@@ -125,6 +125,7 @@ $quickAccessMenus = [
     'categories' => ['icon' => 'fa-folder', 'label' => 'หมวดหมู่', 'url' => '/shop/categories', 'page' => 'categories', 'color' => 'lime'],
     'templates' => ['icon' => 'fa-file-alt', 'label' => 'Templates', 'url' => '/templates', 'page' => 'templates', 'color' => 'slate'],
     'scheduled-reports' => ['icon' => 'fa-calendar-alt', 'label' => 'รายงานอัตโนมัติ', 'url' => '/scheduled-reports', 'page' => 'scheduled-reports', 'color' => 'amber'],
+    'executive' => ['icon' => 'fa-chart-line', 'label' => 'Executive', 'url' => '/executive-dashboard', 'page' => 'executive-dashboard', 'color' => 'indigo'],
 ];
 
 // Get user's quick access preferences
@@ -163,6 +164,7 @@ $menuSections = [
         'title' => '',
         'items' => [
             ['icon' => 'fa-th-large', 'label' => 'Dashboard', 'url' => '/', 'page' => 'index'],
+            ['icon' => 'fa-chart-line', 'label' => '📊 Executive Dashboard', 'url' => '/executive-dashboard', 'page' => 'executive-dashboard'],
         ]
     ],
     'messaging' => [
