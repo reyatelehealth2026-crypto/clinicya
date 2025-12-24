@@ -867,7 +867,13 @@ function buildPageUrl($page, $userId, $lineAccountId, $filterCategory, $filterSe
         }
     }
 
-    async function showProduct(id) {
+    function showProduct(id) {
+        // Redirect to product detail page
+        window.location.href = `liff-product-detail.php?id=${id}&user=${userId}&account=${ACCOUNT_ID}`;
+    }
+
+    // Keep old modal function for backward compatibility
+    async function showProductModal(id) {
         try {
             const res = await fetch(`${BASE_URL}/api/shop-products.php?product_id=${id}&account=${ACCOUNT_ID}`);
             const data = await res.json();
