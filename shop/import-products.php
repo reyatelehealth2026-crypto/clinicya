@@ -127,16 +127,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file']) && !isse
                     
                     $sku = $colMap['sku'] !== false ? trim($data[$colMap['sku']] ?? '') : '';
                     
-                    // Check if exists
+                    // Check if exists (shared products - no line_account_id filter)
                     $exists = false;
                     if ($sku) {
-                        $stmt = $db->prepare("SELECT id FROM products WHERE sku = ? AND line_account_id = ?");
-                        $stmt->execute([$sku, $currentBotId]);
+                        $stmt = $db->prepare("SELECT id FROM products WHERE sku = ?");
+                        $stmt->execute([$sku]);
                         $exists = $stmt->fetch() !== false;
                     }
                     if (!$exists) {
-                        $stmt = $db->prepare("SELECT id FROM products WHERE name = ? AND line_account_id = ?");
-                        $stmt->execute([$name, $currentBotId]);
+                        $stmt = $db->prepare("SELECT id FROM products WHERE name = ?");
+                        $stmt->execute([$name]);
                         $exists = $stmt->fetch() !== false;
                     }
                     
@@ -204,15 +204,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_import'])) {
             // Get or create category
             $categoryId = null;
             if ($category) {
-                $stmt = $db->prepare("SELECT id FROM product_categories WHERE name = ? AND line_account_id = ?");
-                $stmt->execute([$category, $currentBotId]);
+                $stmt = $db->prepare("SELECT id FROM product_categories WHERE name = ?");
+                $stmt->execute([$category]);
                 $cat = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 if ($cat) {
                     $categoryId = $cat['id'];
                 } else {
-                    $stmt = $db->prepare("INSERT INTO product_categories (line_account_id, name, created_at) VALUES (?, ?, NOW())");
-                    $stmt->execute([$currentBotId, $category]);
+                    $stmt = $db->prepare("INSERT INTO product_categories (name, is_active, created_at) VALUES (?, 1, NOW())");
+                    $stmt->execute([$category]);
                     $categoryId = $db->lastInsertId();
                 }
             }
@@ -220,13 +220,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_import'])) {
             try {
                 $existing = null;
                 if ($sku) {
-                    $stmt = $db->prepare("SELECT id FROM products WHERE sku = ? AND line_account_id = ?");
-                    $stmt->execute([$sku, $currentBotId]);
+                    $stmt = $db->prepare("SELECT id FROM products WHERE sku = ?");
+                    $stmt->execute([$sku]);
                     $existing = $stmt->fetch(PDO::FETCH_ASSOC);
                 }
                 if (!$existing) {
-                    $stmt = $db->prepare("SELECT id FROM products WHERE name = ? AND line_account_id = ?");
-                    $stmt->execute([$name, $currentBotId]);
+                    $stmt = $db->prepare("SELECT id FROM products WHERE name = ?");
+                    $stmt->execute([$name]);
                     $existing = $stmt->fetch(PDO::FETCH_ASSOC);
                 }
                 
@@ -250,16 +250,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_import'])) {
                 } elseif (!$existing) {
                     if ($hasNewColumns) {
                         $sql = "INSERT INTO products 
-                                (line_account_id, name, description, price, sale_price, stock, category_id, image_url, sku, barcode, manufacturer, generic_name, usage_instructions, unit, is_active, created_at) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
+                                (name, description, price, sale_price, stock, category_id, image_url, sku, barcode, manufacturer, generic_name, usage_instructions, unit, is_active, created_at) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
                         $stmt = $db->prepare($sql);
-                        $stmt->execute([$currentBotId, $name, $description, $price, $salePrice, $stock, $categoryId, $imageUrl, $sku, $barcode, $manufacturer, $genericName, $usageInstructions, $unit]);
+                        $stmt->execute([$name, $description, $price, $salePrice, $stock, $categoryId, $imageUrl, $sku, $barcode, $manufacturer, $genericName, $usageInstructions, $unit]);
                     } else {
                         $sql = "INSERT INTO products 
-                                (line_account_id, name, description, price, sale_price, stock, category_id, image_url, sku, is_active, created_at) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
+                                (name, description, price, sale_price, stock, category_id, image_url, sku, is_active, created_at) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())";
                         $stmt = $db->prepare($sql);
-                        $stmt->execute([$currentBotId, $name, $description, $price, $salePrice, $stock, $categoryId, $imageUrl, $sku]);
+                        $stmt->execute([$name, $description, $price, $salePrice, $stock, $categoryId, $imageUrl, $sku]);
                     }
                     $imported++;
                 } else {
@@ -280,8 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_import'])) {
 }
 
 // Get current products count
-$stmt = $db->prepare("SELECT COUNT(*) FROM business_items WHERE line_account_id = ?");
-$stmt->execute([$currentBotId]);
+$stmt = $db->query("SELECT COUNT(*) FROM products");
 $totalProducts = $stmt->fetchColumn();
 
 require_once __DIR__ . '/../includes/header.php';
