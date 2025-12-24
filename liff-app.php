@@ -560,13 +560,13 @@ async function loadMemberData() {
         const data = await response.json();
         console.log('Member API response:', data);
         
-        if (data.success && data.member && data.member.is_registered && data.member.first_name) {
-            // สมัครแล้วและมีข้อมูลครบ → แสดงบัตรสมาชิก
+        if (data.success && data.member) {
+            // สมัครแล้ว → แสดงบัตรสมาชิก
             memberData = data;
             renderCard(data);
         } else {
             // ยังไม่สมัคร → แสดงปุ่มสมัครสมาชิก (ไม่ redirect)
-            console.log('Not registered, showing register card...');
+            console.log('Not registered, showing register card...', data.message);
             showNotRegisteredCard();
         }
     } catch (e) {

@@ -426,6 +426,7 @@ function handleGetCard($db) {
         'member' => [
             'id' => $user['id'],
             'member_id' => $user['member_id'],
+            'is_registered' => (bool)$user['is_registered'],
             'first_name' => $user['first_name'],
             'last_name' => $user['last_name'],
             'display_name' => $user['display_name'],
@@ -442,7 +443,7 @@ function handleGetCard($db) {
             'height' => $user['height'] ?? null,
             'medical_conditions' => $user['medical_conditions'] ?? null,
             'drug_allergies' => $user['drug_allergies'] ?? null,
-            'points' => (int)$user['points'],
+            'points' => (int)($user['points'] ?? 0),
             'total_spent' => (float)($user['total_spent'] ?? 0),
             'total_orders' => (int)($user['total_orders'] ?? 0),
             'registered_at' => $user['registered_at']
