@@ -135,7 +135,8 @@ $bestsellerCount = $db->query("SELECT COUNT(*) FROM products WHERE is_active = 1
 // Best Seller per category
 $bestsellerByCategory = [];
 $stmt = $db->query("SELECT category_id, COUNT(*) as cnt FROM products WHERE is_active = 1 AND COALESCE(is_bestseller, 0) = 1 GROUP BY category_id");
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+foreach ($rows as $row) {
     $bestsellerByCategory[$row['category_id']] = $row['cnt'];
 }
 
