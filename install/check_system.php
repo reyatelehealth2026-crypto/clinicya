@@ -223,7 +223,7 @@ try {
     $settingsResults['Admin Users'] = $adminUsers > 0 ? "$adminUsers active" : false;
     
     // Check Products
-    $stmt = $db->query("SELECT COUNT(*) FROM business_items WHERE is_active = 1");
+    $stmt = $db->query("SELECT COUNT(*) FROM products WHERE is_active = 1");
     $products = $stmt->fetchColumn();
     $settingsResults['Products'] = "$products items";
     

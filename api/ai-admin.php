@@ -240,7 +240,6 @@ function processAdminQuery($db, $message, $botId) {
 
 function getMostExpensiveProducts($db, $botId) {
     $table = 'products';
-    try { $db->query("SELECT 1 FROM business_items LIMIT 1"); $table = 'business_items'; } catch (Exception $e) {}
     
     try {
         $stmt = $db->prepare("SELECT name, sku, price, stock FROM {$table} 
@@ -266,7 +265,6 @@ function getMostExpensiveProducts($db, $botId) {
 
 function getCheapestProducts($db, $botId) {
     $table = 'products';
-    try { $db->query("SELECT 1 FROM business_items LIMIT 1"); $table = 'business_items'; } catch (Exception $e) {}
     
     try {
         $stmt = $db->prepare("SELECT name, sku, price, stock FROM {$table} 
@@ -395,9 +393,7 @@ function getOrdersReport($db, $msg, $botId) {
 }
 
 function getProductsReport($db, $msg, $botId) {
-    // Detect table
     $table = 'products';
-    try { $db->query("SELECT 1 FROM business_items LIMIT 1"); $table = 'business_items'; } catch (Exception $e) {}
     
     try {
         // Stats
@@ -862,9 +858,7 @@ function searchProduct($db, $keyword, $botId) {
         return ['text' => '❌ กรุณาระบุชื่อสินค้าที่ต้องการค้นหา', 'type' => 'error'];
     }
     
-    // Detect table
     $table = 'products';
-    try { $db->query("SELECT 1 FROM business_items LIMIT 1"); $table = 'business_items'; } catch (Exception $e) {}
     
     try {
         $stmt = $db->prepare("SELECT * FROM {$table} 
@@ -906,7 +900,7 @@ function getSystemStatus($db, $botId) {
     }
     
     // Tables check
-    $tables = ['users', 'messages', 'transactions', 'business_items', 'broadcasts'];
+    $tables = ['users', 'messages', 'transactions', 'products', 'broadcasts'];
     $text .= "\n📋 **ตารางข้อมูล:**\n";
     foreach ($tables as $table) {
         try {
@@ -1032,7 +1026,6 @@ function getProductContextForAI($db, $botId, $message) {
     $context = "\nข้อมูลสินค้า:\n";
     
     $table = 'products';
-    try { $db->query("SELECT 1 FROM business_items LIMIT 1"); $table = 'business_items'; } catch (Exception $e) {}
     
     try {
         // ถ้าถามสินค้าแพงสุด
@@ -1166,9 +1159,7 @@ function callGeminiAPI($apiKey, $systemPrompt, $userMessage) {
 // ==================== AI ACTIONS ====================
 
 function actionDisableOutOfStock($db, $botId) {
-    // Detect table
     $table = 'products';
-    try { $db->query("SELECT 1 FROM business_items LIMIT 1"); $table = 'business_items'; } catch (Exception $e) {}
     
     try {
         // Count first
@@ -1196,9 +1187,7 @@ function actionDisableOutOfStock($db, $botId) {
 }
 
 function actionEnableInStock($db, $botId) {
-    // Detect table
     $table = 'products';
-    try { $db->query("SELECT 1 FROM business_items LIMIT 1"); $table = 'business_items'; } catch (Exception $e) {}
     
     try {
         // Count first
@@ -1525,7 +1514,6 @@ function getSmartAlerts($db, $botId) {
         
         // 3. สินค้าหมดแต่ยังเปิดขาย
         $table = 'products';
-        try { $db->query("SELECT 1 FROM business_items LIMIT 1"); $table = 'business_items'; } catch (Exception $e) {}
         
         $stmt = $db->prepare("SELECT COUNT(*) FROM {$table} WHERE stock <= 0 AND is_active = 1 AND (line_account_id = ? OR line_account_id IS NULL)");
         $stmt->execute([$botId]);

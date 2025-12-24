@@ -1,7 +1,7 @@
 <?php
 /**
  * Scheduled Messages - ตั้งเวลาส่งข้อความล่วงหน้า
- * อัพเกรด: เลือกได้จากสินค้า (business_items) หรือเทมเพลท + Flex Designer
+ * อัพเกรด: เลือกได้จากสินค้า (products) หรือเทมเพลท + Flex Designer
  */
 require_once 'config/config.php';
 require_once 'config/database.php';
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // ถ้าเลือกจากสินค้า
         elseif ($contentSource === 'product' && !empty($_POST['product_ids'])) {
             $messageType = 'flex';
-            $content = json_encode(['product_ids' => $_POST['product_ids'], 'source' => 'business_items']);
+            $content = json_encode(['product_ids' => $_POST['product_ids'], 'source' => 'products']);
         }
         // ถ้าเป็น Flex Designer
         elseif ($contentSource === 'flex' && !empty($_POST['flex_json'])) {
@@ -335,7 +335,7 @@ try {
                 <div id="productContent" class="content-section hidden">
                     <div class="flex items-center justify-between mb-2">
                         <label class="text-sm font-medium">เลือกสินค้า (เลือกได้หลายรายการ)</label>
-                        <span class="text-xs text-gray-500">จาก business_items</span>
+                        <span class="text-xs text-gray-500">จาก products</span>
                     </div>
                     <div class="mb-2">
                         <input type="text" id="productSearch" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="🔍 ค้นหาสินค้า..." oninput="filterProducts()">

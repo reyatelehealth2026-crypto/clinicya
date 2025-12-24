@@ -472,7 +472,7 @@ error_reporting = E_ALL</pre>
                 <div class="max-h-48 overflow-y-auto">
                     <table class="w-full text-sm">
                         <?php
-                        $tables = ['users', 'messages', 'dev_logs', 'business_items', 'products', 'cart_items', 'transactions', 'orders', 'item_categories', 'product_categories'];
+                        $tables = ['users', 'messages', 'dev_logs', 'products', 'cart_items', 'transactions', 'orders', 'product_categories'];
                         foreach ($tables as $table):
                             try {
                                 $count = $db->query("SELECT COUNT(*) FROM {$table}")->fetchColumn();

@@ -269,7 +269,6 @@ function generateWeeklySummaryReport($db, $botId) {
 
 function generateLowStockReport($db, $botId) {
     $table = 'products';
-    try { $db->query("SELECT 1 FROM business_items LIMIT 1"); $table = 'business_items'; } catch (Exception $e) {}
     
     $stmt = $db->prepare("
         SELECT name, sku, stock 

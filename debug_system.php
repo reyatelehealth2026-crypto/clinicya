@@ -355,15 +355,15 @@ try {
 echo "</div>";
 
 // ==========================================
-// 11. PRODUCTS (business_items)
+// 11. PRODUCTS
 // ==========================================
-echo "<div class='box'><h2>11. 📦 Products (business_items)</h2>";
+echo "<div class='box'><h2>11. 📦 Products</h2>";
 try {
-    $stmt = $db->prepare("SELECT bi.*, bc.name as category_name 
-                          FROM business_items bi 
-                          LEFT JOIN business_categories bc ON bi.category_id = bc.id 
-                          WHERE bi.line_account_id = ? OR bi.line_account_id IS NULL 
-                          ORDER BY bi.sort_order, bi.id LIMIT 10");
+    $stmt = $db->prepare("SELECT p.*, pc.name as category_name 
+                          FROM products p 
+                          LEFT JOIN product_categories pc ON p.category_id = pc.id 
+                          WHERE p.line_account_id = ? OR p.line_account_id IS NULL 
+                          ORDER BY p.sort_order, p.id LIMIT 10");
     $stmt->execute([$botId]);
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if ($products) {
@@ -398,7 +398,7 @@ try {
     $stats['users'] = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
     $stats['messages'] = $db->query("SELECT COUNT(*) FROM messages")->fetchColumn();
     $stats['transactions'] = $db->query("SELECT COUNT(*) FROM transactions")->fetchColumn();
-    $stats['products'] = $db->query("SELECT COUNT(*) FROM business_items")->fetchColumn();
+    $stats['products'] = $db->query("SELECT COUNT(*) FROM products")->fetchColumn();
     $stats['tags'] = $db->query("SELECT COUNT(*) FROM tags")->fetchColumn();
     
     echo "<div style='display:grid;grid-template-columns:repeat(5,1fr);gap:15px;text-align:center'>";
