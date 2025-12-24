@@ -1,176 +1,147 @@
 <?php
 /**
- * Debug Payment Slips - ตรวจสอบปัญหาสลิปไม่แสดงในหลังบ้าน
+ * Debug Payment Slips
+ * ตรวจสอบปัญหาสลิปไม่แสดง
  */
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=utf-8');
-
 require_once 'config/config.php';
 require_once 'config/database.php';
 
-echo "<h2>🔍 Debug Payment Slips</h2>";
-echo "<style>
-    body { font-family: sans-serif; padding: 20px; }
-    table { border-collapse: collapse; margin: 10px 0; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #f5f5f5; }
-    .ok { color: green; }
-    .warn { color: orange; }
-    .error { color: red; }
-    .box { background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 8px; }
-</style>";
+$db = Database::getInstance()->getConnection();
 
+$orderId = $_GET['order_id'] ?? null;
+
+echo "<h1>🧾 Debug Payment Slips</h1>";
+
+// 1. Check payment_slips table structure
+echo "<h2>1. โครงสร้างตาราง payment_slips</h2>";
 try {
-    $db = Database::getInstance()->getConnection();
-    echo "<p class='ok'>✅ Database connected</p>";
-    
-    // 1. Check recent payment_slips
-    echo "<h3>1. Recent Payment Slips</h3>";
-    $stmt = $db->query("SELECT ps.*, t.order_number, t.status as txn_status, t.line_account_id as txn_bot_id, t.user_id as txn_user_id
-                        FROM payment_slips ps 
-                        LEFT JOIN transactions t ON ps.transaction_id = t.id 
-                        ORDER BY ps.id DESC LIMIT 10");
+    $stmt = $db->query("DESCRIBE payment_slips");
+    $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    echo "<table border='1' cellpadding='5'>";
+    echo "<tr><th>Field</th><th>Type</th><th>Null</th><th>Key</th></tr>";
+    foreach ($columns as $col) {
+        echo "<tr><td>{$col['Field']}</td><td>{$col['Type']}</td><td>{$col['Null']}</td><td>{$col['Key']}</td></tr>";
+    }
+    echo "</table>";
+} catch (Exception $e) {
+    echo "<p style='color:red'>Error: " . $e->getMessage() . "</p>";
+}
+
+// 2. Show all slips
+echo "<h2>2. สลิปทั้งหมดในระบบ</h2>";
+try {
+    $stmt = $db->query("SELECT * FROM payment_slips ORDER BY id DESC LIMIT 20");
     $slips = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     if ($slips) {
-        echo "<table>";
-        echo "<tr><th>Slip ID</th><th>Transaction ID</th><th>Order#</th><th>User ID</th><th>Slip Status</th><th>Txn Status</th><th>Bot ID</th><th>Image</th><th>Created</th></tr>";
-        foreach ($slips as $slip) {
-            $hasOrder = $slip['order_number'] ? 'ok' : 'error';
-            echo "<tr>";
-            echo "<td>{$slip['id']}</td>";
-            echo "<td class='{$hasOrder}'>{$slip['transaction_id']}</td>";
-            echo "<td class='{$hasOrder}'>" . ($slip['order_number'] ?: '<span class="error">NOT FOUND!</span>') . "</td>";
-            echo "<td>{$slip['user_id']}</td>";
-            echo "<td>{$slip['status']}</td>";
-            echo "<td>" . ($slip['txn_status'] ?: '-') . "</td>";
-            echo "<td>" . ($slip['txn_bot_id'] ?: '<span class="warn">NULL</span>') . "</td>";
-            echo "<td><a href='{$slip['image_url']}' target='_blank'>View</a></td>";
-            echo "<td>{$slip['created_at']}</td>";
-            echo "</tr>";
+        echo "<table border='1' cellpadding='5'>";
+        echo "<tr>";
+        foreach (array_keys($slips[0]) as $key) {
+            echo "<th>{$key}</th>";
         }
-        echo "</table>";
-    } else {
-        echo "<p class='warn'>⚠️ No payment slips found</p>";
-    }
-    
-    // 2. Check recent transactions
-    echo "<h3>2. Recent Transactions</h3>";
-    $stmt = $db->query("SELECT t.id, t.order_number, t.user_id, t.status, t.payment_status, t.grand_total, t.line_account_id, t.created_at,
-                        (SELECT COUNT(*) FROM payment_slips WHERE transaction_id = t.id) as slip_count
-                        FROM transactions t ORDER BY t.id DESC LIMIT 10");
-    $txns = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    if ($txns) {
-        echo "<table>";
-        echo "<tr><th>ID</th><th>Order#</th><th>User</th><th>Status</th><th>Payment</th><th>Total</th><th>Bot ID</th><th>Slips</th><th>Created</th></tr>";
-        foreach ($txns as $txn) {
-            $botClass = $txn['line_account_id'] ? 'ok' : 'warn';
-            $slipClass = $txn['slip_count'] > 0 ? 'ok' : '';
-            echo "<tr>";
-            echo "<td>{$txn['id']}</td>";
-            echo "<td>{$txn['order_number']}</td>";
-            echo "<td>{$txn['user_id']}</td>";
-            echo "<td>{$txn['status']}</td>";
-            echo "<td>{$txn['payment_status']}</td>";
-            echo "<td>฿" . number_format($txn['grand_total'], 2) . "</td>";
-            echo "<td class='{$botClass}'>" . ($txn['line_account_id'] ?: '<span class="warn">NULL</span>') . "</td>";
-            echo "<td class='{$slipClass}'>{$txn['slip_count']}</td>";
-            echo "<td>{$txn['created_at']}</td>";
-            echo "</tr>";
-        }
-        echo "</table>";
-    }
-    
-    // 3. Check session bot ID
-    echo "<h3>3. Session Info</h3>";
-    session_start();
-    $sessionBotId = $_SESSION['current_bot_id'] ?? null;
-    echo "<div class='box'>";
-    echo "<p><strong>Session current_bot_id:</strong> " . ($sessionBotId ?: '<span class="warn">NOT SET</span>') . "</p>";
-    
-    // 4. Check line_accounts
-    echo "</div><h3>4. Line Accounts</h3>";
-    $stmt = $db->query("SELECT id, name, is_active, is_default FROM line_accounts ORDER BY id");
-    $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    echo "<table>";
-    echo "<tr><th>ID</th><th>Name</th><th>Active</th><th>Default</th></tr>";
-    foreach ($accounts as $acc) {
-        $isSelected = ($acc['id'] == $sessionBotId) ? ' style="background:#e8f5e9"' : '';
-        echo "<tr{$isSelected}>";
-        echo "<td>{$acc['id']}</td>";
-        echo "<td>{$acc['name']}</td>";
-        echo "<td>" . ($acc['is_active'] ? '✅' : '❌') . "</td>";
-        echo "<td>" . ($acc['is_default'] ? '⭐' : '') . "</td>";
         echo "</tr>";
-    }
-    echo "</table>";
-    
-    // 5. Problem Analysis
-    echo "<h3>5. 🔎 Problem Analysis</h3>";
-    echo "<div class='box'>";
-    
-    // Check if there are slips with mismatched transaction_id
-    $stmt = $db->query("SELECT ps.id, ps.transaction_id FROM payment_slips ps 
-                        LEFT JOIN transactions t ON ps.transaction_id = t.id 
-                        WHERE t.id IS NULL");
-    $orphanSlips = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    if ($orphanSlips) {
-        echo "<p class='error'>❌ Found " . count($orphanSlips) . " slips with invalid transaction_id!</p>";
-        echo "<ul>";
-        foreach ($orphanSlips as $os) {
-            echo "<li>Slip #{$os['id']} → transaction_id={$os['transaction_id']} (NOT EXISTS)</li>";
+        foreach ($slips as $slip) {
+            echo "<tr>";
+            foreach ($slip as $key => $val) {
+                if ($key === 'image_url' && $val) {
+                    echo "<td><a href='{$val}' target='_blank'>View</a></td>";
+                } else {
+                    echo "<td>" . htmlspecialchars($val ?? 'NULL') . "</td>";
+                }
+            }
+            echo "</tr>";
         }
-        echo "</ul>";
-    }
-    
-    // Check transactions without line_account_id
-    $stmt = $db->query("SELECT COUNT(*) FROM transactions WHERE line_account_id IS NULL");
-    $nullBotCount = $stmt->fetchColumn();
-    if ($nullBotCount > 0) {
-        echo "<p class='warn'>⚠️ Found {$nullBotCount} transactions with NULL line_account_id</p>";
-        echo "<p>These may not show in orders page if filtered by bot ID</p>";
-    }
-    
-    // Check if session bot matches transactions
-    if ($sessionBotId) {
-        $stmt = $db->prepare("SELECT COUNT(*) FROM transactions WHERE line_account_id = ?");
-        $stmt->execute([$sessionBotId]);
-        $matchCount = $stmt->fetchColumn();
-        
-        $stmt = $db->query("SELECT COUNT(*) FROM transactions");
-        $totalCount = $stmt->fetchColumn();
-        
-        echo "<p>📊 Transactions matching session bot (ID={$sessionBotId}): {$matchCount} / {$totalCount}</p>";
-        
-        if ($matchCount < $totalCount) {
-            echo "<p class='warn'>⚠️ Some transactions may not show because line_account_id doesn't match!</p>";
-        }
-    }
-    
-    echo "</div>";
-    
-    // 6. Quick Fix Options
-    echo "<h3>6. 🔧 Quick Fix</h3>";
-    
-    if (isset($_GET['fix']) && $_GET['fix'] === 'bot_id') {
-        // Fix NULL line_account_id
-        $defaultBotId = 1;
-        $stmt = $db->prepare("UPDATE transactions SET line_account_id = ? WHERE line_account_id IS NULL");
-        $stmt->execute([$defaultBotId]);
-        $affected = $stmt->rowCount();
-        echo "<p class='ok'>✅ Fixed {$affected} transactions - set line_account_id to {$defaultBotId}</p>";
-        echo "<p><a href='debug_payment_slips.php'>Refresh to see results</a></p>";
+        echo "</table>";
     } else {
-        echo "<div class='box'>";
-        echo "<p>If transactions have NULL line_account_id, click below to fix:</p>";
-        echo "<a href='?fix=bot_id' style='display:inline-block;padding:10px 20px;background:#4CAF50;color:white;text-decoration:none;border-radius:5px;'>Fix NULL line_account_id</a>";
-        echo "</div>";
+        echo "<p style='color:orange'>ไม่มีสลิปในระบบ</p>";
     }
-    
 } catch (Exception $e) {
-    echo "<p class='error'>❌ Error: " . $e->getMessage() . "</p>";
+    echo "<p style='color:red'>Error: " . $e->getMessage() . "</p>";
 }
-?>
+
+// 3. Check specific order
+if ($orderId) {
+    echo "<h2>3. ตรวจสอบ Order ID: {$orderId}</h2>";
+    
+    // Get order
+    $stmt = $db->prepare("SELECT * FROM transactions WHERE id = ?");
+    $stmt->execute([$orderId]);
+    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($order) {
+        echo "<p style='color:green'>✅ พบ Order</p>";
+        echo "<ul>";
+        echo "<li>Order Number: {$order['order_number']}</li>";
+        echo "<li>User ID: {$order['user_id']}</li>";
+        echo "<li>Status: {$order['status']}</li>";
+        echo "<li>Payment Status: " . ($order['payment_status'] ?? 'N/A') . "</li>";
+        echo "</ul>";
+        
+        // Find slips by transaction_id
+        echo "<h3>สลิปที่ผูกกับ transaction_id = {$orderId}</h3>";
+        $stmt = $db->prepare("SELECT * FROM payment_slips WHERE transaction_id = ?");
+        $stmt->execute([$orderId]);
+        $slipsByTxn = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo "<p>พบ " . count($slipsByTxn) . " รายการ</p>";
+        
+        // Find slips by user_id
+        echo "<h3>สลิปที่ผูกกับ user_id = {$order['user_id']}</h3>";
+        $stmt = $db->prepare("SELECT * FROM payment_slips WHERE user_id = ?");
+        $stmt->execute([$order['user_id']]);
+        $slipsByUser = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo "<p>พบ " . count($slipsByUser) . " รายการ</p>";
+        
+        if ($slipsByUser) {
+            echo "<table border='1' cellpadding='5'>";
+            echo "<tr><th>ID</th><th>Transaction ID</th><th>User ID</th><th>Image</th><th>Status</th><th>Created</th></tr>";
+            foreach ($slipsByUser as $s) {
+                echo "<tr>";
+                echo "<td>{$s['id']}</td>";
+                echo "<td>" . ($s['transaction_id'] ?? 'NULL') . "</td>";
+                echo "<td>" . ($s['user_id'] ?? 'NULL') . "</td>";
+                echo "<td><a href='{$s['image_url']}' target='_blank'>View</a></td>";
+                echo "<td>{$s['status']}</td>";
+                echo "<td>{$s['created_at']}</td>";
+                echo "</tr>";
+            }
+            echo "</table>";
+        }
+        
+        // Find slips by order_number
+        echo "<h3>สลิปที่ผูกกับ order_number = {$order['order_number']}</h3>";
+        try {
+            $stmt = $db->prepare("SELECT * FROM payment_slips WHERE order_number = ?");
+            $stmt->execute([$order['order_number']]);
+            $slipsByOrderNum = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            echo "<p>พบ " . count($slipsByOrderNum) . " รายการ</p>";
+        } catch (Exception $e) {
+            echo "<p>ไม่มี column order_number</p>";
+        }
+        
+    } else {
+        echo "<p style='color:red'>❌ ไม่พบ Order</p>";
+    }
+}
+
+// 4. Recent transactions
+echo "<h2>4. Transactions ล่าสุด</h2>";
+$stmt = $db->query("SELECT id, order_number, user_id, status, payment_status, created_at FROM transactions ORDER BY id DESC LIMIT 10");
+$txns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+echo "<table border='1' cellpadding='5'>";
+echo "<tr><th>ID</th><th>Order Number</th><th>User ID</th><th>Status</th><th>Payment</th><th>Created</th><th>Action</th></tr>";
+foreach ($txns as $t) {
+    echo "<tr>";
+    echo "<td>{$t['id']}</td>";
+    echo "<td>{$t['order_number']}</td>";
+    echo "<td>{$t['user_id']}</td>";
+    echo "<td>{$t['status']}</td>";
+    echo "<td>" . ($t['payment_status'] ?? 'N/A') . "</td>";
+    echo "<td>{$t['created_at']}</td>";
+    echo "<td><a href='?order_id={$t['id']}'>Debug</a></td>";
+    echo "</tr>";
+}
+echo "</table>";
+
+echo "<hr>";
+echo "<p><a href='debug_payment_slips.php'>🔄 Refresh</a></p>";
