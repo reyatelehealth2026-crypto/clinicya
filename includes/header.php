@@ -108,7 +108,7 @@ try {
 // ==================== Quick Access - User Customizable ====================
 // Available quick access menus (using clean URLs without .php)
 $quickAccessMenus = [
-    'messages' => ['icon' => 'fa-comments', 'label' => 'แชท', 'url' => '/messages', 'page' => 'messages', 'badge' => $unreadMessages, 'color' => 'green'],
+    'messages' => ['icon' => 'fa-comments', 'label' => 'แชท', 'url' => '/inbox', 'page' => 'inbox', 'badge' => $unreadMessages, 'color' => 'green'],
     'orders' => ['icon' => 'fa-receipt', 'label' => 'ออเดอร์', 'url' => '/shop/orders', 'page' => 'orders', 'badge' => $pendingOrders, 'badgeColor' => 'yellow', 'color' => 'orange'],
     'products' => ['icon' => 'fa-box-open', 'label' => 'สินค้า', 'url' => '/shop/products', 'page' => 'products', 'color' => 'blue'],
     'broadcast' => ['icon' => 'fa-paper-plane', 'label' => 'บรอดแคสต์', 'url' => '/broadcast-catalog-v2', 'page' => 'broadcast-catalog-v2', 'color' => 'purple'],
@@ -172,7 +172,7 @@ $menuSections = [
         'icon' => 'fa-comments',
         'collapsible' => true,
         'items' => [
-            ['icon' => 'fa-inbox', 'label' => 'กล่องข้อความ', 'url' => '/messages', 'page' => 'messages', 'badge' => $unreadMessages],
+            ['icon' => 'fa-inbox', 'label' => 'กล่องข้อความ', 'url' => '/inbox', 'page' => 'inbox', 'badge' => $unreadMessages],
             ['icon' => 'fa-users', 'label' => 'รายชื่อลูกค้า', 'url' => '/users', 'page' => 'users'],
             ['icon' => 'fa-robot', 'label' => 'ตอบอัตโนมัติ', 'url' => '/auto-reply', 'page' => 'auto-reply'],
         ]
@@ -1101,7 +1101,7 @@ $menuSections = [
                 
                 <div class="header-actions">
                     <!-- Quick Actions -->
-                    <a href="<?= $baseUrl ?>messages.php" class="header-btn" title="Messages">
+                    <a href="<?= $baseUrl ?>inbox.php" class="header-btn" title="Inbox (Real-time)">
                         <i class="fas fa-inbox"></i>
                         <?php if ($unreadMessages > 0): ?>
                         <span class="badge"><?= $unreadMessages > 99 ? '99+' : $unreadMessages ?></span>
