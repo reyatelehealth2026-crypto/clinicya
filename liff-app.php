@@ -551,16 +551,21 @@ async function loadMemberData() {
         const data = await response.json();
         console.log('Member API response:', data);
         
-        if (data.success && data.member) {
+        if (data.success && data.member && data.member.is_registered && data.member.first_name) {
+            // สมัครแล้วและมีข้อมูลครบ → แสดงบัตรสมาชิก
             memberData = data;
             renderCard(data);
         } else {
-            console.log('Not registered or error:', data.message);
-            showNotRegisteredCard();
+            // ยังไม่สมัคร หรือยังไม่ได้กรอกข้อมูล → ไปหน้าสมัครสมาชิก
+            console.log('Not registered, redirecting to register page...');
+            window.location.href = `${CONFIG.BASE_URL}/liff-register.php?account=${CONFIG.ACCOUNT_ID}`;
+            return;
         }
     } catch (e) {
         console.error('Load member error:', e);
-        showNotRegisteredCard();
+        // Error → ไปหน้าสมัครสมาชิก
+        window.location.href = `${CONFIG.BASE_URL}/liff-register.php?account=${CONFIG.ACCOUNT_ID}`;
+        return;
     }
     
     // Load pharmacists after member data
