@@ -136,13 +136,21 @@ function handleRegister($db, $data) {
             'medical_conditions = ?',
             'drug_allergies = ?',
             'member_id = ?',
-            "member_tier = 'bronze'",
-            'points = 0',
             'is_registered = 1',
             'registered_at = NOW()',
             'updated_at = NOW()'
         ];
         $params = [$firstName, $lastName, $realName, $birthday, $gender, $phoneValue, $weight, $height, $medicalConditions, $drugAllergies, $memberId];
+        
+        // Add member_tier if column exists
+        if (isset($existingColumns['member_tier'])) {
+            $updates[] = "member_tier = 'bronze'";
+        }
+        
+        // Add points if column exists
+        if (isset($existingColumns['points'])) {
+            $updates[] = 'points = 0';
+        }
         
         // Add optional columns if they exist
         if (isset($existingColumns['email'])) {
@@ -175,78 +183,72 @@ function handleRegister($db, $data) {
         $userId = $user['id'];
     } else {
         // Create new user - build dynamic SQL
-        $columns = ['line_account_id', 'line_user_id', 'first_name', 'last_name', 'real_name', 'birthday', 'gender', 'phone', 'weight', 'height', 'medical_conditions', 'drug_allergies', 'member_id', 'member_tier', 'points', 'is_registered', 'registered_at', 'created_at'];
-        $values = [$lineAccountId, $lineUserId, $firstName, $lastName, $realName, $birthday, $gender, $phone ?: null, $weight, $height, $medicalConditions ?: null, $drugAllergies ?: null, $memberId, 'bronze', 0, 1];
-        $placeholders = array_fill(0, count($values), '?');
+        $columns = ['line_account_id', 'line_user_id', 'first_name', 'last_name', 'real_name', 'birthday', 'gender', 'phone', 'weight', 'height', 'medical_conditions', 'drug_allergies', 'member_id', 'is_registered'];
+        $values = [$lineAccountId, $lineUserId, $firstName, $lastName, $realName, $birthday, $gender, $phone ?: null, $weight, $height, $medicalConditions ?: null, $drugAllergies ?: null, $memberId, 1];
         
-        // Add NOW() for timestamps
+        // Add member_tier if column exists
+        if (isset($existingColumns['member_tier'])) {
+            $columns[] = 'member_tier';
+            $values[] = 'bronze';
+        }
+        
+        // Add points if column exists
+        if (isset($existingColumns['points'])) {
+            $columns[] = 'points';
+            $values[] = 0;
+        }
+        
+        // Add registered_at and created_at
+        $columns[] = 'registered_at';
+        $columns[] = 'created_at';
+        
+        $placeholders = array_fill(0, count($values), '?');
         $placeholders[] = 'NOW()';
         $placeholders[] = 'NOW()';
         
         // Add optional columns if they exist
-        if (isset($existingColumns['email'])) {
-            $columns[] = 'email';
-            $values[] = $email ?: null;
-            $placeholders[count($placeholders) - 2] = '?'; // Adjust placeholder
-            $placeholders[] = 'NOW()';
-        }
-        if (isset($existingColumns['address'])) {
-            $columns[] = 'address';
-            $values[] = $address ?: null;
-        }
-        if (isset($existingColumns['district'])) {
-            $columns[] = 'district';
-            $values[] = $district ?: null;
-        }
-        if (isset($existingColumns['province'])) {
-            $columns[] = 'province';
-            $values[] = $province ?: null;
-        }
-        if (isset($existingColumns['postal_code'])) {
-            $columns[] = 'postal_code';
-            $values[] = $postalCode ?: null;
-        }
-        
-        // Simplified insert
-        $sql = "INSERT INTO users (line_account_id, line_user_id, first_name, last_name, real_name, birthday, gender, phone, weight, height, medical_conditions, drug_allergies, member_id, member_tier, points, is_registered, registered_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'bronze', 0, 1, NOW(), NOW())";
-        $stmt = $db->prepare($sql);
-        $stmt->execute([$lineAccountId, $lineUserId, $firstName, $lastName, $realName, $birthday, $gender, $phone ?: null, $weight, $height, $medicalConditions ?: null, $drugAllergies ?: null, $memberId]);
-        $userId = $db->lastInsertId();
-        
-        // Update optional columns separately if they exist
-        $optionalUpdates = [];
-        $optionalParams = [];
         if (isset($existingColumns['email']) && $email) {
-            $optionalUpdates[] = 'email = ?';
-            $optionalParams[] = $email;
+            $columns[] = 'email';
+            $values[] = $email;
+            $placeholders[] = '?';
         }
         if (isset($existingColumns['address']) && $address) {
-            $optionalUpdates[] = 'address = ?';
-            $optionalParams[] = $address;
+            $columns[] = 'address';
+            $values[] = $address;
+            $placeholders[] = '?';
         }
         if (isset($existingColumns['district']) && $district) {
-            $optionalUpdates[] = 'district = ?';
-            $optionalParams[] = $district;
+            $columns[] = 'district';
+            $values[] = $district;
+            $placeholders[] = '?';
         }
         if (isset($existingColumns['province']) && $province) {
-            $optionalUpdates[] = 'province = ?';
-            $optionalParams[] = $province;
+            $columns[] = 'province';
+            $values[] = $province;
+            $placeholders[] = '?';
         }
         if (isset($existingColumns['postal_code']) && $postalCode) {
-            $optionalUpdates[] = 'postal_code = ?';
-            $optionalParams[] = $postalCode;
+            $columns[] = 'postal_code';
+            $values[] = $postalCode;
+            $placeholders[] = '?';
         }
         
-        if (!empty($optionalUpdates)) {
-            $optionalParams[] = $userId;
-            $db->prepare("UPDATE users SET " . implode(', ', $optionalUpdates) . " WHERE id = ?")->execute($optionalParams);
-        }
+        // Build and execute dynamic INSERT
+        $sql = "INSERT INTO users (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")";
+        $stmt = $db->prepare($sql);
+        $stmt->execute($values);
+        $userId = $db->lastInsertId();
     }
     
-    // Add welcome bonus points
+    // Add welcome bonus points if points column exists
     $welcomeBonus = 50;
-    $stmt = $db->prepare("UPDATE users SET points = ? WHERE id = ?");
-    $stmt->execute([$welcomeBonus, $userId]);
+    try {
+        $stmt = $db->prepare("UPDATE users SET points = ? WHERE id = ?");
+        $stmt->execute([$welcomeBonus, $userId]);
+    } catch (Exception $e) {
+        // points column might not exist
+        error_log("Update points error: " . $e->getMessage());
+    }
     
     // Log points
     try {
@@ -278,9 +280,9 @@ function handleCheck($db) {
         jsonResponse(false, 'Missing line_user_id');
     }
     
-    // Try exact match first
+    // Try exact match first - use only columns that definitely exist
     $stmt = $db->prepare("
-        SELECT id, member_id, is_registered, first_name, last_name, member_tier, points
+        SELECT id, member_id, is_registered, first_name, last_name, points
         FROM users 
         WHERE line_user_id = ? AND line_account_id = ?
     ");
@@ -290,7 +292,7 @@ function handleCheck($db) {
     // If not found, try without account filter
     if (!$user) {
         $stmt = $db->prepare("
-            SELECT id, member_id, is_registered, first_name, last_name, member_tier, points
+            SELECT id, member_id, is_registered, first_name, last_name, points
             FROM users 
             WHERE line_user_id = ?
         ");
@@ -312,11 +314,11 @@ function handleCheck($db) {
         'exists' => true,
         'is_registered' => (bool)$user['is_registered'],
         'has_profile' => $hasProfile,
-        'member_id' => $user['member_id'],
-        'first_name' => $user['first_name'],
-        'last_name' => $user['last_name'],
-        'tier' => $user['member_tier'],
-        'points' => (int)$user['points']
+        'member_id' => $user['member_id'] ?? null,
+        'first_name' => $user['first_name'] ?? null,
+        'last_name' => $user['last_name'] ?? null,
+        'tier' => 'bronze',
+        'points' => (int)($user['points'] ?? 0)
     ]);
 }
 
@@ -365,24 +367,36 @@ function handleGetCard($db) {
         jsonResponse(false, 'ยังไม่ได้ลงทะเบียนสมาชิก', ['is_registered' => false, 'user_exists' => true, 'user_id' => $user['id']]);
     }
     
-    // Get tier info
-    $stmt = $db->prepare("
-        SELECT * FROM member_tiers 
-        WHERE tier_code = ? AND (line_account_id = ? OR line_account_id IS NULL)
-        LIMIT 1
-    ");
-    $stmt->execute([$user['member_tier'], $lineAccountId]);
-    $tier = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Get tier info - handle missing member_tier column
+    $memberTier = $user['member_tier'] ?? 'bronze';
+    $tier = null;
+    try {
+        $stmt = $db->prepare("
+            SELECT * FROM member_tiers 
+            WHERE tier_code = ? AND (line_account_id = ? OR line_account_id IS NULL)
+            LIMIT 1
+        ");
+        $stmt->execute([$memberTier, $lineAccountId]);
+        $tier = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        // member_tiers table might not exist
+    }
     
     // Get next tier
-    $stmt = $db->prepare("
-        SELECT * FROM member_tiers 
-        WHERE min_points > ? AND (line_account_id = ? OR line_account_id IS NULL)
-        ORDER BY min_points ASC
-        LIMIT 1
-    ");
-    $stmt->execute([$user['points'], $lineAccountId]);
-    $nextTier = $stmt->fetch(PDO::FETCH_ASSOC);
+    $nextTier = null;
+    $userPoints = $user['points'] ?? 0;
+    try {
+        $stmt = $db->prepare("
+            SELECT * FROM member_tiers 
+            WHERE min_points > ? AND (line_account_id = ? OR line_account_id IS NULL)
+            ORDER BY min_points ASC
+            LIMIT 1
+        ");
+        $stmt->execute([$userPoints, $lineAccountId]);
+        $nextTier = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        // member_tiers table might not exist
+    }
     
     // Get shop info - handle missing logo_url column
     $shop = null;

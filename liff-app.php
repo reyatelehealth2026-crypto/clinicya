@@ -565,16 +565,14 @@ async function loadMemberData() {
             memberData = data;
             renderCard(data);
         } else {
-            // ยังไม่สมัคร หรือยังไม่ได้กรอกข้อมูล → ไปหน้าสมัครสมาชิก
-            console.log('Not registered, redirecting to register page...');
-            window.location.href = `${CONFIG.BASE_URL}/liff-register.php?account=${CONFIG.ACCOUNT_ID}`;
-            return;
+            // ยังไม่สมัคร → แสดงปุ่มสมัครสมาชิก (ไม่ redirect)
+            console.log('Not registered, showing register card...');
+            showNotRegisteredCard();
         }
     } catch (e) {
         console.error('Load member error:', e);
-        // Error → ไปหน้าสมัครสมาชิก
-        window.location.href = `${CONFIG.BASE_URL}/liff-register.php?account=${CONFIG.ACCOUNT_ID}`;
-        return;
+        // Error → แสดงปุ่มสมัครสมาชิก
+        showNotRegisteredCard();
     }
     
     // Load pharmacists after member data
