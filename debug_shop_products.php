@@ -26,7 +26,7 @@ foreach ($tables as $table) {
 // 2. Check UnifiedShop detection
 echo "<h3>2. UnifiedShop Detection</h3>";
 if (file_exists('classes/UnifiedShop.php')) {
-    req ce 'classes/UnifiedShop.php';
+    require_once 'classes/UnifiedShop.php';
     $shop = new UnifiedShop($db, null, 1);
     echo "Items Table: <b>" . ($shop->getItemsTable() ?? 'NULL') . "</b><br>";
     echo "Categories Table: <b>" . ($shop->getCategoriesTable() ?? 'NULL') . "</b><br>";
