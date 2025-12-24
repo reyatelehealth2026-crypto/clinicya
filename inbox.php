@@ -245,6 +245,44 @@ function getSenderBadge($sentBy, $direction = 'outgoing') {
     }
     return '<span class="sender-badge">' . htmlspecialchars($sentBy) . '</span>';
 }
+
+// ฟังก์ชันแปลงเวลาเป็นภาษาไทย
+function formatThaiTime($datetime) {
+    if (!$datetime) return '';
+    $timestamp = strtotime($datetime);
+    $now = time();
+    $diff = $now - $timestamp;
+    
+    // ถ้าเป็นวันนี้ แสดงเวลา
+    if (date('Y-m-d', $timestamp) === date('Y-m-d', $now)) {
+        return date('H:i น.', $timestamp);
+    }
+    
+    // ถ้าเป็นเมื่อวาน
+    if (date('Y-m-d', $timestamp) === date('Y-m-d', strtotime('-1 day'))) {
+        return 'เมื่อวาน ' . date('H:i', $timestamp);
+    }
+    
+    // ถ้าภายใน 7 วัน
+    if ($diff < 604800) {
+        $thaiDays = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+        return $thaiDays[date('w', $timestamp)] . ' ' . date('H:i', $timestamp);
+    }
+    
+    // อื่นๆ แสดงวันที่
+    return date('d/m', $timestamp) . ' ' . date('H:i', $timestamp);
+}
+
+function formatThaiDateTime($datetime) {
+    if (!$datetime) return '';
+    $timestamp = strtotime($datetime);
+    $thaiMonths = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    $day = date('j', $timestamp);
+    $month = $thaiMonths[intval(date('n', $timestamp))];
+    $year = date('Y', $timestamp) + 543 - 2500; // แสดงเป็น พ.ศ. 2 หลัก
+    $time = date('H:i', $timestamp);
+    return "{$day} {$month} {$year} {$time}";
+}
 ?>
 
 <style>
@@ -301,6 +339,90 @@ function getSenderBadge($sentBy, $direction = 'outgoing') {
 .unread-divider::before, .unread-divider::after {
     content: ''; flex: 1; height: 1px; background: #EF4444;
 }
+
+/* Notification Toast */
+.notification-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 350px;
+}
+.notification-toast {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    padding: 12px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: slideIn 0.3s ease-out;
+    border-left: 4px solid #10B981;
+    cursor: pointer;
+    transition: transform 0.2s, opacity 0.2s;
+}
+.notification-toast:hover {
+    transform: translateX(-5px);
+}
+.notification-toast.closing {
+    animation: slideOut 0.3s ease-in forwards;
+}
+.notification-toast img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.notification-toast .content {
+    flex: 1;
+    min-width: 0;
+}
+.notification-toast .name {
+    font-weight: 600;
+    color: #1E293B;
+    font-size: 14px;
+}
+.notification-toast .message {
+    color: #64748B;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.notification-toast .time {
+    font-size: 11px;
+    color: #94A3B8;
+}
+.notification-toast .close-btn {
+    color: #94A3B8;
+    cursor: pointer;
+    padding: 4px;
+}
+.notification-toast .close-btn:hover {
+    color: #64748B;
+}
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+/* Sound Toggle Button */
+.sound-toggle {
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+.sound-toggle:hover {
+    background: rgba(255,255,255,0.2);
+}
 </style>
 
 <div class="h-[calc(100vh-80px)] flex bg-white rounded-xl shadow-lg border overflow-hidden">
@@ -313,6 +435,9 @@ function getSenderBadge($sentBy, $direction = 'outgoing') {
                 <span id="totalUnread" class="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded-full"><?= count($users) ?></span>
             </h2>
             <div class="flex items-center gap-2">
+                <button id="soundToggle" class="sound-toggle text-white" onclick="toggleSound()" title="เปิด/ปิดเสียง">
+                    <i class="fas fa-volume-up" id="soundIcon"></i>
+                </button>
                 <span id="liveIndicator" class="w-2 h-2 bg-green-300 rounded-full pulse-dot" title="Real-time Active"></span>
             </div>
         </div>
@@ -346,7 +471,7 @@ function getSenderBadge($sentBy, $direction = 'outgoing') {
                         <div class="flex-1 min-w-0">
                             <div class="flex justify-between items-baseline">
                                 <h3 class="text-sm font-semibold text-gray-800 truncate"><?= htmlspecialchars($user['display_name']) ?></h3>
-                                <span class="last-time text-[10px] text-gray-400"><?= $user['last_time'] ? date('H:i', strtotime($user['last_time'])) : '' ?></span>
+                                <span class="last-time text-[10px] text-gray-400"><?= formatThaiTime($user['last_time']) ?></span>
                             </div>
                             <p class="last-msg text-xs text-gray-500 truncate"><?= htmlspecialchars(getMessagePreview($user['last_msg'], $user['last_type'])) ?></p>
                         </div>
@@ -430,7 +555,7 @@ function getSenderBadge($sentBy, $direction = 'outgoing') {
                     
                     <!-- Message Meta: Time + Sender + Read Status -->
                     <div class="msg-meta <?= $isMe ? '' : 'incoming' ?>">
-                        <span><?= date('H:i', strtotime($msg['created_at'])) ?></span>
+                        <span><?= date('H:i น.', strtotime($msg['created_at'])) ?></span>
                         <?php if ($isMe): ?>
                             <?= getSenderBadge($sentBy, 'outgoing') ?>
                             <?php if ($isRead): ?>
@@ -551,12 +676,131 @@ function getSenderBadge($sentBy, $direction = 'outgoing') {
     </div>
 </div>
 
+<!-- Notification Container -->
+<div id="notificationContainer" class="notification-container"></div>
+
+<!-- Audio for notifications -->
+<audio id="notificationSound" preload="auto">
+    <source src="data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNBrv2AAAAAAAAAAAAAAAAAAAAAP/7UMQAA8AAADSAAAAAAAAANIAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+1DEAYPAAADSAAAAAAAAANIAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=" type="audio/mpeg">
+</audio>
+
 <script>
 const userId = <?= $selectedUser ? $selectedUser['id'] : 'null' ?>;
+const currentUserName = '<?= $selectedUser ? htmlspecialchars($selectedUser['display_name']) : '' ?>';
+const currentUserPic = '<?= $selectedUser ? ($selectedUser['picture_url'] ?: 'https://via.placeholder.com/40') : '' ?>';
 let lastMessageId = <?= !empty($messages) ? end($messages)['id'] ?? 0 : 0 ?>;
 let pollingInterval = null;
 let isPolling = false;
-let sentMessageIds = new Set(); // Track messages we sent to prevent duplicates
+let sentMessageIds = new Set();
+let soundEnabled = localStorage.getItem('inboxSoundEnabled') !== 'false'; // default true
+
+// Update sound icon on load
+document.addEventListener('DOMContentLoaded', () => {
+    updateSoundIcon();
+    scrollToBottom();
+    if (userId) {
+        pollingInterval = setInterval(pollMessages, 2000);
+    }
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+});
+
+function updateSoundIcon() {
+    const icon = document.getElementById('soundIcon');
+    if (icon) {
+        icon.className = soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
+    }
+}
+
+function toggleSound() {
+    soundEnabled = !soundEnabled;
+    localStorage.setItem('inboxSoundEnabled', soundEnabled);
+    updateSoundIcon();
+    showToast(soundEnabled ? '🔊 เปิดเสียงแจ้งเตือน' : '🔇 ปิดเสียงแจ้งเตือน', '', '', 2000);
+}
+
+// ===== Notification Functions =====
+function showNotification(name, message, pictureUrl, userId) {
+    // Show toast notification
+    showToast(name, message, pictureUrl, 5000, userId);
+    
+    // Play sound
+    if (soundEnabled) {
+        playNotificationSound();
+    }
+    
+    // Browser notification (if permitted and tab not focused)
+    if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') {
+        const notification = new Notification('ข้อความใหม่จาก ' + name, {
+            body: message.substring(0, 100),
+            icon: pictureUrl || 'https://via.placeholder.com/40',
+            tag: 'inbox-' + userId
+        });
+        notification.onclick = () => {
+            window.focus();
+            if (userId) window.location.href = '?user=' + userId;
+            notification.close();
+        };
+        setTimeout(() => notification.close(), 5000);
+    }
+}
+
+function showToast(name, message, pictureUrl, duration = 5000, clickUserId = null) {
+    const container = document.getElementById('notificationContainer');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = 'notification-toast';
+    toast.innerHTML = `
+        ${pictureUrl ? `<img src="${pictureUrl}" alt="">` : ''}
+        <div class="content">
+            <div class="name">${escapeHtml(name)}</div>
+            ${message ? `<div class="message">${escapeHtml(message)}</div>` : ''}
+            <div class="time">${formatThaiTimeJS(new Date())}</div>
+        </div>
+        <span class="close-btn" onclick="event.stopPropagation(); this.parentElement.remove();"><i class="fas fa-times"></i></span>
+    `;
+    
+    if (clickUserId) {
+        toast.onclick = () => {
+            window.location.href = '?user=' + clickUserId;
+        };
+    }
+    
+    container.appendChild(toast);
+    
+    // Auto remove
+    setTimeout(() => {
+        toast.classList.add('closing');
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+
+function formatThaiTimeJS(date) {
+    const now = new Date();
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    
+    if (date.toDateString() === now.toDateString()) {
+        return `${hours}:${minutes} น.`;
+    }
+    
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+        return `เมื่อวาน ${hours}:${minutes}`;
+    }
+    
+    const thaiDays = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    if (diffDays < 7) {
+        return `${thaiDays[date.getDay()]} ${hours}:${minutes}`;
+    }
+    
+    return `${date.getDate()}/${date.getMonth() + 1} ${hours}:${minutes}`;
+}
 
 // ===== Real-time Polling =====
 async function pollMessages() {
@@ -572,9 +816,21 @@ async function pollMessages() {
             if (data.messages && data.messages.length > 0) {
                 data.messages.forEach(msg => {
                     const msgId = parseInt(msg.id);
+                    const isIncoming = msg.direction === 'incoming';
+                    
                     // Skip if already displayed or if we just sent it
                     if (msgId > lastMessageId && !sentMessageIds.has(msgId) && !document.querySelector(`[data-msg-id="${msgId}"]`)) {
                         appendMessage(msg);
+                        
+                        // Show notification for incoming messages
+                        if (isIncoming) {
+                            showNotification(
+                                currentUserName || 'ลูกค้า',
+                                msg.content || 'ส่งข้อความใหม่',
+                                currentUserPic,
+                                userId
+                            );
+                        }
                     }
                     if (msgId > lastMessageId) {
                         lastMessageId = msgId;
@@ -583,10 +839,25 @@ async function pollMessages() {
                 scrollToBottom();
             }
             
-            // Update sidebar unread counts
+            // Update sidebar unread counts and show notifications for other users
             if (data.unread_users) {
                 data.unread_users.forEach(u => {
                     updateUserUnread(u.id, u.unread);
+                });
+            }
+            
+            // Show notifications for updated conversations (other users)
+            if (data.updated_conversations) {
+                data.updated_conversations.forEach(conv => {
+                    if (conv.id != userId && conv.last_message) {
+                        // Show notification for messages from other users
+                        showNotification(
+                            conv.display_name || 'ลูกค้า',
+                            conv.last_message,
+                            conv.picture_url,
+                            conv.id
+                        );
+                    }
                 });
             }
         }
@@ -916,22 +1187,32 @@ function escapeHtml(text) {
 }
 
 function playNotificationSound() {
+    if (!soundEnabled) return;
     try {
-        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2teleQAA');
-        audio.volume = 0.3;
-        audio.play().catch(() => {});
-    } catch(e) {}
-}
-
-// ===== Initialize =====
-document.addEventListener('DOMContentLoaded', () => {
-    scrollToBottom();
-    
-    // Start polling every 2 seconds
-    if (userId) {
-        pollingInterval = setInterval(pollMessages, 2000);
+        // ใช้เสียงที่ดีกว่า
+        const audio = document.getElementById('notificationSound');
+        if (audio) {
+            audio.currentTime = 0;
+            audio.volume = 0.5;
+            audio.play().catch(() => {
+                // Fallback to simple beep
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                oscillator.start(ctx.currentTime);
+                oscillator.stop(ctx.currentTime + 0.3);
+            });
+        }
+    } catch(e) {
+        console.log('Sound error:', e);
     }
-});
+}
 
 // Cleanup on leave
 window.addEventListener('beforeunload', () => {
