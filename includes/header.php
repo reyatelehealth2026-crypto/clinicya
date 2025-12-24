@@ -518,6 +518,18 @@ $menuSections = [
         .quick-icon.purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
         .quick-icon.pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
         .quick-icon.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+        .quick-icon.teal { background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); }
+        .quick-icon.amber { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .quick-icon.emerald { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .quick-icon.sky { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); }
+        .quick-icon.violet { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+        .quick-icon.rose { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); }
+        .quick-icon.fuchsia { background: linear-gradient(135deg, #d946ef 0%, #c026d3 100%); }
+        .quick-icon.lime { background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%); }
+        .quick-icon.slate { background: linear-gradient(135deg, #64748b 0%, #475569 100%); }
+        .quick-icon.indigo { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); }
+        .quick-icon.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .quick-icon.yellow { background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); }
         
         .quick-label {
             font-size: 11px;
