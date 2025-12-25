@@ -18,6 +18,26 @@ $db = Database::getInstance()->getConnection();
 $lineAccountId = $_SESSION['line_account_id'] ?? $_SESSION['current_bot_id'] ?? null;
 $pageTitle = 'จัดการสินค้าเด่น / Best Seller';
 
+// Check if columns exist
+$hasIsFeatured = $hasIsBestseller = false;
+try {
+    $cols = $db->query("SHOW COLUMNS FROM business_items")->fetchAll(PDO::FETCH_COLUMN);
+    $hasIsFeatured = in_array('is_featured', $cols);
+    $hasIsBestseller = in_array('is_bestseller', $cols);
+    
+    // Add columns if not exist
+    if (!$hasIsFeatured) {
+        $db->exec("ALTER TABLE business_items ADD COLUMN is_featured TINYINT(1) DEFAULT 0");
+        $hasIsFeatured = true;
+    }
+    if (!$hasIsBestseller) {
+        $db->exec("ALTER TABLE business_items ADD COLUMN is_bestseller TINYINT(1) DEFAULT 0");
+        $hasIsBestseller = true;
+    }
+} catch (Exception $e) {
+    // Columns might already exist or table doesn't exist
+}
+
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json; charset=utf-8');
@@ -62,12 +82,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // Get categories
 $categories = [];
-$catTable = 'product_categories';
+$catTable = 'item_categories';
 try {
-    try { $db->query("SELECT 1 FROM product_categories LIMIT 1"); } 
+    try { $db->query("SELECT 1 FROM item_categories LIMIT 1"); } 
     catch (Exception $e) { 
-        try { $db->query("SELECT 1 FROM item_categories LIMIT 1"); $catTable = 'item_categories'; }
-        catch (Exception $e2) { $catTable = 'business_categories'; }
+        try { $db->query("SELECT 1 FROM business_categories LIMIT 1"); $catTable = 'business_categories'; }
+        catch (Exception $e2) { $catTable = 'product_categories'; }
     }
     $stmt = $db->query("SELECT * FROM $catTable ORDER BY id");
     $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
