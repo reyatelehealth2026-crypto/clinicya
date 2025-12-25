@@ -124,240 +124,296 @@ class SetupStatusChecker {
      * Check LINE connection status
      */
     public function checkLineConnection(): array {
-        $stmt = $this->db->prepare("
-            SELECT channel_access_token, channel_secret 
-            FROM line_accounts 
-            WHERE id = ?
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $account = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        $hasToken = !empty($account['channel_access_token']);
-        $hasSecret = !empty($account['channel_secret']);
-        
-        return [
-            'completed' => $hasToken && $hasSecret,
-            'details' => [
-                'has_token' => $hasToken,
-                'has_secret' => $hasSecret
-            ]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT channel_access_token, channel_secret 
+                FROM line_accounts 
+                WHERE id = ?
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $account = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            $hasToken = !empty($account['channel_access_token']);
+            $hasSecret = !empty($account['channel_secret']);
+            
+            return [
+                'completed' => $hasToken && $hasSecret,
+                'details' => [
+                    'has_token' => $hasToken,
+                    'has_secret' => $hasSecret
+                ]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check Webhook status
      */
     public function checkWebhook(): array {
-        $stmt = $this->db->prepare("
-            SELECT webhook_verified 
-            FROM line_accounts 
-            WHERE id = ?
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $account = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        return [
-            'completed' => !empty($account['webhook_verified']),
-            'details' => ['verified' => !empty($account['webhook_verified'])]
-        ];
+        try {
+            // Check if webhook_verified column exists
+            $stmt = $this->db->prepare("SHOW COLUMNS FROM line_accounts LIKE 'webhook_verified'");
+            $stmt->execute();
+            $columnExists = $stmt->rowCount() > 0;
+            
+            if ($columnExists) {
+                $stmt = $this->db->prepare("SELECT webhook_verified FROM line_accounts WHERE id = ?");
+                $stmt->execute([$this->lineAccountId]);
+                $account = $stmt->fetch(\PDO::FETCH_ASSOC);
+                return [
+                    'completed' => !empty($account['webhook_verified']),
+                    'details' => ['verified' => !empty($account['webhook_verified'])]
+                ];
+            }
+            
+            // If column doesn't exist, check if LINE connection works (has token)
+            $lineCheck = $this->checkLineConnection();
+            return [
+                'completed' => $lineCheck['completed'],
+                'details' => ['verified' => $lineCheck['completed']]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check Shop info status
      */
     public function checkShopInfo(): array {
-        $stmt = $this->db->prepare("
-            SELECT shop_name, shop_logo 
-            FROM shop_settings 
-            WHERE line_account_id = ?
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $shop = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        $hasName = !empty($shop['shop_name']);
-        $hasLogo = !empty($shop['shop_logo']);
-        
-        return [
-            'completed' => $hasName,
-            'details' => [
-                'has_name' => $hasName,
-                'has_logo' => $hasLogo
-            ]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT shop_name, shop_logo 
+                FROM shop_settings 
+                WHERE line_account_id = ?
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $shop = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            $hasName = !empty($shop['shop_name']);
+            $hasLogo = !empty($shop['shop_logo']);
+            
+            return [
+                'completed' => $hasName,
+                'details' => [
+                    'has_name' => $hasName,
+                    'has_logo' => $hasLogo
+                ]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check Products status
      */
     public function checkProducts(): array {
-        $stmt = $this->db->prepare("
-            SELECT COUNT(*) as count 
-            FROM products 
-            WHERE line_account_id = ? AND status = 'active'
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        return [
-            'completed' => ($result['count'] ?? 0) > 0,
-            'details' => ['product_count' => $result['count'] ?? 0]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) as count 
+                FROM products 
+                WHERE line_account_id = ? AND status = 'active'
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            return [
+                'completed' => ($result['count'] ?? 0) > 0,
+                'details' => ['product_count' => $result['count'] ?? 0]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check LIFF Shop status
      */
     public function checkLiffShop(): array {
-        $stmt = $this->db->prepare("
-            SELECT liff_shop_id 
-            FROM liff_settings 
-            WHERE line_account_id = ?
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $liff = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        return [
-            'completed' => !empty($liff['liff_shop_id']),
-            'details' => ['has_liff_shop' => !empty($liff['liff_shop_id'])]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT liff_shop_id 
+                FROM liff_settings 
+                WHERE line_account_id = ?
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $liff = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            return [
+                'completed' => !empty($liff['liff_shop_id']),
+                'details' => ['has_liff_shop' => !empty($liff['liff_shop_id'])]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check Payment setup status
      */
     public function checkPayment(): array {
-        $stmt = $this->db->prepare("
-            SELECT bank_accounts, promptpay_number 
-            FROM shop_settings 
-            WHERE line_account_id = ?
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $shop = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        $hasBankAccounts = !empty($shop['bank_accounts']);
-        $hasPromptPay = !empty($shop['promptpay_number']);
-        
-        return [
-            'completed' => $hasBankAccounts || $hasPromptPay,
-            'details' => [
-                'has_bank_accounts' => $hasBankAccounts,
-                'has_promptpay' => $hasPromptPay
-            ]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT bank_accounts, promptpay_number 
+                FROM shop_settings 
+                WHERE line_account_id = ?
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $shop = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            $hasBankAccounts = !empty($shop['bank_accounts']);
+            $hasPromptPay = !empty($shop['promptpay_number']);
+            
+            return [
+                'completed' => $hasBankAccounts || $hasPromptPay,
+                'details' => [
+                    'has_bank_accounts' => $hasBankAccounts,
+                    'has_promptpay' => $hasPromptPay
+                ]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check Rich Menu status
      */
     public function checkRichMenu(): array {
-        $stmt = $this->db->prepare("
-            SELECT COUNT(*) as count 
-            FROM rich_menus 
-            WHERE line_account_id = ? AND is_active = 1
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        return [
-            'completed' => ($result['count'] ?? 0) > 0,
-            'details' => ['rich_menu_count' => $result['count'] ?? 0]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) as count 
+                FROM rich_menus 
+                WHERE line_account_id = ? AND is_active = 1
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            return [
+                'completed' => ($result['count'] ?? 0) > 0,
+                'details' => ['rich_menu_count' => $result['count'] ?? 0]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check Auto Reply status
      */
     public function checkAutoReply(): array {
-        $stmt = $this->db->prepare("
-            SELECT COUNT(*) as count 
-            FROM auto_replies 
-            WHERE line_account_id = ? AND is_active = 1
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        return [
-            'completed' => ($result['count'] ?? 0) > 0,
-            'details' => ['auto_reply_count' => $result['count'] ?? 0]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) as count 
+                FROM auto_replies 
+                WHERE line_account_id = ? AND is_active = 1
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            return [
+                'completed' => ($result['count'] ?? 0) > 0,
+                'details' => ['auto_reply_count' => $result['count'] ?? 0]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check AI Chat status
      */
     public function checkAiChat(): array {
-        $stmt = $this->db->prepare("
-            SELECT ai_enabled, gemini_api_key 
-            FROM ai_settings 
-            WHERE line_account_id = ?
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $ai = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        $enabled = !empty($ai['ai_enabled']);
-        $hasKey = !empty($ai['gemini_api_key']);
-        
-        return [
-            'completed' => $enabled && $hasKey,
-            'details' => [
-                'ai_enabled' => $enabled,
-                'has_api_key' => $hasKey
-            ]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT ai_enabled, gemini_api_key 
+                FROM ai_settings 
+                WHERE line_account_id = ?
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $ai = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            $enabled = !empty($ai['ai_enabled']);
+            $hasKey = !empty($ai['gemini_api_key']);
+            
+            return [
+                'completed' => $enabled && $hasKey,
+                'details' => [
+                    'ai_enabled' => $enabled,
+                    'has_api_key' => $hasKey
+                ]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check Broadcast status
      */
     public function checkBroadcast(): array {
-        $stmt = $this->db->prepare("
-            SELECT COUNT(*) as count 
-            FROM broadcasts 
-            WHERE line_account_id = ? AND status = 'sent'
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        return [
-            'completed' => ($result['count'] ?? 0) > 0,
-            'details' => ['broadcast_count' => $result['count'] ?? 0]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) as count 
+                FROM broadcasts 
+                WHERE line_account_id = ? AND status = 'sent'
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            return [
+                'completed' => ($result['count'] ?? 0) > 0,
+                'details' => ['broadcast_count' => $result['count'] ?? 0]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
-    
     /**
      * Check Loyalty status
      */
     public function checkLoyalty(): array {
-        $stmt = $this->db->prepare("
-            SELECT loyalty_enabled 
-            FROM shop_settings 
-            WHERE line_account_id = ?
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $shop = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        return [
-            'completed' => !empty($shop['loyalty_enabled']),
-            'details' => ['loyalty_enabled' => !empty($shop['loyalty_enabled'])]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT loyalty_enabled 
+                FROM shop_settings 
+                WHERE line_account_id = ?
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $shop = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            return [
+                'completed' => !empty($shop['loyalty_enabled']),
+                'details' => ['loyalty_enabled' => !empty($shop['loyalty_enabled'])]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
      * Check Member Card status
      */
     public function checkMemberCard(): array {
-        $stmt = $this->db->prepare("
-            SELECT liff_member_id 
-            FROM liff_settings 
-            WHERE line_account_id = ?
-        ");
-        $stmt->execute([$this->lineAccountId]);
-        $liff = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
-        return [
-            'completed' => !empty($liff['liff_member_id']),
-            'details' => ['has_liff_member' => !empty($liff['liff_member_id'])]
-        ];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT liff_member_id 
+                FROM liff_settings 
+                WHERE line_account_id = ?
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $liff = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            return [
+                'completed' => !empty($liff['liff_member_id']),
+                'details' => ['has_liff_member' => !empty($liff['liff_member_id'])]
+            ];
+        } catch (\Exception $e) {
+            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+        }
     }
     
     /**
