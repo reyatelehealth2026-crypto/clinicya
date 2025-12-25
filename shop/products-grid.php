@@ -61,7 +61,7 @@ $orderBy = match($sortBy) {
 };
 
 // Count total
-$countSql = "SELECT COUNT(*) FROM products bi WHERE $whereClause";
+$countSql = "SELECT COUNT(*) FROM business_items bi WHERE $whereClause";
 $stmt = $db->prepare($countSql);
 $stmt->execute($params);
 $totalProducts = $stmt->fetchColumn();
@@ -70,7 +70,7 @@ $offset = ($page - 1) * $perPage;
 
 // Get products
 $sql = "SELECT bi.*, pc.name as category_name 
-        FROM products bi 
+        FROM business_items bi 
         LEFT JOIN product_categories pc ON bi.category_id = pc.id 
         WHERE $whereClause 
         ORDER BY $orderBy 

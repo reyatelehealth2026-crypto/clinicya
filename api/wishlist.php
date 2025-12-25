@@ -143,7 +143,7 @@ try {
                                 THEN ROUND((1 - p.sale_price / w.price_when_added) * 100) 
                                 ELSE 0 END as discount_percent
                     FROM user_wishlist w
-                    JOIN products p ON w.product_id = p.id
+                    JOIN business_items p ON w.product_id = p.id
                     WHERE ";
             
             if ($userId) {

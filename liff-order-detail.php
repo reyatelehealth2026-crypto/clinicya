@@ -36,7 +36,7 @@ if ($orderId) {
                 SELECT ti.*, COALESCE(p.name, ti.product_name) as name, 
                        p.image_url as image, p.id as product_id, p.is_active
                 FROM transaction_items ti
-                LEFT JOIN products p ON ti.product_id = p.id
+                LEFT JOIN business_items p ON ti.product_id = p.id
                 WHERE ti.transaction_id = ?
             ");
             $stmt->execute([$order['id']]);

@@ -72,7 +72,7 @@ if ($debugMode) {
             echo "<p><strong>DB User ID:</strong> " . ($dbUserId ?: 'ไม่พบ') . "</p>";
             
             if ($dbUserId) {
-                $stmt = $db->prepare("SELECT c.*, p.name, p.price, p.sale_price FROM cart_items c JOIN products p ON c.product_id = p.id WHERE c.user_id = ?");
+                $stmt = $db->prepare("SELECT c.*, p.name, p.price, p.sale_price FROM cart_items c JOIN business_items p ON c.product_id = p.id WHERE c.user_id = ?");
                 $stmt->execute([$dbUserId]);
                 $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 echo "<p><strong>Cart Items:</strong> " . count($cartItems) . " รายการ</p>";

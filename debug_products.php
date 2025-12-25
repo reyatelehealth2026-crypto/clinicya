@@ -18,7 +18,7 @@ echo "<p>current_bot_id: " . ($currentBotId ?? 'NULL') . "</p>";
 // ดูสินค้าทั้งหมด
 echo "<h3>1. สินค้าทั้งหมด (ไม่กรอง)</h3>";
 try {
-    $stmt = $db->query("SELECT id, name, line_account_id, is_active FROM products ORDER BY id DESC LIMIT 20");
+    $stmt = $db->query("SELECT id, name, line_account_id, is_active FROM business_items ORDER BY id DESC LIMIT 20");
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     echo "<p>พบ " . count($products) . " สินค้า</p>";
@@ -40,7 +40,7 @@ try {
 // ดูสินค้าที่กรองตาม bot
 echo "<h3>2. สินค้าที่กรองตาม current_bot_id = {$currentBotId}</h3>";
 try {
-    $stmt = $db->prepare("SELECT id, name, line_account_id, is_active FROM products WHERE (line_account_id = ? OR line_account_id IS NULL) AND is_active = 1");
+    $stmt = $db->prepare("SELECT id, name, line_account_id, is_active FROM business_items WHERE (line_account_id = ? OR line_account_id IS NULL) AND is_active = 1");
     $stmt->execute([$currentBotId]);
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     

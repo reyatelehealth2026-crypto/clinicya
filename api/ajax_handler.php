@@ -276,12 +276,12 @@ try {
             $imageUrl = $_POST['image_url'] ?? '';
             if (empty($name) || $price <= 0) throw new Exception('กรุณากรอกชื่อสินค้าและราคา');
             if ($action === 'create_product') {
-                $stmt = $db->prepare("INSERT INTO products (line_account_id, category_id, name, price, sale_price, stock, description, image_url, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt = $db->prepare("INSERT INTO business_items (line_account_id, category_id, name, price, sale_price, stock, description, image_url, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$currentBotId, $categoryId, $name, $price, $salePrice, $stock, $description, $imageUrl, $isActive]);
                 echo json_encode(['success' => true, 'product_id' => $db->lastInsertId(), 'message' => 'เพิ่มสินค้าสำเร็จ']);
             } else {
                 $id = (int)$_POST['id'];
-                $stmt = $db->prepare("UPDATE products SET category_id = ?, name = ?, price = ?, sale_price = ?, stock = ?, description = ?, image_url = ?, is_active = ? WHERE id = ? AND line_account_id = ?");
+                $stmt = $db->prepare("UPDATE business_items SET category_id = ?, name = ?, price = ?, sale_price = ?, stock = ?, description = ?, image_url = ?, is_active = ? WHERE id = ? AND line_account_id = ?");
                 $stmt->execute([$categoryId, $name, $price, $salePrice, $stock, $description, $imageUrl, $isActive, $id, $currentBotId]);
                 echo json_encode(['success' => true, 'message' => 'อัพเดทสินค้าสำเร็จ']);
             }
@@ -527,7 +527,7 @@ try {
             $query = trim($_GET['q'] ?? '');
             $products = [];
             if (strlen($query) >= 1) {
-                $table = 'products';
+                $table = 'business_items';
                 
                 $search = '%' . $query . '%';
                 $sql = "SELECT id, name, sku, barcode, price, stock, unit FROM {$table} 
@@ -543,7 +543,7 @@ try {
                 $sql .= " ORDER BY name ASC LIMIT 15";
                 $stmt = $db->prepare($sql);
                 $stmt->execute($params);
-                $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $products = $stmt->fetchAll(PDO::FETCH_ASSOC);TCH_ASSOC);
             }
             ob_end_clean();
             echo json_encode(['success' => true, 'products' => $products]);

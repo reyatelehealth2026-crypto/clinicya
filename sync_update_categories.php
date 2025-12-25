@@ -123,7 +123,7 @@ function updateProductCategories($db, $lineAccountId) {
     
     // Get products with extra_data
     try {
-        $stmt = $db->query("SELECT id, extra_data, category_id FROM products WHERE extra_data IS NOT NULL AND extra_data != ''");
+        $stmt = $db->query("SELECT id, extra_data, category_id FROM business_items WHERE extra_data IS NOT NULL AND extra_data != ''");
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Exception $e) {
         return ['success' => false, 'error' => 'Cannot fetch products: ' . $e->getMessage()];
@@ -144,7 +144,7 @@ function updateProductCategories($db, $lineAccountId) {
             $categoryId = getOrCreateCategory($db, $cnyCategory, $lineAccountId);
             
             if ($categoryId && $categoryId != $product['category_id']) {
-                $db->prepare("UPDATE products SET category_id = ? WHERE id = ?")
+                $db->prepare("UPDATE business_items SET category_id = ? WHERE id = ?")
                     ->execute([$categoryId, $product['id']]);
                 $stats['updated']++;
             } else {
@@ -208,7 +208,7 @@ try {
         $stmt = $db->query("
             SELECT c.id, c.name, c.cny_code, COUNT(p.id) as product_count
             FROM product_categories c
-            LEFT JOIN products p ON p.category_id = c.id
+            LEFT JOIN business_items p ON p.category_id = c.id
             GROUP BY c.id, c.name, c.cny_code
             ORDER BY c.sort_order
         ");
@@ -216,7 +216,7 @@ try {
         $stmt = $db->query("
             SELECT c.id, c.name, NULL as cny_code, COUNT(p.id) as product_count
             FROM product_categories c
-            LEFT JOIN products p ON p.category_id = c.id
+            LEFT JOIN business_items p ON p.category_id = c.id
             GROUP BY c.id, c.name
             ORDER BY c.sort_order
         ");
@@ -227,7 +227,7 @@ try {
 // Get products without category
 $productsWithoutCategory = 0;
 try {
-    $stmt = $db->query("SELECT COUNT(*) FROM products WHERE category_id IS NULL");
+    $stmt = $db->query("SELECT COUNT(*) FROM business_items WHERE category_id IS NULL");
     $productsWithoutCategory = $stmt->fetchColumn();
 } catch (Exception $e) {}
 

@@ -10,7 +10,7 @@ $stmt = $db->query("SELECT id, name FROM product_categories WHERE is_active = 1 
 $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get products with category - แสดงทั้งหมด ไม่ filter ตาม line_account_id
-$stmt = $db->query("SELECT p.*, c.name as category_name FROM products p LEFT JOIN product_categories c ON p.category_id = c.id ORDER BY p.id DESC");
+$stmt = $db->query("SELECT p.*, c.name as category_name FROM business_items p LEFT JOIN product_categories c ON p.category_id = c.id ORDER BY p.id DESC");
 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 

@@ -249,7 +249,7 @@ if (isset($_POST['sync_all'])) {
     $updated = 0;
     foreach ($productCatMap as $productId => $categoryId) {
         try {
-            $stmt = $db->prepare("UPDATE products SET category_id = ? WHERE id = ?");
+            $stmt = $db->prepare("UPDATE business_items SET category_id = ? WHERE id = ?");
             $stmt->execute([$categoryId, $productId]);
             if ($stmt->rowCount() > 0) {
                 $updated++;
@@ -271,7 +271,7 @@ if (isset($_POST['sync_all'])) {
     }
     
     // Check remaining
-    $stmt = $db->query("SELECT COUNT(*) FROM products WHERE category_id IS NULL OR category_id = 0");
+    $stmt = $db->query("SELECT COUNT(*) FROM business_items WHERE category_id IS NULL OR category_id = 0");
     $remaining = $stmt->fetchColumn();
     if ($remaining > 0) {
         echo "<p class='warning'>⚠️ ยังเหลือสินค้าที่ไม่มี category: $remaining รายการ</p>";
@@ -289,10 +289,10 @@ $stmt = $db->query("SELECT COUNT(*) FROM $catTable");
 $catCount = $stmt->fetchColumn();
 
 // Products
-$stmt = $db->query("SELECT COUNT(*) FROM products");
+$stmt = $db->query("SELECT COUNT(*) FROM business_items");
 $totalProducts = $stmt->fetchColumn();
 
-$stmt = $db->query("SELECT COUNT(*) FROM products WHERE category_id IS NOT NULL AND category_id > 0");
+$stmt = $db->query("SELECT COUNT(*) FROM business_items WHERE category_id IS NOT NULL AND category_id > 0");
 $withCategory = $stmt->fetchColumn();
 
 $noCategory = $totalProducts - $withCategory;
@@ -327,7 +327,7 @@ echo "</div>";
 echo "<div class='card'>";
 echo "<h2>📁 Categories ในระบบ</h2>";
 
-$stmt = $db->query("SELECT c.*, (SELECT COUNT(*) FROM products WHERE category_id = c.id) as product_count FROM $catTable c ORDER BY c.id");
+$stmt = $db->query("SELECT c.*, (SELECT COUNT(*) FROM business_items WHERE category_id = c.id) as product_count FROM $catTable c ORDER BY c.id");
 $cats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 if (count($cats) > 0) {

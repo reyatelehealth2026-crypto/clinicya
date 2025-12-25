@@ -383,7 +383,7 @@ function handleGetCart() {
         SELECT c.*, p.name, p.price, p.sale_price, p.image_url, p.is_active,
                (COALESCE(p.sale_price, p.price) * c.quantity) as subtotal
         FROM cart_items c
-        LEFT JOIN products p ON c.product_id = p.id
+        LEFT JOIN business_items p ON c.product_id = p.id
         WHERE c.user_id = ?
     ");
     $stmt->execute([$userId]);
@@ -505,7 +505,7 @@ function handleCreateOrder($data) {
     $stmt = $db->prepare("
         SELECT c.*, p.name, p.price, p.sale_price
         FROM cart_items c
-        JOIN products p ON c.product_id = p.id
+        JOIN business_items p ON c.product_id = p.id
         WHERE c.user_id = ?
     ");
     $stmt->execute([$userId]);
@@ -1019,7 +1019,7 @@ function handleGetOrderItems() {
     // Get items
     $stmt = $db->prepare("SELECT ti.*, p.image_url 
         FROM transaction_items ti 
-        LEFT JOIN products p ON ti.product_id = p.id 
+        LEFT JOIN business_items p ON ti.product_id = p.id 
         WHERE ti.transaction_id = ?");
     $stmt->execute([$orderId]);
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);

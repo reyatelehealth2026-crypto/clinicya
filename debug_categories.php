@@ -17,7 +17,7 @@ echo "</table>";
 
 // 2. Products by category_id
 echo "<h3>2. จำนวนสินค้าแต่ละ category_id</h3>";
-$bycat = $db->query("SELECT category_id, COUNT(*) as cnt FROM products GROUP BY category_id ORDER BY category_id")->fetchAll();
+$bycat = $db->query("SELECT category_id, COUNT(*) as cnt FROM business_items GROUP BY category_id ORDER BY category_id")->fetchAll();
 echo "<table><tr><th>Category ID</th><th>Count</th><th>Category Name</th></tr>";
 foreach ($bycat as $b) {
     $catName = '-';
@@ -31,7 +31,7 @@ echo "</table>";
 
 // 3. Products with invalid category_id
 echo "<h3>3. สินค้าที่ category_id ไม่มีในตาราง categories</h3>";
-$invalid = $db->query("SELECT p.id, p.name, p.category_id FROM products p 
+$invalid = $db->query("SELECT p.id, p.name, p.category_id FROM business_items p 
     LEFT JOIN product_categories c ON p.category_id = c.id 
     WHERE c.id IS NULL AND p.category_id IS NOT NULL LIMIT 20")->fetchAll();
 if (empty($invalid)) {
@@ -44,7 +44,7 @@ if (empty($invalid)) {
     echo "</table>";
     
     // Show unique invalid category_ids
-    $uniqueInvalid = $db->query("SELECT DISTINCT category_id FROM products p 
+    $uniqueInvalid = $db->query("SELECT DISTINCT category_id FROM business_items p 
         LEFT JOIN product_categories c ON p.category_id = c.id 
         WHERE c.id IS NULL AND p.category_id IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN);
     echo "<br>Invalid category_ids: " . implode(', ', $uniqueInvalid);

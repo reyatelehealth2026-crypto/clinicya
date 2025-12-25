@@ -22,7 +22,7 @@ $sql = "SELECT w.*,
                u.line_user_id, u.display_name,
                la.channel_access_token
         FROM user_wishlist w
-        JOIN products p ON w.product_id = p.id
+        JOIN business_items p ON w.product_id = p.id
         JOIN users u ON w.user_id = u.id
         LEFT JOIN line_accounts la ON w.line_account_id = la.id
         WHERE w.notify_on_sale = 1

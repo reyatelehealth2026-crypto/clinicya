@@ -12,15 +12,15 @@ $db = Database::getInstance()->getConnection();
 
 echo "<h2>Debug Shop System</h2>";
 
-// ตรวจสอบตาราง products
-echo "<h3>1. ตาราง products</h3>";
+// ตรวจสอบตาราง business_items
+echo "<h3>1. ตาราง business_items</h3>";
 try {
-    $stmt = $db->query("SELECT COUNT(*) FROM products");
+    $stmt = $db->query("SELECT COUNT(*) FROM business_items");
     $count = $stmt->fetchColumn();
-    echo "<p style='color:green'>✅ ตาราง products มี {$count} รายการ</p>";
+    echo "<p style='color:green'>✅ ตาราง business_items มี {$count} รายการ</p>";
     
     // แสดงสินค้า
-    $stmt = $db->query("SELECT * FROM products LIMIT 5");
+    $stmt = $db->query("SELECT * FROM business_items LIMIT 5");
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if (count($products) > 0) {
         echo "<table border='1' cellpadding='5'>";

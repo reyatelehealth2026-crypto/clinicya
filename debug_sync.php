@@ -72,12 +72,12 @@ try {
         }
     }
     
-    echo "=== 6. Checking Products Table ===\n";
-    $count = $db->query("SELECT COUNT(*) FROM products")->fetchColumn();
-    echo "Products in database: {$count}\n\n";
+    echo "=== 6. Checking Business Items Table ===\n";
+    $count = $db->query("SELECT COUNT(*) FROM business_items")->fetchColumn();
+    echo "Business items in database: {$count}\n\n";
     
-    echo "=== 7. Sample Products ===\n";
-    $stmt = $db->query("SELECT id, sku, name FROM products LIMIT 5");
+    echo "=== 7. Sample Business Items ===\n";
+    $stmt = $db->query("SELECT id, sku, name FROM business_items LIMIT 5");
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         echo "ID: {$row['id']} | SKU: {$row['sku']} | Name: {$row['name']}\n";
     }

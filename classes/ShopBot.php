@@ -62,7 +62,7 @@ class ShopBot
      */
     private function isShopReady()
     {
-        return $this->tableExists('product_categories') && $this->tableExists('products');
+        return $this->tableExists('product_categories') && $this->tableExists('business_items');
     }
 
     /**
@@ -194,9 +194,9 @@ class ShopBot
     private function getProductsByCategory($categoryId, $limit = 10)
     {
         $limit = (int)$limit;
-        $sql = "SELECT * FROM products WHERE category_id = ? AND is_active = 1";
+        $sql = "SELECT * FROM business_items WHERE category_id = ? AND is_active = 1";
         
-        if ($this->lineAccountId && $this->hasLineAccountColumn('products')) {
+        if ($this->lineAccountId && $this->hasLineAccountColumn('business_items')) {
             $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
             $sql .= " ORDER BY id DESC LIMIT {$limit}";
             $stmt = $this->db->prepare($sql);
@@ -214,9 +214,9 @@ class ShopBot
      */
     private function getProduct($productId)
     {
-        $sql = "SELECT * FROM products WHERE id = ? AND is_active = 1";
+        $sql = "SELECT * FROM business_items WHERE id = ? AND is_active = 1";
         
-        if ($this->lineAccountId && $this->hasLineAccountColumn('products')) {
+        if ($this->lineAccountId && $this->hasLineAccountColumn('business_items')) {
             $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([$productId, $this->lineAccountId]);
@@ -485,7 +485,7 @@ class ShopBot
     {
         $stmt = $this->db->prepare("SELECT c.*, p.name, p.price, p.sale_price, p.image_url 
                                     FROM cart_items c 
-                                    JOIN products p ON c.product_id = p.id 
+                                    JOIN business_items p ON c.product_id = p.id 
                                     WHERE c.user_id = ?");
         $stmt->execute([$dbUserId]);
         $items = $stmt->fetchAll();
@@ -607,7 +607,7 @@ class ShopBot
     {
         try {
             // Get cart items
-            $stmt = $this->db->prepare("SELECT c.*, p.name, p.price, p.sale_price, p.image_url FROM cart_items c JOIN products p ON c.product_id = p.id WHERE c.user_id = ?");
+            $stmt = $this->db->prepare("SELECT c.*, p.name, p.price, p.sale_price, p.image_url FROM cart_items c JOIN business_items p ON c.product_id = p.id WHERE c.user_id = ?");
             $stmt->execute([$dbUserId]);
             $items = $stmt->fetchAll();
 
@@ -823,8 +823,8 @@ class ShopBot
     public function searchProducts($keyword, $replyToken)
     {
         $searchTerm = '%' . $keyword . '%';
-        $sql = "SELECT * FROM products WHERE (name LIKE ? OR description LIKE ?) AND is_active = 1";
-        if ($this->lineAccountId && $this->hasLineAccountColumn('products')) {
+        $sql = "SELECT * FROM business_items WHERE (name LIKE ? OR description LIKE ?) AND is_active = 1";
+        if ($this->lineAccountId && $this->hasLineAccountColumn('business_items')) {
             $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
             $sql .= " ORDER BY id DESC LIMIT 10";
             $stmt = $this->db->prepare($sql);
@@ -1067,8 +1067,8 @@ class ShopBot
      */
     public function showProduct($productId, $replyToken)
     {
-        $sql = "SELECT p.*, c.name as category_name FROM products p LEFT JOIN product_categories c ON p.category_id = c.id WHERE p.id = ? AND p.is_active = 1";
-        if ($this->lineAccountId && $this->hasLineAccountColumn('products')) {
+        $sql = "SELECT p.*, c.name as category_name FROM business_items p LEFT JOIN product_categories c ON p.category_id = c.id WHERE p.id = ? AND p.is_active = 1";
+        if ($this->lineAccountId && $this->hasLineAccountColumn('business_items')) {
             $sql .= " AND (p.line_account_id = ? OR p.line_account_id IS NULL)";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([$productId, $this->lineAccountId]);

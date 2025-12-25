@@ -18,8 +18,8 @@ foreach ($tables as $t) {
 
 // Products stats
 try {
-    $r = $db->query("SELECT COUNT(*) as t, SUM(is_active) as a FROM products")->fetch();
-    echo "<br>Products total: {$r['t']}, active: {$r['a']}<br>";
+    $r = $db->query("SELECT COUNT(*) as t, SUM(is_active) as a FROM business_items")->fetch();
+    echo "<br>Business items total: {$r['t']}, active: {$r['a']}<br>";
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage();
 }

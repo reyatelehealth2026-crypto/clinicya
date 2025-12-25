@@ -82,7 +82,7 @@ if ($cartItems) {
     $productIds = array_column($cartItems, 'product_id');
     $placeholders = implode(',', array_fill(0, count($productIds), '?'));
     
-    $stmt = $db->prepare("SELECT id, name, price, is_active, stock FROM products WHERE id IN ({$placeholders})");
+    $stmt = $db->prepare("SELECT id, name, price, is_active, stock FROM business_items WHERE id IN ({$placeholders})");
     $stmt->execute($productIds);
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
@@ -162,7 +162,7 @@ try {
         SELECT c.*, u.line_user_id, u.display_name, p.name as product_name
         FROM cart_items c
         LEFT JOIN users u ON c.user_id = u.id
-        LEFT JOIN products p ON c.product_id = p.id
+        LEFT JOIN business_items p ON c.product_id = p.id
         ORDER BY c.id DESC
         LIMIT 20
     ");

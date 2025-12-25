@@ -114,7 +114,7 @@ function handleMyOrders($db) {
                        p.sku, p.description, p.unit,
                        p.manufacturer, p.generic_name, p.usage_instructions
                 FROM {$orderItemsTable} oi
-                LEFT JOIN products p ON oi.product_id = p.id
+                LEFT JOIN business_items p ON oi.product_id = p.id
                 WHERE oi.{$orderIdField} = ?
             ");
             $stmt->execute([$orderId]);
@@ -201,7 +201,7 @@ function handleOrderDetail($db) {
         $stmt = $db->prepare("
             SELECT oi.*, p.name, p.image_url as image, p.sku
             FROM {$orderItemsTable} oi
-            LEFT JOIN products p ON oi.product_id = p.id
+            LEFT JOIN business_items p ON oi.product_id = p.id
             WHERE oi.{$itemOrderIdField} = ?
         ");
         $stmt->execute([$order['id']]);

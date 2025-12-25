@@ -13,10 +13,10 @@ require_once __DIR__ . '/../config/database.php';
 
 $db = Database::getInstance()->getConnection();
 
-// Get all columns from products table
+// Get all columns from business_items table
 $allColumns = [];
 try {
-    $cols = $db->query("SHOW COLUMNS FROM products")->fetchAll(PDO::FETCH_COLUMN);
+    $cols = $db->query("SHOW COLUMNS FROM business_items")->fetchAll(PDO::FETCH_COLUMN);
     $allColumns = $cols;
 } catch (Exception $e) {}
 
@@ -50,7 +50,7 @@ $sql = "SELECT
     p.*,
     pc.name as category_name,
     pc.cny_code as category_code
-FROM products p
+FROM business_items p
 LEFT JOIN product_categories pc ON p.category_id = pc.id
 WHERE $whereClause
 ORDER BY p.id ASC";

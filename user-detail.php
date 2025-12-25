@@ -489,7 +489,7 @@ try {
                     <?php 
                     // Get order items
                     try {
-                        $stmtItems = $db->prepare("SELECT ti.*, p.name as product_name FROM transaction_items ti LEFT JOIN products p ON ti.product_id = p.id WHERE ti.transaction_id = ? LIMIT 3");
+                        $stmtItems = $db->prepare("SELECT ti.*, p.name as product_name FROM transaction_items ti LEFT JOIN business_items p ON ti.product_id = p.id WHERE ti.transaction_id = ? LIMIT 3");
                         $stmtItems->execute([$order['id']]);
                         $items = $stmtItems->fetchAll(PDO::FETCH_ASSOC);
                         if (!empty($items)):
