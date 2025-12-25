@@ -1111,6 +1111,11 @@ $menuSections = [
                 </div>
                 
                 <div class="header-actions">
+                    <!-- Onboarding Assistant -->
+                    <a href="<?= $baseUrl ?>onboarding-assistant.php" class="header-btn" title="Kiro Assistant - ผู้ช่วยตั้งค่าระบบ" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white;">
+                        <i class="fas fa-robot"></i>
+                    </a>
+                    
                     <!-- Quick Actions -->
                     <a href="<?= $baseUrl ?>inbox.php" class="header-btn" title="Inbox (Real-time)">
                         <i class="fas fa-inbox"></i>
