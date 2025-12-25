@@ -73,15 +73,17 @@ $startTime = microtime(true);
     <!-- Test Controls -->
     <div class="bg-white rounded-lg shadow p-4 mb-4">
         <h2 class="font-bold text-lg mb-2">🎮 เริ่มทดสอบ</h2>
+        
+        <div class="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4 text-sm">
+            ⚠️ <strong>หมายเหตุ:</strong> เพื่อป้องกัน server ล่ม ระบบจำกัดไว้ที่ max 5 users, 3 requests/user
+        </div>
+        
         <div class="flex flex-wrap gap-2 mb-4">
             <button onclick="runTest('database')" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
                 💾 Test Database
             </button>
             <button onclick="runTest('api')" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
                 🔌 Test API
-            </button>
-            <button onclick="runTest('webhook')" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">
-                📨 Test Webhook
             </button>
             <button onclick="runTest('chat')" class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600">
                 💬 Test Chat
@@ -93,13 +95,13 @@ $startTime = microtime(true);
         
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm font-medium mb-1">จำนวน Concurrent Users</label>
-                <input type="number" id="concurrentUsers" value="10" min="1" max="500" 
+                <label class="block text-sm font-medium mb-1">จำนวน Concurrent Users (max 5)</label>
+                <input type="number" id="concurrentUsers" value="3" min="1" max="5" 
                        class="w-full border rounded px-3 py-2">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">Requests per User</label>
-                <input type="number" id="requestsPerUser" value="5" min="1" max="50" 
+                <label class="block text-sm font-medium mb-1">Requests per User (max 3)</label>
+                <input type="number" id="requestsPerUser" value="2" min="1" max="3" 
                        class="w-full border rounded px-3 py-2">
             </div>
         </div>
