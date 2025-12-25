@@ -34,6 +34,51 @@ $shopSettings = getShopSettings($db, $lineAccountId);
 $companyName = $shopSettings['shop_name'] ?? 'ร้านค้า';
 $baseUrl = rtrim(BASE_URL, '/');
 
+// Get promotion settings
+function getPromoSetting($db, $lineAccountId, $key, $default = null) {
+    try {
+        $stmt = $db->prepare("SELECT setting_value FROM promotion_settings WHERE line_account_id = ? AND setting_key = ?");
+        $stmt->execute([$lineAccountId, $key]);
+        $value = $stmt->fetchColumn();
+        if ($value === false) return $default;
+        $decoded = json_decode($value, true);
+        return $decoded !== null ? $decoded : $value;
+    } catch (Exception $e) { return $default; }
+}
+
+$promoSettings = [
+    'image_size' => getPromoSetting($db, $lineAccountId, 'image_size', 'medium'),
+    'image_ratio' => getPromoSetting($db, $lineAccountId, 'image_ratio', '1:1'),
+    'products_per_section' => (int)getPromoSetting($db, $lineAccountId, 'products_per_section', 6),
+    'columns_mobile' => (int)getPromoSetting($db, $lineAccountId, 'columns_mobile', 2),
+    'columns_desktop' => (int)getPromoSetting($db, $lineAccountId, 'columns_desktop', 4),
+    'show_sale_section' => getPromoSetting($db, $lineAccountId, 'show_sale_section', '1'),
+    'show_bestseller_section' => getPromoSetting($db, $lineAccountId, 'show_bestseller_section', '1'),
+    'show_featured_section' => getPromoSetting($db, $lineAccountId, 'show_featured_section', '1'),
+    'show_points_badge' => getPromoSetting($db, $lineAccountId, 'show_points_badge', '1'),
+    'primary_color' => getPromoSetting($db, $lineAccountId, 'primary_color', '#11B0A6'),
+    'sale_badge_color' => getPromoSetting($db, $lineAccountId, 'sale_badge_color', '#EF4444'),
+    'bestseller_badge_color' => getPromoSetting($db, $lineAccountId, 'bestseller_badge_color', '#F59E0B'),
+    'featured_badge_color' => getPromoSetting($db, $lineAccountId, 'featured_badge_color', '#8B5CF6'),
+    'card_style' => getPromoSetting($db, $lineAccountId, 'card_style', 'rounded'),
+    'card_shadow' => getPromoSetting($db, $lineAccountId, 'card_shadow', 'sm'),
+    'show_sku' => getPromoSetting($db, $lineAccountId, 'show_sku', '0'),
+    'show_stock' => getPromoSetting($db, $lineAccountId, 'show_stock', '0'),
+    'banner_height_mobile' => (int)getPromoSetting($db, $lineAccountId, 'banner_height_mobile', 160),
+    'banner_height_desktop' => (int)getPromoSetting($db, $lineAccountId, 'banner_height_desktop', 200),
+    'banner_autoplay' => getPromoSetting($db, $lineAccountId, 'banner_autoplay', '1'),
+    'banner_interval' => (int)getPromoSetting($db, $lineAccountId, 'banner_interval', 5000),
+];
+$banners = getPromoSetting($db, $lineAccountId, 'banners', []);
+
+// Image size mapping
+$imageSizes = ['small' => '120px', 'medium' => '160px', 'large' => '200px', 'xlarge' => '240px'];
+$imageSize = $imageSizes[$promoSettings['image_size']] ?? '160px';
+
+// Card border radius
+$cardRadius = ['square' => '0', 'rounded' => '8px', 'rounded-lg' => '16px', 'rounded-xl' => '24px'];
+$borderRadius = $cardRadius[$promoSettings['card_style']] ?? '16px';
+
 // Check columns
 $hasIsFeatured = $hasIsBestseller = false;
 try {
@@ -94,24 +139,45 @@ try {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root { --primary: #11B0A6; }
+        :root { 
+            --primary: <?= $promoSettings['primary_color'] ?>;
+            --sale-badge: <?= $promoSettings['sale_badge_color'] ?>;
+            --bestseller-badge: <?= $promoSettings['bestseller_badge_color'] ?>;
+            --featured-badge: <?= $promoSettings['featured_badge_color'] ?>;
+            --card-radius: <?= $borderRadius ?>;
+            --image-size: <?= $imageSize ?>;
+            --cols-mobile: <?= $promoSettings['columns_mobile'] ?>;
+            --cols-desktop: <?= $promoSettings['columns_desktop'] ?>;
+            --banner-height-mobile: <?= $promoSettings['banner_height_mobile'] ?>px;
+            --banner-height-desktop: <?= $promoSettings['banner_height_desktop'] ?>px;
+        }
         body { font-family: 'Sarabun', sans-serif; background: #F8FAFC; }
         .scroll-x { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
         .scroll-x::-webkit-scrollbar { display: none; }
-        .scroll-item { scroll-snap-align: start; flex-shrink: 0; }
+        .scroll-item { scroll-snap-align: start; flex-shrink: 0; width: var(--image-size); }
         
         .tab-btn { padding: 10px 20px; border-radius: 25px; font-weight: 600; transition: all 0.2s; }
         .tab-btn.active { background: var(--primary); color: white; }
         .tab-btn:not(.active) { background: white; color: #6B7280; border: 1px solid #E5E7EB; }
         
-        .product-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: transform 0.15s; }
+        .product-card { 
+            background: white; 
+            border-radius: var(--card-radius); 
+            overflow: hidden; 
+            <?php
+            $shadows = ['none' => 'none', 'sm' => '0 2px 8px rgba(0,0,0,0.06)', 'md' => '0 4px 12px rgba(0,0,0,0.1)', 'lg' => '0 8px 24px rgba(0,0,0,0.15)'];
+            echo 'box-shadow: ' . ($shadows[$promoSettings['card_shadow']] ?? $shadows['sm']) . ';';
+            ?>
+            transition: transform 0.15s; 
+        }
         .product-card:active { transform: scale(0.98); }
+        .product-card .product-image { height: var(--image-size); }
         
-        .sale-badge { position: absolute; top: 8px; left: 8px; background: #EF4444; color: white; font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: bold; }
-        .featured-badge { position: absolute; top: 8px; right: 8px; background: #F59E0B; color: white; font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: bold; }
-        .bestseller-badge { position: absolute; top: 8px; left: 8px; background: linear-gradient(90deg, #EF4444, #DC2626); color: white; font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: bold; }
+        .sale-badge { position: absolute; top: 8px; left: 8px; background: var(--sale-badge); color: white; font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: bold; }
+        .featured-badge { position: absolute; top: 8px; right: 8px; background: var(--featured-badge); color: white; font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: bold; }
+        .bestseller-badge { position: absolute; top: 8px; left: 8px; background: var(--bestseller-badge); color: white; font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: bold; }
         
-        .reward-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: transform 0.15s; }
+        .reward-card { background: white; border-radius: var(--card-radius); overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: transform 0.15s; }
         .reward-card:active { transform: scale(0.98); }
         
         .points-badge { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
@@ -119,6 +185,34 @@ try {
         .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
         .section-title { display: flex; align-items: center; gap: 8px; font-weight: bold; color: #1F2937; }
         .section-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        
+        .product-grid { 
+            display: grid; 
+            grid-template-columns: repeat(var(--cols-mobile), 1fr); 
+            gap: 12px; 
+        }
+        @media (min-width: 768px) {
+            .product-grid { grid-template-columns: repeat(var(--cols-desktop), 1fr); }
+        }
+        
+        .price-text { color: var(--primary); }
+        
+        /* Banner Slider */
+        .banner-slider { height: var(--banner-height-mobile); overflow: hidden; position: relative; }
+        @media (min-width: 768px) { .banner-slider { height: var(--banner-height-desktop); } }
+        .banner-slider img { width: 100%; height: 100%; object-fit: cover; }
+        .banner-dots { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+        .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.5); cursor: pointer; }
+        .banner-dot.active { background: white; }
+        
+        /* Image ratio */
+        <?php
+        $ratios = ['1:1' => '100%', '4:3' => '75%', '3:4' => '133.33%', '16:9' => '56.25%'];
+        $paddingRatio = $ratios[$promoSettings['image_ratio']] ?? '100%';
+        ?>
+        .product-image-wrapper { position: relative; padding-bottom: <?= $paddingRatio ?>; overflow: hidden; background: #f3f4f6; }
+        .product-image-wrapper img, .product-image-wrapper .placeholder { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .product-image-wrapper .placeholder { display: flex; align-items: center; justify-content: center; }
     </style>
 </head>
 <body class="min-h-screen pb-24">
@@ -147,7 +241,33 @@ try {
 
     <!-- Promotions Tab -->
     <div id="contentPromotions" class="<?= $tab !== 'promotions' ? 'hidden' : '' ?>">
+        
+        <!-- Banner Slider -->
+        <?php if (!empty($banners)): ?>
+        <div class="banner-slider" id="bannerSlider">
+            <?php foreach ($banners as $i => $banner): ?>
+            <div class="banner-slide <?= $i === 0 ? 'active' : '' ?>" style="display: <?= $i === 0 ? 'block' : 'none' ?>">
+                <?php if (!empty($banner['link'])): ?>
+                <a href="<?= htmlspecialchars($banner['link']) ?>">
+                    <img src="<?= htmlspecialchars($banner['image']) ?>" alt="<?= htmlspecialchars($banner['title'] ?? 'Banner') ?>" loading="lazy">
+                </a>
+                <?php else: ?>
+                <img src="<?= htmlspecialchars($banner['image']) ?>" alt="<?= htmlspecialchars($banner['title'] ?? 'Banner') ?>" loading="lazy">
+                <?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+            <?php if (count($banners) > 1): ?>
+            <div class="banner-dots">
+                <?php foreach ($banners as $i => $banner): ?>
+                <span class="banner-dot <?= $i === 0 ? 'active' : '' ?>" onclick="goToSlide(<?= $i ?>)"></span>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+        
         <!-- Points Badge (if logged in) -->
+        <?php if ($promoSettings['show_points_badge'] == '1'): ?>
         <div class="p-4" id="pointsBadgePromo">
             <div class="points-badge rounded-2xl p-4 text-white shadow-lg">
                 <div class="flex items-center justify-between">
@@ -161,39 +281,46 @@ try {
                 </div>
             </div>
         </div>
+        <?php endif; ?>
 
         <!-- Sale Products -->
-        <?php if (!empty($saleProducts)): ?>
+        <?php if (!empty($saleProducts) && $promoSettings['show_sale_section'] == '1'): ?>
         <div class="px-4 mb-6">
             <div class="section-header">
                 <div class="section-title">
                     <div class="section-icon bg-red-100">🏷️</div>
                     <span>สินค้าลดราคา</span>
                 </div>
-                <a href="liff-shop.php?user=<?= $userId ?>&account=<?= $lineAccountId ?>&sale=1" class="text-sm text-teal-600">ดูทั้งหมด</a>
+                <a href="liff-shop.php?user=<?= $userId ?>&account=<?= $lineAccountId ?>&sale=1" class="text-sm" style="color: var(--primary)">ดูทั้งหมด</a>
             </div>
             <div class="scroll-x">
-                <?php foreach ($saleProducts as $p): 
+                <?php foreach (array_slice($saleProducts, 0, $promoSettings['products_per_section']) as $p): 
                     $price = $p['sale_price'];
                     $originalPrice = $p['price'];
                     $discount = $p['discount_percent'];
                 ?>
-                <div class="scroll-item w-40">
+                <div class="scroll-item">
                     <div class="product-card relative" onclick="showProduct(<?= $p['id'] ?>)">
                         <span class="sale-badge">-<?= $discount ?>%</span>
-                        <div class="aspect-square bg-gray-100 flex items-center justify-center">
+                        <div class="product-image-wrapper">
                             <?php if ($p['image_url']): ?>
-                            <img src="<?= htmlspecialchars($p['image_url']) ?>" class="w-full h-full object-cover" loading="lazy">
+                            <img src="<?= htmlspecialchars($p['image_url']) ?>" loading="lazy">
                             <?php else: ?>
-                            <i class="fas fa-image text-3xl text-gray-300"></i>
+                            <div class="placeholder"><i class="fas fa-image text-3xl text-gray-300"></i></div>
                             <?php endif; ?>
                         </div>
                         <div class="p-3">
                             <h3 class="text-sm font-medium text-gray-800 line-clamp-2 h-10"><?= htmlspecialchars($p['name']) ?></h3>
+                            <?php if ($promoSettings['show_sku'] == '1' && !empty($p['sku'])): ?>
+                            <p class="text-xs text-gray-400"><?= htmlspecialchars($p['sku']) ?></p>
+                            <?php endif; ?>
                             <div class="mt-2">
-                                <span class="text-red-600 font-bold">฿<?= number_format($price) ?></span>
+                                <span class="font-bold" style="color: var(--sale-badge)">฿<?= number_format($price) ?></span>
                                 <span class="text-gray-400 text-xs line-through ml-1">฿<?= number_format($originalPrice) ?></span>
                             </div>
+                            <?php if ($promoSettings['show_stock'] == '1'): ?>
+                            <p class="text-xs text-gray-500 mt-1">คงเหลือ <?= number_format($p['stock'] ?? 0) ?> ชิ้น</p>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -203,37 +330,43 @@ try {
         <?php endif; ?>
 
         <!-- Best Sellers -->
-        <?php if (!empty($bestSellers)): ?>
+        <?php if (!empty($bestSellers) && $promoSettings['show_bestseller_section'] == '1'): ?>
         <div class="px-4 mb-6">
             <div class="section-header">
                 <div class="section-title">
                     <div class="section-icon bg-orange-100">🔥</div>
                     <span>สินค้าขายดี</span>
                 </div>
-                <a href="liff-shop.php?user=<?= $userId ?>&account=<?= $lineAccountId ?>&bestseller=1" class="text-sm text-teal-600">ดูทั้งหมด</a>
+                <a href="liff-shop.php?user=<?= $userId ?>&account=<?= $lineAccountId ?>&bestseller=1" class="text-sm" style="color: var(--primary)">ดูทั้งหมด</a>
             </div>
-            <div class="grid grid-cols-2 gap-3">
-                <?php foreach (array_slice($bestSellers, 0, 6) as $p): 
+            <div class="product-grid">
+                <?php foreach (array_slice($bestSellers, 0, $promoSettings['products_per_section']) as $p): 
                     $price = $p['sale_price'] ?: $p['price'];
                     $originalPrice = $p['sale_price'] ? $p['price'] : null;
                 ?>
                 <div class="product-card relative" onclick="showProduct(<?= $p['id'] ?>)">
                     <span class="bestseller-badge">🔥 ขายดี</span>
-                    <div class="aspect-square bg-gray-100 flex items-center justify-center">
+                    <div class="product-image-wrapper">
                         <?php if ($p['image_url']): ?>
-                        <img src="<?= htmlspecialchars($p['image_url']) ?>" class="w-full h-full object-cover" loading="lazy">
+                        <img src="<?= htmlspecialchars($p['image_url']) ?>" loading="lazy">
                         <?php else: ?>
-                        <i class="fas fa-image text-2xl text-gray-300"></i>
+                        <div class="placeholder"><i class="fas fa-image text-2xl text-gray-300"></i></div>
                         <?php endif; ?>
                     </div>
                     <div class="p-2">
                         <h3 class="text-xs font-medium text-gray-800 line-clamp-2 h-8"><?= htmlspecialchars($p['name']) ?></h3>
+                        <?php if ($promoSettings['show_sku'] == '1' && !empty($p['sku'])): ?>
+                        <p class="text-[10px] text-gray-400"><?= htmlspecialchars($p['sku']) ?></p>
+                        <?php endif; ?>
                         <div class="mt-1">
-                            <span class="text-teal-600 font-bold text-sm">฿<?= number_format($price) ?></span>
+                            <span class="price-text font-bold text-sm">฿<?= number_format($price) ?></span>
                             <?php if ($originalPrice): ?>
                             <span class="text-gray-400 text-[10px] line-through ml-1">฿<?= number_format($originalPrice) ?></span>
                             <?php endif; ?>
                         </div>
+                        <?php if ($promoSettings['show_stock'] == '1'): ?>
+                        <p class="text-[10px] text-gray-500">คงเหลือ <?= number_format($p['stock'] ?? 0) ?></p>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -242,37 +375,43 @@ try {
         <?php endif; ?>
 
         <!-- Featured Products -->
-        <?php if (!empty($featuredProducts)): ?>
+        <?php if (!empty($featuredProducts) && $promoSettings['show_featured_section'] == '1'): ?>
         <div class="px-4 mb-6">
             <div class="section-header">
                 <div class="section-title">
                     <div class="section-icon bg-yellow-100">⭐</div>
                     <span>สินค้าแนะนำ</span>
                 </div>
-                <a href="liff-shop.php?user=<?= $userId ?>&account=<?= $lineAccountId ?>&featured=1" class="text-sm text-teal-600">ดูทั้งหมด</a>
+                <a href="liff-shop.php?user=<?= $userId ?>&account=<?= $lineAccountId ?>&featured=1" class="text-sm" style="color: var(--primary)">ดูทั้งหมด</a>
             </div>
-            <div class="grid grid-cols-2 gap-3">
-                <?php foreach (array_slice($featuredProducts, 0, 6) as $p): 
+            <div class="product-grid">
+                <?php foreach (array_slice($featuredProducts, 0, $promoSettings['products_per_section']) as $p): 
                     $price = $p['sale_price'] ?: $p['price'];
                     $originalPrice = $p['sale_price'] ? $p['price'] : null;
                 ?>
                 <div class="product-card relative" onclick="showProduct(<?= $p['id'] ?>)">
                     <span class="featured-badge">⭐ แนะนำ</span>
-                    <div class="aspect-square bg-gray-100 flex items-center justify-center">
+                    <div class="product-image-wrapper">
                         <?php if ($p['image_url']): ?>
-                        <img src="<?= htmlspecialchars($p['image_url']) ?>" class="w-full h-full object-cover" loading="lazy">
+                        <img src="<?= htmlspecialchars($p['image_url']) ?>" loading="lazy">
                         <?php else: ?>
-                        <i class="fas fa-image text-2xl text-gray-300"></i>
+                        <div class="placeholder"><i class="fas fa-image text-2xl text-gray-300"></i></div>
                         <?php endif; ?>
                     </div>
                     <div class="p-2">
                         <h3 class="text-xs font-medium text-gray-800 line-clamp-2 h-8"><?= htmlspecialchars($p['name']) ?></h3>
+                        <?php if ($promoSettings['show_sku'] == '1' && !empty($p['sku'])): ?>
+                        <p class="text-[10px] text-gray-400"><?= htmlspecialchars($p['sku']) ?></p>
+                        <?php endif; ?>
                         <div class="mt-1">
-                            <span class="text-teal-600 font-bold text-sm">฿<?= number_format($price) ?></span>
+                            <span class="price-text font-bold text-sm">฿<?= number_format($price) ?></span>
                             <?php if ($originalPrice): ?>
                             <span class="text-gray-400 text-[10px] line-through ml-1">฿<?= number_format($originalPrice) ?></span>
                             <?php endif; ?>
                         </div>
+                        <?php if ($promoSettings['show_stock'] == '1'): ?>
+                        <p class="text-[10px] text-gray-500">คงเหลือ <?= number_format($p['stock'] ?? 0) ?></p>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -280,7 +419,9 @@ try {
         </div>
         <?php endif; ?>
 
-        <?php if (empty($saleProducts) && empty($bestSellers) && empty($featuredProducts)): ?>
+        <?php if ((empty($saleProducts) || $promoSettings['show_sale_section'] != '1') && 
+                  (empty($bestSellers) || $promoSettings['show_bestseller_section'] != '1') && 
+                  (empty($featuredProducts) || $promoSettings['show_featured_section'] != '1')): ?>
         <div class="text-center py-16 text-gray-500">
             <i class="fas fa-tags text-6xl text-gray-300 mb-4"></i>
             <p>ยังไม่มีโปรโมชั่น</p>
@@ -357,13 +498,23 @@ try {
     const LIFF_ID = '<?= $liffId ?>';
     const ACCOUNT_ID = <?= (int)$lineAccountId ?>;
     const USER_ID_PARAM = '<?= $userId ?>';
+    const BANNER_AUTOPLAY = <?= $promoSettings['banner_autoplay'] == '1' ? 'true' : 'false' ?>;
+    const BANNER_INTERVAL = <?= (int)$promoSettings['banner_interval'] ?>;
     
     let lineUserId = null;
     let currentPoints = 0;
+    let currentSlide = 0;
+    let bannerTimer = null;
+    const totalSlides = <?= count($banners) ?>;
 
     document.addEventListener('DOMContentLoaded', init);
 
     async function init() {
+        // Init banner slider
+        if (totalSlides > 1 && BANNER_AUTOPLAY) {
+            startBannerAutoplay();
+        }
+        
         if (!LIFF_ID) {
             console.warn('No LIFF ID');
             return;
@@ -380,6 +531,32 @@ try {
         } catch (e) {
             console.error('LIFF init error:', e);
         }
+    }
+    
+    // Banner Slider Functions
+    function goToSlide(index) {
+        if (totalSlides <= 1) return;
+        
+        const slides = document.querySelectorAll('.banner-slide');
+        const dots = document.querySelectorAll('.banner-dot');
+        
+        slides.forEach((slide, i) => {
+            slide.style.display = i === index ? 'block' : 'none';
+        });
+        dots.forEach((dot, i) => {
+            dot.classList.toggle('active', i === index);
+        });
+        
+        currentSlide = index;
+    }
+    
+    function nextSlide() {
+        goToSlide((currentSlide + 1) % totalSlides);
+    }
+    
+    function startBannerAutoplay() {
+        if (bannerTimer) clearInterval(bannerTimer);
+        bannerTimer = setInterval(nextSlide, BANNER_INTERVAL);
     }
 
     async function loadPoints() {
