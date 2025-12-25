@@ -141,9 +141,20 @@ $rules = $dynamicMenu->getRules();
 $statistics = $dynamicMenu->getStatistics();
 
 // Get Rich Menus
-$stmt = $db->prepare("SELECT * FROM rich_menus WHERE line_account_id = ? OR line_account_id IS NULL ORDER BY name");
-$stmt->execute([$currentBotId]);
-$richMenus = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$richMenus = [];
+try {
+    // Check if line_account_id column exists
+    $cols = $db->query("SHOW COLUMNS FROM rich_menus")->fetchAll(PDO::FETCH_COLUMN);
+    if (in_array('line_account_id', $cols)) {
+        $stmt = $db->prepare("SELECT * FROM rich_menus WHERE line_account_id = ? OR line_account_id IS NULL ORDER BY name");
+        $stmt->execute([$currentBotId]);
+    } else {
+        $stmt = $db->query("SELECT * FROM rich_menus ORDER BY name");
+    }
+    $richMenus = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // Table might not exist
+}
 
 // Get Tags - try user_tags first, fallback to tags
 $tags = [];
