@@ -42,7 +42,7 @@ $endpoints = [
         '/api/shop-products.php?limit=5&page=2',
     ],
     'chat' => [
-        '/api/shop-products.php?search=test&limit=5',
+        '/api/messages.php?action=get_conversations&limit=10',
     ],
     'webhook' => [
         '/api/shop-products.php?limit=5',
@@ -50,7 +50,7 @@ $endpoints = [
     'full' => [
         '/api/shop-products.php?limit=10',
         '/api/shop-products.php?limit=5&page=2',
-        '/api/shop-products.php?search=a&limit=5',
+        '/api/messages.php?action=get_conversations&limit=5',
     ]
 ];
 
