@@ -192,15 +192,78 @@ class OnboardingAssistant {
      * Get fallback response when AI is not available
      */
     private function getFallbackResponse(string $message): string {
+        $message = mb_strtolower($message);
+        
+        // Check for specific topics in message
+        $topicResponses = [
+            'member_card' => "**บัตรสมาชิกดิจิทัล (Member Card)** 🎫\n\nบัตรสมาชิกช่วยให้ลูกค้าดูข้อมูลสมาชิก แต้มสะสม และสิทธิพิเศษได้ใน LINE\n\n**วิธีตั้งค่า:**\n1. ไปที่ LIFF Settings\n2. สร้าง LIFF App สำหรับ Member Card\n3. คัดลอก LIFF ID มาใส่ในช่อง 'LIFF Member ID'\n\n👉 [ไปตั้งค่า LIFF](/liff-settings.php)\n👉 [จัดการสมาชิก](/members.php)",
+            
+            'shop_info' => "**ข้อมูลร้านค้า** 🏪\n\nตั้งค่าข้อมูลพื้นฐานของร้านเพื่อแสดงให้ลูกค้าเห็น\n\n**สิ่งที่ต้องกรอก:**\n• ชื่อร้าน\n• โลโก้ร้าน\n• ข้อมูลติดต่อ (เบอร์โทร, อีเมล)\n• ที่อยู่ร้าน\n• เวลาทำการ\n\n👉 [ไปตั้งค่าร้านค้า](/shop/liff-shop-settings.php)",
+            
+            'products' => "**การจัดการสินค้า** 📦\n\n**วิธีเพิ่มสินค้า:**\n1. ไปที่ Shop > Products\n2. กด 'เพิ่มสินค้า'\n3. กรอกข้อมูล: ชื่อ, ราคา, รูปภาพ\n4. เลือกหมวดหมู่\n5. กดบันทึก\n\n**Tips:**\n• ใส่รูปภาพคุณภาพดี\n• เขียนรายละเอียดให้ครบ\n\n👉 [ไปจัดการสินค้า](/shop/products.php)",
+            
+            'webhook' => "**การตั้งค่า Webhook** 🔗\n\nWebhook ใช้รับข้อความจาก LINE\n\n**วิธีตั้งค่า:**\n1. ไปที่ LINE Developers Console\n2. เลือก Channel > Messaging API\n3. ในส่วน Webhook settings:\n   - เปิด 'Use webhook'\n   - ใส่ Webhook URL ของระบบ\n   - กด Verify\n\n👉 [ไปตั้งค่า LINE Account](/line-accounts.php)",
+            
+            'liff_shop' => "**LIFF Shop** 🛒\n\nร้านค้าออนไลน์ที่เปิดใน LINE App\n\n**วิธีตั้งค่า:**\n1. สร้าง LIFF App ใน LINE Console\n2. ตั้ง Endpoint URL เป็น URL ของระบบ\n3. คัดลอก LIFF ID มาใส่\n\n👉 [ไปตั้งค่า LIFF](/liff-settings.php)",
+            
+            'payment' => "**การชำระเงิน** 💳\n\n**ช่องทางที่รองรับ:**\n• โอนเงินผ่านธนาคาร\n• PromptPay\n\n**วิธีตั้งค่า:**\n1. ไปที่ Shop Settings\n2. เพิ่มบัญชีธนาคาร หรือ\n3. ใส่เบอร์ PromptPay\n\n👉 [ไปตั้งค่าการชำระเงิน](/shop/liff-shop-settings.php)",
+            
+            'rich_menu' => "**Rich Menu** 📱\n\nเมนูลัดที่แสดงด้านล่างห้องแชท\n\n**วิธีสร้าง:**\n1. ไปที่ Rich Menu\n2. กด 'สร้าง Rich Menu'\n3. อัพโหลดรูปภาพ (2500x1686 px)\n4. กำหนด Action สำหรับแต่ละปุ่ม\n5. เปิดใช้งาน\n\n👉 [ไปสร้าง Rich Menu](/rich-menu.php)",
+            
+            'auto_reply' => "**ข้อความตอบกลับอัตโนมัติ** 🤖\n\nตอบกลับอัตโนมัติเมื่อลูกค้าส่งข้อความที่ตรงกับ keyword\n\n**วิธีตั้งค่า:**\n1. ไปที่ Auto Reply\n2. กด 'เพิ่มข้อความตอบกลับ'\n3. กำหนด Keyword\n4. กำหนดข้อความตอบกลับ\n5. เปิดใช้งาน\n\n👉 [ไปตั้งค่า Auto Reply](/auto-reply.php)",
+            
+            'ai_chat' => "**AI Chat** 🧠\n\nใช้ AI ตอบคำถามลูกค้าอัตโนมัติ\n\n**วิธีเปิดใช้งาน:**\n1. ไปที่ AI Settings\n2. ใส่ Gemini API Key\n3. เปิดใช้งาน AI Chat\n4. ตั้งค่า Prompt\n\n**การขอ API Key:**\nไปที่ Google AI Studio > สร้าง API Key\n\n👉 [ไปตั้งค่า AI](/ai-settings.php)",
+            
+            'broadcast' => "**Broadcast** 📢\n\nส่งข้อความถึงลูกค้าหลายคนพร้อมกัน\n\n**วิธีส่ง:**\n1. ไปที่ Broadcast\n2. กด 'สร้าง Broadcast'\n3. เลือกกลุ่มเป้าหมาย\n4. สร้างข้อความ\n5. ส่งทันทีหรือตั้งเวลา\n\n👉 [ไปส่ง Broadcast](/broadcast.php)",
+            
+            'loyalty' => "**ระบบแต้มสะสม** 🪙\n\nให้ลูกค้าสะสมแต้มเมื่อซื้อสินค้า\n\n**วิธีตั้งค่า:**\n1. ไปที่ Loyalty Points\n2. เปิดใช้งานระบบแต้ม\n3. ตั้งค่าอัตราการได้รับแต้ม\n4. สร้างรางวัลแลกแต้ม\n\n👉 [ไปตั้งค่าแต้มสะสม](/loyalty-points.php)",
+            
+            'line_connection' => "**การเชื่อมต่อ LINE OA** 💚\n\n**วิธีเชื่อมต่อ:**\n1. ไปที่ LINE Developers Console\n2. เลือก Provider และ Channel\n3. ไปที่ Messaging API settings\n4. คัดลอก Channel Access Token\n5. คัดลอก Channel Secret\n6. นำมาใส่ในระบบ\n\n👉 [ไปตั้งค่า LINE Account](/line-accounts.php)"
+        ];
+        
+        // Check each topic
+        foreach ($topicResponses as $topic => $response) {
+            $keywords = explode('_', $topic);
+            foreach ($keywords as $keyword) {
+                if (mb_strpos($message, $keyword) !== false) {
+                    return $response;
+                }
+            }
+        }
+        
+        // Additional keyword checks
+        if (mb_strpos($message, 'สมาชิก') !== false || mb_strpos($message, 'member') !== false) {
+            return $topicResponses['member_card'];
+        }
+        if (mb_strpos($message, 'ร้าน') !== false || mb_strpos($message, 'shop') !== false) {
+            return $topicResponses['shop_info'];
+        }
+        if (mb_strpos($message, 'สินค้า') !== false || mb_strpos($message, 'product') !== false) {
+            return $topicResponses['products'];
+        }
+        if (mb_strpos($message, 'แต้ม') !== false || mb_strpos($message, 'point') !== false) {
+            return $topicResponses['loyalty'];
+        }
+        if (mb_strpos($message, 'เมนู') !== false || mb_strpos($message, 'menu') !== false) {
+            return $topicResponses['rich_menu'];
+        }
+        if (mb_strpos($message, 'ตอบ') !== false || mb_strpos($message, 'reply') !== false) {
+            return $topicResponses['auto_reply'];
+        }
+        if (mb_strpos($message, 'ai') !== false || mb_strpos($message, 'เอไอ') !== false) {
+            return $topicResponses['ai_chat'];
+        }
+        if (mb_strpos($message, 'จ่าย') !== false || mb_strpos($message, 'ชำระ') !== false) {
+            return $topicResponses['payment'];
+        }
+        
+        // Use intent-based fallback
         $intent = $this->promptBuilder->extractIntent($message);
         $primaryIntent = $intent['primary_intent'];
         
         $responses = [
             'greeting' => "สวัสดีครับ! 👋 ผมคือ Kiro Assistant พร้อมช่วยคุณตั้งค่าและใช้งานระบบ LINE CRM ครับ\n\nถามผมได้เลยว่าต้องการทำอะไร หรือดูรายการตั้งค่าที่แนะนำได้ที่ Checklist ด้านข้างครับ",
             'help' => "ผมช่วยคุณได้หลายอย่างครับ:\n\n• ตั้งค่าการเชื่อมต่อ LINE\n• ตั้งค่าร้านค้าและสินค้า\n• ตั้งค่า LIFF Apps\n• สร้าง Rich Menu\n• ตั้งค่า Auto Reply\n• เปิดใช้ AI Chat\n\nบอกผมได้เลยว่าต้องการทำอะไรครับ",
-            'setup_line' => "การเชื่อมต่อ LINE OA:\n\n1. ไปที่ LINE Developers Console\n2. คัดลอก Channel Access Token และ Channel Secret\n3. นำมาใส่ในหน้า LINE Accounts\n\n👉 [ไปตั้งค่า LINE Account](/line-accounts.php)",
-            'setup_shop' => "การตั้งค่าร้านค้า:\n\n1. ไปที่ Shop Settings\n2. กรอกข้อมูลร้าน: ชื่อ, โลโก้, ข้อมูลติดต่อ\n3. ตั้งค่าการชำระเงินและจัดส่ง\n\n👉 [ไปตั้งค่าร้านค้า](/shop/liff-shop-settings.php)",
-            'setup_liff' => "การตั้งค่า LIFF:\n\n1. ไปที่ LINE Developers Console\n2. สร้าง LIFF App ใหม่\n3. คัดลอก LIFF ID มาใส่ในระบบ\n\n👉 [ไปตั้งค่า LIFF](/liff-settings.php)",
             'feature_info' => "ฟีเจอร์หลักของระบบ:\n\n• **Inbox** - จัดการข้อความลูกค้า\n• **Shop** - ร้านค้าออนไลน์\n• **Broadcast** - ส่งข้อความหาลูกค้า\n• **Rich Menu** - เมนูลัดใน LINE\n• **Auto Reply** - ตอบกลับอัตโนมัติ\n• **AI Chat** - AI ตอบแชท\n• **Loyalty** - ระบบแต้มสะสม\n\nสนใจฟีเจอร์ไหนเป็นพิเศษครับ?",
             'status' => "ดูสถานะการตั้งค่าได้ที่ Checklist ด้านข้างครับ หรือกดปุ่ม 'ตรวจสอบสถานะระบบ' เพื่อ Health Check",
             'general' => "ผมเข้าใจครับ ถ้าต้องการความช่วยเหลือเพิ่มเติม ลองถามเรื่องที่ต้องการได้เลยครับ เช่น:\n\n• วิธีเชื่อมต่อ LINE\n• วิธีตั้งค่าร้านค้า\n• วิธีใช้ฟีเจอร์ต่างๆ\n\nหรือดู Checklist ด้านข้างเพื่อดูรายการที่ต้องตั้งค่าครับ"
