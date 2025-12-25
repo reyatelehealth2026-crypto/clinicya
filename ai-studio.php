@@ -15,16 +15,16 @@ $currentBotId = $_SESSION['current_bot_id'] ?? null;
 try {
     $db = Database::getInstance()->getConnection();
     
-    // 1. Try ai_settings table first
+    // 1. Try ai_settings table first (actual column structure)
     if ($currentBotId) {
-        $stmt = $db->prepare("SELECT setting_value FROM ai_settings WHERE setting_key = 'gemini_api_key' AND line_account_id = ? LIMIT 1");
+        $stmt = $db->prepare("SELECT gemini_api_key FROM ai_settings WHERE line_account_id = ? LIMIT 1");
         $stmt->execute([$currentBotId]);
     } else {
-        $stmt = $db->query("SELECT setting_value FROM ai_settings WHERE setting_key = 'gemini_api_key' LIMIT 1");
+        $stmt = $db->query("SELECT gemini_api_key FROM ai_settings WHERE line_account_id IS NULL LIMIT 1");
     }
     $result = $stmt->fetch();
-    if ($result && !empty($result['setting_value'])) {
-        $geminiApiKey = $result['setting_value'];
+    if ($result && !empty($result['gemini_api_key'])) {
+        $geminiApiKey = $result['gemini_api_key'];
     }
     
     // 2. Try line_accounts table
