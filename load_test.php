@@ -93,15 +93,19 @@ $startTime = microtime(true);
         
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm font-medium mb-1">จำนวน Concurrent Users</label>
-                <input type="number" id="concurrentUsers" value="10" min="1" max="100" 
+                <label class="block text-sm font-medium mb-1">จำนวน Concurrent Users (max 50)</label>
+                <input type="number" id="concurrentUsers" value="10" min="1" max="50" 
                        class="w-full border rounded px-3 py-2">
             </div>
             <div>
-                <label class="block text-sm font-medium mb-1">Requests per User</label>
-                <input type="number" id="requestsPerUser" value="5" min="1" max="20" 
+                <label class="block text-sm font-medium mb-1">Requests per User (max 10)</label>
+                <input type="number" id="requestsPerUser" value="3" min="1" max="10" 
                        class="w-full border rounded px-3 py-2">
             </div>
+        </div>
+        
+        <div class="mt-3 text-sm text-gray-500">
+            ⚠️ ทดสอบแบบ concurrent จริงๆ ด้วย curl_multi - อาจทำให้ server หนักได้
         </div>
     </div>
 
@@ -173,7 +177,18 @@ async function runTest(type) {
 }
 
 function displayResults(data) {
+    const errorsHtml = data.errors && data.errors.length > 0 
+        ? `<div class="mt-4 p-3 bg-red-50 rounded text-sm">
+            <strong>Errors:</strong> ${data.errors.join(', ')}
+           </div>` 
+        : '';
+    
     const html = `
+        <div class="bg-blue-50 p-2 rounded mb-4 text-sm">
+            <strong>Mode:</strong> ${data.test_mode || 'sequential'} | 
+            <strong>Total Time:</strong> ${data.total_time}s
+        </div>
+        
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="bg-blue-50 p-3 rounded">
                 <div class="text-xs text-blue-600">Total Requests</div>
@@ -195,27 +210,44 @@ function displayResults(data) {
         
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
             <div class="bg-gray-50 p-3 rounded">
-                <div class="text-xs text-gray-600">Avg Response Time</div>
+                <div class="text-xs text-gray-600">Avg Response</div>
                 <div class="text-xl font-bold">${data.avg_response_time}ms</div>
             </div>
             <div class="bg-gray-50 p-3 rounded">
-                <div class="text-xs text-gray-600">Min Response Time</div>
-                <div class="text-xl font-bold">${data.min_response_time}ms</div>
+                <div class="text-xs text-gray-600">P50 (Median)</div>
+                <div class="text-xl font-bold">${data.p50_response_time || '-'}ms</div>
             </div>
             <div class="bg-gray-50 p-3 rounded">
-                <div class="text-xs text-gray-600">Max Response Time</div>
-                <div class="text-xl font-bold">${data.max_response_time}ms</div>
+                <div class="text-xs text-gray-600">P95</div>
+                <div class="text-xl font-bold">${data.p95_response_time || '-'}ms</div>
+            </div>
+            <div class="bg-gray-50 p-3 rounded">
+                <div class="text-xs text-gray-600">P99</div>
+                <div class="text-xl font-bold">${data.p99_response_time || '-'}ms</div>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-3 gap-4 mt-4">
+            <div class="bg-gray-50 p-3 rounded">
+                <div class="text-xs text-gray-600">Min / Max</div>
+                <div class="text-lg font-bold">${data.min_response_time}ms / ${data.max_response_time}ms</div>
             </div>
             <div class="bg-gray-50 p-3 rounded">
                 <div class="text-xs text-gray-600">Requests/sec</div>
                 <div class="text-xl font-bold">${data.requests_per_second}</div>
             </div>
+            <div class="bg-gray-50 p-3 rounded">
+                <div class="text-xs text-gray-600">Est. Users Supported</div>
+                <div class="text-xl font-bold">${data.estimated_capacity?.concurrent_users_supported || '-'}</div>
+            </div>
         </div>
         
         <div class="mt-4 p-3 rounded ${data.success_rate >= 95 ? 'bg-green-100 text-green-700' : data.success_rate >= 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">
-            <strong>สรุป:</strong> ระบบรองรับ <strong>${data.concurrent_users}</strong> ผู้ใช้พร้อมกัน 
-            ${data.success_rate >= 95 ? '✅ ได้ดีมาก' : data.success_rate >= 80 ? '⚠️ พอใช้ได้' : '❌ ต้องปรับปรุง'}
+            <strong>สรุป:</strong> ทดสอบ <strong>${data.concurrent_users}</strong> concurrent users, 
+            ${data.requests_per_user} requests/user
+            ${data.success_rate >= 95 ? '✅ ผ่าน' : data.success_rate >= 80 ? '⚠️ พอใช้' : '❌ ต้องปรับปรุง'}
         </div>
+        ${errorsHtml}
     `;
     
     document.getElementById('results').innerHTML = html;
