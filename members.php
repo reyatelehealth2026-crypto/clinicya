@@ -58,16 +58,39 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 20;
 $offset = ($page - 1) * $perPage;
 
-// Build query
-$where = "WHERE is_registered = 1";
+// Check if required columns exist
+$hasIsRegistered = false;
+$hasMemberTier = false;
+$hasRegisteredAt = false;
+$hasPoints = false;
+$hasMemberId = false;
+
+try {
+    $cols = $db->query("SHOW COLUMNS FROM users")->fetchAll(PDO::FETCH_COLUMN);
+    $hasIsRegistered = in_array('is_registered', $cols);
+    $hasMemberTier = in_array('member_tier', $cols);
+    $hasRegisteredAt = in_array('registered_at', $cols);
+    $hasPoints = in_array('points', $cols);
+    $hasMemberId = in_array('member_id', $cols);
+} catch (Exception $e) {}
+
+// Build query based on available columns
+$where = "WHERE 1=1";
+if ($hasIsRegistered) {
+    $where = "WHERE is_registered = 1";
+}
 $params = [];
 
 if ($search) {
-    $where .= " AND (first_name LIKE ? OR last_name LIKE ? OR member_id LIKE ? OR phone LIKE ? OR display_name LIKE ?)";
+    $searchFields = ["first_name LIKE ?", "last_name LIKE ?", "phone LIKE ?", "display_name LIKE ?"];
+    if ($hasMemberId) {
+        $searchFields[] = "member_id LIKE ?";
+    }
+    $where .= " AND (" . implode(" OR ", $searchFields) . ")";
     $searchParam = "%{$search}%";
-    $params = array_merge($params, [$searchParam, $searchParam, $searchParam, $searchParam, $searchParam]);
+    $params = array_fill(0, count($searchFields), $searchParam);
 }
-if ($tier) {
+if ($tier && $hasMemberTier) {
     $where .= " AND member_tier = ?";
     $params[] = $tier;
 }
@@ -79,12 +102,24 @@ $total = $stmt->fetchColumn();
 $totalPages = ceil($total / $perPage);
 
 // Get members
-$stmt = $db->prepare("SELECT * FROM users {$where} ORDER BY registered_at DESC LIMIT {$perPage} OFFSET {$offset}");
+$orderBy = $hasRegisteredAt ? "ORDER BY registered_at DESC" : "ORDER BY id DESC";
+$stmt = $db->prepare("SELECT * FROM users {$where} {$orderBy} LIMIT {$perPage} OFFSET {$offset}");
 $stmt->execute($params);
 $members = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get tiers
-$tiers = $db->query("SELECT * FROM member_tiers ORDER BY min_points ASC")->fetchAll(PDO::FETCH_ASSOC);
+$tiers = [];
+try {
+    $tiers = $db->query("SELECT * FROM member_tiers ORDER BY min_points ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // Table doesn't exist, use default tiers
+    $tiers = [
+        ['name' => 'bronze', 'min_points' => 0],
+        ['name' => 'silver', 'min_points' => 500],
+        ['name' => 'gold', 'min_points' => 2000],
+        ['name' => 'platinum', 'min_points' => 5000]
+    ];
+}
 
 require_once 'includes/header.php';
 ?>
@@ -98,13 +133,22 @@ require_once 'includes/header.php';
 <!-- Stats -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
     <?php
-    $stats = $db->query("SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN member_tier = 'bronze' THEN 1 ELSE 0 END) as bronze,
-        SUM(CASE WHEN member_tier = 'silver' THEN 1 ELSE 0 END) as silver,
-        SUM(CASE WHEN member_tier = 'gold' THEN 1 ELSE 0 END) as gold,
-        SUM(CASE WHEN member_tier = 'platinum' THEN 1 ELSE 0 END) as platinum
-        FROM users WHERE is_registered = 1")->fetch();
+    $statsQuery = "SELECT COUNT(*) as total";
+    if ($hasMemberTier) {
+        $statsQuery .= ",
+            SUM(CASE WHEN member_tier = 'bronze' THEN 1 ELSE 0 END) as bronze,
+            SUM(CASE WHEN member_tier = 'silver' THEN 1 ELSE 0 END) as silver,
+            SUM(CASE WHEN member_tier = 'gold' THEN 1 ELSE 0 END) as gold,
+            SUM(CASE WHEN member_tier = 'platinum' THEN 1 ELSE 0 END) as platinum";
+    }
+    $statsQuery .= " FROM users";
+    if ($hasIsRegistered) {
+        $statsQuery .= " WHERE is_registered = 1";
+    }
+    $stats = $db->query($statsQuery)->fetch();
+    if (!$hasMemberTier) {
+        $stats['bronze'] = $stats['silver'] = $stats['gold'] = $stats['platinum'] = 0;
+    }
     ?>
     <div class="bg-white rounded-xl shadow p-4">
         <p class="text-gray-500 text-sm">สมาชิกทั้งหมด</p>
@@ -169,22 +213,22 @@ require_once 'includes/header.php';
                             </div>
                         </div>
                     </td>
-                    <td class="px-4 py-3 font-mono text-sm"><?= $member['member_id'] ?></td>
+                    <td class="px-4 py-3 font-mono text-sm"><?= $hasMemberId ? ($member['member_id'] ?? '-') : '-' ?></td>
                     <td class="px-4 py-3">
                         <?php
                         $tierIcons = ['bronze' => '🥉', 'silver' => '🥈', 'gold' => '🥇', 'platinum' => '💎', 'vip' => '👑'];
                         $tierColors = ['bronze' => 'bg-amber-100 text-amber-700', 'silver' => 'bg-gray-100 text-gray-700', 'gold' => 'bg-yellow-100 text-yellow-700', 'platinum' => 'bg-purple-100 text-purple-700', 'vip' => 'bg-pink-100 text-pink-700'];
-                        $t = $member['member_tier'] ?? 'bronze';
+                        $t = $hasMemberTier ? ($member['member_tier'] ?? 'bronze') : 'bronze';
                         ?>
                         <span class="px-2 py-1 rounded-full text-xs font-medium <?= $tierColors[$t] ?? '' ?>">
                             <?= $tierIcons[$t] ?? '' ?> <?= ucfirst($t) ?>
                         </span>
                     </td>
-                    <td class="px-4 py-3 text-right font-bold text-purple-600"><?= number_format($member['points'] ?? 0) ?></td>
+                    <td class="px-4 py-3 text-right font-bold text-purple-600"><?= number_format($hasPoints ? ($member['points'] ?? 0) : 0) ?></td>
                     <td class="px-4 py-3 text-sm"><?= $member['phone'] ?: '-' ?></td>
-                    <td class="px-4 py-3 text-sm text-gray-500"><?= $member['registered_at'] ? date('d/m/Y', strtotime($member['registered_at'])) : '-' ?></td>
+                    <td class="px-4 py-3 text-sm text-gray-500"><?= ($hasRegisteredAt && $member['registered_at']) ? date('d/m/Y', strtotime($member['registered_at'])) : '-' ?></td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="openPointsModal(<?= $member['id'] ?>, '<?= htmlspecialchars($member['first_name']) ?>', <?= $member['points'] ?? 0 ?>)" 
+                        <button onclick="openPointsModal(<?= $member['id'] ?>, '<?= htmlspecialchars($member['first_name'] ?? '') ?>', <?= $hasPoints ? ($member['points'] ?? 0) : 0 ?>)" 
                             class="px-3 py-1 bg-purple-100 text-purple-600 rounded-lg text-sm hover:bg-purple-200" title="จัดการแต้ม">
                             <i class="fas fa-coins"></i>
                         </button>
