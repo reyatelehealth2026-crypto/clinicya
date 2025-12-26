@@ -22,10 +22,10 @@ try {
     $tableExists = true;
 } catch (Exception $e) {}
 
-// Get products
+// Get products with barcode
 $products = [];
 try {
-    $stmt = $db->prepare("SELECT id, name, sku, stock FROM business_items WHERE is_active = 1 ORDER BY name");
+    $stmt = $db->prepare("SELECT id, name, sku, barcode, stock FROM business_items WHERE is_active = 1 ORDER BY name");
     $stmt->execute();
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
@@ -57,19 +57,39 @@ if (!$tableExists):
         <form id="adjustmentForm" class="p-4 space-y-4">
             <div>
                 <label class="block text-sm font-medium mb-1">สินค้า *</label>
-                <select name="product_id" required class="w-full px-3 py-2 border rounded-lg" onchange="updateStock(this)">
+                <div class="relative">
+                    <input type="text" id="productSearch" placeholder="🔍 ค้นหาด้วย ชื่อ, รหัส SKU, หรือ Barcode..." 
+                           class="w-full px-3 py-2 border rounded-lg pr-10" autocomplete="off">
+                    <button type="button" onclick="openBarcodeScanner()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-barcode"></i>
+                    </button>
+                </div>
+                <select name="product_id" id="productSelect" required class="w-full px-3 py-2 border rounded-lg mt-2" onchange="updateStock(this)">
                     <option value="">-- เลือกสินค้า --</option>
                     <?php foreach ($products as $p): ?>
-                    <option value="<?= $p['id'] ?>" data-stock="<?= $p['stock'] ?>">
-                        <?= htmlspecialchars($p['name']) ?> (<?= $p['sku'] ?>) - Stock: <?= $p['stock'] ?>
+                    <option value="<?= $p['id'] ?>" 
+                            data-stock="<?= $p['stock'] ?>" 
+                            data-sku="<?= htmlspecialchars($p['sku'] ?? '') ?>"
+                            data-barcode="<?= htmlspecialchars($p['barcode'] ?? '') ?>"
+                            data-name="<?= htmlspecialchars($p['name']) ?>">
+                        <?= htmlspecialchars($p['name']) ?> <?= $p['sku'] ? "({$p['sku']})" : '' ?>
                     </option>
                     <?php endforeach; ?>
                 </select>
+                <div id="searchResults" class="hidden mt-1 border rounded-lg bg-white shadow-lg max-h-60 overflow-y-auto"></div>
             </div>
             
-            <div class="p-3 bg-gray-50 rounded-lg">
-                <p class="text-sm text-gray-500">สต็อกปัจจุบัน</p>
-                <p class="text-2xl font-bold" id="currentStock">-</p>
+            <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">สต็อกปัจจุบัน</p>
+                        <p class="text-3xl font-bold text-blue-600" id="currentStock">-</p>
+                    </div>
+                    <div id="productInfo" class="text-right hidden">
+                        <p class="text-xs text-gray-500">SKU: <span id="productSku">-</span></p>
+                        <p class="text-xs text-gray-500">Barcode: <span id="productBarcode">-</span></p>
+                    </div>
+                </div>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
@@ -158,9 +178,96 @@ if (!$tableExists):
 </div>
 
 <script>
+// Product data for search
+const products = <?= json_encode($products, JSON_UNESCAPED_UNICODE) ?>;
+
+// Search functionality
+const searchInput = document.getElementById('productSearch');
+const searchResults = document.getElementById('searchResults');
+const productSelect = document.getElementById('productSelect');
+
+searchInput.addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    if (query.length < 1) {
+        searchResults.classList.add('hidden');
+        return;
+    }
+    
+    const matches = products.filter(p => {
+        const name = (p.name || '').toLowerCase();
+        const sku = (p.sku || '').toLowerCase();
+        const barcode = (p.barcode || '').toLowerCase();
+        return name.includes(query) || sku.includes(query) || barcode.includes(query) || barcode === query;
+    }).slice(0, 10);
+    
+    if (matches.length === 0) {
+        searchResults.innerHTML = '<div class="p-3 text-gray-500 text-sm">ไม่พบสินค้า</div>';
+    } else {
+        searchResults.innerHTML = matches.map(p => `
+            <div class="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0" onclick="selectProduct(${p.id})">
+                <div class="font-medium">${p.name}</div>
+                <div class="text-xs text-gray-500">
+                    ${p.sku ? 'SKU: ' + p.sku : ''} 
+                    ${p.barcode ? '| Barcode: ' + p.barcode : ''} 
+                    | <span class="text-blue-600 font-semibold">Stock: ${p.stock}</span>
+                </div>
+            </div>
+        `).join('');
+    }
+    searchResults.classList.remove('hidden');
+});
+
+searchInput.addEventListener('blur', function() {
+    setTimeout(() => searchResults.classList.add('hidden'), 200);
+});
+
+searchInput.addEventListener('focus', function() {
+    if (this.value.length >= 1) {
+        this.dispatchEvent(new Event('input'));
+    }
+});
+
+// Handle Enter key for barcode scanner
+searchInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const query = this.value.trim();
+        // Find exact barcode match
+        const match = products.find(p => p.barcode === query || p.sku === query);
+        if (match) {
+            selectProduct(match.id);
+            this.value = '';
+        }
+    }
+});
+
+function selectProduct(id) {
+    productSelect.value = id;
+    updateStock(productSelect);
+    searchResults.classList.add('hidden');
+    searchInput.value = '';
+}
+
 function updateStock(select) {
-    const stock = select.options[select.selectedIndex].dataset.stock || 0;
+    const option = select.options[select.selectedIndex];
+    const stock = option.dataset.stock || '-';
+    const sku = option.dataset.sku || '-';
+    const barcode = option.dataset.barcode || '-';
+    
     document.getElementById('currentStock').textContent = stock;
+    document.getElementById('productSku').textContent = sku || '-';
+    document.getElementById('productBarcode').textContent = barcode || '-';
+    
+    if (select.value) {
+        document.getElementById('productInfo').classList.remove('hidden');
+    } else {
+        document.getElementById('productInfo').classList.add('hidden');
+    }
+}
+
+function openBarcodeScanner() {
+    searchInput.focus();
+    searchInput.placeholder = '📷 สแกน Barcode หรือพิมพ์รหัส...';
 }
 
 document.getElementById('adjustmentForm').addEventListener('submit', async function(e) {
