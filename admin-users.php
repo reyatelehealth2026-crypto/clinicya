@@ -1,7 +1,7 @@
-<?php
+﻿<?php
 /**
  * Admin Users Management
- * จัดการผู้ดูแลระบบและสิทธิ์การเข้าถึง LINE Bot
+ * เธเธฑเธ”เธเธฒเธฃเธเธนเนเธ”เธนเนเธฅเธฃเธฐเธเธเนเธฅเธฐเธชเธดเธ—เธเธดเนเธเธฒเธฃเน€เธเนเธฒเธ–เธถเธ LINE Bot
  */
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -19,7 +19,7 @@ $lineManager = new LineAccountManager($db);
 // Require super admin
 $auth->requireSuperAdmin('index.php');
 
-$pageTitle = 'จัดการผู้ดูแลระบบ';
+$pageTitle = 'เธเธฑเธ”เธเธฒเธฃเธเธนเนเธ”เธนเนเธฅเธฃเธฐเธเธ';
 $error = null;
 $success = null;
 
@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $role = $_POST['role'] ?? 'admin';
                 
                 if (empty($username) || empty($password)) {
-                    throw new Exception('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
+                    throw new Exception('เธเธฃเธธเธ“เธฒเธเธฃเธญเธเธเธทเนเธญเธเธนเนเนเธเนเนเธฅเธฐเธฃเธซเธฑเธชเธเนเธฒเธ');
                 }
                 
                 $adminId = $auth->createAdmin([
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
                 }
                 
-                $success = "สร้างผู้ดูแล '{$username}' สำเร็จ";
+                $success = "เธชเธฃเนเธฒเธเธเธนเนเธ”เธนเนเธฅ '{$username}' เธชเธณเน€เธฃเนเธ";
                 break;
                 
             case 'update':
@@ -113,15 +113,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
                 }
                 
-                $success = "อัพเดทผู้ดูแลสำเร็จ";
+                $success = "เธญเธฑเธเน€เธ”เธ—เธเธนเนเธ”เธนเนเธฅเธชเธณเน€เธฃเนเธ";
                 break;
                 
             case 'delete':
                 $adminId = (int)$_POST['admin_id'];
                 if ($auth->deleteAdmin($adminId)) {
-                    $success = "ลบผู้ดูแลสำเร็จ";
+                    $success = "เธฅเธเธเธนเนเธ”เธนเนเธฅเธชเธณเน€เธฃเนเธ";
                 } else {
-                    throw new Exception('ไม่สามารถลบ Super Admin ได้');
+                    throw new Exception('เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธฅเธ Super Admin เนเธ”เน');
                 }
                 break;
         }
@@ -153,9 +153,9 @@ require_once 'includes/header.php';
     <div class="lg:col-span-2">
         <div class="bg-white rounded-xl shadow">
             <div class="p-4 border-b flex justify-between items-center">
-                <h3 class="font-semibold"><i class="fas fa-users-cog text-purple-500 mr-2"></i>รายชื่อผู้ดูแล</h3>
+                <h3 class="font-semibold"><i class="fas fa-users-cog text-purple-500 mr-2"></i>เธฃเธฒเธขเธเธทเนเธญเธเธนเนเธ”เธนเนเธฅ</h3>
                 <button onclick="showCreateModal()" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">
-                    <i class="fas fa-plus mr-1"></i>เพิ่มผู้ดูแล
+                    <i class="fas fa-plus mr-1"></i>เน€เธเธดเนเธกเธเธนเนเธ”เธนเนเธฅ
                 </button>
             </div>
             
@@ -178,16 +178,16 @@ require_once 'includes/header.php';
                                     <?php elseif ($admin['role'] === 'admin'): ?>
                                     <span class="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs">Admin</span>
                                     <?php elseif ($admin['role'] === 'pharmacist'): ?>
-                                    <span class="px-2 py-0.5 bg-green-100 text-green-600 rounded text-xs">เภสัชกร</span>
+                                    <span class="px-2 py-0.5 bg-green-100 text-green-600 rounded text-xs">เน€เธ เธชเธฑเธเธเธฃ</span>
                                     <?php else: ?>
                                     <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Staff</span>
                                     <?php endif; ?>
                                     <?php if (!$admin['is_active']): ?>
-                                    <span class="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">ปิดใช้งาน</span>
+                                    <span class="px-2 py-0.5 bg-red-100 text-red-600 rounded text-xs">เธเธดเธ”เนเธเนเธเธฒเธ</span>
                                     <?php endif; ?>
                                 </div>
                                 <?php if (!empty($admin['line_user_id'])): ?>
-                                <div class="text-xs text-green-600 mt-1"><i class="fab fa-line mr-1"></i>LINE เชื่อมต่อแล้ว</div>
+                                <div class="text-xs text-green-600 mt-1"><i class="fab fa-line mr-1"></i>LINE เน€เธเธทเนเธญเธกเธ•เนเธญเนเธฅเนเธง</div>
                                 <?php endif; ?>
                                 <?php if ($admin['role'] !== 'super_admin' && !empty($admin['bot_access'])): ?>
                                 <div class="flex flex-wrap gap-1 mt-1">
@@ -198,19 +198,18 @@ require_once 'includes/header.php';
                                     <?php endforeach; ?>
                                 </div>
                                 <?php elseif ($admin['role'] === 'super_admin'): ?>
-                                <div class="text-xs text-purple-600 mt-1"><i class="fas fa-infinity mr-1"></i>เข้าถึงได้ทุก Bot</div>
+                                <div class="text-xs text-purple-600 mt-1"><i class="fas fa-infinity mr-1"></i>เน€เธเนเธฒเธ–เธถเธเนเธ”เนเธ—เธธเธ Bot</div>
                                 <?php endif; ?>
                             </div>
                         </div>
                         <div class="flex items-center gap-2">
                             <?php if ($admin['last_login']): ?>
-                            <span class="text-xs text-gray-400">เข้าล่าสุด: <?= date('d/m H:i', strtotime($admin['last_login'])) ?></span>
+                            <span class="text-xs text-gray-400">เน€เธเนเธฒเธฅเนเธฒเธชเธธเธ”: <?= date('d/m H:i', strtotime($admin['last_login'])) ?></span>
                             <?php endif; ?>
-                            <?php if ($admin['role'] !== 'super_admin'): ?>
                             <button onclick="editAdmin(<?= htmlspecialchars(json_encode($admin)) ?>)" class="p-2 text-blue-500 hover:bg-blue-50 rounded">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <form method="POST" class="inline" onsubmit="return confirm('ลบผู้ดูแลนี้?')">
+                            <form method="POST" class="inline" onsubmit="return confirm('เธฅเธเธเธนเนเธ”เธนเนเธฅเธเธตเน?')">
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="admin_id" value="<?= $admin['id'] ?>">
                                 <button type="submit" class="p-2 text-red-500 hover:bg-red-50 rounded">
@@ -229,36 +228,36 @@ require_once 'includes/header.php';
     <!-- Info -->
     <div class="space-y-4">
         <div class="bg-white rounded-xl shadow p-4">
-            <h4 class="font-semibold mb-3"><i class="fas fa-info-circle text-blue-500 mr-2"></i>ระดับสิทธิ์</h4>
+            <h4 class="font-semibold mb-3"><i class="fas fa-info-circle text-blue-500 mr-2"></i>เธฃเธฐเธ”เธฑเธเธชเธดเธ—เธเธดเน</h4>
             <div class="space-y-3 text-sm">
                 <div class="p-3 bg-red-50 rounded-lg">
-                    <div class="font-medium text-red-700">🔴 Super Admin</div>
-                    <div class="text-red-600 text-xs mt-1">เข้าถึงได้ทุก LINE Bot และจัดการผู้ดูแลได้</div>
+                    <div class="font-medium text-red-700">๐”ด Super Admin</div>
+                    <div class="text-red-600 text-xs mt-1">เน€เธเนเธฒเธ–เธถเธเนเธ”เนเธ—เธธเธ LINE Bot เนเธฅเธฐเธเธฑเธ”เธเธฒเธฃเธเธนเนเธ”เธนเนเธฅเนเธ”เน</div>
                 </div>
                 <div class="p-3 bg-blue-50 rounded-lg">
-                    <div class="font-medium text-blue-700">🔵 Admin</div>
-                    <div class="text-blue-600 text-xs mt-1">เข้าถึงได้เฉพาะ LINE Bot ที่ถูกกำหนด</div>
+                    <div class="font-medium text-blue-700">๐”ต Admin</div>
+                    <div class="text-blue-600 text-xs mt-1">เน€เธเนเธฒเธ–เธถเธเนเธ”เนเน€เธเธเธฒเธฐ LINE Bot เธ—เธตเนเธ–เธนเธเธเธณเธซเธเธ”</div>
                 </div>
                 <div class="p-3 bg-gray-50 rounded-lg">
-                    <div class="font-medium text-gray-700">⚪ Staff</div>
-                    <div class="text-gray-600 text-xs mt-1">สิทธิ์จำกัด ดูข้อมูลได้อย่างเดียว</div>
+                    <div class="font-medium text-gray-700">โช Staff</div>
+                    <div class="text-gray-600 text-xs mt-1">เธชเธดเธ—เธเธดเนเธเธณเธเธฑเธ” เธ”เธนเธเนเธญเธกเธนเธฅเนเธ”เนเธญเธขเนเธฒเธเน€เธ”เธตเธขเธง</div>
                 </div>
                 <div class="p-3 bg-green-50 rounded-lg">
-                    <div class="font-medium text-green-700">💊 เภสัชกร</div>
-                    <div class="text-green-600 text-xs mt-1">รับแจ้งเตือนและอนุมัติยา</div>
+                    <div class="font-medium text-green-700">๐’ เน€เธ เธชเธฑเธเธเธฃ</div>
+                    <div class="text-green-600 text-xs mt-1">เธฃเธฑเธเนเธเนเธเน€เธ•เธทเธญเธเนเธฅเธฐเธญเธเธธเธกเธฑเธ•เธดเธขเธฒ</div>
                 </div>
             </div>
         </div>
         
         <div class="bg-white rounded-xl shadow p-4">
-            <h4 class="font-semibold mb-3"><i class="fas fa-shield-alt text-green-500 mr-2"></i>สิทธิ์ต่อ Bot</h4>
+            <h4 class="font-semibold mb-3"><i class="fas fa-shield-alt text-green-500 mr-2"></i>เธชเธดเธ—เธเธดเนเธ•เนเธญ Bot</h4>
             <div class="space-y-2 text-xs text-gray-600">
-                <div><i class="fas fa-eye text-blue-500 mr-2"></i>ดูข้อมูล</div>
-                <div><i class="fas fa-edit text-yellow-500 mr-2"></i>แก้ไขข้อมูล</div>
-                <div><i class="fas fa-paper-plane text-purple-500 mr-2"></i>ส่ง Broadcast</div>
-                <div><i class="fas fa-users text-green-500 mr-2"></i>จัดการผู้ใช้</div>
-                <div><i class="fas fa-store text-orange-500 mr-2"></i>จัดการร้านค้า</div>
-                <div><i class="fas fa-chart-bar text-pink-500 mr-2"></i>ดู Analytics</div>
+                <div><i class="fas fa-eye text-blue-500 mr-2"></i>เธ”เธนเธเนเธญเธกเธนเธฅ</div>
+                <div><i class="fas fa-edit text-yellow-500 mr-2"></i>เนเธเนเนเธเธเนเธญเธกเธนเธฅ</div>
+                <div><i class="fas fa-paper-plane text-purple-500 mr-2"></i>เธชเนเธ Broadcast</div>
+                <div><i class="fas fa-users text-green-500 mr-2"></i>เธเธฑเธ”เธเธฒเธฃเธเธนเนเนเธเน</div>
+                <div><i class="fas fa-store text-orange-500 mr-2"></i>เธเธฑเธ”เธเธฒเธฃเธฃเนเธฒเธเธเนเธฒ</div>
+                <div><i class="fas fa-chart-bar text-pink-500 mr-2"></i>เธ”เธน Analytics</div>
             </div>
         </div>
     </div>
@@ -268,7 +267,7 @@ require_once 'includes/header.php';
 <div id="adminModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div class="p-4 border-b flex justify-between items-center sticky top-0 bg-white">
-            <h3 class="font-semibold" id="modalTitle">เพิ่มผู้ดูแล</h3>
+            <h3 class="font-semibold" id="modalTitle">เน€เธเธดเนเธกเธเธนเนเธ”เธนเนเธฅ</h3>
             <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
         </div>
         
@@ -278,11 +277,11 @@ require_once 'includes/header.php';
             
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">ชื่อผู้ใช้ <span class="text-red-500">*</span></label>
+                    <label class="block text-sm font-medium mb-1">เธเธทเนเธญเธเธนเนเนเธเน <span class="text-red-500">*</span></label>
                     <input type="text" name="username" id="username" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">รหัสผ่าน <span class="text-red-500" id="pwdReq">*</span></label>
+                    <label class="block text-sm font-medium mb-1">เธฃเธซเธฑเธชเธเนเธฒเธ <span class="text-red-500" id="pwdReq">*</span></label>
                     <input type="password" name="password" id="password" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                     <p class="text-xs text-gray-500 mt-1" id="pwdHint"></p>
                 </div>
@@ -290,18 +289,18 @@ require_once 'includes/header.php';
             
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">ชื่อที่แสดง</label>
+                    <label class="block text-sm font-medium mb-1">เธเธทเนเธญเธ—เธตเนเนเธชเธ”เธ</label>
                     <input type="text" name="display_name" id="displayName" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">อีเมล</label>
+                    <label class="block text-sm font-medium mb-1">เธญเธตเน€เธกเธฅ</label>
                     <input type="email" name="email" id="email" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                 </div>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">เบอร์โทร</label>
+                    <label class="block text-sm font-medium mb-1">เน€เธเธญเธฃเนเนเธ—เธฃ</label>
                     <input type="tel" name="phone" id="phone" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                 </div>
                 <div>
@@ -310,30 +309,30 @@ require_once 'includes/header.php';
                         <a href="javascript:void(0)" onclick="showLineIdHelp()" class="text-blue-500 ml-1"><i class="fas fa-question-circle"></i></a>
                     </label>
                     <input type="text" name="line_user_id" id="lineUserId" placeholder="Uxxxxxxxxxx..." class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
-                    <p class="text-xs text-gray-500 mt-1">สำหรับรับแจ้งเตือนผ่าน LINE</p>
+                    <p class="text-xs text-gray-500 mt-1">เธชเธณเธซเธฃเธฑเธเธฃเธฑเธเนเธเนเธเน€เธ•เธทเธญเธเธเนเธฒเธ LINE</p>
                 </div>
             </div>
             
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">ระดับสิทธิ์</label>
+                    <label class="block text-sm font-medium mb-1">เธฃเธฐเธ”เธฑเธเธชเธดเธ—เธเธดเน</label>
                     <select name="role" id="role" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500" onchange="toggleBotAccess()">
                         <option value="admin">Admin</option>
-                        <option value="pharmacist">เภสัชกร</option>
+                        <option value="pharmacist">เน€เธ เธชเธฑเธเธเธฃ</option>
                         <option value="staff">Staff</option>
                     </select>
                 </div>
                 <div class="flex items-center">
                     <label class="flex items-center cursor-pointer mt-6">
                         <input type="checkbox" name="is_active" id="isActive" checked class="mr-2">
-                        <span class="text-sm">เปิดใช้งาน</span>
+                        <span class="text-sm">เน€เธเธดเธ”เนเธเนเธเธฒเธ</span>
                     </label>
                 </div>
             </div>
             
             <!-- Bot Access -->
             <div id="botAccessSection">
-                <label class="block text-sm font-medium mb-2">สิทธิ์เข้าถึง LINE Bot</label>
+                <label class="block text-sm font-medium mb-2">เธชเธดเธ—เธเธดเนเน€เธเนเธฒเธ–เธถเธ LINE Bot</label>
                 <div class="border rounded-lg divide-y max-h-60 overflow-y-auto">
                     <?php foreach ($allBots as $bot): ?>
                     <div class="p-3 hover:bg-gray-50">
@@ -343,10 +342,10 @@ require_once 'includes/header.php';
                             <span class="text-xs text-gray-500 ml-2"><?= htmlspecialchars($bot['basic_id'] ?? '') ?></span>
                         </label>
                         <div class="ml-6 mt-2 flex flex-wrap gap-2 bot-perms hidden" id="perms_<?= $bot['id'] ?>">
-                            <label class="text-xs"><input type="checkbox" name="perm_edit[<?= $bot['id'] ?>]" checked class="mr-1">แก้ไข</label>
+                            <label class="text-xs"><input type="checkbox" name="perm_edit[<?= $bot['id'] ?>]" checked class="mr-1">เนเธเนเนเธ</label>
                             <label class="text-xs"><input type="checkbox" name="perm_broadcast[<?= $bot['id'] ?>]" checked class="mr-1">Broadcast</label>
-                            <label class="text-xs"><input type="checkbox" name="perm_users[<?= $bot['id'] ?>]" checked class="mr-1">จัดการผู้ใช้</label>
-                            <label class="text-xs"><input type="checkbox" name="perm_shop[<?= $bot['id'] ?>]" checked class="mr-1">ร้านค้า</label>
+                            <label class="text-xs"><input type="checkbox" name="perm_users[<?= $bot['id'] ?>]" checked class="mr-1">เธเธฑเธ”เธเธฒเธฃเธเธนเนเนเธเน</label>
+                            <label class="text-xs"><input type="checkbox" name="perm_shop[<?= $bot['id'] ?>]" checked class="mr-1">เธฃเนเธฒเธเธเนเธฒ</label>
                             <label class="text-xs"><input type="checkbox" name="perm_analytics[<?= $bot['id'] ?>]" checked class="mr-1">Analytics</label>
                         </div>
                     </div>
@@ -355,9 +354,9 @@ require_once 'includes/header.php';
             </div>
             
             <div class="flex justify-end gap-2 pt-4 border-t">
-                <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">ยกเลิก</button>
+                <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">เธขเธเน€เธฅเธดเธ</button>
                 <button type="submit" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
-                    <i class="fas fa-save mr-1"></i>บันทึก
+                    <i class="fas fa-save mr-1"></i>เธเธฑเธเธ—เธถเธ
                 </button>
             </div>
         </form>
@@ -366,7 +365,7 @@ require_once 'includes/header.php';
 
 <script>
 function showCreateModal() {
-    document.getElementById('modalTitle').textContent = 'เพิ่มผู้ดูแล';
+    document.getElementById('modalTitle').textContent = 'เน€เธเธดเนเธกเธเธนเนเธ”เธนเนเธฅ';
     document.getElementById('formAction').value = 'create';
     document.getElementById('adminId').value = '';
     document.getElementById('username').value = '';
@@ -393,7 +392,7 @@ function showCreateModal() {
 }
 
 function editAdmin(admin) {
-    document.getElementById('modalTitle').textContent = 'แก้ไขผู้ดูแล';
+    document.getElementById('modalTitle').textContent = 'เนเธเนเนเธเธเธนเนเธ”เธนเนเธฅ';
     document.getElementById('formAction').value = 'update';
     document.getElementById('adminId').value = admin.id;
     document.getElementById('username').value = admin.username;
@@ -401,7 +400,7 @@ function editAdmin(admin) {
     document.getElementById('password').value = '';
     document.getElementById('password').required = false;
     document.getElementById('pwdReq').style.display = 'none';
-    document.getElementById('pwdHint').textContent = 'เว้นว่างถ้าไม่ต้องการเปลี่ยน';
+    document.getElementById('pwdHint').textContent = 'เน€เธงเนเธเธงเนเธฒเธเธ–เนเธฒเนเธกเนเธ•เนเธญเธเธเธฒเธฃเน€เธเธฅเธตเนเธขเธ';
     document.getElementById('displayName').value = admin.display_name || '';
     document.getElementById('email').value = admin.email || '';
     document.getElementById('phone').value = admin.phone || '';
@@ -452,7 +451,7 @@ function toggleBotAccess() {
 }
 
 function showLineIdHelp() {
-    alert('วิธีหา LINE User ID:\n\n1. ไปที่หน้า Inbox หรือ Users\n2. คลิกที่ผู้ใช้ที่ต้องการ\n3. LINE User ID จะขึ้นต้นด้วย U ตามด้วยตัวอักษร 32 ตัว\n   เช่น Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nหมายเหตุ: ผู้ใช้ต้องทักมาที่ LINE OA ก่อนจึงจะมี User ID');
+    alert('เธงเธดเธเธตเธซเธฒ LINE User ID:\n\n1. เนเธเธ—เธตเนเธซเธเนเธฒ Inbox เธซเธฃเธทเธญ Users\n2. เธเธฅเธดเธเธ—เธตเนเธเธนเนเนเธเนเธ—เธตเนเธ•เนเธญเธเธเธฒเธฃ\n3. LINE User ID เธเธฐเธเธถเนเธเธ•เนเธเธ”เนเธงเธข U เธ•เธฒเธกเธ”เนเธงเธขเธ•เธฑเธงเธญเธฑเธเธฉเธฃ 32 เธ•เธฑเธง\n   เน€เธเนเธ Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nเธซเธกเธฒเธขเน€เธซเธ•เธธ: เธเธนเนเนเธเนเธ•เนเธญเธเธ—เธฑเธเธกเธฒเธ—เธตเน LINE OA เธเนเธญเธเธเธถเธเธเธฐเธกเธต User ID');
 }
 
 // Close modal on outside click
@@ -462,3 +461,4 @@ document.getElementById('adminModal').addEventListener('click', function(e) {
 </script>
 
 <?php require_once 'includes/footer.php'; ?>
+
