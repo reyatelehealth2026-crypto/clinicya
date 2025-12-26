@@ -82,7 +82,7 @@ if (!$tableExists):
             <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">สต็อกปัจจุบัน</p>
+                        <p class="text-sm text-gray-500">สต็อกในระบบ</p>
                         <p class="text-3xl font-bold text-blue-600" id="currentStock">-</p>
                     </div>
                     <div id="productInfo" class="text-right hidden">
@@ -92,19 +92,31 @@ if (!$tableExists):
                 </div>
             </div>
             
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium mb-1">ประเภท *</label>
-                    <select name="adjustment_type" required class="w-full px-3 py-2 border rounded-lg">
-                        <option value="increase">เพิ่ม (+)</option>
-                        <option value="decrease">ลด (-)</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-1">จำนวน *</label>
-                    <input type="number" name="quantity" min="1" required class="w-full px-3 py-2 border rounded-lg">
+            <div>
+                <label class="block text-sm font-medium mb-1">จำนวนที่นับได้จริง *</label>
+                <input type="number" name="actual_count" id="actualCount" min="0" required 
+                       class="w-full px-4 py-3 border-2 border-blue-300 rounded-lg text-xl font-bold text-center focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                       placeholder="กรอกจำนวนที่นับได้"
+                       oninput="calculateDifference()">
+            </div>
+            
+            <!-- Auto-calculated difference -->
+            <div id="differenceBox" class="hidden p-4 rounded-lg border-2">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">ผลต่าง (ระบบคำนวณอัตโนมัติ)</p>
+                        <p class="text-2xl font-bold" id="differenceText">-</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500">ประเภท</p>
+                        <p class="text-lg font-semibold" id="adjustmentTypeText">-</p>
+                    </div>
                 </div>
             </div>
+            
+            <!-- Hidden fields for API -->
+            <input type="hidden" name="adjustment_type" id="adjustmentType" value="increase">
+            <input type="hidden" name="quantity" id="adjustmentQuantity" value="0">
             
             <div>
                 <label class="block text-sm font-medium mb-1">เหตุผล *</label>
@@ -260,8 +272,64 @@ function updateStock(select) {
     
     if (select.value) {
         document.getElementById('productInfo').classList.remove('hidden');
+        // Clear and recalculate
+        document.getElementById('actualCount').value = '';
+        calculateDifference();
     } else {
         document.getElementById('productInfo').classList.add('hidden');
+        document.getElementById('differenceBox').classList.add('hidden');
+    }
+}
+
+function calculateDifference() {
+    const productSelect = document.getElementById('productSelect');
+    const actualCountInput = document.getElementById('actualCount');
+    const differenceBox = document.getElementById('differenceBox');
+    const differenceText = document.getElementById('differenceText');
+    const adjustmentTypeText = document.getElementById('adjustmentTypeText');
+    const adjustmentType = document.getElementById('adjustmentType');
+    const adjustmentQuantity = document.getElementById('adjustmentQuantity');
+    
+    const option = productSelect.options[productSelect.selectedIndex];
+    const currentStock = parseInt(option.dataset.stock) || 0;
+    const actualCount = parseInt(actualCountInput.value) || 0;
+    
+    if (!productSelect.value || actualCountInput.value === '') {
+        differenceBox.classList.add('hidden');
+        return;
+    }
+    
+    const difference = actualCount - currentStock;
+    
+    differenceBox.classList.remove('hidden');
+    
+    if (difference > 0) {
+        // เพิ่ม
+        differenceBox.className = 'p-4 rounded-lg border-2 bg-green-50 border-green-300';
+        differenceText.textContent = '+' + difference;
+        differenceText.className = 'text-2xl font-bold text-green-600';
+        adjustmentTypeText.textContent = 'เพิ่มสต็อก';
+        adjustmentTypeText.className = 'text-lg font-semibold text-green-600';
+        adjustmentType.value = 'increase';
+        adjustmentQuantity.value = difference;
+    } else if (difference < 0) {
+        // ลด
+        differenceBox.className = 'p-4 rounded-lg border-2 bg-red-50 border-red-300';
+        differenceText.textContent = difference;
+        differenceText.className = 'text-2xl font-bold text-red-600';
+        adjustmentTypeText.textContent = 'ลดสต็อก';
+        adjustmentTypeText.className = 'text-lg font-semibold text-red-600';
+        adjustmentType.value = 'decrease';
+        adjustmentQuantity.value = Math.abs(difference);
+    } else {
+        // เท่ากัน
+        differenceBox.className = 'p-4 rounded-lg border-2 bg-gray-50 border-gray-300';
+        differenceText.textContent = '0 (ไม่มีการเปลี่ยนแปลง)';
+        differenceText.className = 'text-2xl font-bold text-gray-500';
+        adjustmentTypeText.textContent = 'ตรงกัน';
+        adjustmentTypeText.className = 'text-lg font-semibold text-gray-500';
+        adjustmentType.value = 'increase';
+        adjustmentQuantity.value = 0;
     }
 }
 
@@ -272,8 +340,19 @@ function openBarcodeScanner() {
 
 document.getElementById('adjustmentForm').addEventListener('submit', async function(e) {
     e.preventDefault();
+    
+    const quantity = parseInt(document.getElementById('adjustmentQuantity').value) || 0;
+    if (quantity === 0) {
+        alert('ไม่มีการเปลี่ยนแปลงสต็อก (จำนวนที่นับได้ตรงกับสต็อกในระบบ)');
+        return;
+    }
+    
     const formData = new FormData(this);
     const data = Object.fromEntries(formData);
+    // Use calculated values
+    data.adjustment_type = document.getElementById('adjustmentType').value;
+    data.quantity = quantity;
+    
     const action = e.submitter.value;
     
     // Create adjustment
