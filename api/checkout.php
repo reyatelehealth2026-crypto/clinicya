@@ -642,6 +642,20 @@ function handleCreateOrder($data) {
         // 🔔 แจ้งเตือน Telegram เมื่อมี order ใหม่
         notifyTelegramNewOrder($orderId, $orderNumber, $total, $user, $deliveryInfo);
         
+        // 🔔 แจ้งเตือนผ่าน LINE/Email ด้วย NotificationService
+        try {
+            require_once __DIR__ . '/../classes/NotificationService.php';
+            $notifier = new NotificationService($db, $lineAccountId);
+            $notifier->notifyNewOrder([
+                'id' => $orderId,
+                'order_number' => $orderNumber,
+                'total_amount' => $total,
+                'customer_name' => $user['display_name'] ?? 'ลูกค้า'
+            ]);
+        } catch (Exception $e) {
+            error_log("NotificationService error: " . $e->getMessage());
+        }
+        
         jsonResponse(true, 'Order created', [
             'order_id' => $orderId,
             'order_number' => $orderNumber,
@@ -831,6 +845,20 @@ function handleUploadSlip() {
     $stmt->execute([$order['user_id']]);
     $slipUser = $stmt->fetch(PDO::FETCH_ASSOC);
     notifyTelegramPayment($orderId, $order['order_number'], $imageUrl, $slipUser ?: []);
+    
+    // 🔔 แจ้งเตือนผ่าน LINE/Email ด้วย NotificationService
+    try {
+        require_once __DIR__ . '/../classes/NotificationService.php';
+        $notifier = new NotificationService($db, $order['line_account_id'] ?? null);
+        $notifier->notifyPayment([
+            'id' => $orderId,
+            'order_number' => $order['order_number'],
+            'total_amount' => $order['grand_total'] ?? $order['total_amount'],
+            'customer_name' => $slipUser['display_name'] ?? 'ลูกค้า'
+        ], $imageUrl);
+    } catch (Exception $e) {
+        error_log("NotificationService payment error: " . $e->getMessage());
+    }
     
     jsonResponse(true, 'Slip uploaded', [
         'image_url' => $imageUrl

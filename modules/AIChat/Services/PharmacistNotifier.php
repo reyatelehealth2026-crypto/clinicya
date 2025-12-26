@@ -125,11 +125,35 @@ class PharmacistNotifier
     }
 
     /**
-     * ดึงรายชื่อเภสัชกร
+     * ดึงรายชื่อเภสัชกร - ใช้ notify_admin_users จาก notification_settings ถ้ามี
      */
     private function getPharmacists(): array
     {
         try {
+            // ลองดึงจาก notification_settings ก่อน
+            $accountId = (int)($this->lineAccountId ?: 0);
+            $settings = $this->db->fetchOne(
+                "SELECT notify_admin_users FROM notification_settings WHERE line_account_id = ?",
+                [$accountId]
+            );
+            
+            $adminIds = [];
+            if ($settings && !empty($settings['notify_admin_users'])) {
+                $adminIds = array_filter(array_map('intval', explode(',', $settings['notify_admin_users'])));
+            }
+            
+            // ถ้ามี notify_admin_users ให้ใช้เฉพาะคนที่ตั้งค่าไว้
+            if (!empty($adminIds)) {
+                $placeholders = implode(',', array_fill(0, count($adminIds), '?'));
+                return $this->db->fetchAll(
+                    "SELECT id, username, line_user_id, email, role FROM admin_users 
+                     WHERE id IN ({$placeholders}) AND is_active = 1 
+                     AND (line_user_id IS NOT NULL AND line_user_id != '')",
+                    $adminIds
+                );
+            }
+            
+            // Fallback: ดึงเภสัชกรและ admin ทั้งหมด
             $sql = "SELECT au.id, au.username, au.line_user_id, au.email, au.role
                     FROM admin_users au
                     WHERE au.role IN ('pharmacist', 'admin')
@@ -143,6 +167,7 @@ class PharmacistNotifier
             
             return $this->db->fetchAll($sql);
         } catch (\Exception $e) {
+            error_log("getPharmacists error: " . $e->getMessage());
             return [];
         }
     }
