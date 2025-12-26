@@ -139,6 +139,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         setPromoSetting($db, $lineAccountId, 'show_featured_section', isset($_POST['show_featured_section']) ? '1' : '0');
         setPromoSetting($db, $lineAccountId, 'show_sku', isset($_POST['show_sku']) ? '1' : '0');
         setPromoSetting($db, $lineAccountId, 'show_stock', isset($_POST['show_stock']) ? '1' : '0');
+        setPromoSetting($db, $lineAccountId, 'show_description', isset($_POST['show_description']) ? '1' : '0');
+        setPromoSetting($db, $lineAccountId, 'show_usage', isset($_POST['show_usage']) ? '1' : '0');
+        setPromoSetting($db, $lineAccountId, 'show_manufacturer', isset($_POST['show_manufacturer']) ? '1' : '0');
         
         $message = 'บันทึกการตั้งค่าสำเร็จ!';
         $messageType = 'success';
@@ -164,6 +167,9 @@ $settings = [
     'show_featured_section' => getPromoSetting($db, $lineAccountId, 'show_featured_section', '1'),
     'show_sku' => getPromoSetting($db, $lineAccountId, 'show_sku', '0'),
     'show_stock' => getPromoSetting($db, $lineAccountId, 'show_stock', '0'),
+    'show_description' => getPromoSetting($db, $lineAccountId, 'show_description', '1'),
+    'show_usage' => getPromoSetting($db, $lineAccountId, 'show_usage', '1'),
+    'show_manufacturer' => getPromoSetting($db, $lineAccountId, 'show_manufacturer', '0'),
 ];
 
 require_once __DIR__ . '/../includes/header.php';
@@ -428,15 +434,47 @@ require_once __DIR__ . '/../includes/header.php';
                     <h4 class="font-medium text-gray-700 mb-3 flex items-center gap-2">
                         <i class="fas fa-cog text-gray-500"></i>ตัวเลือกเพิ่มเติม
                     </h4>
-                    <div class="flex flex-wrap gap-4">
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" name="show_sku" <?= $settings['show_sku'] == '1' ? 'checked' : '' ?> class="w-4 h-4 text-blue-500 rounded">
-                            <span class="text-sm text-gray-600">แสดงรหัสสินค้า (SKU)</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" name="show_stock" <?= $settings['show_stock'] == '1' ? 'checked' : '' ?> class="w-4 h-4 text-blue-500 rounded">
-                            <span class="text-sm text-gray-600">แสดงจำนวนคงเหลือ</span>
-                        </label>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Product Info Options -->
+                        <div class="p-4 bg-blue-50 rounded-xl">
+                            <h5 class="font-medium text-blue-800 mb-3 flex items-center gap-2">
+                                <i class="fas fa-info-circle"></i>ข้อมูลสินค้า
+                            </h5>
+                            <div class="space-y-2">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="show_sku" <?= $settings['show_sku'] == '1' ? 'checked' : '' ?> class="w-4 h-4 text-blue-500 rounded">
+                                    <span class="text-sm text-gray-700">แสดงรหัสสินค้า (SKU)</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="show_stock" <?= $settings['show_stock'] == '1' ? 'checked' : '' ?> class="w-4 h-4 text-blue-500 rounded">
+                                    <span class="text-sm text-gray-700">แสดงจำนวนคงเหลือ</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="show_manufacturer" <?= $settings['show_manufacturer'] == '1' ? 'checked' : '' ?> class="w-4 h-4 text-blue-500 rounded">
+                                    <span class="text-sm text-gray-700">แสดงผู้ผลิต/ยี่ห้อ</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Pharmacy Info Options -->
+                        <div class="p-4 bg-green-50 rounded-xl">
+                            <h5 class="font-medium text-green-800 mb-3 flex items-center gap-2">
+                                <i class="fas fa-pills"></i>ข้อมูลยา/สรรพคุณ
+                            </h5>
+                            <div class="space-y-2">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="show_description" <?= $settings['show_description'] == '1' ? 'checked' : '' ?> class="w-4 h-4 text-green-500 rounded">
+                                    <span class="text-sm text-gray-700">แสดงสรรพคุณ/รายละเอียด</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="show_usage" <?= $settings['show_usage'] == '1' ? 'checked' : '' ?> class="w-4 h-4 text-green-500 rounded">
+                                    <span class="text-sm text-gray-700">แสดงวิธีใช้</span>
+                                </label>
+                            </div>
+                            <p class="text-xs text-green-600 mt-2">
+                                <i class="fas fa-lightbulb mr-1"></i>ข้อมูลจะแสดงในหน้ารายละเอียดสินค้า
+                            </p>
+                        </div>
                     </div>
                 </div>
                 

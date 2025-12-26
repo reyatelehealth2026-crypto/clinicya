@@ -100,6 +100,9 @@ $promoSettings = [
     'card_shadow' => getPromoSetting($db, $lineAccountId, 'card_shadow', 'sm'),
     'show_sku' => getPromoSetting($db, $lineAccountId, 'show_sku', '0'),
     'show_stock' => getPromoSetting($db, $lineAccountId, 'show_stock', '0'),
+    'show_description' => getPromoSetting($db, $lineAccountId, 'show_description', '1'),
+    'show_usage' => getPromoSetting($db, $lineAccountId, 'show_usage', '1'),
+    'show_manufacturer' => getPromoSetting($db, $lineAccountId, 'show_manufacturer', '0'),
     'banner_height_mobile' => (int)getPromoSetting($db, $lineAccountId, 'banner_height_mobile', 160),
     'banner_height_desktop' => (int)getPromoSetting($db, $lineAccountId, 'banner_height_desktop', 200),
     'banner_autoplay' => getPromoSetting($db, $lineAccountId, 'banner_autoplay', '1'),
@@ -920,10 +923,10 @@ function buildPageUrl($page, $userId, $lineAccountId, $filterCategory, $filterSe
                             <span></span>
                         </div>
                         
-                        <!-- Description -->
+                        <!-- Description / สรรพคุณ -->
                         <div id="modalDescSection" class="hidden mb-4">
                             <h3 class="font-bold text-gray-700 mb-2 flex items-center gap-2">
-                                <i class="fas fa-info-circle text-teal-500"></i>รายละเอียด
+                                <i class="fas fa-pills text-teal-500"></i>สรรพคุณ / รายละเอียด
                             </h3>
                             <p id="modalDesc" class="text-sm text-gray-600 leading-relaxed"></p>
                         </div>
@@ -1115,24 +1118,27 @@ function buildPageUrl($page, $userId, $lineAccountId, $filterCategory, $filterSe
                 
                 document.getElementById('modalQty').textContent = '1';
                 
-                // Description
-                if (p.description) {
+                // Description - check settings
+                const showDescription = <?= $promoSettings['show_description'] == '1' ? 'true' : 'false' ?>;
+                if (showDescription && p.description) {
                     document.getElementById('modalDesc').textContent = p.description;
                     document.getElementById('modalDescSection').classList.remove('hidden');
                 } else {
                     document.getElementById('modalDescSection').classList.add('hidden');
                 }
                 
-                // Usage Instructions
-                if (p.usage_instructions) {
+                // Usage Instructions - check settings
+                const showUsage = <?= $promoSettings['show_usage'] == '1' ? 'true' : 'false' ?>;
+                if (showUsage && p.usage_instructions) {
                     document.getElementById('modalUsage').textContent = p.usage_instructions;
                     document.getElementById('modalUsageSection').classList.remove('hidden');
                 } else {
                     document.getElementById('modalUsageSection').classList.add('hidden');
                 }
                 
-                // Manufacturer
-                if (p.manufacturer) {
+                // Manufacturer - check settings
+                const showManufacturer = <?= $promoSettings['show_manufacturer'] == '1' ? 'true' : 'false' ?>;
+                if (showManufacturer && p.manufacturer) {
                     document.getElementById('modalManufacturer').textContent = `ผู้ผลิต: ${p.manufacturer}`;
                     document.getElementById('modalManufacturerSection').classList.remove('hidden');
                 } else {
