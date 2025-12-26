@@ -212,6 +212,20 @@ $menuSections = [
             ['icon' => 'fa-mobile-alt', 'label' => 'ตั้งค่า LIFF Shop', 'url' => '/shop/liff-shop-settings', 'page' => 'liff-shop-settings'],
         ])
     ],
+    'inventory' => [
+        'title' => '📦 คลังสินค้า',
+        'icon' => 'fa-warehouse',
+        'collapsible' => true,
+        'items' => [
+            ['icon' => 'fa-truck', 'label' => 'Suppliers', 'url' => '/inventory/suppliers', 'page' => 'suppliers'],
+            ['icon' => 'fa-file-invoice', 'label' => 'ใบสั่งซื้อ (PO)', 'url' => '/inventory/purchase-orders', 'page' => 'purchase-orders'],
+            ['icon' => 'fa-truck-loading', 'label' => 'รับสินค้า (GR)', 'url' => '/inventory/goods-receive', 'page' => 'goods-receive'],
+            ['icon' => 'fa-sliders-h', 'label' => 'ปรับสต็อก', 'url' => '/inventory/stock-adjustment', 'page' => 'stock-adjustment'],
+            ['icon' => 'fa-exchange-alt', 'label' => 'ประวัติเคลื่อนไหว', 'url' => '/inventory/stock-movements', 'page' => 'stock-movements'],
+            ['icon' => 'fa-exclamation-triangle', 'label' => 'สินค้าใกล้หมด', 'url' => '/inventory/low-stock', 'page' => 'low-stock'],
+            ['icon' => 'fa-chart-bar', 'label' => 'รายงาน', 'url' => '/inventory/reports', 'page' => 'reports'],
+        ]
+    ],
     'membership' => [
         'title' => 'สมาชิก & แต้ม',
         'icon' => 'fa-id-card',
