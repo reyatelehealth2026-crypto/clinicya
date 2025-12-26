@@ -33,7 +33,12 @@ $suppliers = $tableExists ? $supplierService->getAll(['is_active' => 1]) : [];
 // Get products for adding items
 $products = [];
 try {
-    $stmt = $db->prepare("SELECT id, name, sku, cost_price, stock FROM business_items WHERE is_active = 1 ORDER BY name");
+    // Check if cost_price column exists
+    $cols = $db->query("SHOW COLUMNS FROM business_items")->fetchAll(PDO::FETCH_COLUMN);
+    $hasCostPrice = in_array('cost_price', $cols);
+    $costPriceCol = $hasCostPrice ? "cost_price" : "0 as cost_price";
+    
+    $stmt = $db->prepare("SELECT id, name, sku, {$costPriceCol}, stock FROM business_items WHERE is_active = 1 ORDER BY name");
     $stmt->execute();
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}

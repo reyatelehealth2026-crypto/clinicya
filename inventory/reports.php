@@ -33,9 +33,16 @@ $totalItems = 0;
 
 if ($reportType === 'valuation') {
     try {
+        // Check if cost_price column exists
+        $cols = $db->query("SHOW COLUMNS FROM business_items")->fetchAll(PDO::FETCH_COLUMN);
+        $hasCostPrice = in_array('cost_price', $cols);
+        
+        $costPriceCol = $hasCostPrice ? "cost_price" : "0";
+        $valueCalc = $hasCostPrice ? "(stock * COALESCE(cost_price, 0))" : "0";
+        
         $stmt = $db->prepare("
-            SELECT id, name, sku, stock, cost_price, 
-                   (stock * COALESCE(cost_price, 0)) as value
+            SELECT id, name, sku, stock, {$costPriceCol} as cost_price, 
+                   {$valueCalc} as value
             FROM business_items 
             WHERE is_active = 1 AND stock > 0
             ORDER BY value DESC

@@ -51,25 +51,36 @@ class InventoryService {
     }
     
     /**
+     * Get available columns from business_items
+     */
+    private function getBusinessItemsColumns(): array {
+        static $cols = null;
+        if ($cols === null) {
+            try {
+                $cols = $this->db->query("SHOW COLUMNS FROM business_items")->fetchAll(PDO::FETCH_COLUMN);
+            } catch (Exception $e) {
+                $cols = [];
+            }
+        }
+        return $cols;
+    }
+    
+    /**
      * Get low stock products
      */
     public function getLowStockProducts(): array {
-        // Check if min_stock column exists
-        $hasMinStock = false;
-        $hasReorderPoint = false;
-        try {
-            $cols = $this->db->query("SHOW COLUMNS FROM business_items")->fetchAll(PDO::FETCH_COLUMN);
-            $hasMinStock = in_array('min_stock', $cols);
-            $hasReorderPoint = in_array('reorder_point', $cols);
-        } catch (Exception $e) {}
+        $cols = $this->getBusinessItemsColumns();
+        $hasMinStock = in_array('min_stock', $cols);
+        $hasReorderPoint = in_array('reorder_point', $cols);
+        $hasCostPrice = in_array('cost_price', $cols);
         
         $threshold = $hasReorderPoint ? 'COALESCE(reorder_point, 5)' : ($hasMinStock ? 'COALESCE(min_stock, 5)' : '5');
         
         $sql = "SELECT id, name, sku, stock, " . 
                ($hasMinStock ? "min_stock, " : "5 as min_stock, ") .
                ($hasReorderPoint ? "reorder_point, " : "5 as reorder_point, ") .
-               "cost_price
-                FROM business_items 
+               ($hasCostPrice ? "cost_price " : "0 as cost_price ") .
+               "FROM business_items 
                 WHERE is_active = 1 
                 AND stock <= {$threshold}";
         $params = [];
@@ -244,7 +255,13 @@ class InventoryService {
      * Get stock valuation
      */
     public function getStockValuation(): array {
-        $sql = "SELECT id, name, sku, stock, cost_price, (stock * COALESCE(cost_price, 0)) as value
+        $cols = $this->getBusinessItemsColumns();
+        $hasCostPrice = in_array('cost_price', $cols);
+        
+        $costPriceCol = $hasCostPrice ? "cost_price" : "0";
+        $valueCalc = $hasCostPrice ? "(stock * COALESCE(cost_price, 0))" : "0";
+        
+        $sql = "SELECT id, name, sku, stock, {$costPriceCol} as cost_price, {$valueCalc} as value
                 FROM business_items 
                 WHERE is_active = 1";
         $params = [];
