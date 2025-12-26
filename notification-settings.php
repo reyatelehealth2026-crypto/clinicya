@@ -11,42 +11,58 @@ $db = Database::getInstance()->getConnection();
 $pageTitle = 'ตั้งค่าการแจ้งเตือน';
 $currentBotId = $_SESSION['current_bot_id'] ?? null;
 
-// Ensure notification_settings table exists
+// Debug info
+$debugInfo = [];
+$debugInfo['current_bot_id'] = $currentBotId;
+
+// Ensure notification_settings table exists with proper structure
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS notification_settings (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        line_account_id INT DEFAULT NULL,
-        -- LINE Notifications
+        line_account_id INT NOT NULL DEFAULT 0,
         line_notify_enabled TINYINT(1) DEFAULT 1,
         line_notify_new_order TINYINT(1) DEFAULT 1,
         line_notify_payment TINYINT(1) DEFAULT 1,
         line_notify_urgent TINYINT(1) DEFAULT 1,
         line_notify_appointment TINYINT(1) DEFAULT 1,
         line_notify_low_stock TINYINT(1) DEFAULT 0,
-        -- Email Notifications
         email_enabled TINYINT(1) DEFAULT 0,
         email_addresses TEXT DEFAULT NULL,
         email_notify_urgent TINYINT(1) DEFAULT 1,
         email_notify_daily_report TINYINT(1) DEFAULT 0,
         email_notify_low_stock TINYINT(1) DEFAULT 0,
-        -- Telegram (link to telegram_settings)
         telegram_enabled TINYINT(1) DEFAULT 0,
-        -- Notification Recipients
         notify_admin_users TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY unique_account (line_account_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-} catch (Exception $e) {}
+    
+    // Fix existing NULL values
+    $db->exec("UPDATE notification_settings SET line_account_id = 0 WHERE line_account_id IS NULL");
+    
+    // Alter column to NOT NULL if needed
+    try {
+        $db->exec("ALTER TABLE notification_settings MODIFY line_account_id INT NOT NULL DEFAULT 0");
+    } catch (Exception $e) {}
+    
+} catch (Exception $e) {
+    $debugInfo['table_error'] = $e->getMessage();
+}
 
 // Get current settings
 $settings = [];
+$accountId = (int)($currentBotId ?: 0);
+$debugInfo['account_id'] = $accountId;
+
 try {
-    $accountId = $currentBotId ?: 0;
     $stmt = $db->prepare("SELECT * FROM notification_settings WHERE line_account_id = ?");
     $stmt->execute([$accountId]);
     $settings = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-} catch (Exception $e) {}
+    $debugInfo['settings_loaded'] = !empty($settings);
+} catch (Exception $e) {
+    $debugInfo['load_error'] = $e->getMessage();
+}
 
 // Get Telegram settings
 $telegramSettings = [];
@@ -68,33 +84,33 @@ $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+    $debugInfo['post_action'] = $action;
     
     if ($action === 'save_settings') {
         try {
             $emailAddresses = trim($_POST['email_addresses'] ?? '');
             $notifyAdminUsers = isset($_POST['notify_admin_users']) ? implode(',', $_POST['notify_admin_users']) : '';
             
-            // Use 0 if no bot selected (for global settings)
-            $accountId = $currentBotId ?: 0;
+            $debugInfo['notify_admin_users'] = $notifyAdminUsers;
             
             $data = [
-                'line_account_id' => $accountId,
-                'line_notify_enabled' => isset($_POST['line_notify_enabled']) ? 1 : 0,
-                'line_notify_new_order' => isset($_POST['line_notify_new_order']) ? 1 : 0,
-                'line_notify_payment' => isset($_POST['line_notify_payment']) ? 1 : 0,
-                'line_notify_urgent' => isset($_POST['line_notify_urgent']) ? 1 : 0,
-                'line_notify_appointment' => isset($_POST['line_notify_appointment']) ? 1 : 0,
-                'line_notify_low_stock' => isset($_POST['line_notify_low_stock']) ? 1 : 0,
-                'email_enabled' => isset($_POST['email_enabled']) ? 1 : 0,
-                'email_addresses' => $emailAddresses,
-                'email_notify_urgent' => isset($_POST['email_notify_urgent']) ? 1 : 0,
-                'email_notify_daily_report' => isset($_POST['email_notify_daily_report']) ? 1 : 0,
-                'email_notify_low_stock' => isset($_POST['email_notify_low_stock']) ? 1 : 0,
-                'telegram_enabled' => isset($_POST['telegram_enabled']) ? 1 : 0,
-                'notify_admin_users' => $notifyAdminUsers
+                $accountId,
+                isset($_POST['line_notify_enabled']) ? 1 : 0,
+                isset($_POST['line_notify_new_order']) ? 1 : 0,
+                isset($_POST['line_notify_payment']) ? 1 : 0,
+                isset($_POST['line_notify_urgent']) ? 1 : 0,
+                isset($_POST['line_notify_appointment']) ? 1 : 0,
+                isset($_POST['line_notify_low_stock']) ? 1 : 0,
+                isset($_POST['email_enabled']) ? 1 : 0,
+                $emailAddresses,
+                isset($_POST['email_notify_urgent']) ? 1 : 0,
+                isset($_POST['email_notify_daily_report']) ? 1 : 0,
+                isset($_POST['email_notify_low_stock']) ? 1 : 0,
+                isset($_POST['telegram_enabled']) ? 1 : 0,
+                $notifyAdminUsers
             ];
             
-            $stmt = $db->prepare("INSERT INTO notification_settings 
+            $sql = "INSERT INTO notification_settings 
                 (line_account_id, line_notify_enabled, line_notify_new_order, line_notify_payment, 
                  line_notify_urgent, line_notify_appointment, line_notify_low_stock,
                  email_enabled, email_addresses, email_notify_urgent, email_notify_daily_report, email_notify_low_stock,
@@ -113,18 +129,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 email_notify_daily_report = VALUES(email_notify_daily_report),
                 email_notify_low_stock = VALUES(email_notify_low_stock),
                 telegram_enabled = VALUES(telegram_enabled),
-                notify_admin_users = VALUES(notify_admin_users)");
+                notify_admin_users = VALUES(notify_admin_users)";
             
-            $stmt->execute(array_values($data));
-            $success = 'บันทึกการตั้งค่าสำเร็จ';
+            $stmt = $db->prepare($sql);
+            $result = $stmt->execute($data);
             
-            // Reload settings
-            $stmt = $db->prepare("SELECT * FROM notification_settings WHERE line_account_id = ?");
-            $stmt->execute([$accountId]);
-            $settings = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            $debugInfo['execute_result'] = $result;
+            $debugInfo['rows_affected'] = $stmt->rowCount();
+            
+            if ($result) {
+                $success = 'บันทึกการตั้งค่าสำเร็จ';
+                
+                // Reload settings
+                $stmt = $db->prepare("SELECT * FROM notification_settings WHERE line_account_id = ?");
+                $stmt->execute([$accountId]);
+                $settings = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            } else {
+                $error = 'บันทึกไม่สำเร็จ - ไม่มี error แต่ไม่มีการเปลี่ยนแปลง';
+            }
             
         } catch (Exception $e) {
             $error = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
+            $debugInfo['save_error'] = $e->getMessage();
         }
     } elseif ($action === 'test_line') {
         // Test LINE notification
@@ -258,6 +284,14 @@ require_once 'includes/header.php';
 </style>
 
 <div class="max-w-5xl mx-auto py-6 px-4">
+    <!-- Debug Info (temporary) -->
+    <?php if (!empty($debugInfo)): ?>
+    <div class="mb-6 p-4 bg-gray-100 border border-gray-300 rounded-xl text-xs">
+        <strong>Debug Info:</strong>
+        <pre><?= htmlspecialchars(json_encode($debugInfo, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+    </div>
+    <?php endif; ?>
+
     <?php if ($success): ?>
     <div class="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-center gap-3">
         <i class="fas fa-check-circle text-xl"></i>
