@@ -282,12 +282,26 @@ function testLineNotification($db, $lineAccountId) {
 }
 
 function testEmailNotification($email) {
+    // ลองใช้ EmailService ก่อน
+    try {
+        require_once __DIR__ . '/classes/EmailService.php';
+        global $db;
+        $emailService = new EmailService($db);
+        $result = $emailService->sendTest($email);
+        if ($result) {
+            return true;
+        }
+    } catch (Exception $e) {
+        error_log("EmailService error: " . $e->getMessage());
+    }
+    
+    // Fallback ไปใช้ mail() โดยตรง
     $subject = "🔔 ทดสอบการแจ้งเตือน Email";
     $body = "
 <!DOCTYPE html>
 <html>
 <head><meta charset='UTF-8'></head>
-<body style='font-family: Sarabun, Arial, sans-serif; padding: 20px;'>
+<body style='font-family: Arial, sans-serif; padding: 20px;'>
     <div style='max-width: 500px; margin: 0 auto; background: #f8fafc; padding: 30px; border-radius: 12px;'>
         <h2 style='color: #059669; margin-bottom: 20px;'>✅ ทดสอบการแจ้งเตือน</h2>
         <p>ระบบแจ้งเตือน Email ทำงานปกติ</p>
@@ -302,7 +316,9 @@ function testEmailNotification($email) {
         'From: Notification System <noreply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . '>'
     ];
     
-    return mail($email, $subject, $body, implode("\r\n", $headers));
+    $result = @mail($email, $subject, $body, implode("\r\n", $headers));
+    error_log("testEmailNotification mail() to {$email}: " . ($result ? 'success' : 'failed'));
+    return $result;
 }
 
 // Default values
@@ -593,6 +609,10 @@ require_once 'includes/header.php';
                         <i class="fas fa-link text-gray-400 mr-2"></i>ลิงก์ที่เกี่ยวข้อง
                     </h4>
                     <div class="space-y-2">
+                        <a href="email-settings.php" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
+                            <i class="fas fa-envelope text-blue-500"></i>
+                            <span class="text-sm">ตั้งค่า Email/SMTP</span>
+                        </a>
                         <a href="telegram.php" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
                             <i class="fab fa-telegram text-sky-500"></i>
                             <span class="text-sm">ตั้งค่า Telegram Bot</span>
