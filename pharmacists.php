@@ -93,11 +93,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get pharmacists
-$pharmacists = $db->query("SELECT p.*, 
-    (SELECT COUNT(*) FROM appointments WHERE pharmacist_id = p.id AND status = 'completed') as completed_count,
-    (SELECT COUNT(*) FROM appointments WHERE pharmacist_id = p.id AND status IN ('pending','confirmed') AND appointment_date >= CURDATE()) as upcoming_count
-    FROM pharmacists p ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_ASSOC);
+// Get pharmacists - check if sort_order column exists
+$pharmacists = [];
+try {
+    $cols = $db->query("SHOW COLUMNS FROM pharmacists")->fetchAll(PDO::FETCH_COLUMN);
+    $hasSortOrder = in_array('sort_order', $cols);
+    $orderBy = $hasSortOrder ? "ORDER BY sort_order ASC, name ASC" : "ORDER BY name ASC";
+    
+    $pharmacists = $db->query("SELECT p.*, 
+        (SELECT COUNT(*) FROM appointments WHERE pharmacist_id = p.id AND status = 'completed') as completed_count,
+        (SELECT COUNT(*) FROM appointments WHERE pharmacist_id = p.id AND status IN ('pending','confirmed') AND appointment_date >= CURDATE()) as upcoming_count
+        FROM pharmacists p {$orderBy}")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $pharmacists = [];
+}
 
 // Get schedules for each pharmacist
 foreach ($pharmacists as &$p) {
