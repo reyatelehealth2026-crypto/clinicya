@@ -74,7 +74,10 @@ $total = $stmt->fetchColumn();
 $totalPages = ceil($total / $perPage);
 
 // Get appointments
-$sql = "SELECT a.*, 
+$sql = "SELECT a.id, a.user_id, a.pharmacist_id, a.appointment_date, a.appointment_time, 
+        a.status, a.notes, a.created_at, a.updated_at,
+        COALESCE(a.appointment_id, CONCAT('APT', LPAD(a.id, 6, '0'))) as appointment_id,
+        COALESCE(a.duration, 30) as duration,
         u.first_name, u.last_name, u.phone, u.display_name, u.picture_url,
         p.name as pharmacist_name, p.title as pharmacist_title
         FROM appointments a
