@@ -212,10 +212,11 @@ class SetupStatusChecker {
      */
     public function checkProducts(): array {
         try {
+            // Try business_items first (new system)
             $stmt = $this->db->prepare("
                 SELECT COUNT(*) as count 
-                FROM products 
-                WHERE line_account_id = ? AND status = 'active'
+                FROM business_items 
+                WHERE (line_account_id = ? OR line_account_id IS NULL) AND is_active = 1
             ");
             $stmt->execute([$this->lineAccountId]);
             $result = $stmt->fetch(\PDO::FETCH_ASSOC);
@@ -225,7 +226,23 @@ class SetupStatusChecker {
                 'details' => ['product_count' => $result['count'] ?? 0]
             ];
         } catch (\Exception $e) {
-            return ['completed' => false, 'details' => ['error' => $e->getMessage()]];
+            // Fallback to products table (old system)
+            try {
+                $stmt = $this->db->prepare("
+                    SELECT COUNT(*) as count 
+                    FROM products 
+                    WHERE line_account_id = ? AND status = 'active'
+                ");
+                $stmt->execute([$this->lineAccountId]);
+                $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+                
+                return [
+                    'completed' => ($result['count'] ?? 0) > 0,
+                    'details' => ['product_count' => $result['count'] ?? 0]
+                ];
+            } catch (\Exception $e2) {
+                return ['completed' => false, 'details' => ['error' => $e2->getMessage()]];
+            }
         }
     }
     
@@ -234,6 +251,23 @@ class SetupStatusChecker {
      */
     public function checkLiffShop(): array {
         try {
+            // Check line_accounts table for liff_id (new system)
+            $stmt = $this->db->prepare("
+                SELECT liff_id 
+                FROM line_accounts 
+                WHERE id = ?
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $account = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            if (!empty($account['liff_id'])) {
+                return [
+                    'completed' => true,
+                    'details' => ['has_liff_shop' => true]
+                ];
+            }
+            
+            // Fallback to liff_settings table (old system)
             $stmt = $this->db->prepare("
                 SELECT liff_shop_id 
                 FROM liff_settings 
@@ -329,14 +363,16 @@ class SetupStatusChecker {
     public function checkAiChat(): array {
         try {
             $stmt = $this->db->prepare("
-                SELECT ai_enabled, gemini_api_key 
+                SELECT is_enabled, gemini_api_key 
                 FROM ai_settings 
-                WHERE line_account_id = ?
+                WHERE line_account_id = ? OR line_account_id IS NULL
+                ORDER BY line_account_id DESC
+                LIMIT 1
             ");
             $stmt->execute([$this->lineAccountId]);
             $ai = $stmt->fetch(\PDO::FETCH_ASSOC);
             
-            $enabled = !empty($ai['ai_enabled']);
+            $enabled = !empty($ai['is_enabled']);
             $hasKey = !empty($ai['gemini_api_key']);
             
             return [
