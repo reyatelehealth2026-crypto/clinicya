@@ -6108,7 +6108,7 @@ class LiffApp {
      */
     async loadProductDetail(productId) {
         try {
-            const response = await fetch(this.config.BASE_URL + '/api/products.php?action=detail&id=' + productId);
+            const response = await fetch(`${this.config.BASE_URL}/api/shop-products.php?product_id=${productId}`);
             const data = await response.json();
             
             const container = document.getElementById('product-detail-content');
