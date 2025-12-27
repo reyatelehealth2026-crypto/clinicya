@@ -1141,15 +1141,20 @@ class LiffApp {
     async loadCategories() {
         try {
             const url = `${this.config.BASE_URL}/api/shop-products.php?action=categories`;
+            console.log('📂 Loading categories from:', url);
             const response = await this.fetchWithRetry(url);
             const data = await response.json();
+            console.log('📂 Categories response:', data);
 
             if (data.success && data.categories) {
                 this.shopState.categories = data.categories;
                 this.renderCategories();
+            } else {
+                console.warn('⚠️ No categories found:', data);
+                this.renderCategories(); // Render with empty categories
             }
         } catch (error) {
-            console.error('Error loading categories:', error);
+            console.error('❌ Error loading categories:', error);
             this.renderCategories(); // Render with empty categories
         }
     }
@@ -1549,6 +1554,8 @@ class LiffApp {
      * @param {number} productId - Product ID to show
      */
     async showProductDetailModal(productId) {
+        console.log('🛍️ Opening product detail modal for ID:', productId);
+        
         // Create modal if not exists
         let modal = document.getElementById('product-detail-modal');
         if (!modal) {
@@ -1582,17 +1589,30 @@ class LiffApp {
         try {
             // Fetch product details
             const url = `${this.config.BASE_URL}/api/shop-products.php?product_id=${productId}`;
+            console.log('🛍️ Fetching product from:', url);
             const response = await this.fetchWithRetry(url);
-            const data = await response.json();
+            const text = await response.text();
+            console.log('🛍️ Product response text:', text.substring(0, 200));
+            
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (parseError) {
+                console.error('❌ JSON parse error:', parseError, 'Response:', text);
+                this.showToast('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'error');
+                this.closeProductDetailModal();
+                return;
+            }
 
             if (data.success && data.product) {
                 this.renderProductDetailModal(data.product);
             } else {
+                console.warn('⚠️ Product not found:', data);
                 this.showToast('ไม่พบข้อมูลสินค้า', 'error');
                 this.closeProductDetailModal();
             }
         } catch (error) {
-            console.error('Error loading product:', error);
+            console.error('❌ Error loading product:', error);
             this.showToast('เกิดข้อผิดพลาด', 'error');
             this.closeProductDetailModal();
         }
@@ -5025,10 +5045,10 @@ class LiffApp {
     }
 
     /**
-     * View product detail
+     * View product detail - show modal instead of navigating
      */
     viewProduct(productId) {
-        window.router.navigate(`/product/${productId}`);
+        this.showProductDetailModal(productId);
     }
 
     /**
@@ -6047,30 +6067,21 @@ class LiffApp {
     }
 
     /**
-     * Render Product Detail page
+     * Render Product Detail page - redirect to modal
      */
     renderProductDetailPage(params) {
         const productId = params?.id;
         
-        if (!productId) {
-            return `
-                <div class="product-detail-page">
-                    <div class="product-detail-header">
-                        <button class="back-btn" onclick="window.router.back()">
-                            <i class="fas fa-arrow-left"></i>
-                        </button>
-                        <h1 class="page-title">รายละเอียดสินค้า</h1>
-                    </div>
-                    <div class="empty-state">
-                        <p>ไม่พบสินค้า</p>
-                    </div>
-                </div>
-            `;
+        if (productId) {
+            // Show modal instead of page, then go back
+            setTimeout(() => {
+                this.showProductDetailModal(productId);
+                // Go back to previous page after modal is shown
+                window.router.back();
+            }, 100);
         }
 
-        // Load product data
-        setTimeout(() => this.loadProductDetail(productId), 100);
-
+        // Return empty content since we're showing modal
         return `
             <div class="product-detail-page">
                 <div class="product-detail-header">
@@ -6078,33 +6089,16 @@ class LiffApp {
                         <i class="fas fa-arrow-left"></i>
                     </button>
                     <h1 class="page-title">รายละเอียดสินค้า</h1>
-                    <button class="wishlist-btn" onclick="window.liffApp.toggleWishlist(${productId})">
-                        <i class="far fa-heart"></i>
-                    </button>
                 </div>
-                <div id="product-detail-content">
+                <div class="empty-state">
                     <div class="skeleton" style="width: 100%; aspect-ratio: 1;"></div>
-                    <div style="padding: 16px;">
-                        <div class="skeleton skeleton-text" style="height: 24px; margin-bottom: 8px;"></div>
-                        <div class="skeleton skeleton-text" style="height: 32px; width: 40%; margin-bottom: 16px;"></div>
-                        <div class="skeleton skeleton-text" style="height: 16px; margin-bottom: 8px;"></div>
-                        <div class="skeleton skeleton-text" style="height: 16px; width: 80%;"></div>
-                    </div>
-                </div>
-                <div class="product-detail-actions">
-                    <button class="btn btn-outline flex-1" onclick="window.liffApp.addToCart(${productId})">
-                        <i class="fas fa-cart-plus"></i> เพิ่มลงตะกร้า
-                    </button>
-                    <button class="btn btn-primary flex-1" onclick="window.liffApp.buyNow(${productId})">
-                        ซื้อเลย
-                    </button>
                 </div>
             </div>
         `;
     }
 
     /**
-     * Load product detail from API
+     * Load product detail from API (legacy - kept for compatibility)
      */
     async loadProductDetail(productId) {
         try {
@@ -6153,6 +6147,9 @@ class LiffApp {
      * เหมือนระบบเก่า liff-appointment.php - นัดเภสัชกรก่อน แล้วค่อย video call ตามเวลานัด
      */
     renderAppointmentsPage() {
+        // Initialize appointment state first
+        this.initAppointmentState();
+        
         // Load pharmacists and appointments
         setTimeout(() => {
             this.loadPharmacistsForAppointment();

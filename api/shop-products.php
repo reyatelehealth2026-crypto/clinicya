@@ -25,24 +25,53 @@ $action = $_GET['action'] ?? 'products';
 // Handle categories request
 if ($action === 'categories') {
     try {
-        // ใช้ item_categories เป็นหลัก
-        $catTable = 'item_categories';
+        // ตรวจสอบตารางที่มี
+        $catTable = null;
+        $hasIsActive = false;
+        
+        // ลอง item_categories ก่อน
         try {
-            $db->query("SELECT 1 FROM item_categories LIMIT 1");
+            $cols = $db->query("SHOW COLUMNS FROM item_categories")->fetchAll(PDO::FETCH_COLUMN);
+            $catTable = 'item_categories';
+            $hasIsActive = in_array('is_active', $cols);
         } catch (Exception $e) {
-            $catTable = 'business_categories';
+            // ลอง business_categories
+            try {
+                $cols = $db->query("SHOW COLUMNS FROM business_categories")->fetchAll(PDO::FETCH_COLUMN);
+                $catTable = 'business_categories';
+                $hasIsActive = in_array('is_active', $cols);
+            } catch (Exception $e2) {
+                // ลอง product_categories
+                try {
+                    $cols = $db->query("SHOW COLUMNS FROM product_categories")->fetchAll(PDO::FETCH_COLUMN);
+                    $catTable = 'product_categories';
+                    $hasIsActive = in_array('is_active', $cols);
+                } catch (Exception $e3) {}
+            }
         }
         
-        $sql = "SELECT id, name, cny_code FROM {$catTable} WHERE is_active = 1 ORDER BY id";
+        if (!$catTable) {
+            echo json_encode(['success' => true, 'categories' => []]);
+            exit;
+        }
+        
+        // ตรวจสอบว่ามี cny_code หรือไม่
+        $hasCnyCode = in_array('cny_code', $cols);
+        
+        // Build query
+        $selectCols = "id, name" . ($hasCnyCode ? ", cny_code" : "");
+        $whereClause = $hasIsActive ? "WHERE is_active = 1" : "";
+        
+        $sql = "SELECT {$selectCols} FROM {$catTable} {$whereClause} ORDER BY id";
         $stmt = $db->query($sql);
         $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         // Format categories
-        $formattedCategories = array_map(function($cat) {
+        $formattedCategories = array_map(function($cat) use ($hasCnyCode) {
             return [
                 'id' => (int)$cat['id'],
                 'name' => $cat['name'],
-                'code' => $cat['cny_code'] ?? null
+                'code' => $hasCnyCode ? ($cat['cny_code'] ?? null) : null
             ];
         }, $categories);
         
