@@ -194,7 +194,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     </script>
 
     <!-- App Scripts -->
-    <?php $v = '20241228i'; // Cache bust version ?>
+    <?php $v = '20241228j'; // Cache bust version ?>
     <script src="<?= $baseUrl ?>/liff/assets/js/store.js?v=<?= $v ?>"></script>
     <script src="<?= $baseUrl ?>/liff/assets/js/router.js?v=<?= $v ?>"></script>
     <script src="<?= $baseUrl ?>/liff/assets/js/components/skeleton.js?v=<?= $v ?>"></script>

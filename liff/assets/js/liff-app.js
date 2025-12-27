@@ -2359,8 +2359,26 @@ class LiffApp {
     refreshCartDisplay() {
         const cart = window.store?.get('cart') || { items: [], subtotal: 0, discount: 0, shipping: 0, total: 0 };
         
-        // Update items container
+        console.log('🛒 refreshCartDisplay:', { itemCount: cart.items?.length, subtotal: cart.subtotal });
+        
+        // If cart has items but page shows empty state, re-render the whole page
         const itemsContainer = document.getElementById('cart-items-container');
+        const checkoutBar = document.querySelector('.cart-checkout-bar');
+        
+        if (cart.items?.length > 0 && !itemsContainer) {
+            console.log('🛒 Cart has items but no container, re-rendering page');
+            // Re-render the cart page
+            const contentEl = document.getElementById('app-content');
+            if (contentEl) {
+                contentEl.innerHTML = this.renderCartPage();
+                setTimeout(() => {
+                    this.setupCartEventListeners();
+                }, 100);
+            }
+            return;
+        }
+        
+        // Update items container
         if (itemsContainer) {
             itemsContainer.innerHTML = this.renderCartItems(cart.items);
         }
