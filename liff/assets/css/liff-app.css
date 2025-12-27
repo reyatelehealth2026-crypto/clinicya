@@ -12308,3 +12308,585 @@ body:has(.ai-chat-page) .bottom-nav {
     color: var(--error);
     margin-top: var(--space-1);
 }
+
+
+/* ==================== Enhanced Member Card & Profile Styles ==================== */
+/* Premium glassmorphism design with 3D flip animation */
+
+/* Emerald Gradient Theme */
+.bg-emerald-gradient {
+    background: linear-gradient(135deg, #10b981 0%, #6ee7b7 50%, #059669 100%);
+}
+
+.bg-gold-gradient {
+    background: linear-gradient(135deg, #d4af37 0%, #f3e5ab 50%, #c5a028 100%);
+}
+
+/* Enhanced Member Card with Glassmorphism */
+.member-card-premium {
+    position: relative;
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    color: white;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    min-height: 220px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: var(--shadow-xl);
+}
+
+.member-card-premium:active {
+    transform: scale(0.98);
+}
+
+/* Premium Tier Gradients */
+.member-card-premium.tier-emerald {
+    background: linear-gradient(135deg, #10b981 0%, #6ee7b7 50%, #059669 100%);
+}
+
+.member-card-premium.tier-gold {
+    background: linear-gradient(135deg, #d4af37 0%, #f3e5ab 50%, #c5a028 100%);
+}
+
+.member-card-premium.tier-platinum {
+    background: linear-gradient(135deg, #334155 0%, #64748b 50%, #0f172a 100%);
+}
+
+.member-card-premium.tier-silver {
+    background: linear-gradient(135deg, #9ca3af 0%, #d1d5db 50%, #6b7280 100%);
+}
+
+/* Glassmorphism Decorative Circles */
+.member-card-decor-circle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.member-card-decor-circle.top-right {
+    top: -40px;
+    right: -40px;
+    width: 160px;
+    height: 160px;
+    background: rgba(255, 255, 255, 0.1);
+    filter: blur(40px);
+}
+
+.member-card-decor-circle.bottom-left {
+    bottom: -20px;
+    left: -40px;
+    width: 100px;
+    height: 100px;
+    background: rgba(0, 0, 0, 0.05);
+    filter: blur(24px);
+}
+
+/* 3D Flip Card Enhanced */
+.perspective-1000 {
+    perspective: 1000px;
+}
+
+.transform-style-3d {
+    transform-style: preserve-3d;
+}
+
+.backface-hidden {
+    backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+    transform: rotateY(180deg);
+}
+
+.card-flip-container {
+    position: relative;
+    width: 100%;
+    height: 220px;
+    transform-style: preserve-3d;
+    transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.card-flip-container.flipped {
+    transform: rotateY(180deg);
+}
+
+.card-flip-face {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+}
+
+.card-flip-front {
+    z-index: 2;
+}
+
+.card-flip-back {
+    transform: rotateY(180deg);
+    background: var(--bg-white);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+}
+
+/* Card Shadow Effect */
+.card-shadow-effect {
+    position: absolute;
+    bottom: -16px;
+    left: 16px;
+    right: 16px;
+    height: 16px;
+    background: rgba(0, 0, 0, 0.1);
+    filter: blur(16px);
+    border-radius: 50%;
+    z-index: -1;
+}
+
+/* Bounce Animation for Flip Hint */
+@keyframes bounce-hint {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-25%);
+        animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+}
+
+.animate-bounce-hint {
+    animation: bounce-hint 1s infinite;
+}
+
+/* Member Card Content Layout */
+.member-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--space-4);
+    position: relative;
+    z-index: 10;
+}
+
+.member-card-brand-text {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.8;
+}
+
+.member-card-tier-name {
+    font-size: 24px;
+    font-weight: 700;
+    margin-top: var(--space-1);
+}
+
+.member-card-tier-badge {
+    font-size: 30px;
+    filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.07));
+}
+
+.member-card-tier-badge.gold {
+    color: #fde047;
+}
+
+.member-card-tier-badge.platinum {
+    color: #e2e8f0;
+}
+
+/* Points Display */
+.member-card-points-section {
+    position: relative;
+    z-index: 10;
+}
+
+.member-card-points-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: var(--space-2);
+}
+
+.member-card-points-label {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.member-card-points-number {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+}
+
+.member-card-points-suffix {
+    font-size: 16px;
+    font-weight: 400;
+    opacity: 0.8;
+}
+
+.member-card-member-id {
+    text-align: right;
+}
+
+.member-card-id-text {
+    font-size: 14px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    letter-spacing: 0.1em;
+}
+
+/* Progress Bar Premium */
+.member-card-progress-premium {
+    width: 100%;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-full);
+    margin-bottom: var(--space-1);
+    backdrop-filter: blur(4px);
+    overflow: hidden;
+}
+
+.member-card-progress-premium .progress-fill {
+    height: 100%;
+    background: white;
+    border-radius: var(--radius-full);
+    transition: width 0.5s ease;
+}
+
+.member-card-progress-hint {
+    font-size: 10px;
+    text-align: right;
+    opacity: 0.9;
+}
+
+/* Flip Hint Icon */
+.member-card-flip-icon {
+    position: absolute;
+    bottom: 12px;
+    right: 20px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+}
+
+/* QR Code Back Side */
+.qr-code-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.qr-code-wrapper {
+    background: white;
+    padding: var(--space-2);
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--border-light);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+    margin-bottom: var(--space-2);
+}
+
+.qr-code-image {
+    width: 128px;
+    height: 128px;
+    display: block;
+    mix-blend-mode: multiply;
+}
+
+.qr-code-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.qr-code-id {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: var(--space-2);
+}
+
+/* Action Buttons Grid */
+.member-action-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+    padding: 0 var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.member-action-btn-premium {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border-radius: var(--radius-xl);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: var(--touch-target-min);
+    transition: all var(--transition-fast);
+    border: none;
+}
+
+.member-action-btn-premium:active {
+    transform: scale(0.95);
+}
+
+.member-action-btn-premium.outline {
+    background: var(--bg-white);
+    color: var(--primary);
+    border: 1px solid var(--primary-light);
+    box-shadow: var(--shadow-sm);
+}
+
+.member-action-btn-premium.filled {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Coupon Card Premium */
+.coupon-card-premium {
+    background: var(--bg-white);
+    border-radius: var(--radius-xl);
+    padding: var(--space-3);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-light);
+    display: flex;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: var(--space-3);
+}
+
+.coupon-card-premium .coupon-accent {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background: var(--primary);
+}
+
+.coupon-card-premium.expired .coupon-accent {
+    background: var(--text-muted);
+}
+
+.coupon-card-premium.expired {
+    opacity: 0.6;
+    filter: grayscale(100%);
+}
+
+.coupon-discount-box {
+    width: 64px;
+    height: 64px;
+    background: var(--primary-light);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    margin-right: var(--space-3);
+    flex-shrink: 0;
+}
+
+.coupon-discount-label {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.coupon-discount-value {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.coupon-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.coupon-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.coupon-condition {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-1);
+}
+
+.coupon-expiry {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--primary);
+    background: var(--primary-light);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    width: fit-content;
+}
+
+.coupon-use-btn {
+    align-self: center;
+    background: var(--text-primary);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: var(--radius-lg);
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.coupon-use-btn:active {
+    transform: scale(0.95);
+}
+
+/* Coupon Circle Cuts */
+.coupon-card-premium::before,
+.coupon-card-premium::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--bg-light);
+    border-radius: 50%;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.coupon-card-premium::before {
+    left: -6px;
+}
+
+.coupon-card-premium::after {
+    right: -6px;
+}
+
+/* Points History Premium */
+.points-history-section {
+    padding: 0 var(--space-4);
+    margin-top: var(--space-6);
+}
+
+.points-history-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-3);
+}
+
+.points-history-card {
+    background: var(--bg-white);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.points-history-item {
+    padding: var(--space-4);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.points-history-item:last-child {
+    border-bottom: none;
+}
+
+.points-history-info h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-1) 0;
+}
+
+.points-history-info p {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.points-history-value {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.points-history-value.positive {
+    color: var(--success);
+}
+
+.points-history-value.negative {
+    color: var(--danger);
+}
+
+/* Profile Header Premium */
+.profile-header-premium {
+    padding: calc(var(--space-6) + var(--safe-area-top)) var(--space-6) var(--space-2);
+    background: var(--bg-white);
+    border-radius: 0 0 var(--radius-2xl) var(--radius-2xl);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: var(--space-6);
+}
+
+.profile-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-4);
+}
+
+.profile-header-text h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.profile-header-text p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: var(--space-1) 0 0 0;
+}
+
+.profile-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-gray);
+    overflow: hidden;
+    border: 2px solid white;
+    box-shadow: var(--shadow-sm);
+}
+
+.profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Shimmer Effect */
+.shimmer {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer-effect 1.5s infinite;
+}
+
+@keyframes shimmer-effect {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
