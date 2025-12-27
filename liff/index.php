@@ -128,7 +128,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- App Styles -->
-    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/liff-app.css">
+    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/liff-app.css?v=20241227">
 </head>
 <body>
     <!-- Loading Overlay - Shows immediately (Requirement 1.1) -->
@@ -194,19 +194,20 @@ $currentPage = $pages[$page] ?? $pages['home'];
     </script>
 
     <!-- App Scripts -->
-    <script src="<?= $baseUrl ?>/liff/assets/js/store.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/router.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/skeleton.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/lazy-image.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/drug-interaction.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/prescription-handler.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/permission-checker.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/video-call.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/liff-message-bridge.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/bottom-nav.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/page-transition.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/ai-chat.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/components/health-profile.js"></script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/liff-app.js"></script>
+    <?php $v = '20241227'; // Cache bust version ?>
+    <script src="<?= $baseUrl ?>/liff/assets/js/store.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/router.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/skeleton.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/lazy-image.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/drug-interaction.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/prescription-handler.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/permission-checker.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/video-call.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/liff-message-bridge.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/bottom-nav.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/page-transition.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/ai-chat.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/health-profile.js?v=<?= $v ?>"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/liff-app.js?v=<?= $v ?>"></script>
 </body>
 </html>

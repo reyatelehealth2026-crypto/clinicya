@@ -5866,7 +5866,7 @@ class LiffApp {
      */
     async loadProductDetail(productId) {
         try {
-            const response = await fetch(\`\${this.config.BASE_URL}/api/products.php?action=detail&id=\${productId}\`);
+            const response = await fetch(`${this.config.BASE_URL}/api/products.php?action=detail&id=${productId}`);
             const data = await response.json();
             
             const container = document.getElementById('product-detail-content');
@@ -5874,20 +5874,20 @@ class LiffApp {
 
             if (data.success && data.product) {
                 const product = data.product;
-                container.innerHTML = \`
-                    <img src="\${product.image_url || 'assets/images/placeholder.png'}" 
+                container.innerHTML = `
+                    <img src="${product.image_url || 'assets/images/placeholder.png'}" 
                          class="product-detail-image"
                          onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f0f0f0%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2212%22>No Image</text></svg>'">
                     <div class="product-detail-info">
-                        <h1 class="product-detail-name">\${product.name}</h1>
+                        <h1 class="product-detail-name">${product.name}</h1>
                         <div class="product-detail-price">
-                            ฿\${this.formatNumber(product.sale_price || product.price)}
-                            \${product.sale_price && product.sale_price < product.price ? 
-                                \`<span style="text-decoration: line-through; color: var(--text-muted); font-size: 1rem; margin-left: 8px;">฿\${this.formatNumber(product.price)}</span>\` : ''}
+                            ฿${this.formatNumber(product.sale_price || product.price)}
+                            ${product.sale_price && product.sale_price < product.price ? 
+                                `<span style="text-decoration: line-through; color: var(--text-muted); font-size: 1rem; margin-left: 8px;">฿${this.formatNumber(product.price)}</span>` : ''}
                         </div>
-                        <p class="product-detail-description">\${product.description || 'ไม่มีรายละเอียดสินค้า'}</p>
+                        <p class="product-detail-description">${product.description || 'ไม่มีรายละเอียดสินค้า'}</p>
                     </div>
-                \`;
+                `;
             } else {
                 container.innerHTML = '<div class="empty-state"><p>ไม่พบข้อมูลสินค้า</p></div>';
             }
@@ -5913,7 +5913,7 @@ class LiffApp {
         // Load appointments
         setTimeout(() => this.loadAppointments(), 100);
 
-        return \`
+        return `
             <div class="appointments-page">
                 <div class="appointments-header">
                     <button class="back-btn" onclick="window.router.back()">
@@ -5932,7 +5932,7 @@ class LiffApp {
                     </div>
                 </div>
             </div>
-        \`;
+        `;
     }
 
     /**
@@ -5944,21 +5944,21 @@ class LiffApp {
         if (!container || !profile?.userId) return;
 
         try {
-            const response = await fetch(\`\${this.config.BASE_URL}/api/appointments.php?action=list&line_user_id=\${profile.userId}\`);
+            const response = await fetch(`${this.config.BASE_URL}/api/appointments.php?action=list&line_user_id=${profile.userId}`);
             const data = await response.json();
 
             if (data.success && data.appointments?.length > 0) {
-                container.innerHTML = data.appointments.map(apt => \`
+                container.innerHTML = data.appointments.map(apt => `
                     <div class="appointment-card">
                         <div class="appointment-date">
-                            <i class="far fa-calendar"></i> \${apt.date} เวลา \${apt.time}
+                            <i class="far fa-calendar"></i> ${apt.date} เวลา ${apt.time}
                         </div>
-                        <div class="appointment-title">\${apt.service || 'ปรึกษาเภสัชกร'}</div>
-                        <span class="appointment-status \${apt.status}">\${this.getAppointmentStatusText(apt.status)}</span>
+                        <div class="appointment-title">${apt.service || 'ปรึกษาเภสัชกร'}</div>
+                        <span class="appointment-status ${apt.status}">${this.getAppointmentStatusText(apt.status)}</span>
                     </div>
-                \`).join('');
+                `).join('');
             } else {
-                container.innerHTML = \`
+                container.innerHTML = `
                     <div class="empty-state" style="padding: 40px 20px; text-align: center;">
                         <i class="far fa-calendar-alt" style="font-size: 48px; color: var(--text-muted); margin-bottom: 16px;"></i>
                         <h3 style="margin-bottom: 8px;">ยังไม่มีนัดหมาย</h3>
@@ -5967,7 +5967,7 @@ class LiffApp {
                             <i class="fas fa-video"></i> นัดหมายเลย
                         </button>
                     </div>
-                \`;
+                `;
             }
         } catch (error) {
             console.error('Error loading appointments:', error);
@@ -5995,7 +5995,7 @@ class LiffApp {
         // Load rewards
         setTimeout(() => this.loadRewards(), 100);
 
-        return \`
+        return `
             <div class="redeem-page">
                 <div class="redeem-header">
                     <button class="back-btn" onclick="window.router.back()">
@@ -6006,7 +6006,7 @@ class LiffApp {
                 
                 <div class="points-balance-card">
                     <div class="points-balance-label">แต้มสะสมของคุณ</div>
-                    <div class="points-balance-value">\${this.formatNumber(points)}</div>
+                    <div class="points-balance-value">${this.formatNumber(points)}</div>
                 </div>
 
                 <h3 style="margin-bottom: 12px; font-weight: 600;">รางวัลที่แลกได้</h3>
@@ -6020,7 +6020,7 @@ class LiffApp {
                     </div>
                 </div>
             </div>
-        \`;
+        `;
     }
 
     /**
@@ -6031,29 +6031,29 @@ class LiffApp {
         if (!container) return;
 
         try {
-            const response = await fetch(\`\${this.config.BASE_URL}/api/rewards.php?action=list\`);
+            const response = await fetch(`${this.config.BASE_URL}/api/rewards.php?action=list`);
             const data = await response.json();
 
             if (data.success && data.rewards?.length > 0) {
-                container.innerHTML = data.rewards.map(reward => \`
-                    <div class="reward-card" onclick="window.liffApp.showRewardDetail(\${reward.id})">
-                        <img src="\${reward.image_url || 'assets/images/placeholder.png'}" 
+                container.innerHTML = data.rewards.map(reward => `
+                    <div class="reward-card" onclick="window.liffApp.showRewardDetail(${reward.id})">
+                        <img src="${reward.image_url || 'assets/images/placeholder.png'}" 
                              class="reward-image"
                              onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f0f0f0%22 width=%22100%22 height=%22100%22/></svg>'">
                         <div class="reward-info">
-                            <div class="reward-name">\${reward.name}</div>
-                            <div class="reward-points">\${this.formatNumber(reward.points_required)} แต้ม</div>
+                            <div class="reward-name">${reward.name}</div>
+                            <div class="reward-points">${this.formatNumber(reward.points_required)} แต้ม</div>
                         </div>
                     </div>
-                \`).join('');
+                `).join('');
             } else {
-                container.innerHTML = \`
+                container.innerHTML = `
                     <div class="empty-state" style="padding: 40px 20px; text-align: center;">
                         <i class="fas fa-gift" style="font-size: 48px; color: var(--text-muted); margin-bottom: 16px;"></i>
                         <h3 style="margin-bottom: 8px;">ยังไม่มีรางวัล</h3>
                         <p style="color: var(--text-secondary);">รางวัลจะเพิ่มเข้ามาเร็วๆ นี้</p>
                     </div>
-                \`;
+                `;
             }
         } catch (error) {
             console.error('Error loading rewards:', error);
