@@ -387,6 +387,8 @@ class AIChat {
      * @param {string} message - User message
      */
     async processMessage(message) {
+        console.log('[AI Chat] Processing message:', message);
+        
         // Client-side emergency check first (for immediate response)
         const clientEmergency = this.checkEmergencySymptoms(message);
         if (clientEmergency) {
@@ -399,6 +401,7 @@ class AIChat {
 
         try {
             const baseUrl = window.APP_CONFIG?.BASE_URL || '';
+            console.log('[AI Chat] Calling API:', `${baseUrl}/api/pharmacy-ai.php`);
             const response = await fetch(`${baseUrl}/api/pharmacy-ai.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -411,6 +414,7 @@ class AIChat {
             });
 
             const data = await response.json();
+            console.log('[AI Chat] API Response:', data);
 
             // Simulate realistic typing delay based on response length
             const typingDelay = Math.min(500 + (data.response?.length || 0) * 10, 2000);
@@ -455,7 +459,7 @@ class AIChat {
                 });
             }
         } catch (error) {
-            console.error('AI process error:', error);
+            console.error('[AI Chat] Process error:', error);
             this.hideTypingIndicator();
             
             this.addMessage({

@@ -14,10 +14,32 @@ $liffId = '';
 $lineAccountId = isset($_GET['line_account_id']) ? intval($_GET['line_account_id']) : null;
 
 if ($lineAccountId) {
-    // ดึงจาก line_accounts
+    // ดึงจาก line_accounts ตาม ID ที่ระบุ
     $stmt = $db->prepare("SELECT liff_id FROM line_accounts WHERE id = ?");
     $stmt->execute([$lineAccountId]);
     $liffId = $stmt->fetchColumn() ?: '';
+}
+
+// ถ้าไม่มี LIFF ID ให้ดึงจาก default account
+if (empty($liffId)) {
+    $stmt = $db->prepare("SELECT id, liff_id FROM line_accounts WHERE is_default = 1 LIMIT 1");
+    $stmt->execute();
+    $defaultAccount = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($defaultAccount) {
+        $liffId = $defaultAccount['liff_id'] ?: '';
+        $lineAccountId = $defaultAccount['id'];
+    }
+}
+
+// ถ้ายังไม่มี ให้ดึงจาก account แรก
+if (empty($liffId)) {
+    $stmt = $db->prepare("SELECT id, liff_id FROM line_accounts ORDER BY id ASC LIMIT 1");
+    $stmt->execute();
+    $firstAccount = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($firstAccount) {
+        $liffId = $firstAccount['liff_id'] ?: '';
+        $lineAccountId = $firstAccount['id'];
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -358,13 +380,19 @@ if ($lineAccountId) {
 
         // Initialize LIFF
         document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                await liff.init({ liffId: LIFF_ID });
-                if (liff.isLoggedIn()) {
-                    liffProfile = await liff.getProfile();
+            // Initialize LIFF only if we have a valid LIFF ID
+            if (LIFF_ID && LIFF_ID.length > 0) {
+                try {
+                    await liff.init({ liffId: LIFF_ID });
+                    if (liff.isLoggedIn()) {
+                        liffProfile = await liff.getProfile();
+                    }
+                    console.log('LIFF initialized successfully');
+                } catch (e) {
+                    console.log('LIFF init error:', e);
                 }
-            } catch (e) {
-                console.log('LIFF init error:', e);
+            } else {
+                console.log('No LIFF ID configured, running in standalone mode');
             }
 
             // Symptom buttons
