@@ -186,15 +186,39 @@ $currentPage = $pages[$page] ?? $pages['home'];
 
     <!-- App Configuration -->
     <script>
+        // Debug helper - show messages on screen for mobile debugging
+        window.debugLog = function(msg, type) {
+            type = type || 'info';
+            var colors = { info: '#2196F3', error: '#f44336', warn: '#ff9800', success: '#4CAF50' };
+            var debugDiv = document.getElementById('debug-log');
+            if (!debugDiv) {
+                debugDiv = document.createElement('div');
+                debugDiv.id = 'debug-log';
+                debugDiv.style.cssText = 'position:fixed;bottom:60px;left:0;right:0;max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.9);color:white;padding:5px;z-index:99999;font-size:10px;font-family:monospace;';
+                document.body.appendChild(debugDiv);
+            }
+            var line = document.createElement('div');
+            line.style.cssText = 'padding:2px 5px;border-left:3px solid ' + (colors[type] || colors.info) + ';margin:2px 0;';
+            line.textContent = new Date().toLocaleTimeString() + ' [' + type.toUpperCase() + '] ' + msg;
+            debugDiv.appendChild(line);
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+        };
+        
         // Global error handler to catch JS errors
         window.onerror = function(msg, url, line, col, error) {
             var errorDiv = document.createElement('div');
             errorDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;z-index:99999;font-size:12px;';
             errorDiv.innerHTML = 'JS Error: ' + msg + '<br>File: ' + url + '<br>Line: ' + line;
             document.body.appendChild(errorDiv);
+            window.debugLog('ERROR: ' + msg + ' at ' + url + ':' + line, 'error');
             console.error('Global error:', msg, url, line, col, error);
             return false;
         };
+        
+        // Catch unhandled promise rejections
+        window.addEventListener('unhandledrejection', function(event) {
+            window.debugLog('Promise Error: ' + (event.reason?.message || event.reason), 'error');
+        });
         
         window.APP_CONFIG = {
             BASE_URL: '<?= $baseUrl ?>',
@@ -210,7 +234,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     </script>
 
     <!-- App Scripts -->
-    <?php $v = '20241228ac'; // Cache bust version ?>
+    <?php $v = '20241228ad'; // Cache bust version ?>
     <script src="<?= $baseUrl ?>/liff/assets/js/store.js?v=<?= $v ?>"></script>
     <script src="<?= $baseUrl ?>/liff/assets/js/router.js?v=<?= $v ?>"></script>
     <script src="<?= $baseUrl ?>/liff/assets/js/components/skeleton.js?v=<?= $v ?>"></script>

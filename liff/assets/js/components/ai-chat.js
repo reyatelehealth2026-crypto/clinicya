@@ -36,10 +36,15 @@ class AIChat {
      * @param {HTMLElement} container - Container element to render into
      */
     init(container) {
+        if (window.debugLog) window.debugLog('AIChat.init() called', 'info');
         this.container = container;
+        if (window.debugLog) window.debugLog('Calling render()...', 'info');
         this.render();
+        if (window.debugLog) window.debugLog('Calling setupEventListeners()...', 'info');
         this.setupEventListeners();
+        if (window.debugLog) window.debugLog('Calling showWelcomeMessage()...', 'info');
         this.showWelcomeMessage();
+        if (window.debugLog) window.debugLog('AIChat.init() complete', 'success');
     }
 
     /**
@@ -1095,3 +1100,7 @@ if (typeof module !== 'undefined' && module.exports) {
 
 // Make available globally
 window.AIChat = AIChat;
+
+// Debug log when script loads
+if (window.debugLog) window.debugLog('ai-chat.js loaded, AIChat class available', 'success');
+console.log('✅ ai-chat.js loaded');

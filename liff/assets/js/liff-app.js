@@ -6307,32 +6307,40 @@ class LiffApp {
      * @param {Object} params - Route parameters
      */
     initAIAssistantPage(params) {
+        if (window.debugLog) window.debugLog('initAIAssistantPage called', 'info');
         console.log('🤖 Initializing AI Assistant page...');
         
         const container = document.getElementById('ai-assistant-container');
         if (!container) {
+            if (window.debugLog) window.debugLog('Container not found!', 'error');
             console.error('❌ AI Assistant container not found');
             return;
         }
+        if (window.debugLog) window.debugLog('Container found', 'success');
 
         // Check if AIChat class exists
         if (typeof AIChat === 'undefined') {
+            if (window.debugLog) window.debugLog('AIChat class NOT loaded!', 'error');
             console.error('❌ AIChat class not loaded');
             container.innerHTML = `
                 <div style="padding: 20px; text-align: center;">
                     <p style="color: red;">ไม่สามารถโหลด AI Chat ได้</p>
+                    <p style="font-size: 12px; color: #666;">AIChat class is undefined</p>
                     <button onclick="location.reload()" style="padding: 10px 20px; margin-top: 10px;">ลองใหม่</button>
                 </div>
             `;
             return;
         }
+        if (window.debugLog) window.debugLog('AIChat class loaded', 'success');
 
         try {
             // Get user ID from profile
             const profile = window.store?.get('profile');
             const userId = profile?.userId || null;
+            if (window.debugLog) window.debugLog('User ID: ' + (userId || 'null'), 'info');
 
             // Create AI Chat instance
+            if (window.debugLog) window.debugLog('Creating AIChat instance...', 'info');
             window.aiChat = new AIChat({
                 userId: userId,
                 onSendMessage: (message) => {
@@ -6344,7 +6352,9 @@ class LiffApp {
             });
 
             // Initialize the chat interface
+            if (window.debugLog) window.debugLog('Calling aiChat.init()...', 'info');
             window.aiChat.init(container);
+            if (window.debugLog) window.debugLog('AI Chat initialized!', 'success');
             console.log('✅ AI Chat initialized');
 
             // If a symptom was passed from home page, start with it
@@ -6352,6 +6362,7 @@ class LiffApp {
                 window.aiChat.initWithSymptom(params.symptom);
             }
         } catch (error) {
+            if (window.debugLog) window.debugLog('Error: ' + error.message, 'error');
             console.error('❌ Error initializing AI Chat:', error);
             container.innerHTML = `
                 <div style="padding: 20px; text-align: center;">
