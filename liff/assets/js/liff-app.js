@@ -38,14 +38,14 @@ class LiffApp {
             // Initialize LIFF SDK่
             await this.initLiff();
             
-            // Initialize router
+            // Hide loading and show app FIRST (so elements are visible)
+            this.showApp();
+            
+            // Initialize router (needs app-content to be visible)
             this.initRouter();
             
             // Setup event listeners
             this.setupEventListeners();
-            
-            // Hide loading and show app
-            this.showApp();
             
             console.log('✅ LiffApp initialized successfully');
             
