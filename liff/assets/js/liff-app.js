@@ -299,7 +299,8 @@ class LiffApp {
         // Hide/show bottom nav based on page
         const bottomNav = document.getElementById('bottom-nav');
         if (bottomNav) {
-            if (route.page === 'checkout') {
+            // Hide bottom nav on checkout and video-call pages
+            if (route.page === 'checkout' || route.page === 'video-call') {
                 bottomNav.style.display = 'none';
             } else {
                 bottomNav.style.display = '';
@@ -3238,12 +3239,15 @@ class LiffApp {
                 // Clear cart
                 window.store?.clearCart();
 
-                // Send LIFF message if in LINE app
-                if (this.isInClient) {
+                // Send LIFF message via LiffMessageBridge (with API fallback)
+                if (window.liffMessageBridge) {
                     try {
-                        await this.sendMessage(`สั่งซื้อสำเร็จ #${result.order_number}`);
+                        await window.liffMessageBridge.sendOrderPlaced(result.order_number, {
+                            total: cart.total,
+                            items: cart.items.length
+                        });
                     } catch (e) {
-                        console.warn('Failed to send LIFF message:', e);
+                        console.warn('Failed to send order message:', e);
                     }
                 }
 
@@ -6949,6 +6953,23 @@ class LiffApp {
 
             if (data.success) {
                 this.showToast('จองนัดหมายสำเร็จ!', 'success');
+                
+                // Send LIFF message via LiffMessageBridge
+                if (window.liffMessageBridge) {
+                    try {
+                        await window.liffMessageBridge.sendAppointmentBooked(
+                            this.appointmentState?.selectedDate,
+                            this.appointmentState?.selectedTime,
+                            {
+                                pharmacist: this.appointmentState?.selectedPharmacist?.name,
+                                appointmentId: data.appointment_id
+                            }
+                        );
+                    } catch (e) {
+                        console.warn('Failed to send appointment message:', e);
+                    }
+                }
+                
                 // Reset state and go back to step 1
                 this.initAppointmentState();
                 this.goToAppointmentStep(1);
