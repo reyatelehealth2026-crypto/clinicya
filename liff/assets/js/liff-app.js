@@ -4274,10 +4274,10 @@ class LiffApp {
         try {
             const profile = window.store?.get('profile');
             const lineUserId = profile?.userId || '';
-            const lineAccountId = this.config.LINE_ACCOUNT_ID || 1;
+            const lineAccountId = this.config.ACCOUNT_ID || 1;
             
             const response = await fetch(
-                `${this.config.API_BASE_URL}/orders.php?action=detail&order_id=${orderId}&line_user_id=${lineUserId}&line_account_id=${lineAccountId}`
+                `${this.config.BASE_URL}/api/checkout.php?action=order&order_id=${orderId}&line_user_id=${lineUserId}&line_account_id=${lineAccountId}`
             );
             
             const data = await response.json();
@@ -4298,9 +4298,14 @@ class LiffApp {
      */
     renderOrderDetailContent(order) {
         const status = this.normalizeOrderStatus(order.status);
+        const paymentStatus = order.payment_status || 'pending';
         const statusConfig = this.getStatusConfig(status);
         const orderNumber = order.order_number || order.order_id || order.id;
         const items = order.items || [];
+        const paymentMethod = order.payment_method || 'transfer';
+        
+        // Check if needs slip upload (transfer/promptpay and not paid)
+        const needsSlipUpload = ['transfer', 'promptpay'].includes(paymentMethod) && paymentStatus === 'pending';
         
         return `
             <!-- Order Header Card -->
@@ -4315,6 +4320,9 @@ class LiffApp {
                     </span>
                 </div>
             </div>
+            
+            <!-- Payment Slip Upload Section -->
+            ${needsSlipUpload ? this.renderSlipUploadSection(order) : ''}
             
             <!-- Delivery Tracking Section - Requirements 19.1, 19.2, 19.3, 19.4 -->
             ${this.renderDeliveryTrackingSection(order)}
@@ -4348,6 +4356,206 @@ class LiffApp {
                 </button>
             </div>
         `;
+    }
+
+    /**
+     * Render slip upload section
+     */
+    renderSlipUploadSection(order) {
+        const orderNumber = order.order_number || order.order_id || order.id;
+        const orderId = order.id || order.order_id;
+        const total = parseFloat(order.grand_total || order.total_amount || 0);
+        const paymentMethod = order.payment_method || 'transfer';
+        
+        return `
+            <div class="order-detail-card slip-upload-card">
+                <div class="order-detail-section-title">
+                    <i class="fas fa-receipt"></i>
+                    แจ้งชำระเงิน
+                </div>
+                
+                <div class="payment-info-box">
+                    <div class="payment-amount">
+                        <span class="payment-amount-label">ยอดที่ต้องชำระ</span>
+                        <span class="payment-amount-value">฿${this.formatNumber(total)}</span>
+                    </div>
+                    
+                    ${paymentMethod === 'transfer' ? `
+                        <div class="bank-transfer-info">
+                            <div class="bank-info-title">โอนเงินมาที่</div>
+                            <div class="bank-info-row">
+                                <span class="bank-name">ธนาคารกสิกรไทย</span>
+                            </div>
+                            <div class="bank-info-row">
+                                <span class="bank-label">ชื่อบัญชี:</span>
+                                <span class="bank-value">บริษัท ร้านยา จำกัด</span>
+                            </div>
+                            <div class="bank-info-row">
+                                <span class="bank-label">เลขบัญชี:</span>
+                                <span class="bank-value bank-account-number">xxx-x-xxxxx-x</span>
+                                <button class="copy-btn" onclick="window.liffApp.copyToClipboard('xxx-x-xxxxx-x')">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="promptpay-info">
+                            <div class="promptpay-qr-container">
+                                <img src="${this.config.BASE_URL}/api/checkout.php?action=promptpay_qr&amount=${total}" 
+                                     alt="PromptPay QR" class="promptpay-qr-image"
+                                     onerror="this.style.display='none'">
+                            </div>
+                            <p class="promptpay-hint">สแกน QR Code เพื่อชำระเงิน</p>
+                        </div>
+                    `}
+                </div>
+                
+                <div class="slip-upload-section">
+                    <div class="slip-upload-title">อัพโหลดหลักฐานการชำระเงิน</div>
+                    
+                    <div class="slip-upload-area" id="slip-upload-area" onclick="document.getElementById('slip-file-input').click()">
+                        <input type="file" id="slip-file-input" accept="image/*" style="display: none;" 
+                               onchange="window.liffApp.handleSlipFileSelect(event, '${orderId}')">
+                        <div class="slip-upload-placeholder" id="slip-upload-placeholder">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <span>แตะเพื่อเลือกรูปสลิป</span>
+                            <span class="slip-upload-hint">รองรับ JPG, PNG ขนาดไม่เกิน 5MB</span>
+                        </div>
+                        <div class="slip-preview" id="slip-preview" style="display: none;">
+                            <img id="slip-preview-image" src="" alt="Preview">
+                            <button class="slip-remove-btn" onclick="event.stopPropagation(); window.liffApp.removeSlipPreview()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary btn-block slip-submit-btn" id="slip-submit-btn" 
+                            onclick="window.liffApp.submitSlip('${orderId}')" disabled>
+                        <i class="fas fa-paper-plane"></i>
+                        ส่งหลักฐานการชำระเงิน
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Handle slip file selection
+     */
+    handleSlipFileSelect(event, orderId) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            this.showToast('กรุณาเลือกไฟล์รูปภาพ', 'error');
+            return;
+        }
+        
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            this.showToast('ไฟล์ใหญ่เกินไป (สูงสุด 5MB)', 'error');
+            return;
+        }
+        
+        // Store file for later upload
+        this._slipFile = file;
+        this._slipOrderId = orderId;
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const placeholder = document.getElementById('slip-upload-placeholder');
+            const preview = document.getElementById('slip-preview');
+            const previewImage = document.getElementById('slip-preview-image');
+            const submitBtn = document.getElementById('slip-submit-btn');
+            
+            if (placeholder) placeholder.style.display = 'none';
+            if (preview) preview.style.display = 'block';
+            if (previewImage) previewImage.src = e.target.result;
+            if (submitBtn) submitBtn.disabled = false;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    /**
+     * Remove slip preview
+     */
+    removeSlipPreview() {
+        this._slipFile = null;
+        
+        const placeholder = document.getElementById('slip-upload-placeholder');
+        const preview = document.getElementById('slip-preview');
+        const fileInput = document.getElementById('slip-file-input');
+        const submitBtn = document.getElementById('slip-submit-btn');
+        
+        if (placeholder) placeholder.style.display = 'flex';
+        if (preview) preview.style.display = 'none';
+        if (fileInput) fileInput.value = '';
+        if (submitBtn) submitBtn.disabled = true;
+    }
+
+    /**
+     * Submit slip upload
+     */
+    async submitSlip(orderId) {
+        if (!this._slipFile) {
+            this.showToast('กรุณาเลือกรูปสลิป', 'error');
+            return;
+        }
+        
+        const submitBtn = document.getElementById('slip-submit-btn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<div class="btn-spinner"></div> กำลังอัพโหลด...';
+        }
+        
+        try {
+            const formData = new FormData();
+            formData.append('slip', this._slipFile);
+            formData.append('order_id', orderId);
+            formData.append('action', 'upload_slip');
+            
+            const profile = window.store?.get('profile');
+            if (profile?.userId) {
+                formData.append('line_user_id', profile.userId);
+            }
+            
+            const response = await fetch(`${this.config.BASE_URL}/api/checkout.php`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast('ส่งหลักฐานการชำระเงินสำเร็จ', 'success');
+                
+                // Reload order detail
+                setTimeout(() => this.loadOrderDetail(orderId), 1000);
+            } else {
+                throw new Error(result.message || 'ไม่สามารถอัพโหลดได้');
+            }
+        } catch (error) {
+            console.error('Slip upload error:', error);
+            this.showToast(error.message || 'เกิดข้อผิดพลาด', 'error');
+            
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> ส่งหลักฐานการชำระเงิน';
+            }
+        }
+    }
+
+    /**
+     * Copy text to clipboard
+     */
+    copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            this.showToast('คัดลอกแล้ว', 'success');
+        }).catch(() => {
+            this.showToast('ไม่สามารถคัดลอกได้', 'error');
+        });
     }
 
     /**

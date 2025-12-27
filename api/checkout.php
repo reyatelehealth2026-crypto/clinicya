@@ -1135,7 +1135,27 @@ function handleGetOrderItems() {
         ];
     }
     
+    // Parse delivery info
+    $deliveryInfo = json_decode($order['delivery_info'] ?? '{}', true);
+    
     jsonResponse(true, '', [
+        'order' => [
+            'id' => $order['id'],
+            'order_id' => $order['id'],
+            'order_number' => $order['order_number'],
+            'status' => $order['status'],
+            'payment_status' => $order['payment_status'],
+            'payment_method' => $order['payment_method'],
+            'total_amount' => floatval($order['total_amount']),
+            'shipping_fee' => floatval($order['shipping_fee'] ?? 0),
+            'grand_total' => floatval($order['grand_total']),
+            'delivery_info' => $deliveryInfo,
+            'tracking_number' => $order['tracking_number'] ?? null,
+            'carrier' => $order['carrier'] ?? null,
+            'created_at' => $order['created_at'],
+            'updated_at' => $order['updated_at'],
+            'items' => $formattedItems
+        ],
         'items' => $formattedItems,
         'total' => floatval($order['grand_total']),
         'subtotal' => floatval($order['total_amount']),

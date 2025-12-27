@@ -6199,6 +6199,208 @@ img[loading="lazy"] {
     color: var(--danger);
 }
 
+/* ==================== Slip Upload Section ==================== */
+.slip-upload-card {
+    background: linear-gradient(135deg, #FFF7ED 0%, #FFFBEB 100%);
+    border: 1px solid rgba(249, 115, 22, 0.2);
+}
+
+.payment-info-box {
+    background: var(--bg-white);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.payment-amount {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: var(--space-3);
+}
+
+.payment-amount-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.payment-amount-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.bank-transfer-info {
+    padding: var(--space-3);
+    background: var(--bg-light);
+    border-radius: var(--radius-md);
+}
+
+.bank-info-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: var(--space-2);
+}
+
+.bank-info-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.bank-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.bank-label {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.bank-value {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.bank-account-number {
+    font-family: monospace;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.copy-btn {
+    width: 28px;
+    height: 28px;
+    background: var(--primary-light);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.copy-btn:active {
+    background: var(--primary);
+    color: white;
+}
+
+.promptpay-info {
+    text-align: center;
+}
+
+.promptpay-qr-container {
+    background: white;
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    display: inline-block;
+    margin-bottom: var(--space-2);
+}
+
+.promptpay-qr-image {
+    width: 180px;
+    height: 180px;
+}
+
+.promptpay-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.slip-upload-section {
+    margin-top: var(--space-4);
+}
+
+.slip-upload-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--space-3);
+}
+
+.slip-upload-area {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    margin-bottom: var(--space-4);
+    background: var(--bg-white);
+}
+
+.slip-upload-area:active {
+    border-color: var(--primary);
+    background: var(--primary-light);
+}
+
+.slip-upload-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-muted);
+}
+
+.slip-upload-placeholder i {
+    font-size: 40px;
+    color: var(--primary);
+}
+
+.slip-upload-placeholder span {
+    font-size: 14px;
+}
+
+.slip-upload-hint {
+    font-size: 12px !important;
+    color: var(--text-muted) !important;
+}
+
+.slip-preview {
+    position: relative;
+    display: inline-block;
+}
+
+.slip-preview img {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: var(--radius-md);
+    object-fit: contain;
+}
+
+.slip-remove-btn {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 28px;
+    height: 28px;
+    background: var(--danger);
+    color: white;
+    border: none;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.slip-submit-btn {
+    min-height: 52px;
+    font-size: 16px;
+}
+
+.slip-submit-btn:disabled {
+    background: var(--border);
+    color: var(--text-muted);
+}
+
 .order-detail-error h3 {
     font-size: 18px;
     font-weight: 600;
