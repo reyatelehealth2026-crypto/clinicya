@@ -7923,19 +7923,32 @@ class LiffApp {
             if (window.permissionChecker) {
                 const result = await window.permissionChecker.requestPermissions();
                 if (!result.success) {
+                    // If device not found (no camera), still allow to proceed for testing
+                    if (result.errorType === 'not_found') {
+                        console.warn('📹 No camera found, proceeding without preview');
+                        this.handlePermissionsGranted(null);
+                        return;
+                    }
                     this.showPermissionCheckUI(result);
                     return;
                 }
                 // Stream is handled by onPermissionsGranted callback
             } else {
                 // Fallback to direct request
-                const stream = await window.videoCallManager.getLocalStream();
-                this.handlePermissionsGranted(stream);
+                try {
+                    const stream = await window.videoCallManager.getLocalStream();
+                    this.handlePermissionsGranted(stream);
+                } catch (e) {
+                    console.warn('📹 Could not get stream, proceeding anyway:', e);
+                    this.handlePermissionsGranted(null);
+                }
             }
             
         } catch (error) {
             console.error('Video call init error:', error);
-            this.showVideoCallError(error.message || 'ไม่สามารถเข้าถึงกล้องได้');
+            // Allow to proceed even with errors for testing
+            console.warn('📹 Proceeding to pre-call despite error');
+            this.handlePermissionsGranted(null);
         }
     }
 
