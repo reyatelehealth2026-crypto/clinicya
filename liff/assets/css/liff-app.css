@@ -10945,3 +10945,899 @@ body:has(.ai-chat-page) .bottom-nav {
     color: var(--primary);
     font-weight: 600;
 }
+
+
+/* ==================== Product Detail Modal ==================== */
+/* Modal like old liff-product-detail.php */
+
+.product-detail-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.product-detail-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.product-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.product-modal-content {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    background: var(--bg-white);
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+}
+
+.product-detail-modal.show .product-modal-content {
+    transform: translateY(0);
+}
+
+.product-modal-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: var(--space-3);
+    z-index: 10;
+}
+
+.product-modal-close,
+.product-modal-wishlist {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.15s;
+}
+
+.product-modal-close:active,
+.product-modal-wishlist:active {
+    transform: scale(0.95);
+}
+
+.product-modal-close i {
+    font-size: 18px;
+    color: var(--text-secondary);
+}
+
+.product-modal-wishlist i {
+    font-size: 18px;
+    color: var(--text-muted);
+}
+
+.product-modal-wishlist.active i,
+.product-modal-wishlist i.fas {
+    color: var(--danger);
+}
+
+.product-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 100px;
+}
+
+.product-modal-loading {
+    padding: var(--space-4);
+}
+
+.product-modal-image-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--bg-gray);
+    overflow: hidden;
+}
+
+.product-modal-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.product-modal-badge {
+    position: absolute;
+    top: var(--space-3);
+    left: var(--space-3);
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.product-modal-badge.sale {
+    background: var(--danger);
+    color: white;
+}
+
+.product-modal-info {
+    padding: var(--space-4);
+}
+
+.product-modal-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-2);
+    line-height: 1.3;
+}
+
+.product-modal-generic {
+    font-size: 14px;
+    color: var(--secondary);
+    margin: 0 0 var(--space-3);
+}
+
+.product-modal-price {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.product-modal-price .price-current {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.product-modal-price .price-current.sale {
+    color: var(--danger);
+}
+
+.product-modal-price .price-original {
+    font-size: 16px;
+    color: var(--text-muted);
+    text-decoration: line-through;
+}
+
+.product-modal-price .price-unit {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.product-modal-stock {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: var(--space-3);
+}
+
+.product-modal-stock.in {
+    background: var(--success-light);
+    color: var(--success);
+}
+
+.product-modal-stock.low {
+    background: var(--warning-light);
+    color: var(--warning);
+}
+
+.product-modal-stock.out {
+    background: var(--danger-light);
+    color: var(--danger);
+}
+
+.product-modal-manufacturer {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-4);
+}
+
+.product-modal-manufacturer i {
+    color: var(--text-muted);
+}
+
+.product-modal-section {
+    margin-bottom: var(--space-4);
+    padding: var(--space-3);
+    background: var(--bg-light);
+    border-radius: var(--radius-md);
+}
+
+.product-modal-section h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-2);
+}
+
+.product-modal-section h3 i {
+    color: var(--primary);
+}
+
+.product-modal-section p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.6;
+    white-space: pre-line;
+}
+
+.product-modal-sku {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: monospace;
+}
+
+.product-modal-sku span {
+    color: var(--text-secondary);
+}
+
+.product-modal-actions {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    padding-bottom: calc(var(--space-4) + var(--safe-area-bottom));
+    background: var(--bg-white);
+    border-top: 1px solid var(--border-light);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.product-modal-qty {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.product-modal-qty .qty-btn {
+    width: 40px;
+    height: 44px;
+    border: none;
+    background: var(--bg-light);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+
+.product-modal-qty .qty-btn:active {
+    background: var(--border);
+}
+
+.product-modal-qty input {
+    width: 50px;
+    height: 44px;
+    border: none;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    background: transparent;
+}
+
+.product-modal-add-btn {
+    flex: 1;
+    min-height: var(--touch-target-min);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    transition: transform 0.15s, opacity 0.15s;
+}
+
+.product-modal-add-btn:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+.product-modal-add-btn:disabled {
+    background: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.product-modal-add-btn .btn-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* Desktop Modal */
+@media (min-width: 640px) {
+    .product-detail-modal {
+        align-items: center;
+    }
+    
+    .product-modal-content {
+        max-height: 85vh;
+        border-radius: var(--radius-2xl);
+        margin: var(--space-4);
+    }
+}
+
+
+/* ==================== Appointments Page ==================== */
+/* เหมือนระบบเก่า liff-appointment.php */
+
+.appointments-page {
+    min-height: 100vh;
+    background: var(--bg-light);
+    padding-bottom: calc(80px + var(--safe-area-bottom));
+}
+
+.appointments-header {
+    display: flex;
+    align-items: center;
+    padding: var(--space-4);
+    background: var(--bg-white);
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* Appointment Tabs */
+.appointment-tabs {
+    display: flex;
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-4);
+    background: var(--bg-white);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.appointment-tab {
+    flex: 1;
+    padding: var(--space-3);
+    background: none;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.appointment-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* Step Indicator */
+.appointment-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+    background: var(--bg-white);
+    border-bottom: 1px solid var(--border-light);
+    gap: var(--space-2);
+}
+
+.appointment-steps .step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.appointment-steps .step-number {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    background: var(--bg-gray);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    transition: all 0.2s;
+}
+
+.appointment-steps .step.active .step-number {
+    background: var(--primary);
+    color: white;
+}
+
+.appointment-steps .step.completed .step-number {
+    background: var(--success);
+    color: white;
+}
+
+.appointment-steps .step-label {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.appointment-steps .step.active .step-label {
+    color: var(--primary);
+}
+
+.appointment-steps .step-line {
+    width: 40px;
+    height: 2px;
+    background: var(--border);
+    margin-bottom: 20px;
+}
+
+/* Appointment Step Content */
+.appointment-step-content {
+    padding: var(--space-4);
+}
+
+/* Pharmacist List */
+.pharmacist-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.pharmacist-card {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--bg-white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.pharmacist-card:active {
+    transform: scale(0.98);
+}
+
+.pharmacist-card.skeleton-card {
+    cursor: default;
+}
+
+.pharmacist-avatar {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.pharmacist-avatar img {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--radius-lg);
+    object-fit: cover;
+    background: var(--bg-gray);
+}
+
+.pharmacist-rating {
+    position: absolute;
+    bottom: -4px;
+    left: -4px;
+    background: linear-gradient(135deg, var(--success), #059669);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.pharmacist-rating i {
+    color: #FCD34D;
+    font-size: 10px;
+}
+
+.pharmacist-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.pharmacist-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-1);
+}
+
+.pharmacist-specialty {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 var(--space-1);
+}
+
+.pharmacist-license {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0 0 var(--space-2);
+}
+
+.pharmacist-license i {
+    margin-right: 4px;
+}
+
+.pharmacist-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.pharmacist-fee {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--danger);
+}
+
+.pharmacist-duration {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.pharmacist-book-btn {
+    align-self: center;
+}
+
+/* Selected Pharmacist Info */
+.selected-pharmacist-info {
+    margin-bottom: var(--space-4);
+}
+
+.selected-pharmacist {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--bg-white);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.selected-pharmacist img {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+}
+
+.selected-pharmacist h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.selected-pharmacist p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Date Selection */
+.date-selection,
+.time-selection {
+    margin-bottom: var(--space-4);
+}
+
+.date-selection h3,
+.time-selection h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 var(--space-3);
+}
+
+.date-list {
+    display: flex;
+    gap: var(--space-2);
+    overflow-x: auto;
+    padding-bottom: var(--space-2);
+    -webkit-overflow-scrolling: touch;
+}
+
+.date-list::-webkit-scrollbar {
+    display: none;
+}
+
+.date-btn {
+    flex-shrink: 0;
+    width: 64px;
+    padding: var(--space-3) var(--space-2);
+    background: var(--bg-white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.date-btn.selected {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.date-btn .date-day {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.date-btn.selected .date-day {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.date-btn .date-num {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.date-btn .date-month {
+    display: block;
+    font-size: 11px;
+}
+
+/* Time Slots */
+.time-slots {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-2);
+}
+
+.time-slot-btn {
+    padding: var(--space-3);
+    background: var(--bg-white);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.time-slot-btn:hover:not(:disabled) {
+    border-color: var(--primary);
+}
+
+.time-slot-btn.selected {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.time-slot-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.no-slots-msg {
+    text-align: center;
+    padding: var(--space-8);
+    color: var(--text-muted);
+}
+
+/* Confirm Card */
+.confirm-card,
+.symptoms-card {
+    background: var(--bg-white);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+    box-shadow: var(--shadow-sm);
+}
+
+.confirm-card h3,
+.symptoms-card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 var(--space-3);
+}
+
+.confirm-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.confirm-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.confirm-item i {
+    width: 32px;
+    height: 32px;
+    background: var(--primary-light);
+    color: var(--primary);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.confirm-item label {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: block;
+}
+
+.confirm-item span {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.symptoms-card textarea {
+    width: 100%;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    resize: none;
+}
+
+/* My Appointments Modal */
+.appointments-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-light);
+    z-index: var(--z-modal);
+    overflow-y: auto;
+}
+
+.appointments-modal-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--bg-white);
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+}
+
+.appointments-modal-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.my-appointments-list {
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.my-appointment-card {
+    background: var(--bg-white);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    box-shadow: var(--shadow-sm);
+}
+
+.my-appointment-card .appointment-datetime {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.my-appointment-card .appointment-datetime i {
+    margin-right: var(--space-2);
+}
+
+.my-appointment-card .appointment-pharmacist {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.my-appointment-card .appointment-pharmacist img {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    object-fit: cover;
+}
+
+.my-appointment-card .appointment-pharmacist span {
+    font-weight: 600;
+}
+
+.my-appointment-card .appointment-status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.appointment-status {
+    display: inline-block;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.appointment-status.pending {
+    background: var(--warning-light);
+    color: var(--warning);
+}
+
+.appointment-status.confirmed {
+    background: var(--success-light);
+    color: var(--success);
+}
+
+.appointment-status.completed {
+    background: var(--info-light);
+    color: var(--info);
+}
+
+.appointment-status.cancelled {
+    background: var(--danger-light);
+    color: var(--danger);
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-8);
+    color: var(--primary);
+    font-size: 24px;
+}
+
+/* Error Text */
+.error-text {
+    text-align: center;
+    color: var(--danger);
+    padding: var(--space-4);
+}

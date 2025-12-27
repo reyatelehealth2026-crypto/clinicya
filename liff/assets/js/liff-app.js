@@ -1140,7 +1140,7 @@ class LiffApp {
      */
     async loadCategories() {
         try {
-            const url = `${this.config.BASE_URL}/api/checkout.php?action=get_products&line_account_id=${this.config.ACCOUNT_ID}`;
+            const url = `${this.config.BASE_URL}/api/shop-products.php?action=categories`;
             const response = await this.fetchWithRetry(url);
             const data = await response.json();
 
@@ -1347,6 +1347,7 @@ class LiffApp {
      * - Display image, name, price, sale price, badges
      * - Add Rx badge for prescription products
      * - Add wishlist heart button
+     * - Click opens modal instead of navigating
      */
     renderProductCard(product) {
         const isOutOfStock = product.stock <= 0;
@@ -1363,7 +1364,7 @@ class LiffApp {
 
         return `
             <div class="product-card ${isOutOfStock ? 'out-of-stock' : ''}" data-product-id="${product.id}">
-                <div class="product-card-image-wrapper" onclick="window.router.navigate('/product/${product.id}')">
+                <div class="product-card-image-wrapper" onclick="window.liffApp.showProductDetailModal(${product.id})">
                     <!-- Badges -->
                     <div class="product-badges">
                         ${isPrescription ? '<span class="product-badge product-badge-rx">Rx</span>' : ''}
@@ -1386,7 +1387,7 @@ class LiffApp {
                 </div>
                 
                 <div class="product-card-info">
-                    <h3 class="product-card-name" onclick="window.router.navigate('/product/${product.id}')">${product.name}</h3>
+                    <h3 class="product-card-name" onclick="window.liffApp.showProductDetailModal(${product.id})">${product.name}</h3>
                     
                     <div class="product-card-price">
                         ${hasSalePrice ? `
@@ -1541,6 +1542,247 @@ class LiffApp {
             btn.classList.remove('added');
             btn.innerHTML = originalContent;
         }, 1500);
+    }
+
+    /**
+     * Show product detail modal (like old liff-product-detail.php)
+     * @param {number} productId - Product ID to show
+     */
+    async showProductDetailModal(productId) {
+        // Create modal if not exists
+        let modal = document.getElementById('product-detail-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'product-detail-modal';
+            modal.className = 'product-detail-modal';
+            document.body.appendChild(modal);
+        }
+
+        // Show loading state
+        modal.innerHTML = `
+            <div class="product-modal-overlay" onclick="window.liffApp.closeProductDetailModal()"></div>
+            <div class="product-modal-content">
+                <div class="product-modal-header">
+                    <button class="product-modal-close" onclick="window.liffApp.closeProductDetailModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="product-modal-body">
+                    <div class="product-modal-loading">
+                        <div class="skeleton" style="width: 100%; aspect-ratio: 1; border-radius: 12px;"></div>
+                        <div class="skeleton" style="height: 24px; width: 80%; margin-top: 16px;"></div>
+                        <div class="skeleton" style="height: 32px; width: 40%; margin-top: 8px;"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+
+        try {
+            // Fetch product details
+            const url = `${this.config.BASE_URL}/api/shop-products.php?product_id=${productId}`;
+            const response = await this.fetchWithRetry(url);
+            const data = await response.json();
+
+            if (data.success && data.product) {
+                this.renderProductDetailModal(data.product);
+            } else {
+                this.showToast('ไม่พบข้อมูลสินค้า', 'error');
+                this.closeProductDetailModal();
+            }
+        } catch (error) {
+            console.error('Error loading product:', error);
+            this.showToast('เกิดข้อผิดพลาด', 'error');
+            this.closeProductDetailModal();
+        }
+    }
+
+    /**
+     * Render product detail modal content
+     * @param {Object} product - Product data
+     */
+    renderProductDetailModal(product) {
+        const modal = document.getElementById('product-detail-modal');
+        if (!modal) return;
+
+        const hasSalePrice = product.sale_price && product.sale_price < product.price;
+        const discountPercent = hasSalePrice ? Math.round((1 - product.sale_price / product.price) * 100) : 0;
+        const isOutOfStock = product.stock <= 0;
+        const isLowStock = product.stock > 0 && product.stock <= 5;
+
+        modal.innerHTML = `
+            <div class="product-modal-overlay" onclick="window.liffApp.closeProductDetailModal()"></div>
+            <div class="product-modal-content">
+                <div class="product-modal-header">
+                    <button class="product-modal-close" onclick="window.liffApp.closeProductDetailModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <button class="product-modal-wishlist" onclick="window.liffApp.toggleWishlist(${product.id})">
+                        <i class="${this.isProductInWishlist(product.id) ? 'fas' : 'far'} fa-heart"></i>
+                    </button>
+                </div>
+                <div class="product-modal-body">
+                    <!-- Product Image -->
+                    <div class="product-modal-image-wrapper">
+                        <img src="${product.image_url || this.config.BASE_URL + '/assets/images/image-placeholder.svg'}" 
+                             alt="${product.name}"
+                             class="product-modal-image"
+                             onerror="this.src='${this.config.BASE_URL}/assets/images/image-placeholder.svg'">
+                        ${hasSalePrice ? `<span class="product-modal-badge sale">-${discountPercent}%</span>` : ''}
+                    </div>
+
+                    <!-- Product Info -->
+                    <div class="product-modal-info">
+                        <h2 class="product-modal-name">${product.name}</h2>
+                        
+                        ${product.generic_name ? `<p class="product-modal-generic">${product.generic_name}</p>` : ''}
+                        
+                        <!-- Price -->
+                        <div class="product-modal-price">
+                            ${hasSalePrice ? `
+                                <span class="price-current sale">฿${this.formatNumber(product.sale_price)}</span>
+                                <span class="price-original">฿${this.formatNumber(product.price)}</span>
+                            ` : `
+                                <span class="price-current">฿${this.formatNumber(product.price)}</span>
+                            `}
+                            ${product.unit ? `<span class="price-unit">/ ${product.unit}</span>` : ''}
+                        </div>
+
+                        <!-- Stock Status -->
+                        <div class="product-modal-stock ${isOutOfStock ? 'out' : isLowStock ? 'low' : 'in'}">
+                            ${isOutOfStock ? 
+                                '<i class="fas fa-times-circle"></i> สินค้าหมด' : 
+                                isLowStock ? 
+                                    `<i class="fas fa-exclamation-circle"></i> เหลือ ${product.stock} ${product.unit || 'ชิ้น'}` :
+                                    '<i class="fas fa-check-circle"></i> มีสินค้า'
+                            }
+                        </div>
+
+                        ${product.manufacturer ? `
+                            <div class="product-modal-manufacturer">
+                                <i class="fas fa-industry"></i> ${product.manufacturer}
+                            </div>
+                        ` : ''}
+
+                        ${product.usage_instructions ? `
+                            <div class="product-modal-section">
+                                <h3><i class="fas fa-prescription-bottle-alt"></i> วิธีใช้</h3>
+                                <p>${product.usage_instructions}</p>
+                            </div>
+                        ` : ''}
+
+                        ${product.description ? `
+                            <div class="product-modal-section">
+                                <h3><i class="fas fa-info-circle"></i> รายละเอียด</h3>
+                                <p>${product.description}</p>
+                            </div>
+                        ` : ''}
+
+                        ${product.sku ? `
+                            <div class="product-modal-sku">
+                                <span>SKU:</span> ${product.sku}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- Bottom Actions -->
+                <div class="product-modal-actions">
+                    <div class="product-modal-qty">
+                        <button class="qty-btn" onclick="window.liffApp.changeModalQty(-1)">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <input type="number" id="modal-qty" value="1" min="1" max="${product.stock || 999}" readonly>
+                        <button class="qty-btn" onclick="window.liffApp.changeModalQty(1)">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <button class="product-modal-add-btn" 
+                            onclick="window.liffApp.addToCartFromModal(${product.id})"
+                            ${isOutOfStock ? 'disabled' : ''}>
+                        <i class="fas fa-cart-plus"></i>
+                        ${isOutOfStock ? 'สินค้าหมด' : 'เพิ่มลงตะกร้า'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Store current product for qty changes
+        this.currentModalProduct = product;
+    }
+
+    /**
+     * Close product detail modal
+     */
+    closeProductDetailModal() {
+        const modal = document.getElementById('product-detail-modal');
+        if (modal) {
+            modal.classList.remove('show');
+            document.body.style.overflow = '';
+            setTimeout(() => {
+                modal.innerHTML = '';
+            }, 300);
+        }
+        this.currentModalProduct = null;
+    }
+
+    /**
+     * Change quantity in modal
+     * @param {number} delta - Amount to change (+1 or -1)
+     */
+    changeModalQty(delta) {
+        const input = document.getElementById('modal-qty');
+        if (!input || !this.currentModalProduct) return;
+
+        let val = parseInt(input.value) + delta;
+        const max = this.currentModalProduct.stock || 999;
+        
+        if (val < 1) val = 1;
+        if (val > max) val = max;
+        
+        input.value = val;
+    }
+
+    /**
+     * Add to cart from modal
+     * @param {number} productId - Product ID
+     */
+    async addToCartFromModal(productId) {
+        const qtyInput = document.getElementById('modal-qty');
+        const qty = qtyInput ? parseInt(qtyInput.value) : 1;
+        const btn = document.querySelector('.product-modal-add-btn');
+        
+        if (!btn || btn.disabled) return;
+
+        const originalContent = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<div class="btn-spinner"></div>';
+
+        try {
+            const product = this.currentModalProduct;
+            if (!product) throw new Error('Product not found');
+
+            // Add to cart
+            for (let i = 0; i < qty; i++) {
+                window.store?.addToCart(product, 1);
+            }
+
+            // Show success
+            btn.innerHTML = '<i class="fas fa-check"></i> เพิ่มแล้ว';
+            this.showToast(`เพิ่ม ${qty} รายการลงตะกร้าแล้ว`, 'success');
+
+            // Close modal after delay
+            setTimeout(() => {
+                this.closeProductDetailModal();
+            }, 800);
+
+        } catch (error) {
+            console.error('Add to cart error:', error);
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+            this.showToast('เกิดข้อผิดพลาด', 'error');
+        }
     }
 
     /**
@@ -5866,7 +6108,7 @@ class LiffApp {
      */
     async loadProductDetail(productId) {
         try {
-            const response = await fetch(`${this.config.BASE_URL}/api/products.php?action=detail&id=${productId}`);
+            const response = await fetch(this.config.BASE_URL + '/api/products.php?action=detail&id=' + productId);
             const data = await response.json();
             
             const container = document.getElementById('product-detail-content');
@@ -5874,16 +6116,18 @@ class LiffApp {
 
             if (data.success && data.product) {
                 const product = data.product;
+                const priceHtml = product.sale_price && product.sale_price < product.price 
+                    ? '<span style="text-decoration: line-through; color: var(--text-muted); font-size: 1rem; margin-left: 8px;">฿' + this.formatNumber(product.price) + '</span>' 
+                    : '';
                 container.innerHTML = `
                     <img src="${product.image_url || 'assets/images/placeholder.png'}" 
                          class="product-detail-image"
-                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f0f0f0%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2212%22>No Image</text></svg>'">
+                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f0f0f0%22 width=%22100%22 height=%22100%22/></svg>'">
                     <div class="product-detail-info">
                         <h1 class="product-detail-name">${product.name}</h1>
                         <div class="product-detail-price">
                             ฿${this.formatNumber(product.sale_price || product.price)}
-                            ${product.sale_price && product.sale_price < product.price ? 
-                                `<span style="text-decoration: line-through; color: var(--text-muted); font-size: 1rem; margin-left: 8px;">฿${this.formatNumber(product.price)}</span>` : ''}
+                            ${priceHtml}
                         </div>
                         <p class="product-detail-description">${product.description || 'ไม่มีรายละเอียดสินค้า'}</p>
                     </div>
@@ -5906,12 +6150,14 @@ class LiffApp {
 
     /**
      * Render Appointments page
+     * เหมือนระบบเก่า liff-appointment.php - นัดเภสัชกรก่อน แล้วค่อย video call ตามเวลานัด
      */
     renderAppointmentsPage() {
-        const profile = window.store?.get('profile');
-        
-        // Load appointments
-        setTimeout(() => this.loadAppointments(), 100);
+        // Load pharmacists and appointments
+        setTimeout(() => {
+            this.loadPharmacistsForAppointment();
+            this.loadMyAppointments();
+        }, 100);
 
         return `
             <div class="appointments-page">
@@ -5920,59 +6166,606 @@ class LiffApp {
                         <i class="fas fa-arrow-left"></i>
                     </button>
                     <h1 class="page-title" style="flex: 1; margin-left: 12px;">นัดหมาย</h1>
-                    <button class="btn btn-primary btn-sm" onclick="window.router.navigate('/video-call')">
-                        <i class="fas fa-plus"></i> นัดใหม่
+                    <button class="btn btn-icon" onclick="window.liffApp.showMyAppointments()">
+                        <i class="fas fa-calendar-check"></i>
                     </button>
                 </div>
-                <div id="appointments-list">
-                    <div class="appointment-card">
-                        <div class="skeleton skeleton-text" style="height: 14px; width: 40%; margin-bottom: 8px;"></div>
-                        <div class="skeleton skeleton-text" style="height: 18px; margin-bottom: 8px;"></div>
-                        <div class="skeleton skeleton-text" style="height: 24px; width: 30%;"></div>
+
+                <!-- Tabs -->
+                <div class="appointment-tabs">
+                    <button class="appointment-tab active" data-tab="instant" onclick="window.liffApp.switchAppointmentTab('instant')">
+                        พบเภสัชกรทันที
+                    </button>
+                    <button class="appointment-tab" data-tab="schedule" onclick="window.liffApp.switchAppointmentTab('schedule')">
+                        นัดล่วงหน้า
+                    </button>
+                </div>
+
+                <!-- Step Indicator (for schedule mode) -->
+                <div id="appointment-steps" class="appointment-steps hidden">
+                    <div class="step active" data-step="1">
+                        <span class="step-number">1</span>
+                        <span class="step-label">เลือกเภสัชกร</span>
                     </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="2">
+                        <span class="step-number">2</span>
+                        <span class="step-label">เลือกเวลา</span>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="3">
+                        <span class="step-number">3</span>
+                        <span class="step-label">ยืนยัน</span>
+                    </div>
+                </div>
+
+                <!-- Step 1: Select Pharmacist -->
+                <div id="appointment-step-1" class="appointment-step-content">
+                    <div id="pharmacist-list" class="pharmacist-list">
+                        <!-- Loading skeleton -->
+                        <div class="pharmacist-card skeleton-card">
+                            <div class="skeleton" style="width: 80px; height: 80px; border-radius: 12px;"></div>
+                            <div style="flex: 1;">
+                                <div class="skeleton" style="height: 20px; width: 60%; margin-bottom: 8px;"></div>
+                                <div class="skeleton" style="height: 14px; width: 40%; margin-bottom: 8px;"></div>
+                                <div class="skeleton" style="height: 14px; width: 80%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Select Date & Time -->
+                <div id="appointment-step-2" class="appointment-step-content hidden">
+                    <div id="selected-pharmacist-info" class="selected-pharmacist-info"></div>
+                    
+                    <div class="date-selection">
+                        <h3>เลือกวันที่</h3>
+                        <div id="date-list" class="date-list"></div>
+                    </div>
+                    
+                    <div class="time-selection">
+                        <h3>เลือกเวลา</h3>
+                        <div id="time-slots" class="time-slots"></div>
+                        <p id="no-slots-msg" class="no-slots-msg hidden">ไม่มีช่วงเวลาว่างในวันนี้</p>
+                    </div>
+                    
+                    <button id="step2-next-btn" class="btn btn-primary btn-block" onclick="window.liffApp.goToAppointmentStep(3)" disabled>
+                        ถัดไป
+                    </button>
+                </div>
+
+                <!-- Step 3: Confirm -->
+                <div id="appointment-step-3" class="appointment-step-content hidden">
+                    <div class="confirm-card">
+                        <h3>ยืนยันการนัดหมาย</h3>
+                        <div id="confirm-details" class="confirm-details"></div>
+                    </div>
+                    
+                    <div class="symptoms-card">
+                        <h3>อาการ/เหตุผลที่มา (ถ้ามี)</h3>
+                        <textarea id="appointment-symptoms" rows="3" placeholder="เช่น ปวดหัว มีไข้ ต้องการปรึกษาเรื่องยา..."></textarea>
+                    </div>
+                    
+                    <button id="confirm-booking-btn" class="btn btn-primary btn-block" onclick="window.liffApp.confirmBookAppointment()">
+                        ยืนยันนัดหมาย
+                    </button>
+                </div>
+
+                <!-- My Appointments Modal -->
+                <div id="my-appointments-modal" class="appointments-modal hidden">
+                    <div class="appointments-modal-header">
+                        <button class="back-btn" onclick="window.liffApp.hideMyAppointments()">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <h2>นัดหมายของฉัน</h2>
+                    </div>
+                    <div id="my-appointments-list" class="my-appointments-list"></div>
                 </div>
             </div>
         `;
     }
 
     /**
-     * Load appointments from API
+     * Initialize appointment state
      */
-    async loadAppointments() {
+    initAppointmentState() {
+        this.appointmentState = {
+            currentTab: 'instant',
+            currentStep: 1,
+            pharmacists: [],
+            selectedPharmacist: null,
+            selectedDate: null,
+            selectedTime: null,
+            myAppointments: []
+        };
+    }
+
+    /**
+     * Switch appointment tab
+     */
+    switchAppointmentTab(tab) {
+        if (!this.appointmentState) this.initAppointmentState();
+        this.appointmentState.currentTab = tab;
+        
+        // Update tab UI
+        document.querySelectorAll('.appointment-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.tab === tab);
+        });
+        
+        // Show/hide step indicator
+        const steps = document.getElementById('appointment-steps');
+        if (steps) {
+            steps.classList.toggle('hidden', tab === 'instant');
+        }
+    }
+
+    /**
+     * Load pharmacists for appointment
+     */
+    async loadPharmacistsForAppointment() {
+        if (!this.appointmentState) this.initAppointmentState();
+        
+        const container = document.getElementById('pharmacist-list');
+        if (!container) return;
+
+        try {
+            const response = await fetch(`${this.config.BASE_URL}/api/appointments.php?action=pharmacists&line_account_id=${this.config.ACCOUNT_ID}`);
+            const data = await response.json();
+
+            if (data.success && data.pharmacists?.length > 0) {
+                this.appointmentState.pharmacists = data.pharmacists;
+                this.renderPharmacistList(data.pharmacists);
+            } else {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-user-md"></i>
+                        <p>ยังไม่มีเภสัชกรให้บริการ</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading pharmacists:', error);
+            container.innerHTML = `
+                <div class="empty-state error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>ไม่สามารถโหลดข้อมูลได้</p>
+                    <button class="btn btn-sm btn-outline" onclick="window.liffApp.loadPharmacistsForAppointment()">ลองใหม่</button>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Render pharmacist list
+     */
+    renderPharmacistList(pharmacists) {
+        const container = document.getElementById('pharmacist-list');
+        if (!container) return;
+
+        container.innerHTML = pharmacists.map(p => {
+            const fee = p.consultation_fee > 0 ? `฿${this.formatNumber(p.consultation_fee)}` : 'ฟรี';
+            const duration = p.consultation_duration || 15;
+            
+            return `
+                <div class="pharmacist-card" onclick="window.liffApp.selectPharmacistForAppointment(${p.id})">
+                    <div class="pharmacist-avatar">
+                        <img src="${p.image_url || this.config.BASE_URL + '/assets/images/avatar-placeholder.png'}" 
+                             alt="${p.name}"
+                             onerror="this.src='${this.config.BASE_URL}/assets/images/avatar-placeholder.png'">
+                        <span class="pharmacist-rating">
+                            <i class="fas fa-star"></i> ${p.rating || '4.9'}
+                        </span>
+                    </div>
+                    <div class="pharmacist-info">
+                        <h3 class="pharmacist-name">${p.name}</h3>
+                        <p class="pharmacist-specialty">${p.specialty || 'เภสัชกรทั่วไป'}</p>
+                        <p class="pharmacist-license"><i class="fas fa-id-card"></i> ${p.license_no || '-'}</p>
+                        <div class="pharmacist-meta">
+                            <span class="pharmacist-fee">${fee}</span>
+                            <span class="pharmacist-duration">${duration} นาที</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm pharmacist-book-btn" ${!p.is_available ? 'disabled' : ''}>
+                        ${p.is_available ? 'นัดหมาย' : 'ไม่ว่าง'}
+                    </button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    /**
+     * Select pharmacist for appointment
+     */
+    selectPharmacistForAppointment(pharmacistId) {
+        if (!this.appointmentState) this.initAppointmentState();
+        
+        const pharmacist = this.appointmentState.pharmacists.find(p => p.id === pharmacistId);
+        if (!pharmacist || !pharmacist.is_available) return;
+
+        this.appointmentState.selectedPharmacist = pharmacist;
+        
+        // If instant mode, go directly to video call
+        if (this.appointmentState.currentTab === 'instant') {
+            window.router.navigate('/video-call', { pharmacist_id: pharmacistId });
+            return;
+        }
+
+        // Schedule mode - go to step 2
+        this.goToAppointmentStep(2);
+        this.renderSelectedPharmacistInfo();
+        this.renderDateSelection();
+    }
+
+    /**
+     * Go to appointment step
+     */
+    goToAppointmentStep(step) {
+        if (!this.appointmentState) this.initAppointmentState();
+        this.appointmentState.currentStep = step;
+
+        // Hide all steps
+        document.querySelectorAll('.appointment-step-content').forEach(el => el.classList.add('hidden'));
+        
+        // Show current step
+        const stepEl = document.getElementById(`appointment-step-${step}`);
+        if (stepEl) stepEl.classList.remove('hidden');
+
+        // Update step indicators
+        document.querySelectorAll('.appointment-steps .step').forEach(el => {
+            const s = parseInt(el.dataset.step);
+            el.classList.toggle('active', s <= step);
+            el.classList.toggle('completed', s < step);
+        });
+
+        // Show step indicator
+        const stepsEl = document.getElementById('appointment-steps');
+        if (stepsEl) stepsEl.classList.remove('hidden');
+
+        // Render confirmation details when going to step 3
+        if (step === 3) {
+            this.renderConfirmationDetails();
+        }
+    }
+
+    /**
+     * Render selected pharmacist info
+     */
+    renderSelectedPharmacistInfo() {
+        const container = document.getElementById('selected-pharmacist-info');
+        const p = this.appointmentState?.selectedPharmacist;
+        if (!container || !p) return;
+
+        container.innerHTML = `
+            <div class="selected-pharmacist">
+                <img src="${p.image_url || this.config.BASE_URL + '/assets/images/avatar-placeholder.png'}" alt="${p.name}">
+                <div>
+                    <h4>${p.name}</h4>
+                    <p>${p.specialty || 'เภสัชกรทั่วไป'}</p>
+                </div>
+                <button class="btn btn-icon btn-sm" onclick="window.liffApp.goToAppointmentStep(1)">
+                    <i class="fas fa-edit"></i>
+                </button>
+            </div>
+        `;
+    }
+
+    /**
+     * Render date selection
+     */
+    renderDateSelection() {
+        const container = document.getElementById('date-list');
+        if (!container) return;
+
+        const today = new Date();
+        let html = '';
+
+        for (let i = 0; i < 14; i++) {
+            const date = new Date(today);
+            date.setDate(today.getDate() + i);
+            const dateStr = date.toISOString().split('T')[0];
+            const dayName = date.toLocaleDateString('th-TH', { weekday: 'short' });
+            const dayNum = date.getDate();
+            const monthName = date.toLocaleDateString('th-TH', { month: 'short' });
+            const isSelected = this.appointmentState?.selectedDate === dateStr;
+
+            html += `
+                <button class="date-btn ${isSelected ? 'selected' : ''}" 
+                        data-date="${dateStr}"
+                        onclick="window.liffApp.selectAppointmentDate('${dateStr}')">
+                    <span class="date-day">${dayName}</span>
+                    <span class="date-num">${dayNum}</span>
+                    <span class="date-month">${monthName}</span>
+                </button>
+            `;
+        }
+
+        container.innerHTML = html;
+
+        // Auto select first date
+        if (!this.appointmentState?.selectedDate) {
+            this.selectAppointmentDate(today.toISOString().split('T')[0]);
+        }
+    }
+
+    /**
+     * Select appointment date
+     */
+    async selectAppointmentDate(dateStr) {
+        if (!this.appointmentState) this.initAppointmentState();
+        this.appointmentState.selectedDate = dateStr;
+        this.appointmentState.selectedTime = null;
+
+        // Update UI
+        document.querySelectorAll('.date-btn').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.date === dateStr);
+        });
+
+        // Disable next button
+        const nextBtn = document.getElementById('step2-next-btn');
+        if (nextBtn) nextBtn.disabled = true;
+
+        // Load time slots
+        await this.loadTimeSlots();
+    }
+
+    /**
+     * Load available time slots
+     */
+    async loadTimeSlots() {
+        const container = document.getElementById('time-slots');
+        const noSlotsMsg = document.getElementById('no-slots-msg');
+        if (!container) return;
+
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i></div>';
+        if (noSlotsMsg) noSlotsMsg.classList.add('hidden');
+
+        try {
+            const pharmacistId = this.appointmentState?.selectedPharmacist?.id;
+            const date = this.appointmentState?.selectedDate;
+            
+            const response = await fetch(`${this.config.BASE_URL}/api/appointments.php?action=available_slots&pharmacist_id=${pharmacistId}&date=${date}`);
+            const data = await response.json();
+
+            if (data.success && data.slots?.length > 0) {
+                container.innerHTML = data.slots.map(slot => `
+                    <button class="time-slot-btn ${slot.is_available ? '' : 'disabled'}" 
+                            data-time="${slot.time}"
+                            onclick="window.liffApp.selectAppointmentTime('${slot.time}')"
+                            ${!slot.is_available ? 'disabled' : ''}>
+                        ${slot.time}
+                    </button>
+                `).join('');
+            } else {
+                container.innerHTML = '';
+                if (noSlotsMsg) noSlotsMsg.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error loading time slots:', error);
+            container.innerHTML = '<p class="error-text">ไม่สามารถโหลดข้อมูลได้</p>';
+        }
+    }
+
+    /**
+     * Select appointment time
+     */
+    selectAppointmentTime(time) {
+        if (!this.appointmentState) this.initAppointmentState();
+        this.appointmentState.selectedTime = time;
+
+        // Update UI
+        document.querySelectorAll('.time-slot-btn').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.time === time);
+        });
+
+        // Enable next button
+        const nextBtn = document.getElementById('step2-next-btn');
+        if (nextBtn) nextBtn.disabled = false;
+    }
+
+    /**
+     * Render confirmation details
+     */
+    renderConfirmationDetails() {
+        const container = document.getElementById('confirm-details');
+        if (!container || !this.appointmentState) return;
+
+        const p = this.appointmentState.selectedPharmacist;
+        const date = new Date(this.appointmentState.selectedDate);
+        const dateFormatted = date.toLocaleDateString('th-TH', { 
+            weekday: 'long', 
+            day: 'numeric', 
+            month: 'long', 
+            year: 'numeric' 
+        });
+
+        container.innerHTML = `
+            <div class="confirm-item">
+                <i class="fas fa-user-md"></i>
+                <div>
+                    <label>เภสัชกร</label>
+                    <span>${p?.name || '-'}</span>
+                </div>
+            </div>
+            <div class="confirm-item">
+                <i class="fas fa-calendar"></i>
+                <div>
+                    <label>วันที่</label>
+                    <span>${dateFormatted}</span>
+                </div>
+            </div>
+            <div class="confirm-item">
+                <i class="fas fa-clock"></i>
+                <div>
+                    <label>เวลา</label>
+                    <span>${this.appointmentState.selectedTime || '-'}</span>
+                </div>
+            </div>
+            <div class="confirm-item">
+                <i class="fas fa-video"></i>
+                <div>
+                    <label>รูปแบบ</label>
+                    <span>Video Call</span>
+                </div>
+            </div>
+            <div class="confirm-item">
+                <i class="fas fa-money-bill"></i>
+                <div>
+                    <label>ค่าบริการ</label>
+                    <span>${p?.consultation_fee > 0 ? '฿' + this.formatNumber(p.consultation_fee) : 'ฟรี'}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Confirm book appointment
+     */
+    async confirmBookAppointment() {
         const profile = window.store?.get('profile');
-        const container = document.getElementById('appointments-list');
-        if (!container || !profile?.userId) return;
+        if (!profile?.userId) {
+            this.showToast('กรุณาเข้าสู่ระบบก่อน', 'warning');
+            return;
+        }
+
+        const btn = document.getElementById('confirm-booking-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังจอง...';
+        }
+
+        try {
+            const symptoms = document.getElementById('appointment-symptoms')?.value || '';
+            
+            const response = await fetch(`${this.config.BASE_URL}/api/appointments.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'book',
+                    line_user_id: profile.userId,
+                    line_account_id: this.config.ACCOUNT_ID,
+                    pharmacist_id: this.appointmentState?.selectedPharmacist?.id,
+                    date: this.appointmentState?.selectedDate,
+                    time: this.appointmentState?.selectedTime,
+                    symptoms: symptoms
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showToast('จองนัดหมายสำเร็จ!', 'success');
+                // Reset state and go back to step 1
+                this.initAppointmentState();
+                this.goToAppointmentStep(1);
+                this.loadPharmacistsForAppointment();
+            } else {
+                this.showToast(data.message || 'ไม่สามารถจองได้', 'error');
+            }
+        } catch (error) {
+            console.error('Error booking appointment:', error);
+            this.showToast('เกิดข้อผิดพลาด กรุณาลองใหม่', 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = 'ยืนยันนัดหมาย';
+            }
+        }
+    }
+
+    /**
+     * Show my appointments modal
+     */
+    showMyAppointments() {
+        const modal = document.getElementById('my-appointments-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            this.loadMyAppointments();
+        }
+    }
+
+    /**
+     * Hide my appointments modal
+     */
+    hideMyAppointments() {
+        const modal = document.getElementById('my-appointments-modal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    /**
+     * Load my appointments
+     */
+    async loadMyAppointments() {
+        const profile = window.store?.get('profile');
+        const container = document.getElementById('my-appointments-list');
+        if (!container) return;
+
+        if (!profile?.userId) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-user-lock"></i>
+                    <p>กรุณาเข้าสู่ระบบเพื่อดูนัดหมาย</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i></div>';
 
         try {
             const response = await fetch(`${this.config.BASE_URL}/api/appointments.php?action=list&line_user_id=${profile.userId}`);
             const data = await response.json();
 
             if (data.success && data.appointments?.length > 0) {
-                container.innerHTML = data.appointments.map(apt => `
-                    <div class="appointment-card">
-                        <div class="appointment-date">
-                            <i class="far fa-calendar"></i> ${apt.date} เวลา ${apt.time}
+                container.innerHTML = data.appointments.map(apt => {
+                    const canJoin = apt.status === 'confirmed' && this.isAppointmentTimeNow(apt.date, apt.time);
+                    return `
+                        <div class="my-appointment-card ${apt.status}">
+                            <div class="appointment-datetime">
+                                <i class="far fa-calendar"></i>
+                                ${apt.date} เวลา ${apt.time}
+                            </div>
+                            <div class="appointment-pharmacist">
+                                <img src="${apt.pharmacist_image || this.config.BASE_URL + '/assets/images/avatar-placeholder.png'}" alt="">
+                                <span>${apt.pharmacist_name || 'เภสัชกร'}</span>
+                            </div>
+                            <div class="appointment-status-row">
+                                <span class="appointment-status ${apt.status}">${this.getAppointmentStatusText(apt.status)}</span>
+                                ${canJoin ? `
+                                    <button class="btn btn-primary btn-sm" onclick="window.router.navigate('/video-call', { appointment_id: ${apt.id} })">
+                                        <i class="fas fa-video"></i> เข้าร่วม
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
-                        <div class="appointment-title">${apt.service || 'ปรึกษาเภสัชกร'}</div>
-                        <span class="appointment-status ${apt.status}">${this.getAppointmentStatusText(apt.status)}</span>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             } else {
                 container.innerHTML = `
-                    <div class="empty-state" style="padding: 40px 20px; text-align: center;">
-                        <i class="far fa-calendar-alt" style="font-size: 48px; color: var(--text-muted); margin-bottom: 16px;"></i>
-                        <h3 style="margin-bottom: 8px;">ยังไม่มีนัดหมาย</h3>
-                        <p style="color: var(--text-secondary); margin-bottom: 16px;">นัดปรึกษาเภสัชกรผ่าน Video Call</p>
-                        <button class="btn btn-primary" onclick="window.router.navigate('/video-call')">
-                            <i class="fas fa-video"></i> นัดหมายเลย
-                        </button>
+                    <div class="empty-state">
+                        <i class="far fa-calendar-alt"></i>
+                        <p>ยังไม่มีนัดหมาย</p>
                     </div>
                 `;
             }
         } catch (error) {
             console.error('Error loading appointments:', error);
-            container.innerHTML = '<div class="empty-state"><p>ไม่สามารถโหลดข้อมูลได้</p></div>';
+            container.innerHTML = `
+                <div class="empty-state error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>ไม่สามารถโหลดข้อมูลได้</p>
+                </div>
+            `;
         }
+    }
+
+    /**
+     * Check if appointment time is now (within 15 minutes)
+     */
+    isAppointmentTimeNow(dateStr, timeStr) {
+        const appointmentDate = new Date(`${dateStr}T${timeStr}`);
+        const now = new Date();
+        const diffMinutes = (appointmentDate - now) / (1000 * 60);
+        return diffMinutes >= -15 && diffMinutes <= 15;
     }
 
     getAppointmentStatusText(status) {
@@ -6031,21 +6824,25 @@ class LiffApp {
         if (!container) return;
 
         try {
-            const response = await fetch(`${this.config.BASE_URL}/api/rewards.php?action=list`);
+            const response = await fetch(this.config.BASE_URL + '/api/rewards.php?action=list');
             const data = await response.json();
 
             if (data.success && data.rewards?.length > 0) {
-                container.innerHTML = data.rewards.map(reward => `
-                    <div class="reward-card" onclick="window.liffApp.showRewardDetail(${reward.id})">
-                        <img src="${reward.image_url || 'assets/images/placeholder.png'}" 
-                             class="reward-image"
-                             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f0f0f0%22 width=%22100%22 height=%22100%22/></svg>'">
-                        <div class="reward-info">
-                            <div class="reward-name">${reward.name}</div>
-                            <div class="reward-points">${this.formatNumber(reward.points_required)} แต้ม</div>
+                let html = '';
+                data.rewards.forEach(reward => {
+                    html += `
+                        <div class="reward-card" onclick="window.liffApp.showRewardDetail(${reward.id})">
+                            <img src="${reward.image_url || 'assets/images/placeholder.png'}" 
+                                 class="reward-image"
+                                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f0f0f0%22 width=%22100%22 height=%22100%22/></svg>'">
+                            <div class="reward-info">
+                                <div class="reward-name">${reward.name}</div>
+                                <div class="reward-points">${this.formatNumber(reward.points_required)} แต้ม</div>
+                            </div>
                         </div>
-                    </div>
-                `).join('');
+                    `;
+                });
+                container.innerHTML = html;
             } else {
                 container.innerHTML = `
                     <div class="empty-state" style="padding: 40px 20px; text-align: center;">
@@ -6070,11 +6867,14 @@ class LiffApp {
      * Render placeholder page
      */
     renderPlaceholderPage(page, params) {
+        const paramsStr = params && Object.keys(params).length > 0 
+            ? '<p class="text-xs text-muted mt-2">Params: ' + JSON.stringify(params) + '</p>' 
+            : '';
         return `
             <div class="placeholder-page p-4">
                 <h2 class="text-xl font-bold mb-4">${page}</h2>
                 <p class="text-secondary">หน้านี้จะถูกพัฒนาในขั้นตอนถัดไป</p>
-                ${params && Object.keys(params).length > 0 ? `<p class="text-xs text-muted mt-2">Params: ${JSON.stringify(params)}</p>` : ''}
+                ${paramsStr}
             </div>
         `;
     }

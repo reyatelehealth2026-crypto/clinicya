@@ -2,15 +2,60 @@
 /**
  * Shop Products API - Pagination Support
  * สำหรับโหลดสินค้าแบบ pagination ใน LIFF Shop
+ * ใช้ตาราง business_items และ item_categories
  */
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    exit(0);
+}
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 
 $db = Database::getInstance()->getConnection();
+
+// Action handler
+$action = $_GET['action'] ?? 'products';
+
+// Handle categories request
+if ($action === 'categories') {
+    try {
+        // ใช้ item_categories เป็นหลัก
+        $catTable = 'item_categories';
+        try {
+            $db->query("SELECT 1 FROM item_categories LIMIT 1");
+        } catch (Exception $e) {
+            $catTable = 'business_categories';
+        }
+        
+        $sql = "SELECT id, name, cny_code FROM {$catTable} WHERE is_active = 1 ORDER BY id";
+        $stmt = $db->query($sql);
+        $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Format categories
+        $formattedCategories = array_map(function($cat) {
+            return [
+                'id' => (int)$cat['id'],
+                'name' => $cat['name'],
+                'code' => $cat['cny_code'] ?? null
+            ];
+        }, $categories);
+        
+        echo json_encode([
+            'success' => true,
+            'categories' => $formattedCategories
+        ]);
+        exit;
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
+    }
+}
 
 // Check columns exist
 $hasIsFeatured = $hasIsBestseller = false;
