@@ -248,10 +248,16 @@ require_once __DIR__ . '/../includes/header.php';
             </h2>
             <p class="text-white/80 text-sm mt-1">เลือกธีมสำเร็จรูปหรือปรับแต่งเอง</p>
         </div>
-        <a href="<?= BASE_URL ?>liff-shop.php?account=<?= $lineAccountId ?>" target="_blank" 
-           class="px-5 py-2.5 bg-white text-purple-600 rounded-xl font-bold hover:bg-purple-50 transition flex items-center gap-2 shadow">
-            <i class="fas fa-external-link-alt"></i>ดูหน้าร้าน
-        </a>
+        <div class="flex gap-2">
+            <a href="<?= BASE_URL ?>liff/#/shop" target="_blank" 
+               class="px-5 py-2.5 bg-white text-purple-600 rounded-xl font-bold hover:bg-purple-50 transition flex items-center gap-2 shadow">
+                <i class="fas fa-external-link-alt"></i>ดูหน้าร้าน (LIFF ใหม่)
+            </a>
+            <a href="<?= BASE_URL ?>liff-shop.php?account=<?= $lineAccountId ?>" target="_blank" 
+               class="px-4 py-2.5 bg-white/20 text-white rounded-xl hover:bg-white/30 transition flex items-center gap-2 text-sm">
+                <i class="fas fa-store"></i>LIFF เดิม
+            </a>
+        </div>
     </div>
 </div>
 

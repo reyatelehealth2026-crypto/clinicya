@@ -53,27 +53,40 @@ $baseUrl = rtrim(BASE_URL, '/');
         <div class="flex items-start gap-4">
             <div class="text-4xl">🚀</div>
             <div class="flex-1">
-                <h2 class="text-xl font-bold mb-2">แนะนำ: Unified LIFF App</h2>
+                <h2 class="text-xl font-bold mb-2">แนะนำ: Unified LIFF App (ระบบใหม่)</h2>
                 <p class="text-green-100 mb-4">ใช้ LIFF ID เดียวสำหรับทุกฟังก์ชัน! ง่ายต่อการจัดการ ไม่ต้องสร้างหลาย LIFF</p>
                 <div class="bg-white/20 rounded-lg p-4 mb-4">
-                    <p class="text-sm font-medium mb-2">Endpoint URL สำหรับสร้าง LIFF:</p>
+                    <p class="text-sm font-medium mb-2">Endpoint URL สำหรับสร้าง LIFF (ระบบใหม่):</p>
                     <div class="flex gap-2">
-                        <input type="text" value="<?= $baseUrl ?>/liff-app.php" readonly 
+                        <input type="text" value="<?= $baseUrl ?>/liff/" readonly 
                             class="flex-1 px-3 py-2 bg-white/30 rounded-lg font-mono text-sm" onclick="this.select()">
-                        <button onclick="copyText('<?= $baseUrl ?>/liff-app.php')" class="px-4 py-2 bg-white/30 hover:bg-white/40 rounded-lg">
+                        <button onclick="copyText('<?= $baseUrl ?>/liff/')" class="px-4 py-2 bg-white/30 hover:bg-white/40 rounded-lg">
                             <i class="fas fa-copy"></i>
                         </button>
                     </div>
                 </div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                    <span class="bg-white/20 px-2 py-1 rounded">✅ บัตรสมาชิก</span>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                    <span class="bg-white/20 px-2 py-1 rounded">✅ หน้าหลัก</span>
                     <span class="bg-white/20 px-2 py-1 rounded">✅ ร้านค้า</span>
                     <span class="bg-white/20 px-2 py-1 rounded">✅ ตะกร้า</span>
                     <span class="bg-white/20 px-2 py-1 rounded">✅ ออเดอร์</span>
-                    <span class="bg-white/20 px-2 py-1 rounded">✅ แต้มสะสม</span>
-                    <span class="bg-white/20 px-2 py-1 rounded">✅ แลกแต้ม</span>
-                    <span class="bg-white/20 px-2 py-1 rounded">✅ นัดหมาย</span>
                     <span class="bg-white/20 px-2 py-1 rounded">✅ โปรไฟล์</span>
+                    <span class="bg-white/20 px-2 py-1 rounded">✅ นัดหมาย</span>
+                    <span class="bg-white/20 px-2 py-1 rounded">✅ วิดีโอคอล</span>
+                    <span class="bg-white/20 px-2 py-1 rounded">✅ AI Chat</span>
+                    <span class="bg-white/20 px-2 py-1 rounded">✅ แต้มสะสม</span>
+                    <span class="bg-white/20 px-2 py-1 rounded">✅ Health Profile</span>
+                </div>
+                <div class="mt-4 flex gap-2">
+                    <a href="<?= $baseUrl ?>/liff/" target="_blank" class="px-4 py-2 bg-white text-green-600 rounded-lg font-bold hover:bg-green-50 transition">
+                        <i class="fas fa-external-link-alt mr-1"></i>ทดสอบ LIFF ใหม่
+                    </a>
+                    <a href="<?= $baseUrl ?>/liff/#/shop" target="_blank" class="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition">
+                        <i class="fas fa-store mr-1"></i>หน้าร้านค้า
+                    </a>
+                    <a href="<?= $baseUrl ?>/liff/#/appointments" target="_blank" class="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition">
+                        <i class="fas fa-calendar mr-1"></i>นัดหมาย
+                    </a>
                 </div>
             </div>
         </div>
@@ -273,8 +286,9 @@ $baseUrl = rtrim(BASE_URL, '/');
             <div class="space-y-3">
                 <?php 
                 $endpoints = [
-                    ['name' => 'LIFF Shop + Checkout', 'url' => $baseUrl . '/liff-shop.php', 'desc' => 'หน้าร้านค้าและชำระเงิน (ใช้ LIFF เดียวกัน)', 'icon' => '🛒', 'config' => 'ตั้งค่าในแต่ละ LINE Account', 'color' => 'purple'],
-                    ['name' => 'LIFF Video Call', 'url' => $baseUrl . '/liff-video-call-pro.php', 'desc' => 'วิดีโอคอลกับลูกค้า', 'icon' => '📹', 'config' => 'LIFF_ID ใน config.php', 'color' => 'green'],
+                    ['name' => '🆕 LIFF App ใหม่ (แนะนำ)', 'url' => $baseUrl . '/liff/', 'desc' => 'ระบบ LIFF ใหม่ครบทุกฟังก์ชัน (ร้านค้า, นัดหมาย, วิดีโอคอล, AI Chat)', 'icon' => '🚀', 'config' => 'ตั้งค่าในแต่ละ LINE Account', 'color' => 'green'],
+                    ['name' => 'LIFF Shop (เดิม)', 'url' => $baseUrl . '/liff-shop.php', 'desc' => 'หน้าร้านค้าและชำระเงิน (ระบบเดิม)', 'icon' => '🛒', 'config' => 'ตั้งค่าในแต่ละ LINE Account', 'color' => 'purple'],
+                    ['name' => 'LIFF Video Call', 'url' => $baseUrl . '/liff-video-call-pro.php', 'desc' => 'วิดีโอคอลกับลูกค้า', 'icon' => '📹', 'config' => 'LIFF_ID ใน config.php', 'color' => 'blue'],
                     ['name' => 'LIFF Share', 'url' => $baseUrl . '/liff-share.php', 'desc' => 'แชร์ข้อความไปยังเพื่อน', 'icon' => '📤', 'config' => 'LIFF_SHARE_ID ใน config.php', 'color' => 'orange'],
                 ];
                 foreach ($endpoints as $ep): ?>
@@ -296,10 +310,10 @@ $baseUrl = rtrim(BASE_URL, '/');
                 <?php endforeach; ?>
             </div>
             
-            <div class="mt-4 p-4 bg-gray-100 rounded-xl">
-                <p class="text-sm text-gray-600">
-                    <i class="fas fa-lightbulb text-yellow-500 mr-1"></i>
-                    <strong>หมายเหตุ:</strong> Checkout ใช้ LIFF เดียวกับ Shop ไม่ต้องสร้างแยก เพราะระบบจะ redirect ไปหน้า checkout อัตโนมัติ
+            <div class="mt-4 p-4 bg-green-100 rounded-xl border border-green-200">
+                <p class="text-sm text-green-700">
+                    <i class="fas fa-lightbulb text-green-500 mr-1"></i>
+                    <strong>แนะนำ:</strong> ใช้ <code class="bg-green-200 px-1 rounded"><?= $baseUrl ?>/liff/</code> เป็น Endpoint หลัก เพราะรองรับทุกฟังก์ชันในที่เดียว
                 </p>
             </div>
         </div>
@@ -362,21 +376,26 @@ $baseUrl = rtrim(BASE_URL, '/');
     <!-- Test Section -->
     <div class="bg-white rounded-xl shadow-lg p-6">
         <h2 class="text-lg font-bold mb-4">🧪 ทดสอบ LIFF</h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <a href="liff-shop.php" target="_blank" class="block p-4 bg-purple-50 rounded-xl hover:bg-purple-100 text-center">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <a href="liff/" target="_blank" class="block p-4 bg-green-100 rounded-xl hover:bg-green-200 text-center border-2 border-green-300">
+                <div class="text-3xl mb-2">🚀</div>
+                <div class="font-medium text-green-700">LIFF ใหม่</div>
+                <div class="text-xs text-green-600">ระบบใหม่ครบทุกฟังก์ชัน</div>
+            </a>
+            <a href="liff/#/shop" target="_blank" class="block p-4 bg-purple-50 rounded-xl hover:bg-purple-100 text-center">
                 <div class="text-3xl mb-2">🛒</div>
-                <div class="font-medium">LIFF Shop</div>
-                <div class="text-xs text-gray-500">เปิดในเบราว์เซอร์</div>
+                <div class="font-medium">ร้านค้า</div>
+                <div class="text-xs text-gray-500">LIFF ใหม่</div>
             </a>
-            <a href="liff-checkout.php" target="_blank" class="block p-4 bg-blue-50 rounded-xl hover:bg-blue-100 text-center">
-                <div class="text-3xl mb-2">💳</div>
-                <div class="font-medium">Checkout</div>
-                <div class="text-xs text-gray-500">เปิดในเบราว์เซอร์</div>
+            <a href="liff/#/appointments" target="_blank" class="block p-4 bg-blue-50 rounded-xl hover:bg-blue-100 text-center">
+                <div class="text-3xl mb-2">📅</div>
+                <div class="font-medium">นัดหมาย</div>
+                <div class="text-xs text-gray-500">LIFF ใหม่</div>
             </a>
-            <a href="liff-video-call-pro.php" target="_blank" class="block p-4 bg-green-50 rounded-xl hover:bg-green-100 text-center">
+            <a href="liff/#/video-call" target="_blank" class="block p-4 bg-teal-50 rounded-xl hover:bg-teal-100 text-center">
                 <div class="text-3xl mb-2">📹</div>
                 <div class="font-medium">Video Call</div>
-                <div class="text-xs text-gray-500">เปิดในเบราว์เซอร์</div>
+                <div class="text-xs text-gray-500">LIFF ใหม่</div>
             </a>
             <?php if ($currentAccount && !empty($currentAccount['liff_id'])): ?>
             <a href="https://liff.line.me/<?= htmlspecialchars($currentAccount['liff_id']) ?>" target="_blank" 
@@ -392,6 +411,22 @@ $baseUrl = rtrim(BASE_URL, '/');
                 <div class="text-xs text-gray-500">ต้องตั้งค่า LIFF ID ก่อน</div>
             </div>
             <?php endif; ?>
+        </div>
+        
+        <!-- Legacy LIFF Links -->
+        <div class="mt-4 pt-4 border-t">
+            <p class="text-sm text-gray-500 mb-3">LIFF เดิม (สำหรับความเข้ากันได้):</p>
+            <div class="flex flex-wrap gap-2">
+                <a href="liff-shop.php" target="_blank" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">
+                    <i class="fas fa-store mr-1"></i>LIFF Shop เดิม
+                </a>
+                <a href="liff-checkout.php" target="_blank" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">
+                    <i class="fas fa-credit-card mr-1"></i>Checkout เดิม
+                </a>
+                <a href="liff-video-call-pro.php" target="_blank" class="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">
+                    <i class="fas fa-video mr-1"></i>Video Call เดิม
+                </a>
+            </div>
         </div>
     </div>
 </div>

@@ -410,9 +410,9 @@ $bankAccounts = json_decode($settings['bank_accounts'] ?? '{"banks":[]}', true)[
                             <i class="fas fa-shopping-cart"></i>
                             <span class="text-sm">จัดการออเดอร์</span>
                         </a>
-                        <a href="../liff-shop.php?account=<?= $currentBotId ?>" target="_blank" class="flex items-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition">
+                        <a href="<?= rtrim(BASE_URL, '/') ?>/liff/#/shop" target="_blank" class="flex items-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition">
                             <i class="fas fa-external-link-alt"></i>
-                            <span class="text-sm">ดูหน้าร้าน</span>
+                            <span class="text-sm">ดูหน้าร้าน (LIFF ใหม่)</span>
                         </a>
                     </div>
                 </div>
