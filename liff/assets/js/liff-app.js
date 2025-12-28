@@ -298,6 +298,11 @@ class LiffApp {
             window.store.setCurrentPage(route.page);
         }
         
+        // Remove checkout submit bar when leaving checkout page
+        if (route.page !== 'checkout') {
+            this.removeCheckoutSubmitBar();
+        }
+        
         // Hide/show bottom nav based on page
         const bottomNav = document.getElementById('bottom-nav');
         if (bottomNav) {
@@ -2610,6 +2615,7 @@ class LiffApp {
 
         // Setup event listeners after render
         setTimeout(() => {
+            this.renderCheckoutSubmitBar();
             this.setupCheckoutEventListeners();
             this.autoFillFromProfile();
             this.validateCheckoutForm();
@@ -2868,23 +2874,43 @@ class LiffApp {
                         ` : ''}
                     </div>
                 </form>
-
-                <!-- Place Order Button -->
-                <div class="checkout-submit-bar">
-                    <button type="button" 
-                            id="place-order-btn" 
-                            class="btn btn-primary btn-block checkout-submit-btn"
-                            onclick="window.liffApp.placeOrder()"
-                            disabled>
-                        <span id="place-order-text">สั่งซื้อ</span>
-                        <span id="place-order-loading" class="hidden">
-                            <div class="btn-spinner"></div>
-                            กำลังดำเนินการ...
-                        </span>
-                    </button>
-                </div>
             </div>
         `;
+    }
+
+    /**
+     * Render checkout submit bar (appended to body for fixed positioning)
+     */
+    renderCheckoutSubmitBar() {
+        // Remove existing bar if any
+        const existingBar = document.getElementById('checkout-submit-bar-fixed');
+        if (existingBar) existingBar.remove();
+
+        const bar = document.createElement('div');
+        bar.id = 'checkout-submit-bar-fixed';
+        bar.className = 'checkout-submit-bar-fixed';
+        bar.innerHTML = `
+            <button type="button" 
+                    id="place-order-btn" 
+                    class="btn btn-primary btn-block checkout-submit-btn"
+                    onclick="window.liffApp.placeOrder()"
+                    disabled>
+                <span id="place-order-text">สั่งซื้อ</span>
+                <span id="place-order-loading" class="hidden">
+                    <div class="btn-spinner"></div>
+                    กำลังดำเนินการ...
+                </span>
+            </button>
+        `;
+        document.body.appendChild(bar);
+    }
+
+    /**
+     * Remove checkout submit bar
+     */
+    removeCheckoutSubmitBar() {
+        const bar = document.getElementById('checkout-submit-bar-fixed');
+        if (bar) bar.remove();
     }
 
     /**

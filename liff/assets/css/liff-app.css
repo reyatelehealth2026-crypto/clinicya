@@ -3679,6 +3679,25 @@ img[loading="lazy"] {
     padding-bottom: calc(100px + var(--safe-area-bottom)); /* Space for submit bar */
 }
 
+/* Fixed Submit Bar - appended to body for proper fixed positioning */
+.checkout-submit-bar-fixed {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 16px;
+    padding-bottom: calc(16px + var(--safe-area-bottom));
+    background: #ffffff;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    border-top: 2px solid #11B0A6;
+}
+
+/* Legacy submit bar (kept for backward compatibility) */
+.checkout-page .checkout-submit-bar {
+    display: none;
+}
+
 .checkout-header {
     display: flex;
     align-items: center;
