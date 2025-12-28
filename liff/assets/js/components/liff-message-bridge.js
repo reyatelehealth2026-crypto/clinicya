@@ -148,7 +148,20 @@ class LiffMessageBridge {
                 })
             });
 
-            const result = await response.json();
+            // Handle empty or non-JSON responses
+            const text = await response.text();
+            if (!text || text.trim() === '') {
+                console.warn('API returned empty response');
+                return { success: false, method: 'api', error: 'Empty response from server' };
+            }
+
+            let result;
+            try {
+                result = JSON.parse(text);
+            } catch (parseError) {
+                console.error('API returned invalid JSON:', text.substring(0, 200));
+                return { success: false, method: 'api', error: 'Invalid JSON response' };
+            }
             
             if (result.success) {
                 console.log('✅ API message sent:', action);
