@@ -7348,7 +7348,6 @@ class LiffApp {
 
                     <!-- Health Info -->
                     <div class="form-section">
-                        <h3 class="form-section-title">ข้อมูลสุขภาพ (ถ้ามี)</h3>
                         
                         <div class="form-row">
                             <div class="form-group">
