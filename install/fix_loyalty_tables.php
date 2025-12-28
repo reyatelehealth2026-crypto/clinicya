@@ -45,16 +45,28 @@ try {
     addColumnIfNotExists($db, 'points_transactions', 'expires_at', 'DATE DEFAULT NULL AFTER `balance_after`');
     
     echo "\n=== Fixing rewards table ===\n";
+    addColumnIfNotExists($db, 'rewards', 'line_account_id', 'INT DEFAULT NULL AFTER `id`');
     addColumnIfNotExists($db, 'rewards', 'reward_type', "ENUM('discount', 'shipping', 'gift', 'product', 'coupon', 'voucher') DEFAULT 'gift' AFTER `points_required`");
     addColumnIfNotExists($db, 'rewards', 'reward_value', 'VARCHAR(255) DEFAULT NULL AFTER `reward_type`');
-    addColumnIfNotExists($db, 'rewards', 'terms', 'TEXT AFTER `max_per_user`');
-    addColumnIfNotExists($db, 'rewards', 'start_date', 'DATE DEFAULT NULL AFTER `terms`');
-    addColumnIfNotExists($db, 'rewards', 'end_date', 'DATE DEFAULT NULL AFTER `start_date`');
-    addColumnIfNotExists($db, 'rewards', 'sort_order', 'INT DEFAULT 0 AFTER `is_active`');
+    addColumnIfNotExists($db, 'rewards', 'stock', "INT DEFAULT -1 COMMENT '-1 = unlimited'");
+    addColumnIfNotExists($db, 'rewards', 'max_per_user', "INT DEFAULT 0 COMMENT '0 = unlimited'");
+    addColumnIfNotExists($db, 'rewards', 'terms', 'TEXT');
+    addColumnIfNotExists($db, 'rewards', 'start_date', 'DATE DEFAULT NULL');
+    addColumnIfNotExists($db, 'rewards', 'end_date', 'DATE DEFAULT NULL');
+    addColumnIfNotExists($db, 'rewards', 'is_active', 'TINYINT(1) DEFAULT 1');
+    addColumnIfNotExists($db, 'rewards', 'sort_order', 'INT DEFAULT 0');
     
     echo "\n=== Fixing reward_redemptions table ===\n";
-    addColumnIfNotExists($db, 'reward_redemptions', 'expires_at', 'DATE DEFAULT NULL AFTER `delivered_at`');
-    addColumnIfNotExists($db, 'reward_redemptions', 'expiry_reminder_sent', 'TINYINT(1) DEFAULT 0 AFTER `expires_at`');
+    addColumnIfNotExists($db, 'reward_redemptions', 'line_account_id', 'INT DEFAULT NULL AFTER `reward_id`');
+    addColumnIfNotExists($db, 'reward_redemptions', 'points_used', 'INT NOT NULL DEFAULT 0');
+    addColumnIfNotExists($db, 'reward_redemptions', 'redemption_code', 'VARCHAR(50)');
+    addColumnIfNotExists($db, 'reward_redemptions', 'status', "ENUM('pending', 'approved', 'delivered', 'cancelled', 'expired') DEFAULT 'pending'");
+    addColumnIfNotExists($db, 'reward_redemptions', 'notes', 'TEXT');
+    addColumnIfNotExists($db, 'reward_redemptions', 'approved_by', 'INT DEFAULT NULL');
+    addColumnIfNotExists($db, 'reward_redemptions', 'approved_at', 'TIMESTAMP NULL DEFAULT NULL');
+    addColumnIfNotExists($db, 'reward_redemptions', 'delivered_at', 'TIMESTAMP NULL DEFAULT NULL');
+    addColumnIfNotExists($db, 'reward_redemptions', 'expires_at', 'DATE DEFAULT NULL');
+    addColumnIfNotExists($db, 'reward_redemptions', 'expiry_reminder_sent', 'TINYINT(1) DEFAULT 0');
     
     echo "\n=== Fixing users table ===\n";
     addColumnIfNotExists($db, 'users', 'total_points', 'INT DEFAULT 0');
