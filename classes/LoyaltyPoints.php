@@ -403,23 +403,52 @@ class LoyaltyPoints
 
     public function getPointsSummary()
     {
-        $summary = [];
-        $stmt = $this->db->prepare("SELECT COALESCE(SUM(points), 0) FROM points_transactions WHERE type = 'earn' AND (line_account_id = ? OR line_account_id IS NULL)");
-        $stmt->execute([$this->lineAccountId]);
-        $summary['total_issued'] = $stmt->fetchColumn();
+        $summary = ['total_issued' => 0, 'total_redeemed' => 0, 'active_rewards' => 0, 'pending_redemptions' => 0];
+        
+        try {
+            // Check if line_account_id column exists in points_transactions
+            $hasLineAccountId = $this->columnExists('points_transactions', 'line_account_id');
+            
+            if ($hasLineAccountId) {
+                $stmt = $this->db->prepare("SELECT COALESCE(SUM(points), 0) FROM points_transactions WHERE type = 'earn' AND (line_account_id = ? OR line_account_id IS NULL)");
+                $stmt->execute([$this->lineAccountId]);
+            } else {
+                $stmt = $this->db->query("SELECT COALESCE(SUM(points), 0) FROM points_transactions WHERE type = 'earn'");
+            }
+            $summary['total_issued'] = $stmt->fetchColumn();
 
-        $stmt = $this->db->prepare("SELECT COALESCE(SUM(ABS(points)), 0) FROM points_transactions WHERE type = 'redeem' AND (line_account_id = ? OR line_account_id IS NULL)");
-        $stmt->execute([$this->lineAccountId]);
-        $summary['total_redeemed'] = $stmt->fetchColumn();
+            if ($hasLineAccountId) {
+                $stmt = $this->db->prepare("SELECT COALESCE(SUM(ABS(points)), 0) FROM points_transactions WHERE type = 'redeem' AND (line_account_id = ? OR line_account_id IS NULL)");
+                $stmt->execute([$this->lineAccountId]);
+            } else {
+                $stmt = $this->db->query("SELECT COALESCE(SUM(ABS(points)), 0) FROM points_transactions WHERE type = 'redeem'");
+            }
+            $summary['total_redeemed'] = $stmt->fetchColumn();
 
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM rewards WHERE is_active = 1 AND (line_account_id = ? OR line_account_id IS NULL)");
-        $stmt->execute([$this->lineAccountId]);
-        $summary['active_rewards'] = $stmt->fetchColumn();
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM rewards WHERE is_active = 1 AND (line_account_id = ? OR line_account_id IS NULL)");
+            $stmt->execute([$this->lineAccountId]);
+            $summary['active_rewards'] = $stmt->fetchColumn();
 
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM reward_redemptions WHERE status = 'pending' AND (line_account_id = ? OR line_account_id IS NULL)");
-        $stmt->execute([$this->lineAccountId]);
-        $summary['pending_redemptions'] = $stmt->fetchColumn();
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM reward_redemptions WHERE status = 'pending' AND (line_account_id = ? OR line_account_id IS NULL)");
+            $stmt->execute([$this->lineAccountId]);
+            $summary['pending_redemptions'] = $stmt->fetchColumn();
+        } catch (PDOException $e) {
+            // Return defaults if tables don't exist yet
+        }
 
         return $summary;
+    }
+    
+    /**
+     * Check if a column exists in a table
+     */
+    private function columnExists($table, $column)
+    {
+        try {
+            $stmt = $this->db->query("SHOW COLUMNS FROM `{$table}` LIKE '{$column}'");
+            return $stmt->fetch() !== false;
+        } catch (PDOException $e) {
+            return false;
+        }
     }
 }
