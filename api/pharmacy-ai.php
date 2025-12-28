@@ -91,6 +91,18 @@ if ($action === 'get_mims_info') {
     exit;
 }
 
+if ($action === 'get_history') {
+    // Get conversation history for user
+    echo json_encode(getConversationHistory($db, $userId));
+    exit;
+}
+
+if ($action === 'clear_history') {
+    // Clear conversation history for user
+    echo json_encode(clearConversationHistory($db, $userId));
+    exit;
+}
+
 if (empty($message)) {
     echo json_encode(['success' => false, 'error' => 'No message']);
     exit;
@@ -101,6 +113,9 @@ try {
     $userContext = getUserFullContext($db, $userId);
     $lineAccountId = $userContext['line_account_id'] ?? null;
     $internalUserId = $userContext['id'] ?? null;
+    
+    // Save user message to history
+    saveConversationMessage($db, $userId, 'user', $message);
     
     // Get business context
     $businessContext = getBusinessContext($db, $lineAccountId);
@@ -122,6 +137,9 @@ try {
         // Use enhanced rule-based processing
         $result = processPharmacyMessage($db, $message, $state, $triageData, $lineAccountId, $userContext, $businessContext);
     }
+    
+    // Save AI response to history
+    saveConversationMessage($db, $userId, 'assistant', $result['response']);
     
     // Get product recommendations if applicable
     $products = [];
@@ -1258,4 +1276,151 @@ function extractProductKeywords($products) {
     }
     
     return array_unique($keywords);
+}
+
+
+// ============================================================================
+// CONVERSATION HISTORY FUNCTIONS
+// ============================================================================
+
+/**
+ * Get conversation history for user
+ */
+function getConversationHistory($db, $lineUserId) {
+    if (!$lineUserId) {
+        return ['success' => false, 'error' => 'No user ID', 'messages' => []];
+    }
+    
+    try {
+        // Get user's internal ID
+        $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ? LIMIT 1");
+        $stmt->execute([$lineUserId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            return ['success' => true, 'messages' => []];
+        }
+        
+        // Get recent conversation history (last 50 messages)
+        $stmt = $db->prepare("
+            SELECT role, content, created_at 
+            FROM ai_conversation_history 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 50
+        ");
+        $stmt->execute([$user['id']]);
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Reverse to get chronological order
+        $messages = array_reverse($messages);
+        
+        // Format for frontend
+        $formatted = [];
+        foreach ($messages as $msg) {
+            $formatted[] = [
+                'type' => $msg['role'] === 'user' ? 'user' : 'ai',
+                'content' => $msg['content'],
+                'timestamp' => $msg['created_at']
+            ];
+        }
+        
+        return ['success' => true, 'messages' => $formatted];
+        
+    } catch (Exception $e) {
+        error_log("getConversationHistory error: " . $e->getMessage());
+        return ['success' => false, 'error' => $e->getMessage(), 'messages' => []];
+    }
+}
+
+/**
+ * Save conversation message
+ */
+function saveConversationMessage($db, $lineUserId, $role, $content) {
+    if (!$lineUserId) return false;
+    
+    try {
+        // Get user's internal ID
+        $stmt = $db->prepare("SELECT id, line_account_id FROM users WHERE line_user_id = ? LIMIT 1");
+        $stmt->execute([$lineUserId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) return false;
+        
+        // Check if table exists, create if not
+        try {
+            $db->query("SELECT 1 FROM ai_conversation_history LIMIT 1");
+        } catch (Exception $e) {
+            // Create table
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS ai_conversation_history (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    line_account_id INT NULL,
+                    role ENUM('user', 'assistant') NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_user_id (user_id),
+                    INDEX idx_created_at (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+        }
+        
+        // Insert message
+        $stmt = $db->prepare("
+            INSERT INTO ai_conversation_history (user_id, line_account_id, role, content) 
+            VALUES (?, ?, ?, ?)
+        ");
+        $stmt->execute([$user['id'], $user['line_account_id'], $role, $content]);
+        
+        // Clean up old messages (keep last 100 per user)
+        $stmt = $db->prepare("
+            DELETE FROM ai_conversation_history 
+            WHERE user_id = ? AND id NOT IN (
+                SELECT id FROM (
+                    SELECT id FROM ai_conversation_history 
+                    WHERE user_id = ? 
+                    ORDER BY created_at DESC 
+                    LIMIT 100
+                ) as recent
+            )
+        ");
+        $stmt->execute([$user['id'], $user['id']]);
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("saveConversationMessage error: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Clear conversation history for user
+ */
+function clearConversationHistory($db, $lineUserId) {
+    if (!$lineUserId) {
+        return ['success' => false, 'error' => 'No user ID'];
+    }
+    
+    try {
+        // Get user's internal ID
+        $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ? LIMIT 1");
+        $stmt->execute([$lineUserId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$user) {
+            return ['success' => true, 'message' => 'No history to clear'];
+        }
+        
+        // Delete all messages for user
+        $stmt = $db->prepare("DELETE FROM ai_conversation_history WHERE user_id = ?");
+        $stmt->execute([$user['id']]);
+        
+        return ['success' => true, 'message' => 'History cleared'];
+        
+    } catch (Exception $e) {
+        error_log("clearConversationHistory error: " . $e->getMessage());
+        return ['success' => false, 'error' => $e->getMessage()];
+    }
 }

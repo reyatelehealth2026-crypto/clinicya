@@ -133,7 +133,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- App Styles -->
-    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/liff-app.css?v=20241228aj">
+    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/liff-app.css?v=20241228ak">
 </head>
 <body>
     <!-- Loading Overlay - Shows immediately (Requirement 1.1) -->
@@ -211,7 +211,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     </script>
 
     <!-- App Scripts -->
-    <?php $v = '20241228aj'; // Cache bust version ?>
+    <?php $v = '20241228ak'; // Cache bust version ?>
     <script>window.debugLog('Loading scripts...', 'info');</script>
     <script src="<?= $baseUrl ?>/liff/assets/js/store.js?v=<?= $v ?>" onerror="window.debugLog('FAILED: store.js', 'error')"></script>
     <script>window.debugLog('store.js loaded', 'success');</script>

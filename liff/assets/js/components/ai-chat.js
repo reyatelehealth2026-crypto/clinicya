@@ -44,7 +44,7 @@ class AIChat {
         this.container = container;
         this.render();
         this.setupEventListeners();
-        this.showWelcomeMessage();
+        this.loadConversationHistory();
     }
 
     /**
@@ -265,6 +265,59 @@ class AIChat {
         };
         
         this.addMessage(welcomeMessage);
+    }
+
+    /**
+     * Load conversation history from server
+     */
+    async loadConversationHistory() {
+        if (!this.userId) {
+            this.showWelcomeMessage();
+            return;
+        }
+
+        try {
+            const baseUrl = window.APP_CONFIG?.BASE_URL || '';
+            const response = await fetch(`${baseUrl}/api/pharmacy-ai.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'get_history',
+                    user_id: this.userId
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.messages && data.messages.length > 0) {
+                // Hide quick symptoms if there's history
+                const quickSymptomsSection = document.getElementById('ai-quick-symptoms');
+                if (quickSymptomsSection) {
+                    quickSymptomsSection.classList.add('hidden');
+                }
+
+                // Render history messages
+                data.messages.forEach(msg => {
+                    this.messages.push(msg);
+                    this.renderMessage(msg);
+                });
+
+                this.scrollToBottom();
+
+                // Show continue message
+                this.addMessage({
+                    type: 'ai',
+                    content: '--- ประวัติการสนทนาก่อนหน้า ---\n\nมีอะไรให้ช่วยเพิ่มเติมไหมคะ?',
+                    timestamp: new Date()
+                });
+            } else {
+                // No history, show welcome
+                this.showWelcomeMessage();
+            }
+        } catch (error) {
+            console.error('[AI Chat] Load history error:', error);
+            this.showWelcomeMessage();
+        }
     }
 
     /**
@@ -1138,6 +1191,19 @@ class AIChat {
         const quickSymptomsSection = document.getElementById('ai-quick-symptoms');
         if (quickSymptomsSection) {
             quickSymptomsSection.classList.remove('hidden');
+        }
+        
+        // Clear server-side history
+        if (this.userId) {
+            const baseUrl = window.APP_CONFIG?.BASE_URL || '';
+            fetch(`${baseUrl}/api/pharmacy-ai.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'clear_history',
+                    user_id: this.userId
+                })
+            }).catch(err => console.error('[AI Chat] Clear history error:', err));
         }
         
         this.showWelcomeMessage();
