@@ -178,7 +178,7 @@ function createOrderConfirmationFlex($db, $data, $lineAccountId) {
     $orderId = $data['orderId'] ?? '';
     $total = $data['total'] ?? 0;
     $items = $data['items'] ?? [];
-    $itemCount = $data['itemCount'] ?? count($items);
+    $itemCount = $data['itemCount'] ?? (is_array($items) ? count($items) : (int)$items);
     
     // Get shop name
     $shopName = 'ร้านค้า';
