@@ -128,25 +128,52 @@ function handleHistory($db) {
 function handleGetRewards($db) {
     $lineAccountId = $_GET['line_account_id'] ?? 1;
     
-    // Check if rewards table exists
+    // Try new rewards table first, then fallback to point_rewards
     try {
-        $stmt = $db->prepare("
-            SELECT * FROM point_rewards 
-            WHERE (line_account_id = ? OR line_account_id IS NULL) 
-            AND is_active = 1 
-            AND (stock IS NULL OR stock > 0)
-            ORDER BY points_required ASC
-        ");
-        $stmt->execute([$lineAccountId]);
+        // Check if rewards table has line_account_id column
+        $stmt = $db->query("SHOW COLUMNS FROM rewards LIKE 'line_account_id'");
+        $hasLineAccountId = $stmt->fetch() !== false;
+        
+        $stmt = $db->query("SHOW COLUMNS FROM rewards LIKE 'is_active'");
+        $hasIsActive = $stmt->fetch() !== false;
+        
+        $sql = "SELECT * FROM rewards WHERE 1=1";
+        $params = [];
+        
+        if ($hasLineAccountId) {
+            $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
+            $params[] = $lineAccountId;
+        }
+        
+        if ($hasIsActive) {
+            $sql .= " AND is_active = 1";
+        }
+        
+        $sql .= " AND (stock IS NULL OR stock < 0 OR stock > 0) ORDER BY points_required ASC";
+        
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
         $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        if (empty($rewards)) {
+            // Try old table
+            throw new Exception('No rewards in new table');
+        }
     } catch (Exception $e) {
-        // Table doesn't exist, return sample rewards
-        $rewards = [
-            ['id' => 1, 'name' => 'ส่วนลด 50 บาท', 'description' => 'คูปองส่วนลด 50 บาท', 'points_required' => 100, 'type' => 'discount', 'value' => 50, 'image' => null],
-            ['id' => 2, 'name' => 'ส่วนลด 100 บาท', 'description' => 'คูปองส่วนลด 100 บาท', 'points_required' => 200, 'type' => 'discount', 'value' => 100, 'image' => null],
-            ['id' => 3, 'name' => 'จัดส่งฟรี', 'description' => 'ฟรีค่าจัดส่ง 1 ครั้ง', 'points_required' => 150, 'type' => 'shipping', 'value' => 0, 'image' => null],
-            ['id' => 4, 'name' => 'ของขวัญพิเศษ', 'description' => 'รับของขวัญพิเศษจากร้าน', 'points_required' => 500, 'type' => 'gift', 'value' => 0, 'image' => null],
-        ];
+        // Fallback to point_rewards table
+        try {
+            $stmt = $db->prepare("
+                SELECT * FROM point_rewards 
+                WHERE (line_account_id = ? OR line_account_id IS NULL) 
+                AND is_active = 1 
+                AND (stock IS NULL OR stock > 0)
+                ORDER BY points_required ASC
+            ");
+            $stmt->execute([$lineAccountId]);
+            $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e2) {
+            $rewards = [];
+        }
     }
     
     jsonResponse(true, 'OK', ['rewards' => $rewards]);
