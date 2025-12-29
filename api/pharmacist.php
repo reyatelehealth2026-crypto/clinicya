@@ -233,12 +233,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $notifData = $stmt->fetch(PDO::FETCH_ASSOC);
                 $triageData = json_decode($notifData['triage_data'] ?? '{}', true);
                 
-                // Load PharmacistNotifier
-                require_once __DIR__ . '/../modules/AIChat/Services/PharmacistNotifier.php';
-                $notifier = new \Modules\AIChat\Services\PharmacistNotifier();
-                
-                // Send approval to customer
-                $result = $notifier->sendApprovalToCustomer($userId, $triageData, $drugs);
+                // Try to send LINE message (but don't fail if it doesn't work)
+                $lineSent = false;
+                try {
+                    require_once __DIR__ . '/../modules/AIChat/Services/PharmacistNotifier.php';
+                    $notifier = new \Modules\AIChat\Services\PharmacistNotifier();
+                    $lineSent = $notifier->sendApprovalToCustomer($userId, $triageData, $drugs);
+                } catch (Exception $lineError) {
+                    error_log("LINE send error (non-fatal): " . $lineError->getMessage());
+                }
                 
                 // Update notification status
                 $stmt = $db->prepare("UPDATE pharmacist_notifications SET status = 'handled', handled_at = NOW() WHERE id = ?");
@@ -248,22 +251,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $db->prepare("UPDATE triage_sessions SET status = 'completed', completed_at = NOW() WHERE id = (SELECT triage_session_id FROM pharmacist_notifications WHERE id = ?)");
                 $stmt->execute([$notificationId]);
                 
-                // Save medical history
-                $stmt = $db->prepare("
-                    INSERT INTO medical_history (user_id, triage_session_id, symptoms, medications_prescribed, pharmacist_notes)
-                    SELECT ?, pn.triage_session_id, ?, ?, ?
-                    FROM pharmacist_notifications pn WHERE pn.id = ?
-                ");
-                $stmt->execute([
-                    $userId,
-                    json_encode($triageData['symptoms'] ?? [], JSON_UNESCAPED_UNICODE),
-                    json_encode($drugs, JSON_UNESCAPED_UNICODE),
-                    $pharmacistNote,
-                    $notificationId
-                ]);
+                // Save medical history (ignore if table doesn't exist)
+                try {
+                    $stmt = $db->prepare("
+                        INSERT INTO medical_history (user_id, triage_session_id, symptoms, medications_prescribed, pharmacist_notes)
+                        SELECT ?, pn.triage_session_id, ?, ?, ?
+                        FROM pharmacist_notifications pn WHERE pn.id = ?
+                    ");
+                    $stmt->execute([
+                        $userId,
+                        json_encode($triageData['symptoms'] ?? [], JSON_UNESCAPED_UNICODE),
+                        json_encode($drugs, JSON_UNESCAPED_UNICODE),
+                        $pharmacistNote,
+                        $notificationId
+                    ]);
+                } catch (Exception $historyError) {
+                    error_log("Medical history save error (non-fatal): " . $historyError->getMessage());
+                }
                 
-                echo json_encode(['success' => true, 'message' => 'Drugs approved and sent to customer']);
+                echo json_encode([
+                    'success' => true, 
+                    'message' => 'Drugs approved' . ($lineSent ? ' and sent to customer' : ' (LINE notification pending)')
+                ]);
             } catch (Exception $e) {
+                error_log("approve_drugs error: " . $e->getMessage());
                 echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             }
             break;
