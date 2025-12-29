@@ -1,7 +1,7 @@
 <?php
 /**
  * Triage Analytics - รายงานสถิติการซักประวัติ
- * Version 1.0
+ * Version 1.1 - Fixed to count all session statuses
  */
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
@@ -9,24 +9,6 @@ require_once __DIR__ . '/includes/auth_check.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'Triage Analytics';
-$currentBotId = $_SESSION['current_bot_id'] ?? null;
-
-// Debug: Check all sessions in database
-$debugInfo = [];
-$debugInfo['db_connected'] = ($db !== null);
-try {
-    $stmt = $db->query("SELECT COUNT(*) as cnt FROM triage_sessions");
-    $debugInfo['direct_count'] = $stmt->fetch(PDO::FETCH_ASSOC)['cnt'];
-    
-    $stmt = $db->query("SELECT id, user_id, line_account_id, current_state, status, created_at FROM triage_sessions ORDER BY created_at DESC LIMIT 10");
-    $debugInfo['all_sessions'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $debugInfo['current_bot_id'] = $currentBotId;
-    $debugInfo['start_date'] = $startDate ?? 'not set';
-    $debugInfo['end_date'] = $endDate ?? 'not set';
-} catch (Exception $e) {
-    $debugInfo['error'] = $e->getMessage();
-}
-error_log("Triage Analytics Debug: " . json_encode($debugInfo));
 
 // Date range - default to last 30 days
 $startDate = $_GET['start'] ?? date('Y-m-d', strtotime('-30 days'));
@@ -40,6 +22,7 @@ $stats = [
     'cancelled' => 0,
     'avg_completion_time' => 0,
     'urgent_cases' => 0,
+    'in_progress' => 0,
 ];
 
 $topSymptoms = [];
@@ -64,12 +47,6 @@ try {
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
     
     // Debug log
-    error_log("Triage Query Result: " . json_encode([
-        'startDate' => $startDate,
-        'endDate' => $endDate,
-        'result' => $result
-    ]));
-    
     $stats['total_sessions'] = $result['total'] ?? 0;
     $stats['completed'] = $result['completed'] ?? 0;
     $stats['escalated'] = $result['escalated'] ?? 0;
@@ -129,26 +106,12 @@ try {
     $dailyStats = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
 } catch (Exception $e) {
-    // Tables might not exist
+    // Log error but continue
     error_log("Triage Analytics Error: " . $e->getMessage());
-    $stats['error'] = $e->getMessage();
 }
 
 require_once __DIR__ . '/includes/header.php';
 ?>
-
-<!-- Debug Info -->
-<div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4 mx-4">
-    <strong>Debug:</strong> 
-    Direct Count: <?= $debugInfo['direct_count'] ?? 'N/A' ?> |
-    Start: <?= htmlspecialchars($startDate) ?> | 
-    End: <?= htmlspecialchars($endDate) ?> | 
-    Total: <?= $stats['total_sessions'] ?> | 
-    In Progress: <?= $stats['in_progress'] ?? 0 ?> |
-    <?php if (isset($stats['error'])): ?>
-    <span class="text-red-600">Error: <?= htmlspecialchars($stats['error']) ?></span>
-    <?php endif; ?>
-</div>
 
 <style>
 .stat-card { transition: all 0.3s; }
