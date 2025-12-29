@@ -207,6 +207,15 @@ require_once __DIR__ . '/includes/header.php';
                         $severity = $notifData['severity'] ?? $triageData['severity'] ?? null;
                         $severityLevel = $notifData['severity_level'] ?? null;
                         
+                        // Get red_flags from notification_data or triage_data
+                        $redFlags = $notifData['red_flags'] ?? $triageData['red_flags'] ?? [];
+                        
+                        // Check if emergency state
+                        $isEmergency = ($notif['current_state'] ?? '') === 'emergency';
+                        if ($isEmergency && empty($redFlags)) {
+                            $redFlags = [['message' => 'ผู้ป่วยอยู่ในสถานะฉุกเฉิน']];
+                        }
+                        
                         // Get notification type
                         $notifType = $notif['type'] ?? 'triage_alert';
                     ?>
@@ -258,13 +267,13 @@ require_once __DIR__ . '/includes/header.php';
                                 </p>
                                 <?php endif; ?>
                                 
-                                <?php if (!empty($notifData['red_flags'])): ?>
+                                <?php if (!empty($redFlags)): ?>
                                 <div class="text-sm text-red-600 mb-1">
-                                    <?php foreach (array_slice($notifData['red_flags'], 0, 2) as $flag): ?>
+                                    <?php foreach (array_slice($redFlags, 0, 2) as $flag): ?>
                                     <p><i class="fas fa-exclamation-triangle mr-1"></i><?= htmlspecialchars(is_array($flag) ? ($flag['message'] ?? '') : $flag) ?></p>
                                     <?php endforeach; ?>
-                                    <?php if (count($notifData['red_flags']) > 2): ?>
-                                    <p class="text-xs text-red-400">+<?= count($notifData['red_flags']) - 2 ?> รายการเพิ่มเติม</p>
+                                    <?php if (count($redFlags) > 2): ?>
+                                    <p class="text-xs text-red-400">+<?= count($redFlags) - 2 ?> รายการเพิ่มเติม</p>
                                     <?php endif; ?>
                                 </div>
                                 <?php endif; ?>
