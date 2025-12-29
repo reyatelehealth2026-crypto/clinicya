@@ -43,14 +43,15 @@ $dailyStats = [];
 $completionRate = 0;
 
 try {
-    // Total sessions - temporarily remove line_account_id filter for debugging
+    // Total sessions - count all statuses including NULL and 'active'
     $stmt = $db->prepare("
         SELECT 
             COUNT(*) as total,
             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-            SUM(CASE WHEN status = 'escalated' THEN 1 ELSE 0 END) as escalated,
+            SUM(CASE WHEN status = 'escalated' OR current_state = 'emergency' THEN 1 ELSE 0 END) as escalated,
             SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
-            SUM(CASE WHEN priority = 'urgent' THEN 1 ELSE 0 END) as urgent
+            SUM(CASE WHEN status IS NULL OR status = 'active' OR status = '' THEN 1 ELSE 0 END) as in_progress,
+            SUM(CASE WHEN priority = 'urgent' OR current_state = 'emergency' THEN 1 ELSE 0 END) as urgent
         FROM triage_sessions 
         WHERE DATE(created_at) BETWEEN ? AND ?
     ");
@@ -61,6 +62,7 @@ try {
     $stats['completed'] = $result['completed'] ?? 0;
     $stats['escalated'] = $result['escalated'] ?? 0;
     $stats['cancelled'] = $result['cancelled'] ?? 0;
+    $stats['in_progress'] = $result['in_progress'] ?? 0;
     $stats['urgent_cases'] = $result['urgent'] ?? 0;
     
     if ($stats['total_sessions'] > 0) {
@@ -99,12 +101,13 @@ try {
     arsort($symptomCounts);
     $topSymptoms = array_slice($symptomCounts, 0, 10, true);
     
-    // Daily stats
+    // Daily stats - count all sessions
     $stmt = $db->prepare("
         SELECT 
             DATE(created_at) as date,
             COUNT(*) as total,
-            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status IS NULL OR status = 'active' OR status = '' THEN 1 ELSE 0 END) as in_progress
         FROM triage_sessions 
         WHERE DATE(created_at) BETWEEN ? AND ?
         GROUP BY DATE(created_at)
@@ -150,7 +153,7 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-8">
         <div class="stat-card bg-white rounded-xl shadow p-4">
             <div class="text-3xl font-bold text-gray-800"><?= number_format($stats['total_sessions']) ?></div>
             <div class="text-sm text-gray-500">Session ทั้งหมด</div>
@@ -159,6 +162,11 @@ require_once __DIR__ . '/includes/header.php';
         <div class="stat-card bg-white rounded-xl shadow p-4">
             <div class="text-3xl font-bold text-green-600"><?= number_format($stats['completed']) ?></div>
             <div class="text-sm text-gray-500">เสร็จสมบูรณ์</div>
+        </div>
+        
+        <div class="stat-card bg-white rounded-xl shadow p-4">
+            <div class="text-3xl font-bold text-gray-600"><?= number_format($stats['in_progress'] ?? 0) ?></div>
+            <div class="text-sm text-gray-500">กำลังดำเนินการ</div>
         </div>
         
         <div class="stat-card bg-white rounded-xl shadow p-4">
@@ -315,7 +323,7 @@ new Chart(document.getElementById('statusChart'), {
                 <?= $stats['completed'] ?>,
                 <?= $stats['escalated'] ?>,
                 <?= $stats['cancelled'] ?>,
-                <?= max(0, $stats['total_sessions'] - $stats['completed'] - $stats['escalated'] - $stats['cancelled']) ?>
+                <?= $stats['in_progress'] ?? 0 ?>
             ],
             backgroundColor: ['#10B981', '#F59E0B', '#EF4444', '#6B7280']
         }]
