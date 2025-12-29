@@ -11,6 +11,27 @@ $db = Database::getInstance()->getConnection();
 echo "<h2>Creating Notifications from Existing Sessions</h2>";
 
 try {
+    // First, ensure table has all required columns
+    echo "<p>Checking table structure...</p>";
+    
+    // Add missing columns if they don't exist
+    $alterQueries = [
+        "ALTER TABLE pharmacist_notifications ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'triage_alert'",
+        "ALTER TABLE pharmacist_notifications ADD COLUMN IF NOT EXISTS notification_data JSON",
+        "ALTER TABLE pharmacist_notifications ADD COLUMN IF NOT EXISTS triage_session_id INT NULL",
+        "ALTER TABLE pharmacist_notifications ADD COLUMN IF NOT EXISTS priority ENUM('normal', 'urgent') DEFAULT 'normal'",
+    ];
+    
+    foreach ($alterQueries as $query) {
+        try {
+            $db->exec($query);
+        } catch (Exception $e) {
+            // Column might already exist, ignore
+        }
+    }
+    
+    echo "<p>✅ Table structure updated</p>";
+    
     // Get all active sessions without notifications
     $stmt = $db->query("
         SELECT ts.*, u.display_name, u.picture_url
