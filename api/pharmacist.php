@@ -108,20 +108,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
             
             try {
+                // Get from triage_sessions directly
                 $stmt = $db->prepare("
-                    SELECT pn.*, u.display_name, u.picture_url, u.phone, u.drug_allergies,
-                           u.medical_conditions, ts.triage_data, ts.current_state
-                    FROM pharmacist_notifications pn
-                    LEFT JOIN users u ON pn.user_id = u.id
-                    LEFT JOIN triage_sessions ts ON pn.triage_session_id = ts.id
-                    WHERE pn.id = ?
+                    SELECT ts.id, ts.user_id, ts.triage_data, ts.current_state, ts.status as session_status,
+                           ts.created_at, ts.line_account_id,
+                           u.display_name, u.picture_url, u.phone, u.drug_allergies, u.medical_conditions
+                    FROM triage_sessions ts
+                    LEFT JOIN users u ON ts.user_id = u.id
+                    WHERE ts.id = ?
                 ");
                 $stmt->execute([$id]);
                 $data = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 if ($data) {
                     $data['triage_data'] = json_decode($data['triage_data'] ?? '{}', true);
-                    $data['notification_data'] = json_decode($data['notification_data'] ?? '{}', true);
                     echo json_encode(['success' => true, 'data' => $data]);
                 } else {
                     echo json_encode(['success' => false, 'error' => 'Not found']);
@@ -183,6 +183,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             }
             break;
+        
+        case 'update_session_status':
+            $sessionId = (int)($input['session_id'] ?? 0);
+            $status = $input['status'] ?? '';
+            
+            if (!$sessionId || !in_array($status, ['completed', 'cancelled', 'active'])) {
+                echo json_encode(['success' => false, 'error' => 'Invalid parameters']);
+                exit;
+            }
+            
+            try {
+                $completedAt = ($status === 'completed') ? ', completed_at = NOW()' : '';
+                $stmt = $db->prepare("UPDATE triage_sessions SET status = ? {$completedAt} WHERE id = ?");
+                $stmt->execute([$status, $sessionId]);
+                
+                echo json_encode(['success' => true]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            }
+            break;
             
         case 'send_message':
             $userId = (int)($input['user_id'] ?? 0);
@@ -211,27 +231,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             break;
             
         case 'approve_drugs':
-            $notificationId = (int)($input['notification_id'] ?? 0);
+            // Support both notification_id (old) and session_id (new)
+            $sessionId = (int)($input['session_id'] ?? $input['notification_id'] ?? 0);
             $userId = (int)($input['user_id'] ?? 0);
             $drugs = $input['drugs'] ?? [];
             $pharmacistNote = $input['note'] ?? '';
             
-            if (!$notificationId || !$userId || empty($drugs)) {
+            if (!$sessionId || !$userId || empty($drugs)) {
                 echo json_encode(['success' => false, 'error' => 'Invalid parameters']);
                 exit;
             }
             
             try {
-                // Get triage data
-                $stmt = $db->prepare("
-                    SELECT ts.triage_data 
-                    FROM pharmacist_notifications pn
-                    LEFT JOIN triage_sessions ts ON pn.triage_session_id = ts.id
-                    WHERE pn.id = ?
-                ");
-                $stmt->execute([$notificationId]);
-                $notifData = $stmt->fetch(PDO::FETCH_ASSOC);
-                $triageData = json_decode($notifData['triage_data'] ?? '{}', true);
+                // Get triage data from session directly
+                $stmt = $db->prepare("SELECT triage_data FROM triage_sessions WHERE id = ?");
+                $stmt->execute([$sessionId]);
+                $sessionData = $stmt->fetch(PDO::FETCH_ASSOC);
+                $triageData = json_decode($sessionData['triage_data'] ?? '{}', true);
                 
                 // Try to send LINE message (but don't fail if it doesn't work)
                 $lineSent = false;
@@ -243,27 +259,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     error_log("LINE send error (non-fatal): " . $lineError->getMessage());
                 }
                 
-                // Update notification status
-                $stmt = $db->prepare("UPDATE pharmacist_notifications SET status = 'handled', handled_at = NOW() WHERE id = ?");
-                $stmt->execute([$notificationId]);
-                
-                // Update triage session
-                $stmt = $db->prepare("UPDATE triage_sessions SET status = 'completed', completed_at = NOW() WHERE id = (SELECT triage_session_id FROM pharmacist_notifications WHERE id = ?)");
-                $stmt->execute([$notificationId]);
+                // Update triage session status
+                $stmt = $db->prepare("UPDATE triage_sessions SET status = 'completed', completed_at = NOW() WHERE id = ?");
+                $stmt->execute([$sessionId]);
                 
                 // Save medical history (ignore if table doesn't exist)
                 try {
                     $stmt = $db->prepare("
                         INSERT INTO medical_history (user_id, triage_session_id, symptoms, medications_prescribed, pharmacist_notes)
-                        SELECT ?, pn.triage_session_id, ?, ?, ?
-                        FROM pharmacist_notifications pn WHERE pn.id = ?
+                        VALUES (?, ?, ?, ?, ?)
                     ");
                     $stmt->execute([
                         $userId,
+                        $sessionId,
                         json_encode($triageData['symptoms'] ?? [], JSON_UNESCAPED_UNICODE),
                         json_encode($drugs, JSON_UNESCAPED_UNICODE),
-                        $pharmacistNote,
-                        $notificationId
+                        $pharmacistNote
                     ]);
                 } catch (Exception $historyError) {
                     error_log("Medical history save error (non-fatal): " . $historyError->getMessage());
@@ -280,12 +291,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             break;
             
         case 'reject':
-            $notificationId = (int)($input['notification_id'] ?? 0);
+            // Support both notification_id (old) and session_id (new)
+            $sessionId = (int)($input['session_id'] ?? $input['notification_id'] ?? 0);
             $userId = (int)($input['user_id'] ?? 0);
             $reason = $input['reason'] ?? 'ไม่สามารถแนะนำยาได้ กรุณาพบแพทย์';
             
-            if (!$notificationId) {
-                echo json_encode(['success' => false, 'error' => 'Invalid notification ID']);
+            if (!$sessionId) {
+                echo json_encode(['success' => false, 'error' => 'Invalid session ID']);
                 exit;
             }
             
@@ -297,9 +309,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = "⚠️ เภสัชกรแจ้ง:\n{$reason}\n\nกรุณาพบแพทย์หรือติดต่อเภสัชกรโดยตรง";
                 $notifier->sendToCustomer($userId, $message);
                 
-                // Update status
-                $stmt = $db->prepare("UPDATE pharmacist_notifications SET status = 'dismissed', handled_at = NOW() WHERE id = ?");
-                $stmt->execute([$notificationId]);
+                // Update triage session status
+                $stmt = $db->prepare("UPDATE triage_sessions SET status = 'cancelled' WHERE id = ?");
+                $stmt->execute([$sessionId]);
                 
                 echo json_encode(['success' => true]);
             } catch (Exception $e) {

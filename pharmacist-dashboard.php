@@ -26,12 +26,12 @@ $stats = [
 ];
 
 try {
-    // Pending notifications - no line_account_id filter
-    $stmt = $db->query("SELECT COUNT(*) FROM pharmacist_notifications WHERE status = 'pending'");
+    // Pending - count from triage_sessions where status is NULL, active, or empty (not completed/cancelled)
+    $stmt = $db->query("SELECT COUNT(*) FROM triage_sessions WHERE status IS NULL OR status = 'active' OR status = ''");
     $stats['pending'] = $stmt->fetchColumn();
     
-    // Urgent notifications
-    $stmt = $db->query("SELECT COUNT(*) FROM pharmacist_notifications WHERE status = 'pending' AND priority = 'urgent'");
+    // Urgent - count emergency cases from triage_sessions
+    $stmt = $db->query("SELECT COUNT(*) FROM triage_sessions WHERE current_state = 'emergency' AND (status IS NULL OR status = 'active' OR status = '')");
     $stats['urgent'] = $stmt->fetchColumn();
     
     // Today completed
@@ -47,19 +47,20 @@ try {
     error_log("Pharmacist Dashboard Stats Error: " . $e->getMessage());
 }
 
-// Get pending notifications
+// Get pending notifications - now from triage_sessions directly
 $notifications = [];
 try {
     $stmt = $db->query("
-        SELECT pn.*, u.display_name, u.picture_url, u.phone,
-               ts.current_state, ts.triage_data
-        FROM pharmacist_notifications pn
-        LEFT JOIN users u ON pn.user_id = u.id
-        LEFT JOIN triage_sessions ts ON pn.triage_session_id = ts.id
-        WHERE pn.status = 'pending'
+        SELECT ts.id, ts.user_id, ts.current_state, ts.triage_data, ts.status as session_status,
+               ts.created_at, ts.line_account_id,
+               u.display_name, u.picture_url, u.phone,
+               CASE WHEN ts.current_state = 'emergency' THEN 'urgent' ELSE 'normal' END as priority
+        FROM triage_sessions ts
+        LEFT JOIN users u ON ts.user_id = u.id
+        WHERE ts.status IS NULL OR ts.status = 'active' OR ts.status = ''
         ORDER BY 
-            CASE WHEN pn.priority = 'urgent' THEN 0 ELSE 1 END,
-            pn.created_at DESC
+            CASE WHEN ts.current_state = 'emergency' THEN 0 ELSE 1 END,
+            ts.created_at DESC
         LIMIT 20
     ");
     $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -196,19 +197,23 @@ require_once __DIR__ . '/includes/header.php';
                     <?php foreach ($notifications as $notif): ?>
                     <?php 
                         $triageData = json_decode($notif['triage_data'] ?? '{}', true);
-                        $notifData = json_decode($notif['notification_data'] ?? '{}', true);
                         $isUrgent = $notif['priority'] === 'urgent';
                         
-                        // Get symptoms from notification_data or triage_data
-                        $symptoms = $notifData['symptoms'] ?? $triageData['symptoms'] ?? [];
+                        // Get symptoms from triage_data
+                        $symptoms = $triageData['symptoms'] ?? [];
                         if (is_string($symptoms)) $symptoms = [$symptoms];
                         
-                        // Get severity from notification_data or triage_data
-                        $severity = $notifData['severity'] ?? $triageData['severity'] ?? null;
-                        $severityLevel = $notifData['severity_level'] ?? null;
+                        // Get severity from triage_data
+                        $severity = $triageData['severity'] ?? null;
+                        $severityLevel = null;
+                        if ($severity !== null) {
+                            if ($severity >= 8) $severityLevel = 'critical';
+                            elseif ($severity >= 6) $severityLevel = 'high';
+                            elseif ($severity >= 4) $severityLevel = 'medium';
+                        }
                         
-                        // Get red_flags from notification_data or triage_data
-                        $redFlags = $notifData['red_flags'] ?? $triageData['red_flags'] ?? [];
+                        // Get red_flags from triage_data
+                        $redFlags = $triageData['red_flags'] ?? [];
                         
                         // Check if emergency state
                         $isEmergency = ($notif['current_state'] ?? '') === 'emergency';
@@ -216,11 +221,11 @@ require_once __DIR__ . '/includes/header.php';
                             $redFlags = [['message' => 'ผู้ป่วยอยู่ในสถานะฉุกเฉิน']];
                         }
                         
-                        // Get notification type
-                        $notifType = $notif['type'] ?? 'triage_alert';
+                        // Session ID for actions
+                        $sessionId = $notif['id'];
                     ?>
                     <div class="notification-card p-4 <?= $isUrgent ? 'priority-urgent bg-red-50' : 'priority-normal' ?>" 
-                         data-id="<?= $notif['id'] ?>">
+                         data-id="<?= $sessionId ?>">
                         <div class="flex items-start gap-4">
                             <img src="<?= htmlspecialchars($notif['picture_url'] ?? 'assets/images/default-avatar.png') ?>" 
                                  class="w-12 h-12 rounded-full object-cover" alt="">
@@ -234,11 +239,7 @@ require_once __DIR__ . '/includes/header.php';
                                         🚨 เร่งด่วน
                                     </span>
                                     <?php endif; ?>
-                                    <?php if ($notifType === 'escalation'): ?>
-                                    <span class="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
-                                        👨‍⚕️ ขอปรึกษา
-                                    </span>
-                                    <?php elseif ($notifType === 'emergency_alert'): ?>
+                                    <?php if ($isEmergency): ?>
                                     <span class="px-2 py-0.5 bg-red-600 text-white text-xs rounded-full">
                                         🚨 ฉุกเฉิน
                                     </span>
@@ -285,11 +286,11 @@ require_once __DIR__ . '/includes/header.php';
                             </div>
                             
                             <div class="flex flex-col gap-2">
-                                <button onclick="viewDetail(<?= $notif['id'] ?>)" 
+                                <button onclick="viewDetail(<?= $sessionId ?>)" 
                                         class="px-3 py-1.5 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600">
                                     <i class="fas fa-eye mr-1"></i>ดู
                                 </button>
-                                <button onclick="handleNotification(<?= $notif['id'] ?>, 'handled')" 
+                                <button onclick="handleSession(<?= $sessionId ?>, 'completed')" 
                                         class="px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600">
                                     <i class="fas fa-check mr-1"></i>จัดการแล้ว
                                 </button>
@@ -763,6 +764,23 @@ function handleNotification(id, status) {
     });
 }
 
+function handleSession(sessionId, status) {
+    fetch('api/pharmacist.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_session_status', session_id: sessionId, status: status })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.querySelector(`[data-id="${sessionId}"]`)?.remove();
+            location.reload();
+        } else {
+            alert('เกิดข้อผิดพลาด: ' + (data.error || 'Unknown error'));
+        }
+    });
+}
+
 function startVideoCall(userId) {
     window.open(`video-call.php?user_id=${userId}`, '_blank');
 }
@@ -793,7 +811,7 @@ function approveAndSend() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             action: 'approve_drugs',
-            notification_id: currentNotificationId,
+            session_id: currentNotificationId,
             user_id: currentUserId,
             drugs: selectedDrugs,
             note: note
@@ -836,7 +854,7 @@ function rejectCase() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             action: 'reject',
-            notification_id: currentNotificationId,
+            session_id: currentNotificationId,
             user_id: currentUserId,
             reason: reason
         })
