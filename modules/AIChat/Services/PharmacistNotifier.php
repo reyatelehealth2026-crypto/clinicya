@@ -886,7 +886,33 @@ class PharmacistNotifier
     
     private function getCheckoutUrl(): string
     {
-        // Use actual LIFF URL - same as test_flex_message.php
+        // Get LIFF ID from LINE account
+        try {
+            $liffId = null;
+            if ($this->lineAccountId) {
+                $result = $this->db->fetchOne(
+                    "SELECT liff_id FROM line_accounts WHERE id = ?",
+                    [$this->lineAccountId]
+                );
+                $liffId = $result['liff_id'] ?? null;
+            }
+            
+            if (!$liffId) {
+                // Fallback to first active account
+                $result = $this->db->fetchOne(
+                    "SELECT liff_id FROM line_accounts WHERE is_active = 1 AND liff_id IS NOT NULL LIMIT 1"
+                );
+                $liffId = $result['liff_id'] ?? null;
+            }
+            
+            if ($liffId) {
+                return "https://liff.line.me/{$liffId}";
+            }
+        } catch (\Exception $e) {
+            error_log("getCheckoutUrl error: " . $e->getMessage());
+        }
+        
+        // Fallback to direct URL
         return "https://clinicya.re-ya.com/liff/";
     }
 }
