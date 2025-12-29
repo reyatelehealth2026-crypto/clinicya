@@ -195,9 +195,12 @@ class LiffApp {
             return;
         }
 
+        // Wait for app-content element to be available
         const contentEl = document.getElementById('app-content');
         if (!contentEl) {
-            console.error('Content element not found');
+            // Element not ready yet, retry after a short delay
+            console.warn('Content element not found, retrying...');
+            setTimeout(() => this.initRouter(), 50);
             return;
         }
 
