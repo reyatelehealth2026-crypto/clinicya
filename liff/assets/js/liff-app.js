@@ -195,13 +195,35 @@ class LiffApp {
             return;
         }
 
-        // Wait for app-content element to be available
-        const contentEl = document.getElementById('app-content');
+        // Get app-content element - it exists in DOM but may be hidden
+        let contentEl = document.getElementById('app-content');
+        
+        // If not found, check if app element exists and try to find content inside
         if (!contentEl) {
-            // Element not ready yet, retry after a short delay
-            console.warn('Content element not found, retrying...');
-            setTimeout(() => this.initRouter(), 50);
-            return;
+            const app = document.getElementById('app');
+            if (app) {
+                contentEl = app.querySelector('#app-content') || app.querySelector('.app-content');
+            }
+        }
+        
+        // Still not found - create it
+        if (!contentEl) {
+            console.warn('Content element not found, creating...');
+            const app = document.getElementById('app');
+            if (app) {
+                contentEl = document.createElement('main');
+                contentEl.id = 'app-content';
+                contentEl.className = 'app-content';
+                const header = app.querySelector('#app-header');
+                if (header && header.nextSibling) {
+                    app.insertBefore(contentEl, header.nextSibling);
+                } else {
+                    app.appendChild(contentEl);
+                }
+            } else {
+                console.error('App element not found');
+                return;
+            }
         }
 
         // Register page handlers
