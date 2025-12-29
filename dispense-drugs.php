@@ -221,6 +221,7 @@ const userId = <?= $session['user_id'] ?>;
 let allDrugs = [];
 let selectedDrugs = [];
 let searchTimeout = null;
+let drugsLoaded = false;
 
 // Load all drugs on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -228,17 +229,31 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function loadAllDrugs() {
+    const searchInput = document.getElementById('drugSearch');
+    searchInput.placeholder = 'กำลังโหลดรายการยา...';
+    searchInput.disabled = true;
+    
     fetch('api/pharmacist.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get_drugs', line_account_id: null })
+        body: JSON.stringify({ action: 'get_drugs' })
     })
     .then(r => r.json())
     .then(data => {
         if (data.success) {
             allDrugs = data.drugs || [];
+            drugsLoaded = true;
+            searchInput.placeholder = `พิมพ์ชื่อยา... (${allDrugs.length} รายการ)`;
+            searchInput.disabled = false;
             console.log('Loaded', allDrugs.length, 'drugs');
+        } else {
+            searchInput.placeholder = 'เกิดข้อผิดพลาด: ' + (data.error || 'Unknown');
+            console.error('Failed to load drugs:', data.error);
         }
+    })
+    .catch(err => {
+        searchInput.placeholder = 'เกิดข้อผิดพลาดในการโหลด';
+        console.error('Error loading drugs:', err);
     });
 }
 
@@ -253,11 +268,17 @@ document.getElementById('drugSearch').addEventListener('input', function(e) {
         return;
     }
     
+    if (!drugsLoaded) {
+        document.getElementById('searchResults').innerHTML = '<div class="p-4 text-gray-400 text-center">กำลังโหลดรายการยา...</div>';
+        document.getElementById('searchResults').classList.add('show');
+        return;
+    }
+    
     searchTimeout = setTimeout(() => {
         const results = allDrugs.filter(drug => 
             drug.name.toLowerCase().includes(query) || 
             (drug.generic_name && drug.generic_name.toLowerCase().includes(query))
-        ).slice(0, 10);
+        ).slice(0, 15);
         
         showSearchResults(results);
     }, 150);
