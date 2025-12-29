@@ -214,9 +214,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             try {
-                // Load PharmacistNotifier
+                // Get user's line_account_id
+                $stmt = $db->prepare("SELECT line_account_id FROM users WHERE id = ?");
+                $stmt->execute([$userId]);
+                $userData = $stmt->fetch(PDO::FETCH_ASSOC);
+                $lineAccountId = $userData['line_account_id'] ?? null;
+                
+                // Load PharmacistNotifier with lineAccountId
                 require_once __DIR__ . '/../modules/AIChat/Services/PharmacistNotifier.php';
-                $notifier = new \Modules\AIChat\Services\PharmacistNotifier();
+                $notifier = new \Modules\AIChat\Services\PharmacistNotifier($lineAccountId);
                 
                 $result = $notifier->sendToCustomer($userId, $message);
                 
@@ -246,16 +252,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             try {
                 // Get triage data from session directly
-                $stmt = $db->prepare("SELECT triage_data FROM triage_sessions WHERE id = ?");
+                $stmt = $db->prepare("SELECT triage_data, line_account_id FROM triage_sessions WHERE id = ?");
                 $stmt->execute([$sessionId]);
                 $sessionData = $stmt->fetch(PDO::FETCH_ASSOC);
                 $triageData = json_decode($sessionData['triage_data'] ?? '{}', true);
+                $lineAccountId = $sessionData['line_account_id'] ?? null;
+                
+                // If no line_account_id in session, get from user
+                if (!$lineAccountId) {
+                    $stmt = $db->prepare("SELECT line_account_id FROM users WHERE id = ?");
+                    $stmt->execute([$userId]);
+                    $userData = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $lineAccountId = $userData['line_account_id'] ?? null;
+                }
                 
                 // Try to send LINE message (but don't fail if it doesn't work)
                 $lineSent = false;
                 try {
                     require_once __DIR__ . '/../modules/AIChat/Services/PharmacistNotifier.php';
-                    $notifier = new \Modules\AIChat\Services\PharmacistNotifier();
+                    $notifier = new \Modules\AIChat\Services\PharmacistNotifier($lineAccountId);
                     $lineSent = $notifier->sendApprovalToCustomer($userId, $triageData, $drugs, $pharmacistName, $pharmacistLicense, $pharmacistNote);
                 } catch (Exception $lineError) {
                     error_log("LINE send error (non-fatal): " . $lineError->getMessage());
@@ -284,12 +299,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Add items to user's cart if requested
                 $addToCart = $input['add_to_cart'] ?? false;
+                error_log("approve_drugs: add_to_cart=" . ($addToCart ? 'true' : 'false') . ", drugs count=" . count($drugs) . ", userId={$userId}");
+                
                 if ($addToCart) {
+                    $cartAdded = 0;
                     try {
                         foreach ($drugs as $drug) {
                             $productId = (int)($drug['id'] ?? 0);
                             $quantity = (int)($drug['quantity'] ?? 1);
-                            if ($productId <= 0) continue;
+                            error_log("approve_drugs: Processing drug id={$productId}, quantity={$quantity}");
+                            if ($productId <= 0) {
+                                error_log("approve_drugs: Skipping drug with invalid id");
+                                continue;
+                            }
                             
                             // Check if item already in cart (use product_id column)
                             $stmt = $db->prepare("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?");
@@ -300,13 +322,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 // Update quantity
                                 $stmt = $db->prepare("UPDATE cart SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?");
                                 $stmt->execute([$quantity, $existing['id']]);
+                                error_log("approve_drugs: Updated cart item {$existing['id']}");
                             } else {
                                 // Insert new cart item
                                 $stmt = $db->prepare("INSERT INTO cart (user_id, product_id, quantity, created_at) VALUES (?, ?, ?, NOW())");
                                 $stmt->execute([$userId, $productId, $quantity]);
+                                error_log("approve_drugs: Inserted cart item, lastInsertId=" . $db->lastInsertId());
                             }
+                            $cartAdded++;
                         }
-                        error_log("Added " . count($drugs) . " items to cart for user $userId");
+                        error_log("Added {$cartAdded} items to cart for user {$userId}");
                     } catch (Exception $cartError) {
                         error_log("Cart add error (non-fatal): " . $cartError->getMessage());
                     }
@@ -334,11 +359,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             try {
+                // Get user's line_account_id
+                $lineAccountId = null;
+                if ($userId) {
+                    $stmt = $db->prepare("SELECT line_account_id FROM users WHERE id = ?");
+                    $stmt->execute([$userId]);
+                    $userData = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $lineAccountId = $userData['line_account_id'] ?? null;
+                }
+                
                 // Send rejection message
                 require_once __DIR__ . '/../modules/AIChat/Services/PharmacistNotifier.php';
-                $notifier = new \Modules\AIChat\Services\PharmacistNotifier();
+                $notifier = new \Modules\AIChat\Services\PharmacistNotifier($lineAccountId);
                 
-                $message = "⚠️ เภสัชกรแจ้ง:\n{$reason}\n\nกรุณาพบแพทย์หรือติดต่อเภสัชกรโดยตรง";
+                $message = "เภสัชกรแจ้ง:\n{$reason}\n\nกรุณาพบแพทย์หรือติดต่อเภสัชกรโดยตรง";
                 $notifier->sendToCustomer($userId, $message);
                 
                 // Update triage session status

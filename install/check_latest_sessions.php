@@ -36,3 +36,20 @@ foreach ($sessions as $s) {
     echo "</div>";
 }
 
+echo "<h3>AI Triage Assessments (Last 5)</h3>";
+try {
+    $stmt = $db->query("SELECT * FROM ai_triage_assessments ORDER BY created_at DESC LIMIT 5");
+    $assessments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    echo "<p>Found: " . count($assessments) . " assessments</p>";
+    foreach ($assessments as $a) {
+        echo "<div style='border:1px solid #0a0; margin:10px; padding:10px;'>";
+        echo "<p>ID: {$a['id']} | User: {$a['user_id']} | Severity: {$a['severity_level']} | Created: {$a['created_at']}</p>";
+        echo "<p>Symptoms: " . htmlspecialchars($a['symptoms'] ?? '-') . "</p>";
+        echo "<p>Duration: " . htmlspecialchars($a['duration'] ?? '-') . "</p>";
+        echo "<p>AI Assessment: " . htmlspecialchars(substr($a['ai_assessment'] ?? '-', 0, 200)) . "</p>";
+        echo "</div>";
+    }
+} catch (Exception $e) {
+    echo "<p style='color:red'>ai_triage_assessments table error: " . $e->getMessage() . "</p>";
+}
+
