@@ -390,34 +390,35 @@ require_once __DIR__ . '/includes/header.php';
 <div id="detailModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
     <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeModal()"></div>
     <div class="flex min-h-full items-center justify-center p-4">
-        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden">
-            <div class="bg-gradient-to-r from-green-500 to-teal-500 p-4 text-white">
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="bg-gradient-to-r from-green-500 to-teal-500 p-4 text-white flex-shrink-0">
                 <div class="flex justify-between items-center">
                     <h3 class="font-bold text-lg"><i class="fas fa-clipboard-list mr-2"></i>รายละเอียดการซักประวัติ</h3>
                     <button onclick="closeModal()" class="hover:opacity-80"><i class="fas fa-times"></i></button>
                 </div>
             </div>
-            <div id="modalContent" class="p-6 overflow-y-auto max-h-[60vh]">
-                <!-- Content loaded via AJAX -->
-            </div>
-            <div class="p-4 border-t bg-gray-50 overflow-y-auto max-h-[50vh]">
-                <!-- Drug Selection -->
-                <div id="drugSelection" class="mb-4 hidden">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">เลือกยาที่จะแนะนำ:</label>
-                    <div id="drugList" class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-gray-100 rounded-lg">
-                        <!-- Drugs loaded via AJAX -->
-                    </div>
+            <div class="flex-1 overflow-y-auto">
+                <div id="modalContent" class="p-6">
+                    <!-- Content loaded via AJAX -->
                 </div>
-                
-                <!-- Selected Drugs with Details -->
-                <div id="selectedDrugsDetails" class="mb-4 hidden">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        <i class="fas fa-pills text-green-500 mr-1"></i>รายละเอียดยาที่เลือก:
-                    </label>
-                    <div id="drugDetailsContainer" class="space-y-3">
-                        <!-- Drug detail forms will be added here -->
+                <div class="p-4 border-t bg-gray-50">
+                    <!-- Drug Selection -->
+                    <div id="drugSelection" class="mb-4 hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">เลือกยาที่จะแนะนำ:</label>
+                        <div id="drugList" class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2 bg-gray-100 rounded-lg">
+                            <!-- Drugs loaded via AJAX -->
+                        </div>
                     </div>
-                </div>
+                    
+                    <!-- Selected Drugs with Details -->
+                    <div id="selectedDrugsDetails" class="mb-4 hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            <i class="fas fa-pills text-green-500 mr-1"></i>รายละเอียดยาที่เลือก:
+                        </label>
+                        <div id="drugDetailsContainer" class="space-y-3 max-h-60 overflow-y-auto">
+                            <!-- Drug detail forms will be added here -->
+                        </div>
+                    </div>
                 
                 <!-- Pharmacist Info -->
                 <div class="mb-4 p-3 bg-blue-50 rounded-lg">
@@ -455,6 +456,7 @@ require_once __DIR__ . '/includes/header.php';
                     <button onclick="approveAndSend()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
                         <i class="fas fa-check mr-2"></i>อนุมัติและส่งยา
                     </button>
+                </div>
                 </div>
             </div>
         </div>
