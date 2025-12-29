@@ -8644,6 +8644,20 @@ class LiffApp {
 window.liffApp = new LiffApp();
 
 // Initialize on DOM ready
-document.addEventListener('DOMContentLoaded', () => {
+function initApp() {
+    // Double check DOM is ready and app element exists
+    const app = document.getElementById('app');
+    if (!app) {
+        console.warn('App element not ready, waiting...');
+        setTimeout(initApp, 100);
+        return;
+    }
     window.liffApp.init();
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    // DOM already loaded
+    initApp();
+}
