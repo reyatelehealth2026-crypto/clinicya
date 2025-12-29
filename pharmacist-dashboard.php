@@ -511,20 +511,22 @@ function loadAvailableDrugs() {
 
 function renderDrugList() {
     const container = document.getElementById('drugList');
-    const recommendations = currentTriageData.recommendations || [];
+    const recommendations = currentTriageData?.recommendations || [];
     const recommendedIds = recommendations.map(r => r.id);
     
     container.innerHTML = availableDrugs.map(drug => {
         const isRecommended = recommendedIds.includes(drug.id);
         const isSelected = selectedDrugs.some(d => d.id === drug.id);
+        // Escape drug name for JavaScript string
+        const escapedName = (drug.name || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
         return `
             <label class="flex items-center gap-2 p-2 bg-white rounded cursor-pointer hover:bg-green-50 ${isRecommended ? 'ring-2 ring-green-500' : ''}">
                 <input type="checkbox" value="${drug.id}" ${isSelected ? 'checked' : ''} 
-                       onchange="toggleDrug(${drug.id}, '${drug.name}', ${drug.price})"
+                       onchange="toggleDrug(${drug.id}, '${escapedName}', ${drug.price || 0})"
                        class="w-4 h-4 text-green-500 rounded">
                 <div class="flex-1 min-w-0">
                     <div class="text-sm font-medium truncate">${drug.name}</div>
-                    <div class="text-xs text-gray-500">฿${drug.price}</div>
+                    <div class="text-xs text-gray-500">฿${drug.price || 0}</div>
                 </div>
                 ${isRecommended ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">AI แนะนำ</span>' : ''}
             </label>
@@ -534,7 +536,7 @@ function renderDrugList() {
     // Pre-select AI recommended drugs
     if (selectedDrugs.length === 0 && recommendations.length > 0) {
         recommendations.forEach(drug => {
-            selectedDrugs.push({ id: drug.id, name: drug.name, price: drug.price });
+            selectedDrugs.push({ id: drug.id, name: drug.name, price: drug.price || 0 });
         });
         renderDrugList();
     }
