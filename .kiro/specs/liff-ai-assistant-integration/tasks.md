@@ -38,7 +38,12 @@
   - [x] 2.4 Write property test for numeric response interpretation
     - **Property 8: Numeric Response Interpretation**
     - **Validates: Requirements 9.3**
-  - [ ] 2.5 Write property test for duration response interpretation
+  - [x] 2.5 Write property test for duration response interpretation
+
+
+
+
+
 
 
 
@@ -60,7 +65,12 @@
 
 
 
-  - [ ] 2.6 Write property test for state persistence
+  - [x] 2.6 Write property test for state persistence
+
+
+
+
+
 
 
     - **Property 10: State Persistence**
@@ -90,7 +100,13 @@
     - Display emergency contact numbers (1669, 1323, 1367)
     - Add call button for emergency numbers
     - _Requirements: 3.2, 3.3_
-  - [ ]* 4.4 Write property test for emergency alert display
+  - [x] 4.4 Write property test for emergency alert display
+
+
+
+
+
+
     - **Property 3: Emergency Alert Display**
     - **Validates: Requirements 3.2**
 
@@ -105,7 +121,17 @@
     - Display messages in chronological order
     - Show timestamps for messages
     - _Requirements: 6.2, 6.4_
-  - [ ] 5.3 Write property test for conversation history persistence
+  - [x] 5.3 Write property test for conversation history persistence
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -113,7 +139,12 @@
     - **Property 4: Conversation History Persistence**
     - **Validates: Requirements 6.1, 6.2**
 
-  - [ ] 5.4 Write property test for user-specific history isolation
+  - [x] 5.4 Write property test for user-specific history isolation
+
+
+
+
+
 
 
     - **Property 5: User-Specific History Isolation**
@@ -157,7 +188,12 @@
 
 
 
-- [-] 9. Checkpoint - Ensure all tests pass
+- [x] 9. Checkpoint - Ensure all tests pass
+
+
+
+
+
 
 
   - Ensure all tests pass, ask the user if questions arise.
@@ -228,7 +264,13 @@
     - Check PharmacyAIAdapter includes system prompt
     - Verify MIMSPharmacistAI uses MIMS context
     - _Requirements: 10.5_
-  - [ ]* 14.3 Write property test for triage protocol sequence
+
+
+  - [x]* 14.3 Write property test for triage protocol sequence
+
+
+
+
     - **Property 15: Triage Protocol Sequence**
     - **Validates: Requirements 10.3**
 

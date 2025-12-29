@@ -199,8 +199,15 @@ try {
     
     // Update triage session state if session exists
     $newState = $result['state'] ?? $state;
+    $mergedTriageData = $result['data'] ?? $triageData;
     if ($sessionId && $newState) {
-        updateTriageSessionState($db, $sessionId, $newState, $result['data'] ?? $triageData);
+        updateTriageSessionState($db, $sessionId, $newState, $mergedTriageData);
+        
+        // Create or update pharmacist notification when triage has symptoms
+        // This ensures all triage sessions appear in pharmacist dashboard
+        if (!empty($mergedTriageData['symptoms']) || $newState !== 'greeting') {
+            ensureTriageNotification($db, $sessionId, $internalUserId, $lineAccountId, $userContext, $mergedTriageData, $newState);
+        }
     }
     
     // Get product recommendations if applicable
@@ -2318,6 +2325,157 @@ function saveConversationMessageWithSession($db, $lineUserId, $role, $content, $
         
     } catch (Exception $e) {
         error_log("saveConversationMessageWithSession error: " . $e->getMessage());
+        return false;
+    }
+}
+
+
+/**
+ * Ensure a pharmacist notification exists for a triage session
+ * Creates or updates notification so all triage sessions appear in pharmacist dashboard
+ * 
+ * @param PDO $db Database connection
+ * @param int $sessionId Triage session ID
+ * @param int $userId Internal user ID
+ * @param int $lineAccountId LINE account ID
+ * @param array $userContext User context data
+ * @param array $triageData Triage data (symptoms, duration, severity, etc.)
+ * @param string $state Current triage state
+ * @return bool Success status
+ */
+function ensureTriageNotification($db, $sessionId, $userId, $lineAccountId, $userContext, $triageData, $state) {
+    if (!$sessionId || !$userId) {
+        return false;
+    }
+    
+    try {
+        // Check if notification already exists for this session
+        $stmt = $db->prepare("
+            SELECT id, notification_data FROM pharmacist_notifications 
+            WHERE triage_session_id = ? AND status = 'pending'
+            LIMIT 1
+        ");
+        $stmt->execute([$sessionId]);
+        $existingNotif = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        // Build notification data
+        $symptoms = $triageData['symptoms'] ?? '';
+        if (is_array($symptoms)) {
+            $symptoms = implode(', ', $symptoms);
+        }
+        
+        $severity = $triageData['severity'] ?? null;
+        $severityLevel = 'normal';
+        $priority = 'normal';
+        
+        if ($severity !== null) {
+            if ($severity >= 8) {
+                $severityLevel = 'critical';
+                $priority = 'urgent';
+            } elseif ($severity >= 6) {
+                $severityLevel = 'high';
+                $priority = 'urgent';
+            } elseif ($severity >= 4) {
+                $severityLevel = 'medium';
+            } else {
+                $severityLevel = 'low';
+            }
+        }
+        
+        $userName = $userContext['display_name'] ?? 'ไม่ระบุชื่อ';
+        
+        $notificationData = json_encode([
+            'symptoms' => $triageData['symptoms'] ?? '',
+            'duration' => $triageData['duration'] ?? '',
+            'severity' => $severity,
+            'severity_level' => $severityLevel,
+            'associated_symptoms' => $triageData['associated_symptoms'] ?? '',
+            'allergies' => $triageData['allergies'] ?? '',
+            'medical_history' => $triageData['medical_history'] ?? '',
+            'current_medications' => $triageData['current_medications'] ?? '',
+            'current_state' => $state,
+            'user_name' => $userName
+        ], JSON_UNESCAPED_UNICODE);
+        
+        if ($existingNotif) {
+            // Update existing notification with latest data
+            $stmt = $db->prepare("
+                UPDATE pharmacist_notifications 
+                SET notification_data = ?, priority = ?, updated_at = NOW()
+                WHERE id = ?
+            ");
+            $stmt->execute([$notificationData, $priority, $existingNotif['id']]);
+            
+            error_log("ensureTriageNotification: Updated notification #{$existingNotif['id']} for session #{$sessionId}");
+        } else {
+            // Create new notification
+            $title = "🩺 การซักประวัติใหม่";
+            if ($priority === 'urgent') {
+                $title = "⚠️ การซักประวัติ - ต้องตรวจสอบ";
+            }
+            
+            $message = "ลูกค้า: {$userName}\n";
+            if (!empty($symptoms)) {
+                $message .= "อาการ: {$symptoms}\n";
+            }
+            if (!empty($triageData['duration'])) {
+                $message .= "ระยะเวลา: {$triageData['duration']}\n";
+            }
+            if ($severity !== null) {
+                $message .= "ความรุนแรง: {$severity}/10\n";
+            }
+            $message .= "สถานะ: {$state}";
+            
+            // Ensure table exists with all columns
+            $db->exec("
+                CREATE TABLE IF NOT EXISTS pharmacist_notifications (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    line_account_id INT NULL,
+                    type VARCHAR(50) DEFAULT 'triage_alert',
+                    title VARCHAR(255),
+                    message TEXT,
+                    notification_data JSON,
+                    reference_id INT,
+                    reference_type VARCHAR(50),
+                    user_id INT,
+                    triage_session_id INT NULL,
+                    priority ENUM('normal', 'urgent') DEFAULT 'normal',
+                    status ENUM('pending', 'handled', 'dismissed') DEFAULT 'pending',
+                    is_read TINYINT(1) DEFAULT 0,
+                    handled_by INT NULL,
+                    handled_at TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_line_account (line_account_id),
+                    INDEX idx_status (status),
+                    INDEX idx_priority (priority),
+                    INDEX idx_triage_session (triage_session_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ");
+            
+            $stmt = $db->prepare("
+                INSERT INTO pharmacist_notifications 
+                (line_account_id, type, title, message, notification_data, user_id, triage_session_id, priority, status)
+                VALUES (?, 'triage_session', ?, ?, ?, ?, ?, ?, 'pending')
+            ");
+            $stmt->execute([
+                $lineAccountId,
+                $title,
+                $message,
+                $notificationData,
+                $userId,
+                $sessionId,
+                $priority
+            ]);
+            
+            $notifId = $db->lastInsertId();
+            error_log("ensureTriageNotification: Created notification #{$notifId} for session #{$sessionId}, priority={$priority}");
+        }
+        
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("ensureTriageNotification error: " . $e->getMessage());
         return false;
     }
 }
