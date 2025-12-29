@@ -28,8 +28,8 @@ $stmt->execute([$user['line_account_id']]);
 $account = $stmt->fetch(PDO::FETCH_ASSOC);
 echo "<p>LIFF ID: " . ($account['liff_id'] ?? 'NOT SET') . "</p>";
 
-// Check cart before
-$stmt = $db->prepare("SELECT COUNT(*) FROM cart WHERE user_id = ?");
+// Check cart before (use cart_items table)
+$stmt = $db->prepare("SELECT COUNT(*) FROM cart_items WHERE user_id = ?");
 $stmt->execute([$userId]);
 $cartBefore = $stmt->fetchColumn();
 echo "<p>Cart items before: {$cartBefore}</p>";
@@ -58,7 +58,7 @@ echo "<h3>Simulating approve_drugs...</h3>";
 
 $lineAccountId = $user['line_account_id'];
 
-// Add to cart
+// Add to cart (use cart_items table for LIFF compatibility)
 foreach ($testDrugs as $drug) {
     $productId = (int)($drug['id'] ?? 0);
     $quantity = (int)($drug['quantity'] ?? 1);
@@ -68,24 +68,24 @@ foreach ($testDrugs as $drug) {
         continue;
     }
     
-    // Check if item already in cart
-    $stmt = $db->prepare("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?");
+    // Check if item already in cart_items
+    $stmt = $db->prepare("SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?");
     $stmt->execute([$userId, $productId]);
     $existing = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($existing) {
-        $stmt = $db->prepare("UPDATE cart SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?");
+        $stmt = $db->prepare("UPDATE cart_items SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?");
         $stmt->execute([$quantity, $existing['id']]);
-        echo "<p style='color:green'>Updated cart item {$existing['id']}, added {$quantity}</p>";
+        echo "<p style='color:green'>Updated cart_items item {$existing['id']}, added {$quantity}</p>";
     } else {
-        $stmt = $db->prepare("INSERT INTO cart (user_id, product_id, quantity, created_at) VALUES (?, ?, ?, NOW())");
+        $stmt = $db->prepare("INSERT INTO cart_items (user_id, product_id, quantity, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())");
         $stmt->execute([$userId, $productId, $quantity]);
-        echo "<p style='color:green'>Inserted new cart item, ID: " . $db->lastInsertId() . "</p>";
+        echo "<p style='color:green'>Inserted new cart_items item, ID: " . $db->lastInsertId() . "</p>";
     }
 }
 
 // Check cart after
-$stmt = $db->prepare("SELECT c.*, bi.name FROM cart c LEFT JOIN business_items bi ON c.product_id = bi.id WHERE c.user_id = ?");
+$stmt = $db->prepare("SELECT c.*, bi.name FROM cart_items c LEFT JOIN business_items bi ON c.product_id = bi.id WHERE c.user_id = ?");
 $stmt->execute([$userId]);
 $cartAfter = $stmt->fetchAll(PDO::FETCH_ASSOC);
 echo "<h3>Cart after ({$userId}):</h3>";

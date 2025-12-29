@@ -297,7 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     error_log("Medical history save error (non-fatal): " . $historyError->getMessage());
                 }
                 
-                // Add items to user's cart if requested
+                // Add items to user's cart if requested (use cart_items table for LIFF compatibility)
                 $addToCart = $input['add_to_cart'] ?? false;
                 error_log("approve_drugs: add_to_cart=" . ($addToCart ? 'true' : 'false') . ", drugs count=" . count($drugs) . ", userId={$userId}");
                 
@@ -313,25 +313,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 continue;
                             }
                             
-                            // Check if item already in cart (use product_id column)
-                            $stmt = $db->prepare("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?");
+                            // Check if item already in cart_items (LIFF uses cart_items table)
+                            $stmt = $db->prepare("SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?");
                             $stmt->execute([$userId, $productId]);
                             $existing = $stmt->fetch(PDO::FETCH_ASSOC);
                             
                             if ($existing) {
                                 // Update quantity
-                                $stmt = $db->prepare("UPDATE cart SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?");
+                                $stmt = $db->prepare("UPDATE cart_items SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?");
                                 $stmt->execute([$quantity, $existing['id']]);
-                                error_log("approve_drugs: Updated cart item {$existing['id']}");
+                                error_log("approve_drugs: Updated cart_items item {$existing['id']}");
                             } else {
                                 // Insert new cart item
-                                $stmt = $db->prepare("INSERT INTO cart (user_id, product_id, quantity, created_at) VALUES (?, ?, ?, NOW())");
+                                $stmt = $db->prepare("INSERT INTO cart_items (user_id, product_id, quantity, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())");
                                 $stmt->execute([$userId, $productId, $quantity]);
-                                error_log("approve_drugs: Inserted cart item, lastInsertId=" . $db->lastInsertId());
+                                error_log("approve_drugs: Inserted cart_items item, lastInsertId=" . $db->lastInsertId());
                             }
                             $cartAdded++;
                         }
-                        error_log("Added {$cartAdded} items to cart for user {$userId}");
+                        error_log("Added {$cartAdded} items to cart_items for user {$userId}");
                     } catch (Exception $cartError) {
                         error_log("Cart add error (non-fatal): " . $cartError->getMessage());
                     }
