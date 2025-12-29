@@ -497,7 +497,7 @@ function loadAvailableDrugs() {
     fetch('api/pharmacist.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'get_drugs', line_account_id: <?= $currentBotId ?? 'null' ?> })
+        body: JSON.stringify({ action: 'get_drugs', line_account_id: <?= $currentBotId ? $currentBotId : 'null' ?> })
     })
     .then(r => r.json())
     .then(data => {
