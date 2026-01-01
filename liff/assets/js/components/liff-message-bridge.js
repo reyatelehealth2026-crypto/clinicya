@@ -153,6 +153,18 @@ class LiffMessageBridge {
     async sendViaApi(action, data, message) {
         console.log('🌐 sendViaApi called:', { action, data, message });
         
+        // For order_placed, we want user to send message first
+        // Show instruction to open in LINE app
+        if (action === 'order_placed' || action === 'appointment_booked') {
+            console.log('🌐 Action requires user to send message first');
+            
+            // Show instruction modal
+            this.showOpenInLineModal(message, action, data);
+            
+            return { success: true, method: 'manual', message: 'User needs to send message in LINE' };
+        }
+        
+        // For other actions, use API fallback (push message)
         try {
             const userId = window.store?.get('profile')?.userId || '';
             console.log('🌐 User ID for API:', userId);
@@ -213,6 +225,155 @@ class LiffMessageBridge {
             console.error('🌐 API fallback failed:', error);
             return { success: false, method: 'api', error: error.message };
         }
+    }
+    
+    /**
+     * Show modal instructing user to open in LINE app
+     * @param {string} message - Message to send
+     * @param {string} action - Action type
+     * @param {object} data - Action data
+     */
+    showOpenInLineModal(message, action, data) {
+        // Remove existing modal
+        const existingModal = document.getElementById('liff-line-modal');
+        if (existingModal) existingModal.remove();
+        
+        const modal = document.createElement('div');
+        modal.id = 'liff-line-modal';
+        modal.className = 'liff-line-modal';
+        
+        // Generate deep link to LINE chat
+        const lineOaId = window.APP_CONFIG?.LINE_OA_ID || '';
+        const encodedMessage = encodeURIComponent(message);
+        const lineDeepLink = lineOaId ? `https://line.me/R/oaMessage/${lineOaId}/?${encodedMessage}` : '';
+        
+        modal.innerHTML = `
+            <div class="liff-line-modal-backdrop"></div>
+            <div class="liff-line-modal-content">
+                <div class="liff-line-modal-header">
+                    <span class="liff-line-modal-icon">✅</span>
+                    <h3>สั่งซื้อสำเร็จ</h3>
+                </div>
+                <div class="liff-line-modal-body">
+                    <p>กรุณาส่งข้อความนี้ในแชท LINE เพื่อรับการยืนยัน:</p>
+                    <div class="liff-line-modal-message">
+                        <code>${message}</code>
+                        <button class="liff-copy-btn" onclick="navigator.clipboard.writeText('${message}').then(() => this.textContent = 'คัดลอกแล้ว!')">คัดลอก</button>
+                    </div>
+                </div>
+                <div class="liff-line-modal-footer">
+                    ${lineDeepLink ? `<a href="${lineDeepLink}" class="liff-line-btn">เปิดแชท LINE</a>` : ''}
+                    <button class="liff-close-btn" onclick="this.closest('.liff-line-modal').remove()">ปิด</button>
+                </div>
+            </div>
+        `;
+        
+        // Add styles if not exists
+        if (!document.getElementById('liff-line-modal-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'liff-line-modal-styles';
+            styles.textContent = `
+                .liff-line-modal {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    z-index: 9999;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .liff-line-modal-backdrop {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0,0,0,0.5);
+                }
+                .liff-line-modal-content {
+                    position: relative;
+                    background: white;
+                    border-radius: 16px;
+                    padding: 24px;
+                    max-width: 90%;
+                    width: 320px;
+                    text-align: center;
+                }
+                .liff-line-modal-header {
+                    margin-bottom: 16px;
+                }
+                .liff-line-modal-icon {
+                    font-size: 48px;
+                    display: block;
+                    margin-bottom: 8px;
+                }
+                .liff-line-modal-header h3 {
+                    margin: 0;
+                    font-size: 18px;
+                    color: #333;
+                }
+                .liff-line-modal-body p {
+                    font-size: 14px;
+                    color: #666;
+                    margin-bottom: 12px;
+                }
+                .liff-line-modal-message {
+                    background: #f5f5f5;
+                    border-radius: 8px;
+                    padding: 12px;
+                    margin-bottom: 16px;
+                }
+                .liff-line-modal-message code {
+                    display: block;
+                    font-size: 14px;
+                    color: #06C755;
+                    margin-bottom: 8px;
+                    word-break: break-all;
+                }
+                .liff-copy-btn {
+                    background: #06C755;
+                    color: white;
+                    border: none;
+                    padding: 6px 16px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    cursor: pointer;
+                }
+                .liff-line-modal-footer {
+                    display: flex;
+                    gap: 8px;
+                    justify-content: center;
+                }
+                .liff-line-btn {
+                    background: #06C755;
+                    color: white;
+                    text-decoration: none;
+                    padding: 10px 20px;
+                    border-radius: 24px;
+                    font-size: 14px;
+                    font-weight: bold;
+                }
+                .liff-close-btn {
+                    background: #e0e0e0;
+                    color: #333;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 24px;
+                    font-size: 14px;
+                    cursor: pointer;
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+        
+        document.body.appendChild(modal);
+        
+        // Close on backdrop click
+        modal.querySelector('.liff-line-modal-backdrop').addEventListener('click', () => {
+            modal.remove();
+        });
     }
 
     /**

@@ -1126,6 +1126,113 @@
             $isOrderCommand = in_array($textLower, $orderCommands);
             $isMenuCommand = in_array($textLower, $menuCommands);
             
+            // ===== Handle LIFF Action Messages (สั่งซื้อสำเร็จ, นัดหมายสำเร็จ, etc.) =====
+            if (preg_match('/^สั่งซื้อสำเร็จ\s*#?(\w+)/u', $messageText, $matches)) {
+                $orderNumber = $matches[1];
+                devLog($db, 'info', 'webhook', 'Order confirmation message received', [
+                    'user_id' => $userId,
+                    'order_number' => $orderNumber
+                ], $userId);
+                
+                // Get order details
+                $stmt = $db->prepare("
+                    SELECT t.*, 
+                           (SELECT SUM(quantity) FROM transaction_items WHERE transaction_id = t.id) as item_count
+                    FROM transactions t 
+                    WHERE t.order_number = ? AND t.user_id = ?
+                ");
+                $stmt->execute([$orderNumber, $user['id']]);
+                $order = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($order) {
+                    // Get order items
+                    $stmt = $db->prepare("SELECT * FROM transaction_items WHERE transaction_id = ?");
+                    $stmt->execute([$order['id']]);
+                    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    // Build Flex Message for order confirmation
+                    $itemContents = [];
+                    foreach ($items as $item) {
+                        $itemContents[] = [
+                            'type' => 'box',
+                            'layout' => 'horizontal',
+                            'contents' => [
+                                ['type' => 'text', 'text' => $item['product_name'], 'size' => 'sm', 'color' => '#555555', 'flex' => 4, 'wrap' => true],
+                                ['type' => 'text', 'text' => 'x' . $item['quantity'], 'size' => 'sm', 'color' => '#111111', 'flex' => 1, 'align' => 'end'],
+                                ['type' => 'text', 'text' => '฿' . number_format($item['subtotal'], 0), 'size' => 'sm', 'color' => '#111111', 'flex' => 2, 'align' => 'end']
+                            ]
+                        ];
+                    }
+                    
+                    $deliveryInfo = json_decode($order['delivery_info'] ?? '{}', true);
+                    
+                    $orderFlex = [
+                        'type' => 'bubble',
+                        'header' => [
+                            'type' => 'box',
+                            'layout' => 'vertical',
+                            'backgroundColor' => '#06C755',
+                            'paddingAll' => 'lg',
+                            'contents' => [
+                                ['type' => 'text', 'text' => 'ยืนยันคำสั่งซื้อ', 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'lg']
+                            ]
+                        ],
+                        'body' => [
+                            'type' => 'box',
+                            'layout' => 'vertical',
+                            'contents' => array_merge(
+                                [
+                                    ['type' => 'text', 'text' => '#' . $order['order_number'], 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
+                                    ['type' => 'separator', 'margin' => 'lg'],
+                                    ['type' => 'text', 'text' => 'รายการสินค้า', 'weight' => 'bold', 'size' => 'sm', 'margin' => 'lg']
+                                ],
+                                $itemContents,
+                                [
+                                    ['type' => 'separator', 'margin' => 'lg'],
+                                    [
+                                        'type' => 'box',
+                                        'layout' => 'horizontal',
+                                        'margin' => 'lg',
+                                        'contents' => [
+                                            ['type' => 'text', 'text' => 'ค่าจัดส่ง', 'size' => 'sm', 'color' => '#555555'],
+                                            ['type' => 'text', 'text' => '฿' . number_format($order['shipping_fee'] ?? 0, 0), 'size' => 'sm', 'color' => '#111111', 'align' => 'end']
+                                        ]
+                                    ],
+                                    [
+                                        'type' => 'box',
+                                        'layout' => 'horizontal',
+                                        'margin' => 'md',
+                                        'contents' => [
+                                            ['type' => 'text', 'text' => 'รวมทั้งหมด', 'size' => 'md', 'weight' => 'bold'],
+                                            ['type' => 'text', 'text' => '฿' . number_format($order['grand_total'], 0), 'size' => 'lg', 'weight' => 'bold', 'color' => '#06C755', 'align' => 'end']
+                                        ]
+                                    ]
+                                ]
+                            )
+                        ],
+                        'footer' => [
+                            'type' => 'box',
+                            'layout' => 'vertical',
+                            'contents' => [
+                                ['type' => 'text', 'text' => 'กรุณาชำระเงินและแนบสลิป', 'size' => 'xs', 'color' => '#888888', 'align' => 'center'],
+                                ['type' => 'text', 'text' => 'พิมพ์ "สลิป" เพื่อแนบหลักฐาน', 'size' => 'xs', 'color' => '#888888', 'align' => 'center', 'margin' => 'sm']
+                            ]
+                        ]
+                    ];
+                    
+                    $message = [
+                        'type' => 'flex',
+                        'altText' => 'ยืนยันคำสั่งซื้อ #' . $order['order_number'],
+                        'contents' => $orderFlex
+                    ];
+                    $line->replyMessage($replyToken, [$message]);
+                    saveOutgoingMessage($db, $user['id'], 'order_confirmation_flex', 'system', 'flex');
+                } else {
+                    $line->replyMessage($replyToken, [['type' => 'text', 'text' => 'ไม่พบคำสั่งซื้อ #' . $orderNumber]]);
+                }
+                return;
+            }
+            
             // ถ้าเรียก AI (@บอท xxx) - ส่งไปให้ AI ตอบ (fallback)
             if ($isAICall && !empty($aiMessage)) {
                 devLog($db, 'info', 'webhook', 'AI called with @bot', [
