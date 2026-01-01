@@ -17,7 +17,7 @@ define('ARP_LINK', ''); // link to ARP sheet
 $SYSTEM_ALIAS = [
     'mk' => 'mtk', 'mtk' => 'mtk',
     'aw' => 'arp', 'arp' => 'arp'
-];
+];แ
 
 $SYSTEMS = [
     'mtk' => [

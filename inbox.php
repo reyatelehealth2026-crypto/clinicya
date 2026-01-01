@@ -144,6 +144,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 echo json_encode(['success' => true, 'id' => $db->lastInsertId()]);
                 break;
             
+            case 'delete_note':
+                $noteId = intval($_POST['note_id'] ?? 0);
+                $stmt = $db->prepare("DELETE FROM user_notes WHERE id = ?");
+                $stmt->execute([$noteId]);
+                echo json_encode(['success' => true]);
+                break;
+            
+            case 'save_medical':
+                $userId = intval($_POST['user_id'] ?? 0);
+                $medicalConditions = trim($_POST['medical_conditions'] ?? '');
+                $drugAllergies = trim($_POST['drug_allergies'] ?? '');
+                $currentMedications = trim($_POST['current_medications'] ?? '');
+                $stmt = $db->prepare("UPDATE users SET medical_conditions = ?, drug_allergies = ?, current_medications = ? WHERE id = ?");
+                $stmt->execute([$medicalConditions, $drugAllergies, $currentMedications, $userId]);
+                echo json_encode(['success' => true]);
+                break;
+            
             case 'test_session':
                 // Debug: ทดสอบว่า session ถูกอ่านถูกต้องหรือไม่
                 $adminUser = $_SESSION['admin_user'] ?? null;
@@ -623,42 +640,145 @@ function formatThaiDateTime($datetime) {
 
     <!-- RIGHT: Customer Panel -->
     <?php if ($selectedUser): ?>
-    <div id="customerPanel" class="w-80 bg-white border-l flex-col hidden lg:flex">
-        <div class="p-4 border-b bg-gray-50">
-            <div class="flex items-center gap-3">
-                <img src="<?= $selectedUser['picture_url'] ?: 'https://via.placeholder.com/60' ?>" class="w-14 h-14 rounded-full border-2 border-emerald-500">
-                <div>
-                    <h3 class="font-bold text-gray-800"><?= htmlspecialchars($selectedUser['display_name']) ?></h3>
-                    <p class="text-xs text-gray-500"><?= $selectedUser['phone'] ?? '-' ?></p>
-                </div>
-            </div>
+    <?php 
+    // Get user notes
+    $userNotes = [];
+    try {
+        $stmt = $db->prepare("SELECT * FROM user_notes WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+        $stmt->execute([$selectedUser['id']]);
+        $userNotes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {}
+    
+    // Get user orders
+    $userOrders = [];
+    try {
+        $stmt = $db->prepare("SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+        $stmt->execute([$selectedUser['id']]);
+        $userOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {}
+    ?>
+    <div id="customerPanel" class="w-72 bg-white border-l flex flex-col transition-all duration-300 overflow-hidden hidden lg:flex">
+        <div class="p-3 border-b bg-gray-50 flex items-center justify-between flex-shrink-0">
+            <h3 class="text-sm font-bold text-gray-700"><i class="fas fa-user text-emerald-500 mr-2"></i>รายละเอียดลูกค้า</h3>
+            <button onclick="togglePanel()" class="text-gray-400 hover:text-gray-600 p-1"><i class="fas fa-times"></i></button>
         </div>
-        <div class="flex-1 overflow-y-auto p-4 space-y-4 chat-scroll">
-            <div>
-                <h4 class="text-xs font-semibold text-gray-500 uppercase mb-2">Tags</h4>
-                <div id="tagList" class="flex flex-wrap gap-1">
+        
+        <div class="flex-1 overflow-y-auto chat-scroll p-3 space-y-4">
+            <!-- Profile -->
+            <div class="text-center pb-3 border-b">
+                <img src="<?= $selectedUser['picture_url'] ?: 'https://via.placeholder.com/60' ?>" class="w-16 h-16 rounded-full mx-auto border-2 border-emerald-500 mb-2">
+                <h4 class="font-bold text-gray-800"><?= htmlspecialchars($selectedUser['display_name']) ?></h4>
+                <p class="text-xs text-gray-500"><?= $selectedUser['phone'] ?: 'ไม่มีเบอร์โทร' ?></p>
+                <div class="flex justify-center gap-1 mt-2 flex-wrap">
                     <?php foreach ($userTags as $tag): ?>
-                    <span class="tag-badge cursor-pointer" style="background-color: <?= htmlspecialchars($tag['color']) ?>20; color: <?= htmlspecialchars($tag['color']) ?>;" onclick="removeTag(<?= $tag['id'] ?>)"><?= htmlspecialchars($tag['name']) ?> ×</span>
+                    <span class="tag-badge" style="background-color: <?= htmlspecialchars($tag['color']) ?>20; color: <?= htmlspecialchars($tag['color']) ?>;"><?= htmlspecialchars($tag['name']) ?></span>
                     <?php endforeach; ?>
                     <button onclick="showTagModal()" class="text-xs text-emerald-600 hover:text-emerald-700">+ เพิ่ม</button>
                 </div>
             </div>
-            <div>
-                <h4 class="text-xs font-semibold text-gray-500 uppercase mb-2">ข้อมูล</h4>
-                <div class="space-y-2 text-sm">
-                    <div class="flex justify-between"><span class="text-gray-500">สมาชิกตั้งแต่</span><span><?= date('d/m/Y', strtotime($selectedUser['created_at'])) ?></span></div>
-                    <div class="flex justify-between"><span class="text-gray-500">แต้มสะสม</span><span class="font-medium text-emerald-600"><?= number_format($selectedUser['loyalty_points'] ?? 0) ?></span></div>
+            
+            <!-- Quick Info -->
+            <div class="space-y-2 text-xs">
+                <div class="flex justify-between"><span class="text-gray-500">สมาชิกตั้งแต่</span><span class="font-medium"><?= date('d/m/Y', strtotime($selectedUser['created_at'])) ?></span></div>
+                <div class="flex justify-between"><span class="text-gray-500">ออเดอร์ทั้งหมด</span><span class="font-medium"><?= count($userOrders) ?> รายการ</span></div>
+                <?php $totalSpent = array_sum(array_column($userOrders, 'grand_total')); ?>
+                <div class="flex justify-between"><span class="text-gray-500">ยอดซื้อรวม</span><span class="font-medium text-emerald-600">฿<?= number_format($totalSpent) ?></span></div>
+                <div class="flex justify-between"><span class="text-gray-500">แต้มสะสม</span><span class="font-medium text-emerald-600"><?= number_format($selectedUser['loyalty_points'] ?? 0) ?></span></div>
+            </div>
+            
+            <!-- Medical Info Section -->
+            <div class="pt-3 border-t">
+                <div class="flex items-center justify-between mb-2">
+                    <h5 class="text-xs font-bold text-gray-700"><i class="fas fa-heartbeat text-red-500 mr-1"></i>ข้อมูลสุขภาพ</h5>
+                    <button onclick="openMedicalModal()" class="text-blue-500 hover:text-blue-600 text-xs"><i class="fas fa-edit"></i></button>
+                </div>
+                <div class="space-y-2 text-xs">
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-2">
+                        <p class="text-red-600 font-medium text-[10px] mb-1"><i class="fas fa-disease mr-1"></i>โรคประจำตัว</p>
+                        <p class="text-gray-700" id="medicalConditions"><?= htmlspecialchars($selectedUser['medical_conditions'] ?? '') ?: '<span class="text-gray-400">ไม่ระบุ</span>' ?></p>
+                    </div>
+                    <div class="bg-orange-50 border border-orange-200 rounded-lg p-2">
+                        <p class="text-orange-600 font-medium text-[10px] mb-1"><i class="fas fa-allergies mr-1"></i>แพ้ยา</p>
+                        <p class="text-gray-700" id="drugAllergies"><?= htmlspecialchars($selectedUser['drug_allergies'] ?? '') ?: '<span class="text-gray-400">ไม่ระบุ</span>' ?></p>
+                    </div>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-2">
+                        <p class="text-blue-600 font-medium text-[10px] mb-1"><i class="fas fa-pills mr-1"></i>ยาที่ใช้อยู่</p>
+                        <p class="text-gray-700" id="currentMedications"><?= htmlspecialchars($selectedUser['current_medications'] ?? '') ?: '<span class="text-gray-400">ไม่ระบุ</span>' ?></p>
+                    </div>
                 </div>
             </div>
-            <div>
-                <h4 class="text-xs font-semibold text-gray-500 uppercase mb-2">บันทึก</h4>
-                <textarea id="noteInput" class="w-full p-2 border rounded-lg text-sm" rows="2" placeholder="เพิ่มบันทึก..."></textarea>
-                <button onclick="saveNote()" class="mt-1 text-xs text-emerald-600 hover:text-emerald-700">บันทึก</button>
+            
+            <!-- Notes Section -->
+            <div class="pt-3 border-t">
+                <h5 class="text-xs font-bold text-gray-700 mb-2"><i class="fas fa-sticky-note text-yellow-500 mr-1"></i>โน๊ต</h5>
+                <form onsubmit="saveNote(event)" class="mb-2">
+                    <textarea id="noteInput" rows="2" class="w-full border rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-emerald-500 outline-none resize-none" placeholder="เพิ่มโน๊ตเกี่ยวกับลูกค้า..."></textarea>
+                    <button type="submit" class="w-full mt-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs py-1.5 rounded-lg">บันทึกโน๊ต</button>
+                </form>
+                <div id="notesList" class="space-y-2 max-h-40 overflow-y-auto">
+                    <?php foreach ($userNotes as $note): ?>
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs relative group">
+                        <p class="text-gray-700"><?= nl2br(htmlspecialchars($note['note'])) ?></p>
+                        <p class="text-[9px] text-gray-400 mt-1"><?= date('d/m/Y H:i', strtotime($note['created_at'])) ?></p>
+                        <button onclick="deleteNote(<?= $note['id'] ?>, this)" class="absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><i class="fas fa-times text-[10px]"></i></button>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php if (empty($userNotes)): ?><p class="text-gray-400 text-xs text-center py-2">ยังไม่มีโน๊ต</p><?php endif; ?>
+                </div>
+            </div>
+            
+            <!-- Recent Orders -->
+            <?php if (!empty($userOrders)): ?>
+            <div class="pt-3 border-t">
+                <h5 class="text-xs font-bold text-gray-700 mb-2"><i class="fas fa-shopping-bag text-blue-500 mr-1"></i>ออเดอร์ล่าสุด</h5>
+                <div class="space-y-1.5">
+                    <?php foreach (array_slice($userOrders, 0, 3) as $order): ?>
+                    <div class="bg-gray-50 rounded-lg p-2 text-xs">
+                        <div class="flex justify-between"><span class="font-medium">#<?= $order['order_number'] ?? $order['id'] ?></span><span class="text-emerald-600">฿<?= number_format($order['grand_total']) ?></span></div>
+                        <div class="text-[9px] text-gray-400"><?= date('d/m/Y', strtotime($order['created_at'])) ?></div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Actions -->
+            <div class="pt-3 border-t space-y-1.5">
+                <a href="user-detail.php?id=<?= $selectedUser['id'] ?>" class="block w-full text-center bg-gray-500 hover:bg-gray-600 text-white text-xs py-2 rounded-lg"><i class="fas fa-external-link-alt mr-1"></i>ดูโปรไฟล์เต็ม</a>
             </div>
         </div>
     </div>
     <?php endif; ?>
 </div>
+
+<!-- Medical Info Modal -->
+<?php if ($selectedUser): ?>
+<div id="medicalModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div class="p-3 border-b flex justify-between items-center bg-red-50">
+            <h3 class="font-bold text-sm text-red-700"><i class="fas fa-heartbeat mr-1"></i>ข้อมูลสุขภาพ</h3>
+            <button onclick="closeMedicalModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <form onsubmit="saveMedical(event)" class="p-4 space-y-3">
+            <div>
+                <label class="block text-xs font-medium text-red-600 mb-1"><i class="fas fa-disease mr-1"></i>โรคประจำตัว</label>
+                <textarea id="inputMedicalConditions" rows="2" class="w-full border border-red-200 rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-red-500 outline-none resize-none" placeholder="เช่น เบาหวาน, ความดันโลหิตสูง..."><?= htmlspecialchars($selectedUser['medical_conditions'] ?? '') ?></textarea>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-orange-600 mb-1"><i class="fas fa-allergies mr-1"></i>แพ้ยา</label>
+                <textarea id="inputDrugAllergies" rows="2" class="w-full border border-orange-200 rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-orange-500 outline-none resize-none" placeholder="เช่น Penicillin, Aspirin..."><?= htmlspecialchars($selectedUser['drug_allergies'] ?? '') ?></textarea>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-blue-600 mb-1"><i class="fas fa-pills mr-1"></i>ยาที่ใช้อยู่</label>
+                <textarea id="inputCurrentMedications" rows="2" class="w-full border border-blue-200 rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 outline-none resize-none" placeholder="เช่น Metformin 500mg วันละ 2 ครั้ง..."><?= htmlspecialchars($selectedUser['current_medications'] ?? '') ?></textarea>
+            </div>
+            <button type="submit" class="w-full bg-red-500 hover:bg-red-600 text-white text-xs py-2 rounded-lg font-medium">
+                <i class="fas fa-save mr-1"></i>บันทึกข้อมูล
+            </button>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Tag Modal -->
 <div id="tagModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
@@ -1255,7 +1375,8 @@ function showTagModal() { document.getElementById('tagModal').classList.remove('
 function closeTagModal() { document.getElementById('tagModal').classList.add('hidden'); }
 
 // ===== Notes =====
-async function saveNote() {
+async function saveNote(e) {
+    if (e) e.preventDefault();
     const note = document.getElementById('noteInput').value.trim();
     if (!note) return;
     
@@ -1264,9 +1385,72 @@ async function saveNote() {
     formData.append('user_id', userId);
     formData.append('note', note);
     
-    await fetch('', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
-    document.getElementById('noteInput').value = '';
-    alert('บันทึกแล้ว');
+    const res = await fetch('', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
+    const data = await res.json();
+    
+    if (data.success) {
+        document.getElementById('noteInput').value = '';
+        // Add note to list
+        const notesList = document.getElementById('notesList');
+        const emptyMsg = notesList.querySelector('.text-center');
+        if (emptyMsg) emptyMsg.remove();
+        
+        const noteDiv = document.createElement('div');
+        noteDiv.className = 'bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs relative group';
+        noteDiv.innerHTML = `
+            <p class="text-gray-700">${escapeHtml(note)}</p>
+            <p class="text-[9px] text-gray-400 mt-1">${new Date().toLocaleString('th-TH')}</p>
+            <button onclick="deleteNote(${data.id}, this)" class="absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><i class="fas fa-times text-[10px]"></i></button>
+        `;
+        notesList.insertBefore(noteDiv, notesList.firstChild);
+    }
+}
+
+async function deleteNote(noteId, btn) {
+    if (!confirm('ลบโน๊ตนี้?')) return;
+    
+    const formData = new FormData();
+    formData.append('action', 'delete_note');
+    formData.append('note_id', noteId);
+    
+    const res = await fetch('', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
+    const data = await res.json();
+    
+    if (data.success) {
+        btn.closest('.bg-yellow-50').remove();
+    }
+}
+
+// ===== Medical Info =====
+function openMedicalModal() {
+    document.getElementById('medicalModal').classList.remove('hidden');
+}
+
+function closeMedicalModal() {
+    document.getElementById('medicalModal').classList.add('hidden');
+}
+
+async function saveMedical(e) {
+    e.preventDefault();
+    
+    const formData = new FormData();
+    formData.append('action', 'save_medical');
+    formData.append('user_id', userId);
+    formData.append('medical_conditions', document.getElementById('inputMedicalConditions').value);
+    formData.append('drug_allergies', document.getElementById('inputDrugAllergies').value);
+    formData.append('current_medications', document.getElementById('inputCurrentMedications').value);
+    
+    const res = await fetch('', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
+    const data = await res.json();
+    
+    if (data.success) {
+        // Update display
+        document.getElementById('medicalConditions').innerHTML = document.getElementById('inputMedicalConditions').value || '<span class="text-gray-400">ไม่ระบุ</span>';
+        document.getElementById('drugAllergies').innerHTML = document.getElementById('inputDrugAllergies').value || '<span class="text-gray-400">ไม่ระบุ</span>';
+        document.getElementById('currentMedications').innerHTML = document.getElementById('inputCurrentMedications').value || '<span class="text-gray-400">ไม่ระบุ</span>';
+        closeMedicalModal();
+        alert('บันทึกข้อมูลสุขภาพแล้ว');
+    }
 }
 
 // ===== Utilities =====
