@@ -1557,31 +1557,6 @@ $menuSections = [
                                 $itemUrl = basename($item['url']);
                             }
                         ?>
-                            $itemUrl = $baseUrl . $item['url'];
-                            $isActive = false;
-                            
-                            // Determine which folder this menu item belongs to based on URL
-                            $itemIsShopUrl = strpos($item['url'], '/shop/') !== false || strpos($item['url'], 'shop/') === 0;
-                            $itemIsInventoryUrl = strpos($item['url'], '/inventory/') !== false || strpos($item['url'], 'inventory/') === 0;
-                            
-                            // Check if active based on URL folder type
-                            if ($itemIsShopUrl) {
-                                // Shop folder items - active when in shop folder and page matches
-                                if ($isShop && $currentPage === $item['page']) {
-                                    $isActive = true;
-                                    $itemUrl = basename($item['url']); // Use relative URL when in shop folder
-                                }
-                            } elseif ($itemIsInventoryUrl) {
-                                // Inventory folder items - active when in inventory folder and page matches
-                                if ($isInventory && $currentPage === $item['page']) {
-                                    $isActive = true;
-                                    $itemUrl = basename($item['url']); // Use relative URL when in inventory folder
-                                }
-                            } else {
-                                // Root level items - active when not in any subfolder and page matches
-                                $isActive = !$isSubfolder && $currentPage === $item['page'];
-                            }
-                        ?>
                         <a href="<?= $itemUrl ?>" class="menu-item <?= $isActive ? 'active' : '' ?>">
                             <span class="menu-icon"><i class="fas <?= $item['icon'] ?>"></i></span>
                             <?= $item['label'] ?>
