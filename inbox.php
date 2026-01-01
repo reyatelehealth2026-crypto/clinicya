@@ -203,6 +203,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 echo json_encode(['success' => true]);
                 break;
             
+            case 'send_image':
+                $userId = intval($_POST['user_id'] ?? 0);
+                if (!$userId) throw new Exception("User ID required");
+                if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+                    throw new Exception("No image uploaded");
+                }
+                
+                // Validate image
+                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                $fileType = $_FILES['image']['type'];
+                if (!in_array($fileType, $allowedTypes)) {
+                    throw new Exception("Invalid image type. Allowed: JPG, PNG, GIF, WEBP");
+                }
+                
+                // Max 10MB
+                if ($_FILES['image']['size'] > 10 * 1024 * 1024) {
+                    throw new Exception("Image too large. Max 10MB");
+                }
+                
+                // Get user info
+                $stmt = $db->prepare("SELECT line_user_id, line_account_id FROM users WHERE id = ?");
+                $stmt->execute([$userId]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$user) throw new Exception("User not found");
+                
+                // Upload image
+                $uploadDir = __DIR__ . '/uploads/chat_images/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+                
+                $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION) ?: 'jpg';
+                $filename = 'chat_' . time() . '_' . uniqid() . '.' . $ext;
+                $filepath = $uploadDir . $filename;
+                
+                if (!move_uploaded_file($_FILES['image']['tmp_name'], $filepath)) {
+                    throw new Exception("Failed to save image");
+                }
+                
+                // Get full URL
+                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+                $host = $_SERVER['HTTP_HOST'];
+                $imageUrl = $protocol . $host . '/uploads/chat_images/' . $filename;
+                
+                // Send via LINE
+                $lineManager = new LineAccountManager($db);
+                $line = $lineManager->getLineAPI($user['line_account_id']);
+                
+                $result = $line->pushMessage($user['line_user_id'], [[
+                    'type' => 'image',
+                    'originalContentUrl' => $imageUrl,
+                    'previewImageUrl' => $imageUrl
+                ]]);
+                
+                if ($result['code'] === 200) {
+                    // Get admin name
+                    $adminUser = $_SESSION['admin_user'] ?? null;
+                    $adminName = 'Admin';
+                    if (is_array($adminUser)) {
+                        $adminName = $adminUser['username'] ?? $adminUser['display_name'] ?? 'Admin';
+                    }
+                    
+                    // Save to messages
+                    $hasSentBy = false;
+                    try {
+                        $checkCol = $db->query("SHOW COLUMNS FROM messages LIKE 'sent_by'");
+                        $hasSentBy = $checkCol->rowCount() > 0;
+                    } catch (Exception $e) {}
+                    
+                    if ($hasSentBy) {
+                        $stmt = $db->prepare("INSERT INTO messages (line_account_id, user_id, direction, message_type, content, sent_by, created_at, is_read) VALUES (?, ?, 'outgoing', 'image', ?, ?, NOW(), 0)");
+                        $stmt->execute([$user['line_account_id'], $userId, $imageUrl, 'admin:' . $adminName]);
+                    } else {
+                        $stmt = $db->prepare("INSERT INTO messages (line_account_id, user_id, direction, message_type, content, created_at, is_read) VALUES (?, ?, 'outgoing', 'image', ?, NOW(), 0)");
+                        $stmt->execute([$user['line_account_id'], $userId, $imageUrl]);
+                    }
+                    $msgId = $db->lastInsertId();
+                    
+                    // Log activity
+                    $activityLogger->logMessage(ActivityLogger::ACTION_SEND, 'ส่งรูปภาพถึงลูกค้า', [
+                        'user_id' => $userId,
+                        'entity_type' => 'message',
+                        'entity_id' => $msgId,
+                        'line_account_id' => $user['line_account_id']
+                    ]);
+                    
+                    echo json_encode([
+                        'success' => true,
+                        'message_id' => $msgId,
+                        'image_url' => $imageUrl,
+                        'time' => date('H:i'),
+                        'sent_by' => 'admin:' . $adminName
+                    ]);
+                } else {
+                    // Delete uploaded file on failure
+                    @unlink($filepath);
+                    throw new Exception("Failed to send image via LINE");
+                }
+                break;
+            
             case 'test_session':
                 // Debug: ทดสอบว่า session ถูกอ่านถูกต้องหรือไม่
                 $adminUser = $_SESSION['admin_user'] ?? null;
@@ -658,6 +758,15 @@ function formatThaiDateTime($datetime) {
         <div class="p-3 bg-white border-t">
             <form id="sendForm" class="flex gap-2 items-end" onsubmit="sendMessage(event)">
                 <input type="hidden" name="user_id" value="<?= $selectedUser['id'] ?>">
+                
+                <!-- Image Upload Button -->
+                <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="handleImageSelect(this)">
+                <button type="button" onclick="document.getElementById('imageInput').click()" 
+                        class="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center transition-all" 
+                        title="แนบรูปภาพ">
+                    <i class="fas fa-image"></i>
+                </button>
+                
                 <div class="flex-1 bg-gray-100 rounded-2xl px-4 py-2 focus-within:ring-2 focus-within:ring-emerald-500">
                     <textarea name="message" id="messageInput" rows="1" 
                               class="w-full bg-transparent border-0 outline-none text-sm resize-none max-h-24" 
@@ -669,6 +778,23 @@ function formatThaiDateTime($datetime) {
                     <i class="fas fa-paper-plane"></i>
                 </button>
             </form>
+            
+            <!-- Image Preview -->
+            <div id="imagePreview" class="hidden mt-2 p-2 bg-gray-50 rounded-lg">
+                <div class="flex items-center gap-2">
+                    <img id="previewImg" src="" class="w-16 h-16 object-cover rounded-lg">
+                    <div class="flex-1">
+                        <p id="previewName" class="text-sm text-gray-700 truncate"></p>
+                        <p id="previewSize" class="text-xs text-gray-500"></p>
+                    </div>
+                    <button type="button" onclick="cancelImageUpload()" class="text-red-500 hover:text-red-700 p-2">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <button type="button" onclick="sendImage()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                        <i class="fas fa-paper-plane mr-1"></i>ส่งรูป
+                    </button>
+                </div>
+            </div>
         </div>
         
         <?php else: ?>
@@ -1333,6 +1459,103 @@ async function sendMessage(e) {
     
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+}
+
+// ===== Image Upload =====
+let selectedImageFile = null;
+
+function handleImageSelect(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    // Validate
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+        alert('รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP');
+        input.value = '';
+        return;
+    }
+    
+    if (file.size > 10 * 1024 * 1024) {
+        alert('ไฟล์ใหญ่เกินไป (สูงสุด 10MB)');
+        input.value = '';
+        return;
+    }
+    
+    selectedImageFile = file;
+    
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('previewImg').src = e.target.result;
+        document.getElementById('previewName').textContent = file.name;
+        document.getElementById('previewSize').textContent = formatFileSize(file.size);
+        document.getElementById('imagePreview').classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function cancelImageUpload() {
+    selectedImageFile = null;
+    document.getElementById('imageInput').value = '';
+    document.getElementById('imagePreview').classList.add('hidden');
+}
+
+async function sendImage() {
+    if (!selectedImageFile || !userId) return;
+    
+    const preview = document.getElementById('imagePreview');
+    const sendBtn = preview.querySelector('button:last-child');
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังส่ง...';
+    
+    try {
+        const formData = new FormData();
+        formData.append('action', 'send_image');
+        formData.append('user_id', userId);
+        formData.append('image', selectedImageFile);
+        
+        const res = await fetch('', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: formData
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            const msgId = data.message_id || Date.now();
+            sentMessageIds.add(msgId);
+            lastMessageId = Math.max(lastMessageId, msgId);
+            
+            // Append image message
+            appendMessage({
+                id: msgId,
+                direction: 'outgoing',
+                message_type: 'image',
+                content: data.image_url,
+                sent_by: data.sent_by,
+                is_read: 0,
+                created_at: new Date().toISOString()
+            });
+            scrollToBottom();
+            
+            // Clear preview
+            cancelImageUpload();
+        } else {
+            alert('Error: ' + (data.error || 'ส่งรูปไม่สำเร็จ'));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+    
+    sendBtn.disabled = false;
+    sendBtn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i>ส่งรูป';
 }
 
 // ===== AI Reply =====
