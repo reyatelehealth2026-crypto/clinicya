@@ -295,6 +295,7 @@ $menuSections = [
             isSuperAdmin() ? ['icon' => 'fa-layer-group', 'label' => 'บัญชี LINE', 'url' => '/line-accounts', 'page' => 'line-accounts'] : null,
             ['icon' => 'fa-mobile-screen', 'label' => 'ตั้งค่า LIFF', 'url' => '/liff-settings', 'page' => 'liff-settings'],
             ['icon' => 'fa-shield-alt', 'label' => 'Consent/PDPA', 'url' => '/consent-management', 'page' => 'consent-management'],
+            ['icon' => 'fa-history', 'label' => 'Activity Logs', 'url' => '/activity-logs', 'page' => 'activity-logs'],
             ['icon' => 'fa-bell', 'label' => 'การแจ้งเตือน', 'url' => '/notification-settings', 'page' => 'notification-settings'],
             ['icon' => 'fab fa-telegram', 'label' => 'Telegram', 'url' => '/telegram', 'page' => 'telegram'],
             isSuperAdmin() ? ['icon' => 'fa-users-cog', 'label' => 'ผู้ใช้ระบบ', 'url' => '/admin-users', 'page' => 'admin-users'] : null,
