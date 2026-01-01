@@ -79,11 +79,14 @@ if (isUser()) {
 $currentPage = basename($_SERVER['PHP_SELF'], '.php');
 $currentPath = $_SERVER['PHP_SELF'];
 
-// Detect folder (shop or inventory)
+// Detect folder (shop, inventory, or admin)
 $isShop = strpos($currentPath, '/shop/') !== false;
 $isInventory = strpos($currentPath, '/inventory/') !== false;
-$isSubfolder = $isShop || $isInventory;
-$baseUrl = $isSubfolder ? '../' : '';
+$isAdmin = strpos($currentPath, '/admin/') !== false;
+$isSubfolder = $isShop || $isInventory || $isAdmin;
+
+// Use absolute paths for menu URLs to avoid path issues
+$baseUrl = '/';
 
 
 // Handle bot switching
@@ -280,7 +283,6 @@ $menuGroups = [
                 'submenus' => [
                     ['title' => 'ภาพรวมระบบ (Main Dashboard)', 'href' => '/shop/'],
                     ['title' => 'ผู้บริหาร (Executive Dashboard)', 'href' => '/executive-dashboard'],
-                    ['title' => 'ภาพรวมร้านค้า (Shop Overview)', 'href' => '/shop/'],
                 ]
             ],
             [
