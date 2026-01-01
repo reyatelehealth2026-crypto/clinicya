@@ -60,32 +60,6 @@ function hasMenuAccess($menuItem) {
     return in_array($userRole, $menuItem['roles']);
 }
 
-/**
- * Check if a menu item is active based on current page
- * @param array $item Menu item
- * @param string $currentPage Current page name
- * @param bool $isShop Is in shop folder
- * @param bool $isInventory Is in inventory folder
- * @param bool $isSubfolder Is in any subfolder
- * @return bool True if menu item is active
- */
-function checkMenuItemActive($item, $currentPage, $isShop, $isInventory, $isSubfolder) {
-    if (!isset($item['url']) || !isset($item['page'])) {
-        return false;
-    }
-    
-    $itemIsShopUrl = strpos($item['url'], '/shop/') !== false || strpos($item['url'], 'shop/') === 0;
-    $itemIsInventoryUrl = strpos($item['url'], '/inventory/') !== false || strpos($item['url'], 'inventory/') === 0;
-    
-    if ($itemIsShopUrl) {
-        return $isShop && $currentPage === $item['page'];
-    } elseif ($itemIsInventoryUrl) {
-        return $isInventory && $currentPage === $item['page'];
-    } else {
-        return !$isSubfolder && $currentPage === $item['page'];
-    }
-}
-
 // Helper function to generate clean URLs (without .php)
 function cleanUrl($url) {
     // Remove .php extension for clean URLs
@@ -292,7 +266,8 @@ foreach ($userQuickAccess as $key) {
     }
 }
 
-// Menu structure with collapsible submenus - Optimized & Consolidated
+// Menu structure with collapsible submenus - Complete Menu Structure
+// จัดกลุ่มเมนูทั้งหมดจากระบบเดิมเข้า 5 กลุ่มใหม่
 $menuSections = [
     'quick' => [
         'title' => '⚡ Quick Access',
@@ -308,288 +283,129 @@ $menuSections = [
     ],
     
     // ==================== กลุ่ม 1: Insights & Overview ====================
+    // รวม: Dashboard, รายงาน & สถิติ, Activity Logs
     'insights' => [
         'title' => '📊 Insights & Overview',
         'icon' => 'fa-chart-line',
         'collapsible' => true,
         'items' => [
-            // Executive Dashboard - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-chart-line', 
-                'label' => 'Executive Dashboard', 
-                'label_th' => 'แดชบอร์ดผู้บริหาร',
-                'roles' => ['owner', 'admin'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-dollar-sign', 'label' => 'ยอดขายรวม', 'url' => '/executive-dashboard', 'page' => 'executive-dashboard', 'hash' => 'sales'],
-                    ['icon' => 'fa-user-injured', 'label' => 'เคสรักษา', 'url' => '/executive-dashboard', 'page' => 'executive-dashboard', 'hash' => 'cases'],
-                    ['icon' => 'fa-store', 'label' => 'Performance ร้าน', 'url' => '/executive-dashboard', 'page' => 'executive-dashboard', 'hash' => 'performance'],
-                    ['icon' => 'fa-fire', 'label' => 'สินค้าขายดี', 'url' => '/executive-dashboard', 'page' => 'executive-dashboard', 'hash' => 'bestsellers'],
-                ]
-            ],
-            // Clinical Analytics - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-stethoscope', 
-                'label' => 'Clinical Analytics', 
-                'label_th' => 'สถิติคลินิก',
-                'roles' => ['pharmacist', 'owner'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-procedures', 'label' => 'สถิติคนไข้ไทรอาจ', 'url' => '/triage-analytics', 'page' => 'triage-analytics'],
-                    ['icon' => 'fa-prescription', 'label' => 'การจ่ายยา', 'url' => '/triage-analytics', 'page' => 'triage-analytics', 'hash' => 'dispensing'],
-                    ['icon' => 'fa-pills', 'label' => 'Drug Interaction Stats', 'url' => '/drug-interactions', 'page' => 'drug-interactions'],
-                ]
-            ],
-            // Audit Logs - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-history', 
-                'label' => 'Audit Logs', 
-                'label_th' => 'ประวัติการใช้งาน',
-                'roles' => ['owner'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-sign-in-alt', 'label' => 'Login History', 'url' => '/activity-logs', 'page' => 'activity-logs', 'hash' => 'login'],
-                    ['icon' => 'fa-edit', 'label' => 'การแก้ไขออเดอร์', 'url' => '/activity-logs', 'page' => 'activity-logs', 'hash' => 'orders'],
-                    ['icon' => 'fa-clipboard-list', 'label' => 'ตรวจสอบการกระทำ', 'url' => '/activity-logs', 'page' => 'activity-logs'],
-                ]
-            ],
+            // Dashboard
+            ['icon' => 'fa-chart-line', 'label' => 'Executive Dashboard', 'url' => '/executive-dashboard', 'page' => 'executive-dashboard', 'roles' => ['owner', 'admin']],
+            // รายงาน & สถิติ
+            ['icon' => 'fa-chart-pie', 'label' => 'สถิติทั่วไป', 'url' => '/analytics', 'page' => 'analytics', 'roles' => ['owner', 'admin']],
+            ['icon' => 'fa-chart-area', 'label' => 'วิเคราะห์ขั้นสูง', 'url' => '/advanced-analytics', 'page' => 'advanced-analytics', 'roles' => ['owner', 'admin']],
+            ['icon' => 'fa-users-viewfinder', 'label' => 'CRM Analytics', 'url' => '/crm-analytics', 'page' => 'crm-analytics', 'roles' => ['owner', 'admin']],
+            ['icon' => 'fa-calendar-alt', 'label' => 'รายงานอัตโนมัติ', 'url' => '/scheduled-reports', 'page' => 'scheduled-reports', 'roles' => ['owner', 'admin']],
+            ['icon' => 'fa-link', 'label' => 'ติดตามลิงก์', 'url' => '/link-tracking', 'page' => 'link-tracking', 'roles' => ['owner', 'admin', 'marketing']],
+            // Clinical Analytics
+            ['icon' => 'fa-stethoscope', 'label' => 'Triage Analytics', 'url' => '/triage-analytics', 'page' => 'triage-analytics', 'roles' => ['pharmacist', 'owner']],
+            ['icon' => 'fa-pills', 'label' => 'ยาตีกัน', 'url' => '/drug-interactions', 'page' => 'drug-interactions', 'roles' => ['pharmacist', 'owner']],
+            // Audit
+            ['icon' => 'fa-history', 'label' => 'Activity Logs', 'url' => '/activity-logs', 'page' => 'activity-logs', 'roles' => ['owner']],
         ]
     ],
     
     // ==================== กลุ่ม 2: Clinical Station ====================
+    // รวม: แชท & ลูกค้า (บางส่วน), เภสัชกร & AI, AI Tools
     'clinical' => [
         'title' => '🏥 Clinical Station',
         'icon' => 'fa-user-md',
         'collapsible' => true,
         'items' => [
-            // Unified Care Chat - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-comments', 
-                'label' => 'Unified Care Chat', 
-                'label_th' => 'พื้นที่ตรวจสอบแชทรวม',
-                'roles' => ['pharmacist', 'staff'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-inbox', 'label' => 'แชท (Text)', 'url' => '/inbox', 'page' => 'inbox', 'badge' => $unreadMessages],
-                    ['icon' => 'fa-video', 'label' => 'Video Consult', 'url' => '/video-call-pro', 'page' => 'video-call-pro'],
-                    ['icon' => 'fa-robot', 'label' => 'ตอบไลน์อัตโนมัติ', 'url' => '/auto-reply', 'page' => 'auto-reply'],
-                    ['icon' => 'fa-check-circle', 'label' => 'ตรวจไลน์', 'url' => '/inbox', 'page' => 'inbox', 'hash' => 'pending'],
-                ]
-            ],
-            // Roster & Shifts - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-calendar-alt', 
-                'label' => 'Roster & Shifts', 
-                'label_th' => 'ตารางเวรเภสัชกร',
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-user-md', 'label' => 'จัดการเวรเภสัชกร', 'url' => '/pharmacist-dashboard', 'page' => 'pharmacist-dashboard'],
-                    ['icon' => 'fa-circle', 'label' => 'สถานะ Online/Offline', 'url' => '/pharmacists', 'page' => 'pharmacists'],
-                    ['icon' => 'fa-calendar-check', 'label' => 'Booking Slots', 'url' => '/appointments-admin', 'page' => 'appointments-admin'],
-                ]
-            ],
-            // Medical Copilot AI - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-robot', 
-                'label' => 'Medical Copilot (AI)', 
-                'label_th' => 'ผู้ช่วย AI',
-                'roles' => ['pharmacist'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-comments', 'label' => 'AI Tools', 'url' => '/ai-chat-settings', 'page' => 'ai-chat-settings'],
-                    ['icon' => 'fa-wand-magic-sparkles', 'label' => 'AI สรุปประวัติ', 'url' => '/ai-studio', 'page' => 'ai-studio'],
-                    ['icon' => 'fa-pills', 'label' => 'ตรวจสอบประวัติยา', 'url' => '/ai-pharmacy-settings', 'page' => 'ai-pharmacy-settings'],
-                    ['icon' => 'fa-search', 'label' => 'ค้นหาข้อมูลยา', 'url' => '/drug-interactions', 'page' => 'drug-interactions'],
-                ]
-            ],
+            // แชท & การสื่อสาร
+            ['icon' => 'fa-inbox', 'label' => 'กล่องข้อความ', 'url' => '/inbox', 'page' => 'inbox', 'badge' => $unreadMessages],
+            ['icon' => 'fa-video', 'label' => 'Video Call', 'url' => '/video-call-pro', 'page' => 'video-call-pro', 'roles' => ['pharmacist', 'staff']],
+            ['icon' => 'fa-robot', 'label' => 'ตอบอัตโนมัติ', 'url' => '/auto-reply', 'page' => 'auto-reply'],
+            // เภสัชกร
+            ['icon' => 'fa-user-md', 'label' => 'Dashboard เภสัชกร', 'url' => '/pharmacist-dashboard', 'page' => 'pharmacist-dashboard', 'roles' => ['pharmacist', 'owner', 'admin']],
+            ['icon' => 'fa-user-nurse', 'label' => 'จัดการเภสัชกร', 'url' => '/pharmacists', 'page' => 'pharmacists', 'roles' => ['owner', 'admin']],
+            // AI Tools
+            ['icon' => 'fa-comments', 'label' => 'AI ตอบแชท', 'url' => '/ai-chat-settings', 'page' => 'ai-chat-settings', 'roles' => ['pharmacist', 'admin']],
+            ['icon' => 'fa-wand-magic-sparkles', 'label' => 'AI Studio', 'url' => '/ai-studio', 'page' => 'ai-studio', 'roles' => ['pharmacist', 'admin']],
+            ['icon' => 'fa-image', 'label' => 'AI สร้างรูป', 'url' => '/ai-image', 'page' => 'ai-image', 'roles' => ['pharmacist', 'admin', 'marketing']],
+            ['icon' => 'fa-cog', 'label' => 'ตั้งค่า AI เภสัช', 'url' => '/ai-pharmacy-settings', 'page' => 'ai-pharmacy-settings', 'roles' => ['pharmacist', 'owner']],
         ]
     ],
     
     // ==================== กลุ่ม 3: Patient & Journey ====================
+    // รวม: แชท & ลูกค้า (ข้อมูลลูกค้า), สมาชิก & แต้ม, บรอดแคสต์, เครื่องมือ LINE
     'patient' => [
         'title' => '👤 Patient & Journey',
         'icon' => 'fa-users',
         'collapsible' => true,
         'items' => [
-            // EHR (Health Records) - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-file-medical', 
-                'label' => 'EHR (Health Records)', 
-                'label_th' => 'ระบบเวชระเบียน',
-                'roles' => ['pharmacist', 'admin'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-users', 'label' => 'รายชื่อลูกค้า', 'url' => '/users', 'page' => 'users'],
-                    ['icon' => 'fa-prescription', 'label' => 'ประวัติสั่งยา', 'url' => '/users', 'page' => 'users', 'hash' => 'prescriptions'],
-                    ['icon' => 'fa-file-alt', 'label' => 'ใบสั่งยาจ่าง', 'url' => '/dispense-drugs', 'page' => 'dispense-drugs'],
-                    ['icon' => 'fa-sticky-note', 'label' => 'Note ต่อเนื่อง', 'url' => '/user-tags', 'page' => 'user-tags'],
-                ]
-            ],
-            // Membership - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-id-card', 
-                'label' => 'Membership', 
-                'label_th' => 'สมาชิก & สิทธิพิเศษ',
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-crown', 'label' => 'ระดับสมาชิก (Tier)', 'url' => '/members', 'page' => 'members'],
-                    ['icon' => 'fa-coins', 'label' => 'ระบบแต้ม', 'url' => '/admin-points-settings', 'page' => 'admin-points-settings'],
-                    ['icon' => 'fa-gift', 'label' => 'ประวัติการแลก', 'url' => '/admin-rewards', 'page' => 'admin-rewards'],
-                ]
-            ],
-            // Care Journey - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-route', 
-                'label' => 'Care Journey', 
-                'label_th' => 'ติดตามผลลัพธ์ไลน์',
-                'roles' => ['admin', 'marketing'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-paper-plane', 'label' => 'บรอดแคสต์', 'url' => '/broadcast', 'page' => 'broadcast'],
-                    ['icon' => 'fa-water', 'label' => 'Drip Campaign', 'url' => '/drip-campaigns', 'page' => 'drip-campaigns'],
-                    ['icon' => 'fa-magic', 'label' => 'Automation Flows', 'url' => '/drip-campaigns', 'page' => 'drip-campaigns', 'hash' => 'automation'],
-                    ['icon' => 'fa-chart-line', 'label' => 'ติดตามผลการรักษา', 'url' => '/broadcast-stats', 'page' => 'broadcast-stats'],
-                ]
-            ],
-            // Digital Front Door - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-door-open', 
-                'label' => 'Digital Front Door', 
-                'label_th' => 'จัดการหน้าร้าน LINE',
-                'roles' => ['admin', 'marketing'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-th-large', 'label' => 'ออกแบบ Rich Menu', 'url' => '/rich-menu', 'page' => 'rich-menu'],
-                    ['icon' => 'fa-random', 'label' => 'Dynamic Rich Menu', 'url' => '/dynamic-rich-menu', 'page' => 'dynamic-rich-menu'],
-                    ['icon' => 'fa-comment-dots', 'label' => 'ข้อความต้อนรับ', 'url' => '/welcome-settings', 'page' => 'welcome-settings'],
-                    ['icon' => 'fa-mobile-screen', 'label' => 'LIFF Settings', 'url' => '/liff-settings', 'page' => 'liff-settings'],
-                ]
-            ],
+            // ข้อมูลลูกค้า
+            ['icon' => 'fa-users', 'label' => 'รายชื่อลูกค้า', 'url' => '/users', 'page' => 'users'],
+            ['icon' => 'fa-tags', 'label' => 'แท็กลูกค้า', 'url' => '/user-tags', 'page' => 'user-tags'],
+            ['icon' => 'fa-layer-group', 'label' => 'กลุ่มลูกค้า (Segments)', 'url' => '/customer-segments', 'page' => 'customer-segments', 'roles' => ['admin', 'marketing']],
+            // สมาชิก & แต้ม
+            ['icon' => 'fa-id-card', 'label' => 'จัดการสมาชิก', 'url' => '/members', 'page' => 'members'],
+            ['icon' => 'fa-gift', 'label' => 'รางวัลแลกแต้ม', 'url' => '/admin-rewards', 'page' => 'admin-rewards'],
+            ['icon' => 'fa-coins', 'label' => 'ตั้งค่าแต้ม', 'url' => '/admin-points-settings', 'page' => 'admin-points-settings', 'roles' => ['owner', 'admin']],
+            ['icon' => 'fa-calendar-check', 'label' => 'นัดหมาย', 'url' => '/appointments-admin', 'page' => 'appointments-admin'],
+            // บรอดแคสต์
+            ['icon' => 'fa-paper-plane', 'label' => 'ส่งข้อความ', 'url' => '/broadcast', 'page' => 'broadcast', 'roles' => ['admin', 'marketing']],
+            ['icon' => 'fa-images', 'label' => 'แคตตาล็อก', 'url' => '/broadcast-catalog-v2', 'page' => 'broadcast-catalog-v2', 'roles' => ['admin', 'marketing']],
+            ['icon' => 'fa-chart-bar', 'label' => 'สถิติบรอดแคสต์', 'url' => '/broadcast-stats', 'page' => 'broadcast-stats', 'roles' => ['admin', 'marketing']],
+            ['icon' => 'fa-water', 'label' => 'Drip Campaign', 'url' => '/drip-campaigns', 'page' => 'drip-campaigns', 'roles' => ['admin', 'marketing']],
+            // เครื่องมือ LINE
+            ['icon' => 'fa-th-large', 'label' => 'Rich Menu', 'url' => '/rich-menu', 'page' => 'rich-menu', 'roles' => ['admin', 'marketing']],
+            ['icon' => 'fa-random', 'label' => 'Dynamic Rich Menu', 'url' => '/dynamic-rich-menu', 'page' => 'dynamic-rich-menu', 'roles' => ['admin', 'marketing']],
+            ['icon' => 'fa-puzzle-piece', 'label' => 'Flex Builder', 'url' => '/flex-builder', 'page' => 'flex-builder', 'roles' => ['admin', 'marketing']],
+            ['icon' => 'fa-hand-wave', 'label' => 'ข้อความต้อนรับ', 'url' => '/welcome-settings', 'page' => 'welcome-settings', 'roles' => ['admin', 'marketing']],
+            ['icon' => 'fa-clock', 'label' => 'ตั้งเวลาส่ง', 'url' => '/scheduled', 'page' => 'scheduled', 'roles' => ['admin', 'marketing']],
+            ['icon' => 'fa-users-rectangle', 'label' => 'กลุ่ม LINE', 'url' => '/line-groups', 'page' => 'line-groups', 'roles' => ['admin', 'marketing']],
         ]
     ],
     
     // ==================== กลุ่ม 4: Supply & Revenue ====================
+    // รวม: ร้านค้า, คลังสินค้า
     'supply' => [
         'title' => '📦 Supply & Revenue',
         'icon' => 'fa-warehouse',
         'collapsible' => true,
         'items' => [
-            // Billing & Orders - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-receipt', 
-                'label' => 'Billing & Orders', 
-                'label_th' => 'บิล & ออเดอร์',
-                'roles' => ['admin', 'staff'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-shopping-cart', 'label' => 'ออเดอร์', 'url' => '/shop/orders', 'page' => 'orders', 'badge' => $pendingOrders, 'badgeColor' => 'yellow'],
-                    ['icon' => 'fa-image', 'label' => 'ตรวจสลิป', 'url' => '/shop/orders', 'page' => 'orders', 'hash' => 'slips'],
-                    ['icon' => 'fa-file-invoice', 'label' => 'ออกใบกำกับภาษี', 'url' => '/shop/orders', 'page' => 'orders', 'hash' => 'invoice'],
-                    ['icon' => 'fa-truck', 'label' => 'สถานะจัดส่ง', 'url' => '/shop/orders', 'page' => 'orders', 'hash' => 'shipping'],
-                ]
-            ],
-            // Inventory - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-boxes', 
-                'label' => 'Inventory', 
-                'label_th' => 'คลังยา & สินค้า',
-                'roles' => ['admin', 'pharmacist'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-box', 'label' => 'รายการยา (SKU)', 'url' => '/shop/products', 'page' => 'products'],
-                    ['icon' => 'fa-folder', 'label' => 'หมวดหมู่', 'url' => '/shop/categories', 'page' => 'categories'],
-                    ['icon' => 'fa-sliders-h', 'label' => 'ตัดสต็อก', 'url' => '/inventory/stock-adjustment', 'page' => 'stock-adjustment'],
-                    ['icon' => 'fa-exclamation-triangle', 'label' => 'แจ้งเตือนยาใกล้หมด/หมดอายุ', 'url' => '/inventory/low-stock', 'page' => 'low-stock'],
-                ]
-            ],
-            // Services Catalog - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-clipboard-list', 
-                'label' => 'Services Catalog', 
-                'label_th' => 'รายการค่าบริการ',
-                'roles' => ['admin', 'pharmacist'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-stethoscope', 'label' => 'ค่าราคาค่า Consult', 'url' => '/shop/promotions', 'page' => 'promotions'],
-                    ['icon' => 'fa-cut', 'label' => 'ค่าหัตถการ', 'url' => '/shop/promotions', 'page' => 'promotions', 'hash' => 'services'],
-                    ['icon' => 'fa-heartbeat', 'label' => 'แพ็กเกจตรวจสุขภาพ', 'url' => '/shop/promotions', 'page' => 'promotions', 'hash' => 'packages'],
-                ]
-            ],
-            // Procurement - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-truck-loading', 
-                'label' => 'Procurement', 
-                'label_th' => 'จัดซื้อ & รับสินค้า',
-                'roles' => ['admin', 'owner'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-file-invoice', 'label' => 'สั่งซื้อยาจาก Supplier', 'url' => '/inventory/purchase-orders', 'page' => 'purchase-orders'],
-                    ['icon' => 'fa-truck', 'label' => 'Suppliers', 'url' => '/inventory/suppliers', 'page' => 'suppliers'],
-                    ['icon' => 'fa-clipboard-check', 'label' => 'รับสินค้าเข้าคลัง (GR)', 'url' => '/inventory/goods-receive', 'page' => 'goods-receive'],
-                ]
-            ],
+            // ร้านค้า - ออเดอร์
+            ['icon' => 'fa-store', 'label' => 'ภาพรวมร้านค้า', 'url' => '/shop/', 'page' => 'shop-index', 'folder' => 'shop', 'roles' => ['admin', 'staff']],
+            ['icon' => 'fa-receipt', 'label' => 'ออเดอร์', 'url' => '/shop/orders', 'page' => 'orders', 'badge' => $pendingOrders, 'badgeColor' => 'yellow', 'folder' => 'shop'],
+            ['icon' => 'fa-file-invoice-dollar', 'label' => 'รอตรวจสลิป', 'url' => '/shop/orders?filter=pending_slip', 'page' => 'orders-slip', 'badge' => $pendingSlips, 'badgeColor' => 'orange', 'folder' => 'shop'],
+            ['icon' => 'fa-percent', 'label' => 'โปรโมชั่น', 'url' => '/shop/promotions', 'page' => 'promotions', 'folder' => 'shop', 'roles' => ['admin']],
+            ['icon' => 'fa-sync', 'label' => 'Sync สินค้า', 'url' => '/sync-dashboard', 'page' => 'sync-dashboard', 'roles' => ['admin', 'owner']],
+            ['icon' => 'fa-cog', 'label' => 'ตั้งค่าร้าน', 'url' => '/shop/settings', 'page' => 'settings', 'folder' => 'shop', 'roles' => ['admin', 'owner']],
+            ['icon' => 'fa-mobile-screen', 'label' => 'ตั้งค่า LIFF Shop', 'url' => '/shop/liff-shop-settings', 'page' => 'liff-shop-settings', 'folder' => 'shop', 'roles' => ['admin', 'owner']],
+            // คลังสินค้า
+            ['icon' => 'fa-box', 'label' => 'สินค้า', 'url' => '/shop/products', 'page' => 'products', 'folder' => 'shop'],
+            ['icon' => 'fa-folder', 'label' => 'หมวดหมู่', 'url' => '/shop/categories', 'page' => 'categories', 'folder' => 'shop'],
+            ['icon' => 'fa-truck', 'label' => 'Suppliers', 'url' => '/inventory/suppliers', 'page' => 'suppliers', 'folder' => 'inventory', 'roles' => ['admin', 'owner']],
+            ['icon' => 'fa-file-invoice', 'label' => 'ใบสั่งซื้อ (PO)', 'url' => '/inventory/purchase-orders', 'page' => 'purchase-orders', 'folder' => 'inventory', 'roles' => ['admin', 'owner']],
+            ['icon' => 'fa-truck-loading', 'label' => 'รับสินค้า (GR)', 'url' => '/inventory/goods-receive', 'page' => 'goods-receive', 'folder' => 'inventory', 'roles' => ['admin', 'owner']],
+            ['icon' => 'fa-sliders-h', 'label' => 'ปรับสต็อก', 'url' => '/inventory/stock-adjustment', 'page' => 'stock-adjustment', 'folder' => 'inventory', 'roles' => ['admin', 'pharmacist']],
+            ['icon' => 'fa-exchange-alt', 'label' => 'ประวัติเคลื่อนไหว', 'url' => '/inventory/stock-movements', 'page' => 'stock-movements', 'folder' => 'inventory', 'roles' => ['admin', 'pharmacist']],
+            ['icon' => 'fa-exclamation-triangle', 'label' => 'สินค้าใกล้หมด', 'url' => '/inventory/low-stock', 'page' => 'low-stock', 'folder' => 'inventory'],
+            ['icon' => 'fa-balance-scale', 'label' => 'หน่วยสินค้า', 'url' => '/inventory/product-units', 'page' => 'product-units', 'folder' => 'inventory', 'roles' => ['admin']],
+            ['icon' => 'fa-file-alt', 'label' => 'รายงานคลัง', 'url' => '/inventory/reports', 'page' => 'inventory-reports', 'folder' => 'inventory', 'roles' => ['admin', 'owner']],
         ]
     ],
     
     // ==================== กลุ่ม 5: Facility Setup ====================
+    // รวม: ตั้งค่าระบบ
     'facility' => [
         'title' => '⚙️ Facility Setup',
         'icon' => 'fa-cog',
         'collapsible' => true,
         'items' => [
-            // Facility Profile - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-store', 
-                'label' => 'Facility Profile', 
-                'label_th' => 'ข้อมูลสถานพยาบาล',
-                'roles' => ['owner', 'admin'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-building', 'label' => 'ชื่อร้าน/คลินิก', 'url' => '/shop/settings', 'page' => 'settings'],
-                    ['icon' => 'fa-image', 'label' => 'โลโก้', 'url' => '/shop/settings', 'page' => 'settings', 'hash' => 'logo'],
-                    ['icon' => 'fa-map-marker-alt', 'label' => 'ที่อยู่', 'url' => '/shop/settings', 'page' => 'settings', 'hash' => 'address'],
-                    ['icon' => 'fa-certificate', 'label' => 'เลขใบอนุญาต', 'url' => '/shop/settings', 'page' => 'settings', 'hash' => 'license'],
-                ]
-            ],
-            // Staff & Roles - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-users-cog', 
-                'label' => 'Staff & Roles', 
-                'label_th' => 'บุคลากร & สิทธิ์',
-                'roles' => ['owner'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-user-plus', 'label' => 'เพิ่ม/ลบพนักงาน', 'url' => '/admin-users2', 'page' => 'admin-users2'],
-                    ['icon' => 'fa-user-shield', 'label' => 'กำหนดสิทธิ์ (Role-based)', 'url' => '/admin-users2', 'page' => 'admin-users2', 'hash' => 'roles'],
-                ]
-            ],
-            // Integrations - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-plug', 
-                'label' => 'Integrations', 
-                'label_th' => 'เชื่อมต่อระบบ',
-                'roles' => ['admin', 'tech'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fab fa-line', 'label' => 'เชื่อมต่อ LINE OA', 'url' => '/line-accounts', 'page' => 'line-accounts'],
-                    ['icon' => 'fa-credit-card', 'label' => 'Payment Gateway', 'url' => '/shop/settings', 'page' => 'settings', 'hash' => 'payment'],
-                    ['icon' => 'fa-key', 'label' => 'API Key', 'url' => '/ai-settings', 'page' => 'ai-settings'],
-                    ['icon' => 'fa-hospital', 'label' => 'ระบบ HIS ภายนอก', 'url' => '/ai-settings', 'page' => 'ai-settings', 'hash' => 'his'],
-                    ['icon' => 'fab fa-telegram', 'label' => 'Telegram', 'url' => '/telegram', 'page' => 'telegram'],
-                ]
-            ],
-            // Consent & PDPA - เมนูหลักพร้อมเมนูย่อย
-            [
-                'icon' => 'fa-shield-alt', 
-                'label' => 'Consent & PDPA', 
-                'label_th' => 'ความยินยอม & PDPA',
-                'roles' => ['admin'],
-                'collapsible' => true,
-                'children' => [
-                    ['icon' => 'fa-file-signature', 'label' => 'แบบฟอร์มขอความยินยอม', 'url' => '/consent-management', 'page' => 'consent-management'],
-                    ['icon' => 'fa-user-secret', 'label' => 'นโยบายความเป็นส่วนตัว', 'url' => '/privacy-policy', 'page' => 'privacy-policy'],
-                ]
-            ],
+            // บัญชี & การเชื่อมต่อ
+            ['icon' => 'fab fa-line', 'label' => 'บัญชี LINE', 'url' => '/line-accounts', 'page' => 'line-accounts', 'roles' => ['owner', 'admin', 'tech']],
+            ['icon' => 'fa-mobile-screen', 'label' => 'ตั้งค่า LIFF', 'url' => '/liff-settings', 'page' => 'liff-settings', 'roles' => ['admin', 'tech']],
+            ['icon' => 'fa-shield-alt', 'label' => 'Consent & PDPA', 'url' => '/consent-management', 'page' => 'consent-management', 'roles' => ['owner', 'admin']],
+            ['icon' => 'fa-bell', 'label' => 'การแจ้งเตือน', 'url' => '/notification-settings', 'page' => 'notification-settings', 'roles' => ['admin']],
+            ['icon' => 'fab fa-telegram', 'label' => 'Telegram', 'url' => '/telegram', 'page' => 'telegram', 'roles' => ['owner', 'admin', 'tech']],
+            // API & ระบบ
+            ['icon' => 'fa-key', 'label' => 'ตั้งค่า API Key', 'url' => '/ai-settings', 'page' => 'ai-settings', 'roles' => ['owner', 'admin', 'tech']],
+            // ผู้ใช้ระบบ
+            ['icon' => 'fa-users-cog', 'label' => 'ผู้ใช้ระบบ', 'url' => '/admin-users2', 'page' => 'admin-users2', 'roles' => ['owner', 'admin']],
+            // ช่วยเหลือ
+            ['icon' => 'fa-question-circle', 'label' => 'ช่วยเหลือ', 'url' => '/help', 'page' => 'help'],
         ]
     ],
 ];
@@ -781,7 +597,7 @@ $menuSections = [
         
         .menu-arrow.rotate { transform: rotate(180deg); }
         
-        /* Submenu Level 1 (Group -> Parent) */
+        /* Submenu */
         .menu-submenu {
             max-height: 0;
             overflow: hidden;
@@ -790,7 +606,7 @@ $menuSections = [
         }
         
         .menu-submenu.open {
-            max-height: 1500px;
+            max-height: 500px;
             transition: max-height 0.3s ease-in;
         }
         
@@ -803,108 +619,6 @@ $menuSections = [
             font-size: 12px;
             width: 16px;
             margin-right: 10px;
-        }
-        
-        /* Level 2: Parent Menu with Children */
-        .menu-level2 {
-            margin: 2px 0;
-        }
-        
-        .menu-parent-l2 {
-            display: flex;
-            align-items: center;
-            padding: 10px 12px 10px 32px;
-            color: #475569;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            user-select: none;
-            border-radius: 8px;
-            margin: 0 4px;
-        }
-        
-        .menu-parent-l2:hover { 
-            background: #f1f5f9; 
-            color: #1e293b; 
-        }
-        
-        .menu-parent-l2:hover .menu-icon { 
-            color: var(--primary); 
-        }
-        
-        .menu-parent-l2 .menu-icon {
-            width: 18px;
-            margin-right: 10px;
-            font-size: 13px;
-            color: #64748b;
-            text-align: center;
-        }
-        
-        .menu-arrow-sm {
-            font-size: 9px;
-            color: #94a3b8;
-            transition: transform 0.2s ease;
-            margin-left: auto;
-        }
-        
-        .menu-arrow-sm.rotate { transform: rotate(180deg); }
-        
-        /* Level 3: Child Menu Items */
-        .menu-submenu-l3 {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.2s ease-out;
-            background: #f8fafc;
-            border-radius: 8px;
-            margin: 2px 4px 2px 36px;
-        }
-        
-        .menu-submenu-l3.open {
-            max-height: 500px;
-            transition: max-height 0.25s ease-in;
-        }
-        
-        .menu-item-l3 {
-            display: flex;
-            align-items: center;
-            padding: 8px 12px 8px 16px;
-            color: #64748b;
-            font-size: 12px;
-            font-weight: 500;
-            transition: all 0.15s ease;
-            text-decoration: none;
-            border-left: 2px solid transparent;
-        }
-        
-        .menu-item-l3:hover { 
-            background: #e2e8f0; 
-            color: #334155;
-            border-left-color: var(--primary);
-        }
-        
-        .menu-item-l3:hover .menu-icon-l3 { 
-            color: var(--primary); 
-        }
-        
-        .menu-item-l3.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white;
-            border-left-color: transparent;
-            border-radius: 6px;
-            margin: 2px 4px;
-        }
-        
-        .menu-item-l3.active .menu-icon-l3 { 
-            color: white; 
-        }
-        
-        .menu-icon-l3 {
-            width: 14px;
-            margin-right: 8px;
-            font-size: 11px;
-            color: #94a3b8;
-            text-align: center;
         }
         
         /* Quick Access Highlight */
@@ -1459,16 +1173,24 @@ $menuSections = [
                 // Check if any accessible item in this section is active (Requirements 8.3)
                 $sectionHasActive = false;
                 foreach ($accessibleItems as $item) {
-                    // Check if this is a parent menu with children
-                    if (isset($item['children'])) {
-                        foreach ($item['children'] as $child) {
-                            $checkActive = checkMenuItemActive($child, $currentPage, $isShop, $isInventory, $isSubfolder);
-                            if ($checkActive) { $sectionHasActive = true; break 2; }
-                        }
+                    $checkActive = false;
+                    
+                    // Determine which folder this menu item belongs to based on URL
+                    $itemIsShopUrl = strpos($item['url'], '/shop/') !== false || strpos($item['url'], 'shop/') === 0;
+                    $itemIsInventoryUrl = strpos($item['url'], '/inventory/') !== false || strpos($item['url'], 'inventory/') === 0;
+                    
+                    if ($itemIsShopUrl) {
+                        // Shop folder items - active when in shop folder and page matches
+                        $checkActive = $isShop && $currentPage === $item['page'];
+                    } elseif ($itemIsInventoryUrl) {
+                        // Inventory folder items - active when in inventory folder and page matches
+                        $checkActive = $isInventory && $currentPage === $item['page'];
                     } else {
-                        $checkActive = checkMenuItemActive($item, $currentPage, $isShop, $isInventory, $isSubfolder);
-                        if ($checkActive) { $sectionHasActive = true; break; }
+                        // Root level items - active when not in any subfolder and page matches
+                        $checkActive = !$isSubfolder && $currentPage === $item['page'];
                     }
+                    
+                    if ($checkActive) { $sectionHasActive = true; break; }
                 }
                 $isCollapsible = !empty($section['collapsible']);
                 $sectionId = 'menu_' . $sectionKey;
@@ -1487,74 +1209,30 @@ $menuSections = [
                     <?php endif; ?>
                     
                     <div id="<?= $sectionId ?>" class="menu-submenu <?= $isCollapsible ? ($sectionHasActive ? 'open' : '') : 'open' ?>">
-                        <?php foreach ($accessibleItems as $itemIndex => $item): 
-                            // Check if this is a parent menu with children (Level 2)
-                            if (isset($item['children']) && !empty($item['children'])):
-                                // Filter children by role access
-                                $accessibleChildren = array_filter($item['children'], function($child) {
-                                    return hasMenuAccess($child);
-                                });
-                                
-                                if (empty($accessibleChildren)) continue;
-                                
-                                // Check if any child is active
-                                $parentHasActive = false;
-                                foreach ($accessibleChildren as $child) {
-                                    if (checkMenuItemActive($child, $currentPage, $isShop, $isInventory, $isSubfolder)) {
-                                        $parentHasActive = true;
-                                        break;
-                                    }
-                                }
-                                
-                                $parentId = $sectionId . '_' . $itemIndex;
-                        ?>
-                        <!-- Level 2: Parent Menu with Children -->
-                        <div class="menu-level2">
-                            <div class="menu-parent-l2" onclick="toggleSubmenu('<?= $parentId ?>')">
-                                <span class="menu-icon"><i class="fas <?= $item['icon'] ?>"></i></span>
-                                <span class="flex-1"><?= $item['label_th'] ?? $item['label'] ?></span>
-                                <i class="fas fa-chevron-down menu-arrow-sm <?= $parentHasActive ? 'rotate' : '' ?>"></i>
-                            </div>
-                            <div id="<?= $parentId ?>" class="menu-submenu-l3 <?= $parentHasActive ? 'open' : '' ?>">
-                                <?php foreach ($accessibleChildren as $child): 
-                                    $childUrl = $baseUrl . $child['url'];
-                                    if (!empty($child['hash'])) {
-                                        $childUrl .= '#' . $child['hash'];
-                                    }
-                                    $isChildActive = checkMenuItemActive($child, $currentPage, $isShop, $isInventory, $isSubfolder);
-                                    
-                                    // Handle folder URLs
-                                    if ($isShop && (strpos($child['url'], '/shop/') !== false)) {
-                                        $childUrl = basename($child['url']);
-                                        if (!empty($child['hash'])) $childUrl .= '#' . $child['hash'];
-                                    }
-                                    if ($isInventory && (strpos($child['url'], '/inventory/') !== false)) {
-                                        $childUrl = basename($child['url']);
-                                        if (!empty($child['hash'])) $childUrl .= '#' . $child['hash'];
-                                    }
-                                ?>
-                                <!-- Level 3: Child Menu Item -->
-                                <a href="<?= $childUrl ?>" class="menu-item-l3 <?= $isChildActive ? 'active' : '' ?>">
-                                    <span class="menu-icon-l3"><i class="fas <?= $child['icon'] ?>"></i></span>
-                                    <?= $child['label'] ?>
-                                    <?php if (!empty($child['badge']) && $child['badge'] > 0): ?>
-                                    <span class="menu-badge <?= $child['badgeColor'] ?? '' ?>"><?= $child['badge'] ?></span>
-                                    <?php endif; ?>
-                                </a>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                        <?php else: 
-                            // Regular menu item without children (Level 2 direct link)
+                        <?php foreach ($accessibleItems as $item): 
                             $itemUrl = $baseUrl . $item['url'];
-                            $isActive = checkMenuItemActive($item, $currentPage, $isShop, $isInventory, $isSubfolder);
+                            $isActive = false;
                             
-                            // Handle folder URLs
-                            if ($isShop && (strpos($item['url'], '/shop/') !== false)) {
-                                $itemUrl = basename($item['url']);
-                            }
-                            if ($isInventory && (strpos($item['url'], '/inventory/') !== false)) {
-                                $itemUrl = basename($item['url']);
+                            // Determine which folder this menu item belongs to based on URL
+                            $itemIsShopUrl = strpos($item['url'], '/shop/') !== false || strpos($item['url'], 'shop/') === 0;
+                            $itemIsInventoryUrl = strpos($item['url'], '/inventory/') !== false || strpos($item['url'], 'inventory/') === 0;
+                            
+                            // Check if active based on URL folder type
+                            if ($itemIsShopUrl) {
+                                // Shop folder items - active when in shop folder and page matches
+                                if ($isShop && $currentPage === $item['page']) {
+                                    $isActive = true;
+                                    $itemUrl = basename($item['url']); // Use relative URL when in shop folder
+                                }
+                            } elseif ($itemIsInventoryUrl) {
+                                // Inventory folder items - active when in inventory folder and page matches
+                                if ($isInventory && $currentPage === $item['page']) {
+                                    $isActive = true;
+                                    $itemUrl = basename($item['url']); // Use relative URL when in inventory folder
+                                }
+                            } else {
+                                // Root level items - active when not in any subfolder and page matches
+                                $isActive = !$isSubfolder && $currentPage === $item['page'];
                             }
                         ?>
                         <a href="<?= $itemUrl ?>" class="menu-item <?= $isActive ? 'active' : '' ?>">
@@ -1564,7 +1242,6 @@ $menuSections = [
                             <span class="menu-badge <?= $item['badgeColor'] ?? '' ?>"><?= $item['badge'] ?></span>
                             <?php endif; ?>
                         </a>
-                        <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
                 </div>
