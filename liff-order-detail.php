@@ -64,6 +64,7 @@ $deliveryType = $deliveryInfo['type'] ?? 'shipping';
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -241,7 +242,77 @@ $deliveryType = $deliveryInfo['type'] ?? 'shipping';
             </div>
         </div>
 
-        <!-- Payment Slip -->
+        <!-- Payment Slip / QR Code Section -->
+        <?php 
+        $promptpay = $shopSettings['promptpay_number'] ?? '';
+        $needsPayment = ($order['status'] === 'pending' && $order['payment_method'] === 'transfer');
+        ?>
+        
+        <?php if ($needsPayment && $promptpay): ?>
+        <!-- PromptPay QR Code for pending orders -->
+        <div class="bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl shadow-sm p-4 border-2 border-teal-200">
+            <h3 class="font-bold text-teal-700 mb-3 flex items-center text-lg">
+                <i class="fas fa-qrcode text-teal-500 mr-2"></i>💚 แจ้งชำระเงิน
+            </h3>
+            
+            <div class="text-center">
+                <!-- Amount Display -->
+                <div class="bg-white rounded-xl p-3 mb-4 border border-teal-200">
+                    <p class="text-sm text-gray-500">ยอดที่ต้องชำระ</p>
+                    <p class="text-3xl font-bold text-teal-600">฿<?= number_format($order['grand_total'], 2) ?></p>
+                </div>
+                
+                <!-- QR Code Container -->
+                <div class="bg-white rounded-xl p-4 inline-block shadow-sm mb-3">
+                    <div id="promptpayQR" class="w-48 h-48 mx-auto flex items-center justify-center">
+                        <div class="text-gray-400 text-center">
+                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                            <p class="text-sm">กำลังสร้าง QR...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <p class="text-sm text-gray-600 mb-2">สแกน QR Code เพื่อชำระเงิน</p>
+                
+                <!-- PromptPay Number -->
+                <div class="flex items-center justify-center gap-2 text-gray-600 mb-3">
+                    <span class="text-sm">พร้อมเพย์:</span>
+                    <span class="font-bold text-lg"><?= htmlspecialchars($promptpay) ?></span>
+                    <button onclick="copyPromptPay('<?= htmlspecialchars($promptpay) ?>')" class="text-teal-600 hover:text-teal-700 p-1">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                
+                <!-- Save QR Button -->
+                <button onclick="saveQRCode()" class="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm font-medium transition-colors mb-4">
+                    <i class="fas fa-download mr-1"></i>บันทึก QR Code
+                </button>
+            </div>
+            
+            <!-- Upload Slip Section -->
+            <div class="border-t border-teal-200 pt-4 mt-2">
+                <h4 class="font-bold text-gray-700 mb-3">อัพโหลดหลักฐานการชำระเงิน</h4>
+                
+                <div id="slipPreview" class="hidden mb-3">
+                    <img id="slipImage" src="" class="w-full rounded-xl border-2 border-teal-200">
+                </div>
+                
+                <div id="slipUploadArea" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-teal-500 hover:bg-white transition-all" onclick="document.getElementById('slipFile').click()">
+                    <div class="w-12 h-12 mx-auto mb-2 bg-teal-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-cloud-upload-alt text-xl text-teal-500"></i>
+                    </div>
+                    <p class="text-gray-700 font-medium">แตะเพื่อเลือกรูปสลิป</p>
+                    <p class="text-xs text-gray-400 mt-1">รองรับ JPG, PNG ขนาดไม่เกิน 5MB</p>
+                    <input type="file" id="slipFile" accept="image/*" class="hidden" onchange="handleSlipSelect(this)">
+                </div>
+                
+                <button id="submitSlipBtn" onclick="submitSlip()" class="hidden w-full mt-3 py-3 bg-gradient-to-r from-teal-500 to-teal-600 text-white rounded-xl font-bold shadow-lg">
+                    <i class="fas fa-paper-plane mr-2"></i>ส่งหลักฐานการชำระเงิน
+                </button>
+            </div>
+        </div>
+        <?php endif; ?>
+        
         <?php if ($paymentSlip): ?>
         <div class="bg-white rounded-2xl shadow-sm p-4">
             <h3 class="font-bold text-gray-800 mb-3 flex items-center">
@@ -263,8 +334,8 @@ $deliveryType = $deliveryInfo['type'] ?? 'shipping';
         </div>
         <?php endif; ?>
 
-        <!-- Actions -->
-        <?php if ($order['status'] === 'pending' && $order['payment_method'] === 'transfer'): ?>
+        <!-- Actions - Only show if no QR section -->
+        <?php if ($order['status'] === 'pending' && $order['payment_method'] === 'transfer' && !$promptpay): ?>
         <div class="bg-white rounded-2xl shadow-sm p-4">
             <a href="liff-checkout.php?order=<?= $order['id'] ?>&action=slip&user=<?= urlencode($_GET['user'] ?? '') ?>&account=<?= $lineAccountId ?>" 
                class="block w-full py-3.5 btn-primary text-white text-center rounded-xl font-bold shadow-lg">
@@ -298,8 +369,13 @@ $deliveryType = $deliveryInfo['type'] ?? 'shipping';
     const ACCOUNT_ID = <?= (int)$lineAccountId ?>;
     const LIFF_ID = '<?= $liffId ?>';
     const ORDER_ITEMS = <?= json_encode($orderItems) ?>;
+    const ORDER_ID = <?= (int)($order['id'] ?? 0) ?>;
+    const ORDER_TOTAL = <?= (float)($order['grand_total'] ?? 0) ?>;
+    const PROMPTPAY_NUMBER = '<?= addslashes($promptpay ?? '') ?>';
+    const SHOP_NAME = '<?= addslashes($companyName) ?>';
     
     let userId = null;
+    let selectedSlipFile = null;
     
     document.addEventListener('DOMContentLoaded', async () => {
         try {
@@ -430,6 +506,218 @@ $deliveryType = $deliveryInfo['type'] ?? 'shipping';
     function goBack() {
         window.location.href = `${BASE_URL}/liff-my-orders.php?account=${ACCOUNT_ID}`;
     }
+    
+    // ===== PromptPay QR Code Functions =====
+    function generatePromptPayPayload(promptpayNumber, amount) {
+        let target = promptpayNumber.replace(/[^0-9]/g, '');
+        let targetType;
+        
+        if (target.length === 10) {
+            target = '0066' + target.substring(1);
+            targetType = '01';
+        } else if (target.length === 13) {
+            targetType = '02';
+        } else {
+            return null;
+        }
+        
+        let payload = '';
+        payload += '000201';
+        payload += '010212';
+        
+        let merchantInfo = '';
+        merchantInfo += '0016A000000677010111';
+        merchantInfo += targetType + formatLength(target.length) + target;
+        payload += '29' + formatLength(merchantInfo.length) + merchantInfo;
+        
+        payload += '5303764';
+        
+        if (amount && amount > 0) {
+            const amountStr = amount.toFixed(2);
+            payload += '54' + formatLength(amountStr.length) + amountStr;
+        }
+        
+        payload += '5802TH';
+        payload += '6304';
+        
+        const crc = calculateCRC16(payload);
+        payload += crc;
+        
+        return payload;
+    }
+    
+    function formatLength(len) {
+        return len.toString().padStart(2, '0');
+    }
+    
+    function calculateCRC16(str) {
+        let crc = 0xFFFF;
+        for (let i = 0; i < str.length; i++) {
+            crc ^= str.charCodeAt(i) << 8;
+            for (let j = 0; j < 8; j++) {
+                if (crc & 0x8000) {
+                    crc = (crc << 1) ^ 0x1021;
+                } else {
+                    crc <<= 1;
+                }
+            }
+            crc &= 0xFFFF;
+        }
+        return crc.toString(16).toUpperCase().padStart(4, '0');
+    }
+    
+    async function generatePromptPayQR() {
+        if (!PROMPTPAY_NUMBER) return;
+        
+        const qrContainer = document.getElementById('promptpayQR');
+        if (!qrContainer) return;
+        
+        const payload = generatePromptPayPayload(PROMPTPAY_NUMBER, ORDER_TOTAL);
+        if (!payload) {
+            qrContainer.innerHTML = '<p class="text-red-500 text-sm">ไม่สามารถสร้าง QR ได้</p>';
+            return;
+        }
+        
+        qrContainer.innerHTML = '';
+        
+        try {
+            const canvas = document.createElement('canvas');
+            await QRCode.toCanvas(canvas, payload, {
+                width: 192,
+                margin: 2,
+                color: { dark: '#000000', light: '#FFFFFF' }
+            });
+            qrContainer.appendChild(canvas);
+        } catch (err) {
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=192x192&data=${encodeURIComponent(payload)}`;
+            qrContainer.innerHTML = `<img src="${qrUrl}" alt="PromptPay QR" class="w-48 h-48">`;
+        }
+    }
+    
+    function copyPromptPay(number) {
+        navigator.clipboard.writeText(number).then(() => {
+            Swal.fire({ icon: 'success', title: 'คัดลอกแล้ว!', timer: 1500, showConfirmButton: false });
+        });
+    }
+    
+    function saveQRCode() {
+        const canvas = document.querySelector('#promptpayQR canvas');
+        if (canvas) {
+            const newCanvas = document.createElement('canvas');
+            const ctx = newCanvas.getContext('2d');
+            
+            newCanvas.width = 300;
+            newCanvas.height = 380;
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+            
+            ctx.fillStyle = '#11B0A6';
+            ctx.fillRect(0, 0, 300, 50);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 18px Sarabun, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('💚 พร้อมเพย์ PromptPay', 150, 33);
+            
+            const qrSize = 200;
+            const qrX = (300 - qrSize) / 2;
+            ctx.drawImage(canvas, qrX, 60, qrSize, qrSize);
+            
+            ctx.fillStyle = '#11B0A6';
+            ctx.font = 'bold 24px Sarabun, sans-serif';
+            ctx.fillText('฿' + ORDER_TOTAL.toLocaleString('th-TH', {minimumFractionDigits: 2}), 150, 290);
+            
+            ctx.fillStyle = '#666666';
+            ctx.font = '14px Sarabun, sans-serif';
+            ctx.fillText('พร้อมเพย์: ' + PROMPTPAY_NUMBER, 150, 320);
+            
+            ctx.fillStyle = '#999999';
+            ctx.font = '12px Sarabun, sans-serif';
+            ctx.fillText(SHOP_NAME, 150, 350);
+            
+            const link = document.createElement('a');
+            link.download = 'promptpay-qr-' + Date.now() + '.png';
+            link.href = newCanvas.toDataURL('image/png');
+            link.click();
+            
+            Swal.fire({ icon: 'success', title: 'บันทึกแล้ว!', timer: 1500, showConfirmButton: false });
+        }
+    }
+    
+    // ===== Slip Upload Functions =====
+    function handleSlipSelect(input) {
+        const file = input.files[0];
+        if (!file) return;
+        
+        if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+            Swal.fire({ icon: 'warning', title: 'รองรับเฉพาะไฟล์รูปภาพ', confirmButtonColor: '#11B0A6' });
+            input.value = '';
+            return;
+        }
+        
+        if (file.size > 5 * 1024 * 1024) {
+            Swal.fire({ icon: 'warning', title: 'ไฟล์ใหญ่เกินไป', text: 'ขนาดไม่เกิน 5MB', confirmButtonColor: '#11B0A6' });
+            input.value = '';
+            return;
+        }
+        
+        selectedSlipFile = file;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('slipImage').src = e.target.result;
+            document.getElementById('slipPreview').classList.remove('hidden');
+            document.getElementById('slipUploadArea').classList.add('hidden');
+            document.getElementById('submitSlipBtn').classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    async function submitSlip() {
+        if (!selectedSlipFile) {
+            Swal.fire({ icon: 'warning', title: 'กรุณาเลือกรูปสลิป', confirmButtonColor: '#11B0A6' });
+            return;
+        }
+        
+        Swal.fire({ title: 'กำลังอัพโหลด...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'upload_slip');
+            formData.append('order_id', ORDER_ID);
+            formData.append('user_id', userId || '');
+            formData.append('slip', selectedSlipFile);
+            
+            const response = await fetch(`${BASE_URL}/api/checkout.php`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'ส่งสลิปสำเร็จ!',
+                    text: 'รอตรวจสอบการชำระเงิน',
+                    confirmButtonColor: '#11B0A6'
+                }).then(() => {
+                    location.reload();
+                });
+            } else {
+                Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: result.message || 'กรุณาลองใหม่', confirmButtonColor: '#11B0A6' });
+            }
+        } catch (e) {
+            Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', confirmButtonColor: '#11B0A6' });
+        }
+    }
+    
+    // Generate QR on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        if (PROMPTPAY_NUMBER && ORDER_TOTAL > 0) {
+            setTimeout(generatePromptPayQR, 300);
+        }
+    });
     </script>
     
     <?php include 'includes/liff-nav.php'; ?>
