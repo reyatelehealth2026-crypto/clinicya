@@ -278,6 +278,7 @@ $menuGroups = [
         'group_id' => 'insights',
         'group_title' => '1. Insights & Overview',
         'group_icon' => '📈',
+        'roles' => ['owner', 'admin'], // เฉพาะ owner และ admin
         'ai_help' => [
             'title' => 'AI ช่วยเหลือ: Insights & Overview',
             'description' => 'กลุ่มนี้รวมเครื่องมือดูภาพรวมและวิเคราะห์ข้อมูล',
@@ -310,6 +311,7 @@ $menuGroups = [
         'group_id' => 'clinical',
         'group_title' => '2. Clinical Station',
         'group_icon' => '🩺',
+        'roles' => ['owner', 'admin', 'pharmacist'], // เภสัชกรและ admin
         'ai_help' => [
             'title' => 'AI ช่วยเหลือ: Clinical Station',
             'description' => 'กลุ่มนี้สำหรับงานเภสัชกรและการดูแลผู้ป่วย',
@@ -342,6 +344,7 @@ $menuGroups = [
         'group_id' => 'patient',
         'group_title' => '3. Patient & Journey',
         'group_icon' => '🗂️',
+        'roles' => ['owner', 'admin', 'marketing', 'staff'], // marketing เข้าได้
         'ai_help' => [
             'title' => 'AI ช่วยเหลือ: Patient & Journey',
             'description' => 'กลุ่มนี้จัดการลูกค้า การสื่อสาร และโปรแกรมสมาชิก',
@@ -380,6 +383,7 @@ $menuGroups = [
         'group_id' => 'supply',
         'group_title' => '4. Supply & Revenue',
         'group_icon' => '📦',
+        'roles' => ['owner', 'admin', 'staff'], // staff จัดการออเดอร์และสินค้า
         'ai_help' => [
             'title' => 'AI ช่วยเหลือ: Supply & Revenue',
             'description' => 'กลุ่มนี้จัดการออเดอร์ สินค้า คลัง และการจัดซื้อ',
@@ -418,6 +422,7 @@ $menuGroups = [
         'group_id' => 'facility',
         'group_title' => '5. Facility Setup',
         'group_icon' => '🏥',
+        'roles' => ['owner', 'admin', 'tech'], // tech ตั้งค่าระบบ
         'ai_help' => [
             'title' => 'AI ช่วยเหลือ: Facility Setup',
             'description' => 'กลุ่มนี้ตั้งค่าระบบ ผู้ใช้ และการเชื่อมต่อ',
@@ -450,6 +455,7 @@ $menuGroups = [
         'group_id' => 'marketing',
         'group_title' => '6. Tool Marketing',
         'group_icon' => '🛠️',
+        'roles' => ['owner', 'admin', 'marketing', 'tech'], // marketing และ tech
         'ai_help' => [
             'title' => 'AI ช่วยเหลือ: Tool Marketing',
             'description' => 'กลุ่มนี้รวมเครื่องมือ AI และ LINE สำหรับการตลาด',
@@ -1714,7 +1720,14 @@ $menuGroups = [
                 <?php endif; ?>
                 
                 <!-- Main Menu Groups -->
-                <?php foreach ($menuGroups as $group): ?>
+                <?php 
+                $userRole = getCurrentUserRole();
+                foreach ($menuGroups as $group): 
+                    // ตรวจสอบ role ก่อนแสดง group
+                    if (isset($group['roles']) && !in_array($userRole, $group['roles'])) {
+                        continue; // ข้าม group นี้ถ้าไม่มีสิทธิ์
+                    }
+                ?>
                 <div class="menu-section">
                     <!-- Group Header -->
                     <div class="menu-parent" onclick="toggleSubmenu('group_<?= $group['group_id'] ?>')">
