@@ -43,6 +43,23 @@ if (isset($_GET['success'])) {
     $success = $successMessages[$_GET['success']] ?? 'ดำเนินการสำเร็จ';
 }
 
+// Process tab content first to capture $success/$error from POST handlers
+ob_start();
+switch ($activeTab) {
+    case 'pharmacists':
+        include __DIR__ . '/includes/pharmacy/pharmacists.php';
+        break;
+    case 'interactions':
+        include __DIR__ . '/includes/pharmacy/interactions.php';
+        break;
+    case 'dispense':
+        include __DIR__ . '/includes/pharmacy/dispense.php';
+        break;
+    default:
+        include __DIR__ . '/includes/pharmacy/dashboard.php';
+}
+$tabContent = ob_get_clean();
+
 require_once __DIR__ . '/includes/header.php';
 echo getTabsStyles();
 ?>
@@ -67,21 +84,7 @@ echo getTabsStyles();
 <!-- Tab Content -->
 <div class="tab-content">
     <div class="tab-panel">
-        <?php
-        switch ($activeTab) {
-            case 'pharmacists':
-                include __DIR__ . '/includes/pharmacy/pharmacists.php';
-                break;
-            case 'interactions':
-                include __DIR__ . '/includes/pharmacy/interactions.php';
-                break;
-            case 'dispense':
-                include __DIR__ . '/includes/pharmacy/dispense.php';
-                break;
-            default:
-                include __DIR__ . '/includes/pharmacy/dashboard.php';
-        }
-        ?>
+        <?= $tabContent ?>
     </div>
 </div>
 
