@@ -336,7 +336,7 @@ $menuGroups = [
                 'title' => 'Triage System',
                 'icon' => '🏥',
                 'submenus' => [
-                    ['title' => 'ประวัติการคัดกรอง', 'href' => '/triage-history'],
+                    ['title' => 'ประวัติการคัดกรอง', 'href' => '/triage-analytics'],
                 ]
             ],
         ]
