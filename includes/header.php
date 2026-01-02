@@ -300,12 +300,10 @@ $menuGroups = [
                 'icon' => '📉',
                 'note' => 'รวมรายงาน',
                 'submenus' => [
-                    ['title' => 'สถิติทั่วไป', 'href' => '/analytics'],
-                    ['title' => 'วิเคราะห์ขั้นสูง', 'href' => '/advanced-analytics'],
-                    ['title' => 'CRM Analytics', 'href' => '/crm-analytics'],
+                    ['title' => 'สถิติรวม', 'href' => '/analytics'],
+                    ['title' => 'รายงานยอดขาย', 'href' => '/shop/reports'],
                     ['title' => 'Triage Analytics', 'href' => '/triage-analytics'],
                     ['title' => 'รายงานคลังสินค้า', 'href' => '/inventory/reports'],
-                    ['title' => 'รายงานยอดขาย', 'href' => '/shop/reports'],
                     ['title' => 'สถิติ Broadcast', 'href' => '/broadcast-stats'],
                 ]
             ],
