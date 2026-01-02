@@ -95,15 +95,8 @@ try {
         (SELECT COUNT(*) FROM appointments WHERE pharmacist_id = p.id AND status = 'completed') as completed_count,
         (SELECT COUNT(*) FROM appointments WHERE pharmacist_id = p.id AND status IN ('pending','confirmed') AND appointment_date >= CURDATE()) as upcoming_count
         FROM pharmacists p {$orderBy}")->fetchAll(PDO::FETCH_ASSOC);
-    
-    // DEBUG: แสดงข้อมูลที่ query ได้
-    echo "<!-- DEBUG: Total pharmacists = " . count($pharmacists) . " -->\n";
-    foreach ($pharmacists as $idx => $pp) {
-        echo "<!-- DEBUG[$idx]: ID={$pp['id']}, Name={$pp['name']} -->\n";
-    }
 } catch (Exception $e) {
     $pharmacists = [];
-    echo "<!-- DEBUG ERROR: " . $e->getMessage() . " -->\n";
 }
 
 // Get schedules for each pharmacist
@@ -121,6 +114,7 @@ foreach ($pharmacists as &$p) {
         $p['holidays'] = [];
     }
 }
+unset($p); // สำคัญมาก! ต้อง unset reference หลัง foreach
 
 $dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
 ?>
