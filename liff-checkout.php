@@ -103,6 +103,7 @@ if ($debugMode) {
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -436,9 +437,45 @@ if ($debugMode) {
                 </h3>
                 
                 <?php if ($promptpay): ?>
-                <div class="p-4 bg-teal-50 rounded-xl mb-3">
-                    <p class="font-medium text-teal-700">💚 พร้อมเพย์</p>
-                    <p class="text-xl font-bold text-gray-800 mt-1"><?= htmlspecialchars($promptpay) ?></p>
+                <!-- PromptPay QR Code Section -->
+                <div class="p-4 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-xl mb-3 border-2 border-teal-200">
+                    <div class="text-center">
+                        <p class="font-bold text-teal-700 text-lg mb-2">💚 สแกนจ่ายพร้อมเพย์</p>
+                        
+                        <!-- QR Code Container -->
+                        <div id="promptpayQRContainer" class="bg-white rounded-xl p-4 inline-block shadow-sm mb-3">
+                            <div id="promptpayQR" class="w-48 h-48 mx-auto flex items-center justify-center">
+                                <div class="text-gray-400 text-center">
+                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <p class="text-sm">กำลังสร้าง QR...</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Amount Display -->
+                        <div class="bg-white rounded-xl p-3 mb-3 border border-teal-200">
+                            <p class="text-sm text-gray-500">ยอดที่ต้องชำระ</p>
+                            <p id="qrAmount" class="text-3xl font-bold text-teal-600">฿0</p>
+                        </div>
+                        
+                        <!-- PromptPay Number -->
+                        <div class="flex items-center justify-center gap-2 text-gray-600">
+                            <span class="text-sm">พร้อมเพย์:</span>
+                            <span class="font-bold text-lg"><?= htmlspecialchars($promptpay) ?></span>
+                            <button onclick="copyPromptPay('<?= htmlspecialchars($promptpay) ?>')" class="text-teal-600 hover:text-teal-700 p-1">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Save QR Button -->
+                        <button onclick="saveQRCode()" class="mt-3 px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg text-sm font-medium transition-colors">
+                            <i class="fas fa-download mr-1"></i>บันทึก QR Code
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="text-center text-sm text-gray-500 mb-3">
+                    <p>หรือโอนเงินผ่านบัญชีธนาคาร</p>
                 </div>
                 <?php endif; ?>
                 
@@ -449,6 +486,7 @@ if ($debugMode) {
                     <p class="text-sm text-gray-500 mt-1">ชื่อบัญชี: <?= htmlspecialchars($bank['holder']) ?></p>
                 </div>
                 <?php endforeach; ?>
+            </div>
             </div>
             
             <!-- Order Summary for Payment Section -->
@@ -1348,6 +1386,258 @@ if ($debugMode) {
             note: 'ผู้ป่วยขอให้ร้านฝากส่งสินค้า'
         };
     }
+    
+    // ===== PromptPay QR Code Functions =====
+    const PROMPTPAY_NUMBER = '<?= addslashes($promptpay) ?>';
+    let currentQRAmount = 0;
+    
+    // Generate PromptPay payload
+    function generatePromptPayPayload(promptpayNumber, amount) {
+        // Clean the number
+        let target = promptpayNumber.replace(/[^0-9]/g, '');
+        
+        // Determine target type (phone or national ID)
+        let targetType;
+        if (target.length === 10) {
+            // Phone number - add country code
+            target = '0066' + target.substring(1);
+            targetType = '01'; // Phone
+        } else if (target.length === 13) {
+            targetType = '02'; // National ID
+        } else {
+            console.error('Invalid PromptPay number');
+            return null;
+        }
+        
+        // Build EMVCo QR payload
+        let payload = '';
+        
+        // Payload Format Indicator
+        payload += '000201';
+        
+        // Point of Initiation Method (12 = dynamic QR with amount)
+        payload += '010212';
+        
+        // Merchant Account Information (PromptPay)
+        let merchantInfo = '';
+        merchantInfo += '0016A000000677010111'; // AID
+        merchantInfo += targetType + formatLength(target.length) + target;
+        payload += '29' + formatLength(merchantInfo.length) + merchantInfo;
+        
+        // Transaction Currency (THB = 764)
+        payload += '5303764';
+        
+        // Transaction Amount (if provided)
+        if (amount && amount > 0) {
+            const amountStr = amount.toFixed(2);
+            payload += '54' + formatLength(amountStr.length) + amountStr;
+        }
+        
+        // Country Code
+        payload += '5802TH';
+        
+        // CRC placeholder
+        payload += '6304';
+        
+        // Calculate CRC16
+        const crc = calculateCRC16(payload);
+        payload += crc;
+        
+        return payload;
+    }
+    
+    function formatLength(len) {
+        return len.toString().padStart(2, '0');
+    }
+    
+    function calculateCRC16(str) {
+        let crc = 0xFFFF;
+        for (let i = 0; i < str.length; i++) {
+            crc ^= str.charCodeAt(i) << 8;
+            for (let j = 0; j < 8; j++) {
+                if (crc & 0x8000) {
+                    crc = (crc << 1) ^ 0x1021;
+                } else {
+                    crc <<= 1;
+                }
+            }
+            crc &= 0xFFFF;
+        }
+        return crc.toString(16).toUpperCase().padStart(4, '0');
+    }
+    
+    // Generate and display QR Code
+    async function generatePromptPayQR(amount) {
+        if (!PROMPTPAY_NUMBER) {
+            console.log('No PromptPay number configured');
+            return;
+        }
+        
+        currentQRAmount = amount || 0;
+        
+        const qrContainer = document.getElementById('promptpayQR');
+        const qrAmountEl = document.getElementById('qrAmount');
+        
+        if (!qrContainer) return;
+        
+        // Update amount display
+        if (qrAmountEl) {
+            qrAmountEl.textContent = '฿' + Number(amount || 0).toLocaleString('th-TH', {minimumFractionDigits: 2});
+        }
+        
+        // Generate payload
+        const payload = generatePromptPayPayload(PROMPTPAY_NUMBER, amount);
+        if (!payload) {
+            qrContainer.innerHTML = '<p class="text-red-500 text-sm">ไม่สามารถสร้าง QR ได้</p>';
+            return;
+        }
+        
+        console.log('PromptPay Payload:', payload);
+        
+        // Clear container
+        qrContainer.innerHTML = '';
+        
+        // Generate QR Code using qrcode library
+        try {
+            const canvas = document.createElement('canvas');
+            await QRCode.toCanvas(canvas, payload, {
+                width: 192,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            });
+            qrContainer.appendChild(canvas);
+        } catch (err) {
+            console.error('QR generation error:', err);
+            // Fallback to API
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=192x192&data=${encodeURIComponent(payload)}`;
+            qrContainer.innerHTML = `<img src="${qrUrl}" alt="PromptPay QR" class="w-48 h-48">`;
+        }
+    }
+    
+    // Copy PromptPay number
+    function copyPromptPay(number) {
+        navigator.clipboard.writeText(number).then(() => {
+            Swal.fire({
+                icon: 'success',
+                title: 'คัดลอกแล้ว!',
+                text: 'คัดลอกเลขพร้อมเพย์เรียบร้อย',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        }).catch(() => {
+            // Fallback
+            const textarea = document.createElement('textarea');
+            textarea.value = number;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            Swal.fire({
+                icon: 'success',
+                title: 'คัดลอกแล้ว!',
+                timer: 1500,
+                showConfirmButton: false
+            });
+        });
+    }
+    
+    // Save QR Code as image
+    function saveQRCode() {
+        const canvas = document.querySelector('#promptpayQR canvas');
+        if (canvas) {
+            // Create a new canvas with amount text
+            const newCanvas = document.createElement('canvas');
+            const ctx = newCanvas.getContext('2d');
+            
+            // Set canvas size (QR + header + footer)
+            newCanvas.width = 300;
+            newCanvas.height = 380;
+            
+            // White background
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+            
+            // Header
+            ctx.fillStyle = '#11B0A6';
+            ctx.fillRect(0, 0, 300, 50);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 18px Sarabun, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('💚 พร้อมเพย์ PromptPay', 150, 33);
+            
+            // QR Code
+            const qrSize = 200;
+            const qrX = (300 - qrSize) / 2;
+            ctx.drawImage(canvas, qrX, 60, qrSize, qrSize);
+            
+            // Amount
+            ctx.fillStyle = '#11B0A6';
+            ctx.font = 'bold 24px Sarabun, sans-serif';
+            ctx.fillText('฿' + Number(currentQRAmount).toLocaleString('th-TH', {minimumFractionDigits: 2}), 150, 290);
+            
+            // PromptPay number
+            ctx.fillStyle = '#666666';
+            ctx.font = '14px Sarabun, sans-serif';
+            ctx.fillText('พร้อมเพย์: ' + PROMPTPAY_NUMBER, 150, 320);
+            
+            // Shop name
+            ctx.fillStyle = '#999999';
+            ctx.font = '12px Sarabun, sans-serif';
+            ctx.fillText('<?= addslashes($shopName) ?>', 150, 350);
+            
+            // Download
+            const link = document.createElement('a');
+            link.download = 'promptpay-qr-' + Date.now() + '.png';
+            link.href = newCanvas.toDataURL('image/png');
+            link.click();
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'บันทึกแล้ว!',
+                text: 'QR Code ถูกบันทึกลงเครื่องแล้ว',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        } else {
+            // Fallback - save the image directly
+            const img = document.querySelector('#promptpayQR img');
+            if (img) {
+                const link = document.createElement('a');
+                link.download = 'promptpay-qr.png';
+                link.href = img.src;
+                link.click();
+            }
+        }
+    }
+    
+    // Update QR when order data is loaded
+    const originalRenderOrderSummary = renderOrderSummary;
+    renderOrderSummary = function(data) {
+        originalRenderOrderSummary(data);
+        
+        // Generate QR with total amount
+        if (data.total && PROMPTPAY_NUMBER) {
+            setTimeout(() => {
+                generatePromptPayQR(data.total);
+            }, 500);
+        }
+    };
+    
+    // Also generate QR when switching to payment section
+    const originalUpdateUI = updateUI;
+    updateUI = function() {
+        originalUpdateUI();
+        
+        // Generate QR when showing payment section
+        if (currentAction === 'payment' && cartData?.total && PROMPTPAY_NUMBER) {
+            setTimeout(() => {
+                generatePromptPayQR(cartData.total);
+            }, 300);
+        }
+    };
     </script>
     
     <?php include 'includes/liff-nav.php'; ?>

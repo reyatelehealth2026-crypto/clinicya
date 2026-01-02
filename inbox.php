@@ -647,6 +647,11 @@ function formatThaiDateTime($datetime) {
         display: flex !important;
     }
     
+    /* Mobile main menu button */
+    #mainMenuBtn {
+        display: flex !important;
+    }
+    
     /* Customer panel - full screen overlay */
     #customerPanel {
         position: fixed !important;
@@ -661,6 +666,9 @@ function formatThaiDateTime($datetime) {
     #mobileBackBtn {
         display: none !important;
     }
+    #mainMenuBtn {
+        display: none !important;
+    }
 }
 </style>
 
@@ -669,10 +677,16 @@ function formatThaiDateTime($datetime) {
     <!-- LEFT: User List -->
     <div id="inboxSidebar" class="w-72 bg-white border-r flex flex-col">
         <div class="p-3 border-b bg-gradient-to-r from-emerald-500 to-green-600 flex items-center justify-between">
-            <h2 class="text-white font-bold flex items-center">
-                <i class="fas fa-inbox mr-2"></i>Inbox
-                <span id="totalUnread" class="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded-full"><?= count($users) ?></span>
-            </h2>
+            <div class="flex items-center gap-2">
+                <!-- Mobile: Back to main menu -->
+                <a href="dashboard.php" id="mainMenuBtn" class="hidden w-8 h-8 items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white">
+                    <i class="fas fa-bars"></i>
+                </a>
+                <h2 class="text-white font-bold flex items-center">
+                    <i class="fas fa-inbox mr-2"></i>Inbox
+                    <span id="totalUnread" class="ml-2 text-xs bg-white/20 px-2 py-0.5 rounded-full"><?= count($users) ?></span>
+                </h2>
+            </div>
             <div class="flex items-center gap-2">
                 <button id="soundToggle" class="sound-toggle text-white" onclick="toggleSound()" title="เปิด/ปิดเสียง">
                     <i class="fas fa-volume-up" id="soundIcon"></i>
