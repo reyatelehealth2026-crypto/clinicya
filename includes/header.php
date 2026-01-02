@@ -598,6 +598,8 @@ $menuGroups = [
         /* Sidebar - Dark Purple Theme */
         .sidebar {
             width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            flex-shrink: 0;
             background: #1e1b4b;
             border-right: none;
             transition: transform 0.3s ease;
@@ -1298,6 +1300,7 @@ $menuGroups = [
             flex-direction: column;
             min-width: 0;
             overflow: hidden;
+            margin-left: 0;
         }
         
         .top-header {
