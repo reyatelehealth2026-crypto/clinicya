@@ -129,6 +129,7 @@ foreach ($pharmacists as &$p) {
     $stmt->execute([$p['id']]);
     $p['holidays'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+unset($p); // สำคัญ! ต้อง unset reference หลัง foreach
 
 $dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
 

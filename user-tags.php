@@ -48,6 +48,7 @@ try {
     foreach ($tags as &$tag) {
         $tag['user_count'] = 0;
     }
+    unset($tag);
 }
 
 require_once 'includes/header.php';

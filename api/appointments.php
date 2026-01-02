@@ -136,6 +136,7 @@ function handleGetPharmacists($db) {
                 // Tables may not exist
             }
         }
+        unset($p);
         
         jsonResponse(true, 'OK', ['pharmacists' => $pharmacists]);
         
@@ -525,6 +526,7 @@ function handleTodayAppointments($db) {
             $apt['user_name'] .= ' ' . $apt['last_name'];
         }
     }
+    unset($apt);
     
     jsonResponse(true, 'OK', ['appointments' => $appointments]);
 }

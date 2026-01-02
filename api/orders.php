@@ -142,6 +142,7 @@ function handleMyOrders($db) {
         $order['order_number'] = $order['order_number'] ?? $order['id'];
         $order['total_amount'] = $order['grand_total'] ?? $order['total_amount'] ?? 0;
     }
+    unset($order);
     
     jsonResponse(true, 'OK', ['orders' => $orders]);
 }

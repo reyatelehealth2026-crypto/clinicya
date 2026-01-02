@@ -128,6 +128,7 @@ try {
         $stmt->execute([$report['id']]);
         $report['recipients'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
+    unset($report);
 } catch (Exception $e) {}
 
 // Get admin users

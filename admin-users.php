@@ -252,6 +252,7 @@ $admins = $auth->getAllAdmins();
 foreach ($admins as &$admin) {
     $admin['bot_access'] = $auth->getAdminBotAccess($admin['id']);
 }
+unset($admin); // สำคัญ! ต้อง unset reference หลัง foreach
 
 // Group admins by role for display
 $adminsByRole = [];
