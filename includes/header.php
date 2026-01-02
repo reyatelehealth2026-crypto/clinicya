@@ -1738,7 +1738,7 @@ $menuGroups = [
                                 <span class="menu-badge"><?= $menu['badge'] > 99 ? '99+' : $menu['badge'] ?></span>
                                 <?php endif; ?>
                             </a>
-                        <?php else: ?>
+                        <?php elseif (isset($menu['submenus']) && is_array($menu['submenus'])): ?>
                         <div class="nested-menu-group">
                             <!-- Menu Title with Submenus -->
                             <div class="nested-menu-parent" onclick="toggleNestedSubmenu('submenu_<?= $group['group_id'] ?>_<?= $menuIndex ?>')">
