@@ -1,7 +1,14 @@
 <?php
 /**
  * Goods Receive - รับสินค้าเข้าคลัง
+ * 
+ * DEPRECATED: This file has been consolidated into procurement.php
+ * Redirects to: procurement.php?tab=gr
  */
+require_once __DIR__ . '/../includes/redirects.php';
+handleRedirect();
+
+// Fallback if redirect doesn't work
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 require_once __DIR__ . '/../config/config.php';

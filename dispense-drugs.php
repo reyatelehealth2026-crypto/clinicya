@@ -1,7 +1,22 @@
 <?php
 /**
- * Dispense Drugs - หน้าจ่ายยาและกรอกรายละเอียด
+ * Dispense Drugs - Redirect Stub
+ * This file has been consolidated into pharmacy.php
+ * Redirects to: pharmacy.php?tab=dispense
  */
+require_once __DIR__ . '/includes/redirects.php';
+handleRedirect();
+
+// Fallback if redirect doesn't work
+$sessionId = $_GET['session_id'] ?? '';
+$redirectUrl = 'pharmacy.php?tab=dispense';
+if ($sessionId) {
+    $redirectUrl .= '&session_id=' . urlencode($sessionId);
+}
+header('Location: ' . $redirectUrl);
+exit;
+
+/* Original code below - kept for reference during transition
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth_check.php';

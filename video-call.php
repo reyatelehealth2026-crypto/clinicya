@@ -1,447 +1,553 @@
 <?php
 /**
- * Video Call - ระบบ Video Call สำหรับแอดมิน
- * รับสายจากลูกค้าผ่าน LIFF
+ * Pharmacist Video Calls Dashboard
+ * หน้าสำหรับเภสัชกรรับสายวิดีโอคอลจากลูกค้า
  */
-require_once 'config/config.php';
-require_once 'config/database.php';
+
+require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/auth_check.php';
 
 $db = Database::getInstance()->getConnection();
-$pageTitle = 'Video Call';
+$lineAccountId = $_SESSION['line_account_id'] ?? $_SESSION['admin_user']['line_account_id'] ?? 1;
 
-require_once 'includes/header.php';
+// Get pharmacist info if logged in as pharmacist
+$pharmacistId = $_SESSION['pharmacist_id'] ?? null;
+$pharmacistInfo = null;
+if ($pharmacistId) {
+    $stmt = $db->prepare("SELECT * FROM pharmacists WHERE id = ?");
+    $stmt->execute([$pharmacistId]);
+    $pharmacistInfo = $stmt->fetch(PDO::FETCH_ASSOC);
+}
 
-// Get pending calls - รวมทั้งที่มีและไม่มี line_account_id
-$stmt = $db->prepare("SELECT vc.*, 
-                      COALESCE(vc.display_name, u.display_name, 'ลูกค้า') as caller_name,
-                      COALESCE(vc.picture_url, u.picture_url) as caller_picture
-                      FROM video_calls vc 
-                      LEFT JOIN users u ON vc.user_id = u.id 
-                      WHERE (vc.line_account_id = ? OR vc.line_account_id IS NULL) 
-                      AND vc.status IN ('pending', 'ringing', 'active')
-                      ORDER BY vc.created_at DESC");
-$stmt->execute([$currentBotId ?? 1]);
-$pendingCalls = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-// Get call history
-$stmt = $db->prepare("SELECT vc.*, 
-                      COALESCE(vc.display_name, u.display_name, 'ลูกค้า') as caller_name,
-                      COALESCE(vc.picture_url, u.picture_url) as caller_picture
-                      FROM video_calls vc 
-                      LEFT JOIN users u ON vc.user_id = u.id 
-                      WHERE vc.line_account_id = ? OR vc.line_account_id IS NULL
-                      ORDER BY vc.created_at DESC LIMIT 50");
-$stmt->execute([$currentBotId ?? 1]);
-$callHistory = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$pageTitle = 'วิดีโอคอล - รับสาย';
+include __DIR__ . '/includes/header.php';
 ?>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Left: Call Controls -->
-    <div class="lg:col-span-2 space-y-6">
-        <!-- Video Area -->
-        <div class="bg-black rounded-2xl overflow-hidden aspect-video relative" id="videoContainer">
-            <!-- Remote Video (Customer) -->
-            <video id="remoteVideo" class="w-full h-full object-cover" autoplay playsinline></video>
-            
-            <!-- Local Video (Admin) -->
-            <div class="absolute bottom-4 right-4 w-48 aspect-video bg-gray-800 rounded-lg overflow-hidden shadow-lg">
-                <video id="localVideo" class="w-full h-full object-cover" autoplay playsinline muted></video>
-            </div>
-            
-            <!-- No Call Placeholder -->
-            <div id="noCallPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-white bg-gradient-to-br from-gray-800 to-gray-900">
-                <div class="text-6xl mb-4">📹</div>
-                <h2 class="text-2xl font-bold mb-2">Video Call Center</h2>
-                <p class="text-gray-400">รอรับสายจากลูกค้า...</p>
-            </div>
-            
-            <!-- Incoming Call Overlay -->
-            <div id="incomingCallOverlay" class="absolute inset-0 bg-black/80 hidden flex-col items-center justify-center text-white">
-                <div class="animate-pulse mb-6">
-                    <img id="callerAvatar" src="" class="w-24 h-24 rounded-full border-4 border-green-500">
-                </div>
-                <h3 class="text-xl font-bold mb-2" id="callerName">ลูกค้า</h3>
-                <p class="text-gray-400 mb-6 animate-pulse">📞 กำลังโทรเข้า...</p>
-                <div class="flex gap-4">
-                    <button onclick="answerCall()" class="px-8 py-3 bg-green-500 rounded-full text-lg font-medium hover:bg-green-600 flex items-center gap-2">
-                        <span class="text-2xl">📞</span> รับสาย
-                    </button>
-                    <button onclick="rejectCall()" class="px-8 py-3 bg-red-500 rounded-full text-lg font-medium hover:bg-red-600 flex items-center gap-2">
-                        <span class="text-2xl">📵</span> ปฏิเสธ
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Call Timer -->
-            <div id="callTimer" class="absolute top-4 left-4 bg-black/50 px-4 py-2 rounded-full text-white hidden">
-                <span class="animate-pulse mr-2">🔴</span>
-                <span id="timerDisplay">00:00</span>
-            </div>
-        </div>
-        
-        <!-- Call Controls -->
-        <div class="bg-white rounded-xl shadow-lg p-6">
-            <div class="flex justify-center gap-4">
-                <button id="btnMute" onclick="toggleMute()" class="p-4 bg-gray-100 rounded-full hover:bg-gray-200 transition" title="ปิด/เปิดไมค์">
-                    <span class="text-2xl" id="muteIcon">🎤</span>
-                </button>
-                <button id="btnVideo" onclick="toggleVideo()" class="p-4 bg-gray-100 rounded-full hover:bg-gray-200 transition" title="ปิด/เปิดกล้อง">
-                    <span class="text-2xl" id="videoIcon">📹</span>
-                </button>
-                <button id="btnEndCall" onclick="endCall()" class="p-4 bg-red-500 text-white rounded-full hover:bg-red-600 transition hidden" title="วางสาย">
-                    <span class="text-2xl">📵</span>
-                </button>
-                <button id="btnScreenShare" onclick="toggleScreenShare()" class="p-4 bg-gray-100 rounded-full hover:bg-gray-200 transition" title="แชร์หน้าจอ">
-                    <span class="text-2xl">🖥️</span>
-                </button>
-            </div>
+<style>
+    .video-calls-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .calls-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+    .calls-header h1 {
+        font-size: 24px;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 500;
+    }
+    .status-badge.online {
+        background: #D1FAE5;
+        color: #059669;
+    }
+    .status-badge .pulse-dot {
+        width: 8px;
+        height: 8px;
+        background: #10B981;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.2); }
+    }
+    
+    .calls-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 20px;
+    }
+    
+    .call-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        overflow: hidden;
+        transition: all 0.3s;
+        border: 2px solid transparent;
+    }
+    .call-card.ringing {
+        border-color: #10B981;
+        animation: ring-pulse 1.5s infinite;
+    }
+    @keyframes ring-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+        50% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    }
+    
+    .call-card-header {
+        padding: 16px;
+        background: linear-gradient(135deg, #10B981, #059669);
+        color: white;
+    }
+    .call-card-header .call-type {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-bottom: 4px;
+    }
+    .call-card-header .call-time {
+        font-size: 14px;
+        font-weight: 500;
+    }
+    
+    .call-card-body {
+        padding: 16px;
+    }
+    .caller-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .caller-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: #E5E7EB;
+    }
+    .caller-avatar.placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        background: #F3F4F6;
+    }
+    .caller-details h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 4px;
+    }
+    .caller-details p {
+        font-size: 13px;
+        color: #6B7280;
+    }
+    
+    .call-actions {
+        display: flex;
+        gap: 12px;
+    }
+    .call-actions button {
+        flex: 1;
+        padding: 12px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    .btn-answer {
+        background: #10B981;
+        color: white;
+    }
+    .btn-answer:hover {
+        background: #059669;
+    }
+    .btn-reject {
+        background: #FEE2E2;
+        color: #DC2626;
+    }
+    .btn-reject:hover {
+        background: #FECACA;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6B7280;
+    }
+    .empty-state i {
+        font-size: 64px;
+        color: #D1D5DB;
+        margin-bottom: 16px;
+    }
+    .empty-state h3 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+    }
+    
+    /* Video Call Modal */
+    .video-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.9);
+        z-index: 9999;
+    }
+    .video-modal.active {
+        display: flex;
+        flex-direction: column;
+    }
+    .video-container {
+        flex: 1;
+        position: relative;
+        max-height: calc(100vh - 120px); /* Leave space for controls */
+    }
+    .remote-video {
+        width: 100%;
+        height: 100%;
+        object-fit: contain; /* Changed from cover to contain */
+        background: #1f2937;
+    }
+    .local-video-pip {
+        position: absolute;
+        top: 80px;
+        right: 20px;
+        width: 120px;
+        aspect-ratio: 3/4;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 3px solid rgba(255,255,255,0.3);
+        background: #374151;
+        z-index: 10;
+    }
+    .local-video-pip video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .video-controls {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 20px;
+        padding-bottom: 30px;
+        background: linear-gradient(transparent, rgba(0,0,0,0.9));
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        z-index: 20;
+    }
+    .video-ctrl-btn {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .video-ctrl-btn.mute { background: rgba(255,255,255,0.2); color: white; }
+    .video-ctrl-btn.mute.active { background: #EF4444; }
+    .video-ctrl-btn.camera { background: rgba(255,255,255,0.2); color: white; }
+    .video-ctrl-btn.camera.active { background: #EF4444; }
+    .video-ctrl-btn.end { background: #EF4444; color: white; width: 64px; height: 64px; font-size: 24px; }
+    .video-ctrl-btn:hover { transform: scale(1.1); }
+    
+    .video-status {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(0,0,0,0.6);
+        padding: 8px 16px;
+        border-radius: 20px;
+        color: white;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        z-index: 10;
+    }
+    .video-status .dot {
+        width: 8px;
+        height: 8px;
+        background: #10B981;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+    
+    /* Quick Actions in Video Modal */
+    .video-quick-actions {
+        position: absolute;
+        top: 80px;
+        left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 10;
+    }
+    .video-quick-actions button {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        border: none;
+        background: rgba(255,255,255,0.9);
+        font-size: 20px;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .video-quick-actions button:hover {
+        transform: scale(1.1);
+        background: white;
+    }
+    .video-quick-actions button:active {
+        transform: scale(0.95);
+    }
+</style>
+
+<div class="video-calls-container">
+    <div class="calls-header">
+        <h1><i class="fas fa-video"></i> วิดีโอคอล - รับสาย</h1>
+        <div class="status-badge online">
+            <span class="pulse-dot"></span>
+            <span>พร้อมรับสาย</span>
         </div>
     </div>
-
-    <!-- Right: Call Queue & History -->
-    <div class="space-y-6">
-        <!-- Pending Calls -->
-        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div class="p-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white">
-                <h3 class="font-bold flex items-center gap-2">
-                    <span class="animate-pulse">📞</span> สายเรียกเข้า
-                    <span class="bg-white/20 px-2 py-0.5 rounded-full text-sm" id="pendingCount"><?= count($pendingCalls) ?></span>
-                </h3>
-            </div>
-            <div class="divide-y max-h-[300px] overflow-y-auto" id="pendingCallsList">
-                <?php if (empty($pendingCalls)): ?>
-                <div class="p-6 text-center text-gray-400">
-                    <div class="text-3xl mb-2">📭</div>
-                    <p>ไม่มีสายเรียกเข้า</p>
-                </div>
-                <?php else: ?>
-                <?php foreach ($pendingCalls as $call): ?>
-                <div class="p-4 hover:bg-gray-50 flex items-center gap-3" id="call-<?= $call['id'] ?>">
-                    <img src="<?= $call['picture_url'] ?: 'https://via.placeholder.com/40' ?>" class="w-10 h-10 rounded-full">
-                    <div class="flex-1">
-                        <div class="font-medium"><?= htmlspecialchars($call['display_name'] ?: 'ลูกค้า') ?></div>
-                        <div class="text-xs text-gray-500"><?= $call['created_at'] ?></div>
-                    </div>
-                    <button onclick="pickupCall('<?= $call['room_id'] ?>')" class="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">
-                        รับสาย
-                    </button>
-                </div>
-                <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
+    
+    <!-- Quick Actions -->
+    <div class="quick-actions-card" style="background: white; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+        <h3 style="font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">⚡</span> Quick Actions
+        </h3>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+            <button onclick="sendGreeting()" style="padding: 14px 16px; border-radius: 12px; border: none; background: #FEF3C7; color: #92400E; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                <span>👋</span> ทักทาย
+            </button>
+            <button onclick="sendWaiting()" style="padding: 14px 16px; border-radius: 12px; border: none; background: #FEE2E2; color: #991B1B; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                <span>⏳</span> รอสักครู่
+            </button>
+            <button onclick="takeScreenshot()" style="padding: 14px 16px; border-radius: 12px; border: none; background: #E0E7FF; color: #3730A3; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                <span>📸</span> Screenshot
+            </button>
+            <button onclick="toggleRecording()" id="btn-record" style="padding: 14px 16px; border-radius: 12px; border: none; background: #DBEAFE; color: #1E40AF; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;">
+                <span>🔴</span> บันทึก
+            </button>
         </div>
-        
-        <!-- Settings -->
-        <div class="bg-white rounded-xl shadow-lg p-4">
-            <h3 class="font-bold mb-4">⚙️ ตั้งค่า</h3>
-            <div class="space-y-3">
-                <div>
-                    <label class="block text-sm text-gray-600 mb-1">กล้อง</label>
-                    <select id="cameraSelect" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="changeCamera()">
-                        <option>กำลังโหลด...</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm text-gray-600 mb-1">ไมโครโฟน</label>
-                    <select id="micSelect" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="changeMic()">
-                        <option>กำลังโหลด...</option>
-                    </select>
-                </div>
-                <label class="flex items-center gap-2 text-sm">
-                    <input type="checkbox" id="autoAnswer" class="rounded">
-                    <span>รับสายอัตโนมัติ</span>
-                </label>
-            </div>
-        </div>
-        
-        <!-- Call History -->
-        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div class="p-4 border-b">
-                <h3 class="font-bold">📋 ประวัติการโทร</h3>
-            </div>
-            <div class="divide-y max-h-[250px] overflow-y-auto">
-                <?php if (empty($callHistory)): ?>
-                <div class="p-6 text-center text-gray-400">
-                    <p>ยังไม่มีประวัติ</p>
-                </div>
-                <?php else: ?>
-                <?php foreach ($callHistory as $call): ?>
-                <div class="p-3 hover:bg-gray-50 flex items-center gap-3">
-                    <div class="text-xl">
-                        <?php 
-                        echo match($call['status']) {
-                            'completed' => '✅',
-                            'missed' => '❌',
-                            'rejected' => '🚫',
-                            default => '📞'
-                        };
-                        ?>
-                    </div>
-                    <div class="flex-1">
-                        <div class="text-sm font-medium"><?= htmlspecialchars($call['display_name'] ?: 'ลูกค้า') ?></div>
-                        <div class="text-xs text-gray-500">
-                            <?= $call['duration'] ? gmdate('i:s', $call['duration']) : '-' ?> | 
-                            <?= date('d/m H:i', strtotime($call['created_at'])) ?>
-                        </div>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
+    </div>
+    
+    <div id="calls-list" class="calls-grid">
+        <div class="empty-state">
+            <i class="fas fa-phone-slash"></i>
+            <h3>ไม่มีสายเรียกเข้า</h3>
+            <p>รอลูกค้าโทรเข้ามา...</p>
         </div>
     </div>
 </div>
 
-<!-- LIFF Link for Customers -->
-<div class="mt-6 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-6 text-white">
-    <h3 class="font-bold text-lg mb-2">📱 ลิงก์สำหรับลูกค้า</h3>
-    <p class="text-sm opacity-80 mb-4">แชร์ลิงก์นี้ให้ลูกค้าเพื่อเริ่ม Video Call</p>
-    <div class="flex gap-2">
-        <input type="text" id="customerLink" value="<?= BASE_URL ?>liff-video-call.php" readonly 
-               class="flex-1 px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/50">
-        <button onclick="copyCustomerLink()" class="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium hover:bg-gray-100">
-            📋 คัดลอก
-        </button>
+<!-- Video Call Modal -->
+<div id="video-modal" class="video-modal">
+    <div class="video-container">
+        <video id="remote-video" class="remote-video" autoplay playsinline></video>
+        <div class="local-video-pip">
+            <video id="local-video" autoplay playsinline muted></video>
+        </div>
+        <div class="video-status">
+            <span class="dot"></span>
+            <span id="call-status-text">กำลังเชื่อมต่อ...</span>
+            <span id="call-timer" style="margin-left: 12px; display: none;">00:00</span>
+        </div>
+        
+        <!-- Quick Actions Panel (in video modal) -->
+        <div class="video-quick-actions" id="video-quick-actions">
+            <button onclick="sendGreeting()" title="ทักทาย">👋</button>
+            <button onclick="sendWaiting()" title="รอสักครู่">⏳</button>
+            <button onclick="takeScreenshot()" title="Screenshot">📸</button>
+            <button onclick="toggleRecording()" id="btn-record-modal" title="บันทึก">🔴</button>
+        </div>
+        
+        <div class="video-controls">
+            <button class="video-ctrl-btn mute" id="btn-mute" onclick="toggleMute()">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <button class="video-ctrl-btn end" onclick="endCurrentCall()">
+                <i class="fas fa-phone-slash"></i>
+            </button>
+            <button class="video-ctrl-btn camera" id="btn-camera" onclick="toggleCamera()">
+                <i class="fas fa-video"></i>
+            </button>
+        </div>
     </div>
 </div>
 
 <script>
-// WebRTC Configuration
-const config = {
+const API_URL = '<?= rtrim(BASE_URL, "/") ?>/liff-video-call-pro.php';
+const LINE_ACCOUNT_ID = <?= (int)$lineAccountId ?>;
+
+const rtcConfig = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
     ]
 };
 
 let localStream = null;
-let remoteStream = null;
 let peerConnection = null;
 let currentCallId = null;
+let signalPoll = null;
 let callTimer = null;
 let callSeconds = 0;
 let isMuted = false;
-let isVideoOff = false;
-
-// Initialize
-document.addEventListener('DOMContentLoaded', async function() {
-    await initMedia();
-    await loadDevices();
-    startPolling();
-});
-
-// Initialize Media
-async function initMedia() {
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true
-        });
-        document.getElementById('localVideo').srcObject = localStream;
-    } catch (err) {
-        console.error('Error accessing media:', err);
-        alert('ไม่สามารถเข้าถึงกล้องหรือไมค์ได้');
-    }
-}
-
-// Load Available Devices
-async function loadDevices() {
-    try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        
-        const cameraSelect = document.getElementById('cameraSelect');
-        const micSelect = document.getElementById('micSelect');
-        
-        cameraSelect.innerHTML = '';
-        micSelect.innerHTML = '';
-        
-        devices.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.deviceId;
-            option.text = device.label || `${device.kind} ${device.deviceId.slice(0, 5)}`;
-            
-            if (device.kind === 'videoinput') {
-                cameraSelect.appendChild(option);
-            } else if (device.kind === 'audioinput') {
-                micSelect.appendChild(option);
-            }
-        });
-    } catch (err) {
-        console.error('Error loading devices:', err);
-    }
-}
+let isCameraOff = false;
+let pendingIceCandidates = [];
+let offerReceived = false;
 
 // Poll for incoming calls
-let lastCallCount = 0;
-let pollingInterval = null;
-
-function startPolling() {
-    // Initial check
-    checkForCalls();
-    
-    // Poll every 2 seconds
-    pollingInterval = setInterval(checkForCalls, 2000);
-}
-
-async function checkForCalls() {
+async function checkIncomingCalls() {
     try {
-        const response = await fetch('api/video-call.php?action=check_calls&account_id=<?= $currentBotId ?? 1 ?>');
-        const text = await response.text();
-        console.log('Poll response:', text);
+        const res = await fetch(`${API_URL}?action=check_calls&account_id=${LINE_ACCOUNT_ID}`);
+        const data = await res.json();
         
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (e) {
-            console.error('JSON parse error:', e, 'Response:', text);
-            return;
-        }
-        
-        if (data.success && data.calls) {
-            console.log('Found', data.calls.length, 'calls');
-            updatePendingCalls(data.calls);
-            
-            // Show incoming call overlay for first ringing call
-            const ringingCall = data.calls.find(c => c.status === 'ringing');
-            if (ringingCall && !currentCallId) {
-                showIncomingCall(ringingCall);
-            }
-            
-            // Play sound if new call
-            if (data.calls.length > lastCallCount) {
-                playRingtone();
-            }
-            lastCallCount = data.calls.length;
+        if (data.success && data.calls?.length > 0) {
+            renderCalls(data.calls);
         } else {
-            console.log('API response:', data);
+            renderEmptyState();
         }
-    } catch (err) {
-        console.error('Polling error:', err);
+    } catch (e) {
+        console.error('Check calls error:', e);
     }
 }
 
-function updatePendingCalls(calls) {
-    document.getElementById('pendingCount').textContent = calls.length;
-    
-    // Update pending calls list
-    const list = document.getElementById('pendingCallsList');
-    if (calls.length === 0) {
-        list.innerHTML = `<div class="p-6 text-center text-gray-400">
-            <div class="text-3xl mb-2">📭</div>
-            <p>ไม่มีสายเรียกเข้า</p>
-        </div>`;
-    } else {
-        list.innerHTML = calls.map(call => `
-            <div class="p-4 hover:bg-gray-50 flex items-center gap-3 ${call.status === 'ringing' ? 'bg-green-50 animate-pulse' : ''}" id="call-${call.id}">
-                <img src="${call.picture_url || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded-full">
-                <div class="flex-1">
-                    <div class="font-medium">${call.display_name || 'ลูกค้า'}</div>
-                    <div class="text-xs text-gray-500">${call.status === 'ringing' ? '📞 กำลังโทร...' : call.created_at}</div>
+function renderCalls(calls) {
+    const container = document.getElementById('calls-list');
+    container.innerHTML = calls.map(call => {
+        // Format appointment info if available
+        const aptCode = call.apt_code || call.appointment_id || null;
+        const aptInfo = aptCode ? `
+            <div style="background: #F0FDF4; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px;">
+                <div style="color: #059669; font-weight: 600; margin-bottom: 4px;">
+                    📋 #${aptCode}
                 </div>
-                <button onclick="pickupCall('${call.id}')" class="px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">
-                    รับสาย
-                </button>
+                ${call.symptoms ? `<div style="color: #6B7280;">อาการ: ${call.symptoms}</div>` : ''}
+                ${call.appointment_date ? `<div style="color: #6B7280;">📅 ${formatDate(call.appointment_date)} ${call.appointment_time || ''}</div>` : ''}
             </div>
-        `).join('');
+        ` : '';
+        
+        return `
+        <div class="call-card ${call.status === 'ringing' ? 'ringing' : ''}" data-call-id="${call.id}">
+            <div class="call-card-header">
+                <div class="call-type">📹 วิดีโอคอล</div>
+                <div class="call-time">${formatTime(call.created_at)}</div>
+            </div>
+            <div class="call-card-body">
+                ${aptInfo}
+                <div class="caller-info">
+                    ${call.picture_url 
+                        ? `<img src="${call.picture_url}" class="caller-avatar" alt="">` 
+                        : `<div class="caller-avatar placeholder">👤</div>`
+                    }
+                    <div class="caller-details">
+                        <h3>${call.display_name || 'ลูกค้า'}</h3>
+                        <p>${call.phone || call.line_user_id?.substring(0, 10) + '...' || 'ไม่ระบุ'}</p>
+                    </div>
+                </div>
+                <div class="call-actions">
+                    <button class="btn-reject" onclick="rejectCall(${call.id})">
+                        <i class="fas fa-phone-slash"></i> ปฏิเสธ
+                    </button>
+                    <button class="btn-answer" onclick="answerCall(${call.id})">
+                        <i class="fas fa-phone"></i> รับสาย
+                    </button>
+                </div>
+            </div>
+        </div>
+    `}).join('');
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderEmptyState() {
+    document.getElementById('calls-list').innerHTML = `
+        <div class="empty-state">
+            <i class="fas fa-phone-slash"></i>
+            <h3>ไม่มีสายเรียกเข้า</h3>
+            <p>รอลูกค้าโทรเข้ามา...</p>
+        </div>
+    `;
+}
+
+function formatTime(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Answer call
+async function answerCall(callId) {
+    currentCallId = callId;
+    
+    // Show video modal
+    document.getElementById('video-modal').classList.add('active');
+    document.getElementById('call-status-text').textContent = 'กำลังเชื่อมต่อ...';
+    
+    try {
+        // Get local media - allow to proceed without camera for testing
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: { echoCancellation: true, noiseSuppression: true }
+            });
+            document.getElementById('local-video').srcObject = localStream;
+        } catch (mediaError) {
+            console.warn('📹 Could not get media, proceeding without:', mediaError.message);
+            // Continue without local stream for testing
+        }
+        
+        // Update call status to active
+        await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'answer', call_id: callId })
+        });
+        
+        // Setup peer connection
+        await setupPeerConnection();
+        
+        // Start polling for signals
+        startSignalPolling();
+        
+    } catch (e) {
+        console.error('Answer call error:', e);
+        alert('เกิดข้อผิดพลาด: ' + e.message);
+        closeVideoModal();
     }
 }
 
-function showIncomingCall(call) {
-    document.getElementById('callerName').textContent = call.display_name || 'ลูกค้า';
-    document.getElementById('callerAvatar').src = call.picture_url || 'https://via.placeholder.com/100';
-    document.getElementById('incomingCallOverlay').classList.remove('hidden');
-    document.getElementById('incomingCallOverlay').classList.add('flex');
+async function setupPeerConnection() {
+    peerConnection = new RTCPeerConnection(rtcConfig);
     
-    currentCallId = call.id;
-    
-    // Play ringtone
-    playRingtone();
-    
-    // Auto answer if enabled
-    if (document.getElementById('autoAnswer').checked) {
-        setTimeout(() => answerCall(), 2000);
-    }
-}
-
-function playRingtone() {
-    // Simple beep sound
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 440;
-    oscillator.type = 'sine';
-    gainNode.gain.value = 0.3;
-    
-    oscillator.start();
-    setTimeout(() => oscillator.stop(), 500);
-}
-
-// Answer Call
-async function answerCall() {
-    if (!currentCallId) return;
-    
-    document.getElementById('incomingCallOverlay').classList.add('hidden');
-    document.getElementById('noCallPlaceholder').classList.add('hidden');
-    document.getElementById('callTimer').classList.remove('hidden');
-    document.getElementById('btnEndCall').classList.remove('hidden');
-    
-    // Start call timer
-    startCallTimer();
-    
-    // Initialize WebRTC
-    await initPeerConnection();
-    
-    // Update call status
-    await fetch('api/video-call.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            action: 'answer',
-            call_id: currentCallId
-        })
-    });
-}
-
-// Reject Call
-async function rejectCall() {
-    if (!currentCallId) return;
-    
-    document.getElementById('incomingCallOverlay').classList.add('hidden');
-    
-    await fetch('api/video-call.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            action: 'reject',
-            call_id: currentCallId
-        })
-    });
-    
-    currentCallId = null;
-}
-
-// Pickup specific call
-async function pickupCall(roomId) {
-    currentCallId = roomId;
-    await answerCall();
-}
-
-// Initialize Peer Connection
-async function initPeerConnection() {
-    peerConnection = new RTCPeerConnection(config);
-    
-    // Add local stream
-    localStream.getTracks().forEach(track => {
+    // Add local tracks
+    localStream?.getTracks().forEach(track => {
         peerConnection.addTrack(track, localStream);
     });
     
     // Handle remote stream
     peerConnection.ontrack = (event) => {
-        document.getElementById('remoteVideo').srcObject = event.streams[0];
+        document.getElementById('remote-video').srcObject = event.streams[0];
+        document.getElementById('call-status-text').textContent = 'เชื่อมต่อแล้ว';
+        document.getElementById('call-timer').style.display = 'inline';
+        if (!callTimer) startCallTimer();
     };
     
     // Handle ICE candidates
@@ -450,171 +556,451 @@ async function initPeerConnection() {
             sendSignal('ice-candidate', event.candidate);
         }
     };
+    
+    // Handle connection state
+    peerConnection.oniceconnectionstatechange = () => {
+        const state = peerConnection.iceConnectionState;
+        
+        if (state === 'connected' || state === 'completed') {
+            document.getElementById('call-status-text').textContent = 'เชื่อมต่อแล้ว';
+            document.getElementById('call-timer').style.display = 'inline';
+            if (!callTimer) startCallTimer();
+        } else if (state === 'failed' || state === 'disconnected') {
+            document.getElementById('call-status-text').textContent = 'การเชื่อมต่อขาดหาย';
+        }
+    };
 }
 
-// Send signaling data
+function startSignalPolling() {
+    signalPoll = setInterval(async () => {
+        if (!currentCallId) return;
+        
+        try {
+            // Check call status
+            const statusRes = await fetch(`${API_URL}?action=get_status&call_id=${currentCallId}`);
+            const statusData = await statusRes.json();
+            
+            if (statusData.status === 'completed' || statusData.status === 'ended') {
+                endCurrentCall('ลูกค้าวางสายแล้ว');
+                return;
+            }
+            
+            // Get signals
+            const sigRes = await fetch(`${API_URL}?action=get_signals&call_id=${currentCallId}&for=admin`);
+            const sigData = await sigRes.json();
+            
+            if (sigData.success && sigData.signals?.length > 0) {
+                for (const sig of sigData.signals) {
+                    await handleSignal(sig);
+                }
+            }
+        } catch (e) {
+            console.error('Poll error:', e);
+        }
+    }, 500);
+}
+
+async function handleSignal(signal) {
+    if (!peerConnection && signal.signal_type !== 'hangup' && signal.signal_type !== 'message') return;
+    
+    try {
+        if (signal.signal_type === 'offer') {
+            if (offerReceived) return;
+            
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.signal_data));
+            offerReceived = true;
+            
+            // Create and send answer
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            await sendSignal('answer', answer);
+            
+            // Process pending ICE candidates
+            for (const candidate of pendingIceCandidates) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+            pendingIceCandidates = [];
+            
+        } else if (signal.signal_type === 'ice-candidate' && signal.signal_data) {
+            if (!peerConnection.remoteDescription) {
+                pendingIceCandidates.push(signal.signal_data);
+            } else {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(signal.signal_data));
+            }
+        } else if (signal.signal_type === 'hangup') {
+            // Other party hung up
+            endCurrentCall('ลูกค้าวางสายแล้ว');
+        } else if (signal.signal_type === 'message') {
+            // Received message from other party
+            showIncomingMessage(signal.signal_data);
+        }
+    } catch (e) {
+        console.error('Signal handling error:', e);
+    }
+}
+
+// Show incoming message overlay
+function showIncomingMessage(data) {
+    const text = data.text || data.message || 'ข้อความจากลูกค้า';
+    
+    // Create message overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 24px 48px;
+        border-radius: 16px;
+        font-size: 24px;
+        z-index: 10001;
+        animation: fadeInScale 0.3s ease;
+        text-align: center;
+        max-width: 80%;
+    `;
+    overlay.innerHTML = `<div style="font-size: 48px; margin-bottom: 12px;">${data.type === 'greeting' ? '👋' : '⏳'}</div>${text}`;
+    document.body.appendChild(overlay);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.3s';
+        setTimeout(() => overlay.remove(), 300);
+    }, 3000);
+}
+
 async function sendSignal(type, data) {
-    await fetch('api/video-call.php', {
+    await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             action: 'signal',
             call_id: currentCallId,
             signal_type: type,
-            signal_data: data
+            signal_data: data,
+            from: 'admin'
         })
     });
 }
 
-// End Call
-async function endCall() {
+// Reject call
+async function rejectCall(callId) {
+    if (!confirm('ปฏิเสธสายนี้?')) return;
+    
+    try {
+        await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reject', call_id: callId })
+        });
+        checkIncomingCalls();
+    } catch (e) {
+        console.error('Reject error:', e);
+    }
+}
+
+// End current call
+async function endCurrentCall(message = 'สิ้นสุดการโทร') {
+    const wasCallId = currentCallId;
+    const duration = callSeconds;
+    
+    // Send hangup signal to other party first
+    if (wasCallId && message !== 'ลูกค้าวางสายแล้ว') {
+        try {
+            await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'signal',
+                    call_id: wasCallId,
+                    signal_type: 'hangup',
+                    signal_data: { reason: message },
+                    from: 'admin'
+                })
+            });
+        } catch (e) {
+            console.error('Failed to send hangup signal:', e);
+        }
+    }
+    
+    if (signalPoll) {
+        clearInterval(signalPoll);
+        signalPoll = null;
+    }
+    
+    if (callTimer) {
+        clearInterval(callTimer);
+        callTimer = null;
+    }
+    
     if (peerConnection) {
         peerConnection.close();
         peerConnection = null;
     }
     
-    stopCallTimer();
-    
-    document.getElementById('noCallPlaceholder').classList.remove('hidden');
-    document.getElementById('callTimer').classList.add('hidden');
-    document.getElementById('btnEndCall').classList.add('hidden');
-    document.getElementById('remoteVideo').srcObject = null;
-    
-    if (currentCallId) {
-        await fetch('api/video-call.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'end',
-                call_id: currentCallId,
-                duration: callSeconds
-            })
-        });
+    if (wasCallId) {
+        try {
+            await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'end',
+                    call_id: wasCallId,
+                    duration: duration
+                })
+            });
+        } catch (e) {}
     }
     
     currentCallId = null;
     callSeconds = 0;
+    offerReceived = false;
+    pendingIceCandidates = [];
+    
+    closeVideoModal();
+    alert(message + `\nระยะเวลา: ${formatDuration(duration)}`);
+    checkIncomingCalls();
 }
 
-// Toggle Mute
-function toggleMute() {
-    isMuted = !isMuted;
-    localStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
-    document.getElementById('muteIcon').textContent = isMuted ? '🔇' : '🎤';
-    document.getElementById('btnMute').classList.toggle('bg-red-100', isMuted);
-}
-
-// Toggle Video
-function toggleVideo() {
-    isVideoOff = !isVideoOff;
-    localStream.getVideoTracks().forEach(track => track.enabled = !isVideoOff);
-    document.getElementById('videoIcon').textContent = isVideoOff ? '📷' : '📹';
-    document.getElementById('btnVideo').classList.toggle('bg-red-100', isVideoOff);
-}
-
-// Toggle Screen Share
-async function toggleScreenShare() {
-    try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const screenTrack = screenStream.getVideoTracks()[0];
-        
-        if (peerConnection) {
-            const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
-            if (sender) {
-                sender.replaceTrack(screenTrack);
-            }
-        }
-        
-        screenTrack.onended = () => {
-            // Switch back to camera
-            const cameraTrack = localStream.getVideoTracks()[0];
-            if (peerConnection) {
-                const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
-                if (sender) {
-                    sender.replaceTrack(cameraTrack);
-                }
-            }
-        };
-    } catch (err) {
-        console.error('Screen share error:', err);
+function closeVideoModal() {
+    document.getElementById('video-modal').classList.remove('active');
+    
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
     }
 }
 
-// Call Timer
+function toggleMute() {
+    isMuted = !isMuted;
+    localStream?.getAudioTracks().forEach(track => track.enabled = !isMuted);
+    
+    const btn = document.getElementById('btn-mute');
+    btn.classList.toggle('active', isMuted);
+    btn.innerHTML = isMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
+}
+
+function toggleCamera() {
+    isCameraOff = !isCameraOff;
+    localStream?.getVideoTracks().forEach(track => track.enabled = !isCameraOff);
+    
+    const btn = document.getElementById('btn-camera');
+    btn.classList.toggle('active', isCameraOff);
+    btn.innerHTML = isCameraOff ? '<i class="fas fa-video-slash"></i>' : '<i class="fas fa-video"></i>';
+}
+
 function startCallTimer() {
     callSeconds = 0;
     callTimer = setInterval(() => {
         callSeconds++;
-        const mins = Math.floor(callSeconds / 60).toString().padStart(2, '0');
-        const secs = (callSeconds % 60).toString().padStart(2, '0');
-        document.getElementById('timerDisplay').textContent = `${mins}:${secs}`;
+        document.getElementById('call-timer').textContent = formatDuration(callSeconds);
     }, 1000);
 }
 
-function stopCallTimer() {
-    if (callTimer) {
-        clearInterval(callTimer);
-        callTimer = null;
-    }
+function formatDuration(seconds) {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
 }
 
-// Change Camera
-async function changeCamera() {
-    const deviceId = document.getElementById('cameraSelect').value;
+// ==================== Quick Actions ====================
+
+let isRecording = false;
+let mediaRecorder = null;
+let recordedChunks = [];
+
+// Send greeting message via signal
+async function sendGreeting() {
+    if (!currentCallId) {
+        showQuickActionToast('⚠️ ยังไม่มีสายที่กำลังโทร', 'warning');
+        return;
+    }
+    
     try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: deviceId } },
-            audio: true
-        });
-        
-        const videoTrack = newStream.getVideoTracks()[0];
-        const oldTrack = localStream.getVideoTracks()[0];
-        
-        localStream.removeTrack(oldTrack);
-        localStream.addTrack(videoTrack);
-        
-        document.getElementById('localVideo').srcObject = localStream;
-        
-        if (peerConnection) {
-            const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
-            if (sender) sender.replaceTrack(videoTrack);
-        }
-    } catch (err) {
-        console.error('Change camera error:', err);
+        await sendSignal('message', { type: 'greeting', text: '👋 สวัสดีครับ/ค่ะ ยินดีให้บริการ' });
+        showQuickActionToast('👋 ส่งข้อความทักทายแล้ว');
+    } catch (e) {
+        showQuickActionToast('❌ ส่งข้อความไม่สำเร็จ', 'error');
     }
 }
 
-// Change Mic
-async function changeMic() {
-    const deviceId = document.getElementById('micSelect').value;
+// Send waiting message via signal
+async function sendWaiting() {
+    if (!currentCallId) {
+        showQuickActionToast('⚠️ ยังไม่มีสายที่กำลังโทร', 'warning');
+        return;
+    }
+    
     try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: { deviceId: { exact: deviceId } }
-        });
-        
-        const audioTrack = newStream.getAudioTracks()[0];
-        const oldTrack = localStream.getAudioTracks()[0];
-        
-        localStream.removeTrack(oldTrack);
-        localStream.addTrack(audioTrack);
-        
-        if (peerConnection) {
-            const sender = peerConnection.getSenders().find(s => s.track.kind === 'audio');
-            if (sender) sender.replaceTrack(audioTrack);
-        }
-    } catch (err) {
-        console.error('Change mic error:', err);
+        await sendSignal('message', { type: 'waiting', text: '⏳ กรุณารอสักครู่นะครับ/ค่ะ' });
+        showQuickActionToast('⏳ ส่งข้อความรอสักครู่แล้ว');
+    } catch (e) {
+        showQuickActionToast('❌ ส่งข้อความไม่สำเร็จ', 'error');
     }
 }
 
-// Copy Customer Link
-function copyCustomerLink() {
-    const input = document.getElementById('customerLink');
-    input.select();
-    document.execCommand('copy');
-    alert('คัดลอกลิงก์แล้ว!');
+// Take screenshot of video call
+function takeScreenshot() {
+    const remoteVideo = document.getElementById('remote-video');
+    const localVideo = document.getElementById('local-video');
+    
+    // Try remote video first, then local video
+    let videoEl = null;
+    if (remoteVideo && remoteVideo.srcObject && remoteVideo.videoWidth > 0) {
+        videoEl = remoteVideo;
+    } else if (localVideo && localVideo.srcObject && localVideo.videoWidth > 0) {
+        videoEl = localVideo;
+    }
+    
+    if (!videoEl) {
+        showQuickActionToast('⚠️ ยังไม่มีวิดีโอให้ถ่าย', 'warning');
+        return;
+    }
+    
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = videoEl.videoWidth || 640;
+        canvas.height = videoEl.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        
+        // Download screenshot
+        const link = document.createElement('a');
+        link.download = `screenshot_${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        
+        showQuickActionToast('📸 บันทึก Screenshot แล้ว');
+    } catch (e) {
+        console.error('Screenshot error:', e);
+        showQuickActionToast('❌ ไม่สามารถถ่ายภาพได้', 'error');
+    }
 }
+
+// Toggle recording
+function toggleRecording() {
+    const btn = document.getElementById('btn-record');
+    const btnModal = document.getElementById('btn-record-modal');
+    
+    if (!isRecording) {
+        // Start recording
+        const remoteVideo = document.getElementById('remote-video');
+        const localVideo = document.getElementById('local-video');
+        
+        let stream = null;
+        if (remoteVideo && remoteVideo.srcObject) {
+            stream = remoteVideo.srcObject;
+        } else if (localVideo && localVideo.srcObject) {
+            stream = localVideo.srcObject;
+        }
+        
+        if (!stream) {
+            showQuickActionToast('⚠️ ยังไม่มีวิดีโอให้บันทึก', 'warning');
+            return;
+        }
+        
+        try {
+            recordedChunks = [];
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+            
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.download = `recording_${Date.now()}.webm`;
+                link.href = url;
+                link.click();
+            };
+            
+            mediaRecorder.start();
+            isRecording = true;
+            if (btn) {
+                btn.innerHTML = '<span>⏹️</span> หยุดบันทึก';
+                btn.style.background = '#FEE2E2';
+                btn.style.color = '#991B1B';
+            }
+            if (btnModal) {
+                btnModal.textContent = '⏹️';
+                btnModal.style.background = '#FEE2E2';
+            }
+            showQuickActionToast('🔴 เริ่มบันทึกวิดีโอ');
+        } catch (e) {
+            console.error('Recording error:', e);
+            showQuickActionToast('❌ ไม่สามารถบันทึกได้: ' + e.message, 'error');
+        }
+    } else {
+        // Stop recording
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+        isRecording = false;
+        if (btn) {
+            btn.innerHTML = '<span>🔴</span> บันทึก';
+            btn.style.background = '#DBEAFE';
+            btn.style.color = '#1E40AF';
+        }
+        if (btnModal) {
+            btnModal.textContent = '🔴';
+            btnModal.style.background = 'rgba(255,255,255,0.9)';
+        }
+        showQuickActionToast('⏹️ หยุดบันทึกและดาวน์โหลดแล้ว');
+    }
+}
+
+// Show toast for quick actions
+function showQuickActionToast(message, type = 'success') {
+    const bgColors = {
+        'success': '#1F2937',
+        'warning': '#92400E',
+        'error': '#991B1B'
+    };
+    
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: ${bgColors[type] || bgColors.success};
+        color: white;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-size: 14px;
+        z-index: 10000;
+        animation: fadeInUp 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 2000);
+}
+
+// Start polling
+setInterval(checkIncomingCalls, 3000);
+checkIncomingCalls();
+
+// Initial call immediately
+document.addEventListener('DOMContentLoaded', function() {
+    checkIncomingCalls();
+});
 </script>
 
-<?php require_once 'includes/footer.php'; ?>
+<style>
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+</style>
+
+<?php include __DIR__ . '/includes/footer.php'; ?>

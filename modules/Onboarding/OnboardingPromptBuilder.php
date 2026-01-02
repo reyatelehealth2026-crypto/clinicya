@@ -69,7 +69,7 @@ class OnboardingPromptBuilder {
 - Segments: /customer-segments.php
 - โปรโมชั่น: /shop/promotions.php
 - Analytics: /analytics.php
-- Executive Dashboard: /executive-dashboard.php
+- Dashboard: /dashboard.php
 
 ## ฟีเจอร์หลักของระบบ
 - Inbox: จัดการข้อความจากลูกค้า

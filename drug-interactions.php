@@ -1,8 +1,17 @@
 <?php
 /**
- * Drug Interactions Management - จัดการฐานข้อมูลยาตีกัน
- * Version 2.0
+ * Drug Interactions Management - Redirect Stub
+ * This file has been consolidated into pharmacy.php
+ * Redirects to: pharmacy.php?tab=interactions
  */
+require_once __DIR__ . '/includes/redirects.php';
+handleRedirect();
+
+// Fallback if redirect doesn't work
+header('Location: pharmacy.php?tab=interactions');
+exit;
+
+/* Original code below - kept for reference during transition
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth_check.php';

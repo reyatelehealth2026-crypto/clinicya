@@ -166,23 +166,24 @@ try {
 $quickAccessMenus = [
     // ==================== Clinical Station - Unified Care Chat ====================
     'messages' => ['icon' => 'fa-inbox', 'label' => 'แชท', 'url' => '/inbox', 'page' => 'inbox', 'badge' => $unreadMessages, 'color' => 'green', 'roles' => ['pharmacist', 'staff']],
-    'video-call' => ['icon' => 'fa-video', 'label' => 'Video Call', 'url' => '/video-call-pro', 'page' => 'video-call-pro', 'color' => 'red', 'roles' => ['pharmacist', 'staff']],
+    'video-call' => ['icon' => 'fa-video', 'label' => 'Video Call', 'url' => '/video-call', 'page' => 'video-call', 'color' => 'red', 'roles' => ['pharmacist', 'staff']],
     'auto-reply' => ['icon' => 'fa-robot', 'label' => 'ตอบอัตโนมัติ', 'url' => '/auto-reply', 'page' => 'auto-reply', 'color' => 'pink', 'roles' => ['pharmacist', 'staff']],
     
     // ==================== Clinical Station - Roster & Shifts (all staff) ====================
-    'pharmacist-dashboard' => ['icon' => 'fa-user-md', 'label' => 'Dashboard เภสัชกร', 'url' => '/pharmacist-dashboard', 'page' => 'pharmacist-dashboard', 'color' => 'emerald'],
-    'pharmacists' => ['icon' => 'fa-users', 'label' => 'จัดการเภสัชกร', 'url' => '/pharmacists', 'page' => 'pharmacists', 'color' => 'teal'],
+    'pharmacist-dashboard' => ['icon' => 'fa-user-md', 'label' => 'Dashboard เภสัชกร', 'url' => '/pharmacy?tab=dashboard', 'page' => 'pharmacy', 'color' => 'emerald'],
+    'pharmacists' => ['icon' => 'fa-users', 'label' => 'จัดการเภสัชกร', 'url' => '/pharmacy?tab=pharmacists', 'page' => 'pharmacy', 'color' => 'teal'],
     'appointments' => ['icon' => 'fa-calendar-check', 'label' => 'นัดหมาย', 'url' => '/appointments-admin', 'page' => 'appointments-admin', 'color' => 'amber'],
     
     // ==================== Clinical Station - Medical Copilot AI ====================
-    'ai-chat' => ['icon' => 'fa-comments', 'label' => 'AI ตอบแชท', 'url' => '/ai-chat-settings', 'page' => 'ai-chat-settings', 'color' => 'fuchsia', 'roles' => ['pharmacist']],
-    'ai-studio' => ['icon' => 'fa-wand-magic-sparkles', 'label' => 'AI Studio', 'url' => '/ai-studio', 'page' => 'ai-studio', 'color' => 'rose', 'roles' => ['pharmacist']],
+    'ai-chat' => ['icon' => 'fa-comments', 'label' => 'AI ตอบแชท', 'url' => '/ai-chat?tab=settings', 'page' => 'ai-chat', 'color' => 'fuchsia', 'roles' => ['pharmacist']],
+    'ai-studio' => ['icon' => 'fa-wand-magic-sparkles', 'label' => 'AI Studio', 'url' => '/ai-chat?tab=studio', 'page' => 'ai-chat', 'color' => 'rose', 'roles' => ['pharmacist']],
     'ai-pharmacy' => ['icon' => 'fa-cog', 'label' => 'ตั้งค่า AI เภสัช', 'url' => '/ai-pharmacy-settings', 'page' => 'ai-pharmacy-settings', 'color' => 'purple', 'roles' => ['pharmacist']],
     
     // ==================== Insights & Overview ====================
-    'executive' => ['icon' => 'fa-chart-line', 'label' => 'แดชบอร์ดผู้บริหาร', 'url' => '/executive-dashboard', 'page' => 'executive-dashboard', 'color' => 'indigo', 'roles' => ['owner', 'admin']],
+    'executive' => ['icon' => 'fa-chart-line', 'label' => 'แดชบอร์ดผู้บริหาร', 'url' => '/dashboard?tab=executive', 'page' => 'dashboard', 'color' => 'indigo', 'roles' => ['owner', 'admin']],
+    'crm-dashboard' => ['icon' => 'fa-users-cog', 'label' => 'CRM Dashboard', 'url' => '/dashboard?tab=crm', 'page' => 'dashboard', 'color' => 'blue', 'roles' => ['owner', 'admin']],
     'triage' => ['icon' => 'fa-stethoscope', 'label' => 'สถิติการรักษา', 'url' => '/triage-analytics', 'page' => 'triage-analytics', 'color' => 'emerald', 'roles' => ['pharmacist', 'owner']],
-    'drug-interactions' => ['icon' => 'fa-pills', 'label' => 'ยาตีกัน', 'url' => '/drug-interactions', 'page' => 'drug-interactions', 'color' => 'red', 'roles' => ['pharmacist', 'owner']],
+    'drug-interactions' => ['icon' => 'fa-pills', 'label' => 'ยาตีกัน', 'url' => '/pharmacy?tab=interactions', 'page' => 'pharmacy', 'color' => 'red', 'roles' => ['pharmacist', 'owner']],
     'activity-logs' => ['icon' => 'fa-history', 'label' => 'ประวัติการใช้งาน', 'url' => '/activity-logs', 'page' => 'activity-logs', 'color' => 'slate', 'roles' => ['owner']],
     
     // ==================== Patient & Journey - EHR ====================
@@ -190,19 +191,19 @@ $quickAccessMenus = [
     'user-tags' => ['icon' => 'fa-tags', 'label' => 'แท็กลูกค้า', 'url' => '/user-tags', 'page' => 'user-tags', 'color' => 'sky', 'roles' => ['pharmacist']],
     
     // ==================== Patient & Journey - Membership (all staff) ====================
-    'members' => ['icon' => 'fa-id-card', 'label' => 'จัดการสมาชิก', 'url' => '/members', 'page' => 'members', 'color' => 'rose'],
-    'rewards' => ['icon' => 'fa-gift', 'label' => 'รางวัลแลกแต้ม', 'url' => '/admin-rewards', 'page' => 'admin-rewards', 'color' => 'fuchsia'],
-    'points-settings' => ['icon' => 'fa-coins', 'label' => 'ตั้งค่าแต้ม', 'url' => '/admin-points-settings', 'page' => 'admin-points-settings', 'color' => 'yellow'],
+    'members' => ['icon' => 'fa-id-card', 'label' => 'จัดการสมาชิก', 'url' => '/membership?tab=members', 'page' => 'membership', 'color' => 'rose'],
+    'rewards' => ['icon' => 'fa-gift', 'label' => 'รางวัลแลกแต้ม', 'url' => '/membership?tab=rewards', 'page' => 'membership', 'color' => 'fuchsia'],
+    'points-settings' => ['icon' => 'fa-coins', 'label' => 'ตั้งค่าแต้ม', 'url' => '/membership?tab=settings', 'page' => 'membership', 'color' => 'yellow'],
     
     // ==================== Patient & Journey - Care Journey ====================
     'broadcast' => ['icon' => 'fa-paper-plane', 'label' => 'บรอดแคสต์', 'url' => '/broadcast', 'page' => 'broadcast', 'color' => 'purple', 'roles' => ['admin', 'marketing']],
-    'broadcast-catalog' => ['icon' => 'fa-layer-group', 'label' => 'แคตตาล็อก', 'url' => '/broadcast-catalog-v2', 'page' => 'broadcast-catalog-v2', 'color' => 'violet', 'roles' => ['admin', 'marketing']],
+    'broadcast-catalog' => ['icon' => 'fa-layer-group', 'label' => 'แคตตาล็อก', 'url' => '/broadcast?tab=catalog', 'page' => 'broadcast', 'color' => 'violet', 'roles' => ['admin', 'marketing']],
     'drip-campaigns' => ['icon' => 'fa-water', 'label' => 'Drip Campaign', 'url' => '/drip-campaigns', 'page' => 'drip-campaigns', 'color' => 'blue', 'roles' => ['admin', 'marketing']],
     'templates' => ['icon' => 'fa-file-alt', 'label' => 'Templates', 'url' => '/templates', 'page' => 'templates', 'color' => 'slate', 'roles' => ['admin', 'marketing']],
     
     // ==================== Patient & Journey - Digital Front Door ====================
     'rich-menu' => ['icon' => 'fa-th-large', 'label' => 'Rich Menu', 'url' => '/rich-menu', 'page' => 'rich-menu', 'color' => 'teal', 'roles' => ['admin', 'marketing']],
-    'dynamic-rich-menu' => ['icon' => 'fa-random', 'label' => 'Dynamic Rich Menu', 'url' => '/dynamic-rich-menu', 'page' => 'dynamic-rich-menu', 'color' => 'cyan', 'roles' => ['admin', 'marketing']],
+    'dynamic-rich-menu' => ['icon' => 'fa-random', 'label' => 'Dynamic Rich Menu', 'url' => '/rich-menu?tab=dynamic', 'page' => 'rich-menu', 'color' => 'cyan', 'roles' => ['admin', 'marketing']],
     'liff-settings' => ['icon' => 'fa-mobile-screen', 'label' => 'ตั้งค่า LIFF', 'url' => '/liff-settings', 'page' => 'liff-settings', 'color' => 'lime', 'roles' => ['admin', 'marketing']],
     
     // ==================== Supply & Revenue - Billing & Orders ====================
@@ -212,16 +213,16 @@ $quickAccessMenus = [
     // ==================== Supply & Revenue - Inventory ====================
     'products' => ['icon' => 'fa-box', 'label' => 'สินค้า', 'url' => '/shop/products', 'page' => 'products', 'color' => 'blue', 'roles' => ['admin', 'pharmacist']],
     'categories' => ['icon' => 'fa-folder', 'label' => 'หมวดหมู่', 'url' => '/shop/categories', 'page' => 'categories', 'color' => 'lime', 'roles' => ['admin', 'pharmacist']],
-    'stock-adjustment' => ['icon' => 'fa-sliders-h', 'label' => 'ปรับสต็อก', 'url' => '/inventory/stock-adjustment', 'page' => 'stock-adjustment', 'color' => 'indigo', 'roles' => ['admin', 'pharmacist']],
-    'stock-movements' => ['icon' => 'fa-exchange-alt', 'label' => 'ประวัติเคลื่อนไหว', 'url' => '/inventory/stock-movements', 'page' => 'stock-movements', 'color' => 'sky', 'roles' => ['admin', 'pharmacist']],
-    'low-stock' => ['icon' => 'fa-exclamation-triangle', 'label' => 'สินค้าใกล้หมด', 'url' => '/inventory/low-stock', 'page' => 'low-stock', 'color' => 'red', 'roles' => ['admin', 'pharmacist']],
+    'stock-adjustment' => ['icon' => 'fa-sliders-h', 'label' => 'ปรับสต็อก', 'url' => '/inventory?tab=adjustment', 'page' => 'inventory', 'color' => 'indigo', 'roles' => ['admin', 'pharmacist']],
+    'stock-movements' => ['icon' => 'fa-exchange-alt', 'label' => 'ประวัติเคลื่อนไหว', 'url' => '/inventory?tab=movements', 'page' => 'inventory', 'color' => 'sky', 'roles' => ['admin', 'pharmacist']],
+    'low-stock' => ['icon' => 'fa-exclamation-triangle', 'label' => 'สินค้าใกล้หมด', 'url' => '/inventory?tab=low-stock', 'page' => 'inventory', 'color' => 'red', 'roles' => ['admin', 'pharmacist']],
     'product-units' => ['icon' => 'fa-balance-scale', 'label' => 'หน่วยสินค้า', 'url' => '/inventory/product-units', 'page' => 'product-units', 'color' => 'emerald', 'roles' => ['admin', 'pharmacist']],
     'sync' => ['icon' => 'fa-sync', 'label' => 'Sync สินค้า', 'url' => '/sync-dashboard', 'page' => 'sync-dashboard', 'color' => 'sky', 'roles' => ['admin', 'owner']],
     
     // ==================== Supply & Revenue - Procurement ====================
-    'purchase-orders' => ['icon' => 'fa-file-invoice', 'label' => 'ใบสั่งซื้อ (PO)', 'url' => '/inventory/purchase-orders', 'page' => 'purchase-orders', 'color' => 'violet', 'roles' => ['admin', 'owner']],
-    'goods-receive' => ['icon' => 'fa-truck-loading', 'label' => 'รับสินค้า (GR)', 'url' => '/inventory/goods-receive', 'page' => 'goods-receive', 'color' => 'teal', 'roles' => ['admin', 'owner']],
-    'suppliers' => ['icon' => 'fa-truck', 'label' => 'Suppliers', 'url' => '/inventory/suppliers', 'page' => 'suppliers', 'color' => 'slate', 'roles' => ['admin', 'owner']],
+    'purchase-orders' => ['icon' => 'fa-file-invoice', 'label' => 'ใบสั่งซื้อ (PO)', 'url' => '/procurement?tab=po', 'page' => 'procurement', 'color' => 'violet', 'roles' => ['admin', 'owner']],
+    'goods-receive' => ['icon' => 'fa-truck-loading', 'label' => 'รับสินค้า (GR)', 'url' => '/procurement?tab=gr', 'page' => 'procurement', 'color' => 'teal', 'roles' => ['admin', 'owner']],
+    'suppliers' => ['icon' => 'fa-truck', 'label' => 'Suppliers', 'url' => '/procurement?tab=suppliers', 'page' => 'procurement', 'color' => 'slate', 'roles' => ['admin', 'owner']],
     
     // ==================== Facility Setup - Facility Profile ====================
     'shop-settings' => ['icon' => 'fa-store', 'label' => 'ข้อมูลสถานพยาบาล', 'url' => '/shop/settings', 'page' => 'settings', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
@@ -230,15 +231,15 @@ $quickAccessMenus = [
     'admin-users' => ['icon' => 'fa-users-cog', 'label' => 'บุคลากร & สิทธิ์', 'url' => '/admin-users2', 'page' => 'admin-users2', 'color' => 'indigo', 'roles' => ['owner', 'admin']],
     
     // ==================== Facility Setup - Integrations ====================
-    'line-accounts' => ['icon' => 'fa-layer-group', 'label' => 'บัญชี LINE', 'url' => '/line-accounts', 'page' => 'line-accounts', 'color' => 'green', 'roles' => ['owner', 'admin', 'tech']],
-    'telegram' => ['icon' => 'fab fa-telegram', 'label' => 'Telegram', 'url' => '/telegram', 'page' => 'telegram', 'color' => 'blue', 'roles' => ['owner', 'admin', 'tech']],
+    'line-accounts' => ['icon' => 'fa-layer-group', 'label' => 'บัญชี LINE', 'url' => '/settings?tab=line', 'page' => 'settings', 'color' => 'green', 'roles' => ['owner', 'admin', 'tech']],
+    'telegram' => ['icon' => 'fab fa-telegram', 'label' => 'Telegram', 'url' => '/settings?tab=telegram', 'page' => 'settings', 'color' => 'blue', 'roles' => ['owner', 'admin', 'tech']],
     'ai-settings' => ['icon' => 'fa-key', 'label' => 'ตั้งค่า API Key', 'url' => '/ai-settings', 'page' => 'ai-settings', 'color' => 'violet', 'roles' => ['owner', 'admin', 'tech']],
     
     // ==================== Facility Setup - Consent & PDPA ====================
     'consent-management' => ['icon' => 'fa-shield-alt', 'label' => 'Consent & PDPA', 'url' => '/consent-management', 'page' => 'consent-management', 'color' => 'rose', 'roles' => ['owner', 'admin']],
     
     // ==================== Facility Setup - Reports ====================
-    'scheduled-reports' => ['icon' => 'fa-calendar-alt', 'label' => 'รายงานอัตโนมัติ', 'url' => '/scheduled-reports', 'page' => 'scheduled-reports', 'color' => 'amber', 'roles' => ['owner', 'admin']],
+    'scheduled-reports' => ['icon' => 'fa-calendar-alt', 'label' => 'รายงานอัตโนมัติ', 'url' => '/scheduled?tab=reports', 'page' => 'scheduled', 'color' => 'amber', 'roles' => ['owner', 'admin']],
 ];
 
 // Get user's quick access preferences
@@ -292,7 +293,8 @@ $menuGroups = [
                 'icon' => '📊',
                 'submenus' => [
                     ['title' => 'ภาพรวมระบบ', 'href' => '/shop/'],
-                    ['title' => 'Executive Dashboard', 'href' => '/executive-dashboard'],
+                    ['title' => 'Executive Dashboard', 'href' => '/dashboard?tab=executive'],
+                    ['title' => 'CRM Dashboard', 'href' => '/dashboard?tab=crm'],
                 ]
             ],
             [
@@ -303,8 +305,8 @@ $menuGroups = [
                     ['title' => 'สถิติรวม', 'href' => '/analytics'],
                     ['title' => 'รายงานยอดขาย', 'href' => '/shop/reports'],
                     ['title' => 'Triage Analytics', 'href' => '/triage-analytics'],
-                    ['title' => 'รายงานคลังสินค้า', 'href' => '/inventory/reports'],
-                    ['title' => 'สถิติ Broadcast', 'href' => '/broadcast-stats'],
+                    ['title' => 'รายงานคลังสินค้า', 'href' => '/inventory?tab=reports'],
+                    ['title' => 'สถิติ Broadcast', 'href' => '/broadcast?tab=stats'],
                 ]
             ],
             [
@@ -313,7 +315,7 @@ $menuGroups = [
                 'submenus' => [
                     ['title' => 'ติดตามลิงก์', 'href' => '/link-tracking'],
                     ['title' => 'Activity Logs', 'href' => '/activity-logs'],
-                    ['title' => 'รายงานอัตโนมัติ', 'href' => '/scheduled-reports'],
+                    ['title' => 'รายงานอัตโนมัติ', 'href' => '/scheduled?tab=reports'],
                 ]
             ],
         ]
@@ -337,16 +339,16 @@ $menuGroups = [
                 'title' => 'Pharmacist Work',
                 'icon' => '👩‍⚕️',
                 'submenus' => [
-                    ['title' => 'Dashboard เภสัชกร', 'href' => '/pharmacist-dashboard'],
+                    ['title' => 'Dashboard เภสัชกร', 'href' => '/pharmacy?tab=dashboard'],
                     ['title' => 'นัดหมาย', 'href' => '/appointments-admin'],
-                    ['title' => 'Video Call Pro', 'href' => '/pharmacist-video-callsผ'],
+                    ['title' => 'Video Call Pro', 'href' => '/pharmacist-video-calls'],
                 ]
             ],
             [
                 'title' => 'Drug & Safety',
                 'icon' => '💊',
                 'submenus' => [
-                    ['title' => 'ตรวจสอบยาตีกัน', 'href' => '/drug-interactions'],
+                    ['title' => 'ตรวจสอบยาตีกัน', 'href' => '/pharmacy?tab=interactions'],
                     ['title' => 'ข้อมูลยา', 'href' => '/drug-info'],
                 ]
             ],
@@ -400,9 +402,9 @@ $menuGroups = [
                 'title' => 'Loyalty Program',
                 'icon' => '💳',
                 'submenus' => [
-                    ['title' => 'จัดการสมาชิก', 'href' => '/members'],
-                    ['title' => 'ตั้งค่าแต้ม', 'href' => '/admin-points-settings'],
-                    ['title' => 'ของรางวัล', 'href' => '/admin-rewards'],
+                    ['title' => 'จัดการสมาชิก', 'href' => '/membership?tab=members'],
+                    ['title' => 'ตั้งค่าแต้ม', 'href' => '/membership?tab=settings'],
+                    ['title' => 'ของรางวัล', 'href' => '/membership?tab=rewards'],
                 ]
             ],
         ]
@@ -437,9 +439,9 @@ $menuGroups = [
                 'submenus' => [
                     ['title' => 'สินค้า', 'href' => '/shop/products'],
                     ['title' => 'หมวดหมู่', 'href' => '/shop/categories'],
-                    ['title' => 'ปรับสต็อก', 'href' => '/inventory/stock-adjustment'],
-                    ['title' => 'สินค้าใกล้หมด', 'href' => '/inventory/low-stock'],
-                    ['title' => 'ประวัติเคลื่อนไหว', 'href' => '/inventory/stock-movements'],
+                    ['title' => 'ปรับสต็อก', 'href' => '/inventory?tab=adjustment'],
+                    ['title' => 'สินค้าใกล้หมด', 'href' => '/inventory?tab=low-stock'],
+                    ['title' => 'ประวัติเคลื่อนไหว', 'href' => '/inventory?tab=movements'],
                 ]
             ],
             [
@@ -447,9 +449,9 @@ $menuGroups = [
                 'icon' => '🚚',
                 'note' => 'จัดซื้อ',
                 'submenus' => [
-                    ['title' => 'Suppliers', 'href' => '/inventory/suppliers'],
-                    ['title' => 'ใบสั่งซื้อ', 'href' => '/inventory/purchase-orders'],
-                    ['title' => 'รับสินค้า', 'href' => '/inventory/goods-receive'],
+                    ['title' => 'Suppliers', 'href' => '/procurement?tab=suppliers'],
+                    ['title' => 'ใบสั่งซื้อ', 'href' => '/procurement?tab=po'],
+                    ['title' => 'รับสินค้า', 'href' => '/procurement?tab=gr'],
                 ]
             ],
             [
@@ -482,16 +484,16 @@ $menuGroups = [
                 'icon' => '👥',
                 'submenus' => [
                     ['title' => 'ผู้ดูแลระบบ', 'href' => '/admin-users'],
-                    ['title' => 'จัดการเภสัชกร', 'href' => '/pharmacists'],
+                    ['title' => 'จัดการเภสัชกร', 'href' => '/pharmacy?tab=pharmacists'],
                 ]
             ],
             [
                 'title' => 'Connections',
                 'icon' => '🔌',
                 'submenus' => [
-                    ['title' => 'บัญชี LINE', 'href' => '/line-accounts'],
+                    ['title' => 'บัญชี LINE', 'href' => '/settings?tab=line'],
                     ['title' => 'ตั้งค่า LIFF', 'href' => '/liff-settings'],
-                    ['title' => 'Telegram', 'href' => '/telegram'],
+                    ['title' => 'Telegram', 'href' => '/settings?tab=telegram'],
                 ]
             ],
             [
@@ -500,7 +502,7 @@ $menuGroups = [
                 'submenus' => [
                     ['title' => 'ตั้งค่าร้านค้า', 'href' => '/shop/settings'],
                     ['title' => 'ตั้งค่า AI เภสัช', 'href' => '/ai-pharmacy-settings'],
-                    ['title' => 'การแจ้งเตือน', 'href' => '/notification-settings'],
+                    ['title' => 'การแจ้งเตือน', 'href' => '/settings?tab=notifications'],
                 ]
             ],
             [
@@ -530,8 +532,8 @@ $menuGroups = [
                 'title' => 'AI Tools',
                 'icon' => '🤖',
                 'submenus' => [
-                    ['title' => 'AI Studio', 'href' => '/ai-studio'],
-                    ['title' => 'AI ตอบแชท', 'href' => '/ai-chat-settings'],
+                    ['title' => 'AI Studio', 'href' => '/ai-chat?tab=studio'],
+                    ['title' => 'AI ตอบแชท', 'href' => '/ai-chat?tab=settings'],
                     ['title' => 'AI สร้างรูป', 'href' => '/ai-image'],
                     ['title' => 'ตั้งค่า API Key', 'href' => '/ai-settings'],
                 ]
@@ -541,7 +543,7 @@ $menuGroups = [
                 'icon' => '📲',
                 'submenus' => [
                     ['title' => 'Rich Menu', 'href' => '/rich-menu'],
-                    ['title' => 'Dynamic Rich Menu', 'href' => '/dynamic-rich-menu'],
+                    ['title' => 'Dynamic Rich Menu', 'href' => '/rich-menu?tab=dynamic'],
                     ['title' => 'Flex Builder', 'href' => '/flex-builder'],
                     ['title' => 'ตั้งเวลาส่ง', 'href' => '/scheduled'],
                     ['title' => 'กลุ่ม LINE', 'href' => '/line-groups'],

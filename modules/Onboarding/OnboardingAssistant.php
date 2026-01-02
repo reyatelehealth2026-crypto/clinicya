@@ -265,7 +265,7 @@ class OnboardingAssistant {
             
             'promotions' => "**โปรโมชั่น** 🎁\n\nสร้างโปรโมชั่นและคูปองได้ที่หน้า Promotions ครับ\n\n👉 [จัดการโปรโมชั่น](/shop/promotions.php)",
             
-            'crm_analytics' => "**CRM Analytics** 📊\n\nดูสถิติและวิเคราะห์ข้อมูลลูกค้าได้ที่หน้า Analytics ครับ\n\n👉 [CRM Analytics](/crm-analytics.php)\n👉 [Executive Dashboard](/executive-dashboard.php)",
+            'crm_analytics' => "**CRM Analytics** 📊\n\nดูสถิติและวิเคราะห์ข้อมูลลูกค้าได้ที่หน้า Analytics ครับ\n\n👉 [CRM Analytics](/analytics.php?tab=crm)\n👉 [Executive Dashboard](/dashboard.php?tab=executive)",
             
             'bug_report' => "**รายงานปัญหา** 🐛\n\nกรุณาบอกรายละเอียด: หน้าที่เกิดปัญหา, อาการ, Error message (ถ้ามี) ครับ"
         ];

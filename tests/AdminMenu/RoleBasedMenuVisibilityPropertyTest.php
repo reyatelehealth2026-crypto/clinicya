@@ -32,14 +32,14 @@ class RoleBasedMenuVisibilityPropertyTest extends TestCase
      */
     private array $expectedRoleAccess = [
         // Requirement 2.2, 2.3: Insights & Overview
-        '/executive-dashboard' => ['owner', 'admin'],
+        '/dashboard' => ['owner', 'admin'],
         '/triage-analytics' => ['pharmacist', 'owner'],
         '/drug-interactions' => ['pharmacist', 'owner'],
         '/activity-logs' => ['owner'],
         
         // Requirement 3.2, 3.3: Clinical Station
         '/inbox' => ['pharmacist', 'staff'],
-        '/video-call-pro' => ['pharmacist', 'staff'],
+        '/video-call' => ['pharmacist', 'staff'],
         '/auto-reply' => ['pharmacist', 'staff'],
         '/pharmacist-dashboard' => null, // All staff (no restriction)
         '/pharmacists' => null, // All staff (no restriction)
@@ -54,7 +54,7 @@ class RoleBasedMenuVisibilityPropertyTest extends TestCase
         '/admin-rewards' => null, // All staff (no restriction)
         '/admin-points-settings' => null, // All staff (no restriction)
         '/broadcast' => ['admin', 'marketing'],
-        '/broadcast-catalog-v2' => ['admin', 'marketing'],
+        '/broadcast-catalog' => ['admin', 'marketing'],
         '/drip-campaigns' => ['admin', 'marketing'],
         '/rich-menu' => ['admin', 'marketing'],
         '/dynamic-rich-menu' => ['admin', 'marketing'],
@@ -371,7 +371,7 @@ class RoleBasedMenuVisibilityPropertyTest extends TestCase
                     $this->hasMenuAccess($item, 'pharmacist'),
                     "Pharmacist should have access to Clinical Analytics '{$url}'"
                 );
-            } elseif ($url === '/executive-dashboard' || $url === '/activity-logs') {
+            } elseif ($url === '/dashboard' || $url === '/activity-logs') {
                 $this->assertFalse(
                     $this->hasMenuAccess($item, 'pharmacist'),
                     "Pharmacist should NOT have access to '{$url}'"
@@ -400,7 +400,7 @@ class RoleBasedMenuVisibilityPropertyTest extends TestCase
             );
             
             // Staff should access Unified Care Chat and Roster & Shifts only (Requirement 3.3)
-            $staffAccessibleUrls = ['/inbox', '/video-call-pro', '/auto-reply', '/pharmacist-dashboard', '/pharmacists'];
+            $staffAccessibleUrls = ['/inbox', '/video-call', '/auto-reply', '/pharmacist-dashboard', '/pharmacists'];
             if (in_array($url, $staffAccessibleUrls)) {
                 $this->assertTrue(
                     $this->hasMenuAccess($item, 'staff'),
@@ -439,7 +439,7 @@ class RoleBasedMenuVisibilityPropertyTest extends TestCase
             
             // Marketing should access Care Journey and Digital Front Door only (Requirement 4.4)
             $marketingAccessibleUrls = [
-                '/broadcast', '/broadcast-catalog-v2', '/drip-campaigns',
+                '/broadcast', '/broadcast-catalog', '/drip-campaigns',
                 '/rich-menu', '/dynamic-rich-menu', '/liff-settings'
             ];
             if (in_array($url, $marketingAccessibleUrls)) {

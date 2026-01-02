@@ -22,7 +22,7 @@ class MenuStructureCompletenessPropertyTest extends TestCase
     private array $expectedMenuStructure = [
         // Requirement 2.1: Insights & Overview
         'insights' => [
-            '/executive-dashboard',  // Executive Dashboard
+            '/dashboard',            // Dashboard (consolidated)
             '/triage-analytics',     // Clinical Analytics
             '/drug-interactions',    // Clinical Analytics (Drug Interactions)
             '/activity-logs',        // Audit Logs
@@ -46,7 +46,7 @@ class MenuStructureCompletenessPropertyTest extends TestCase
             '/admin-rewards',        // Membership
             '/admin-points-settings',// Membership
             '/broadcast',            // Care Journey
-            '/broadcast-catalog-v2', // Care Journey
+            '/broadcast-catalog',    // Care Journey
             '/drip-campaigns',       // Care Journey
             '/rich-menu',            // Digital Front Door
             '/dynamic-rich-menu',    // Digital Front Door

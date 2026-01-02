@@ -44,7 +44,7 @@ $availableMenus = [
     'messages' => ['icon' => 'fa-comments', 'label' => 'แชท', 'url' => 'messages.php', 'color' => 'green'],
     'orders' => ['icon' => 'fa-receipt', 'label' => 'ออเดอร์', 'url' => 'shop/orders.php', 'color' => 'orange'],
     'products' => ['icon' => 'fa-box-open', 'label' => 'สินค้า', 'url' => 'shop/products.php', 'color' => 'blue'],
-    'broadcast' => ['icon' => 'fa-paper-plane', 'label' => 'บรอดแคสต์', 'url' => 'broadcast-catalog-v2.php', 'color' => 'purple'],
+    'broadcast' => ['icon' => 'fa-paper-plane', 'label' => 'บรอดแคสต์', 'url' => 'broadcast-catalog.php', 'color' => 'purple'],
     'users' => ['icon' => 'fa-users', 'label' => 'ลูกค้า', 'url' => 'users.php', 'color' => 'cyan'],
     'auto-reply' => ['icon' => 'fa-robot', 'label' => 'ตอบอัตโนมัติ', 'url' => 'auto-reply.php', 'color' => 'pink'],
     'analytics' => ['icon' => 'fa-chart-pie', 'label' => 'สถิติ', 'url' => 'analytics.php', 'color' => 'indigo'],

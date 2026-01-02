@@ -245,7 +245,7 @@ $_SESSION['current_bot_id'] = $currentBotId;
                 <div class="menu-section">
                     <div class="menu-section-title">จัดการ</div>
                     <div class="px-3">
-                        <a href="messages.php" class="menu-item <?= $currentPage === 'messages' ? 'active' : '' ?>">
+                        <a href="../messages.php" class="menu-item <?= $currentPage === 'messages' ? 'active' : '' ?>">
                             <span class="menu-icon"><i class="fas fa-inbox"></i></span>
                             ข้อความ
                         </a>
@@ -255,7 +255,7 @@ $_SESSION['current_bot_id'] = $currentBotId;
                             ลูกค้า
                         </a>
                         
-                        <a href="broadcast.php" class="menu-item <?= $currentPage === 'broadcast' ? 'active' : '' ?>">
+                        <a href="../broadcast.php" class="menu-item <?= $currentPage === 'broadcast' ? 'active' : '' ?>">
                             <span class="menu-icon"><i class="fas fa-bullhorn"></i></span>
                             Broadcast
                         </a>
@@ -310,7 +310,7 @@ $_SESSION['current_bot_id'] = $currentBotId;
                             Rich Menu
                         </a>
                         
-                        <a href="analytics.php" class="menu-item <?= $currentPage === 'analytics' ? 'active' : '' ?>">
+                        <a href="../analytics.php" class="menu-item <?= $currentPage === 'analytics' ? 'active' : '' ?>">
                             <span class="menu-icon"><i class="fas fa-chart-bar"></i></span>
                             สถิติ
                         </a>

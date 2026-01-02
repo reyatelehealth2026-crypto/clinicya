@@ -14,6 +14,9 @@
         <testsuite name="AdminMenu Tests">
             <directory>tests/AdminMenu</directory>
         </testsuite>
+        <testsuite name="FileConsolidation Tests">
+            <directory>tests/FileConsolidation</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>

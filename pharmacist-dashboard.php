@@ -1,14 +1,17 @@
 <?php
 /**
- * Pharmacist Dashboard - แดชบอร์ดสำหรับเภสัชกร
- * Version 2.0 - Professional Pharmacy Management
- * 
- * Features:
- * - ดูรายการรอตรวจสอบ
- * - ดูประวัติการซักประวัติ
- * - อนุมัติ/ปฏิเสธคำสั่งซื้อยา
- * - Video Call กับลูกค้า
+ * Pharmacist Dashboard - Redirect Stub
+ * This file has been consolidated into pharmacy.php
+ * Redirects to: pharmacy.php?tab=dashboard
  */
+require_once __DIR__ . '/includes/redirects.php';
+handleRedirect();
+
+// Fallback if redirect doesn't work
+header('Location: pharmacy.php?tab=dashboard');
+exit;
+
+/* Original code below - kept for reference during transition
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth_check.php';

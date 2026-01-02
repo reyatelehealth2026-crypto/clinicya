@@ -58,11 +58,11 @@ $pageKnowledge = [
         'features' => ['ดูยอดขายรวม', 'จำนวนลูกค้า', 'ข้อความที่ได้รับ', 'กราฟแนวโน้ม'],
         'tips' => 'ดูภาพรวมธุรกิจได้ที่นี่'
     ],
-    'executive-dashboard' => [
-        'name' => 'Executive Dashboard',
-        'desc' => 'แดชบอร์ดสำหรับผู้บริหาร',
-        'features' => ['ภาพรวมยอดขาย', 'KPI สำคัญ', 'เปรียบเทียบช่วงเวลา', 'Top Products'],
-        'tips' => 'เหมาะสำหรับดูภาพรวมธุรกิจแบบ executive summary'
+    'dashboard' => [
+        'name' => 'Dashboard',
+        'desc' => 'แดชบอร์ดรวม Executive และ CRM',
+        'features' => ['ภาพรวมยอดขาย', 'KPI สำคัญ', 'CRM Dashboard', 'Auto Tag Rules'],
+        'tips' => 'เหมาะสำหรับดูภาพรวมธุรกิจ ใช้ tabs เพื่อสลับระหว่าง Executive และ CRM'
     ],
     
     // === Clinical Station ===

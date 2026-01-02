@@ -62,6 +62,6 @@ foreach ($tables as $table) {
     }
 }
 
-echo "<p><a href='crm-dashboard.php'>ไปหน้า CRM Dashboard</a></p>";
+echo "<p><a href='dashboard.php?tab=crm'>ไปหน้า CRM Dashboard</a></p>";
 echo "<p><a href='auto-tag-rules.php'>ไปหน้า Auto Tag Rules</a></p>";
 ?>

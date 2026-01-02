@@ -1,7 +1,14 @@
 <?php
 /**
  * Inventory Reports - รายงานคลังสินค้า
+ * 
+ * DEPRECATED: This file has been consolidated into inventory/index.php
+ * Redirects to: inventory/index.php?tab=reports
  */
+require_once __DIR__ . '/../includes/redirects.php';
+handleRedirect();
+
+// Fallback if redirect doesn't work
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 require_once __DIR__ . '/../config/config.php';

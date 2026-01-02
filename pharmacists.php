@@ -1,7 +1,17 @@
 <?php
 /**
- * Pharmacists Management - จัดการเภสัชกร
+ * Pharmacists Management - Redirect Stub
+ * This file has been consolidated into pharmacy.php
+ * Redirects to: pharmacy.php?tab=pharmacists
  */
+require_once __DIR__ . '/includes/redirects.php';
+handleRedirect();
+
+// Fallback if redirect doesn't work
+header('Location: pharmacy.php?tab=pharmacists');
+exit;
+
+/* Original code below - kept for reference during transition
 require_once 'config/config.php';
 require_once 'config/database.php';
 

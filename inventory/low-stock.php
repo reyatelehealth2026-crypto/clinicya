@@ -1,7 +1,14 @@
 <?php
 /**
  * Low Stock Alerts - แจ้งเตือนสินค้าใกล้หมด + Bulk Order + Reorder Point
+ * 
+ * DEPRECATED: This file has been consolidated into inventory/index.php
+ * Redirects to: inventory/index.php?tab=low-stock
  */
+require_once __DIR__ . '/../includes/redirects.php';
+handleRedirect();
+
+// Fallback if redirect doesn't work
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 require_once __DIR__ . '/../config/config.php';
