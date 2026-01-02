@@ -536,44 +536,44 @@ $menuGroups = [
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        /* Sidebar */
+        /* Sidebar - Dark Purple Theme */
         .sidebar {
             width: var(--sidebar-width);
-            background: #ffffff;
-            border-right: 1px solid #e2e8f0;
+            background: #1e1b4b;
+            border-right: none;
             transition: transform 0.3s ease;
         }
         
         .sidebar-brand {
             padding: 16px 20px;
-            border-bottom: 1px solid #f1f5f9;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: #1e1b4b;
         }
         
         /* Bot Selector */
         .bot-selector {
             padding: 12px 16px;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
         
         .bot-card {
             display: flex;
             align-items: center;
             padding: 10px 12px;
-            background: #f8fafc;
+            background: rgba(255,255,255,0.05);
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.2s;
             border: 1px solid transparent;
         }
         
-        .bot-card:hover { background: #f1f5f9; border-color: #e2e8f0; }
+        .bot-card:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
         
         .bot-avatar {
             width: 40px;
             height: 40px;
             border-radius: 10px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -585,48 +585,52 @@ $menuGroups = [
         
         .bot-avatar img { width: 100%; height: 100%; object-fit: cover; }
         
-        /* Menu */
-        .menu-section { padding: 12px 12px 4px; }
+        /* Menu Section */
+        .menu-section { padding: 8px 8px 4px; }
         .menu-section-title {
             font-size: 10px;
-            font-weight: 700;
-            color: #94a3b8;
+            font-weight: 600;
+            color: rgba(255,255,255,0.4);
             text-transform: uppercase;
             letter-spacing: 0.8px;
-            padding: 0 12px 8px;
+            padding: 12px 12px 8px;
         }
         
+        /* Simple Menu Item */
         .menu-item {
             display: flex;
             align-items: center;
-            padding: 10px 12px;
-            margin: 2px 0;
-            border-radius: 10px;
-            color: #64748b;
+            padding: 10px 14px;
+            margin: 2px 8px;
+            border-radius: 8px;
+            color: rgba(255,255,255,0.7);
             font-size: 13px;
-            font-weight: 500;
+            font-weight: 400;
             transition: all 0.15s ease;
             text-decoration: none;
             position: relative;
         }
         
-        .menu-item:hover { background: #f1f5f9; color: #334155; }
-        .menu-item:hover .menu-icon { color: var(--primary); }
+        .menu-item:hover { 
+            background: rgba(255,255,255,0.08); 
+            color: white; 
+        }
+        .menu-item:hover .menu-icon { color: #a78bfa; }
         
         .menu-item.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: #7c3aed;
             color: white;
-            box-shadow: 0 4px 12px rgba(6, 199, 85, 0.25);
+            font-weight: 500;
         }
         
         .menu-item.active .menu-icon { color: white; }
-        .menu-item.active:hover { background: linear-gradient(135deg, var(--primary-dark) 0%, #048a3d 100%); }
+        .menu-item.active:hover { background: #6d28d9; }
         
         .menu-icon {
             width: 20px;
             margin-right: 12px;
             font-size: 14px;
-            color: #94a3b8;
+            color: rgba(255,255,255,0.5);
             text-align: center;
         }
         
@@ -645,28 +649,30 @@ $menuGroups = [
         .menu-badge.green { background: var(--primary); }
         .menu-badge.orange { background: #f97316; }
         
-        /* Collapsible Menu Parent */
+        /* Group Header - Collapsible */
         .menu-parent {
             display: flex;
             align-items: center;
-            padding: 10px 12px;
+            padding: 10px 14px;
             margin: 2px 8px;
-            border-radius: 10px;
-            color: #475569;
+            border-radius: 8px;
+            color: rgba(255,255,255,0.9);
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 500;
             cursor: pointer;
             transition: all 0.15s ease;
             user-select: none;
         }
         
-        .menu-parent:hover { background: #f1f5f9; color: #1e293b; }
-        .menu-parent:hover .menu-parent-icon { color: var(--primary); }
+        .menu-parent:hover { 
+            background: rgba(255,255,255,0.08); 
+            color: white; 
+        }
         
         .menu-parent-icon {
-            width: 24px;
+            width: 22px;
             margin-right: 10px;
-            font-size: 16px;
+            font-size: 14px;
             text-align: center;
         }
         
@@ -674,18 +680,17 @@ $menuGroups = [
         
         .menu-arrow {
             font-size: 10px;
-            color: #94a3b8;
+            color: rgba(255,255,255,0.4);
             transition: transform 0.2s ease;
         }
         
         .menu-arrow.rotate { transform: rotate(180deg); }
         
-        /* Submenu */
+        /* Submenu Container */
         .menu-submenu {
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.25s ease-out;
-            padding-left: 8px;
         }
         
         .menu-submenu.open {
@@ -704,73 +709,62 @@ $menuGroups = [
             margin-right: 10px;
         }
         
-        /* Nested Menu Group - Level 2 */
+        /* Nested Menu Group - Simple Style */
         .nested-menu-group {
             margin: 1px 0;
-            border-left: 2px solid #e2e8f0;
-            margin-left: 12px;
         }
         
         .nested-menu-parent {
             display: flex;
             align-items: center;
-            padding: 7px 10px;
-            margin: 1px 4px;
+            padding: 8px 14px 8px 38px;
+            margin: 1px 8px;
             border-radius: 6px;
-            color: #475569;
+            color: rgba(255,255,255,0.7);
             font-size: 12px;
-            font-weight: 500;
+            font-weight: 400;
             cursor: pointer;
             transition: all 0.15s ease;
             user-select: none;
-            background: #f8fafc;
         }
         
         .nested-menu-parent:hover { 
-            background: #e0f2fe; 
-            color: #0369a1;
-            border-left: 2px solid #0ea5e9;
-            margin-left: 2px;
+            background: rgba(255,255,255,0.08); 
+            color: white;
         }
         
         .nested-menu-icon {
             width: 18px;
-            margin-right: 6px;
+            margin-right: 8px;
             font-size: 12px;
             text-align: center;
         }
         
         .nested-menu-label { 
             flex: 1; 
-            font-size: 11.5px;
+            font-size: 12px;
         }
         
         .nested-menu-note {
             font-size: 9px;
-            color: #94a3b8;
+            color: rgba(255,255,255,0.4);
             margin-right: 6px;
             font-weight: 400;
-            background: #f1f5f9;
-            padding: 1px 4px;
-            border-radius: 3px;
         }
         
         .nested-arrow {
             font-size: 8px;
-            color: #94a3b8;
+            color: rgba(255,255,255,0.4);
             transition: transform 0.2s ease;
         }
         
         .nested-arrow.rotate { transform: rotate(90deg); }
         
-        /* Nested Submenu - Level 3 (Final items) */
+        /* Nested Submenu Items */
         .nested-submenu {
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.2s ease-out;
-            padding-left: 20px;
-            border-left: 2px solid #d1fae5;
-            margin-left: 8px;
         }
         
         .nested-submenu.open {
@@ -782,54 +776,29 @@ $menuGroups = [
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 6px 10px;
-            margin: 1px 2px;
-            border-radius: 4px;
-            color: #64748b;
-            font-size: 11px;
+            padding: 8px 14px 8px 56px;
+            margin: 1px 8px;
+            border-radius: 6px;
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
             text-decoration: none;
             transition: all 0.15s ease;
-            position: relative;
-        }
-        
-        .nested-menu-item::before {
-            content: '•';
-            color: #cbd5e1;
-            margin-right: 6px;
-            font-size: 8px;
         }
         
         .nested-menu-item:hover {
-            background: #ecfdf5;
-            color: #059669;
-        }
-        
-        .nested-menu-item:hover::before {
-            color: #059669;
+            background: rgba(255,255,255,0.08);
+            color: white;
         }
         
         .nested-menu-item.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: #7c3aed;
             color: white;
             font-weight: 500;
         }
         
-        .nested-menu-item.active::before {
-            color: white;
-        }
-        
-        /* Quick Access Highlight */
+        /* Quick Access - Hidden for simple theme */
         .quick-access-section {
-            background: linear-gradient(135deg, #f0fdf4 0%, #ecfeff 100%);
-            border-radius: 12px;
-            margin: 8px 12px;
-            padding: 12px 8px;
-            border: 1px solid #d1fae5;
-        }
-        
-        .quick-access-section .menu-section-title {
-            color: #059669;
-            font-size: 11px;
+            display: none;
         }
         
         .quick-item {
@@ -1384,8 +1353,8 @@ $menuGroups = [
             </nav>
             
             <!-- Sidebar Footer -->
-            <div class="p-4 border-t border-gray-100">
-                <div class="flex items-center justify-between text-xs text-gray-400">
+            <div class="p-4 border-t border-white/10">
+                <div class="flex items-center justify-between text-xs text-white/40">
                     <span>LINE CRM Pro v3.5</span>
                     <div class="flex items-center gap-2">
                         <a href="<?= $baseUrl ?>video-call-pro.php" class="hover:text-green-500" title="Video Call"><i class="fas fa-video"></i></a>
