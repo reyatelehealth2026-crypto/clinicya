@@ -278,6 +278,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
             $stmt = $db->prepare("DELETE FROM rich_menus WHERE id = ?");
             $stmt->execute([$_POST['id']]);
         }
+    } elseif ($action === 'sync_from_line') {
+        // Sync Rich Menus from LINE
+        $lineMenus = $line->getRichMenuList();
+        if ($lineMenus['code'] === 200 && !empty($lineMenus['body']['richmenus'])) {
+            $synced = 0;
+            foreach ($lineMenus['body']['richmenus'] as $lineMenu) {
+                $richMenuId = $lineMenu['richMenuId'];
+                
+                // Check if already exists in DB
+                $stmt = $db->prepare("SELECT id FROM rich_menus WHERE line_rich_menu_id = ?");
+                $stmt->execute([$richMenuId]);
+                if (!$stmt->fetch()) {
+                    // Insert new
+                    try {
+                        $stmt = $db->query("SHOW COLUMNS FROM rich_menus LIKE 'line_account_id'");
+                        if ($stmt->rowCount() > 0) {
+                            $stmt = $db->prepare("INSERT INTO rich_menus (line_rich_menu_id, name, chat_bar_text, size_height, areas, line_account_id) VALUES (?, ?, ?, ?, ?, ?)");
+                            $stmt->execute([
+                                $richMenuId,
+                                $lineMenu['name'] ?? 'Synced Menu',
+                                $lineMenu['chatBarText'] ?? 'Menu',
+                                $lineMenu['size']['height'] ?? 1686,
+                                json_encode($lineMenu['areas'] ?? []),
+                                $currentBotId
+                            ]);
+                        } else {
+                            $stmt = $db->prepare("INSERT INTO rich_menus (line_rich_menu_id, name, chat_bar_text, size_height, areas) VALUES (?, ?, ?, ?, ?)");
+                            $stmt->execute([
+                                $richMenuId,
+                                $lineMenu['name'] ?? 'Synced Menu',
+                                $lineMenu['chatBarText'] ?? 'Menu',
+                                $lineMenu['size']['height'] ?? 1686,
+                                json_encode($lineMenu['areas'] ?? [])
+                            ]);
+                        }
+                        $synced++;
+                    } catch (Exception $e) {}
+                }
+            }
+            $_SESSION['rich_menu_success'] = "Sync สำเร็จ! พบ " . count($lineMenus['body']['richmenus']) . " เมนู, เพิ่มใหม่ {$synced} เมนู";
+        } else {
+            $errorMessage = "ไม่สามารถดึงข้อมูลจาก LINE ได้: " . json_encode($lineMenus['body'] ?? []);
+        }
     }
     
     if (!empty($errorMessage)) {
@@ -342,9 +385,17 @@ try {
 
 <div class="mb-4 flex justify-between items-center">
     <p class="text-gray-600">สร้างและจัดการ Rich Menu ด้วย Visual Editor</p>
-    <button onclick="openModal()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
-        <i class="fas fa-plus mr-2"></i>สร้าง Rich Menu
-    </button>
+    <div class="flex gap-2">
+        <form method="POST" action="rich-menu.php?tab=static">
+            <input type="hidden" name="action" value="sync_from_line">
+            <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                <i class="fas fa-sync mr-2"></i>Sync จาก LINE
+            </button>
+        </form>
+        <button onclick="openModal()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
+            <i class="fas fa-plus mr-2"></i>สร้าง Rich Menu
+        </button>
+    </div>
 </div>
 
 <!-- Existing Menus -->
