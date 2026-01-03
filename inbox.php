@@ -1974,7 +1974,7 @@ function toggleNotifications() {
     fetch('api/inbox.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: `action=toggle_notification&user_id=<?= $selectedUserId ?>&enabled=${!isEnabled ? 1 : 0}`
+        body: `action=toggle_notification&user_id=<?= $selectedUser ? $selectedUser['id'] : 0 ?>&enabled=${!isEnabled ? 1 : 0}`
     });
 }
 
@@ -1999,7 +1999,7 @@ function toggleMute() {
     fetch('api/inbox.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: `action=toggle_mute&user_id=<?= $selectedUserId ?>&muted=${!isMuted ? 1 : 0}`
+        body: `action=toggle_mute&user_id=<?= $selectedUser ? $selectedUser['id'] : 0 ?>&muted=${!isMuted ? 1 : 0}`
     });
 }
 
@@ -2010,7 +2010,7 @@ function blockUser() {
     fetch('api/inbox.php', {
         method: 'POST',
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: `action=block_user&user_id=<?= $selectedUserId ?>`
+        body: `action=block_user&user_id=<?= $selectedUser ? $selectedUser['id'] : 0 ?>`
     })
     .then(r => r.json())
     .then(data => {
