@@ -4,7 +4,7 @@
  * Part of consolidated settings.php
  */
 
-// Ensure table exists
+// Ensure table exists with all columns
 try {
     $db->exec("CREATE TABLE IF NOT EXISTS telegram_settings (
         id INT PRIMARY KEY DEFAULT 1,
@@ -19,6 +19,15 @@ try {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )");
     $db->exec("INSERT IGNORE INTO telegram_settings (id) VALUES (1)");
+    
+    // Add missing columns if table already exists
+    $cols = $db->query("SHOW COLUMNS FROM telegram_settings")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('notify_new_order', $cols)) {
+        $db->exec("ALTER TABLE telegram_settings ADD COLUMN notify_new_order TINYINT(1) DEFAULT 1");
+    }
+    if (!in_array('notify_payment', $cols)) {
+        $db->exec("ALTER TABLE telegram_settings ADD COLUMN notify_payment TINYINT(1) DEFAULT 1");
+    }
 } catch (Exception $e) {}
 
 // Get current settings
