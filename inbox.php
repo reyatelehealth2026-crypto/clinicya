@@ -695,6 +695,17 @@ function formatThaiDateTime($datetime) {
     #mainMenuBtn {
         display: none !important;
     }
+    
+    /* Customer panel toggle - desktop */
+    #customerPanel.hidden {
+        display: none !important;
+        width: 0 !important;
+    }
+    
+    /* Chat area expands when panel is hidden */
+    #chatArea {
+        transition: flex 0.3s ease;
+    }
 }
 </style>
 
@@ -795,7 +806,7 @@ function formatThaiDateTime($datetime) {
                 <button onclick="generateAIReply()" class="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-sm font-medium" title="AI ช่วยตอบ">
                     <i class="fas fa-robot mr-1"></i>AI
                 </button>
-                <button onclick="togglePanel()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm" title="ข้อมูลลูกค้า">
+                <button onclick="togglePanel()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm cursor-pointer" title="ข้อมูลลูกค้า">
                     <i class="fas fa-user"></i>
                 </button>
             </div>
@@ -958,10 +969,10 @@ function formatThaiDateTime($datetime) {
         $userOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {}
     ?>
-    <div id="customerPanel" class="w-72 bg-white border-l flex flex-col transition-all duration-300 overflow-hidden hidden lg:flex">
+    <div id="customerPanel" class="w-72 bg-white border-l flex flex-col transition-all duration-300 overflow-hidden hidden lg:block">
         <div class="p-3 border-b bg-gray-50 flex items-center justify-between flex-shrink-0">
             <h3 class="text-sm font-bold text-gray-700"><i class="fas fa-user text-emerald-500 mr-2"></i>รายละเอียดลูกค้า</h3>
-            <button onclick="togglePanel()" class="text-gray-400 hover:text-gray-600 p-1"><i class="fas fa-times"></i></button>
+            <button onclick="togglePanel()" class="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"><i class="fas fa-times"></i></button>
         </div>
         
         <div class="flex-1 overflow-y-auto chat-scroll p-3 space-y-4">
@@ -1897,8 +1908,23 @@ function filterUsers(query) {
 
 function togglePanel() {
     const panel = document.getElementById('customerPanel');
-    panel.classList.toggle('hidden');
-    panel.classList.toggle('flex');
+    const chatArea = document.getElementById('chatArea');
+    
+    // Check current state
+    const isHidden = panel.classList.contains('hidden') || 
+                     window.getComputedStyle(panel).display === 'none';
+    
+    if (isHidden) {
+        // Show panel
+        panel.classList.remove('hidden');
+        panel.classList.add('flex');
+        panel.style.display = 'flex';
+    } else {
+        // Hide panel
+        panel.classList.add('hidden');
+        panel.classList.remove('flex', 'lg:block');
+        panel.style.display = 'none';
+    }
 }
 
 // Toggle collapsible section in customer panel
