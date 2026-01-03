@@ -1288,13 +1288,16 @@ class LiffApp {
     async loadFlashSaleProducts() {
         try {
             const url = `${this.config.BASE_URL}/api/shop-products.php?type=flash_sale&limit=10`;
+            console.log('⚡ Loading flash sale products from:', url);
             const response = await this.fetchWithRetry(url);
             const data = await response.json();
+            console.log('⚡ Flash sale response:', data);
 
             if (data.success && data.products && data.products.length > 0) {
                 this.shopState.flashSaleProducts = data.products;
                 this.renderFlashSaleSection();
             } else {
+                console.log('⚡ No flash sale products found');
                 // Hide flash sale section if no products
                 const section = document.getElementById('flash-sale-section');
                 if (section) section.classList.add('hidden');
@@ -1366,13 +1369,16 @@ class LiffApp {
     async loadChoiceProducts() {
         try {
             const url = `${this.config.BASE_URL}/api/shop-products.php?type=choice&limit=10`;
+            console.log('🏆 Loading choice products from:', url);
             const response = await this.fetchWithRetry(url);
             const data = await response.json();
+            console.log('🏆 Choice response:', data);
 
             if (data.success && data.products && data.products.length > 0) {
                 this.shopState.choiceProducts = data.products;
                 this.renderChoiceSection();
             } else {
+                console.log('🏆 No choice products found');
                 // Hide choice section if no products
                 const section = document.getElementById('choice-section');
                 if (section) section.classList.add('hidden');
