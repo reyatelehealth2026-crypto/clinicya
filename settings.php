@@ -171,6 +171,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $activeTab = 'telegram';
     }
+    
+    // Get Telegram Chat ID
+    elseif ($action === 'get_telegram_chat_id') {
+        $botToken = trim($_POST['bot_token'] ?? '');
+        if (empty($botToken)) {
+            $error = 'กรุณาใส่ Bot Token ก่อน';
+        } else {
+            $url = "https://api.telegram.org/bot{$botToken}/getUpdates";
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 10
+            ]);
+            $response = curl_exec($ch);
+            curl_close($ch);
+            $result = json_decode($response, true);
+            
+            if (($result['ok'] ?? false) && !empty($result['result'])) {
+                $lastUpdate = end($result['result']);
+                $chatId = $lastUpdate['message']['chat']['id'] ?? null;
+                if ($chatId) {
+                    // Save chat_id
+                    $stmt = $db->prepare("UPDATE telegram_settings SET bot_token = ?, chat_id = ? WHERE id = 1");
+                    $stmt->execute([$botToken, $chatId]);
+                    $success = "พบ Chat ID: {$chatId} และบันทึกแล้ว!";
+                } else {
+                    $error = 'ไม่พบ Chat ID กรุณาส่งข้อความหา Bot ก่อน';
+                }
+            } else {
+                $error = 'ไม่พบข้อมูล กรุณาส่งข้อความหา Bot ก่อน หรือตรวจสอบ Token';
+            }
+        }
+        $activeTab = 'telegram';
+    }
+    
+    // Set Telegram Webhook
+    elseif ($action === 'set_telegram_webhook') {
+        $stmt = $db->query("SELECT bot_token FROM telegram_settings WHERE id = 1");
+        $tokenSettings = $stmt->fetch(PDO::FETCH_ASSOC);
+        $botToken = $tokenSettings['bot_token'] ?? '';
+        
+        if (empty($botToken)) {
+            $error = 'กรุณาตั้งค่า Bot Token ก่อน';
+        } else {
+            $webhookUrl = rtrim(BASE_URL, '/') . '/telegram_webhook.php';
+            $url = "https://api.telegram.org/bot{$botToken}/setWebhook";
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => ['url' => $webhookUrl],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 10
+            ]);
+            $response = curl_exec($ch);
+            curl_close($ch);
+            $result = json_decode($response, true);
+            
+            if ($result['ok'] ?? false) {
+                $success = "ตั้งค่า Webhook สำเร็จ: {$webhookUrl}";
+            } else {
+                $error = 'ตั้งค่า Webhook ไม่สำเร็จ: ' . ($result['description'] ?? 'Unknown error');
+            }
+        }
+        $activeTab = 'telegram';
+    }
 
     // Email actions
     elseif ($action === 'save_email') {
