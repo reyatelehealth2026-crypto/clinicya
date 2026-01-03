@@ -86,7 +86,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
     $errorMessage = '';
     
     if ($action === 'create') {
-        $areas = json_decode($_POST['areas'], true) ?: [];
+        // ตรวจสอบว่ามีรูปภาพหรือไม่
+        if (empty($_FILES['image']['tmp_name']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+            $errorMessage = "กรุณาอัพโหลดรูปภาพ Rich Menu (Error: " . ($_FILES['image']['error'] ?? 'No file') . ")";
+        } else {
+            $areas = json_decode($_POST['areas'], true) ?: [];
         $targetHeight = (int)$_POST['size_height'];
         
         // แปลง areas ให้เป็นรูปแบบที่ LINE API รองรับ
@@ -149,26 +153,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
                     }
                     
                     if ($uploadResult['code'] !== 200) {
-                        $errorMessage = "Upload failed: " . ($uploadResult['body']['message'] ?? 'Unknown error');
+                        $errorMessage = "Upload failed (HTTP {$uploadResult['code']}): " . ($uploadResult['body']['message'] ?? json_encode($uploadResult['body'] ?? $uploadResult['error'] ?? 'Unknown error'));
+                        // Log for debugging
+                        error_log("Rich Menu Upload Error: " . json_encode($uploadResult));
                     }
                 }
+            } else {
+                $errorMessage = "กรุณาอัพโหลดรูปภาพ Rich Menu";
             }
             
-            // ตรวจสอบว่ามี column line_account_id หรือไม่
-            try {
-                $stmt = $db->query("SHOW COLUMNS FROM rich_menus LIKE 'line_account_id'");
-                if ($stmt->rowCount() > 0) {
-                    $stmt = $db->prepare("INSERT INTO rich_menus (line_rich_menu_id, name, chat_bar_text, size_height, areas, line_account_id) VALUES (?, ?, ?, ?, ?, ?)");
-                    $stmt->execute([$richMenuId, $_POST['name'], $_POST['chat_bar_text'], $_POST['size_height'], $_POST['areas'], $currentBotId]);
-                } else {
+            // บันทึกลง DB ถ้าสร้าง Rich Menu สำเร็จ
+            if (!empty($richMenuId) && empty($errorMessage)) {
+                // ตรวจสอบว่ามี column line_account_id หรือไม่
+                try {
+                    $stmt = $db->query("SHOW COLUMNS FROM rich_menus LIKE 'line_account_id'");
+                    if ($stmt->rowCount() > 0) {
+                        $stmt = $db->prepare("INSERT INTO rich_menus (line_rich_menu_id, name, chat_bar_text, size_height, areas, line_account_id) VALUES (?, ?, ?, ?, ?, ?)");
+                        $stmt->execute([$richMenuId, $_POST['name'], $_POST['chat_bar_text'], $_POST['size_height'], $_POST['areas'], $currentBotId]);
+                    } else {
+                        $stmt = $db->prepare("INSERT INTO rich_menus (line_rich_menu_id, name, chat_bar_text, size_height, areas) VALUES (?, ?, ?, ?, ?)");
+                        $stmt->execute([$richMenuId, $_POST['name'], $_POST['chat_bar_text'], $_POST['size_height'], $_POST['areas']]);
+                    }
+                } catch (Exception $e) {
                     $stmt = $db->prepare("INSERT INTO rich_menus (line_rich_menu_id, name, chat_bar_text, size_height, areas) VALUES (?, ?, ?, ?, ?)");
                     $stmt->execute([$richMenuId, $_POST['name'], $_POST['chat_bar_text'], $_POST['size_height'], $_POST['areas']]);
                 }
-            } catch (Exception $e) {
-                $stmt = $db->prepare("INSERT INTO rich_menus (line_rich_menu_id, name, chat_bar_text, size_height, areas) VALUES (?, ?, ?, ?, ?)");
-                $stmt->execute([$richMenuId, $_POST['name'], $_POST['chat_bar_text'], $_POST['size_height'], $_POST['areas']]);
             }
-        }
+        } // end else (มีรูปภาพ)
     } elseif ($action === 'set_default') {
         $stmt = $db->prepare("SELECT line_rich_menu_id FROM rich_menus WHERE id = ?");
         $stmt->execute([$_POST['id']]);
