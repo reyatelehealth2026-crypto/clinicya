@@ -436,7 +436,39 @@
                 }
             };
             
-            // ถ้าเป็นโหมด shop และมี LIFF ID - ส่ง Welcome Message (TELECARE Style with Video)
+            // Get welcome settings for this account FIRST
+            $welcomeSettings = null;
+            try {
+                $stmt = $db->prepare("SELECT * FROM welcome_settings WHERE (line_account_id = ? OR line_account_id IS NULL) AND is_enabled = 1 ORDER BY line_account_id DESC LIMIT 1");
+                $stmt->execute([$lineAccountId]);
+                $welcomeSettings = $stmt->fetch();
+            } catch (Exception $e) {}
+            
+            // ถ้ามี welcome_settings ที่เปิดใช้งาน - ใช้ค่าจากนั้น
+            if ($welcomeSettings) {
+                if ($welcomeSettings['message_type'] === 'text' && !empty($welcomeSettings['text_content'])) {
+                    // Replace placeholders
+                    $text = str_replace(['{name}', '{shop}'], [$displayName, $shopName], $welcomeSettings['text_content']);
+                    $sendMessage([['type' => 'text', 'text' => $text]]);
+                    return;
+                } elseif ($welcomeSettings['message_type'] === 'flex' && !empty($welcomeSettings['flex_content'])) {
+                    $flexContent = json_decode($welcomeSettings['flex_content'], true);
+                    if ($flexContent) {
+                        // Replace placeholders in flex JSON
+                        $flexJson = str_replace(['{name}', '{shop}'], [$displayName, $shopName], $welcomeSettings['flex_content']);
+                        $flexContent = json_decode($flexJson, true);
+                        $message = [
+                            'type' => 'flex',
+                            'altText' => "ยินดีต้อนรับคุณ{$displayName}",
+                            'contents' => $flexContent
+                        ];
+                        $sendMessage([$message]);
+                        return;
+                    }
+                }
+            }
+            
+            // ถ้าไม่มี welcome_settings - ใช้ default TELECARE Style (เฉพาะ shop mode)
             if ($botMode === 'shop' && $liffId) {
                 $liffUrl = "https://liff.line.me/{$liffId}";
                 
@@ -521,42 +553,18 @@
                 return;
             }
             
-            // Get welcome settings for this account
-            $stmt = $db->prepare("SELECT * FROM welcome_settings WHERE (line_account_id = ? OR line_account_id IS NULL) AND is_enabled = 1 ORDER BY line_account_id DESC LIMIT 1");
-            $stmt->execute([$lineAccountId]);
-            $settings = $stmt->fetch();
+            // Fallback - Use beautiful default Flex Message
+            $welcomeBubble = FlexTemplates::welcome($displayName, $pictureUrl, $shopName);
+            $message = FlexTemplates::toMessage($welcomeBubble, "ยินดีต้อนรับคุณ {$displayName}!");
             
-            if ($settings) {
-                // Use custom settings
-                if ($settings['message_type'] === 'text' && !empty($settings['text_content'])) {
-                    // Replace placeholders
-                    $text = str_replace(['{name}', '{shop}'], [$displayName, $shopName], $settings['text_content']);
-                    $sendMessage($text);
-                } elseif ($settings['message_type'] === 'flex' && !empty($settings['flex_content'])) {
-                    $flexContent = json_decode($settings['flex_content'], true);
-                    if ($flexContent) {
-                        $message = [
-                            'type' => 'flex',
-                            'altText' => 'ยินดีต้อนรับ',
-                            'contents' => $flexContent
-                        ];
-                        $sendMessage([$message]);
-                    }
-                }
-            } else {
-                // Use beautiful default Flex Message
-                $welcomeBubble = FlexTemplates::welcome($displayName, $pictureUrl, $shopName);
-                $message = FlexTemplates::toMessage($welcomeBubble, "ยินดีต้อนรับคุณ {$displayName}!");
-                
-                // Add quick reply buttons
-                $message = FlexTemplates::withQuickReply($message, [
-                    ['label' => '🛒 ดูสินค้า', 'text' => 'shop'],
-                    ['label' => '📋 เมนู', 'text' => 'menu'],
-                    ['label' => '💬 ติดต่อเรา', 'text' => 'contact']
-                ]);
-                
-                $sendMessage([$message]);
-            }
+            // Add quick reply buttons
+            $message = FlexTemplates::withQuickReply($message, [
+                ['label' => '🛒 ดูสินค้า', 'text' => 'shop'],
+                ['label' => '📋 เมนู', 'text' => 'menu'],
+                ['label' => '💬 ติดต่อเรา', 'text' => 'contact']
+            ]);
+            
+            $sendMessage([$message]);
         } catch (Exception $e) {
             // Table doesn't exist or error - ignore
             error_log("Welcome message error: " . $e->getMessage());
