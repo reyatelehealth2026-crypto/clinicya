@@ -245,6 +245,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             }
             break;
+        
+        case 'add_to_cart_direct':
+            // Add items directly to user's cart (from inbox dispense)
+            $userId = (int)($input['user_id'] ?? 0);
+            $items = $input['items'] ?? [];
+            $note = $input['note'] ?? '';
+            
+            if (!$userId || empty($items)) {
+                echo json_encode(['success' => false, 'error' => 'Invalid parameters']);
+                exit;
+            }
+            
+            try {
+                // Get user's line_user_id
+                $stmt = $db->prepare("SELECT line_user_id FROM users WHERE id = ?");
+                $stmt->execute([$userId]);
+                $userLineId = $stmt->fetchColumn() ?: '';
+                
+                $addedCount = 0;
+                foreach ($items as $item) {
+                    $productId = (int)($item['product_id'] ?? 0);
+                    $quantity = (int)($item['quantity'] ?? 1);
+                    
+                    if ($productId <= 0) continue;
+                    
+                    // Check if item already in cart
+                    $stmt = $db->prepare("SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?");
+                    $stmt->execute([$userId, $productId]);
+                    $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($existing) {
+                        $stmt = $db->prepare("UPDATE cart_items SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?");
+                        $stmt->execute([$quantity, $existing['id']]);
+                    } else {
+                        $stmt = $db->prepare("INSERT INTO cart_items (user_id, line_user_id, product_id, quantity, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())");
+                        $stmt->execute([$userId, $userLineId, $productId, $quantity]);
+                    }
+                    $addedCount++;
+                }
+                
+                echo json_encode(['success' => true, 'added_count' => $addedCount, 'message' => "Added {$addedCount} items to cart"]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            }
+            break;
             
         case 'approve_drugs':
             // Support both notification_id (old) and session_id (new)

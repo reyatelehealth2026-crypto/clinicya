@@ -1065,7 +1065,7 @@ function formatThaiDateTime($datetime) {
             
             <!-- Actions -->
             <div class="pt-3 border-t space-y-1.5">
-                <a href="pharmacy.php?tab=dispense&user_id=<?= $selectedUser['id'] ?>" class="block w-full text-center bg-emerald-500 hover:bg-emerald-600 text-white text-xs py-2 rounded-lg"><i class="fas fa-pills mr-1"></i>จ่ายยาให้ผู้ใช้</a>
+                <button onclick="openDispenseModal()" class="block w-full text-center bg-emerald-500 hover:bg-emerald-600 text-white text-xs py-2 rounded-lg cursor-pointer"><i class="fas fa-pills mr-1"></i>จ่ายยาให้ผู้ใช้</button>
                 <a href="user-detail.php?id=<?= $selectedUser['id'] ?>" class="block w-full text-center bg-gray-500 hover:bg-gray-600 text-white text-xs py-2 rounded-lg"><i class="fas fa-external-link-alt mr-1"></i>ดูโปรไฟล์เต็ม</a>
             </div>
         </div>
@@ -1117,6 +1117,68 @@ function formatThaiDateTime($datetime) {
         <button onclick="closeTagModal()" class="mt-3 w-full py-2 bg-gray-100 rounded-lg text-sm">ปิด</button>
     </div>
 </div>
+
+<!-- Dispense Modal -->
+<?php if ($selectedUser): ?>
+<div id="dispenseModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="p-4 border-b flex justify-between items-center bg-emerald-50 flex-shrink-0">
+            <h3 class="font-bold text-emerald-700"><i class="fas fa-pills mr-2"></i>จ่ายยาให้ <?= htmlspecialchars($selectedUser['display_name']) ?></h3>
+            <button onclick="closeDispenseModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-4">
+            <!-- Drug Allergies Warning -->
+            <?php if (!empty($selectedUser['drug_allergies'])): ?>
+            <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-red-600 font-medium text-sm"><i class="fas fa-exclamation-triangle mr-1"></i>แพ้ยา: <?= htmlspecialchars($selectedUser['drug_allergies']) ?></p>
+            </div>
+            <?php endif; ?>
+            
+            <!-- Drug Search -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">ค้นหายา/สินค้า</label>
+                <div class="relative">
+                    <input type="text" id="dispenseSearch" placeholder="พิมพ์ชื่อยาหรือสินค้า..." 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                           autocomplete="off">
+                    <div id="dispenseSearchResults" class="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50 hidden"></div>
+                </div>
+            </div>
+            
+            <!-- Selected Items -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">รายการที่เลือก</label>
+                <div id="dispenseSelectedItems" class="space-y-2">
+                    <p class="text-gray-400 text-center py-4 text-sm">ยังไม่ได้เลือกรายการ</p>
+                </div>
+            </div>
+            
+            <!-- Total -->
+            <div id="dispenseTotalSection" class="hidden border-t pt-3 mb-4">
+                <div class="flex justify-between items-center text-lg font-bold">
+                    <span>รวมทั้งหมด</span>
+                    <span class="text-emerald-600" id="dispenseTotal">฿0</span>
+                </div>
+            </div>
+            
+            <!-- Note -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">หมายเหตุ</label>
+                <textarea id="dispenseNote" rows="2" class="w-full px-3 py-2 border rounded-lg focus:ring-1 focus:ring-emerald-500 text-sm" 
+                          placeholder="คำแนะนำเพิ่มเติม..."></textarea>
+            </div>
+        </div>
+        
+        <div class="p-4 border-t bg-gray-50 flex gap-3 flex-shrink-0">
+            <button onclick="closeDispenseModal()" class="flex-1 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium">ยกเลิก</button>
+            <button onclick="submitDispense()" class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium">
+                <i class="fas fa-cart-plus mr-1"></i>เพิ่มลงตะกร้า
+            </button>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <!-- Notification Container -->
 <div id="notificationContainer" class="notification-container"></div>
@@ -1848,6 +1910,178 @@ function openMedicalModal() {
 function closeMedicalModal() {
     document.getElementById('medicalModal').classList.add('hidden');
 }
+
+// ===== Dispense Modal =====
+let dispenseItems = [];
+let allDrugsLoaded = false;
+let allDrugsData = [];
+
+function openDispenseModal() {
+    document.getElementById('dispenseModal').classList.remove('hidden');
+    dispenseItems = [];
+    renderDispenseItems();
+    loadDrugsForDispense();
+}
+
+function closeDispenseModal() {
+    document.getElementById('dispenseModal').classList.add('hidden');
+    dispenseItems = [];
+}
+
+async function loadDrugsForDispense() {
+    if (allDrugsLoaded) return;
+    
+    const searchInput = document.getElementById('dispenseSearch');
+    searchInput.placeholder = 'กำลังโหลดรายการ...';
+    searchInput.disabled = true;
+    
+    try {
+        const res = await fetch('api/pharmacist.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'get_drugs' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            allDrugsData = data.drugs || [];
+            allDrugsLoaded = true;
+            searchInput.placeholder = `พิมพ์ชื่อยาหรือสินค้า... (${allDrugsData.length} รายการ)`;
+            searchInput.disabled = false;
+        }
+    } catch (e) {
+        searchInput.placeholder = 'เกิดข้อผิดพลาด';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('dispenseSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function(e) {
+            const query = e.target.value.trim().toLowerCase();
+            const resultsDiv = document.getElementById('dispenseSearchResults');
+            
+            if (query.length < 1) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+            
+            const results = allDrugsData.filter(drug => {
+                const name = (drug.name || '').toLowerCase();
+                const genericName = (drug.generic_name || '').toLowerCase();
+                return name.includes(query) || genericName.includes(query);
+            }).slice(0, 10);
+            
+            if (results.length === 0) {
+                resultsDiv.innerHTML = '<div class="p-3 text-gray-400 text-center text-sm">ไม่พบรายการ</div>';
+            } else {
+                resultsDiv.innerHTML = results.map(drug => `
+                    <div class="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0" onclick='addDispenseItem(${JSON.stringify({id: drug.id, name: drug.name, price: drug.price || 0})})'>
+                        <div class="font-medium text-sm">${drug.name}</div>
+                        ${drug.generic_name ? `<div class="text-xs text-cyan-600">${drug.generic_name}</div>` : ''}
+                        <div class="text-xs text-gray-500">฿${drug.price || 0}</div>
+                    </div>
+                `).join('');
+            }
+            resultsDiv.classList.remove('hidden');
+        });
+    }
+});
+
+function addDispenseItem(drug) {
+    if (dispenseItems.find(d => d.id === drug.id)) {
+        alert('รายการนี้ถูกเลือกแล้ว');
+        return;
+    }
+    dispenseItems.push({ ...drug, quantity: 1 });
+    document.getElementById('dispenseSearch').value = '';
+    document.getElementById('dispenseSearchResults').classList.add('hidden');
+    renderDispenseItems();
+}
+
+function removeDispenseItem(idx) {
+    dispenseItems.splice(idx, 1);
+    renderDispenseItems();
+}
+
+function updateDispenseQty(idx, qty) {
+    dispenseItems[idx].quantity = Math.max(1, parseInt(qty) || 1);
+    renderDispenseItems();
+}
+
+function renderDispenseItems() {
+    const container = document.getElementById('dispenseSelectedItems');
+    const totalSection = document.getElementById('dispenseTotalSection');
+    
+    if (dispenseItems.length === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-center py-4 text-sm">ยังไม่ได้เลือกรายการ</p>';
+        totalSection.classList.add('hidden');
+        return;
+    }
+    
+    let total = 0;
+    container.innerHTML = dispenseItems.map((item, idx) => {
+        const subtotal = (item.price || 0) * item.quantity;
+        total += subtotal;
+        return `
+            <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div class="flex-1">
+                    <div class="font-medium text-sm">${item.name}</div>
+                    <div class="text-xs text-gray-500">฿${item.price} x ${item.quantity} = ฿${subtotal.toLocaleString()}</div>
+                </div>
+                <input type="number" min="1" value="${item.quantity}" onchange="updateDispenseQty(${idx}, this.value)" 
+                       class="w-16 px-2 py-1 border rounded text-center text-sm">
+                <button onclick="removeDispenseItem(${idx})" class="text-red-400 hover:text-red-600 p-1">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+    }).join('');
+    
+    document.getElementById('dispenseTotal').textContent = '฿' + total.toLocaleString();
+    totalSection.classList.remove('hidden');
+}
+
+async function submitDispense() {
+    if (dispenseItems.length === 0) {
+        alert('กรุณาเลือกรายการอย่างน้อย 1 รายการ');
+        return;
+    }
+    
+    if (!confirm('ยืนยันเพิ่มรายการลงตะกร้าลูกค้า?')) return;
+    
+    try {
+        const res = await fetch('api/pharmacist.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'add_to_cart_direct',
+                user_id: userId,
+                items: dispenseItems.map(item => ({
+                    product_id: item.id,
+                    quantity: item.quantity
+                })),
+                note: document.getElementById('dispenseNote').value
+            })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            alert('เพิ่มลงตะกร้าลูกค้าเรียบร้อยแล้ว');
+            closeDispenseModal();
+        } else {
+            alert('เกิดข้อผิดพลาด: ' + (data.error || 'Unknown'));
+        }
+    } catch (e) {
+        alert('เกิดข้อผิดพลาด: ' + e.message);
+    }
+}
+
+// Close dispense search results when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#dispenseSearch') && !e.target.closest('#dispenseSearchResults')) {
+        document.getElementById('dispenseSearchResults')?.classList.add('hidden');
+    }
+});
 
 async function saveMedical(e) {
     e.preventDefault();
