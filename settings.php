@@ -123,18 +123,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Welcome message actions
     elseif ($action === 'save_welcome') {
         try {
-            // Create table if not exists
-            $db->exec("
-                CREATE TABLE IF NOT EXISTS welcome_settings (
-                    id INT PRIMARY KEY DEFAULT 1,
-                    enabled TINYINT(1) DEFAULT 1,
-                    message_type ENUM('text', 'flex') DEFAULT 'text',
-                    text_message TEXT,
-                    flex_json LONGTEXT,
-                    delay_seconds INT DEFAULT 0,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                )
-            ");
+            // Check if table exists and has required columns
+            $tableExists = $db->query("SHOW TABLES LIKE 'welcome_settings'")->rowCount() > 0;
+            
+            if (!$tableExists) {
+                $db->exec("
+                    CREATE TABLE welcome_settings (
+                        id INT PRIMARY KEY DEFAULT 1,
+                        enabled TINYINT(1) DEFAULT 1,
+                        message_type ENUM('text', 'flex') DEFAULT 'text',
+                        text_message TEXT,
+                        flex_json LONGTEXT,
+                        delay_seconds INT DEFAULT 0,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    )
+                ");
+            } else {
+                // Add missing columns
+                $cols = $db->query("SHOW COLUMNS FROM welcome_settings")->fetchAll(PDO::FETCH_COLUMN);
+                if (!in_array('enabled', $cols)) {
+                    $db->exec("ALTER TABLE welcome_settings ADD COLUMN enabled TINYINT(1) DEFAULT 1");
+                }
+                if (!in_array('message_type', $cols)) {
+                    $db->exec("ALTER TABLE welcome_settings ADD COLUMN message_type ENUM('text', 'flex') DEFAULT 'text'");
+                }
+                if (!in_array('text_message', $cols)) {
+                    $db->exec("ALTER TABLE welcome_settings ADD COLUMN text_message TEXT");
+                }
+                if (!in_array('flex_json', $cols)) {
+                    $db->exec("ALTER TABLE welcome_settings ADD COLUMN flex_json LONGTEXT");
+                }
+                if (!in_array('delay_seconds', $cols)) {
+                    $db->exec("ALTER TABLE welcome_settings ADD COLUMN delay_seconds INT DEFAULT 0");
+                }
+            }
             
             $enabled = isset($_POST['enabled']) ? 1 : 0;
             $messageType = $_POST['message_type'] ?? 'text';
