@@ -224,6 +224,12 @@ $quickAccessMenus = [
     'goods-receive' => ['icon' => 'fa-truck-loading', 'label' => 'รับสินค้า (GR)', 'url' => '/procurement?tab=gr', 'page' => 'procurement', 'color' => 'teal', 'roles' => ['admin', 'owner']],
     'suppliers' => ['icon' => 'fa-truck', 'label' => 'Suppliers', 'url' => '/procurement?tab=suppliers', 'page' => 'procurement', 'color' => 'slate', 'roles' => ['admin', 'owner']],
     
+    // ==================== Supply & Revenue - Accounting ====================
+    'accounting' => ['icon' => 'fa-calculator', 'label' => 'บัญชี', 'url' => '/accounting', 'page' => 'accounting', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
+    'accounting-ap' => ['icon' => 'fa-file-invoice-dollar', 'label' => 'เจ้าหนี้ (AP)', 'url' => '/accounting?tab=ap', 'page' => 'accounting', 'color' => 'red', 'roles' => ['admin', 'owner']],
+    'accounting-ar' => ['icon' => 'fa-hand-holding-usd', 'label' => 'ลูกหนี้ (AR)', 'url' => '/accounting?tab=ar', 'page' => 'accounting', 'color' => 'green', 'roles' => ['admin', 'owner']],
+    'accounting-expenses' => ['icon' => 'fa-receipt', 'label' => 'ค่าใช้จ่าย', 'url' => '/accounting?tab=expenses', 'page' => 'accounting', 'color' => 'orange', 'roles' => ['admin', 'owner']],
+    
     // ==================== Facility Setup - Facility Profile ====================
     'shop-settings' => ['icon' => 'fa-store', 'label' => 'ข้อมูลสถานพยาบาล', 'url' => '/shop/settings', 'page' => 'settings', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
     
@@ -318,6 +324,7 @@ $menuGroups = [
             ['title' => 'สินค้า', 'icon' => '🛒', 'href' => '/shop/products'],
             ['title' => 'คลังสินค้า', 'icon' => '📦', 'href' => '/inventory'],
             ['title' => 'จัดซื้อ', 'icon' => '🚚', 'href' => '/procurement'],
+            ['title' => 'บัญชี', 'icon' => '💰', 'href' => '/accounting'],
         ]
     ],
     [

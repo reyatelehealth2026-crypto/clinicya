@@ -11,6 +11,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/InventoryService.php';
 require_once __DIR__ . '/../classes/SupplierService.php';
 require_once __DIR__ . '/../classes/PurchaseOrderService.php';
+require_once __DIR__ . '/../classes/AccountPayableService.php';
 
 $db = Database::getInstance()->getConnection();
 $lineAccountId = $_SESSION['current_bot_id'] ?? null;
@@ -230,11 +231,26 @@ try {
             }
             
             // Confirm if requested
+            $apId = null;
             if (!empty($data['confirm'])) {
                 $poService->confirmGR($grId, $adminId);
+                
+                // Hook: Auto-create Account Payable from confirmed GR
+                // Requirement 8.1: WHEN a GR is completed THEN the Accounting System SHALL automatically create corresponding AP record
+                try {
+                    $apService = new AccountPayableService($db, $lineAccountId);
+                    $apId = $apService->createFromGR($grId);
+                } catch (Exception $apError) {
+                    // Log AP creation error but don't fail the GR creation
+                    error_log("AP creation from GR failed: " . $apError->getMessage());
+                }
             }
             
-            echo json_encode(['success' => true, 'data' => $result]);
+            $response = ['success' => true, 'data' => $result];
+            if ($apId) {
+                $response['ap_id'] = $apId;
+            }
+            echo json_encode($response);
             break;
             
         case 'add_gr_item':
@@ -247,7 +263,25 @@ try {
         case 'confirm_gr':
             $id = (int)($_POST['id'] ?? $_GET['id']);
             $poService->confirmGR($id, $adminId);
-            echo json_encode(['success' => true, 'message' => 'GR confirmed, stock updated']);
+            
+            // Hook: Auto-create Account Payable from confirmed GR
+            // Requirement 8.1: WHEN a GR is completed THEN the Accounting System SHALL automatically create corresponding AP record
+            try {
+                $apService = new AccountPayableService($db, $lineAccountId);
+                $apId = $apService->createFromGR($id);
+                echo json_encode([
+                    'success' => true, 
+                    'message' => 'GR confirmed, stock updated, AP created',
+                    'ap_id' => $apId
+                ]);
+            } catch (Exception $apError) {
+                // Log AP creation error but don't fail the GR confirmation
+                error_log("AP creation from GR failed: " . $apError->getMessage());
+                echo json_encode([
+                    'success' => true, 
+                    'message' => 'GR confirmed, stock updated (AP creation skipped: ' . $apError->getMessage() . ')'
+                ]);
+            }
             break;
             
         // ==================== Bulk Order & Auto Reorder ====================

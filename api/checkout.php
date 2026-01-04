@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once '../config/config.php';
 require_once '../config/database.php';
 require_once '../classes/ActivityLogger.php';
+require_once '../classes/AccountReceivableService.php';
 
 $db = Database::getInstance()->getConnection();
 $activityLogger = ActivityLogger::getInstance($db);
@@ -689,6 +690,22 @@ function handleCreateOrder($data) {
         
         $db->commit();
         
+        // Hook: Auto-create Account Receivable for credit sales
+        // Requirement 8.2: WHEN an Invoice is created from shop order THEN the Accounting System SHALL automatically create corresponding AR record
+        // Credit sales are identified by payment methods that don't require immediate payment (credit, cod)
+        $arId = null;
+        $creditPaymentMethods = ['credit', 'cod', 'term', 'invoice']; // Payment methods that create AR
+        if (in_array(strtolower($paymentMethod), $creditPaymentMethods)) {
+            try {
+                $arService = new AccountReceivableService($db, $lineAccountId);
+                $arId = $arService->createFromTransaction($orderId);
+                error_log("AR created for order {$orderNumber}: AR ID = {$arId}");
+            } catch (Exception $arError) {
+                // Log AR creation error but don't fail the order
+                error_log("AR creation from order failed: " . $arError->getMessage());
+            }
+        }
+        
         // 🔔 แจ้งเตือน Telegram เมื่อมี order ใหม่
         notifyTelegramNewOrder($orderId, $orderNumber, $total, $user, $deliveryInfo);
         
@@ -725,7 +742,8 @@ function handleCreateOrder($data) {
             'order_id' => $orderId,
             'order_number' => $orderNumber,
             'total' => $total,
-            'payment_method' => $paymentMethod
+            'payment_method' => $paymentMethod,
+            'ar_id' => $arId
         ]);
         
     } catch (Exception $e) {
