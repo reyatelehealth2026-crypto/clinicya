@@ -152,8 +152,13 @@ try {
             break;
             
         case 'add_po_item':
-            $poId = (int)($_POST['po_id'] ?? $_GET['po_id']);
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $poId = (int)($data['po_id'] ?? $_POST['po_id'] ?? $_GET['po_id'] ?? 0);
+            
+            if (!$poId) {
+                throw new Exception('PO ID is required');
+            }
+            
             $itemId = $poService->addPOItem($poId, $data);
             echo json_encode(['success' => true, 'item_id' => $itemId]);
             break;
