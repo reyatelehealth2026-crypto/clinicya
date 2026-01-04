@@ -27,6 +27,7 @@ try {
 
 // Define tabs
 $tabs = [
+    'products' => ['label' => 'สินค้า', 'icon' => 'fas fa-box'],
     'stock' => ['label' => 'สต็อกสินค้า', 'icon' => 'fas fa-boxes'],
     'movements' => ['label' => 'การเคลื่อนไหว', 'icon' => 'fas fa-exchange-alt'],
     'adjustment' => ['label' => 'ปรับสต็อก', 'icon' => 'fas fa-sliders-h'],
@@ -35,10 +36,11 @@ $tabs = [
 ];
 
 // Get active tab
-$activeTab = getActiveTab($tabs, 'stock');
+$activeTab = getActiveTab($tabs, 'products');
 
 // Set page title based on active tab
 $tabTitles = [
+    'products' => 'จัดการสินค้า/บริการ',
     'stock' => 'สต็อกสินค้า',
     'movements' => 'ประวัติการเคลื่อนไหวสต็อก',
     'adjustment' => 'ปรับสต็อก (Stock Adjustment)',
@@ -72,6 +74,9 @@ echo renderTabs($tabs, $activeTab);
 
 // Load content based on active tab
 switch ($activeTab) {
+    case 'products':
+        include __DIR__ . '/../includes/inventory/products.php';
+        break;
     case 'movements':
         include __DIR__ . '/../includes/inventory/movements.php';
         break;

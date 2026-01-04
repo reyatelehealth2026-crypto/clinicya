@@ -211,7 +211,7 @@ $quickAccessMenus = [
     'promotions' => ['icon' => 'fa-star', 'label' => 'โปรโมชั่น', 'url' => '/shop/promotions', 'page' => 'promotions', 'color' => 'amber', 'roles' => ['admin', 'staff']],
     
     // ==================== Supply & Revenue - Inventory ====================
-    'products' => ['icon' => 'fa-box', 'label' => 'สินค้า', 'url' => '/shop/products', 'page' => 'products', 'color' => 'blue', 'roles' => ['admin', 'pharmacist']],
+    'products' => ['icon' => 'fa-box', 'label' => 'สินค้า', 'url' => '/inventory?tab=products', 'page' => 'inventory', 'color' => 'blue', 'roles' => ['admin', 'pharmacist']],
     'categories' => ['icon' => 'fa-folder', 'label' => 'หมวดหมู่', 'url' => '/shop/categories', 'page' => 'categories', 'color' => 'lime', 'roles' => ['admin', 'pharmacist']],
     'stock-adjustment' => ['icon' => 'fa-sliders-h', 'label' => 'ปรับสต็อก', 'url' => '/inventory?tab=adjustment', 'page' => 'inventory', 'color' => 'indigo', 'roles' => ['admin', 'pharmacist']],
     'stock-movements' => ['icon' => 'fa-exchange-alt', 'label' => 'ประวัติเคลื่อนไหว', 'url' => '/inventory?tab=movements', 'page' => 'inventory', 'color' => 'sky', 'roles' => ['admin', 'pharmacist']],
@@ -321,7 +321,7 @@ $menuGroups = [
         'roles' => ['owner', 'admin', 'staff'],
         'menus' => [
             ['title' => 'รายการสั่งซื้อ', 'icon' => '🧾', 'href' => '/shop/orders', 'badge' => $pendingOrders],
-            ['title' => 'สินค้า', 'icon' => '🛒', 'href' => '/shop/products'],
+            ['title' => 'สินค้า', 'icon' => '🛒', 'href' => '/inventory?tab=products'],
             ['title' => 'คลังสินค้า', 'icon' => '📦', 'href' => '/inventory'],
             ['title' => 'จัดซื้อ', 'icon' => '🚚', 'href' => '/procurement'],
             ['title' => 'บัญชี', 'icon' => '💰', 'href' => '/accounting'],
