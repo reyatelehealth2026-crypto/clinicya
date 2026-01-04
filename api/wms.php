@@ -25,7 +25,15 @@ $adminId = $_SESSION['admin_user']['id'] ?? null;
 $wmsService = new WMSService($db, $lineAccountId);
 $printService = new WMSPrintService($db, $lineAccountId);
 
+// Get action from REQUEST or JSON body
 $action = $_REQUEST['action'] ?? '';
+if (empty($action)) {
+    $jsonData = json_decode(file_get_contents('php://input'), true);
+    $action = $jsonData['action'] ?? '';
+}
+
+// Debug log
+error_log("WMS API: action={$action}, method={$_SERVER['REQUEST_METHOD']}");
 
 try {
     switch ($action) {
