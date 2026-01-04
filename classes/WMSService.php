@@ -312,6 +312,9 @@ class WMSService {
      * @return array Pick list items
      */
     public function getPickList(int $orderId): array {
+        // Auto-initialize pick items if not exists
+        $this->initializePickItems($orderId);
+        
         $stmt = $this->db->prepare("
             SELECT 
                 wpi.id as pick_item_id,
