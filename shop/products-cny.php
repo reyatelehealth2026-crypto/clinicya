@@ -18,36 +18,35 @@ define('CNY_API_BASE', 'https://manager.cnypharmacy.com/api/');
 define('CNY_API_TOKEN', '90xcKekelCqCAjmgkpI1saJF6N55eiNexcI4hdcYM2M');
 
 /**
- * Call CNY Pharmacy API
+ * Call CNY Pharmacy API with streaming to file
  */
-function callCNYAPI($endpoint, $method = 'GET', $data = null) {
+function callCNYAPIToFile($endpoint, $outputFile) {
     $url = CNY_API_BASE . ltrim($endpoint, '/');
+    
+    $fp = fopen($outputFile, 'w+');
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FILE, $fp);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Authorization: Bearer ' . CNY_API_TOKEN,
         'Content-Type: application/json'
     ]);
     
-    if ($method === 'POST') {
-        curl_setopt($ch, CURLOPT_POST, true);
-        if ($data) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        }
-    }
-    
-    $response = curl_exec($ch);
+    $result = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+    fclose($fp);
     
-    if ($httpCode !== 200) {
-        error_log("CNY API Error: HTTP {$httpCode}, Response: {$response}");
-        return null;
+    if ($httpCode !== 200 || !$result) {
+        error_log("CNY API Error: HTTP {$httpCode}");
+        if (file_exists($outputFile)) {
+            unlink($outputFile);
+        }
+        return false;
     }
     
-    return json_decode($response, true);
+    return true;
 }
 
 // Get filters
@@ -74,26 +73,35 @@ $allProducts = [];
 $useCache = false;
 
 if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTime) {
-    // Use cached data
+    // Use cached data - read in chunks to avoid memory issues
     $cachedData = file_get_contents($cacheFile);
     if ($cachedData) {
         $allProducts = json_decode($cachedData, true);
-        $useCache = true;
+        if ($allProducts) {
+            $useCache = true;
+        }
     }
 }
 
 if (!$useCache) {
-    // Fetch from API (memory limit already increased at top of file)
-    $allProducts = callCNYAPI('get_product_all');
+    // Ensure cache directory exists
+    $cacheDir = dirname($cacheFile);
+    if (!is_dir($cacheDir)) {
+        mkdir($cacheDir, 0755, true);
+    }
     
-    if ($allProducts && is_array($allProducts)) {
-        // Save to cache
-        $cacheDir = dirname($cacheFile);
-        if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
+    // Fetch from API directly to file (streaming)
+    $success = callCNYAPIToFile('get_product_all', $cacheFile);
+    
+    if ($success) {
+        // Now read from the cached file
+        $cachedData = file_get_contents($cacheFile);
+        if ($cachedData) {
+            $allProducts = json_decode($cachedData, true);
         }
-        file_put_contents($cacheFile, json_encode($allProducts));
-    } else {
+    }
+    
+    if (!$allProducts) {
         $allProducts = [];
     }
 }
