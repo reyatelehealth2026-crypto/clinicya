@@ -133,7 +133,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- App Styles -->
-    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/liff-app.css?v=20260103c">
+    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/liff-app.css?v=20260104b">
 </head>
 <body>
     <!-- Loading Overlay - Shows immediately (Requirement 1.1) -->
@@ -193,11 +193,11 @@ $currentPage = $pages[$page] ?? $pages['home'];
             </div>
             <div class="cart-summary-text">
                 <span id="cart-summary-count" class="cart-summary-count">0 รายการ</span>
-                <span id="cart-summary-total" class="cart-summary-total">฿0</span>
+                <span id="cart-summary-total" class="cart-summary-total">&#3647;0</span>
             </div>
         </div>
         <button class="cart-summary-btn" onclick="window.router.navigate('/cart')">
-            ดูตะกร้า
+            &#3604;&#3641;&#3605;&#3632;&#3585;&#3619;&#3657;&#3634;
             <i class="fas fa-chevron-right"></i>
         </button>
     </div>
@@ -240,7 +240,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     </script>
 
     <!-- App Scripts -->
-    <?php $v = '20260103c'; // Cache bust version ?>
+    <?php $v = '20260104e'; // Cache bust version ?>
     <script>window.debugLog('Loading scripts...', 'info');</script>
     <script src="<?= $baseUrl ?>/liff/assets/js/store.js?v=<?= $v ?>" onerror="window.debugLog('FAILED: store.js', 'error')"></script>
     <script>window.debugLog('store.js loaded', 'success');</script>
@@ -263,4 +263,3 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <script>window.debugLog('All scripts loaded!', 'success');</script>
 </body>
 </html>
-

@@ -4024,6 +4024,9 @@ class LiffApp {
         const status = this.normalizeOrderStatus(order.status);
         const paymentMethod = order.payment_method || 'transfer';
         
+        // Debug: log payment method
+        console.log(`Order #${orderId}: payment_method=${order.payment_method}, isCOD=${paymentMethod === 'cod'}`);
+        
         // สำหรับ COD ที่ status = confirmed แสดงว่ารอจัดส่ง
         let statusBadge;
         if (paymentMethod === 'cod' && status === 'confirmed') {
@@ -4316,6 +4319,9 @@ class LiffApp {
         const trackingNumber = order.tracking_number || order.delivery_info?.tracking_number;
         const carrier = order.carrier || order.delivery_info?.carrier || 'ขนส่ง';
         const isCOD = order.payment_method === 'cod';
+        
+        // Debug: log for tracking
+        console.log(`renderOrderTracking: payment_method=${order.payment_method}, isCOD=${isCOD}`);
         
         // Define timeline stages - แยกตาม payment method
         let stages;
