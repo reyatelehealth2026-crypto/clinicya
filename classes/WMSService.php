@@ -1122,7 +1122,7 @@ class WMSService {
             // Update order with carrier and tracking
             $stmt = $this->db->prepare("
                 UPDATE transactions 
-                SET carrier = ?, tracking_number = ?, wms_status = ?, shipped_at = NOW(), status = 'shipping'
+                SET carrier = ?, shipping_tracking = ?, wms_status = ?, shipped_at = NOW(), status = 'shipping'
                 WHERE id = ?
             ");
             $stmt->execute([$carrier, $trackingNumber, self::STATUS_SHIPPED, $orderId]);
