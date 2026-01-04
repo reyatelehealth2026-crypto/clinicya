@@ -10,6 +10,41 @@ require_once __DIR__ . '/../config/database.php';
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'สินค้า - CNY Pharmacy';
 
+// Check if table exists
+$tableExists = false;
+try {
+    $db->query("SELECT 1 FROM cny_products LIMIT 1");
+    $tableExists = true;
+} catch (PDOException $e) {
+    // Table doesn't exist
+}
+
+if (!$tableExists) {
+    require_once __DIR__ . '/../includes/header.php';
+    ?>
+    <div class="max-w-4xl mx-auto px-4 py-6">
+        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-6 rounded-lg">
+            <h2 class="text-xl font-bold text-yellow-800 mb-4">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                ยังไม่ได้ติดตั้งระบบ CNY Products
+            </h2>
+            <p class="text-yellow-700 mb-4">
+                กรุณารันคำสั่งต่อไปนี้เพื่อสร้างตารางและดึงข้อมูล:
+            </p>
+            <div class="bg-gray-900 text-green-400 p-4 rounded font-mono text-sm mb-4">
+                php install/run_cny_migration.php<br>
+                php cron/sync_cny_products.php
+            </div>
+            <a href="../" class="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                <i class="fas fa-arrow-left mr-2"></i>กลับหน้าหลัก
+            </a>
+        </div>
+    </div>
+    <?php
+    require_once __DIR__ . '/../includes/footer.php';
+    exit;
+}
+
 // Get filters
 $search = $_GET['search'] ?? '';
 $page = max(1, (int)($_GET['page'] ?? 1));

@@ -3,10 +3,16 @@
  * Admin page to manually sync CNY products
  */
 session_start();
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/database.php';
 
-// Check if user is admin BEFORE including header
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-    header('Location: ../index.php');
+// Check if user is logged in (not necessarily admin for initial setup)
+$isAdmin = isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+$isLoggedIn = isset($_SESSION['user_id']);
+
+if (!$isLoggedIn) {
+    // Redirect to login
+    header('Location: ../auth/login.php');
     exit;
 }
 
@@ -31,6 +37,15 @@ if (isset($_POST['sync'])) {
             <i class="fas fa-sync-alt text-blue-500 mr-2"></i>
             ซิงค์ข้อมูลสินค้า CNY Pharmacy
         </h1>
+        
+        <?php if (!$isAdmin): ?>
+        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
+            <p class="text-yellow-700">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                คุณไม่มีสิทธิ์ Admin แต่สามารถดูหน้านี้ได้เพื่อการติดตั้งครั้งแรก
+            </p>
+        </div>
+        <?php endif; ?>
         
         <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
             <p class="text-blue-700">
