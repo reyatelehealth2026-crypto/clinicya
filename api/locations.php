@@ -92,6 +92,40 @@ try {
             echo json_encode(['success' => true, 'message' => 'Location deleted']);
             break;
 
+        /**
+         * Bulk delete locations (soft delete)
+         * Requirements: 1.1
+         */
+        case 'bulk_delete':
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $ids = $data['ids'] ?? [];
+            
+            if (empty($ids) || !is_array($ids)) {
+                throw new Exception('Location IDs array is required');
+            }
+            
+            $successCount = 0;
+            $failCount = 0;
+            $errors = [];
+            
+            foreach ($ids as $id) {
+                try {
+                    $locationService->deleteLocation((int)$id);
+                    $successCount++;
+                } catch (Exception $e) {
+                    $failCount++;
+                    $errors[] = "ID $id: " . $e->getMessage();
+                }
+            }
+            
+            echo json_encode([
+                'success' => true,
+                'deleted_count' => $successCount,
+                'failed_count' => $failCount,
+                'errors' => $errors
+            ]);
+            break;
+
         
         /**
          * Get a single location by ID

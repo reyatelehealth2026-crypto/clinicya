@@ -193,6 +193,9 @@ function getUtilizationColor($percent) {
             <div class="flex items-center gap-2">
                 <span class="text-sm text-gray-500"><?= count($locations) ?> ตำแหน่ง</span>
                 <?php if (!empty($locations)): ?>
+                <button onclick="deleteSelectedLocations()" class="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm">
+                    <i class="fas fa-trash mr-1"></i>ลบที่เลือก
+                </button>
                 <div class="relative" x-data="{ open: false }">
                     <button onclick="togglePrintMenu()" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm">
                         <i class="fas fa-print mr-1"></i>พิมพ์ป้าย
@@ -621,6 +624,44 @@ function toggleSelectAll(checkbox) {
 function getSelectedLocationIds() {
     const checkboxes = document.querySelectorAll('.location-checkbox:checked');
     return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// Delete selected locations with confirmation
+async function deleteSelectedLocations() {
+    const ids = getSelectedLocationIds();
+    if (ids.length === 0) {
+        alert('กรุณาเลือกตำแหน่งที่ต้องการลบ');
+        return;
+    }
+    
+    const confirmation = prompt(`คุณกำลังจะลบ ${ids.length} ตำแหน่ง\nพิมพ์ "ยืนยัน" เพื่อยืนยันการลบ:`);
+    if (confirmation !== 'ยืนยัน') {
+        alert('ยกเลิกการลบ');
+        return;
+    }
+    
+    try {
+        const response = await fetch('../api/locations.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'bulk_delete', ids: ids.map(id => parseInt(id)) })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            if (result.failed_count > 0) {
+                alert(`ลบสำเร็จ ${result.deleted_count} ตำแหน่ง\nลบไม่สำเร็จ ${result.failed_count} ตำแหน่ง\n\nข้อผิดพลาด:\n${result.errors.join('\n')}`);
+            } else {
+                alert(`ลบสำเร็จ ${result.deleted_count} ตำแหน่ง`);
+            }
+            location.reload();
+        } else {
+            alert(result.error || 'ไม่สามารถลบตำแหน่งได้');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('เกิดข้อผิดพลาด: ' + error.message);
+    }
 }
 
 // Print all labels (with current filters)
