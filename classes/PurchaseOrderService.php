@@ -5,18 +5,21 @@
 
 require_once __DIR__ . '/InventoryService.php';
 require_once __DIR__ . '/SupplierService.php';
+require_once __DIR__ . '/BatchService.php';
 
 class PurchaseOrderService {
     private $db;
     private $lineAccountId;
     private $inventoryService;
     private $supplierService;
+    private $batchService;
     
     public function __construct($db, $lineAccountId = null) {
         $this->db = $db;
         $this->lineAccountId = $lineAccountId;
         $this->inventoryService = new InventoryService($db, $lineAccountId);
         $this->supplierService = new SupplierService($db, $lineAccountId);
+        $this->batchService = new BatchService($db, $lineAccountId);
     }
     
     // ==================== Purchase Order ====================
@@ -330,6 +333,7 @@ class PurchaseOrderService {
     
     /**
      * Add item to goods receive
+     * Requirements: 1.2, 4.2 - Include batch fields
      */
     public function addGRItem(int $grId, array $item): int {
         $gr = $this->getGR($grId);
@@ -339,15 +343,19 @@ class PurchaseOrderService {
         
         $stmt = $this->db->prepare("
             INSERT INTO goods_receive_items 
-            (gr_id, po_item_id, product_id, quantity, notes)
-            VALUES (?, ?, ?, ?, ?)
+            (gr_id, po_item_id, product_id, quantity, notes, batch_number, lot_number, expiry_date, manufacture_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $grId,
             $item['po_item_id'],
             $item['product_id'],
             $item['quantity'],
-            $item['notes'] ?? null
+            $item['notes'] ?? null,
+            $item['batch_number'] ?? null,
+            $item['lot_number'] ?? null,
+            !empty($item['expiry_date']) ? $item['expiry_date'] : null,
+            !empty($item['manufacture_date']) ? $item['manufacture_date'] : null
         ]);
         
         return $this->db->lastInsertId();
@@ -355,6 +363,8 @@ class PurchaseOrderService {
     
     /**
      * Confirm goods receive
+     * Creates batches for each item and updates stock
+     * Requirements: 1.1, 1.2, 1.3, 1.5
      */
     public function confirmGR(int $grId, int $confirmedBy = null): bool {
         $gr = $this->getGR($grId);
@@ -368,8 +378,14 @@ class PurchaseOrderService {
             // Get GR items
             $items = $this->getGRItems($grId);
             
+            // Get PO for supplier info
+            $po = $this->getPO($gr['po_id']);
+            
             foreach ($items as $item) {
-                // Update stock
+                // Get unit cost for value tracking (Requirements 6.3)
+                $unitCost = isset($item['unit_cost']) ? (float)$item['unit_cost'] : null;
+                
+                // Update stock (Requirements 1.1) with value tracking (Requirements 6.3)
                 $this->inventoryService->updateStock(
                     $item['product_id'],
                     $item['quantity'],
@@ -378,8 +394,45 @@ class PurchaseOrderService {
                     $grId,
                     $gr['gr_number'],
                     "Received from PO: " . $gr['po_number'],
-                    $confirmedBy
+                    $confirmedBy,
+                    $unitCost
                 );
+                
+                // Generate batch number if not provided
+                $batchNumber = !empty($item['batch_number']) 
+                    ? $item['batch_number'] 
+                    : $this->generateBatchNumber($grId, $item['product_id']);
+                
+                // Check for existing batch with same batch_number and product_id (Requirements 1.5)
+                $existingBatch = $this->batchService->getBatchByNumber($batchNumber, $item['product_id']);
+                
+                if ($existingBatch) {
+                    // Update existing batch quantity instead of creating duplicate
+                    $newQuantity = $existingBatch['quantity'] + $item['quantity'];
+                    $newQuantityAvailable = $existingBatch['quantity_available'] + $item['quantity'];
+                    
+                    $this->batchService->updateBatch($existingBatch['id'], [
+                        'quantity' => $newQuantity,
+                        'quantity_available' => $newQuantityAvailable
+                    ]);
+                } else {
+                    // Create new batch (Requirements 1.2, 1.3)
+                    $this->batchService->createBatch([
+                        'product_id' => $item['product_id'],
+                        'batch_number' => $batchNumber,
+                        'lot_number' => $item['lot_number'] ?? null,
+                        'quantity' => $item['quantity'],
+                        'quantity_available' => $item['quantity'],
+                        'cost_price' => $item['unit_cost'] ?? null,
+                        'expiry_date' => $item['expiry_date'] ?? null,
+                        'manufacture_date' => $item['manufacture_date'] ?? null,
+                        'supplier_id' => $po['supplier_id'] ?? null,
+                        'received_at' => date('Y-m-d H:i:s'),
+                        'received_by' => $confirmedBy,
+                        'status' => 'active',
+                        'notes' => "Created from GR: {$gr['gr_number']}"
+                    ]);
+                }
                 
                 // Update PO item received quantity
                 $stmt = $this->db->prepare("
@@ -398,7 +451,6 @@ class PurchaseOrderService {
             $this->checkPOCompletion($gr['po_id']);
             
             // Update supplier total purchase
-            $po = $this->getPO($gr['po_id']);
             $this->supplierService->updateTotalPurchase($po['supplier_id'], $po['total_amount']);
             
             $this->db->commit();
@@ -408,6 +460,14 @@ class PurchaseOrderService {
             $this->db->rollBack();
             throw $e;
         }
+    }
+    
+    /**
+     * Generate batch number for GR item
+     * Format: GR{grId}-{productId}-{timestamp}
+     */
+    private function generateBatchNumber(int $grId, int $productId): string {
+        return sprintf("GR%d-%d-%s", $grId, $productId, date('YmdHis'));
     }
     
     /**
@@ -431,7 +491,8 @@ class PurchaseOrderService {
      */
     public function getGRItems(int $grId): array {
         $stmt = $this->db->prepare("
-            SELECT gri.*, bi.name as product_name, bi.sku, poi.quantity as ordered_quantity
+            SELECT gri.*, bi.name as product_name, bi.sku, 
+                   poi.quantity as ordered_quantity, poi.unit_cost
             FROM goods_receive_items gri
             LEFT JOIN business_items bi ON gri.product_id = bi.id
             LEFT JOIN purchase_order_items poi ON gri.po_item_id = poi.id

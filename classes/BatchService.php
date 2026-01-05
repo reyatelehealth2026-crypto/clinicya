@@ -628,6 +628,135 @@ class BatchService {
         ]);
     }
     
+    /**
+     * Dispose a batch with stock update and expense creation
+     * 
+     * This method performs a complete disposal operation:
+     * 1. Calculates disposal value (quantity_available × cost_price)
+     * 2. Updates batch status to 'disposed' via disposeBatch()
+     * 3. Decreases stock in business_items via InventoryService
+     * 4. Creates stock_movement with type 'disposal'
+     * 5. Creates expense record for inventory write-off via ExpenseService
+     * 
+     * Requirements: 2.1, 2.2, 2.3, 2.4, 5.1, 5.2
+     * 
+     * @param int $batchId Batch ID to dispose
+     * @param int $pharmacistId Pharmacist/Staff ID who approved disposal
+     * @param string $reason Disposal reason
+     * @param InventoryService $inventoryService Inventory service instance
+     * @param ExpenseService|null $expenseService Expense service instance (optional)
+     * @return array Disposal result with batch_id, disposed_quantity, disposal_value, expense_id
+     * @throws Exception If batch not found, invalid status, or insufficient quantity
+     */
+    public function disposeBatchWithStock(
+        int $batchId,
+        int $pharmacistId,
+        string $reason,
+        InventoryService $inventoryService,
+        ?ExpenseService $expenseService = null
+    ): array {
+        // Get batch data before disposal
+        $batch = $this->getBatch($batchId);
+        if (!$batch) {
+            throw new Exception('Batch not found', 404);
+        }
+        
+        // Validate batch is active
+        if ($batch['status'] !== 'active') {
+            throw new Exception('Cannot dispose non-active batch. Current status: ' . $batch['status'], 400);
+        }
+        
+        // Validate batch has quantity to dispose
+        $quantityToDispose = (int)$batch['quantity_available'];
+        if ($quantityToDispose <= 0) {
+            throw new Exception('Batch has no available quantity to dispose', 400);
+        }
+        
+        // Calculate disposal value
+        $costPrice = (float)($batch['cost_price'] ?? 0);
+        $disposalValue = $quantityToDispose * $costPrice;
+        
+        // Determine disposal category based on reason
+        $disposalCategory = $this->getDisposalCategory($reason);
+        
+        // Start transaction
+        $this->db->beginTransaction();
+        
+        try {
+            // 1. Call existing disposeBatch() to update batch status
+            // This sets status='disposed', quantity_available=0, and records disposal info
+            $this->disposeBatch($batchId, $pharmacistId, $reason);
+            
+            // 2. Decrease stock in business_items via InventoryService
+            // This also creates stock_movement record with type 'disposal'
+            // Pass cost_price for value tracking (Requirements 6.3)
+            $inventoryService->updateStock(
+                (int)$batch['product_id'],
+                -$quantityToDispose,  // Negative to decrease stock
+                'disposal',           // movement_type
+                'batch_disposal',     // reference_type
+                $batchId,             // reference_id
+                "DSP-{$batchId}",     // reference_number
+                $reason,              // notes
+                $pharmacistId,        // created_by
+                $costPrice            // unit_cost for value tracking
+            );
+            
+            // 3. Create expense record for inventory write-off (Requirements 5.1, 5.2)
+            $expenseId = null;
+            if ($expenseService !== null && $disposalValue > 0) {
+                $expenseId = $expenseService->createDisposalExpense([
+                    'batch_id' => $batchId,
+                    'product_id' => (int)$batch['product_id'],
+                    'quantity' => $quantityToDispose,
+                    'unit_cost' => $costPrice,
+                    'total_amount' => $disposalValue,
+                    'reason' => $reason,
+                    'category' => $disposalCategory,
+                    'approved_by' => $pharmacistId
+                ]);
+            }
+            
+            $this->db->commit();
+            
+            return [
+                'batch_id' => $batchId,
+                'product_id' => (int)$batch['product_id'],
+                'disposed_quantity' => $quantityToDispose,
+                'cost_price' => $costPrice,
+                'disposal_value' => $disposalValue,
+                'reason' => $reason,
+                'category' => $disposalCategory,
+                'disposed_by' => $pharmacistId,
+                'expense_id' => $expenseId
+            ];
+            
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+    
+    /**
+     * Get disposal category based on reason
+     * 
+     * @param string $reason Disposal reason
+     * @return string Category name (expiry_loss, damage_loss, inventory_loss)
+     */
+    public function getDisposalCategory(string $reason): string {
+        $reasonLower = strtolower($reason);
+        
+        if (strpos($reasonLower, 'expir') !== false || strpos($reasonLower, 'หมดอายุ') !== false) {
+            return 'expiry_loss';
+        }
+        
+        if (strpos($reasonLower, 'damage') !== false || strpos($reasonLower, 'เสียหาย') !== false || strpos($reasonLower, 'ชำรุด') !== false) {
+            return 'damage_loss';
+        }
+        
+        return 'inventory_loss';
+    }
+    
     // =========================================
     // Helper Methods
     // =========================================

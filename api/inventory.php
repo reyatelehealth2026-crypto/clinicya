@@ -224,12 +224,32 @@ try {
                     $poItemMap[$poi['id']] = $poi;
                 }
                 
-                foreach ($data['items'] as $poItemId => $qty) {
+                foreach ($data['items'] as $poItemId => $itemData) {
+                    // Support both old format (qty as number) and new format (object with batch fields)
+                    if (is_array($itemData)) {
+                        $qty = (int)($itemData['quantity'] ?? 0);
+                        $batchNumber = $itemData['batch_number'] ?? null;
+                        $lotNumber = $itemData['lot_number'] ?? null;
+                        $expiryDate = $itemData['expiry_date'] ?? null;
+                        $manufactureDate = $itemData['manufacture_date'] ?? null;
+                    } else {
+                        // Legacy format: just quantity
+                        $qty = (int)$itemData;
+                        $batchNumber = null;
+                        $lotNumber = null;
+                        $expiryDate = null;
+                        $manufactureDate = null;
+                    }
+                    
                     if ($qty > 0 && isset($poItemMap[$poItemId])) {
                         $poService->addGRItem($grId, [
                             'po_item_id' => $poItemId,
                             'product_id' => $poItemMap[$poItemId]['product_id'],
-                            'quantity' => $qty
+                            'quantity' => $qty,
+                            'batch_number' => $batchNumber,
+                            'lot_number' => $lotNumber,
+                            'expiry_date' => $expiryDate,
+                            'manufacture_date' => $manufactureDate
                         ]);
                     }
                 }

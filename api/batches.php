@@ -321,6 +321,70 @@ try {
             
             echo json_encode(['success' => true, 'message' => 'Batch disposed', 'batch' => $batch]);
             break;
+        
+        /**
+         * Dispose a batch with stock update and expense creation
+         * 
+         * This action performs a complete disposal operation:
+         * 1. Updates batch status to 'disposed' and sets quantity_available to 0
+         * 2. Decreases stock in business_items
+         * 3. Creates stock_movement with type 'disposal'
+         * 4. Creates expense record for inventory write-off
+         * 
+         * Requirements: 2.1, 2.2, 5.1
+         */
+        case 'dispose_batch':
+            require_once __DIR__ . '/../classes/InventoryService.php';
+            require_once __DIR__ . '/../classes/ExpenseService.php';
+            
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $batchId = (int)($data['batch_id'] ?? $data['id'] ?? $_GET['batch_id'] ?? 0);
+            $pharmacistId = (int)($data['pharmacist_id'] ?? $adminId ?? 0);
+            $reason = trim($data['reason'] ?? '');
+            
+            // Validate required fields
+            if (!$batchId) {
+                throw new Exception('Batch ID is required');
+            }
+            if (!$pharmacistId) {
+                throw new Exception('Pharmacist ID is required for disposal approval');
+            }
+            if (empty($reason)) {
+                throw new Exception('Disposal reason is required');
+            }
+            
+            // Initialize services
+            $inventoryService = new InventoryService($db, $lineAccountId);
+            $expenseService = new ExpenseService($db, $lineAccountId);
+            
+            // Perform disposal with stock update and expense creation
+            $result = $batchService->disposeBatchWithStock(
+                $batchId,
+                $pharmacistId,
+                $reason,
+                $inventoryService,
+                $expenseService
+            );
+            
+            // Get updated batch data
+            $batch = $batchService->getBatch($batchId);
+            
+            echo json_encode([
+                'success' => true,
+                'message' => 'Batch disposed successfully',
+                'batch' => $batch,
+                'disposal_result' => [
+                    'batch_id' => $result['batch_id'],
+                    'product_id' => $result['product_id'],
+                    'disposed_quantity' => $result['disposed_quantity'],
+                    'cost_price' => $result['cost_price'],
+                    'disposal_value' => $result['disposal_value'],
+                    'reason' => $result['reason'],
+                    'category' => $result['category'],
+                    'expense_id' => $result['expense_id']
+                ]
+            ]);
+            break;
 
         
         // =============================================

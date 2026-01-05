@@ -2,6 +2,13 @@
 /**
  * Inventory Movements Tab - ประวัติการเคลื่อนไหวสต็อก
  * Tab content for inventory/index.php
+ * 
+ * Features:
+ * - Stock movement history with value tracking
+ * - Filter by product, type, and date range
+ * - Value change display for cost tracking
+ * 
+ * Requirements: 6.3
  */
 
 $inventoryService = new InventoryService($db, $lineAccountId);
@@ -51,9 +58,11 @@ try {
                 <select name="type" class="w-full px-3 py-2 border rounded-lg">
                     <option value="">-- ทั้งหมด --</option>
                     <option value="receive" <?= $movementType === 'receive' ? 'selected' : '' ?>>รับเข้า (GR)</option>
+                    <option value="goods_receive" <?= $movementType === 'goods_receive' ? 'selected' : '' ?>>รับเข้า (GR)</option>
                     <option value="sale" <?= $movementType === 'sale' ? 'selected' : '' ?>>ขาย</option>
                     <option value="adjustment_in" <?= $movementType === 'adjustment_in' ? 'selected' : '' ?>>ปรับเพิ่ม</option>
                     <option value="adjustment_out" <?= $movementType === 'adjustment_out' ? 'selected' : '' ?>>ปรับลด</option>
+                    <option value="disposal" <?= $movementType === 'disposal' ? 'selected' : '' ?>>ทำลาย</option>
                     <option value="return" <?= $movementType === 'return' ? 'selected' : '' ?>>คืนสินค้า</option>
                 </select>
             </div>
@@ -87,6 +96,7 @@ try {
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500">สินค้า</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">ประเภท</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">จำนวน</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500">มูลค่า</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">ก่อน</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">หลัง</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500">อ้างอิง</th>
@@ -94,7 +104,7 @@ try {
                 </thead>
                 <tbody class="divide-y">
                     <?php if (empty($movements)): ?>
-                    <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">ไม่พบรายการ</td></tr>
+                    <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">ไม่พบรายการ</td></tr>
                     <?php else: ?>
                     <?php foreach ($movements as $m): ?>
                     <tr class="hover:bg-gray-50">
@@ -107,11 +117,13 @@ try {
                             <?php
                             $typeLabels = [
                                 'receive' => ['รับเข้า', 'green'],
+                                'goods_receive' => ['รับเข้า (GR)', 'green'],
                                 'sale' => ['ขาย', 'red'],
                                 'adjustment_in' => ['ปรับเพิ่ม', 'blue'],
                                 'adjustment_out' => ['ปรับลด', 'orange'],
                                 'return' => ['คืนสินค้า', 'purple'],
-                                'transfer' => ['โอนย้าย', 'gray']
+                                'transfer' => ['โอนย้าย', 'gray'],
+                                'disposal' => ['ทำลาย', 'red']
                             ];
                             $label = $typeLabels[$m['movement_type']] ?? [$m['movement_type'], 'gray'];
                             ?>
@@ -121,6 +133,19 @@ try {
                         </td>
                         <td class="px-4 py-3 text-center font-medium <?= $m['quantity'] > 0 ? 'text-green-600' : 'text-red-600' ?>">
                             <?= $m['quantity'] > 0 ? '+' : '' ?><?= $m['quantity'] ?>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <?php 
+                            $valueChange = $m['value_change'] ?? null;
+                            if ($valueChange !== null && $valueChange != 0): 
+                                $valueColor = $valueChange > 0 ? 'green' : 'red';
+                            ?>
+                            <span class="font-medium text-<?= $valueColor ?>-600">
+                                <?= $valueChange > 0 ? '+' : '' ?>฿<?= number_format($valueChange, 2) ?>
+                            </span>
+                            <?php else: ?>
+                            <span class="text-gray-400">-</span>
+                            <?php endif; ?>
                         </td>
                         <td class="px-4 py-3 text-center text-gray-500"><?= $m['stock_before'] ?></td>
                         <td class="px-4 py-3 text-center font-medium"><?= $m['stock_after'] ?></td>

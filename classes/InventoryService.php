@@ -23,8 +23,19 @@ class InventoryService {
     
     /**
      * Update product stock
+     * 
+     * @param int $productId Product ID
+     * @param int $quantity Quantity change (positive for in, negative for out)
+     * @param string $type Movement type (goods_receive, disposal, adjustment_in, adjustment_out, sale)
+     * @param string|null $refType Reference type (goods_receive, batch_disposal, adjustment, order)
+     * @param int|null $refId Reference ID
+     * @param string|null $refNumber Reference number
+     * @param string|null $notes Notes
+     * @param int|null $createdBy User ID who created the movement
+     * @param float|null $unitCost Unit cost for value tracking (Requirements: 6.3)
+     * @return bool
      */
-    public function updateStock(int $productId, int $quantity, string $type, string $refType = null, int $refId = null, string $refNumber = null, string $notes = null, int $createdBy = null): bool {
+    public function updateStock(int $productId, int $quantity, string $type, string $refType = null, int $refId = null, string $refNumber = null, string $notes = null, int $createdBy = null, ?float $unitCost = null): bool {
         $stockBefore = $this->getProductStock($productId);
         $stockAfter = $stockBefore + $quantity;
         
@@ -36,15 +47,22 @@ class InventoryService {
         $stmt = $this->db->prepare("UPDATE business_items SET stock = ? WHERE id = ?");
         $stmt->execute([$stockAfter, $productId]);
         
-        // Create movement record
+        // Calculate value_change = quantity × unit_cost (Requirements: 6.3)
+        $valueChange = null;
+        if ($unitCost !== null) {
+            $valueChange = $quantity * $unitCost;
+        }
+        
+        // Create movement record with value tracking
         $stmt = $this->db->prepare("
             INSERT INTO stock_movements 
-            (line_account_id, product_id, movement_type, quantity, stock_before, stock_after, reference_type, reference_id, reference_number, notes, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (line_account_id, product_id, movement_type, quantity, stock_before, stock_after, reference_type, reference_id, reference_number, notes, created_by, unit_cost, value_change)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $this->lineAccountId, $productId, $type, $quantity, 
-            $stockBefore, $stockAfter, $refType, $refId, $refNumber, $notes, $createdBy
+            $stockBefore, $stockAfter, $refType, $refId, $refNumber, $notes, $createdBy,
+            $unitCost, $valueChange
         ]);
         
         return true;
@@ -358,6 +376,165 @@ class InventoryService {
      */
     public function getProductsAtReorderPoint(): array {
         return $this->getLowStockProductsWithSupplier();
+    }
+    
+    /**
+     * Synchronize stock with batch quantities
+     * 
+     * Calculates the sum of quantity_available from all active batches
+     * and compares with business_items.stock. If mismatch found, updates
+     * stock and logs the discrepancy.
+     * 
+     * Requirements: 3.1, 3.2
+     * 
+     * @param int $productId Product ID to sync
+     * @param ActivityLogger|null $logger Optional logger for discrepancies
+     * @return array Sync result with details
+     */
+    public function syncStockWithBatches(int $productId, ?ActivityLogger $logger = null): array {
+        // Get current stock from business_items
+        $currentStock = $this->getProductStock($productId);
+        
+        // Calculate sum of active batch quantity_available
+        $stmt = $this->db->prepare("
+            SELECT COALESCE(SUM(quantity_available), 0) as batch_total
+            FROM inventory_batches
+            WHERE product_id = ?
+              AND status = 'active'
+        ");
+        
+        if ($this->lineAccountId) {
+            $stmt = $this->db->prepare("
+                SELECT COALESCE(SUM(quantity_available), 0) as batch_total
+                FROM inventory_batches
+                WHERE product_id = ?
+                  AND status = 'active'
+                  AND line_account_id = ?
+            ");
+            $stmt->execute([$productId, $this->lineAccountId]);
+        } else {
+            $stmt->execute([$productId]);
+        }
+        
+        $batchTotal = (int)$stmt->fetchColumn();
+        
+        // Check for mismatch
+        $hasMismatch = $currentStock !== $batchTotal;
+        $discrepancy = $batchTotal - $currentStock;
+        
+        $result = [
+            'product_id' => $productId,
+            'stock_before' => $currentStock,
+            'batch_total' => $batchTotal,
+            'discrepancy' => $discrepancy,
+            'synced' => false,
+            'message' => ''
+        ];
+        
+        if ($hasMismatch) {
+            // Update stock to match batch total
+            $stmt = $this->db->prepare("UPDATE business_items SET stock = ? WHERE id = ?");
+            $stmt->execute([$batchTotal, $productId]);
+            
+            $result['synced'] = true;
+            $result['stock_after'] = $batchTotal;
+            $result['message'] = "Stock synchronized: {$currentStock} → {$batchTotal} (discrepancy: {$discrepancy})";
+            
+            // Log discrepancy if logger provided
+            if ($logger !== null) {
+                $logger->logSystem(
+                    'sync',
+                    "Stock-batch sync discrepancy for product #{$productId}: stock was {$currentStock}, batches total {$batchTotal}",
+                    [
+                        'entity_type' => 'product',
+                        'entity_id' => $productId,
+                        'old_value' => ['stock' => $currentStock],
+                        'new_value' => ['stock' => $batchTotal, 'batch_total' => $batchTotal],
+                        'extra_data' => [
+                            'discrepancy' => $discrepancy,
+                            'sync_type' => 'stock_batch_sync'
+                        ],
+                        'line_account_id' => $this->lineAccountId
+                    ]
+                );
+            }
+        } else {
+            $result['stock_after'] = $currentStock;
+            $result['message'] = "Stock already synchronized: {$currentStock}";
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Synchronize stock with batches for all products
+     * 
+     * @param ActivityLogger|null $logger Optional logger for discrepancies
+     * @return array Summary of sync results
+     */
+    public function syncAllStocksWithBatches(?ActivityLogger $logger = null): array {
+        // Get all products that have batches
+        $sql = "
+            SELECT DISTINCT product_id 
+            FROM inventory_batches 
+            WHERE status = 'active'
+        ";
+        $params = [];
+        
+        if ($this->lineAccountId) {
+            $sql .= " AND line_account_id = ?";
+            $params[] = $this->lineAccountId;
+        }
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $productIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        $results = [
+            'total_products' => count($productIds),
+            'synced_count' => 0,
+            'no_change_count' => 0,
+            'discrepancies' => []
+        ];
+        
+        foreach ($productIds as $productId) {
+            $syncResult = $this->syncStockWithBatches((int)$productId, $logger);
+            
+            if ($syncResult['synced']) {
+                $results['synced_count']++;
+                $results['discrepancies'][] = $syncResult;
+            } else {
+                $results['no_change_count']++;
+            }
+        }
+        
+        return $results;
+    }
+    
+    /**
+     * Get sum of active batch quantities for a product
+     * 
+     * @param int $productId Product ID
+     * @return int Sum of quantity_available from active batches
+     */
+    public function getActiveBatchTotal(int $productId): int {
+        $sql = "
+            SELECT COALESCE(SUM(quantity_available), 0) as batch_total
+            FROM inventory_batches
+            WHERE product_id = ?
+              AND status = 'active'
+        ";
+        $params = [$productId];
+        
+        if ($this->lineAccountId) {
+            $sql .= " AND line_account_id = ?";
+            $params[] = $this->lineAccountId;
+        }
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        
+        return (int)$stmt->fetchColumn();
     }
 
 }

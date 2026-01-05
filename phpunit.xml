@@ -17,6 +17,9 @@
         <testsuite name="FileConsolidation Tests">
             <directory>tests/FileConsolidation</directory>
         </testsuite>
+        <testsuite name="GoodsReceiveDisposal Tests">
+            <directory>tests/GoodsReceiveDisposal</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>

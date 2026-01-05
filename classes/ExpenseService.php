@@ -565,6 +565,160 @@ class ExpenseService {
     }
     
     /**
+     * Generate expense number with custom prefix
+     * Format: {PREFIX}-YYYYMMDD-XXXX
+     * 
+     * @param string $prefix Prefix for expense number (default: EXP)
+     * @return string Generated expense number
+     */
+    public function generateExpenseNumberWithPrefix(string $prefix = 'EXP'): string {
+        $date = date('Ymd');
+        $fullPrefix = "{$prefix}-{$date}-";
+        
+        // Get the last expense number for today with this prefix
+        $stmt = $this->db->prepare("
+            SELECT expense_number FROM expenses 
+            WHERE expense_number LIKE ? 
+            ORDER BY expense_number DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([$fullPrefix . '%']);
+        $lastNumber = $stmt->fetchColumn();
+        
+        if ($lastNumber) {
+            // Extract the sequence number and increment
+            $sequence = (int)substr($lastNumber, -4);
+            $sequence++;
+        } else {
+            $sequence = 1;
+        }
+        
+        return $fullPrefix . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+    }
+    
+    /**
+     * Get or create expense category by name
+     * 
+     * @param string $categoryName Category name (e.g., 'expiry_loss', 'damage_loss', 'inventory_loss')
+     * @return int Category ID
+     */
+    public function getOrCreateDisposalCategory(string $categoryName): int {
+        // Map disposal category names to Thai names
+        $categoryMap = [
+            'expiry_loss' => ['name' => 'สินค้าหมดอายุ', 'name_en' => 'Expiry Loss', 'expense_type' => 'other'],
+            'damage_loss' => ['name' => 'สินค้าเสียหาย', 'name_en' => 'Damage Loss', 'expense_type' => 'other'],
+            'inventory_loss' => ['name' => 'สินค้าสูญหาย', 'name_en' => 'Inventory Loss', 'expense_type' => 'other']
+        ];
+        
+        $categoryData = $categoryMap[$categoryName] ?? [
+            'name' => 'ค่าใช้จ่ายอื่นๆ',
+            'name_en' => 'Other Expenses',
+            'expense_type' => 'other'
+        ];
+        
+        // Try to find existing category
+        $stmt = $this->db->prepare("
+            SELECT id FROM expense_categories 
+            WHERE name_en = ? AND (line_account_id = ? OR line_account_id IS NULL)
+            LIMIT 1
+        ");
+        $stmt->execute([$categoryData['name_en'], $this->lineAccountId]);
+        $existingId = $stmt->fetchColumn();
+        
+        if ($existingId) {
+            return (int)$existingId;
+        }
+        
+        // Create new category
+        $stmt = $this->db->prepare("
+            INSERT INTO expense_categories 
+            (line_account_id, name, name_en, expense_type, is_default, is_active)
+            VALUES (?, ?, ?, ?, 0, 1)
+        ");
+        $stmt->execute([
+            $this->lineAccountId,
+            $categoryData['name'],
+            $categoryData['name_en'],
+            $categoryData['expense_type']
+        ]);
+        
+        return (int)$this->db->lastInsertId();
+    }
+    
+    /**
+     * Create disposal expense record
+     * 
+     * Creates an expense record for inventory disposal/write-off.
+     * 
+     * Requirements: 5.1, 5.2, 5.5
+     * 
+     * @param array $data Disposal data containing:
+     *   - batch_id: int - Batch being disposed
+     *   - product_id: int - Product ID
+     *   - quantity: int - Quantity disposed
+     *   - unit_cost: float - Cost per unit
+     *   - total_amount: float - Total disposal value (quantity × unit_cost)
+     *   - reason: string - Disposal reason
+     *   - category: string - Category name (expiry_loss, damage_loss, inventory_loss)
+     *   - approved_by: int - Pharmacist/Staff ID who approved
+     * @return int Created expense ID
+     * @throws Exception If validation fails
+     */
+    public function createDisposalExpense(array $data): int {
+        // Validate required fields
+        if (empty($data['batch_id'])) {
+            throw new Exception('Batch ID is required for disposal expense');
+        }
+        if (!isset($data['total_amount']) || $data['total_amount'] < 0) {
+            throw new Exception('Valid total amount is required');
+        }
+        
+        // Get or create disposal category
+        $categoryName = $data['category'] ?? 'inventory_loss';
+        $categoryId = $this->getOrCreateDisposalCategory($categoryName);
+        
+        // Generate expense number with DSP prefix
+        $expenseNumber = $this->generateExpenseNumberWithPrefix('DSP');
+        
+        // Prepare metadata with disposal details
+        $metadata = [
+            'batch_id' => $data['batch_id'],
+            'product_id' => $data['product_id'] ?? null,
+            'quantity' => $data['quantity'] ?? 0,
+            'unit_cost' => $data['unit_cost'] ?? 0,
+            'disposal_type' => $categoryName
+        ];
+        
+        // Build description
+        $description = "Disposal: {$data['reason']}";
+        if (isset($data['quantity']) && isset($data['unit_cost'])) {
+            $description .= " - Qty: {$data['quantity']} @ " . number_format($data['unit_cost'], 2);
+        }
+        
+        $stmt = $this->db->prepare("
+            INSERT INTO expenses 
+            (line_account_id, expense_number, category_id, amount, expense_date, 
+             description, reference_number, payment_status, notes, metadata, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?, ?)
+        ");
+        
+        $stmt->execute([
+            $this->lineAccountId,
+            $expenseNumber,
+            $categoryId,
+            $data['total_amount'],
+            date('Y-m-d'),
+            $description,
+            "BATCH-{$data['batch_id']}",
+            $data['reason'] ?? null,
+            json_encode($metadata),
+            $data['approved_by'] ?? null
+        ]);
+        
+        return (int)$this->db->lastInsertId();
+    }
+    
+    /**
      * Get expense count by status
      * 
      * @return array Count by status

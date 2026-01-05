@@ -235,16 +235,17 @@ function formatExpiryCountdown($days) {
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">ตำแหน่ง</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">จำนวน</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">พร้อมจ่าย</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500">ราคาทุน</th>
+                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500">มูลค่า</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">วันหมดอายุ</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">นับถอยหลัง</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">วันที่รับ</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">สถานะ</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y">
                     <?php if (empty($batches)): ?>
-                    <tr><td colspan="10" class="px-4 py-8 text-center text-gray-500">ไม่พบข้อมูล Batch</td></tr>
+                    <tr><td colspan="11" class="px-4 py-8 text-center text-gray-500">ไม่พบข้อมูล Batch</td></tr>
                     <?php else: ?>
                     <?php foreach ($batches as $batch): 
                         $statusInfo = $statusLabels[$batch['status']] ?? $statusLabels['active'];
@@ -258,6 +259,12 @@ function formatExpiryCountdown($days) {
                             $stmt->execute([$batch['product_id']]);
                             $productName = $stmt->fetchColumn() ?: 'Unknown';
                         } catch (Exception $e) {}
+                        
+                        // Calculate batch value
+                        $costPrice = $batch['cost_price'] ?? 0;
+                        $batchValue = $costPrice * ($batch['quantity_available'] ?? 0);
+                        $isDisposed = $batch['status'] === 'disposed';
+                        $disposalValue = $isDisposed ? ($costPrice * ($batch['quantity'] ?? 0)) : 0;
                     ?>
                     <tr class="hover:bg-gray-50 <?= $batch['is_expired'] ? 'bg-red-50' : ($batch['is_near_expiry'] ? 'bg-yellow-50' : '') ?>">
                         <td class="px-4 py-3">
@@ -280,6 +287,25 @@ function formatExpiryCountdown($days) {
                         <td class="px-4 py-3 text-center font-bold <?= $batch['quantity_available'] > 0 ? 'text-green-600' : 'text-gray-400' ?>">
                             <?= number_format($batch['quantity_available']) ?>
                         </td>
+                        <td class="px-4 py-3 text-right">
+                            <?php if ($costPrice > 0): ?>
+                            <span class="text-sm">฿<?= number_format($costPrice, 2) ?></span>
+                            <?php else: ?>
+                            <span class="text-gray-400 text-sm">-</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <?php if ($isDisposed): ?>
+                            <div class="text-red-600 font-medium">
+                                <span class="text-xs text-gray-500 line-through block">฿<?= number_format($disposalValue, 2) ?></span>
+                                <span class="text-xs">ทำลายแล้ว</span>
+                            </div>
+                            <?php elseif ($batchValue > 0): ?>
+                            <span class="font-medium text-green-600">฿<?= number_format($batchValue, 2) ?></span>
+                            <?php else: ?>
+                            <span class="text-gray-400 text-sm">-</span>
+                            <?php endif; ?>
+                        </td>
                         <td class="px-4 py-3 text-center">
                             <?php if ($batch['expiry_date']): ?>
                             <span class="text-sm"><?= date('d/m/Y', strtotime($batch['expiry_date'])) ?></span>
@@ -300,9 +326,6 @@ function formatExpiryCountdown($days) {
                             <?php else: ?>
                             <span class="text-gray-400 text-xs">ไม่มี</span>
                             <?php endif; ?>
-                        </td>
-                        <td class="px-4 py-3 text-center text-sm text-gray-600">
-                            <?= date('d/m/Y', strtotime($batch['received_at'])) ?>
                         </td>
                         <td class="px-4 py-3 text-center">
                             <span class="px-2 py-1 bg-<?= $statusInfo['color'] ?>-100 text-<?= $statusInfo['color'] ?>-700 rounded text-xs">
@@ -501,6 +524,12 @@ async function viewBatch(id) {
                                  (batch.is_near_expiry ? 'ใกล้หมดอายุ' : 'ปกติ');
             const expiryColor = batch.is_expired ? 'red' : (batch.is_near_expiry ? 'yellow' : 'green');
             
+            // Calculate values
+            const costPrice = parseFloat(batch.cost_price) || 0;
+            const currentValue = costPrice * (parseInt(batch.quantity_available) || 0);
+            const originalValue = costPrice * (parseInt(batch.quantity) || 0);
+            const isDisposed = batch.status === 'disposed';
+            
             document.getElementById('viewBatchContent').innerHTML = `
                 <div class="space-y-4">
                     <div class="bg-gray-50 rounded-lg p-4">
@@ -516,6 +545,23 @@ async function viewBatch(id) {
                         <div>
                             <div class="text-sm text-gray-500">พร้อมจ่าย</div>
                             <div class="font-bold text-green-600">${batch.quantity_available}</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-sm text-gray-500">ราคาทุน/หน่วย</div>
+                            <div class="font-medium">${costPrice > 0 ? '฿' + costPrice.toLocaleString('th-TH', {minimumFractionDigits: 2}) : '-'}</div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-500">มูลค่าปัจจุบัน</div>
+                            ${isDisposed ? `
+                                <div class="text-red-600">
+                                    <span class="line-through text-gray-400">฿${originalValue.toLocaleString('th-TH', {minimumFractionDigits: 2})}</span>
+                                    <span class="block text-sm">ทำลายแล้ว</span>
+                                </div>
+                            ` : `
+                                <div class="font-bold text-green-600">${currentValue > 0 ? '฿' + currentValue.toLocaleString('th-TH', {minimumFractionDigits: 2}) : '-'}</div>
+                            `}
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
@@ -544,6 +590,14 @@ async function viewBatch(id) {
                         <div class="text-sm text-gray-500">สถานะ</div>
                         <div class="capitalize">${batch.status}</div>
                     </div>
+                    ${isDisposed ? `
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <div class="text-sm text-red-700">
+                            <i class="fas fa-trash-alt mr-1"></i>
+                            <strong>มูลค่าที่ทำลาย:</strong> ฿${originalValue.toLocaleString('th-TH', {minimumFractionDigits: 2})}
+                        </div>
+                    </div>
+                    ` : ''}
                 </div>
             `;
             document.getElementById('viewBatchModal').classList.remove('hidden');
