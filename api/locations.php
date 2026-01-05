@@ -81,7 +81,8 @@ try {
          * Requirements: 1.1
          */
         case 'delete':
-            $id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($data['id'] ?? $_GET['id'] ?? 0);
             
             if (!$id) {
                 throw new Exception('Location ID is required');
@@ -209,6 +210,7 @@ try {
             echo json_encode([
                 'success' => true,
                 'message' => count($createdIds) . ' locations created',
+                'created_count' => count($createdIds),
                 'created_ids' => $createdIds
             ]);
             break;
@@ -542,5 +544,6 @@ try {
     }
 } catch (Exception $e) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    error_log("Locations API Error: " . $e->getMessage() . " | Action: " . $action);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
