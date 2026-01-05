@@ -642,4 +642,645 @@ class WMSPrintService {
             'fields_checked' => array_keys($requiredFields)
         ];
     }
+    
+    // =============================================
+    // LOCATION LABEL METHODS (Requirements 6.1, 6.2)
+    // =============================================
+    
+    /**
+     * Format location code to human-readable format
+     * Requirements: 6.2 - Human-readable format display
+     * 
+     * @param string $locationCode Location code (e.g., A1-03-02)
+     * @return array Human-readable components
+     */
+    public function formatLocationForDisplay(string $locationCode): array {
+        $parts = explode('-', strtoupper($locationCode));
+        
+        if (count($parts) !== 3) {
+            return [
+                'zone' => $locationCode,
+                'shelf' => '',
+                'bin' => '',
+                'display' => $locationCode,
+                'display_th' => $locationCode
+            ];
+        }
+        
+        $zone = $parts[0];
+        $shelf = (int)$parts[1];
+        $bin = (int)$parts[2];
+        
+        // Map zone codes to readable names
+        $zoneNames = [
+            'A' => 'A (General)',
+            'A1' => 'A1 (General)',
+            'B' => 'B (General)',
+            'B1' => 'B1 (General)',
+            'C' => 'C (Slow Moving)',
+            'RX' => 'RX (Controlled)',
+            'COLD' => 'Cold Storage',
+            'HAZ' => 'Hazardous'
+        ];
+        
+        $zoneNamesTh = [
+            'A' => 'โซน A (ทั่วไป)',
+            'A1' => 'โซน A1 (ทั่วไป)',
+            'B' => 'โซน B (ทั่วไป)',
+            'B1' => 'โซน B1 (ทั่วไป)',
+            'C' => 'โซน C (สินค้าหมุนช้า)',
+            'RX' => 'โซน RX (ยาควบคุม)',
+            'COLD' => 'ห้องเย็น',
+            'HAZ' => 'วัตถุอันตราย'
+        ];
+        
+        $zoneName = $zoneNames[$zone] ?? "Zone {$zone}";
+        $zoneNameTh = $zoneNamesTh[$zone] ?? "โซน {$zone}";
+        
+        return [
+            'zone' => $zone,
+            'shelf' => $shelf,
+            'bin' => $bin,
+            'zone_name' => $zoneName,
+            'zone_name_th' => $zoneNameTh,
+            'display' => "{$zoneName}, Shelf {$shelf}, Bin {$bin}",
+            'display_th' => "{$zoneNameTh}, ชั้น {$shelf}, ช่อง {$bin}"
+        ];
+    }
+    
+    /**
+     * Generate location label HTML for a single location
+     * Requirements: 6.1 - Generate barcode/QR with location code
+     * Requirements: 6.2 - Human-readable format display
+     * 
+     * @param array $location Location data from LocationService
+     * @return string HTML content for location label
+     */
+    public function generateLocationLabel(array $location): string {
+        $locationCode = $location['location_code'] ?? '';
+        $formatted = $this->formatLocationForDisplay($locationCode);
+        
+        $html = $this->getLocationLabelHeader();
+        $html .= $this->getLocationLabelContent($location, $formatted);
+        $html .= $this->getLocationLabelFooter();
+        
+        return $html;
+    }
+    
+    /**
+     * Generate batch location labels for multiple locations
+     * 
+     * @param array $locations Array of location data
+     * @return string HTML content for all location labels
+     */
+    public function generateBatchLocationLabels(array $locations): string {
+        if (empty($locations)) {
+            throw new Exception("No locations provided for label printing");
+        }
+        
+        $html = $this->getLocationLabelHeader();
+        
+        foreach ($locations as $location) {
+            $locationCode = $location['location_code'] ?? '';
+            $formatted = $this->formatLocationForDisplay($locationCode);
+            $html .= $this->getLocationLabelContent($location, $formatted);
+        }
+        
+        $html .= $this->getLocationLabelFooter();
+        
+        return $html;
+    }
+    
+    /**
+     * Generate location label header HTML
+     * Label size: 50mm x 30mm (standard shelf label)
+     */
+    private function getLocationLabelHeader(): string {
+        return '<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Labels</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Sarabun", "Helvetica Neue", Arial, sans-serif; font-size: 10px; line-height: 1.2; }
+        .location-label { 
+            width: 50mm; 
+            height: 30mm; 
+            padding: 2mm; 
+            margin: 2mm; 
+            background: white; 
+            border: 1px solid #000; 
+            display: inline-block;
+            vertical-align: top;
+            position: relative;
+            page-break-inside: avoid;
+        }
+        .label-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 1px solid #333; 
+            padding-bottom: 1mm; 
+            margin-bottom: 1mm; 
+        }
+        .location-code { 
+            font-size: 14px; 
+            font-weight: bold; 
+            font-family: monospace;
+            letter-spacing: 1px;
+        }
+        .zone-badge {
+            font-size: 8px;
+            padding: 1px 3px;
+            border-radius: 2px;
+            font-weight: bold;
+        }
+        .zone-general { background: #e3f2fd; color: #1565c0; }
+        .zone-cold { background: #e0f7fa; color: #00838f; }
+        .zone-controlled { background: #fce4ec; color: #c62828; }
+        .zone-hazardous { background: #fff3e0; color: #e65100; }
+        .barcode-section { 
+            text-align: center; 
+            margin: 1mm 0;
+        }
+        .barcode { 
+            font-family: "Libre Barcode 39", "Free 3 of 9", monospace; 
+            font-size: 28px; 
+            line-height: 1;
+        }
+        .qr-placeholder {
+            width: 15mm;
+            height: 15mm;
+            border: 1px solid #ccc;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 6px;
+            color: #999;
+            background: #f9f9f9;
+        }
+        .human-readable {
+            font-size: 9px;
+            text-align: center;
+            margin-top: 1mm;
+            color: #333;
+        }
+        .human-readable-th {
+            font-size: 8px;
+            text-align: center;
+            color: #666;
+        }
+        .capacity-info {
+            position: absolute;
+            bottom: 1mm;
+            right: 2mm;
+            font-size: 7px;
+            color: #999;
+        }
+        .ergonomic-indicator {
+            position: absolute;
+            bottom: 1mm;
+            left: 2mm;
+            font-size: 7px;
+        }
+        .ergonomic-golden { color: #f9a825; }
+        .ergonomic-upper { color: #7b1fa2; }
+        .ergonomic-lower { color: #1976d2; }
+        @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .location-label { 
+                page-break-inside: avoid;
+                border: 1px solid #000;
+                margin: 1mm;
+            }
+        }
+        @page {
+            size: A4;
+            margin: 5mm;
+        }
+    </style>
+</head>
+<body>';
+    }
+    
+    /**
+     * Generate location label content HTML
+     * Requirements: 6.1 - Barcode/QR with location code
+     * Requirements: 6.2 - Human-readable format
+     */
+    private function getLocationLabelContent(array $location, array $formatted): string {
+        $locationCode = htmlspecialchars($location['location_code'] ?? '');
+        $zoneType = $location['zone_type'] ?? 'general';
+        $ergonomicLevel = $location['ergonomic_level'] ?? 'golden';
+        $capacity = (int)($location['capacity'] ?? 100);
+        
+        // Zone badge class
+        $zoneBadgeClass = 'zone-general';
+        $zoneBadgeText = 'GEN';
+        switch ($zoneType) {
+            case 'cold_storage':
+                $zoneBadgeClass = 'zone-cold';
+                $zoneBadgeText = 'COLD';
+                break;
+            case 'controlled':
+                $zoneBadgeClass = 'zone-controlled';
+                $zoneBadgeText = 'RX';
+                break;
+            case 'hazardous':
+                $zoneBadgeClass = 'zone-hazardous';
+                $zoneBadgeText = 'HAZ';
+                break;
+        }
+        
+        // Ergonomic level indicator
+        $ergonomicClass = 'ergonomic-golden';
+        $ergonomicIcon = '★';
+        $ergonomicText = 'Golden';
+        switch ($ergonomicLevel) {
+            case 'upper':
+                $ergonomicClass = 'ergonomic-upper';
+                $ergonomicIcon = '↑';
+                $ergonomicText = 'Upper';
+                break;
+            case 'lower':
+                $ergonomicClass = 'ergonomic-lower';
+                $ergonomicIcon = '↓';
+                $ergonomicText = 'Lower';
+                break;
+        }
+        
+        $html = '<div class="location-label">
+    <div class="label-header">
+        <span class="location-code">' . $locationCode . '</span>
+        <span class="zone-badge ' . $zoneBadgeClass . '">' . $zoneBadgeText . '</span>
+    </div>
+    
+    <div class="barcode-section">
+        <div class="barcode">*' . $locationCode . '*</div>
+    </div>
+    
+    <div class="human-readable">' . htmlspecialchars($formatted['display']) . '</div>
+    <div class="human-readable-th">' . htmlspecialchars($formatted['display_th']) . '</div>
+    
+    <div class="ergonomic-indicator ' . $ergonomicClass . '">' . $ergonomicIcon . ' ' . $ergonomicText . '</div>
+    <div class="capacity-info">Cap: ' . $capacity . '</div>
+</div>';
+        
+        return $html;
+    }
+    
+    /**
+     * Generate location label footer HTML
+     */
+    private function getLocationLabelFooter(): string {
+        return '</body></html>';
+    }
+    
+    /**
+     * Generate location label with QR code (SVG-based)
+     * Requirements: 6.1 - Generate QR with location code
+     * 
+     * @param array $location Location data
+     * @return string HTML content with QR code
+     */
+    public function generateLocationLabelWithQR(array $location): string {
+        $locationCode = $location['location_code'] ?? '';
+        $formatted = $this->formatLocationForDisplay($locationCode);
+        
+        $html = $this->getLocationLabelWithQRHeader();
+        $html .= $this->getLocationLabelWithQRContent($location, $formatted);
+        $html .= $this->getLocationLabelFooter();
+        
+        return $html;
+    }
+    
+    /**
+     * Generate batch location labels with QR codes
+     * 
+     * @param array $locations Array of location data
+     * @return string HTML content for all location labels with QR
+     */
+    public function generateBatchLocationLabelsWithQR(array $locations): string {
+        if (empty($locations)) {
+            throw new Exception("No locations provided for label printing");
+        }
+        
+        $html = $this->getLocationLabelWithQRHeader();
+        
+        foreach ($locations as $location) {
+            $locationCode = $location['location_code'] ?? '';
+            $formatted = $this->formatLocationForDisplay($locationCode);
+            $html .= $this->getLocationLabelWithQRContent($location, $formatted);
+        }
+        
+        $html .= $this->getLocationLabelFooter();
+        
+        return $html;
+    }
+    
+    /**
+     * Generate location label with QR header HTML
+     * Larger label size: 60mm x 40mm for QR code
+     */
+    private function getLocationLabelWithQRHeader(): string {
+        return '<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Labels with QR</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Sarabun", "Helvetica Neue", Arial, sans-serif; font-size: 10px; line-height: 1.2; }
+        .location-label-qr { 
+            width: 60mm; 
+            height: 40mm; 
+            padding: 2mm; 
+            margin: 2mm; 
+            background: white; 
+            border: 1px solid #000; 
+            display: inline-block;
+            vertical-align: top;
+            position: relative;
+            page-break-inside: avoid;
+        }
+        .label-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 1px solid #333; 
+            padding-bottom: 1mm; 
+            margin-bottom: 2mm; 
+        }
+        .location-code { 
+            font-size: 16px; 
+            font-weight: bold; 
+            font-family: monospace;
+            letter-spacing: 1px;
+        }
+        .zone-badge {
+            font-size: 9px;
+            padding: 2px 4px;
+            border-radius: 2px;
+            font-weight: bold;
+        }
+        .zone-general { background: #e3f2fd; color: #1565c0; }
+        .zone-cold { background: #e0f7fa; color: #00838f; }
+        .zone-controlled { background: #fce4ec; color: #c62828; }
+        .zone-hazardous { background: #fff3e0; color: #e65100; }
+        .label-body {
+            display: flex;
+            gap: 3mm;
+        }
+        .qr-section {
+            flex: 0 0 20mm;
+        }
+        .qr-code {
+            width: 20mm;
+            height: 20mm;
+            border: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fff;
+        }
+        .qr-code svg {
+            width: 100%;
+            height: 100%;
+        }
+        .info-section {
+            flex: 1;
+        }
+        .human-readable {
+            font-size: 10px;
+            margin-bottom: 1mm;
+            color: #333;
+        }
+        .human-readable-th {
+            font-size: 9px;
+            color: #666;
+            margin-bottom: 2mm;
+        }
+        .details {
+            font-size: 8px;
+            color: #666;
+        }
+        .details-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1px;
+        }
+        .capacity-bar {
+            height: 3mm;
+            background: #e0e0e0;
+            border-radius: 1mm;
+            margin-top: 2mm;
+            overflow: hidden;
+        }
+        .capacity-fill {
+            height: 100%;
+            background: #4caf50;
+            border-radius: 1mm;
+        }
+        @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .location-label-qr { 
+                page-break-inside: avoid;
+                border: 1px solid #000;
+                margin: 1mm;
+            }
+        }
+        @page {
+            size: A4;
+            margin: 5mm;
+        }
+    </style>
+</head>
+<body>';
+    }
+    
+    /**
+     * Generate location label with QR content HTML
+     */
+    private function getLocationLabelWithQRContent(array $location, array $formatted): string {
+        $locationCode = htmlspecialchars($location['location_code'] ?? '');
+        $zoneType = $location['zone_type'] ?? 'general';
+        $ergonomicLevel = $location['ergonomic_level'] ?? 'golden';
+        $capacity = (int)($location['capacity'] ?? 100);
+        $currentQty = (int)($location['current_qty'] ?? 0);
+        $utilization = $capacity > 0 ? round(($currentQty / $capacity) * 100) : 0;
+        
+        // Zone badge class
+        $zoneBadgeClass = 'zone-general';
+        $zoneBadgeText = 'General';
+        switch ($zoneType) {
+            case 'cold_storage':
+                $zoneBadgeClass = 'zone-cold';
+                $zoneBadgeText = 'Cold Storage';
+                break;
+            case 'controlled':
+                $zoneBadgeClass = 'zone-controlled';
+                $zoneBadgeText = 'Controlled';
+                break;
+            case 'hazardous':
+                $zoneBadgeClass = 'zone-hazardous';
+                $zoneBadgeText = 'Hazardous';
+                break;
+        }
+        
+        // Ergonomic level text
+        $ergonomicText = 'Golden Zone';
+        switch ($ergonomicLevel) {
+            case 'upper':
+                $ergonomicText = 'Upper Level';
+                break;
+            case 'lower':
+                $ergonomicText = 'Lower Level';
+                break;
+        }
+        
+        // Generate simple QR code placeholder (in production, use a QR library)
+        $qrSvg = $this->generateSimpleQRPlaceholder($locationCode);
+        
+        $html = '<div class="location-label-qr">
+    <div class="label-header">
+        <span class="location-code">' . $locationCode . '</span>
+        <span class="zone-badge ' . $zoneBadgeClass . '">' . $zoneBadgeText . '</span>
+    </div>
+    
+    <div class="label-body">
+        <div class="qr-section">
+            <div class="qr-code">' . $qrSvg . '</div>
+        </div>
+        <div class="info-section">
+            <div class="human-readable">' . htmlspecialchars($formatted['display']) . '</div>
+            <div class="human-readable-th">' . htmlspecialchars($formatted['display_th']) . '</div>
+            <div class="details">
+                <div class="details-row">
+                    <span>Level:</span>
+                    <span>' . $ergonomicText . '</span>
+                </div>
+                <div class="details-row">
+                    <span>Capacity:</span>
+                    <span>' . $currentQty . ' / ' . $capacity . '</span>
+                </div>
+            </div>
+            <div class="capacity-bar">
+                <div class="capacity-fill" style="width: ' . min(100, $utilization) . '%;"></div>
+            </div>
+        </div>
+    </div>
+</div>';
+        
+        return $html;
+    }
+    
+    /**
+     * Generate a simple QR code placeholder SVG
+     * In production, replace with actual QR code generation library
+     * 
+     * @param string $data Data to encode
+     * @return string SVG markup
+     */
+    private function generateSimpleQRPlaceholder(string $data): string {
+        // This generates a simple visual placeholder
+        // For production, integrate with a QR library like phpqrcode or chillerlan/php-qrcode
+        $hash = md5($data);
+        $size = 21; // QR code modules
+        $moduleSize = 100 / $size;
+        
+        $svg = '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">';
+        $svg .= '<rect width="100" height="100" fill="white"/>';
+        
+        // Generate pseudo-random pattern based on hash
+        for ($y = 0; $y < $size; $y++) {
+            for ($x = 0; $x < $size; $x++) {
+                $charIndex = ($y * $size + $x) % 32;
+                $char = $hash[$charIndex];
+                $value = hexdec($char);
+                
+                // Position patterns (corners)
+                $isPositionPattern = 
+                    ($x < 7 && $y < 7) || 
+                    ($x >= $size - 7 && $y < 7) || 
+                    ($x < 7 && $y >= $size - 7);
+                
+                if ($isPositionPattern) {
+                    // Draw position pattern
+                    $inOuter = ($x < 7 && $y < 7) || ($x >= $size - 7 && $y < 7) || ($x < 7 && $y >= $size - 7);
+                    $localX = $x % 7;
+                    $localY = $y % 7;
+                    if ($x >= $size - 7) $localX = $x - ($size - 7);
+                    if ($y >= $size - 7) $localY = $y - ($size - 7);
+                    
+                    $isBlack = ($localX == 0 || $localX == 6 || $localY == 0 || $localY == 6) ||
+                               ($localX >= 2 && $localX <= 4 && $localY >= 2 && $localY <= 4);
+                    
+                    if ($isBlack) {
+                        $svg .= '<rect x="' . ($x * $moduleSize) . '" y="' . ($y * $moduleSize) . '" ';
+                        $svg .= 'width="' . $moduleSize . '" height="' . $moduleSize . '" fill="black"/>';
+                    }
+                } else if ($value > 7) {
+                    // Data modules
+                    $svg .= '<rect x="' . ($x * $moduleSize) . '" y="' . ($y * $moduleSize) . '" ';
+                    $svg .= 'width="' . $moduleSize . '" height="' . $moduleSize . '" fill="black"/>';
+                }
+            }
+        }
+        
+        $svg .= '</svg>';
+        
+        return $svg;
+    }
+    
+    /**
+     * Get locations for label printing
+     * 
+     * @param array $filters Optional filters (zone, zone_type, etc.)
+     * @return array List of locations
+     */
+    public function getLocationsForPrinting(array $filters = []): array {
+        $sql = "SELECT * FROM warehouse_locations WHERE is_active = 1";
+        $params = [];
+        
+        if ($this->lineAccountId) {
+            $sql .= " AND line_account_id = ?";
+            $params[] = $this->lineAccountId;
+        }
+        
+        if (!empty($filters['zone'])) {
+            $sql .= " AND zone = ?";
+            $params[] = strtoupper($filters['zone']);
+        }
+        
+        if (!empty($filters['zone_type'])) {
+            $sql .= " AND zone_type = ?";
+            $params[] = $filters['zone_type'];
+        }
+        
+        if (!empty($filters['shelf'])) {
+            $sql .= " AND shelf = ?";
+            $params[] = (int)$filters['shelf'];
+        }
+        
+        if (!empty($filters['location_ids']) && is_array($filters['location_ids'])) {
+            $placeholders = implode(',', array_fill(0, count($filters['location_ids']), '?'));
+            $sql .= " AND id IN ({$placeholders})";
+            $params = array_merge($params, $filters['location_ids']);
+        }
+        
+        $sql .= " ORDER BY zone, shelf, bin";
+        
+        if (!empty($filters['limit'])) {
+            $sql .= " LIMIT " . (int)$filters['limit'];
+        }
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }

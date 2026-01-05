@@ -28,3 +28,4 @@ DROP PROCEDURE IF EXISTS AddStorageConditionColumn;
 
 -- Success message
 SELECT 'Migration completed: storage_condition column added to business_items' AS result;
+    

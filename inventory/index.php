@@ -32,6 +32,9 @@ $tabs = [
     'movements' => ['label' => 'การเคลื่อนไหว', 'icon' => 'fas fa-exchange-alt'],
     'adjustment' => ['label' => 'ปรับสต็อก', 'icon' => 'fas fa-sliders-h'],
     'low-stock' => ['label' => 'สินค้าใกล้หมด', 'icon' => 'fas fa-exclamation-triangle'],
+    'locations' => ['label' => 'ตำแหน่งจัดเก็บ', 'icon' => 'fas fa-map-marker-alt'],
+    'batches' => ['label' => 'Batch/Lot', 'icon' => 'fas fa-layer-group'],
+    'put-away' => ['label' => 'Put Away', 'icon' => 'fas fa-inbox'],
     'reports' => ['label' => 'รายงาน', 'icon' => 'fas fa-chart-bar'],
     'wms' => ['label' => 'WMS', 'icon' => 'fas fa-shipping-fast'],
 ];
@@ -46,6 +49,9 @@ $tabTitles = [
     'movements' => 'ประวัติการเคลื่อนไหวสต็อก',
     'adjustment' => 'ปรับสต็อก (Stock Adjustment)',
     'low-stock' => 'สินค้าใกล้หมด & จุดสั่งซื้อ (ROP)',
+    'locations' => 'ตำแหน่งจัดเก็บ (Warehouse Locations)',
+    'batches' => 'Batch/Lot Tracking',
+    'put-away' => 'Put Away - จัดเก็บสินค้า',
     'reports' => 'รายงานคลังสินค้า',
     'wms' => 'WMS - Pick Pack Ship',
 ];
@@ -87,6 +93,15 @@ switch ($activeTab) {
         break;
     case 'low-stock':
         include __DIR__ . '/../includes/inventory/low-stock.php';
+        break;
+    case 'locations':
+        include __DIR__ . '/../includes/inventory/locations.php';
+        break;
+    case 'batches':
+        include __DIR__ . '/../includes/inventory/batches.php';
+        break;
+    case 'put-away':
+        include __DIR__ . '/../includes/inventory/put-away.php';
         break;
     case 'reports':
         include __DIR__ . '/../includes/inventory/reports.php';
