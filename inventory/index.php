@@ -33,6 +33,7 @@ $tabs = [
     'adjustment' => ['label' => 'ปรับสต็อก', 'icon' => 'fas fa-sliders-h'],
     'low-stock' => ['label' => 'สินค้าใกล้หมด', 'icon' => 'fas fa-exclamation-triangle'],
     'locations' => ['label' => 'ตำแหน่งจัดเก็บ', 'icon' => 'fas fa-map-marker-alt'],
+    'planogram' => ['label' => 'Planogram', 'icon' => 'fas fa-th'],
     'batches' => ['label' => 'Batch/Lot', 'icon' => 'fas fa-layer-group'],
     'put-away' => ['label' => 'Put Away', 'icon' => 'fas fa-inbox'],
     'reports' => ['label' => 'รายงาน', 'icon' => 'fas fa-chart-bar'],
@@ -50,6 +51,7 @@ $tabTitles = [
     'adjustment' => 'ปรับสต็อก (Stock Adjustment)',
     'low-stock' => 'สินค้าใกล้หมด & จุดสั่งซื้อ (ROP)',
     'locations' => 'ตำแหน่งจัดเก็บ (Warehouse Locations)',
+    'planogram' => 'Planogram - ผังชั้นวางสินค้า',
     'batches' => 'Batch/Lot Tracking',
     'put-away' => 'Put Away - จัดเก็บสินค้า',
     'reports' => 'รายงานคลังสินค้า',
@@ -96,6 +98,9 @@ switch ($activeTab) {
         break;
     case 'locations':
         include __DIR__ . '/../includes/inventory/locations.php';
+        break;
+    case 'planogram':
+        include __DIR__ . '/../includes/inventory/planogram.php';
         break;
     case 'batches':
         include __DIR__ . '/../includes/inventory/batches.php';

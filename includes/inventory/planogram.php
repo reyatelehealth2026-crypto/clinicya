@@ -1,0 +1,347 @@
+<?php
+/**
+ * Planogram View - Visual Shelf Display
+ * แสดงผังชั้นวางสินค้าแบบ Visual
+ * 
+ * Features:
+ * - Visual shelf grid display
+ * - Click to view/assign products
+ * - Color-coded status (empty/occupied/full/expiring)
+ */
+
+require_once __DIR__ . '/../../classes/LocationService.php';
+
+$locationService = new LocationService($db, $lineAccountId);
+
+// Get all zones
+$zones = $locationService->getZones();
+
+// Get selected zone (default to first zone)
+$selectedZone = $_GET['zone'] ?? ($zones[0]['zone'] ?? '');
+
+// Get shelf data for selected zone
+$shelfData = [];
+$maxShelf = 0;
+$maxBin = 0;
+
+if ($selectedZone) {
+    // Get all locations in this zone
+    $locations = $locationService->getLocations(['zone' => $selectedZone, 'is_active' => 1]);
+    
+    foreach ($locations as $loc) {
+        $shelf = (int)$loc['shelf'];
+        $bin = (int)$loc['bin'];
+        $shelfData[$shelf][$bin] = $loc;
+        
+        if ($shelf > $maxShelf) $maxShelf = $shelf;
+        if ($bin > $maxBin) $maxBin = $bin;
+    }
+}
+
+// Get products in locations for this zone
+$productsInLocations = [];
+try {
+    $stmt = $db->prepare("
+        SELECT ib.*, wl.location_code, wl.shelf, wl.bin, bi.name as product_name, bi.sku
+        FROM inventory_batches ib
+        JOIN warehouse_locations wl ON ib.location_id = wl.id
+        JOIN business_items bi ON ib.product_id = bi.id
+        WHERE wl.zone = ? AND ib.status = 'active' AND ib.quantity_available > 0
+    ");
+    $stmt->execute([$selectedZone]);
+    $batches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    foreach ($batches as $batch) {
+        $key = $batch['shelf'] . '-' . $batch['bin'];
+        if (!isset($productsInLocations[$key])) {
+            $productsInLocations[$key] = [];
+        }
+        $productsInLocations[$key][] = $batch;
+    }
+} catch (Exception $e) {
+    // Table might not exist
+}
+
+/**
+ * Get cell status and color
+ */
+function getCellStatus($location, $products) {
+    if (!$location) return ['status' => 'none', 'color' => 'gray-200', 'text' => 'ไม่มี'];
+    
+    $utilization = $location['capacity'] > 0 ? ($location['current_qty'] / $location['capacity']) * 100 : 0;
+    
+    if (empty($products)) {
+        return ['status' => 'empty', 'color' => 'green-100', 'text' => 'ว่าง', 'border' => 'green-300'];
+    }
+    
+    // Check for expiring products
+    $hasExpiring = false;
+    foreach ($products as $p) {
+        if (isset($p['days_until_expiry']) && $p['days_until_expiry'] <= 30) {
+            $hasExpiring = true;
+            break;
+        }
+    }
+    
+    if ($hasExpiring) {
+        return ['status' => 'expiring', 'color' => 'red-100', 'text' => 'ใกล้หมดอายุ', 'border' => 'red-400'];
+    }
+    
+    if ($utilization >= 90) {
+        return ['status' => 'full', 'color' => 'orange-100', 'text' => 'เกือบเต็ม', 'border' => 'orange-400'];
+    }
+    
+    return ['status' => 'occupied', 'color' => 'blue-100', 'text' => 'มีสินค้า', 'border' => 'blue-400'];
+}
+?>
+
+<div class="space-y-6">
+    <!-- Zone Selector -->
+    <div class="bg-white rounded-xl shadow p-4">
+        <div class="flex flex-wrap items-center gap-4">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-warehouse text-blue-500"></i>
+                <span class="font-medium">เลือกโซน:</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <?php foreach ($zones as $zone): ?>
+                <a href="?tab=planogram&zone=<?= urlencode($zone['zone']) ?>" 
+                   class="px-4 py-2 rounded-lg <?= $selectedZone === $zone['zone'] ? 'bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200' ?>">
+                    <?= htmlspecialchars($zone['zone']) ?>
+                    <span class="text-xs opacity-75">(<?= $zone['location_count'] ?>)</span>
+                </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+
+    <?php if ($selectedZone && $maxShelf > 0): ?>
+    <!-- Legend -->
+    <div class="bg-white rounded-xl shadow p-4">
+        <div class="flex flex-wrap items-center gap-4 text-sm">
+            <span class="font-medium">สถานะ:</span>
+            <div class="flex items-center gap-1">
+                <div class="w-4 h-4 bg-green-100 border-2 border-green-300 rounded"></div>
+                <span>ว่าง</span>
+            </div>
+            <div class="flex items-center gap-1">
+                <div class="w-4 h-4 bg-blue-100 border-2 border-blue-400 rounded"></div>
+                <span>มีสินค้า</span>
+            </div>
+            <div class="flex items-center gap-1">
+                <div class="w-4 h-4 bg-orange-100 border-2 border-orange-400 rounded"></div>
+                <span>เกือบเต็ม</span>
+            </div>
+            <div class="flex items-center gap-1">
+                <div class="w-4 h-4 bg-red-100 border-2 border-red-400 rounded"></div>
+                <span>ใกล้หมดอายุ</span>
+            </div>
+            <div class="flex items-center gap-1">
+                <div class="w-4 h-4 bg-gray-200 border-2 border-gray-300 rounded"></div>
+                <span>ไม่มีตำแหน่ง</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Planogram Grid -->
+    <div class="bg-white rounded-xl shadow p-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-lg">
+                <i class="fas fa-th mr-2 text-blue-500"></i>
+                ผังชั้นวาง: โซน <?= htmlspecialchars($selectedZone) ?>
+            </h2>
+            <div class="text-sm text-gray-500">
+                <?= $maxShelf ?> ชั้น × <?= $maxBin ?> ช่อง
+            </div>
+        </div>
+        
+        <!-- Shelf Visual - Display from top shelf to bottom -->
+        <div class="overflow-x-auto">
+            <div class="min-w-max">
+                <!-- Column Headers (Bin numbers) -->
+                <div class="flex items-center mb-2">
+                    <div class="w-16 text-center text-xs text-gray-500 font-medium">ชั้น/ช่อง</div>
+                    <?php for ($bin = 1; $bin <= $maxBin; $bin++): ?>
+                    <div class="w-24 text-center text-xs text-gray-500 font-medium"><?= $bin ?></div>
+                    <?php endfor; ?>
+                </div>
+                
+                <!-- Shelves (from top to bottom) -->
+                <?php for ($shelf = $maxShelf; $shelf >= 1; $shelf--): ?>
+                <div class="flex items-stretch mb-1">
+                    <!-- Shelf Label -->
+                    <div class="w-16 flex items-center justify-center bg-gray-100 rounded-l-lg text-sm font-medium">
+                        ชั้น <?= $shelf ?>
+                        <?php 
+                        // Ergonomic indicator
+                        $ergonomic = '';
+                        if ($shelf == ceil($maxShelf / 2) || $shelf == ceil($maxShelf / 2) + 1) {
+                            $ergonomic = '⭐';
+                        }
+                        echo $ergonomic;
+                        ?>
+                    </div>
+                    
+                    <!-- Bins -->
+                    <?php for ($bin = 1; $bin <= $maxBin; $bin++): 
+                        $location = $shelfData[$shelf][$bin] ?? null;
+                        $key = $shelf . '-' . $bin;
+                        $products = $productsInLocations[$key] ?? [];
+                        $cellStatus = getCellStatus($location, $products);
+                    ?>
+                    <div class="w-24 h-20 p-1 border-r border-gray-200 last:border-r-0">
+                        <?php if ($location): ?>
+                        <div onclick="showLocationDetail(<?= $location['id'] ?>)" 
+                             class="w-full h-full bg-<?= $cellStatus['color'] ?> border-2 border-<?= $cellStatus['border'] ?? 'gray-300' ?> 
+                                    rounded-lg cursor-pointer hover:shadow-md transition-all flex flex-col items-center justify-center p-1">
+                            <div class="text-xs font-mono font-bold text-gray-700"><?= $location['location_code'] ?></div>
+                            <?php if (!empty($products)): ?>
+                            <div class="text-xs text-center truncate w-full mt-1" title="<?= htmlspecialchars($products[0]['product_name']) ?>">
+                                <?= mb_substr($products[0]['product_name'], 0, 8) ?>...
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                <?= count($products) > 1 ? '+' . (count($products) - 1) . ' more' : $products[0]['quantity_available'] . ' ชิ้น' ?>
+                            </div>
+                            <?php else: ?>
+                            <div class="text-xs text-green-600 mt-1">ว่าง</div>
+                            <div class="text-xs text-gray-400"><?= $location['capacity'] ?> ชิ้น</div>
+                            <?php endif; ?>
+                        </div>
+                        <?php else: ?>
+                        <div class="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg 
+                                    flex items-center justify-center text-gray-400 text-xs">
+                            -
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php endfor; ?>
+                </div>
+                <?php endfor; ?>
+                
+                <!-- Floor indicator -->
+                <div class="flex items-center mt-2 pt-2 border-t-4 border-gray-400">
+                    <div class="w-16"></div>
+                    <div class="flex-1 text-center text-gray-500 text-sm">
+                        <i class="fas fa-arrow-down mr-1"></i> พื้น
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <?php else: ?>
+    <div class="bg-white rounded-xl shadow p-8 text-center text-gray-500">
+        <i class="fas fa-warehouse text-4xl mb-3"></i>
+        <p>ไม่พบข้อมูลตำแหน่งจัดเก็บ</p>
+        <p class="text-sm mt-2">กรุณาสร้างตำแหน่งใน tab "ตำแหน่งจัดเก็บ" ก่อน</p>
+    </div>
+    <?php endif; ?>
+</div>
+
+<!-- Location Detail Modal -->
+<div id="locationDetailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-4 border-b flex justify-between items-center">
+            <h3 class="font-semibold text-lg"><i class="fas fa-map-marker-alt mr-2 text-blue-500"></i>รายละเอียดตำแหน่ง</h3>
+            <button onclick="closeLocationDetailModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="locationDetailContent" class="p-4">
+            <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showLocationDetail(locationId) {
+    document.getElementById('locationDetailModal').classList.remove('hidden');
+    document.getElementById('locationDetailContent').innerHTML = `
+        <div class="text-center py-8">
+            <i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i>
+            <p class="text-gray-500 mt-2">กำลังโหลด...</p>
+        </div>
+    `;
+    
+    fetch(`../api/locations.php?action=get&id=${locationId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const loc = data.location;
+                const cap = data.location.capacity_info || {};
+                const utilization = loc.capacity > 0 ? ((loc.current_qty / loc.capacity) * 100).toFixed(1) : 0;
+                
+                document.getElementById('locationDetailContent').innerHTML = `
+                    <div class="space-y-4">
+                        <div class="text-center">
+                            <div class="text-3xl font-mono font-bold text-blue-600">${loc.location_code}</div>
+                            <div class="text-gray-500">โซน ${loc.zone} | ชั้น ${loc.shelf} | ช่อง ${loc.bin}</div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div class="bg-blue-50 rounded-lg p-3">
+                                <div class="text-2xl font-bold text-blue-600">${loc.current_qty}</div>
+                                <div class="text-sm text-blue-500">จำนวนปัจจุบัน</div>
+                            </div>
+                            <div class="bg-green-50 rounded-lg p-3">
+                                <div class="text-2xl font-bold text-green-600">${loc.capacity}</div>
+                                <div class="text-sm text-green-500">ความจุสูงสุด</div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>การใช้งาน</span>
+                                <span>${utilization}%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-blue-500 h-2 rounded-full" style="width: ${Math.min(100, utilization)}%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            <button onclick="assignToLocation(${loc.id})" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                <i class="fas fa-plus mr-1"></i>จัดเก็บสินค้า
+                            </button>
+                            <button onclick="viewLocationHistory(${loc.id})" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
+                                <i class="fas fa-history"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                document.getElementById('locationDetailContent').innerHTML = `
+                    <div class="text-center py-8 text-red-500">
+                        <i class="fas fa-exclamation-circle text-3xl mb-2"></i>
+                        <p>${data.error || 'ไม่สามารถโหลดข้อมูลได้'}</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('locationDetailContent').innerHTML = `
+                <div class="text-center py-8 text-red-500">
+                    <i class="fas fa-exclamation-circle text-3xl mb-2"></i>
+                    <p>เกิดข้อผิดพลาด</p>
+                </div>
+            `;
+        });
+}
+
+function closeLocationDetailModal() {
+    document.getElementById('locationDetailModal').classList.add('hidden');
+}
+
+function assignToLocation(locationId) {
+    closeLocationDetailModal();
+    // Redirect to put-away tab with location pre-selected
+    window.location.href = `?tab=put-away&location_id=${locationId}`;
+}
+
+function viewLocationHistory(locationId) {
+    alert('ฟีเจอร์ประวัติการเคลื่อนไหวจะเพิ่มในเวอร์ชันถัดไป');
+}
+</script>
