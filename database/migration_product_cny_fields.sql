@@ -10,6 +10,7 @@ ALTER TABLE business_items ADD COLUMN IF NOT EXISTS usage_instructions TEXT NULL
 ALTER TABLE business_items ADD COLUMN IF NOT EXISTS manufacturer VARCHAR(255) NULL COMMENT 'ผู้ผลิต';
 ALTER TABLE business_items ADD COLUMN IF NOT EXISTS barcode VARCHAR(100) NULL;
 ALTER TABLE business_items ADD COLUMN IF NOT EXISTS unit VARCHAR(100) NULL COMMENT 'หน่วยจำนวน เช่น ขวด[ 60ML ]';
+ALTER TABLE business_items ADD COLUMN IF NOT EXISTS base_unit VARCHAR(50) NULL COMMENT 'หน่วยนับ เช่น ขวด, กล่อง, แผง';
 
 -- Add index for barcode search
 CREATE INDEX IF NOT EXISTS idx_business_items_barcode ON business_items(barcode);

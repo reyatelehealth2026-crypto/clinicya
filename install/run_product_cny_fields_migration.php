@@ -25,7 +25,8 @@ try {
         'usage_instructions' => "ALTER TABLE business_items ADD COLUMN usage_instructions TEXT NULL COMMENT 'วิธีใช้'",
         'manufacturer' => "ALTER TABLE business_items ADD COLUMN manufacturer VARCHAR(255) NULL COMMENT 'ผู้ผลิต'",
         'barcode' => "ALTER TABLE business_items ADD COLUMN barcode VARCHAR(100) NULL",
-        'unit' => "ALTER TABLE business_items ADD COLUMN unit VARCHAR(100) NULL COMMENT 'หน่วยจำนวน'"
+        'unit' => "ALTER TABLE business_items ADD COLUMN unit VARCHAR(100) NULL COMMENT 'หน่วยจำนวน'",
+        'base_unit' => "ALTER TABLE business_items ADD COLUMN base_unit VARCHAR(50) NULL COMMENT 'หน่วยนับ เช่น ขวด, กล่อง, แผง'"
     ];
     
     foreach ($migrations as $col => $sql) {

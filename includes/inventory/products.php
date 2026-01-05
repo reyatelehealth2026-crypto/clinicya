@@ -98,14 +98,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tablesExist) {
         ];
         
         // Extended fields for CNY API compatibility
-        $cols = array_merge($cols, ['barcode', 'manufacturer', 'generic_name', 'usage_instructions', 'unit', 'name_en']);
+        $cols = array_merge($cols, ['barcode', 'manufacturer', 'generic_name', 'usage_instructions', 'unit', 'name_en', 'base_unit']);
         $data = array_merge($data, [
             $_POST['barcode'] ?: null,
             $_POST['manufacturer'] ?: null,
             $_POST['generic_name'] ?: null,
             $_POST['usage_instructions'] ?: null,
             $_POST['unit'] ?: null,
-            $_POST['name_en'] ?: null
+            $_POST['name_en'] ?: null,
+            $_POST['base_unit'] ?: null
         ]);
         
         if ($hasItemType) {
@@ -711,10 +712,14 @@ function productSortLink($column, $label) {
                             </div>
                         </div>
                         
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-3 gap-3">
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">Stock คงเหลือ</label>
                                 <input type="number" id="stock" value="0" readonly class="w-full px-2 py-1.5 border rounded-lg text-sm bg-gray-100 cursor-not-allowed" title="Stock จะเปลี่ยนผ่านการรับสินค้า/ขาย/ปรับ Stock เท่านั้น">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">หน่วยนับ</label>
+                                <input type="text" name="base_unit" id="base_unit" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="ขวด, กล่อง, แผง">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">หน่วยจำนวน</label>
@@ -791,6 +796,7 @@ function editProduct(product) {
     
     if (document.getElementById('barcode')) document.getElementById('barcode').value = product.barcode || '';
     if (document.getElementById('unit')) document.getElementById('unit').value = product.unit || '';
+    if (document.getElementById('base_unit')) document.getElementById('base_unit').value = product.base_unit || '';
     if (document.getElementById('name_en')) document.getElementById('name_en').value = product.name_en || '';
     if (document.getElementById('generic_name')) document.getElementById('generic_name').value = product.generic_name || '';
     if (document.getElementById('usage_instructions')) document.getElementById('usage_instructions').value = product.usage_instructions || '';
