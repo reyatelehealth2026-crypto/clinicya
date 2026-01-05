@@ -38,11 +38,13 @@ if ($selectedZone) {
     }
 }
 
-// Get products in locations for this zone
+// Get products in locations for this zone (with actual stock from business_items)
 $productsInLocations = [];
 try {
     $stmt = $db->prepare("
-        SELECT ib.*, wl.location_code, wl.shelf, wl.bin, bi.name as product_name, bi.sku
+        SELECT ib.*, wl.location_code, wl.shelf, wl.bin, 
+               bi.name as product_name, bi.sku, bi.stock as actual_stock,
+               DATEDIFF(ib.expiry_date, CURDATE()) as days_until_expiry
         FROM inventory_batches ib
         JOIN warehouse_locations wl ON ib.location_id = wl.id
         JOIN business_items bi ON ib.product_id = bi.id
@@ -199,9 +201,15 @@ function getCellStatus($location, $products) {
                             <div class="text-xs text-center truncate w-full mt-1" title="<?= htmlspecialchars($products[0]['product_name']) ?>">
                                 <?= mb_substr($products[0]['product_name'], 0, 8) ?>...
                             </div>
-                            <div class="text-xs text-gray-500">
-                                <?= count($products) > 1 ? '+' . (count($products) - 1) . ' more' : $products[0]['quantity_available'] . ' ชิ้น' ?>
+                            <div class="text-xs font-medium text-blue-600">
+                                <?= $products[0]['quantity_available'] ?> ชิ้น
                             </div>
+                            <div class="text-xs text-gray-500" title="คงเหลือในระบบ">
+                                (คงเหลือ <?= number_format($products[0]['actual_stock'] ?? 0) ?>)
+                            </div>
+                            <?php if (count($products) > 1): ?>
+                            <div class="text-xs text-purple-500">+<?= count($products) - 1 ?> รายการ</div>
+                            <?php endif; ?>
                             <?php else: ?>
                             <div class="text-xs text-green-600 mt-1">ว่าง</div>
                             <div class="text-xs text-gray-400"><?= $location['capacity'] ?> ชิ้น</div>
@@ -514,7 +522,72 @@ document.getElementById('assignProductForm').addEventListener('submit', async fu
 });
 
 function viewLocationProducts(locationId) {
-    alert('ฟีเจอร์ดูสินค้าในตำแหน่งจะเพิ่มในเวอร์ชันถัดไป');
+    document.getElementById('locationDetailContent').innerHTML = `
+        <div class="text-center py-8">
+            <i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i>
+            <p class="text-gray-500 mt-2">กำลังโหลดสินค้า...</p>
+        </div>
+    `;
+    
+    fetch(`../api/put-away.php?action=get_location_products&location_id=${locationId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.products.length > 0) {
+                let html = `
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <h4 class="font-medium">สินค้าในตำแหน่งนี้</h4>
+                            <button onclick="showLocationDetail(${locationId})" class="text-blue-600 text-sm hover:underline">
+                                <i class="fas fa-arrow-left mr-1"></i>กลับ
+                            </button>
+                        </div>
+                `;
+                
+                data.products.forEach(p => {
+                    const expiryClass = p.days_until_expiry <= 30 ? 'text-red-600' : (p.days_until_expiry <= 90 ? 'text-orange-600' : 'text-gray-500');
+                    html += `
+                        <div class="border rounded-lg p-3">
+                            <div class="font-medium">${escapeHtml(p.product_name)}</div>
+                            <div class="text-sm text-gray-500">SKU: ${escapeHtml(p.sku || '-')}</div>
+                            <div class="grid grid-cols-2 gap-2 mt-2 text-sm">
+                                <div class="bg-blue-50 rounded p-2 text-center">
+                                    <div class="text-blue-600 font-bold">${p.quantity_available}</div>
+                                    <div class="text-xs text-blue-500">ในตำแหน่งนี้</div>
+                                </div>
+                                <div class="bg-green-50 rounded p-2 text-center">
+                                    <div class="text-green-600 font-bold">${p.actual_stock}</div>
+                                    <div class="text-xs text-green-500">คงเหลือทั้งหมด</div>
+                                </div>
+                            </div>
+                            ${p.batch_number ? `<div class="text-xs text-gray-500 mt-2">Batch: ${escapeHtml(p.batch_number)}</div>` : ''}
+                            ${p.expiry_date ? `<div class="text-xs ${expiryClass} mt-1">หมดอายุ: ${p.expiry_date} (${p.days_until_expiry} วัน)</div>` : ''}
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                document.getElementById('locationDetailContent').innerHTML = html;
+            } else {
+                document.getElementById('locationDetailContent').innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-box-open text-3xl mb-2"></i>
+                        <p>ไม่มีสินค้าในตำแหน่งนี้</p>
+                        <button onclick="showLocationDetail(${locationId})" class="mt-3 text-blue-600 hover:underline">
+                            <i class="fas fa-arrow-left mr-1"></i>กลับ
+                        </button>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('locationDetailContent').innerHTML = `
+                <div class="text-center py-8 text-red-500">
+                    <i class="fas fa-exclamation-circle text-3xl mb-2"></i>
+                    <p>เกิดข้อผิดพลาด</p>
+                </div>
+            `;
+        });
 }
 
 // Close results when clicking outside

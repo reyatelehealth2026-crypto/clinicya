@@ -388,6 +388,39 @@ try {
             break;
         
         // =============================================
+        // GET PRODUCTS IN LOCATION (with actual stock)
+        // =============================================
+        
+        /**
+         * Get all products in a specific location with actual stock
+         */
+        case 'get_location_products':
+            $locationId = (int)($_GET['location_id'] ?? 0);
+            
+            if (!$locationId) {
+                throw new Exception('Location ID is required');
+            }
+            
+            $stmt = $db->prepare("
+                SELECT ib.*, 
+                       bi.name as product_name, bi.sku, bi.stock as actual_stock,
+                       DATEDIFF(ib.expiry_date, CURDATE()) as days_until_expiry
+                FROM inventory_batches ib
+                JOIN business_items bi ON ib.product_id = bi.id
+                WHERE ib.location_id = ? AND ib.status = 'active' AND ib.quantity_available > 0
+                ORDER BY ib.expiry_date ASC, bi.name ASC
+            ");
+            $stmt->execute([$locationId]);
+            $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            echo json_encode([
+                'success' => true,
+                'products' => $products,
+                'count' => count($products)
+            ]);
+            break;
+        
+        // =============================================
         // DEFAULT
         // =============================================
         
