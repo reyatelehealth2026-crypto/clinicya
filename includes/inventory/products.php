@@ -626,122 +626,132 @@ function productSortLink($column, $label) {
 
 <!-- Product Modal -->
 <div id="productModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-xl w-full max-w-4xl mx-4 max-h-[95vh] overflow-hidden flex flex-col">
+    <div class="bg-white rounded-xl w-full max-w-5xl mx-4 max-h-[95vh] overflow-hidden flex flex-col">
         <form method="POST" id="productForm">
             <input type="hidden" name="action" id="formAction" value="create">
             <input type="hidden" name="id" id="formId">
             
-            <div class="px-6 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white flex justify-between items-center">
+            <div class="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white flex justify-between items-center">
                 <h3 class="text-lg font-semibold" id="modalTitle">เพิ่มสินค้า</h3>
                 <button type="button" onclick="closeProductModal()" class="text-white hover:text-blue-200 text-2xl"><i class="fas fa-times"></i></button>
             </div>
             
-            <div class="flex-1 overflow-y-auto p-6 space-y-4">
-                <!-- Basic Info -->
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">รหัสสินค้า (SKU)</label>
-                        <input type="text" name="sku" id="sku" class="w-full px-3 py-2 border rounded-lg">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">บาร์โค้ด</label>
-                        <input type="text" name="barcode" id="barcode" class="w-full px-3 py-2 border rounded-lg">
-                    </div>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อสินค้า *</label>
-                    <input type="text" name="name" id="name" required class="w-full px-3 py-2 border rounded-lg">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อภาษาอังกฤษ</label>
-                    <input type="text" name="name_en" id="name_en" class="w-full px-3 py-2 border rounded-lg" placeholder="English name">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อสามัญ / Generic Name</label>
-                    <input type="text" name="generic_name" id="generic_name" class="w-full px-3 py-2 border rounded-lg" placeholder="เช่น IBUPROFEN 100 MG/5 ML">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
-                    <select name="category_id" id="category_id" class="w-full px-3 py-2 border rounded-lg">
-                        <option value="">-- เลือก --</option>
-                        <?php foreach ($categories as $cat): ?>
-                        <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">รายละเอียด / สรรพคุณ</label>
-                    <textarea name="description" id="description" rows="2" class="w-full px-3 py-2 border rounded-lg" placeholder="สรรพคุณ, คุณสมบัติ"></textarea>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">วิธีใช้</label>
-                    <textarea name="usage_instructions" id="usage_instructions" rows="2" class="w-full px-3 py-2 border rounded-lg" placeholder="วิธีรับประทาน, ขนาดยา"></textarea>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">URL รูปภาพ</label>
-                    <input type="url" name="image_url" id="image_url" class="w-full px-3 py-2 border rounded-lg" placeholder="https://...">
-                </div>
-                
-                <!-- Price & Stock -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">ราคา *</label>
-                        <input type="number" name="price" id="price" required min="0" step="0.01" class="w-full px-3 py-2 border rounded-lg">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">ราคาลด</label>
-                        <input type="number" name="sale_price" id="sale_price" min="0" step="0.01" class="w-full px-3 py-2 border rounded-lg">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">จำนวน (Stock)</label>
-                        <input type="number" name="stock" id="stock" value="0" min="0" class="w-full px-3 py-2 border rounded-lg">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">หน่วยจำนวน</label>
-                        <input type="text" name="unit" id="unit" class="w-full px-3 py-2 border rounded-lg" placeholder="เช่น ขวด[ 60ML ], กล่อง[ 10เม็ด ]">
-                    </div>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">ผู้ผลิต / Manufacturer</label>
-                    <input type="text" name="manufacturer" id="manufacturer" class="w-full px-3 py-2 border rounded-lg">
-                </div>
-                
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" name="is_active" id="is_active" checked class="w-4 h-4 text-green-500">
-                    <label for="is_active" class="text-sm">เปิดขาย</label>
-                </div>
-                
-                <!-- Promotion Settings -->
-                <div class="p-4 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg border border-orange-200">
-                    <h4 class="text-sm font-semibold text-orange-700 mb-3"><i class="fas fa-star mr-2"></i>ตั้งค่าโปรโมชั่น</h4>
-                    <div class="grid grid-cols-3 gap-4">
-                        <div class="flex items-center gap-2">
-                            <input type="checkbox" name="is_featured" id="is_featured" class="w-4 h-4 text-orange-500">
-                            <label for="is_featured" class="text-sm"><i class="fas fa-thumbs-up text-orange-500 mr-1"></i>สินค้าแนะนำ</label>
+            <div class="flex-1 overflow-y-auto p-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Left Column -->
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">รหัสสินค้า (SKU)</label>
+                                <input type="text" name="sku" id="sku" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">บาร์โค้ด</label>
+                                <input type="text" name="barcode" id="barcode" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <input type="checkbox" name="is_flash_sale" id="is_flash_sale" class="w-4 h-4 text-red-500">
-                            <label for="is_flash_sale" class="text-sm"><i class="fas fa-bolt text-red-500 mr-1"></i>Flash Sale</label>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">ชื่อสินค้า *</label>
+                            <input type="text" name="name" id="name" required class="w-full px-2 py-1.5 border rounded-lg text-sm">
                         </div>
-                        <div class="flex items-center gap-2">
-                            <input type="checkbox" name="is_choice" id="is_choice" class="w-4 h-4 text-blue-500">
-                            <label for="is_choice" class="text-sm"><i class="fas fa-award text-blue-500 mr-1"></i>Choice</label>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">ชื่อภาษาอังกฤษ</label>
+                            <input type="text" name="name_en" id="name_en" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="English name">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">ชื่อสามัญ / Generic Name</label>
+                            <input type="text" name="generic_name" id="generic_name" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="เช่น IBUPROFEN 100 MG/5 ML">
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">หมวดหมู่</label>
+                                <select name="category_id" id="category_id" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                                    <option value="">-- เลือก --</option>
+                                    <?php foreach ($categories as $cat): ?>
+                                    <option value="<?= $cat['id'] ?>"><?= htmlspecialchars($cat['name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ผู้ผลิต</label>
+                                <input type="text" name="manufacturer" id="manufacturer" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">รายละเอียด / สรรพคุณ</label>
+                            <textarea name="description" id="description" rows="2" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="สรรพคุณ, คุณสมบัติ"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">วิธีใช้</label>
+                            <textarea name="usage_instructions" id="usage_instructions" rows="2" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="วิธีรับประทาน, ขนาดยา"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column -->
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">URL รูปภาพ</label>
+                            <input type="url" name="image_url" id="image_url" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="https://...">
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ราคา *</label>
+                                <input type="number" name="price" id="price" required min="0" step="0.01" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ราคาลด</label>
+                                <input type="number" name="sale_price" id="sale_price" min="0" step="0.01" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">จำนวน (Stock)</label>
+                                <input type="number" name="stock" id="stock" value="0" min="0" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">หน่วยจำนวน</label>
+                                <input type="text" name="unit" id="unit" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="ขวด[ 60ML ]">
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center gap-2 py-2">
+                            <input type="checkbox" name="is_active" id="is_active" checked class="w-4 h-4 text-green-500">
+                            <label for="is_active" class="text-sm">เปิดขาย</label>
+                        </div>
+                        
+                        <!-- Promotion Settings -->
+                        <div class="p-3 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg border border-orange-200">
+                            <h4 class="text-xs font-semibold text-orange-700 mb-2"><i class="fas fa-star mr-1"></i>ตั้งค่าโปรโมชั่น</h4>
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" name="is_featured" id="is_featured" class="w-4 h-4 text-orange-500">
+                                    <label for="is_featured" class="text-xs"><i class="fas fa-thumbs-up text-orange-500 mr-1"></i>สินค้าแนะนำ</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" name="is_flash_sale" id="is_flash_sale" class="w-4 h-4 text-red-500">
+                                    <label for="is_flash_sale" class="text-xs"><i class="fas fa-bolt text-red-500 mr-1"></i>Flash Sale</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" name="is_choice" id="is_choice" class="w-4 h-4 text-blue-500">
+                                    <label for="is_choice" class="text-xs"><i class="fas fa-award text-blue-500 mr-1"></i>Choice</label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <div class="px-6 py-4 border-t flex justify-end space-x-2">
-                <button type="button" onclick="closeProductModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">ยกเลิก</button>
-                <button type="submit" class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"><i class="fas fa-save mr-2"></i>บันทึก</button>
+            <div class="px-4 py-3 border-t flex justify-end space-x-2">
+                <button type="button" onclick="closeProductModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm">ยกเลิก</button>
+                <button type="submit" class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"><i class="fas fa-save mr-1"></i>บันทึก</button>
             </div>
         </form>
     </div>
