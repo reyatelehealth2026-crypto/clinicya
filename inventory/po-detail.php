@@ -226,19 +226,23 @@ $statusColors = [
             <button onclick="closeAddItemModal()" class="p-2 hover:bg-gray-100 rounded"><i class="fas fa-times"></i></button>
         </div>
         <form id="addItemForm" class="p-4 space-y-4">
-            <div>
+            <div class="relative">
                 <label class="block text-sm font-medium mb-1">สินค้า *</label>
-                <select name="product_id" required class="w-full px-3 py-2 border rounded-lg" onchange="onProductChange(this)">
-                    <option value="">-- เลือกสินค้า --</option>
-                    <?php foreach ($products as $p): ?>
-                    <option value="<?= $p['id'] ?>" 
-                            data-cost="<?= $p['cost_price'] ?? 0 ?>" 
-                            data-unit="<?= htmlspecialchars($p['unit'] ?? 'ชิ้น') ?>"
-                            data-has-units="<?= isset($productUnits[$p['id']]) ? '1' : '0' ?>">
-                        <?= htmlspecialchars($p['name']) ?> (<?= $p['sku'] ?>) - Stock: <?= $p['stock'] ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
+                <input type="text" 
+                       id="productSearch" 
+                       placeholder="พิมพ์ชื่อหรือ SKU เพื่อค้นหา..." 
+                       autocomplete="off"
+                       class="w-full px-3 py-2 border rounded-lg">
+                <input type="hidden" name="product_id" id="selectedProductId" required>
+                <div id="productSearchResults" class="absolute z-10 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto hidden"></div>
+                <div id="selectedProduct" class="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg hidden">
+                    <div class="flex justify-between items-center">
+                        <span id="selectedProductName" class="text-sm font-medium text-green-800"></span>
+                        <button type="button" onclick="clearSelectedProduct()" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
             
             <!-- Unit Selection (shown if product has multiple units) -->
@@ -278,38 +282,98 @@ $statusColors = [
 <script>
 const poId = <?= $poId ?>;
 const productUnits = <?= json_encode($productUnits) ?>;
+const allProducts = <?= json_encode($products) ?>;
 
 function openAddItemModal() {
     document.getElementById('addItemForm').reset();
+    document.getElementById('selectedProductId').value = '';
+    document.getElementById('productSearch').value = '';
+    document.getElementById('selectedProduct').classList.add('hidden');
+    document.getElementById('productSearchResults').classList.add('hidden');
     document.getElementById('unitSelectDiv').classList.add('hidden');
     document.getElementById('defaultUnitDiv').classList.remove('hidden');
     document.getElementById('addItemModal').classList.remove('hidden');
     document.getElementById('addItemModal').classList.add('flex');
+    setTimeout(() => document.getElementById('productSearch').focus(), 100);
 }
 function closeAddItemModal() {
     document.getElementById('addItemModal').classList.add('hidden');
     document.getElementById('addItemModal').classList.remove('flex');
 }
 
-function onProductChange(select) {
-    const option = select.options[select.selectedIndex];
-    const cost = option.dataset.cost || 0;
-    const unit = option.dataset.unit || 'ชิ้น';
-    const hasUnits = option.dataset.hasUnits === '1';
-    const productId = select.value;
+// Product search functionality
+const productSearchInput = document.getElementById('productSearch');
+const productSearchResults = document.getElementById('productSearchResults');
+let searchTimeout;
+
+productSearchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value.trim().toLowerCase();
     
+    if (query.length < 1) {
+        productSearchResults.classList.add('hidden');
+        return;
+    }
+    
+    searchTimeout = setTimeout(() => {
+        const filtered = allProducts.filter(p => 
+            p.name.toLowerCase().includes(query) || 
+            (p.sku && p.sku.toLowerCase().includes(query))
+        ).slice(0, 10);
+        
+        if (filtered.length === 0) {
+            productSearchResults.innerHTML = '<div class="p-3 text-gray-500 text-sm">ไม่พบสินค้า</div>';
+        } else {
+            productSearchResults.innerHTML = filtered.map(p => `
+                <div class="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-b-0" 
+                     onclick="selectProduct(${p.id}, '${escapeHtml(p.name)}', '${p.sku || ''}', ${p.cost_price || 0}, '${escapeHtml(p.unit || 'ชิ้น')}', ${p.stock})">
+                    <div class="font-medium text-sm">${escapeHtml(p.name)}</div>
+                    <div class="text-xs text-gray-500">SKU: ${p.sku || '-'} | Stock: ${p.stock} | ราคาทุน: ฿${(p.cost_price || 0).toLocaleString()}</div>
+                </div>
+            `).join('');
+        }
+        productSearchResults.classList.remove('hidden');
+    }, 200);
+});
+
+productSearchInput.addEventListener('focus', function() {
+    if (this.value.trim().length >= 1) {
+        productSearchResults.classList.remove('hidden');
+    }
+});
+
+// Close search results when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#productSearch') && !e.target.closest('#productSearchResults')) {
+        productSearchResults.classList.add('hidden');
+    }
+});
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function selectProduct(id, name, sku, cost, unit, stock) {
+    document.getElementById('selectedProductId').value = id;
+    document.getElementById('selectedProductName').textContent = `${name} (${sku}) - Stock: ${stock}`;
+    document.getElementById('selectedProduct').classList.remove('hidden');
+    document.getElementById('productSearch').value = '';
+    document.getElementById('productSearchResults').classList.add('hidden');
     document.querySelector('[name="unit_cost"]').value = cost;
     
-    if (hasUnits && productUnits[productId] && productUnits[productId].length > 0) {
-        // Show unit select
+    // Check for product units
+    const hasUnits = productUnits[id] && productUnits[id].length > 0;
+    
+    if (hasUnits) {
         document.getElementById('unitSelectDiv').classList.remove('hidden');
         document.getElementById('defaultUnitDiv').classList.add('hidden');
         
-        // Populate units
         const unitSelect = document.getElementById('unitSelect');
         unitSelect.innerHTML = '<option value="">-- เลือกหน่วย --</option>';
         
-        productUnits[productId].forEach(u => {
+        productUnits[id].forEach(u => {
             const opt = document.createElement('option');
             opt.value = u.id;
             opt.dataset.cost = u.cost_price || cost;
@@ -319,13 +383,22 @@ function onProductChange(select) {
             unitSelect.appendChild(opt);
         });
     } else {
-        // Show default unit
         document.getElementById('unitSelectDiv').classList.add('hidden');
         document.getElementById('defaultUnitDiv').classList.remove('hidden');
         document.getElementById('defaultUnit').value = unit;
         document.getElementById('unitName').value = unit;
         document.getElementById('unitFactor').value = 1;
     }
+}
+
+function clearSelectedProduct() {
+    document.getElementById('selectedProductId').value = '';
+    document.getElementById('selectedProduct').classList.add('hidden');
+    document.getElementById('productSearch').value = '';
+    document.querySelector('[name="unit_cost"]').value = '';
+    document.getElementById('unitSelectDiv').classList.add('hidden');
+    document.getElementById('defaultUnitDiv').classList.remove('hidden');
+    document.getElementById('productSearch').focus();
 }
 
 function onUnitChange(select) {
@@ -337,13 +410,15 @@ function onUnitChange(select) {
     }
 }
 
-// Legacy function for backward compatibility
-function updateCost(select) {
-    onProductChange(select);
-}
-
 document.getElementById('addItemForm').addEventListener('submit', async function(e) {
     e.preventDefault();
+    
+    const productId = document.getElementById('selectedProductId').value;
+    if (!productId) {
+        alert('กรุณาเลือกสินค้า');
+        return;
+    }
+    
     const formData = new FormData(this);
     const data = Object.fromEntries(formData);
     data.po_id = poId;
@@ -404,9 +479,7 @@ async function updateItemCost(itemId, newCost) {
     const result = await res.json();
     
     if (result.success) {
-        // Update subtotal display
         document.getElementById('subtotal_' + itemId).textContent = '฿' + result.subtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        // Reload to update total
         setTimeout(() => location.reload(), 500);
     } else {
         alert(result.message || 'Error updating cost');
