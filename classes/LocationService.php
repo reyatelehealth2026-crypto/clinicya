@@ -265,16 +265,23 @@ class LocationService {
             throw new Exception('Cannot delete location with inventory. Current quantity: ' . $location['current_qty'], 400);
         }
         
-        // Check if any batches are assigned to this location
-        $stmt = $this->db->prepare("
-            SELECT COUNT(*) FROM inventory_batches 
-            WHERE location_id = ? AND status = 'active'
-        ");
-        $stmt->execute([$id]);
-        $batchCount = (int)$stmt->fetchColumn();
-        
-        if ($batchCount > 0) {
-            throw new Exception('Cannot delete location with active batches assigned', 400);
+        // Check if any batches are assigned to this location (if table exists)
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) FROM inventory_batches 
+                WHERE location_id = ? AND status = 'active'
+            ");
+            $stmt->execute([$id]);
+            $batchCount = (int)$stmt->fetchColumn();
+            
+            if ($batchCount > 0) {
+                throw new Exception('Cannot delete location with active batches assigned', 400);
+            }
+        } catch (PDOException $e) {
+            // Table might not exist yet, skip batch check
+            if (strpos($e->getMessage(), "doesn't exist") === false) {
+                throw $e;
+            }
         }
         
         // Soft delete
