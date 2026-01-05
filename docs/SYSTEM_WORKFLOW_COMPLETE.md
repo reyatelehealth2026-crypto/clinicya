@@ -692,3 +692,155 @@ POST /api/put-away.php
 **Document Version:** 2.0  
 **Generated:** January 2026  
 **System:** CLINICYA - Pharmacy Management System
+
+
+---
+
+## 11. SYSTEM ARCHITECTURE & STATISTICS
+
+### 📊 Project Statistics
+
+| Category | Files | Lines of Code |
+|----------|-------|---------------|
+| **PHP Files** | 467 | ~172,893 |
+| **JavaScript Files** | 23 | ~20,330 |
+| **CSS Files** | 3 | ~500 |
+| **SQL Files** | 8 | ~1,808 |
+| **Markdown Docs** | 65 | ~5,000 |
+| **Total** | **566+** | **~200,000+** |
+
+### 📁 Directory Structure
+
+```
+clinicya/
+├── 📂 api/                    (49 files)  - REST API Endpoints
+├── 📂 admin/                  (3 files)   - Admin Setup Pages
+├── 📂 assets/                            - Static Assets
+│   ├── css/                   (3 files)
+│   └── js/                    (23 files)
+├── 📂 auth/                   (4 files)   - Authentication
+├── 📂 classes/                (45 files)  - PHP Service Classes
+├── 📂 config/                 (6 files)   - Configuration
+├── 📂 cron/                   (14 files)  - Scheduled Jobs
+├── 📂 database/               (8 files)   - SQL Migrations
+├── 📂 docs/                              - Documentation
+├── 📂 includes/               (74 files)  - Tab Components
+│   ├── accounting/            (4 files)
+│   ├── analytics/             (3 files)
+│   ├── inventory/             (15 files)
+│   ├── pharmacy/              (4 files)
+│   ├── procurement/           (3 files)
+│   ├── rich-menu/             (3 files)
+│   ├── scheduled/             (2 files)
+│   ├── settings/              (5 files)
+│   └── shop/                  (4 files)
+├── 📂 install/                (38 files)  - Migration Scripts
+├── 📂 inventory/              (10 files)  - Inventory Pages
+├── 📂 liff/                   (1 file)    - LIFF SPA Entry
+├── 📂 modules/                (25 files)  - Feature Modules
+│   └── AIChat/                           - AI Pharmacy Module
+├── 📂 shop/                   (15 files)  - Shop Pages
+├── 📂 tests/                  (42 files)  - PHPUnit Tests
+├── 📂 user/                              - User Pages
+├── 📂 vendor/                            - Composer Dependencies
+└── 📄 *.php                   (50+ files) - Root Pages
+```
+
+### 🏗️ Architecture Pattern
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PRESENTATION LAYER                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
+│  │  Admin Panel │  │  LIFF Apps   │  │  LINE Chat   │  │   API        │    │
+│  │  (PHP/HTML)  │  │  (Vue.js)    │  │  (Webhook)   │  │  (REST)      │    │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘    │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                           BUSINESS LOGIC LAYER                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                        classes/ (Service Classes)                    │   │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐   │   │
+│  │  │ WMSService  │ │ BatchService│ │ LineAPI     │ │ AIAdapter   │   │   │
+│  │  │ PutAway     │ │ Location    │ │ Accounting  │ │ Triage      │   │   │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                        modules/ (Feature Modules)                    │   │
+│  │  ┌─────────────────────────────────────────────────────────────┐   │   │
+│  │  │  AIChat Module (Adapters, Services, Engines)                │   │   │
+│  │  └─────────────────────────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                           DATA ACCESS LAYER                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                      │
+│  │   Database   │  │  LINE API    │  │  OpenAI API  │                      │
+│  │   (MySQL)    │  │  (Messaging) │  │  (AI/Chat)   │                      │
+│  └──────────────┘  └──────────────┘  └──────────────┘                      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 🔧 Technology Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | HTML5, Tailwind CSS, Alpine.js, Vue.js (LIFF) |
+| **Backend** | PHP 8.x |
+| **Database** | MySQL 8.x / MariaDB |
+| **API** | REST JSON |
+| **Messaging** | LINE Messaging API, LINE LIFF |
+| **AI** | OpenAI GPT-4 |
+| **Testing** | PHPUnit |
+| **Server** | Apache/Nginx |
+
+### 📦 Key Service Classes
+
+| Class | Purpose | Lines |
+|-------|---------|-------|
+| `WMSService.php` | WMS Pick/Pack/Ship Logic | ~800 |
+| `BatchService.php` | Batch/Lot Management | ~400 |
+| `LocationService.php` | Location Management | ~350 |
+| `PutAwayService.php` | Put-Away Logic | ~300 |
+| `LineAPI.php` | LINE API Integration | ~900 |
+| `AccountingDashboardService.php` | Accounting Dashboard | ~500 |
+| `PharmacyAIAdapter.php` | AI Pharmacy Integration | ~900 |
+| `TriageEngine.php` | AI Triage Assessment | ~1,800 |
+
+### 🗄️ Database Tables Count
+
+| Category | Tables |
+|----------|--------|
+| Products & Inventory | 8 |
+| Procurement | 5 |
+| Sales & Orders | 4 |
+| WMS | 3 |
+| CRM & Users | 6 |
+| Pharmacy | 4 |
+| Accounting | 6 |
+| Settings & Config | 5 |
+| **Total** | **~41 tables** |
+
+### 🔌 External Integrations
+
+| Service | Purpose |
+|---------|---------|
+| LINE Messaging API | Chat, Push Messages |
+| LINE LIFF | In-app Web Views |
+| LINE Login | Authentication |
+| OpenAI API | AI Chatbot, Triage |
+| MIMS Database | Drug Information |
+
+---
+
+**Total Codebase:** ~200,000+ lines across 566+ files  
+**Architecture:** MVC-like with Service Layer  
+**Last Updated:** January 2026
