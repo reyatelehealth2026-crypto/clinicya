@@ -162,9 +162,9 @@ function getCellStatus($location, $products) {
             <div class="min-w-max">
                 <!-- Column Headers (Bin numbers) -->
                 <div class="flex items-center mb-2">
-                    <div class="w-16 text-center text-xs text-gray-500 font-medium">ชั้น/ช่อง</div>
+                    <div class="w-20 text-center text-xs text-gray-500 font-medium">ชั้น/ช่อง</div>
                     <?php for ($bin = 1; $bin <= $maxBin; $bin++): ?>
-                    <div class="w-24 text-center text-xs text-gray-500 font-medium"><?= $bin ?></div>
+                    <div class="w-36 text-center text-xs text-gray-500 font-medium"><?= $bin ?></div>
                     <?php endfor; ?>
                 </div>
                 
@@ -172,7 +172,7 @@ function getCellStatus($location, $products) {
                 <?php for ($shelf = $maxShelf; $shelf >= 1; $shelf--): ?>
                 <div class="flex items-stretch mb-1">
                     <!-- Shelf Label -->
-                    <div class="w-16 flex items-center justify-center bg-gray-100 rounded-l-lg text-sm font-medium">
+                    <div class="w-20 flex items-center justify-center bg-gray-100 rounded-l-lg text-sm font-medium">
                         ชั้น <?= $shelf ?>
                         <?php 
                         // Ergonomic indicator
@@ -191,32 +191,42 @@ function getCellStatus($location, $products) {
                         $products = $productsInLocations[$key] ?? [];
                         $cellStatus = getCellStatus($location, $products);
                     ?>
-                    <div class="w-24 h-20 p-1 border-r border-gray-200 last:border-r-0">
+                    <div class="w-36 min-h-28 p-1 border-r border-gray-200 last:border-r-0">
                         <?php if ($location): ?>
                         <div onclick="showLocationDetail(<?= $location['id'] ?>)" 
                              class="w-full h-full bg-<?= $cellStatus['color'] ?> border-2 border-<?= $cellStatus['border'] ?? 'gray-300' ?> 
-                                    rounded-lg cursor-pointer hover:shadow-md transition-all flex flex-col items-center justify-center p-1">
-                            <div class="text-xs font-mono font-bold text-gray-700"><?= $location['location_code'] ?></div>
-                            <?php if (!empty($products)): ?>
-                            <div class="text-xs text-center truncate w-full mt-1" title="<?= htmlspecialchars($products[0]['product_name']) ?>">
-                                <?= mb_substr($products[0]['product_name'], 0, 8) ?>...
+                                    rounded-lg cursor-pointer hover:shadow-md transition-all flex flex-col p-2">
+                            <div class="text-xs font-mono font-bold text-gray-700 text-center"><?= $location['location_code'] ?></div>
+                            <?php if (!empty($products)): 
+                                $product = $products[0];
+                                $productName = $product['product_name'];
+                            ?>
+                            <div class="flex-1 mt-1">
+                                <div class="text-sm font-medium text-gray-800 leading-tight line-clamp-2" title="<?= htmlspecialchars($productName) ?>">
+                                    <?= htmlspecialchars($productName) ?>
+                                </div>
+                                <?php if (!empty($product['sku'])): ?>
+                                <div class="text-xs text-gray-500 mt-0.5">SKU: <?= htmlspecialchars($product['sku']) ?></div>
+                                <?php endif; ?>
                             </div>
-                            <div class="text-xs font-medium text-blue-600">
-                                <?= $products[0]['quantity_available'] ?> ชิ้น
+                            <div class="mt-1 pt-1 border-t border-gray-200">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="font-bold text-blue-600"><?= $product['quantity_available'] ?> ชิ้น</span>
+                                    <span class="text-gray-500">(คงเหลือ <?= number_format($product['actual_stock'] ?? 0) ?>)</span>
+                                </div>
+                                <?php if (count($products) > 1): ?>
+                                <div class="text-xs text-purple-600 font-medium mt-0.5">+<?= count($products) - 1 ?> รายการอื่น</div>
+                                <?php endif; ?>
                             </div>
-                            <div class="text-xs text-gray-500" title="คงเหลือในระบบ">
-                                (คงเหลือ <?= number_format($products[0]['actual_stock'] ?? 0) ?>)
-                            </div>
-                            <?php if (count($products) > 1): ?>
-                            <div class="text-xs text-purple-500">+<?= count($products) - 1 ?> รายการ</div>
-                            <?php endif; ?>
                             <?php else: ?>
-                            <div class="text-xs text-green-600 mt-1">ว่าง</div>
-                            <div class="text-xs text-gray-400"><?= $location['capacity'] ?> ชิ้น</div>
+                            <div class="flex-1 flex flex-col items-center justify-center">
+                                <div class="text-sm text-green-600 font-medium">ว่าง</div>
+                                <div class="text-xs text-gray-400">ความจุ <?= $location['capacity'] ?> ชิ้น</div>
+                            </div>
                             <?php endif; ?>
                         </div>
                         <?php else: ?>
-                        <div class="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg 
+                        <div class="w-full h-full min-h-24 bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg 
                                     flex items-center justify-center text-gray-400 text-xs">
                             -
                         </div>
