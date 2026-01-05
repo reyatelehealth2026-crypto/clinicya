@@ -40,6 +40,7 @@ try {
          * Suggest optimal location for a product
          * Requirements: 4.1, 4.2
          */
+        case 'suggest':
         case 'suggest_location':
             $productId = (int)($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
             
@@ -55,6 +56,7 @@ try {
          * Suggest optimal location for a batch
          * Requirements: 4.1, 4.2
          */
+        case 'suggest_batch':
         case 'suggest_location_for_batch':
             $batchId = (int)($_GET['batch_id'] ?? $_POST['batch_id'] ?? 0);
             

@@ -57,7 +57,7 @@ class PutAwayService {
         if (!$product) {
             return [
                 'success' => false,
-                'error' => 'Product not found',
+                'error' => 'ไม่พบสินค้า',
                 'suggestions' => []
             ];
         }
@@ -72,17 +72,24 @@ class PutAwayService {
         // Build filters for location search
         $filters = [
             'zone_type' => $requiredZoneType,
-            'has_capacity' => true,
             'is_active' => 1
         ];
         
         // Get available locations
         $locations = $this->locationService->getLocations($filters);
         
+        // Fallback: if no locations found with required zone type, try all active locations
+        if (empty($locations)) {
+            $fallbackFilters = [
+                'is_active' => 1
+            ];
+            $locations = $this->locationService->getLocations($fallbackFilters);
+        }
+        
         if (empty($locations)) {
             return [
                 'success' => false,
-                'error' => 'No suitable locations available for zone type: ' . $requiredZoneType,
+                'error' => 'ไม่พบตำแหน่งจัดเก็บ กรุณาสร้างตำแหน่งใหม่ก่อน (ไปที่ tab ตำแหน่งจัดเก็บ)',
                 'suggestions' => [],
                 'product' => $product,
                 'required_zone_type' => $requiredZoneType
