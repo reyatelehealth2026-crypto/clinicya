@@ -363,8 +363,8 @@ $progress = round(($done / $total) * 100);
             }
             
             try {
-                // Build URL with reset param for first batch
-                let url = `api/sync_continuous.php?batch_size=${batchSize}`;
+                // Build URL - use sync-worker-run.php with api=1&mode=direct
+                let url = `sync-worker-run.php?api=1&mode=direct&batch_size=${batchSize}`;
                 if (resetOnStart && continuousSyncStats.batches === 0) {
                     url += '&reset=1';
                 }
@@ -383,8 +383,8 @@ $progress = round(($done / $total) * 100);
                     
                     // Update progress bar
                     if (data.progress) {
-                        const current = data.progress.offset + data.stats.processed;
-                        const total = data.progress.total_available;
+                        const current = data.progress.offset + (data.stats.processed || 0);
+                        const total = data.progress.total || 0;
                         const percent = total > 0 ? Math.round((current / total) * 100) : 0;
                         document.getElementById('syncProgressBar').style.width = percent + '%';
                         document.getElementById('syncProgressText').textContent = `${current.toLocaleString()} / ${total.toLocaleString()}`;
@@ -395,8 +395,8 @@ $progress = round(($done / $total) * 100);
                         addSyncLog(`✓ Batch #${continuousSyncStats.batches}: ${processed} รายการ (C:${data.stats.created} U:${data.stats.updated} S:${data.stats.skipped} F:${data.stats.failed})`, 'success');
                         
                         // Check if complete
-                        if (data.progress && data.progress.is_complete) {
-                            addSyncLog(`🎉 Sync เสร็จสมบูรณ์! ทั้งหมด ${data.progress.total_available} รายการ`, 'success');
+                        if (data.progress && data.progress.complete) {
+                            addSyncLog(`🎉 Sync เสร็จสมบูรณ์! ทั้งหมด ${data.progress.total} รายการ`, 'success');
                             document.getElementById('syncStatusBadge').textContent = 'เสร็จสมบูรณ์';
                             document.getElementById('syncStatusBadge').style.background = '#48bb78';
                             stopContinuousSync();
