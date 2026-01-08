@@ -24,10 +24,15 @@ try {
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
+// Debug log
+error_log("CSV Import - Action: " . $action);
+error_log("CSV Import - POST: " . json_encode($_POST));
+error_log("CSV Import - FILES: " . (isset($_FILES['csv_file']) ? $_FILES['csv_file']['name'] : 'none'));
+
 if ($action === 'import_csv') {
     importCsv($db);
 } else {
-    echo json_encode(['success' => false, 'error' => 'Invalid action']);
+    echo json_encode(['success' => false, 'error' => 'Invalid action', 'received_action' => $action, 'post_keys' => array_keys($_POST)]);
 }
 
 function importCsv($db) {
