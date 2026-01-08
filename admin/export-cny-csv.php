@@ -229,10 +229,17 @@ function mapProductToRow($p) {
     
     if (!empty($productPrice)) {
         $prices = json_decode($productPrice, true);
+        
+        // Handle double-encoded JSON
+        if (is_string($prices)) {
+            $prices = json_decode($prices, true);
+        }
+        
         if (is_array($prices) && !empty($prices)) {
             // Try GEN price first
             foreach ($prices as $pr) {
-                if (strpos($pr['customer_group'] ?? '', 'GEN') !== false) {
+                $group = $pr['customer_group'] ?? '';
+                if (strpos($group, 'GEN') !== false) {
                     $price = floatval($pr['price'] ?? 0);
                     break;
                 }
