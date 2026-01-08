@@ -33,71 +33,71 @@ require_once 'classes/LineAPI.php';
 require_once 'classes/LineAccountManager.php';
 require_once 'classes/OpenAI.php';
 require_once 'classes/TelegramAPI.php';
-    require_once 'classes/FlexTemplates.php';
+require_once 'classes/FlexTemplates.php';
 
-    // V2.5: Load BusinessBot if available, fallback to ShopBot
-    if (file_exists(__DIR__ . '/classes/BusinessBot.php')) {
-        require_once 'classes/BusinessBot.php';
-    }
-    if (file_exists(__DIR__ . '/classes/ShopBot.php')) {
-        require_once 'classes/ShopBot.php';
-    }
-    if (file_exists(__DIR__ . '/classes/CRMManager.php')) {
-        require_once 'classes/CRMManager.php';
-    }
-    if (file_exists(__DIR__ . '/classes/AutoTagManager.php')) {
-        require_once 'classes/AutoTagManager.php';
-    }
-    // LIFF Message Handler for processing LIFF-triggered messages
-    if (file_exists(__DIR__ . '/classes/LiffMessageHandler.php')) {
-        require_once 'classes/LiffMessageHandler.php';
-    }
+// V2.5: Load BusinessBot if available, fallback to ShopBot
+if (file_exists(__DIR__ . '/classes/BusinessBot.php')) {
+    require_once 'classes/BusinessBot.php';
+}
+if (file_exists(__DIR__ . '/classes/ShopBot.php')) {
+    require_once 'classes/ShopBot.php';
+}
+if (file_exists(__DIR__ . '/classes/CRMManager.php')) {
+    require_once 'classes/CRMManager.php';
+}
+if (file_exists(__DIR__ . '/classes/AutoTagManager.php')) {
+    require_once 'classes/AutoTagManager.php';
+}
+// LIFF Message Handler for processing LIFF-triggered messages
+if (file_exists(__DIR__ . '/classes/LiffMessageHandler.php')) {
+    require_once 'classes/LiffMessageHandler.php';
+}
 
-    // Get request body and signature
-    $body = file_get_contents('php://input');
-    $signature = $_SERVER['HTTP_X_LINE_SIGNATURE'] ?? '';
+// Get request body and signature
+$body = file_get_contents('php://input');
+$signature = $_SERVER['HTTP_X_LINE_SIGNATURE'] ?? '';
 
-    $db = Database::getInstance()->getConnection();
+$db = Database::getInstance()->getConnection();
 
-    // Multi-account support: ตรวจสอบว่ามาจาก account ไหน
-    $lineAccountId = null;
-    $lineAccount = null;
-    $line = null;
+// Multi-account support: ตรวจสอบว่ามาจาก account ไหน
+$lineAccountId = null;
+$lineAccount = null;
+$line = null;
 
-    // Try to get account from query parameter first
-    if (isset($_GET['account'])) {
+// Try to get account from query parameter first
+if (isset($_GET['account'])) {
+    $manager = new LineAccountManager($db);
+    $lineAccount = $manager->getAccountById($_GET['account']);
+    if ($lineAccount) {
+        $line = new LineAPI($lineAccount['channel_access_token'], $lineAccount['channel_secret']);
+        if ($line->validateSignature($body, $signature)) {
+            $lineAccountId = $lineAccount['id'];
+        } else {
+            $lineAccount = null;
+            $line = null;
+        }
+    }
+}
+
+// If no account from parameter, try to find by signature
+if (!$lineAccount) {
+    try {
         $manager = new LineAccountManager($db);
-        $lineAccount = $manager->getAccountById($_GET['account']);
+        $lineAccount = $manager->validateAndGetAccount($body, $signature);
         if ($lineAccount) {
+            $lineAccountId = $lineAccount['id'];
             $line = new LineAPI($lineAccount['channel_access_token'], $lineAccount['channel_secret']);
-            if ($line->validateSignature($body, $signature)) {
-                $lineAccountId = $lineAccount['id'];
-            } else {
-                $lineAccount = null;
-                $line = null;
-            }
         }
+    } catch (Exception $e) {
+        // Table doesn't exist, use default
     }
+}
 
-    // If no account from parameter, try to find by signature
-    if (!$lineAccount) {
-        try {
-            $manager = new LineAccountManager($db);
-            $lineAccount = $manager->validateAndGetAccount($body, $signature);
-            if ($lineAccount) {
-                $lineAccountId = $lineAccount['id'];
-                $line = new LineAPI($lineAccount['channel_access_token'], $lineAccount['channel_secret']);
-            }
-        } catch (Exception $e) {
-            // Table doesn't exist, use default
-        }
-    }
-
-    // Fallback to default config
-    if (!$line) {
-        $line = new LineAPI();
-        if (!$line->validateSignature($body, $signature)) {
-            http_response_code(400);
+// Fallback to default config
+if (!$line) {
+    $line = new LineAPI();
+    if (!$line->validateSignature($body, $signature)) {
+        http_response_code(400);
             exit('Invalid signature');
         }
     }
