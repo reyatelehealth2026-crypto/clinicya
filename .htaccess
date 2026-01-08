@@ -80,6 +80,13 @@ Options -Indexes
     php_value max_execution_time 300
     php_value memory_limit 256M
     php_value date.timezone "Asia/Bangkok"
+    php_value default_charset "UTF-8"
+    php_value mbstring.internal_encoding "UTF-8"
+</IfModule>
+
+# PHP Settings (for PHP-FPM / FastCGI)
+<IfModule mod_fcgid.c>
+    FcgidInitialEnv PHP_FCGI_CHILDREN 0
 </IfModule>
 
 # Compress files

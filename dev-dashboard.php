@@ -56,7 +56,7 @@ try {
         INDEX idx_type (log_type),
         INDEX idx_created (created_at),
         INDEX idx_source (source)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (Exception $e) {
     // Table might already exist
 }

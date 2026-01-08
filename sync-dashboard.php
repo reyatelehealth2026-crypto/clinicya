@@ -1,450 +1,556 @@
 <?php
 /**
  * CNY Sync Dashboard
- * Dashboard สำหรับ monitor และจัดการ sync queue
+ * Dashboard สำหรับ monitor และจัดการ sync ข้อมูลจาก CNY Pharmacy API
+ * ใช้ระบบ sync เดียวกันกับ admin/setup-cny.php
  */
 
+session_start();
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
-require_once __DIR__ . '/classes/SyncQueue.php';
+require_once __DIR__ . '/classes/CnyPharmacyAPI.php';
 
 $db = Database::getInstance()->getConnection();
-$queue = new SyncQueue($db);
+$cnyApi = new CnyPharmacyAPI($db);
 
-// Get stats
-$stats = $queue->getStats();
-$logs = $queue->getRecentLogs(30);
+// Check if cny_products table exists
+$cnyTableExists = false;
+$cnyProductCount = 0;
+try {
+    $stmt = $db->query("SELECT COUNT(*) FROM cny_products");
+    $cnyProductCount = $stmt->fetchColumn();
+    $cnyTableExists = true;
+} catch (PDOException $e) {
+    // Table doesn't exist
+}
 
-// Calculate progress
-$total = $stats['total'] ?: 1;
-$done = $stats['completed'] + $stats['failed'] + $stats['skipped'];
-$progress = round(($done / $total) * 100);
+// Get business_items stats
+$businessItemsCount = 0;
+$businessItemsWithSku = 0;
+try {
+    $stmt = $db->query("SELECT COUNT(*) FROM business_items");
+    $businessItemsCount = $stmt->fetchColumn();
+    $stmt = $db->query("SELECT COUNT(*) FROM business_items WHERE sku IS NOT NULL AND sku != ''");
+    $businessItemsWithSku = $stmt->fetchColumn();
+} catch (PDOException $e) {
+    // Table doesn't exist
+}
+
+// Get last sync time
+$lastSync = null;
+try {
+    $stmt = $db->query("SELECT MAX(last_updated) FROM cny_products");
+    $lastSync = $stmt->fetchColumn();
+} catch (PDOException $e) {}
+
+// Get categories count
+$categoriesCount = 0;
+try {
+    $stmt = $db->query("SELECT COUNT(*) FROM product_categories WHERE cny_code IS NOT NULL");
+    $categoriesCount = $stmt->fetchColumn();
+} catch (PDOException $e) {}
+
+$pageTitle = 'CNY Sync Dashboard';
+
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔄 CNY Sync Dashboard</title>
+    <title><?= $pageTitle ?></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }
-        h1 { color: white; font-size: 28px; }
-        h2 { color: #2d3748; font-size: 18px; margin-bottom: 16px; }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .stat-card.success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-        .stat-card.warning { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        .stat-card.info { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-        .stat-number { font-size: 32px; font-weight: bold; margin-bottom: 8px; }
-        .stat-label { font-size: 13px; opacity: 0.9; }
-        .btn {
-            display: inline-block;
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 600;
-            border: none;
-            cursor: pointer;
-            margin: 4px;
-        }
-        .btn:hover { opacity: 0.9; }
-        .btn-success { background: #10B981; }
-        .btn-warning { background: #F59E0B; }
-        .btn-danger { background: #EF4444; }
-        .btn-secondary { background: #718096; }
-        .progress-container {
-            background: #e2e8f0;
-            border-radius: 10px;
-            height: 24px;
-            overflow: hidden;
-            margin: 16px 0;
-        }
-        .progress-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 12px;
-            transition: width 0.5s;
-        }
-        .log-container {
-            background: #1a202c;
-            color: #e2e8f0;
-            padding: 16px;
-            border-radius: 6px;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .log-line { margin-bottom: 4px; line-height: 1.5; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.15); }
+        .log-container { font-family: 'Courier New', monospace; }
         .log-success { color: #68d391; }
         .log-error { color: #fc8181; }
-        .action-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-        .form-group { margin-bottom: 16px; }
-        label { display: block; margin-bottom: 8px; color: #4a5568; font-weight: 600; }
-        input, select { width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 6px; }
-        .hidden { display: none; }
+        .log-warning { color: #f6e05e; }
+        .log-info { color: #90cdf4; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🔄 CNY Sync Dashboard</h1>
-            <button class="btn btn-secondary" onclick="location.reload()">🔄 Refresh</button>
-        </div>
-        
-        <!-- Stats -->
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-number"><?= number_format($stats['total']) ?></div>
-                <div class="stat-label">Total Jobs</div>
-            </div>
-            <div class="stat-card info">
-                <div class="stat-number"><?= number_format($stats['pending']) ?></div>
-                <div class="stat-label">Pending</div>
-            </div>
-            <div class="stat-card warning">
-                <div class="stat-number"><?= number_format($stats['processing']) ?></div>
-                <div class="stat-label">Processing</div>
-            </div>
-            <div class="stat-card success">
-                <div class="stat-number"><?= number_format($stats['completed']) ?></div>
-                <div class="stat-label">Completed</div>
-            </div>
-            <div class="stat-card" style="background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);">
-                <div class="stat-number"><?= number_format($stats['failed']) ?></div>
-                <div class="stat-label">Failed</div>
-            </div>
-        </div>
-        
-        <!-- Progress -->
-        <div class="card">
-            <h2>📊 Overall Progress</h2>
-            <div class="progress-container">
-                <div class="progress-bar" style="width: <?= $progress ?>%"><?= $progress ?>%</div>
-            </div>
-            <p style="color: #718096; font-size: 14px;">
-                <?= number_format($done) ?> of <?= number_format($stats['total']) ?> jobs processed
-                (<?= number_format($stats['failed']) ?> failed, <?= number_format($stats['skipped']) ?> skipped)
-            </p>
-        </div>
-        
-        <!-- Continuous Sync -->
-        <div class="card">
-            <h2>🔄 Continuous Sync (ซิงค์ต่อเนื่องจาก CNY API)</h2>
-            <div style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px;">
-                <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 120px;">
-                    <label>Batch Size (ทีละกี่รายการ)</label>
-                    <select id="continuousBatchSize">
-                        <option value="5">5 รายการ</option>
-                        <option value="10" selected>10 รายการ</option>
-                        <option value="20">20 รายการ</option>
-                        <option value="50">50 รายการ</option>
-                        <option value="100">100 รายการ</option>
-                    </select>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <div class="gradient-bg text-white py-6 px-4 mb-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold mb-2">
+                        <i class="fas fa-sync-alt mr-3"></i>CNY Sync Dashboard
+                    </h1>
+                    <p class="text-white/80">
+                        จัดการ sync ข้อมูลสินค้าจาก CNY Pharmacy API
+                        <?php if ($lastSync): ?>
+                        <span class="ml-2 text-sm">(อัพเดทล่าสุด: <?= date('d/m/Y H:i', strtotime($lastSync)) ?>)</span>
+                        <?php endif; ?>
+                    </p>
                 </div>
-                <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 120px;">
-                    <label>Delay (หน่วงระหว่าง batch)</label>
-                    <select id="continuousDelay">
-                        <option value="1000">1 วินาที</option>
-                        <option value="2000" selected>2 วินาที</option>
-                        <option value="3000">3 วินาที</option>
-                        <option value="5000">5 วินาที</option>
-                    </select>
+                <div class="flex gap-3">
+                    <a href="shop/products-cny.php" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
+                        <i class="fas fa-box mr-2"></i>ดูสินค้า CNY
+                    </a>
+                    <a href="admin/setup-cny.php?key=cny2024" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
+                        <i class="fas fa-cog mr-2"></i>Setup CNY
+                    </a>
+                    <button onclick="location.reload()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
+                        <i class="fas fa-refresh mr-2"></i>Refresh
+                    </button>
                 </div>
-                <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 120px;">
-                    <label>Max Batches (0 = ไม่จำกัด)</label>
-                    <input type="number" id="maxBatches" value="0" min="0" style="width: 100%;">
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-success" id="startContinuousBtn" onclick="startContinuousSync(false)">▶️ เริ่ม Sync</button>
-                    <button class="btn" id="resetSyncBtn" onclick="startContinuousSync(true)" style="background:#8b5cf6;">🔄 เริ่มใหม่</button>
-                    <button class="btn btn-danger" id="stopContinuousBtn" onclick="stopContinuousSync()" disabled>⏹️ หยุด</button>
-                </div>
-            </div>
-            
-            <!-- Continuous Sync Status -->
-            <div id="continuousSyncStatus" class="hidden" style="background: #f7fafc; border-radius: 8px; padding: 16px; margin-top: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <span style="font-weight: 600; color: #2d3748;">📊 สถานะ Sync</span>
-                    <span id="syncStatusBadge" style="background: #48bb78; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;">กำลังทำงาน...</span>
-                </div>
-                <!-- Progress Bar -->
-                <div id="syncProgressContainer" class="hidden" style="margin-bottom: 12px;">
-                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #718096; margin-bottom: 4px;">
-                        <span>Progress</span>
-                        <span id="syncProgressText">0 / 0</span>
-                    </div>
-                    <div style="background: #e2e8f0; border-radius: 10px; height: 12px; overflow: hidden;">
-                        <div id="syncProgressBar" style="height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); width: 0%; transition: width 0.3s;"></div>
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; text-align: center;">
-                    <div><div style="font-size: 24px; font-weight: bold; color: #667eea;" id="syncBatchCount">0</div><div style="font-size: 11px; color: #718096;">Batches</div></div>
-                    <div><div style="font-size: 24px; font-weight: bold; color: #48bb78;" id="syncCreated">0</div><div style="font-size: 11px; color: #718096;">Created</div></div>
-                    <div><div style="font-size: 24px; font-weight: bold; color: #4299e1;" id="syncUpdated">0</div><div style="font-size: 11px; color: #718096;">Updated</div></div>
-                    <div><div style="font-size: 24px; font-weight: bold; color: #ed8936;" id="syncSkipped">0</div><div style="font-size: 11px; color: #718096;">Skipped</div></div>
-                    <div><div style="font-size: 24px; font-weight: bold; color: #f56565;" id="syncFailed">0</div><div style="font-size: 11px; color: #718096;">Failed</div></div>
-                </div>
-                <div id="syncLog" style="margin-top: 12px; background: #1a202c; color: #e2e8f0; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 11px; max-height: 150px; overflow-y: auto;"></div>
-            </div>
-        </div>
-        
-        <!-- Actions -->
-        <div class="card">
-            <h2>⚡ Quick Actions</h2>
-            <div class="action-buttons">
-                <button class="btn btn-success" onclick="createBatch()">➕ Create Batch from API</button>
-                <a href="sync-worker-run.php?batch_size=5" class="btn" target="_blank">▶️ Run Worker (5)</a>
-                <a href="sync-worker-run.php?batch_size=10" class="btn" target="_blank">▶️ Run Worker (10)</a>
-                <a href="sync_categories_from_manufacturer.php" class="btn" style="background:#8b5cf6;color:white;">🏷️ สร้างหมวดหมู่จากผู้ผลิต</a>
-                <button class="btn btn-warning" onclick="clearFailed()">🗑️ Clear Failed</button>
-                <button class="btn btn-danger" onclick="clearAll()">🗑️ Clear All</button>
-            </div>
-            
-            <h2 style="margin-top:20px;">📦 Direct Sync (ไม่ผ่าน Queue)</h2>
-            <div class="action-buttons">
-                <a href="sync_products_with_sku_id.php" class="btn" style="background:#059669;color:white;" target="_blank">🔄 Sync with SKU</a>
-                <a href="sync_cny_with_id.php" class="btn" style="background:#0891b2;color:white;" target="_blank">🔄 Sync with CNY ID</a>
-                <a href="sync_update_categories.php" class="btn" style="background:#7c3aed;color:white;" target="_blank">📁 Sync Categories</a>
-            </div>
-        </div>
-        
-        <!-- Create Batch Form -->
-        <div class="card hidden" id="batchForm">
-            <h2>➕ Create New Batch</h2>
-            <form action="api/sync_queue.php" method="POST">
-                <input type="hidden" name="action" value="create_batch">
-                <div class="form-group">
-                    <label>Batch Name</label>
-                    <input type="text" name="batch_name" value="Sync <?= date('Y-m-d H:i') ?>" required>
-                </div>
-                <div class="form-group">
-                    <label>Priority (1=highest, 10=lowest)</label>
-                    <input type="number" name="priority" value="5" min="1" max="10">
-                </div>
-                <button type="submit" class="btn btn-success">Create Batch</button>
-                <button type="button" class="btn btn-secondary" onclick="hideBatchForm()">Cancel</button>
-            </form>
-        </div>
-        
-        <!-- Recent Logs -->
-        <div class="card">
-            <h2>📝 Recent Activity</h2>
-            <div class="log-container">
-                <?php if (empty($logs)): ?>
-                    <div class="log-line">No logs yet</div>
-                <?php else: ?>
-                    <?php foreach ($logs as $log): ?>
-                        <div class="log-line <?= $log['action'] === 'failed' ? 'log-error' : ($log['action'] === 'created' ? 'log-success' : '') ?>">
-                            [<?= $log['created_at'] ?>] 
-                            <?= $log['action'] === 'created' ? '✓' : ($log['action'] === 'failed' ? '✗' : '○') ?>
-                            <?= htmlspecialchars($log['sku']) ?> - <?= $log['action'] ?> 
-                            (<?= $log['duration_ms'] ?>ms)
-                        </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
             </div>
         </div>
     </div>
-    
+
+    <div class="max-w-7xl mx-auto px-4 pb-8">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- CNY Products -->
+            <div class="bg-white rounded-xl shadow p-6 card-hover transition">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-database text-blue-600 text-xl"></i>
+                    </div>
+                    <?php if ($cnyTableExists): ?>
+                    <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Active</span>
+                    <?php else: ?>
+                    <span class="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">Not Setup</span>
+                    <?php endif; ?>
+                </div>
+                <div class="text-3xl font-bold text-gray-800 mb-1"><?= number_format($cnyProductCount) ?></div>
+                <div class="text-sm text-gray-500">CNY Products (Cache)</div>
+            </div>
+
+            <!-- Business Items -->
+            <div class="bg-white rounded-xl shadow p-6 card-hover transition">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-box text-green-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="text-3xl font-bold text-gray-800 mb-1"><?= number_format($businessItemsCount) ?></div>
+                <div class="text-sm text-gray-500">Business Items (<?= number_format($businessItemsWithSku) ?> with SKU)</div>
+            </div>
+
+            <!-- Categories -->
+            <div class="bg-white rounded-xl shadow p-6 card-hover transition">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-tags text-purple-600 text-xl"></i>
+                    </div>
+                </div>
+                <div class="text-3xl font-bold text-gray-800 mb-1"><?= number_format($categoriesCount) ?></div>
+                <div class="text-sm text-gray-500">CNY Categories</div>
+            </div>
+
+            <!-- API Status -->
+            <div class="bg-white rounded-xl shadow p-6 card-hover transition">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-plug text-yellow-600 text-xl"></i>
+                    </div>
+                    <span id="apiStatus" class="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">Checking...</span>
+                </div>
+                <div class="text-lg font-bold text-gray-800 mb-1">CNY API</div>
+                <div class="text-sm text-gray-500">manager.cnypharmacy.com</div>
+            </div>
+        </div>
+
+        <!-- Sync Options -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Method 1: Import from CSV -->
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="bg-purple-600 text-white px-6 py-4">
+                    <h2 class="text-lg font-semibold">
+                        <i class="fas fa-file-csv mr-2"></i>Method 1: Import from CSV (แนะนำ)
+                    </h2>
+                    <p class="text-sm text-white/80 mt-1">นำเข้าจากไฟล์ CSV - เร็วและใช้ memory น้อย</p>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-600 mb-4">
+                        Import ข้อมูลจากไฟล์ <code class="bg-gray-100 px-2 py-1 rounded">CNY API for AI - AI.csv</code> 
+                        เข้าตาราง <code class="bg-gray-100 px-2 py-1 rounded">cny_products</code>
+                    </p>
+                    <div class="flex gap-3">
+                        <a href="admin/setup-cny.php?key=cny2024&step=import_csv" 
+                           class="flex-1 text-center px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium">
+                            <i class="fas fa-file-import mr-2"></i>Import CSV
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Method 2: Sync from API -->
+            <div class="bg-white rounded-xl shadow overflow-hidden">
+                <div class="bg-green-600 text-white px-6 py-4">
+                    <h2 class="text-lg font-semibold">
+                        <i class="fas fa-cloud-download-alt mr-2"></i>Method 2: Sync from API
+                    </h2>
+                    <p class="text-sm text-white/80 mt-1">ดึงข้อมูลตรงจาก CNY API - ต้องใช้ memory สูง</p>
+                </div>
+                <div class="p-6">
+                    <p class="text-gray-600 mb-4">
+                        ดึงข้อมูลจาก CNY Pharmacy API โดยตรง เข้าตาราง <code class="bg-gray-100 px-2 py-1 rounded">cny_products</code>
+                    </p>
+                    <div class="flex gap-3">
+                        <a href="admin/setup-cny.php?key=cny2024&step=sync" 
+                           class="flex-1 text-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium">
+                            <i class="fas fa-sync mr-2"></i>Sync from API
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Continuous Sync to Business Items -->
+        <div class="bg-white rounded-xl shadow overflow-hidden mb-8">
+            <div class="bg-blue-600 text-white px-6 py-4">
+                <h2 class="text-lg font-semibold">
+                    <i class="fas fa-exchange-alt mr-2"></i>Sync to Business Items (ระบบหลัก)
+                </h2>
+                <p class="text-sm text-white/80 mt-1">
+                    Sync ข้อมูลจาก cny_products → business_items พร้อมสร้างหมวดหมู่อัตโนมัติ
+                </p>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Batch Size</label>
+                        <select id="batchSize" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="5">5 รายการ</option>
+                            <option value="10" selected>10 รายการ</option>
+                            <option value="20">20 รายการ</option>
+                            <option value="50">50 รายการ</option>
+                            <option value="100">100 รายการ</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Delay (ms)</label>
+                        <select id="syncDelay" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="500">500ms</option>
+                            <option value="1000">1 วินาที</option>
+                            <option value="2000" selected>2 วินาที</option>
+                            <option value="3000">3 วินาที</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Max Batches (0=ไม่จำกัด)</label>
+                        <input type="number" id="maxBatches" value="0" min="0" 
+                               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <button id="startSyncBtn" onclick="startContinuousSync(false)" 
+                                class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
+                            <i class="fas fa-play mr-2"></i>เริ่ม Sync
+                        </button>
+                        <button id="resetSyncBtn" onclick="startContinuousSync(true)" 
+                                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                        <button id="stopSyncBtn" onclick="stopSync()" disabled
+                                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50">
+                            <i class="fas fa-stop"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sync Status Panel -->
+                <div id="syncStatusPanel" class="hidden bg-gray-50 rounded-lg p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="font-semibold text-gray-800">
+                            <i class="fas fa-chart-line mr-2"></i>สถานะ Sync
+                        </span>
+                        <span id="syncStatusBadge" class="px-3 py-1 bg-blue-500 text-white text-sm rounded-full">
+                            กำลังทำงาน...
+                        </span>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="mb-4">
+                        <div class="flex justify-between text-sm text-gray-600 mb-1">
+                            <span>Progress</span>
+                            <span id="progressText">0 / 0</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div id="progressBar" class="bg-blue-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-5 gap-4 mb-4">
+                        <div class="text-center p-3 bg-white rounded-lg">
+                            <div class="text-2xl font-bold text-blue-600" id="statBatches">0</div>
+                            <div class="text-xs text-gray-500">Batches</div>
+                        </div>
+                        <div class="text-center p-3 bg-white rounded-lg">
+                            <div class="text-2xl font-bold text-green-600" id="statCreated">0</div>
+                            <div class="text-xs text-gray-500">Created</div>
+                        </div>
+                        <div class="text-center p-3 bg-white rounded-lg">
+                            <div class="text-2xl font-bold text-blue-600" id="statUpdated">0</div>
+                            <div class="text-xs text-gray-500">Updated</div>
+                        </div>
+                        <div class="text-center p-3 bg-white rounded-lg">
+                            <div class="text-2xl font-bold text-yellow-600" id="statSkipped">0</div>
+                            <div class="text-xs text-gray-500">Skipped</div>
+                        </div>
+                        <div class="text-center p-3 bg-white rounded-lg">
+                            <div class="text-2xl font-bold text-red-600" id="statFailed">0</div>
+                            <div class="text-xs text-gray-500">Failed</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Log Output -->
+                    <div id="syncLog" class="log-container bg-gray-900 text-gray-300 p-4 rounded-lg text-sm max-h-48 overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="bg-white rounded-xl shadow overflow-hidden mb-8">
+            <div class="bg-gray-800 text-white px-6 py-4">
+                <h2 class="text-lg font-semibold">
+                    <i class="fas fa-bolt mr-2"></i>Quick Actions
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <a href="admin/setup-cny.php?key=cny2024&step=migrate" 
+                       class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                        <i class="fas fa-database text-blue-600 text-2xl mb-2"></i>
+                        <span class="text-sm font-medium text-gray-700">Create Table</span>
+                    </a>
+                    <a href="shop/products-cny.php" 
+                       class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                        <i class="fas fa-box text-green-600 text-2xl mb-2"></i>
+                        <span class="text-sm font-medium text-gray-700">View Products</span>
+                    </a>
+                    <button onclick="updateCategories()" 
+                            class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                        <i class="fas fa-tags text-purple-600 text-2xl mb-2"></i>
+                        <span class="text-sm font-medium text-gray-700">Update Categories</span>
+                    </button>
+                    <button onclick="testApiConnection()" 
+                            class="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                        <i class="fas fa-plug text-yellow-600 text-2xl mb-2"></i>
+                        <span class="text-sm font-medium text-gray-700">Test API</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Links to Product Pages -->
+        <div class="bg-white rounded-xl shadow overflow-hidden">
+            <div class="bg-indigo-600 text-white px-6 py-4">
+                <h2 class="text-lg font-semibold">
+                    <i class="fas fa-link mr-2"></i>Product Pages
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <a href="shop/products-cny.php" class="block p-4 border-2 border-indigo-200 rounded-lg hover:border-indigo-400 transition">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-pills text-indigo-600 text-xl mr-3"></i>
+                            <span class="font-semibold text-gray-800">CNY Products</span>
+                        </div>
+                        <p class="text-sm text-gray-600">ดูสินค้าจาก CNY Cache (<?= number_format($cnyProductCount) ?> รายการ)</p>
+                    </a>
+                    <a href="shop/products.php" class="block p-4 border-2 border-green-200 rounded-lg hover:border-green-400 transition">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-store text-green-600 text-xl mr-3"></i>
+                            <span class="font-semibold text-gray-800">Shop Products</span>
+                        </div>
+                        <p class="text-sm text-gray-600">ดูสินค้าในระบบหลัก (<?= number_format($businessItemsCount) ?> รายการ)</p>
+                    </a>
+                    <a href="inventory/" class="block p-4 border-2 border-yellow-200 rounded-lg hover:border-yellow-400 transition">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-warehouse text-yellow-600 text-xl mr-3"></i>
+                            <span class="font-semibold text-gray-800">Inventory</span>
+                        </div>
+                        <p class="text-sm text-gray-600">จัดการคลังสินค้า</p>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Continuous Sync Variables
-        let continuousSyncRunning = false;
-        let continuousSyncStats = { batches: 0, created: 0, updated: 0, skipped: 0, failed: 0 };
-        let autoRefreshTimer = null;
-        let resetOnStart = false;
+    // Sync state
+    let syncRunning = false;
+    let syncStats = { batches: 0, created: 0, updated: 0, skipped: 0, failed: 0 };
+    
+    // Check API status on load
+    document.addEventListener('DOMContentLoaded', function() {
+        testApiConnection();
+    });
+    
+    // Test API Connection
+    async function testApiConnection() {
+        const statusEl = document.getElementById('apiStatus');
+        statusEl.textContent = 'Checking...';
+        statusEl.className = 'px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full';
         
-        function createBatch() {
-            document.getElementById('batchForm').classList.remove('hidden');
-        }
-        
-        function hideBatchForm() {
-            document.getElementById('batchForm').classList.add('hidden');
-        }
-        
-        function clearFailed() {
-            if (confirm('Clear all failed jobs?')) {
-                fetch('api/sync_queue.php?action=clear_failed', { method: 'POST' })
-                    .then(r => r.json())
-                    .then(d => { alert(d.message || 'Done'); location.reload(); });
+        try {
+            const response = await fetch('api/cny-sync.php?action=test');
+            const data = await response.json();
+            
+            if (data.success) {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full';
+            } else {
+                statusEl.textContent = 'Error';
+                statusEl.className = 'px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full';
             }
+        } catch (e) {
+            statusEl.textContent = 'Offline';
+            statusEl.className = 'px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full';
+        }
+    }
+    
+    // Start Continuous Sync
+    function startContinuousSync(reset = false) {
+        syncRunning = true;
+        syncStats = { batches: 0, created: 0, updated: 0, skipped: 0, failed: 0 };
+        
+        document.getElementById('startSyncBtn').disabled = true;
+        document.getElementById('resetSyncBtn').disabled = true;
+        document.getElementById('stopSyncBtn').disabled = false;
+        document.getElementById('syncStatusPanel').classList.remove('hidden');
+        document.getElementById('syncStatusBadge').textContent = 'กำลังทำงาน...';
+        document.getElementById('syncStatusBadge').className = 'px-3 py-1 bg-blue-500 text-white text-sm rounded-full';
+        document.getElementById('syncLog').innerHTML = '';
+        
+        addLog(reset ? '🔄 เริ่ม sync ใหม่ตั้งแต่ต้น...' : '▶️ เริ่ม sync ต่อจากที่ค้างไว้...', 'info');
+        runSyncBatch(reset);
+    }
+    
+    // Stop Sync
+    function stopSync() {
+        syncRunning = false;
+        document.getElementById('startSyncBtn').disabled = false;
+        document.getElementById('resetSyncBtn').disabled = false;
+        document.getElementById('stopSyncBtn').disabled = true;
+        document.getElementById('syncStatusBadge').textContent = 'หยุดแล้ว';
+        document.getElementById('syncStatusBadge').className = 'px-3 py-1 bg-gray-500 text-white text-sm rounded-full';
+        addLog('⏹️ หยุด Sync แล้ว', 'warning');
+    }
+    
+    // Run single batch
+    async function runSyncBatch(reset = false) {
+        if (!syncRunning) return;
+        
+        const batchSize = document.getElementById('batchSize').value;
+        const delay = parseInt(document.getElementById('syncDelay').value);
+        const maxBatches = parseInt(document.getElementById('maxBatches').value);
+        
+        // Check max batches
+        if (maxBatches > 0 && syncStats.batches >= maxBatches) {
+            addLog(`✅ ครบ ${maxBatches} batches แล้ว`, 'success');
+            stopSync();
+            return;
         }
         
-        function clearAll() {
-            if (confirm('Clear ALL jobs from queue? This cannot be undone!')) {
-                fetch('api/sync_queue.php?action=clear_all', { method: 'POST' })
-                    .then(r => r.json())
-                    .then(d => { alert(d.message || 'Done'); location.reload(); });
+        try {
+            let url = `sync-worker-run.php?api=1&mode=direct&batch_size=${batchSize}`;
+            if (reset && syncStats.batches === 0) {
+                url += '&reset=1';
             }
-        }
-        
-        // Continuous Sync Functions
-        function startContinuousSync(reset = false) {
-            continuousSyncRunning = true;
-            resetOnStart = reset;
-            continuousSyncStats = { batches: 0, created: 0, updated: 0, skipped: 0, failed: 0 };
             
-            document.getElementById('startContinuousBtn').disabled = true;
-            document.getElementById('resetSyncBtn').disabled = true;
-            document.getElementById('stopContinuousBtn').disabled = false;
-            document.getElementById('continuousSyncStatus').classList.remove('hidden');
-            document.getElementById('syncProgressContainer').classList.remove('hidden');
-            document.getElementById('syncStatusBadge').textContent = 'กำลังทำงาน...';
-            document.getElementById('syncStatusBadge').style.background = '#48bb78';
-            document.getElementById('syncLog').innerHTML = '';
+            const response = await fetch(url);
+            const data = await response.json();
             
-            // Stop auto refresh while syncing
-            if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
-            
-            addSyncLog(reset ? '🔄 เริ่ม sync ใหม่ตั้งแต่ต้น...' : '▶️ เริ่ม sync ต่อจากที่ค้างไว้...', 'info');
-            runContinuousBatch();
-        }
-        
-        function stopContinuousSync() {
-            continuousSyncRunning = false;
-            document.getElementById('startContinuousBtn').disabled = false;
-            document.getElementById('resetSyncBtn').disabled = false;
-            document.getElementById('stopContinuousBtn').disabled = true;
-            document.getElementById('syncStatusBadge').textContent = 'หยุดแล้ว';
-            document.getElementById('syncStatusBadge').style.background = '#718096';
-            addSyncLog('⏹️ หยุด Sync แล้ว', 'warning');
-        }
-        
-        async function runContinuousBatch() {
-            if (!continuousSyncRunning) return;
-            
-            const batchSize = document.getElementById('continuousBatchSize').value;
-            const delay = parseInt(document.getElementById('continuousDelay').value);
-            const maxBatches = parseInt(document.getElementById('maxBatches').value);
-            
-            // Check max batches
-            if (maxBatches > 0 && continuousSyncStats.batches >= maxBatches) {
-                addSyncLog(`✅ ครบ ${maxBatches} batches แล้ว`, 'success');
-                stopContinuousSync();
-                return;
-            }
-            
-            try {
-                // Build URL - use sync-worker-run.php with api=1&mode=direct
-                let url = `sync-worker-run.php?api=1&mode=direct&batch_size=${batchSize}`;
-                if (resetOnStart && continuousSyncStats.batches === 0) {
-                    url += '&reset=1';
+            if (data.success) {
+                syncStats.batches++;
+                syncStats.created += data.stats.created || 0;
+                syncStats.updated += data.stats.updated || 0;
+                syncStats.skipped += data.stats.skipped || 0;
+                syncStats.failed += data.stats.failed || 0;
+                
+                updateStatsDisplay();
+                
+                // Update progress
+                if (data.progress) {
+                    const current = data.progress.offset + (data.stats.processed || 0);
+                    const total = data.progress.total || 0;
+                    const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+                    document.getElementById('progressBar').style.width = percent + '%';
+                    document.getElementById('progressText').textContent = `${current.toLocaleString()} / ${total.toLocaleString()}`;
                 }
                 
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                if (data.success) {
-                    continuousSyncStats.batches++;
-                    continuousSyncStats.created += data.stats.created || 0;
-                    continuousSyncStats.updated += data.stats.updated || 0;
-                    continuousSyncStats.skipped += data.stats.skipped || 0;
-                    continuousSyncStats.failed += data.stats.failed || 0;
+                const processed = data.stats.processed || 0;
+                if (processed > 0) {
+                    addLog(`✓ Batch #${syncStats.batches}: ${processed} รายการ (C:${data.stats.created} U:${data.stats.updated} S:${data.stats.skipped} F:${data.stats.failed})`, 'success');
                     
-                    updateSyncDisplay();
-                    
-                    // Update progress bar
-                    if (data.progress) {
-                        const current = data.progress.offset + (data.stats.processed || 0);
-                        const total = data.progress.total || 0;
-                        const percent = total > 0 ? Math.round((current / total) * 100) : 0;
-                        document.getElementById('syncProgressBar').style.width = percent + '%';
-                        document.getElementById('syncProgressText').textContent = `${current.toLocaleString()} / ${total.toLocaleString()}`;
-                    }
-                    
-                    const processed = data.stats.processed || 0;
-                    if (processed > 0) {
-                        addSyncLog(`✓ Batch #${continuousSyncStats.batches}: ${processed} รายการ (C:${data.stats.created} U:${data.stats.updated} S:${data.stats.skipped} F:${data.stats.failed})`, 'success');
-                        
-                        // Check if complete
-                        if (data.progress && data.progress.complete) {
-                            addSyncLog(`🎉 Sync เสร็จสมบูรณ์! ทั้งหมด ${data.progress.total} รายการ`, 'success');
-                            document.getElementById('syncStatusBadge').textContent = 'เสร็จสมบูรณ์';
-                            document.getElementById('syncStatusBadge').style.background = '#48bb78';
-                            stopContinuousSync();
-                            return;
-                        }
-                    } else {
-                        addSyncLog(`⚠️ ไม่มีรายการให้ sync แล้ว`, 'warning');
-                        stopContinuousSync();
+                    // Check if complete
+                    if (data.progress && data.progress.complete) {
+                        addLog(`🎉 Sync เสร็จสมบูรณ์! ทั้งหมด ${data.progress.total} รายการ`, 'success');
+                        document.getElementById('syncStatusBadge').textContent = 'เสร็จสมบูรณ์';
+                        document.getElementById('syncStatusBadge').className = 'px-3 py-1 bg-green-500 text-white text-sm rounded-full';
+                        stopSync();
                         return;
                     }
-                    
-                    // Continue with delay
-                    if (continuousSyncRunning) {
-                        setTimeout(runContinuousBatch, delay);
-                    }
                 } else {
-                    addSyncLog(`❌ Error: ${data.error || 'Unknown error'}`, 'error');
-                    stopContinuousSync();
+                    addLog(`⚠️ ไม่มีรายการให้ sync แล้ว`, 'warning');
+                    stopSync();
+                    return;
                 }
-            } catch (error) {
-                addSyncLog(`❌ Network error: ${error.message}`, 'error');
-                stopContinuousSync();
+                
+                // Continue with delay
+                if (syncRunning) {
+                    setTimeout(() => runSyncBatch(false), delay);
+                }
+            } else {
+                addLog(`❌ Error: ${data.error || 'Unknown error'}`, 'error');
+                stopSync();
             }
+        } catch (error) {
+            addLog(`❌ Network error: ${error.message}`, 'error');
+            stopSync();
         }
+    }
+    
+    // Update stats display
+    function updateStatsDisplay() {
+        document.getElementById('statBatches').textContent = syncStats.batches;
+        document.getElementById('statCreated').textContent = syncStats.created;
+        document.getElementById('statUpdated').textContent = syncStats.updated;
+        document.getElementById('statSkipped').textContent = syncStats.skipped;
+        document.getElementById('statFailed').textContent = syncStats.failed;
+    }
+    
+    // Add log entry
+    function addLog(message, type = 'info') {
+        const logDiv = document.getElementById('syncLog');
+        const time = new Date().toLocaleTimeString('th-TH');
+        const colorClass = {
+            success: 'log-success',
+            error: 'log-error',
+            warning: 'log-warning',
+            info: 'log-info'
+        }[type] || 'log-info';
         
-        function updateSyncDisplay() {
-            document.getElementById('syncBatchCount').textContent = continuousSyncStats.batches;
-            document.getElementById('syncCreated').textContent = continuousSyncStats.created;
-            document.getElementById('syncUpdated').textContent = continuousSyncStats.updated;
-            document.getElementById('syncSkipped').textContent = continuousSyncStats.skipped;
-            document.getElementById('syncFailed').textContent = continuousSyncStats.failed;
-        }
+        logDiv.innerHTML += `<div class="${colorClass}">[${time}] ${message}</div>`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+    
+    // Update categories
+    async function updateCategories() {
+        if (!confirm('อัพเดทหมวดหมู่สินค้าทั้งหมดจาก CNY data?')) return;
         
-        function addSyncLog(message, type = 'info') {
-            const logDiv = document.getElementById('syncLog');
-            const time = new Date().toLocaleTimeString('th-TH');
-            const colors = { success: '#68d391', error: '#fc8181', warning: '#f6e05e', info: '#90cdf4' };
-            logDiv.innerHTML += `<div style="color: ${colors[type] || '#e2e8f0'}">[${time}] ${message}</div>`;
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
-        
-        // Auto refresh every 10 seconds (only when not syncing)
-        function startAutoRefresh() {
-            if (!continuousSyncRunning) {
-                autoRefreshTimer = setTimeout(() => location.reload(), 10000);
+        try {
+            const response = await fetch('api/cny-sync.php?action=update_categories');
+            const data = await response.json();
+            
+            if (data.success) {
+                alert(`อัพเดทหมวดหมู่เสร็จสิ้น!\nUpdated: ${data.stats.updated}\nSkipped: ${data.stats.skipped}`);
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
             }
+        } catch (e) {
+            alert('Network error: ' + e.message);
         }
-        startAutoRefresh();
+    }
     </script>
 </body>
 </html>

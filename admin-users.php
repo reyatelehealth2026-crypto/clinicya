@@ -106,6 +106,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $email = trim($_POST['email'] ?? '');
                 $phone = trim($_POST['phone'] ?? '');
                 $lineUserId = trim($_POST['line_user_id'] ?? '');
+                $idCard = trim($_POST['id_card'] ?? '');
+                $birthDate = trim($_POST['birth_date'] ?? '');
+                $salary = floatval($_POST['salary'] ?? 0);
                 $role = $_POST['role'] ?? 'staff';
                 
                 // Validate role
@@ -121,6 +124,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
                 }
                 
+                // Validate ID card if provided
+                if (!empty($idCard) && !preg_match('/^[0-9]{13}$/', $idCard)) {
+                    throw new Exception('เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก');
+                }
+                
                 $adminId = $auth->createAdmin([
                     'username' => $username,
                     'password' => $password,
@@ -128,6 +136,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'email' => $email,
                     'phone' => $phone,
                     'line_user_id' => $lineUserId,
+                    'id_card' => $idCard ?: null,
+                    'birth_date' => $birthDate ?: null,
+                    'salary' => $salary,
                     'role' => $role
                 ]);
                 
@@ -174,6 +185,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $email = trim($_POST['email'] ?? '');
                 $phone = trim($_POST['phone'] ?? '');
                 $lineUserId = trim($_POST['line_user_id'] ?? '');
+                $idCard = trim($_POST['id_card'] ?? '');
+                $birthDate = trim($_POST['birth_date'] ?? '');
+                $salary = floatval($_POST['salary'] ?? 0);
                 $role = $_POST['role'] ?? $targetAdmin['role'];
                 $password = $_POST['password'] ?? '';
                 $isActive = isset($_POST['is_active']) ? 1 : 0;
@@ -183,11 +197,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $role = 'super_admin';
                 }
                 
+                // Validate ID card if provided
+                if (!empty($idCard) && !preg_match('/^[0-9]{13}$/', $idCard)) {
+                    throw new Exception('เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก');
+                }
+                
                 $updateData = [
                     'display_name' => $displayName,
                     'email' => $email,
                     'phone' => $phone,
                     'line_user_id' => $lineUserId,
+                    'id_card' => $idCard ?: null,
+                    'birth_date' => $birthDate ?: null,
+                    'salary' => $salary,
                     'role' => $role,
                     'is_active' => $isActive
                 ];
@@ -567,7 +589,29 @@ require_once 'includes/header.php';
                                placeholder="08x-xxx-xxxx">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">เลขบัตรประชาชน</label>
+                        <input type="text" name="id_card" id="idCard" maxlength="13" pattern="[0-9]{13}"
+                               class="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                               placeholder="เลข 13 หลัก">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">วันเดือนปีเกิด</label>
+                        <input type="date" name="birth_date" id="birthDate" 
+                               class="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">เงินเดือน (บาท)</label>
+                        <input type="number" name="salary" id="salary" min="0" step="0.01"
+                               class="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                               placeholder="0.00">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>               <label class="block text-sm font-medium text-gray-700 mb-1">
                             LINE User ID
                             <button type="button" onclick="showLineIdHelp()" class="text-blue-500 ml-1">
                                 <i class="fas fa-question-circle"></i>

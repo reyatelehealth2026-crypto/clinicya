@@ -382,7 +382,8 @@ if ($step == 4 && (empty($_SESSION['install_db']) || empty($_SESSION['install_ap
                         throw new Exception("Connection failed: " . $mysqli->connect_error);
                     }
                     $mysqli->set_charset('utf8mb4');
-                    $logs[] = "✓ Connected to database";
+                    $mysqli->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+                    $logs[] = "✓ Connected to database (UTF-8)";
                     
                     // Function to execute SQL file safely using mysqli
                     $executeSqlFile = function($filePath) use ($mysqli, $db) {
@@ -428,6 +429,7 @@ if ($step == 4 && (empty($_SESSION['install_db']) || empty($_SESSION['install_ap
                                 $conn = new mysqli($db['host'], $db['user'], $db['pass'], $db['name']);
                                 if ($conn->connect_error) continue;
                                 $conn->set_charset('utf8mb4');
+                                $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
                                 
                                 $conn->query($stmt);
                                 $executed++;
