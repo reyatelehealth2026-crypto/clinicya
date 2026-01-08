@@ -1,38 +1,38 @@
-    <?php
-    /**
-     * LINE Webhook Handler - Multi-Account Support
-     * V2.5 - Universal Business Platform
-     */
+<?php
+/**
+ * LINE Webhook Handler - Multi-Account Support
+ * V2.5 - Universal Business Platform
+ */
 
-    // Global error handler for webhook
-    set_error_handler(function($severity, $message, $file, $line) {
-        throw new ErrorException($message, 0, $severity, $file, $line);
-    });
+// Global error handler for webhook
+set_error_handler(function($severity, $message, $file, $line) {
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
 
-    // Catch all errors and log them
-    register_shutdown_function(function() {
-        $error = error_get_last();
-        if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-            try {
-                $db = Database::getInstance()->getConnection();
-                $stmt = $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'webhook_fatal', ?, ?, NOW())");
-                $stmt->execute([
-                    $error['message'],
-                    json_encode(['file' => $error['file'], 'line' => $error['line'], 'type' => $error['type']])
-                ]);
-            } catch (Exception $e) {
-                error_log("Webhook fatal error: " . $error['message']);
-            }
+// Catch all errors and log them
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        try {
+            $db = Database::getInstance()->getConnection();
+            $stmt = $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'webhook_fatal', ?, ?, NOW())");
+            $stmt->execute([
+                $error['message'],
+                json_encode(['file' => $error['file'], 'line' => $error['line'], 'type' => $error['type']])
+            ]);
+        } catch (Exception $e) {
+            error_log("Webhook fatal error: " . $error['message']);
         }
-    });
+    }
+});
 
-    require_once 'config/config.php';
-    require_once 'config/database.php';
-    require_once 'classes/ActivityLogger.php';
-    require_once 'classes/LineAPI.php';
-    require_once 'classes/LineAccountManager.php';
-    require_once 'classes/OpenAI.php';
-    require_once 'classes/TelegramAPI.php';
+require_once 'config/config.php';
+require_once 'config/database.php';
+require_once 'classes/ActivityLogger.php';
+require_once 'classes/LineAPI.php';
+require_once 'classes/LineAccountManager.php';
+require_once 'classes/OpenAI.php';
+require_once 'classes/TelegramAPI.php';
     require_once 'classes/FlexTemplates.php';
 
     // V2.5: Load BusinessBot if available, fallback to ShopBot
