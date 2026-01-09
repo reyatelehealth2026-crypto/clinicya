@@ -9,9 +9,10 @@
 class LocationService {
     private $db;
     private $lineAccountId;
+    private $validZoneTypes = null;
     
-    // Valid zone types
-    const ZONE_TYPES = ['general', 'cold_storage', 'controlled', 'hazardous'];
+    // Default zone types (fallback if DB table doesn't exist)
+    const DEFAULT_ZONE_TYPES = ['general', 'cold_storage', 'frozen', 'controlled', 'hazardous'];
     
     // Valid ergonomic levels
     const ERGONOMIC_LEVELS = ['golden', 'upper', 'lower'];
@@ -25,6 +26,33 @@ class LocationService {
     public function __construct($db, $lineAccountId = null) {
         $this->db = $db;
         $this->lineAccountId = $lineAccountId ?? 1;
+    }
+    
+    /**
+     * Get valid zone types from database or use defaults
+     * 
+     * @return array List of valid zone type codes
+     */
+    private function getValidZoneTypes(): array {
+        if ($this->validZoneTypes !== null) {
+            return $this->validZoneTypes;
+        }
+        
+        try {
+            $stmt = $this->db->prepare("SELECT code FROM zone_types WHERE is_active = 1");
+            $stmt->execute();
+            $types = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            if (!empty($types)) {
+                $this->validZoneTypes = $types;
+                return $this->validZoneTypes;
+            }
+        } catch (PDOException $e) {
+            // Table might not exist
+        }
+        
+        $this->validZoneTypes = self::DEFAULT_ZONE_TYPES;
+        return $this->validZoneTypes;
     }
     
     /**
@@ -102,10 +130,11 @@ class LocationService {
             throw new Exception('Invalid location code format. Expected: Zone-Shelf-Bin (e.g., A1-03-02)', 400);
         }
         
-        // Validate zone_type if provided
+        // Validate zone_type if provided - use dynamic list from DB
         $zoneType = $data['zone_type'] ?? 'general';
-        if (!in_array($zoneType, self::ZONE_TYPES)) {
-            throw new Exception('Invalid zone type. Allowed: ' . implode(', ', self::ZONE_TYPES), 400);
+        $validZoneTypes = $this->getValidZoneTypes();
+        if (!in_array($zoneType, $validZoneTypes)) {
+            throw new Exception('Invalid zone type. Allowed: ' . implode(', ', $validZoneTypes), 400);
         }
         
         // Validate ergonomic_level if provided
@@ -194,7 +223,8 @@ class LocationService {
         
         // Handle zone_type update
         if (isset($data['zone_type'])) {
-            if (!in_array($data['zone_type'], self::ZONE_TYPES)) {
+            $validZoneTypes = $this->getValidZoneTypes();
+            if (!in_array($data['zone_type'], $validZoneTypes)) {
                 throw new Exception('Invalid zone type', 400);
             }
             $updates[] = 'zone_type = ?';

@@ -17,6 +17,12 @@ if (!file_exists('config/installed.lock') && file_exists('install/index.php')) {
 require_once 'config/config.php';
 require_once 'config/database.php';
 
+// Load landing page service classes
+require_once 'classes/LandingSEOService.php';
+require_once 'classes/FAQService.php';
+require_once 'classes/TestimonialService.php';
+require_once 'classes/TrustBadgeService.php';
+
 $db = Database::getInstance()->getConnection();
 
 // Helper function to get promotion settings
@@ -97,27 +103,29 @@ try {
 // Build LIFF URL
 $liffUrl = $liffId ? "https://liff.line.me/{$liffId}" : null;
 $baseUrl = rtrim(BASE_URL, '/');
+
+// Initialize landing page services (Requirements: 1.1-1.5, 2.1-2.4, 3.1-3.5, 4.1-4.5, 5.1-5.5)
+$seoService = new LandingSEOService($db, $lineAccountId);
+$faqService = new FAQService($db, $lineAccountId);
+$testimonialService = new TestimonialService($db, $lineAccountId);
+$trustBadgeService = new TrustBadgeService($db, $lineAccountId);
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="<?= htmlspecialchars($shopDescription) ?>">
     <meta name="theme-color" content="<?= htmlspecialchars($primaryColor) ?>">
     
-    <!-- Open Graph -->
-    <meta property="og:title" content="<?= htmlspecialchars($shopName) ?>">
-    <meta property="og:description" content="<?= htmlspecialchars($shopDescription) ?>">
-    <?php if ($shopLogo): ?>
-    <meta property="og:image" content="<?= htmlspecialchars($shopLogo) ?>">
-    <?php endif; ?>
+    <!-- SEO Meta Tags Component (Requirements: 1.1, 1.2, 1.3, 1.4, 1.5) -->
+    <?php include 'includes/landing/seo-meta.php'; ?>
     
     <title><?= htmlspecialchars($shopName) ?></title>
     
-    <!-- Fonts -->
+    <!-- Fonts - Preload for performance (Requirements: 6.3) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" as="style">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Icons -->
@@ -818,6 +826,9 @@ $baseUrl = rtrim(BASE_URL, '/');
             }
         }
     </style>
+    
+    <!-- Structured Data Component (Requirements: 2.1, 2.2, 2.3, 2.4) -->
+    <?php include 'includes/landing/structured-data.php'; ?>
 </head>
 <body>
 
@@ -889,6 +900,9 @@ $baseUrl = rtrim(BASE_URL, '/');
         </div>
     </section>
     
+    <!-- Trust Badges Section (Requirements: 3.1, 3.2, 3.3, 3.4, 3.5) -->
+    <?php include 'includes/landing/trust-badges.php'; ?>
+    
     <!-- Services Section (Requirements: 1.4, 5.1) -->
     <section class="services-section" id="services">
         <div class="container">
@@ -924,6 +938,9 @@ $baseUrl = rtrim(BASE_URL, '/');
             </div>
         </div>
     </section>
+    
+    <!-- Testimonials Section (Requirements: 5.1, 5.2, 5.3, 5.4, 5.5) -->
+    <?php include 'includes/landing/testimonials.php'; ?>
     
     <?php if (!empty($promotions)): ?>
     <!-- Promotions Section (Requirements: 5.2) -->
@@ -965,65 +982,8 @@ $baseUrl = rtrim(BASE_URL, '/');
     </section>
     <?php endif; ?>
 
-    <!-- Contact Section (Requirements: 3.1, 5.3) -->
-    <section class="contact-section" id="contact">
-        <div class="container">
-            <div class="section-title">
-                <h2>ติดต่อเรา</h2>
-                <p>พร้อมให้บริการทุกวัน</p>
-            </div>
-            
-            <div class="contact-grid">
-                <?php if ($contactPhone): ?>
-                <div class="contact-item">
-                    <div class="contact-icon">
-                        <i class="fas fa-phone"></i>
-                    </div>
-                    <div class="contact-info">
-                        <h4>โทรศัพท์</h4>
-                        <p><a href="tel:<?= htmlspecialchars($contactPhone) ?>"><?= htmlspecialchars($contactPhone) ?></a></p>
-                    </div>
-                </div>
-                <?php endif; ?>
-                
-                <?php if ($lineId): ?>
-                <div class="contact-item">
-                    <div class="contact-icon">
-                        <i class="fab fa-line"></i>
-                    </div>
-                    <div class="contact-info">
-                        <h4>LINE</h4>
-                        <p><a href="https://line.me/R/ti/p/<?= htmlspecialchars(ltrim($lineId, '@')) ?>" target="_blank"><?= htmlspecialchars($lineId) ?></a></p>
-                    </div>
-                </div>
-                <?php endif; ?>
-                
-                <?php if ($shopEmail): ?>
-                <div class="contact-item">
-                    <div class="contact-icon">
-                        <i class="fas fa-envelope"></i>
-                    </div>
-                    <div class="contact-info">
-                        <h4>อีเมล</h4>
-                        <p><a href="mailto:<?= htmlspecialchars($shopEmail) ?>"><?= htmlspecialchars($shopEmail) ?></a></p>
-                    </div>
-                </div>
-                <?php endif; ?>
-                
-                <?php if ($shopAddress): ?>
-                <div class="contact-item">
-                    <div class="contact-icon">
-                        <i class="fas fa-map-marker-alt"></i>
-                    </div>
-                    <div class="contact-info">
-                        <h4>ที่อยู่</h4>
-                        <p><?= nl2br(htmlspecialchars($shopAddress)) ?></p>
-                    </div>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    </section>
+    <!-- Contact Section with Operating Hours, Phone/LINE Links, and Map (Requirements: 7.1, 7.2, 7.3, 7.4, 7.5) -->
+    <?php include 'includes/landing/contact-section.php'; ?>
     
     <!-- CTA Section -->
     <?php if ($liffUrl): ?>
@@ -1039,13 +999,16 @@ $baseUrl = rtrim(BASE_URL, '/');
     </section>
     <?php endif; ?>
     
+    <!-- FAQ Section (Requirements: 4.1, 4.3, 4.4, 4.5) -->
+    <?php include 'includes/landing/faq-section.php'; ?>
+    
     <!-- Footer (Requirements: 3.1, 3.2) -->
     <footer class="landing-footer">
         <div class="container">
             <div class="footer-content">
                 <div class="footer-logo">
                     <?php if ($shopLogo): ?>
-                    <img src="<?= htmlspecialchars($shopLogo) ?>" alt="<?= htmlspecialchars($shopName) ?>">
+                    <img src="<?= htmlspecialchars($shopLogo) ?>" alt="<?= htmlspecialchars($shopName) ?>" loading="lazy">
                     <?php endif; ?>
                     <span><?= htmlspecialchars($shopName) ?></span>
                 </div>
@@ -1107,6 +1070,157 @@ $baseUrl = rtrim(BASE_URL, '/');
             Admin
         </a>
     </div>
+    <?php endif; ?>
+    
+    <!-- Floating LINE Button (Requirements: 8.1, 8.5) -->
+    <?php if ($lineId): ?>
+    <a href="https://line.me/R/ti/p/<?= htmlspecialchars(ltrim($lineId, '@')) ?>" 
+       class="floating-line-btn" 
+       id="floatingLineBtn"
+       target="_blank"
+       title="แชทกับเราทาง LINE">
+        <i class="fab fa-line"></i>
+        <span class="floating-line-tooltip">แชทกับเรา</span>
+    </a>
+    
+    <style>
+    /* Floating LINE Button Styles (Requirements: 8.1, 8.4, 8.5) */
+    .floating-line-btn {
+        position: fixed;
+        bottom: 100px;
+        right: 20px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #06C755;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        box-shadow: 0 4px 16px rgba(6, 199, 85, 0.4);
+        z-index: 99;
+        opacity: 0;
+        transform: translateY(20px) scale(0.8);
+        transition: all 0.3s ease;
+        pointer-events: none;
+    }
+    
+    .floating-line-btn.visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+    }
+    
+    .floating-line-btn:hover {
+        background: #05B04C;
+        transform: translateY(-2px) scale(1.05);
+        box-shadow: 0 6px 24px rgba(6, 199, 85, 0.5);
+    }
+    
+    .floating-line-tooltip {
+        position: absolute;
+        right: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #1F2937;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        white-space: nowrap;
+        margin-right: 12px;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.2s ease;
+    }
+    
+    .floating-line-tooltip::after {
+        content: '';
+        position: absolute;
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 6px solid transparent;
+        border-left-color: #1F2937;
+    }
+    
+    /* Desktop: Show tooltip on hover (Requirements: 8.4) */
+    @media (min-width: 768px) {
+        .floating-line-btn:hover .floating-line-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .floating-line-btn {
+            bottom: 40px;
+            right: 40px;
+            width: 60px;
+            height: 60px;
+            font-size: 32px;
+        }
+    }
+    
+    /* Mobile: Adjust position to not overlap with mobile CTA (Requirements: 8.3) */
+    @media (max-width: 767px) {
+        .floating-line-btn {
+            bottom: 100px;
+            right: 16px;
+            width: 52px;
+            height: 52px;
+            font-size: 26px;
+        }
+        
+        .floating-line-tooltip {
+            display: none;
+        }
+    }
+    
+    /* Reduced Motion */
+    @media (prefers-reduced-motion: reduce) {
+        .floating-line-btn {
+            transition: none;
+        }
+    }
+    </style>
+    
+    <script>
+    /**
+     * Floating LINE Button Scroll Behavior
+     * Requirements: 8.1 - Show when user scrolls down
+     */
+    (function() {
+        const floatingBtn = document.getElementById('floatingLineBtn');
+        if (!floatingBtn) return;
+        
+        let lastScrollY = 0;
+        let ticking = false;
+        const showThreshold = 300; // Show after scrolling 300px
+        
+        function updateFloatingBtn() {
+            const scrollY = window.scrollY || window.pageYOffset;
+            
+            if (scrollY > showThreshold) {
+                floatingBtn.classList.add('visible');
+            } else {
+                floatingBtn.classList.remove('visible');
+            }
+            
+            lastScrollY = scrollY;
+            ticking = false;
+        }
+        
+        window.addEventListener('scroll', function() {
+            if (!ticking) {
+                window.requestAnimationFrame(updateFloatingBtn);
+                ticking = true;
+            }
+        }, { passive: true });
+        
+        // Initial check
+        updateFloatingBtn();
+    })();
+    </script>
     <?php endif; ?>
 
 </body>

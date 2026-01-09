@@ -8,6 +8,13 @@ RewriteEngine On
 RewriteBase /
 
 # =====================================================
+# SEO Files - Dynamic sitemap.xml and robots.txt
+# Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
+# =====================================================
+RewriteRule ^sitemap\.xml$ sitemap.php [L]
+RewriteRule ^robots\.txt$ robots.php [L]
+
+# =====================================================
 # Redirect /liff-app to /liff/
 # =====================================================
 RewriteCond %{QUERY_STRING} ^(.*)$

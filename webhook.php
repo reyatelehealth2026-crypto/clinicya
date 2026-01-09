@@ -169,8 +169,11 @@ if (!$line) {
                 continue;
             }
             
-            // สำหรับ event จากกลุ่ม - บันทึกผู้ใช้และ event เสมอ
+            // สำหรับ event จากกลุ่ม - ตรวจสอบและสร้างกลุ่มอัตโนมัติถ้ายังไม่มี
             if (($sourceType === 'group' || $sourceType === 'room') && $groupId && $lineAccountId) {
+                // ตรวจสอบและสร้างกลุ่มอัตโนมัติ
+                ensureGroupExists($db, $line, $lineAccountId, $groupId, $sourceType);
+                
                 if ($userId) {
                     // บันทึกผู้ใช้จากกลุ่ม
                     $groupUser = getOrCreateUser($db, $line, $userId, $lineAccountId, $groupId);
@@ -3163,6 +3166,58 @@ if (!$line) {
                 $telegram->sendLocation($lat, $lng, "📍 <b>ตำแหน่ง</b>\n\n👤 จาก: {$displayName}\n📍 {$address}\n\n💡 <code>/r {$dbUserId} ข้อความ</code>", $dbUserId);
             } else {
                 $telegram->notifyNewMessage($displayName, "[{$messageType}]", '', $dbUserId);
+            }
+        }
+
+        /**
+         * Ensure group exists in database - สร้างกลุ่มอัตโนมัติถ้ายังไม่มี
+         * ใช้เมื่อได้รับ event จากกลุ่มที่บอทอยู่แล้วแต่ยังไม่มีในระบบ
+         */
+        function ensureGroupExists($db, $line, $lineAccountId, $groupId, $sourceType = 'group') {
+            if (!$lineAccountId || !$groupId) return;
+            
+            try {
+                // ตรวจสอบว่ามีกลุ่มนี้ในระบบหรือยัง
+                $stmt = $db->prepare("SELECT id FROM line_groups WHERE line_account_id = ? AND group_id = ?");
+                $stmt->execute([$lineAccountId, $groupId]);
+                
+                if ($stmt->fetch()) {
+                    return; // มีอยู่แล้ว ไม่ต้องทำอะไร
+                }
+                
+                // ยังไม่มี - ดึงข้อมูลกลุ่มจาก LINE API
+                $groupInfo = [];
+                try {
+                    if ($sourceType === 'group') {
+                        $groupInfo = $line->getGroupSummary($groupId);
+                    }
+                } catch (Exception $e) {
+                    // API อาจ fail ถ้าบอทไม่มีสิทธิ์
+                }
+                
+                $groupName = $groupInfo['groupName'] ?? 'Unknown Group';
+                $pictureUrl = $groupInfo['pictureUrl'] ?? null;
+                $memberCount = $groupInfo['memberCount'] ?? 0;
+                
+                // บันทึกกลุ่มใหม่
+                $stmt = $db->prepare("
+                    INSERT INTO line_groups (line_account_id, group_id, group_type, group_name, picture_url, member_count, is_active, joined_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 1, NOW())
+                    ON DUPLICATE KEY UPDATE 
+                        is_active = 1,
+                        updated_at = NOW()
+                ");
+                $stmt->execute([$lineAccountId, $groupId, $sourceType, $groupName, $pictureUrl, $memberCount]);
+                
+                // Log
+                devLog($db, 'info', 'webhook', 'Auto-created group from event', [
+                    'group_id' => $groupId,
+                    'group_name' => $groupName,
+                    'line_account_id' => $lineAccountId
+                ]);
+                
+            } catch (Exception $e) {
+                // Ignore errors - ไม่ให้กระทบ flow หลัก
             }
         }
 

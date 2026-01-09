@@ -102,24 +102,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $stmt = $db->prepare("UPDATE auto_replies SET 
                                 keyword=?, description=?, match_type=?, reply_type=?, reply_content=?, 
                                 alt_text=?, sender_name=?, sender_icon=?, quick_reply=?, enable_share=?, share_button_label=?, tags=?, priority=?, is_active=?
-                                WHERE id=? AND (line_account_id = ? OR line_account_id IS NULL)");
+                                WHERE id=?");
                             $stmt->execute([
                                 $keyword, $description, $matchType, $replyType, $replyContent,
                                 $altText ?: null, $senderName ?: null, $senderIcon ?: null,
                                 $quickReply ?: null, $enableShare, $shareButtonLabel,
                                 $tags ?: null, $priority, $isActive,
-                                $_POST['id'], $currentBotId
+                                $_POST['id']
                             ]);
                         } else {
                             $stmt = $db->prepare("UPDATE auto_replies SET 
                                 keyword=?, description=?, match_type=?, reply_type=?, reply_content=?, 
                                 alt_text=?, sender_name=?, sender_icon=?, quick_reply=?, tags=?, priority=?, is_active=?
-                                WHERE id=? AND (line_account_id = ? OR line_account_id IS NULL)");
+                                WHERE id=?");
                             $stmt->execute([
                                 $keyword, $description, $matchType, $replyType, $replyContent,
                                 $altText ?: null, $senderName ?: null, $senderIcon ?: null,
                                 $quickReply ?: null, $tags ?: null, $priority, $isActive,
-                                $_POST['id'], $currentBotId
+                                $_POST['id']
                             ]);
                         }
                         $message = 'อัพเดทกฎเรียบร้อย';
@@ -130,8 +130,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt = $db->prepare("INSERT INTO auto_replies (keyword, match_type, reply_type, reply_content, is_active, priority, line_account_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
                         $stmt->execute([$keyword, $matchType, $replyType, $replyContent, $isActive, $priority, $currentBotId]);
                     } else {
-                        $stmt = $db->prepare("UPDATE auto_replies SET keyword=?, match_type=?, reply_type=?, reply_content=?, is_active=?, priority=? WHERE id=? AND (line_account_id = ? OR line_account_id IS NULL)");
-                        $stmt->execute([$keyword, $matchType, $replyType, $replyContent, $isActive, $priority, $_POST['id'], $currentBotId]);
+                        $stmt = $db->prepare("UPDATE auto_replies SET keyword=?, match_type=?, reply_type=?, reply_content=?, is_active=?, priority=? WHERE id=?");
+                        $stmt->execute([$keyword, $matchType, $replyType, $replyContent, $isActive, $priority, $_POST['id']]);
                     }
                     $message = $action === 'create' ? 'เพิ่มกฎใหม่เรียบร้อย' : 'อัพเดทกฎเรียบร้อย';
                 }
@@ -140,12 +140,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } elseif ($action === 'delete') {
-        $stmt = $db->prepare("DELETE FROM auto_replies WHERE id = ? AND (line_account_id = ? OR line_account_id IS NULL)");
-        $stmt->execute([$_POST['id'], $currentBotId]);
+        $stmt = $db->prepare("DELETE FROM auto_replies WHERE id = ?");
+        $stmt->execute([$_POST['id']]);
         $message = 'ลบกฎเรียบร้อย';
     } elseif ($action === 'toggle') {
-        $stmt = $db->prepare("UPDATE auto_replies SET is_active = NOT is_active WHERE id = ? AND (line_account_id = ? OR line_account_id IS NULL)");
-        $stmt->execute([$_POST['id'], $currentBotId]);
+        $stmt = $db->prepare("UPDATE auto_replies SET is_active = NOT is_active WHERE id = ?");
+        $stmt->execute([$_POST['id']]);
     } elseif ($action === 'duplicate') {
         $stmt = $db->prepare("SELECT * FROM auto_replies WHERE id = ?");
         $stmt->execute([$_POST['id']]);
