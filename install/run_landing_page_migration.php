@@ -45,8 +45,13 @@ try {
     
     $sql = file_get_contents($sqlFile);
     
-    // Split by semicolon and execute each statement
-    $statements = array_filter(array_map('trim', explode(';', $sql)));
+    // Remove comments
+    $sql = preg_replace('/--.*$/m', '', $sql);
+    $sql = preg_replace('/\/\*.*?\*\//s', '', $sql);
+    
+    // Split by semicolon followed by newline (to avoid splitting inside VALUES)
+    $statements = preg_split('/;\s*\n/', $sql);
+    $statements = array_filter(array_map('trim', $statements));
     
     $success = 0;
     $skipped = 0;
