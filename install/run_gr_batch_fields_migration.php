@@ -22,7 +22,8 @@ try {
         'batch_number' => "VARCHAR(50) NULL COMMENT 'Batch number from supplier'",
         'lot_number' => "VARCHAR(50) NULL COMMENT 'Lot number from supplier'",
         'expiry_date' => "DATE NULL COMMENT 'Product expiry date'",
-        'manufacture_date' => "DATE NULL COMMENT 'Product manufacture date'"
+        'manufacture_date' => "DATE NULL COMMENT 'Product manufacture date'",
+        'unit_cost' => "DECIMAL(12,2) NOT NULL DEFAULT 0 COMMENT 'Unit cost at time of receive'"
     ];
     
     // Define indexes to add
