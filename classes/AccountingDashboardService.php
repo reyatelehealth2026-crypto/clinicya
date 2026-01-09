@@ -624,13 +624,13 @@ class AccountingDashboardService {
      * @return array COGS data
      */
     private function getMonthlyApCOGS(string $startDate, string $endDate): array {
+        // Use all AP as COGS proxy (purchases from suppliers)
         $sql = "
             SELECT 
                 COUNT(*) as purchase_count,
                 COALESCE(SUM(total_amount), 0) as total
             FROM account_payables
             WHERE invoice_date BETWEEN ? AND ?
-            AND source_type = 'goods_receive'
         ";
         $params = [$startDate, $endDate];
         
