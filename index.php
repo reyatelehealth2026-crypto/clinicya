@@ -22,6 +22,8 @@ require_once 'classes/LandingSEOService.php';
 require_once 'classes/FAQService.php';
 require_once 'classes/TestimonialService.php';
 require_once 'classes/TrustBadgeService.php';
+require_once 'classes/LandingBannerService.php';
+require_once 'classes/FeaturedProductService.php';
 
 $db = Database::getInstance()->getConnection();
 
@@ -109,6 +111,8 @@ $seoService = new LandingSEOService($db, $lineAccountId);
 $faqService = new FAQService($db, $lineAccountId);
 $testimonialService = new TestimonialService($db, $lineAccountId);
 $trustBadgeService = new TrustBadgeService($db, $lineAccountId);
+$bannerService = new LandingBannerService($db, $lineAccountId);
+$featuredProductService = new FeaturedProductService($db, $lineAccountId);
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -900,8 +904,14 @@ $trustBadgeService = new TrustBadgeService($db, $lineAccountId);
         </div>
     </section>
     
+    <!-- Banner Slider Section -->
+    <?php include 'includes/landing/banner-slider.php'; ?>
+    
     <!-- Trust Badges Section (Requirements: 3.1, 3.2, 3.3, 3.4, 3.5) -->
     <?php include 'includes/landing/trust-badges.php'; ?>
+    
+    <!-- Featured Products Section (from admin selection) -->
+    <?php include 'includes/landing/featured-products.php'; ?>
     
     <!-- Services Section (Requirements: 1.4, 5.1) -->
     <section class="services-section" id="services">

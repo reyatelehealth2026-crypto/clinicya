@@ -1,7 +1,7 @@
 <?php
 /**
  * Landing Page Settings - Admin Panel
- * จัดการตั้งค่า Landing Page: SEO, FAQ, Testimonials, Trust Badges
+ * จัดการตั้งค่า Landing Page: Banners, Featured Products, SEO, FAQ, Testimonials, Trust Badges
  * 
  * Requirements: 10.1, 10.2, 10.3, 10.4, 10.5
  */
@@ -17,6 +17,8 @@ require_once ADMIN_BASE_PATH . 'classes/FAQService.php';
 require_once ADMIN_BASE_PATH . 'classes/TestimonialService.php';
 require_once ADMIN_BASE_PATH . 'classes/TrustBadgeService.php';
 require_once ADMIN_BASE_PATH . 'classes/LandingSEOService.php';
+require_once ADMIN_BASE_PATH . 'classes/LandingBannerService.php';
+require_once ADMIN_BASE_PATH . 'classes/FeaturedProductService.php';
 
 $db = Database::getInstance()->getConnection();
 $currentBotId = $_SESSION['current_bot_id'] ?? null;
@@ -26,16 +28,20 @@ $faqService = new FAQService($db, $currentBotId);
 $testimonialService = new TestimonialService($db, $currentBotId);
 $trustBadgeService = new TrustBadgeService($db, $currentBotId);
 $seoService = new LandingSEOService($db, $currentBotId);
+$bannerService = new LandingBannerService($db, $currentBotId);
+$featuredProductService = new FeaturedProductService($db, $currentBotId);
 
 // Tab configuration
 $tabs = [
-    'seo' => ['label' => 'SEO Settings', 'icon' => 'fas fa-search'],
-    'faq' => ['label' => 'FAQ', 'icon' => 'fas fa-question-circle', 'badge' => $faqService->getCount(false)],
-    'testimonials' => ['label' => 'รีวิว', 'icon' => 'fas fa-star', 'badge' => $testimonialService->getPendingCount()],
+    'banners' => ['label' => 'แบนเนอร์', 'icon' => 'fas fa-images', 'badge' => $bannerService->getCount()],
+    'featured' => ['label' => 'สินค้าแนะนำ', 'icon' => 'fas fa-star', 'badge' => $featuredProductService->getCount()],
+    'seo' => ['label' => 'SEO', 'icon' => 'fas fa-search'],
+    'faq' => ['label' => 'FAQ', 'icon' => 'fas fa-question-circle'],
+    'testimonials' => ['label' => 'รีวิว', 'icon' => 'fas fa-comments', 'badge' => $testimonialService->getPendingCount()],
     'trust' => ['label' => 'Trust Badges', 'icon' => 'fas fa-shield-alt'],
 ];
 
-$activeTab = getActiveTab($tabs, 'seo');
+$activeTab = getActiveTab($tabs, 'banners');
 $pageTitle = 'ตั้งค่า Landing Page';
 
 $success = null;
@@ -46,6 +52,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
     try {
+        // Banner actions
+        if ($action === 'create_banner') {
+            $bannerService->create([
+                'title' => $_POST['title'] ?? '',
+                'image_url' => $_POST['image_url'] ?? '',
+                'link_url' => $_POST['link_url'] ?? '',
+                'link_type' => $_POST['link_type'] ?? 'none',
+                'is_active' => isset($_POST['is_active']) ? 1 : 0
+            ]);
+            $success = 'เพิ่มแบนเนอร์สำเร็จ!';
+            $activeTab = 'banners';
+        }
+        elseif ($action === 'update_banner') {
+            $bannerService->update((int)$_POST['id'], [
+                'title' => $_POST['title'] ?? '',
+                'image_url' => $_POST['image_url'] ?? '',
+                'link_url' => $_POST['link_url'] ?? '',
+                'link_type' => $_POST['link_type'] ?? 'none',
+                'is_active' => isset($_POST['is_active']) ? 1 : 0
+            ]);
+            $success = 'อัปเดตแบนเนอร์สำเร็จ!';
+            $activeTab = 'banners';
+        }
+        elseif ($action === 'delete_banner') {
+            $bannerService->delete((int)$_POST['id']);
+            $success = 'ลบแบนเนอร์สำเร็จ!';
+            $activeTab = 'banners';
+        }
+        
+        // Featured Products actions
+        elseif ($action === 'add_featured') {
+            $featuredProductService->addProduct((int)$_POST['product_id']);
+            $success = 'เพิ่มสินค้าแนะนำสำเร็จ!';
+            $activeTab = 'featured';
+        }
+        elseif ($action === 'remove_featured') {
+            $featuredProductService->removeProduct((int)$_POST['id']);
+            $success = 'ลบสินค้าออกจากรายการแนะนำสำเร็จ!';
+            $activeTab = 'featured';
+        }
+        elseif ($action === 'toggle_featured') {
+            $featuredProductService->toggleActive((int)$_POST['id']);
+            $success = 'อัปเดตสถานะสำเร็จ!';
+            $activeTab = 'featured';
+        }
+        
         // SEO Settings actions (Requirements: 10.1, 10.2)
         if ($action === 'save_seo') {
             $settings = [
@@ -233,6 +285,12 @@ echo getTabsStyles();
     <div class="tab-panel">
         <?php
         switch ($activeTab) {
+            case 'banners':
+                include ADMIN_BASE_PATH . 'includes/landing/admin-banners.php';
+                break;
+            case 'featured':
+                include ADMIN_BASE_PATH . 'includes/landing/admin-featured.php';
+                break;
             case 'faq':
                 include ADMIN_BASE_PATH . 'includes/landing/admin-faq.php';
                 break;
