@@ -8,6 +8,9 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/database.php';
+
+$db = Database::getInstance()->getConnection();
 
 echo "<h2>Migration: Add Frozen Zone Type & Flexible Zone Types</h2>";
 echo "<pre>";
