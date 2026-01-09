@@ -67,7 +67,7 @@ class AccountPayableService {
     public function createFromGR(int $grId): int {
         // Get GR details with PO and supplier info
         $stmt = $this->db->prepare("
-            SELECT gr.*, po.id as po_id, po.po_number, po.total_amount, po.supplier_id,
+            SELECT gr.*, po.id as po_id, po.po_number, po.total_amount as po_total_amount, po.supplier_id,
                    s.name as supplier_name, s.payment_terms
             FROM goods_receives gr
             LEFT JOIN purchase_orders po ON gr.po_id = po.id
@@ -92,6 +92,28 @@ class AccountPayableService {
             throw new Exception('AP already exists for this Goods Receive');
         }
         
+        // Calculate actual GR total from GR items (not PO total)
+        // This fixes the issue where partial receives create AP with full PO amount
+        $stmt = $this->db->prepare("
+            SELECT COALESCE(SUM(gri.quantity * poi.unit_cost), 0) as gr_total
+            FROM goods_receive_items gri
+            LEFT JOIN purchase_order_items poi ON gri.po_item_id = poi.id
+            WHERE gri.gr_id = ?
+        ");
+        $stmt->execute([$grId]);
+        $grTotal = (float)$stmt->fetchColumn();
+        
+        // If no unit_cost found, try to calculate from GR items directly
+        if ($grTotal <= 0) {
+            $stmt = $this->db->prepare("
+                SELECT COALESCE(SUM(gri.quantity * COALESCE(gri.unit_cost, 0)), 0) as gr_total
+                FROM goods_receive_items gri
+                WHERE gri.gr_id = ?
+            ");
+            $stmt->execute([$grId]);
+            $grTotal = (float)$stmt->fetchColumn();
+        }
+        
         // Calculate due date based on supplier credit terms
         $creditTerms = (int)($gr['payment_terms'] ?? 30);
         $grDate = $gr['receive_date'] ?? date('Y-m-d');
@@ -100,7 +122,7 @@ class AccountPayableService {
         // Generate AP number
         $apNumber = $this->generateApNumber();
         
-        // Create AP record
+        // Create AP record with actual GR total (not PO total)
         $stmt = $this->db->prepare("
             INSERT INTO account_payables 
             (line_account_id, ap_number, supplier_id, po_id, gr_id, invoice_date, 
@@ -112,7 +134,8 @@ class AccountPayableService {
             'gr_number' => $gr['gr_number'],
             'po_number' => $gr['po_number'],
             'supplier_name' => $gr['supplier_name'],
-            'credit_terms' => $creditTerms
+            'credit_terms' => $creditTerms,
+            'po_total_amount' => $gr['po_total_amount']
         ]);
         
         $notes = "Auto-created from GR: {$gr['gr_number']}";
@@ -125,8 +148,8 @@ class AccountPayableService {
             $grId,
             $grDate,
             $dueDate,
-            $gr['total_amount'],
-            $gr['total_amount'], // balance = total_amount initially
+            $grTotal,
+            $grTotal, // balance = total_amount initially
             $notes,
             $metadata
         ]);
