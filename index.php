@@ -874,6 +874,9 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
         </div>
     </header>
     
+    <!-- Banner Slider Section (moved to top) -->
+    <?php include 'includes/landing/banner-slider.php'; ?>
+    
     <!-- Hero Section (Requirements: 1.1, 1.2, 1.3) -->
     <section class="hero-section">
         <div class="container">
@@ -903,9 +906,6 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
             </div>
         </div>
     </section>
-    
-    <!-- Banner Slider Section -->
-    <?php include 'includes/landing/banner-slider.php'; ?>
     
     <!-- Trust Badges Section (Requirements: 3.1, 3.2, 3.3, 3.4, 3.5) -->
     <?php include 'includes/landing/trust-badges.php'; ?>

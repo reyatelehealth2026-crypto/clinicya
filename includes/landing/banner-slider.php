@@ -96,8 +96,9 @@ if (empty($banners)) return;
 .slide img {
     width: 100%;
     aspect-ratio: 16/7;
-    object-fit: cover;
+    object-fit: contain;
     display: block;
+    background: #f8fafc;
 }
 
 @media (max-width: 767px) {
