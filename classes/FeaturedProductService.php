@@ -63,7 +63,7 @@ class FeaturedProductService {
         try {
             switch ($source) {
                 case 'business_items':
-                    $sql = "SELECT id, item_name as name, price, image_url, item_code as sku
+                    $sql = "SELECT id, name, price, image_url, sku
                             FROM business_items WHERE id = ?";
                     break;
                 case 'cny_products':
@@ -91,8 +91,9 @@ class FeaturedProductService {
         
         // Try business_items first
         try {
-            $sql = "SELECT id, item_name as name, price, image_url, item_code as sku
+            $sql = "SELECT id, name, price, image_url, sku
                     FROM business_items 
+                    WHERE is_active = 1
                     ORDER BY id DESC LIMIT ?";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([$limit]);
@@ -105,6 +106,7 @@ class FeaturedProductService {
                 $remaining = $limit - count($products);
                 $sql = "SELECT id, name, price, image_url, sku
                         FROM cny_products 
+                        WHERE is_active = 1
                         ORDER BY id DESC LIMIT ?";
                 $stmt = $this->db->prepare($sql);
                 $stmt->execute([$remaining]);
