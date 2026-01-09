@@ -83,7 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Featured Products actions
         elseif ($action === 'add_featured') {
-            $featuredProductService->addProduct((int)$_POST['product_id']);
+            $productSource = $_POST['product_source'] ?? 'products';
+            $featuredProductService->addProduct((int)$_POST['product_id'], $productSource);
             $success = 'เพิ่มสินค้าแนะนำสำเร็จ!';
             $activeTab = 'featured';
         }

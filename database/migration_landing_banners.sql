@@ -32,13 +32,14 @@ CREATE TABLE IF NOT EXISTS `landing_featured_products` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `line_account_id` INT NULL,
     `product_id` INT NOT NULL,
+    `product_source` VARCHAR(50) DEFAULT 'products' COMMENT 'products, business_items, cny_products',
     `sort_order` INT DEFAULT 0,
     `is_active` TINYINT(1) DEFAULT 1,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_featured_account` (`line_account_id`),
     INDEX `idx_featured_product` (`product_id`),
     INDEX `idx_featured_active` (`is_active`, `sort_order`),
-    UNIQUE KEY `uk_featured_product` (`line_account_id`, `product_id`)
+    UNIQUE KEY `uk_featured_product` (`line_account_id`, `product_id`, `product_source`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

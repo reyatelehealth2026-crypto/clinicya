@@ -1,6 +1,7 @@
 <?php
 /**
  * FeaturedProductService - จัดการสินค้าแนะนำสำหรับ Landing Page
+ * รองรับหลายตาราง: business_items, cny_products, products
  */
 
 class FeaturedProductService {
@@ -17,12 +18,10 @@ class FeaturedProductService {
      */
     public function getFeaturedProducts(int $limit = 8): array {
         try {
-            // First try to get manually selected products
-            $sql = "SELECT p.id, p.name, p.price, p.sale_price, p.image_url, p.sku,
-                           lf.sort_order
+            // Get manually selected products
+            $sql = "SELECT lf.id, lf.product_id, lf.product_source, lf.sort_order
                     FROM landing_featured_products lf
-                    INNER JOIN products p ON lf.product_id = p.id
-                    WHERE lf.is_active = 1 AND p.is_active = 1";
+                    WHERE lf.is_active = 1";
             $params = [];
             
             if ($this->lineAccountId !== null) {
@@ -35,11 +34,20 @@ class FeaturedProductService {
             
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
-            $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $selections = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            // If no manual selection, fallback to featured/bestseller products
-            if (empty($products)) {
+            if (empty($selections)) {
                 return $this->getAutoFeaturedProducts($limit);
+            }
+            
+            // Fetch actual product data from respective tables
+            $products = [];
+            foreach ($selections as $sel) {
+                $product = $this->getProductFromSource($sel['product_id'], $sel['product_source']);
+                if ($product) {
+                    $product['sort_order'] = $sel['sort_order'];
+                    $products[] = $product;
+                }
             }
             
             return $products;
@@ -49,30 +57,63 @@ class FeaturedProductService {
     }
     
     /**
-     * Auto-select featured products based on flags
+     * Get product from specific source table
+     */
+    private function getProductFromSource(int $productId, string $source): ?array {
+        try {
+            switch ($source) {
+                case 'business_items':
+                    $sql = "SELECT id, item_name as name, price, image_url, item_code as sku
+                            FROM business_items WHERE id = ?";
+                    break;
+                case 'cny_products':
+                    $sql = "SELECT id, name, price, image_url, sku
+                            FROM cny_products WHERE id = ?";
+                    break;
+                default:
+                    $sql = "SELECT id, name, price, sale_price, image_url, sku
+                            FROM products WHERE id = ?";
+            }
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([$productId]);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            return $result ?: null;
+        } catch (PDOException $e) {
+            return null;
+        }
+    }
+    
+    /**
+     * Auto-select featured products from available tables
      */
     private function getAutoFeaturedProducts(int $limit = 8): array {
+        $products = [];
+        
+        // Try business_items first
         try {
-            $sql = "SELECT id, name, price, sale_price, image_url, sku
-                    FROM products 
-                    WHERE is_active = 1 
-                    AND (is_featured = 1 OR is_bestseller = 1 OR is_new = 1)";
-            $params = [];
-            
-            if ($this->lineAccountId !== null) {
-                $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
-                $params[] = $this->lineAccountId;
-            }
-            
-            $sql .= " ORDER BY is_featured DESC, is_bestseller DESC, is_new DESC, id DESC LIMIT ?";
-            $params[] = $limit;
-            
+            $sql = "SELECT id, item_name as name, price, image_url, item_code as sku
+                    FROM business_items 
+                    ORDER BY id DESC LIMIT ?";
             $stmt = $this->db->prepare($sql);
-            $stmt->execute($params);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            return [];
+            $stmt->execute([$limit]);
+            $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {}
+        
+        // If not enough, try cny_products
+        if (count($products) < $limit) {
+            try {
+                $remaining = $limit - count($products);
+                $sql = "SELECT id, name, price, image_url, sku
+                        FROM cny_products 
+                        ORDER BY id DESC LIMIT ?";
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute([$remaining]);
+                $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $products = array_merge($products, $items);
+            } catch (PDOException $e) {}
         }
+        
+        return array_slice($products, 0, $limit);
     }
     
     /**
@@ -80,10 +121,7 @@ class FeaturedProductService {
      */
     public function getAllForAdmin(): array {
         try {
-            $sql = "SELECT lf.*, p.name as product_name, p.image_url as product_image, p.price, p.is_active as product_active
-                    FROM landing_featured_products lf
-                    LEFT JOIN products p ON lf.product_id = p.id
-                    WHERE 1=1";
+            $sql = "SELECT lf.* FROM landing_featured_products lf WHERE 1=1";
             $params = [];
             
             if ($this->lineAccountId !== null) {
@@ -95,52 +133,40 @@ class FeaturedProductService {
             
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $selections = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Enrich with product data
+            foreach ($selections as &$sel) {
+                $product = $this->getProductFromSource($sel['product_id'], $sel['product_source'] ?? 'products');
+                $sel['product_name'] = $product['name'] ?? 'สินค้าถูกลบ';
+                $sel['product_image'] = $product['image_url'] ?? null;
+                $sel['price'] = $product['price'] ?? 0;
+                $sel['product_active'] = $product ? true : false;
+            }
+            
+            return $selections;
         } catch (PDOException $e) {
             return [];
         }
     }
     
     /**
-     * Search products for selection
-     */
-    public function searchProducts(string $query, int $limit = 20): array {
-        $sql = "SELECT id, name, sku, price, image_url 
-                FROM products 
-                WHERE is_active = 1 
-                AND (name LIKE ? OR sku LIKE ?)";
-        $params = ["%{$query}%", "%{$query}%"];
-        
-        if ($this->lineAccountId !== null) {
-            $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
-            $params[] = $this->lineAccountId;
-        }
-        
-        $sql .= " ORDER BY name ASC LIMIT ?";
-        $params[] = $limit;
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-    
-    /**
      * Add product to featured list
      */
-    public function addProduct(int $productId): int {
+    public function addProduct(int $productId, string $source = 'products'): int {
         // Check if already exists
-        $stmt = $this->db->prepare("SELECT id FROM landing_featured_products WHERE product_id = ? AND (line_account_id = ? OR (line_account_id IS NULL AND ? IS NULL))");
-        $stmt->execute([$productId, $this->lineAccountId, $this->lineAccountId]);
+        $stmt = $this->db->prepare("SELECT id FROM landing_featured_products WHERE product_id = ? AND product_source = ? AND (line_account_id = ? OR (line_account_id IS NULL AND ? IS NULL))");
+        $stmt->execute([$productId, $source, $this->lineAccountId, $this->lineAccountId]);
         if ($stmt->fetch()) {
             throw new Exception('สินค้านี้ถูกเลือกไว้แล้ว');
         }
         
         $sortOrder = $this->getNextSortOrder();
         $stmt = $this->db->prepare("
-            INSERT INTO landing_featured_products (line_account_id, product_id, sort_order, is_active)
-            VALUES (?, ?, ?, 1)
+            INSERT INTO landing_featured_products (line_account_id, product_id, product_source, sort_order, is_active)
+            VALUES (?, ?, ?, ?, 1)
         ");
-        $stmt->execute([$this->lineAccountId, $productId, $sortOrder]);
+        $stmt->execute([$this->lineAccountId, $productId, $source, $sortOrder]);
         return (int)$this->db->lastInsertId();
     }
     
@@ -150,17 +176,6 @@ class FeaturedProductService {
     public function removeProduct(int $id): bool {
         $stmt = $this->db->prepare("DELETE FROM landing_featured_products WHERE id = ?");
         return $stmt->execute([$id]);
-    }
-    
-    /**
-     * Reorder featured products
-     */
-    public function reorder(array $ids): bool {
-        $stmt = $this->db->prepare("UPDATE landing_featured_products SET sort_order = ? WHERE id = ?");
-        foreach ($ids as $order => $id) {
-            $stmt->execute([$order + 1, (int)$id]);
-        }
-        return true;
     }
     
     /**

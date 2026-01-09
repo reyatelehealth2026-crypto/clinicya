@@ -302,16 +302,17 @@ function searchProducts(query) {
                 if (data.products && data.products.length > 0) {
                     let html = '';
                     data.products.forEach(p => {
+                        const source = p.source || 'products';
                         html += `
-                            <div class="product-result-item" onclick="addFeaturedProduct(${p.id})">
+                            <div class="product-result-item" onclick="addFeaturedProduct(${p.id}, '${source}')">
                                 <div class="product-result-image">
                                     ${p.image_url ? `<img src="${p.image_url}" alt="">` : '<i class="fas fa-box" style="margin:12px;color:#9ca3af;"></i>'}
                                 </div>
                                 <div class="product-result-info">
                                     <div class="product-result-name">${p.name}</div>
-                                    <div class="product-result-sku">${p.sku || ''}</div>
+                                    <div class="product-result-sku">${p.sku || ''} <span style="font-size:10px;color:#9ca3af;">(${source})</span></div>
                                 </div>
-                                <div class="product-result-price">฿${Number(p.price).toLocaleString()}</div>
+                                <div class="product-result-price">฿${Number(p.price || 0).toLocaleString()}</div>
                             </div>
                         `;
                     });
@@ -336,12 +337,13 @@ function searchProducts(query) {
     }, 300);
 }
 
-function addFeaturedProduct(productId) {
+function addFeaturedProduct(productId, source) {
     const form = document.createElement('form');
     form.method = 'POST';
     form.innerHTML = `
         <input type="hidden" name="action" value="add_featured">
         <input type="hidden" name="product_id" value="${productId}">
+        <input type="hidden" name="product_source" value="${source}">
     `;
     document.body.appendChild(form);
     form.submit();

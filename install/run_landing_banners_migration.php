@@ -76,13 +76,14 @@ try {
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `line_account_id` INT NULL,
                 `product_id` INT NOT NULL,
+                `product_source` VARCHAR(50) DEFAULT 'products' COMMENT 'products, business_items, cny_products',
                 `sort_order` INT DEFAULT 0,
                 `is_active` TINYINT(1) DEFAULT 1,
                 `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX `idx_featured_account` (`line_account_id`),
                 INDEX `idx_featured_product` (`product_id`),
                 INDEX `idx_featured_active` (`is_active`, `sort_order`),
-                UNIQUE KEY `uk_featured_product` (`line_account_id`, `product_id`)
+                UNIQUE KEY `uk_featured_product` (`line_account_id`, `product_id`, `product_source`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
         echo "✅ Created table: landing_featured_products\n";
@@ -90,6 +91,17 @@ try {
     } catch (PDOException $e) {
         echo "❌ Error creating landing_featured_products: " . $e->getMessage() . "\n";
         $errors++;
+    }
+    
+    // Add product_source column if not exists
+    try {
+        $db->exec("ALTER TABLE landing_featured_products ADD COLUMN product_source VARCHAR(50) DEFAULT 'products' AFTER product_id");
+        echo "✅ Added column: product_source\n";
+        $success++;
+    } catch (PDOException $e) {
+        if (strpos($e->getMessage(), 'Duplicate') !== false) {
+            echo "⚠️ Column product_source already exists\n";
+        }
     }
     
     // Enable foreign key checks

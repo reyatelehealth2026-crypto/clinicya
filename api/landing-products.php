@@ -24,7 +24,6 @@ if (empty($_SESSION['admin_user'])) {
 try {
     $db = Database::getInstance()->getConnection();
     $action = $_GET['action'] ?? '';
-    $lineAccountId = $_SESSION['current_bot_id'] ?? null;
 
     switch ($action) {
         case 'search':
@@ -34,40 +33,54 @@ try {
                 exit;
             }
             
-            // Check which table exists: products or business_items
-            $tableName = 'products';
+            $allProducts = [];
+            
+            // Search in business_items table
             try {
-                $db->query("SELECT 1 FROM products LIMIT 1");
-            } catch (PDOException $e) {
-                try {
-                    $db->query("SELECT 1 FROM business_items LIMIT 1");
-                    $tableName = 'business_items';
-                } catch (PDOException $e2) {
-                    echo json_encode(['products' => [], 'error' => 'No products table']);
-                    exit;
-                }
-            }
-            
-            // Build query based on table
-            if ($tableName === 'business_items') {
-                $sql = "SELECT id, item_name as name, item_code as sku, price, image_url 
+                $sql = "SELECT id, item_name as name, item_code as sku, price, image_url, 'business_items' as source
                         FROM business_items 
-                        WHERE (item_name LIKE ? OR item_code LIKE ?)";
-            } else {
-                $sql = "SELECT id, name, sku, price, image_url 
-                        FROM products 
-                        WHERE (name LIKE ? OR sku LIKE ?)";
+                        WHERE (item_name LIKE ? OR item_code LIKE ?)
+                        ORDER BY item_name ASC LIMIT 10";
+                $stmt = $db->prepare($sql);
+                $stmt->execute(["%{$query}%", "%{$query}%"]);
+                $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $allProducts = array_merge($allProducts, $items);
+            } catch (PDOException $e) {
+                // Table doesn't exist
             }
             
-            $params = ["%{$query}%", "%{$query}%"];
+            // Search in cny_products table
+            try {
+                $sql = "SELECT id, name, sku, price, image_url, 'cny_products' as source
+                        FROM cny_products 
+                        WHERE (name LIKE ? OR sku LIKE ?)
+                        ORDER BY name ASC LIMIT 10";
+                $stmt = $db->prepare($sql);
+                $stmt->execute(["%{$query}%", "%{$query}%"]);
+                $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $allProducts = array_merge($allProducts, $items);
+            } catch (PDOException $e) {
+                // Table doesn't exist
+            }
             
-            $sql .= " ORDER BY 2 ASC LIMIT 20";
+            // Search in products table (if exists and has data)
+            try {
+                $sql = "SELECT id, name, sku, price, image_url, 'products' as source
+                        FROM products 
+                        WHERE (name LIKE ? OR sku LIKE ?)
+                        ORDER BY name ASC LIMIT 10";
+                $stmt = $db->prepare($sql);
+                $stmt->execute(["%{$query}%", "%{$query}%"]);
+                $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $allProducts = array_merge($allProducts, $items);
+            } catch (PDOException $e) {
+                // Table doesn't exist
+            }
             
-            $stmt = $db->prepare($sql);
-            $stmt->execute($params);
-            $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // Limit to 20 results
+            $allProducts = array_slice($allProducts, 0, 20);
             
-            echo json_encode(['products' => $products, 'table' => $tableName, 'query' => $query]);
+            echo json_encode(['products' => $allProducts, 'query' => $query, 'count' => count($allProducts)]);
             break;
             
         default:
