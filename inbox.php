@@ -16,10 +16,45 @@ require_once 'config/database.php';
 require_once 'classes/LineAPI.php';
 require_once 'classes/LineAccountManager.php';
 require_once 'classes/ActivityLogger.php';
+require_once 'classes/InboxService.php';
+require_once 'classes/AnalyticsService.php';
+require_once 'classes/CustomerNoteService.php';
 
 $db = Database::getInstance()->getConnection();
 $currentBotId = $_SESSION['current_bot_id'] ?? 1;
 $activityLogger = ActivityLogger::getInstance($db);
+
+// Initialize services for conversation list
+$inboxService = new InboxService($db, $currentBotId);
+$analyticsService = new AnalyticsService($db, $currentBotId);
+
+// Get all tags for filter dropdown
+$allTagsForFilter = [];
+try {
+    $stmt = $db->prepare("SELECT * FROM user_tags WHERE line_account_id = ? OR line_account_id IS NULL ORDER BY name ASC");
+    $stmt->execute([$currentBotId]);
+    $allTagsForFilter = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {}
+
+// Get all admins for assignment filter
+$allAdmins = [];
+try {
+    $stmt = $db->prepare("SELECT id, username, display_name FROM admin_users ORDER BY username ASC");
+    $stmt->execute();
+    $allAdmins = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {}
+
+// Get SLA threshold from settings (default 1 hour = 3600 seconds)
+$slaThreshold = 3600;
+
+// Get conversations exceeding SLA for warning indicators
+$slaViolations = [];
+try {
+    $slaViolations = $analyticsService->getConversationsExceedingSLA($slaThreshold);
+    $slaViolationUserIds = array_column($slaViolations, 'user_id');
+} catch (Exception $e) {
+    $slaViolationUserIds = [];
+}
 
 // AJAX Handlers
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
@@ -454,6 +489,12 @@ function formatThaiDateTime($datetime) {
 .chat-outgoing { background: #10B981; color: white; border-radius: 12px 4px 12px 12px; }
 .user-item.active { background: linear-gradient(90deg, #D1FAE5 0%, #ECFDF5 100%); border-left: 3px solid var(--primary); }
 .user-item:hover { background: #F0FDF4; }
+.user-item.sla-warning { border-left: 3px solid #F97316; background: linear-gradient(90deg, #FFF7ED 0%, #FFFFFF 100%); }
+.user-item.sla-warning:hover { background: linear-gradient(90deg, #FFEDD5 0%, #FFF7ED 100%); }
+.sla-badge { animation: pulse-warning 2s infinite; }
+@keyframes pulse-warning { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+.assignment-badge { white-space: nowrap; }
+.time-since { white-space: nowrap; }
 .tag-badge { font-size: 0.6rem; padding: 2px 6px; border-radius: 9999px; font-weight: 500; }
 #chatBox { background: #FFFFFF; }
 /* Flex Message Preview */
@@ -509,6 +550,135 @@ function formatThaiDateTime($datetime) {
 .sender-badge.admin { background: #DBEAFE; color: #1E40AF; }
 .sender-badge.ai { background: #E0E7FF; color: #4338CA; }
 .sender-badge.bot { background: #FEE2E2; color: #991B1B; }
+
+/* Quick Reply Modal Styles - Requirements: 2.1, 2.2 */
+#quickReplyModal {
+    animation: slideUp 0.2s ease-out;
+}
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.quick-reply-item {
+    padding: 10px 12px;
+    border-bottom: 1px solid #F3F4F6;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.quick-reply-item:hover, .quick-reply-item.selected {
+    background: #F0FDF4;
+}
+.quick-reply-item.selected {
+    border-left: 3px solid #10B981;
+}
+.quick-reply-item:last-child {
+    border-bottom: none;
+}
+.quick-reply-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: #1F2937;
+}
+.quick-reply-preview {
+    font-size: 12px;
+    color: #6B7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+.quick-reply-meta {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: #9CA3AF;
+}
+.quick-reply-category {
+    background: #E5E7EB;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+/* Image Error Placeholder - Requirements: 7.2 */
+.chat-image.image-error {
+    background: #F3F4F6;
+    border: 2px dashed #D1D5DB;
+    min-width: 150px;
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.image-error-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #9CA3AF;
+    text-align: center;
+}
+.image-error-placeholder i {
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+.image-error-placeholder span {
+    font-size: 11px;
+}
+
+/* Mobile Image Optimization - Requirements: 9.4 */
+.chat-image {
+    /* Use object-fit for better image display */
+    object-fit: cover;
+    /* Add loading placeholder background */
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: image-loading 1.5s infinite;
+}
+.chat-image.loaded {
+    animation: none;
+    background: transparent;
+}
+@keyframes image-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Thumbnail container for mobile */
+.chat-image-container {
+    position: relative;
+    display: inline-block;
+}
+.chat-image-container .image-loading-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #9CA3AF;
+    display: none;
+}
+.chat-image-container.loading .image-loading-spinner {
+    display: block;
+}
+
+/* Progressive image loading */
+.chat-image.blur-load {
+    filter: blur(10px);
+    transition: filter 0.3s ease-out;
+}
+.chat-image.blur-load.loaded {
+    filter: blur(0);
+}
+
+/* Load More Button */
+#loadMoreContainer {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 100%);
+    padding-bottom: 20px;
+}
 
 /* Read Status */
 .read-status { font-size: 11px; margin-left: 4px; }
@@ -647,8 +817,15 @@ function formatThaiDateTime($datetime) {
     z-index: 50;
 }
 
-/* Mobile Responsive */
+/* Mobile Responsive - Requirements: 9.1, 9.2, 9.4 */
+
+/* Mobile: Single-column layout - Requirements: 9.1 */
 @media (max-width: 768px) {
+    /* Hide desktop three-column layout, show single column */
+    #inboxContainer {
+        flex-direction: column !important;
+    }
+    
     /* Chat list sidebar - full width, can slide out */
     #inboxSidebar {
         position: absolute !important;
@@ -658,14 +835,16 @@ function formatThaiDateTime($datetime) {
         width: 100% !important;
         max-width: 100% !important;
         z-index: 100;
-        transition: transform 0.3s ease;
+        transition: transform 0.3s ease-out;
         background: white;
+        border-right: none !important;
     }
     #inboxSidebar.hidden-mobile {
         transform: translateX(-100%);
+        pointer-events: none;
     }
     
-    /* Chat area - full width */
+    /* Chat area - full screen when visible - Requirements: 9.2 */
     #chatArea {
         position: absolute !important;
         left: 0 !important;
@@ -675,14 +854,15 @@ function formatThaiDateTime($datetime) {
         width: 100% !important;
         display: flex !important;
         flex-direction: column !important;
+        z-index: 50;
     }
     
-    /* Mobile back button */
+    /* Mobile back button - always visible on mobile */
     #mobileBackBtn {
         display: flex !important;
     }
     
-    /* Customer panel - full screen overlay */
+    /* Customer panel - full screen overlay with slide animation */
     #customerPanel {
         position: fixed !important;
         top: 0 !important;
@@ -690,10 +870,115 @@ function formatThaiDateTime($datetime) {
         bottom: 0 !important;
         width: 100% !important;
         z-index: 200 !important;
+        transform: translateX(100%);
+        transition: transform 0.3s ease-out;
+        background: white;
+    }
+    #customerPanel.mobile-visible {
+        transform: translateX(0);
+    }
+    #customerPanel.hidden {
+        transform: translateX(100%);
+    }
+    
+    /* Mobile close button for customer panel */
+    #mobilePanelClose {
+        display: flex !important;
+    }
+    
+    /* Optimize chat bubbles for mobile */
+    .chat-bubble {
+        max-width: 85% !important;
+        font-size: 14px !important;
+    }
+    
+    /* Optimize images for mobile - Requirements: 9.4 */
+    .chat-image {
+        max-width: 180px !important;
+        max-height: 200px !important;
+    }
+    
+    /* Mobile-optimized message input */
+    #messageInput {
+        font-size: 16px !important; /* Prevent iOS zoom */
+    }
+    
+    /* Mobile header adjustments */
+    #chatArea > div:first-child {
+        padding: 8px 12px !important;
+    }
+    
+    /* Quick reply modal - full width on mobile */
+    #quickReplyModal {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: 70px !important;
+        max-height: 60vh !important;
+    }
+    
+    /* Filter dropdowns - stack vertically on small screens */
+    #inboxSidebar .p-2.border-b.bg-gray-50 .flex.gap-2 {
+        flex-wrap: wrap;
+    }
+    
+    /* User item - more touch-friendly */
+    .user-item {
+        padding: 12px !important;
+        min-height: 70px;
+    }
+    
+    /* Hide some elements on mobile for cleaner UI */
+    .time-since {
+        display: none !important;
+    }
+    
+    /* Swipe indicator for mobile */
+    .mobile-swipe-indicator {
+        display: block !important;
     }
 }
+
+/* Small mobile screens (< 480px) */
+@media (max-width: 480px) {
+    /* Even more compact layout */
+    .user-item {
+        padding: 10px !important;
+    }
+    
+    .user-item img {
+        width: 36px !important;
+        height: 36px !important;
+    }
+    
+    .chat-bubble {
+        max-width: 90% !important;
+        padding: 8px 12px !important;
+    }
+    
+    /* Smaller images on very small screens */
+    .chat-image {
+        max-width: 150px !important;
+        max-height: 150px !important;
+    }
+    
+    /* Compact header */
+    #chatArea > div:first-child {
+        height: 50px !important;
+    }
+    
+    #chatArea > div:first-child img {
+        width: 32px !important;
+        height: 32px !important;
+    }
+}
+
+/* Desktop styles */
 @media (min-width: 769px) {
     #mobileBackBtn {
+        display: none !important;
+    }
+    
+    #mobilePanelClose {
         display: none !important;
     }
     
@@ -706,6 +991,27 @@ function formatThaiDateTime($datetime) {
     /* Chat area expands when panel is hidden */
     #chatArea {
         transition: flex 0.3s ease;
+    }
+    
+    .mobile-swipe-indicator {
+        display: none !important;
+    }
+}
+
+/* Touch-friendly improvements for all mobile */
+@media (hover: none) and (pointer: coarse) {
+    /* Larger touch targets */
+    button, .user-item, .quick-reply-item {
+        min-height: 44px;
+    }
+    
+    /* Remove hover effects that don't work on touch */
+    .user-item:hover {
+        background: inherit;
+    }
+    
+    .user-item.active {
+        background: linear-gradient(90deg, #D1FAE5 0%, #ECFDF5 100%);
     }
 }
 </style>
@@ -726,17 +1032,86 @@ function formatThaiDateTime($datetime) {
                 </h2>
             </div>
             <div class="flex items-center gap-2">
+                <!-- Polling Settings Button - Requirements: 1.1 -->
+                <button id="pollingSettingsBtn" class="sound-toggle text-white" onclick="openPollingSettings()" title="ตั้งค่าการอัพเดท">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <!-- Desktop Notification Toggle - Requirements: 1.2 -->
+                <button id="desktopNotifyToggle" class="sound-toggle text-white" onclick="toggleDesktopNotifications()" title="เปิด/ปิดการแจ้งเตือน Desktop">
+                    <i class="fas fa-bell" id="desktopNotifyIcon"></i>
+                </button>
                 <button id="soundToggle" class="sound-toggle text-white" onclick="toggleSound()" title="เปิด/ปิดเสียง">
                     <i class="fas fa-volume-up" id="soundIcon"></i>
                 </button>
                 <span id="liveIndicator" class="w-2 h-2 bg-green-300 rounded-full pulse-dot" title="Real-time Active"></span>
             </div>
         </div>
+        
+        <!-- Search Input with Debounce - Requirements: 5.1, 11.7 -->
         <div class="p-2 border-b">
-            <input type="text" id="userSearch" placeholder="🔍 ค้นหา..." 
-                   class="w-full px-3 py-2 bg-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none" 
-                   onkeyup="filterUsers(this.value)">
+            <div class="relative">
+                <input type="text" id="userSearch" placeholder="🔍 ค้นหาชื่อ, ข้อความ, แท็ก..." 
+                       class="w-full px-3 py-2 bg-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none pr-8" 
+                       oninput="debouncedSearch(this.value)">
+                <span id="searchSpinner" class="hidden absolute right-2 top-1/2 -translate-y-1/2">
+                    <i class="fas fa-spinner fa-spin text-gray-400 text-sm"></i>
+                </span>
+            </div>
         </div>
+        
+        <!-- Filter Dropdowns - Requirements: 5.2, 5.3, 5.4 -->
+        <div class="p-2 border-b bg-gray-50 space-y-2">
+            <div class="flex gap-2">
+                <!-- Status Filter -->
+                <select id="filterStatus" onchange="applyFilters()" class="flex-1 px-2 py-1.5 bg-white border rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 outline-none">
+                    <option value="">ทุกสถานะ</option>
+                    <option value="unread">ยังไม่อ่าน</option>
+                    <option value="assigned">มอบหมายแล้ว</option>
+                    <option value="resolved">แก้ไขแล้ว</option>
+                </select>
+                
+                <!-- Tag Filter -->
+                <select id="filterTag" onchange="applyFilters()" class="flex-1 px-2 py-1.5 bg-white border rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 outline-none">
+                    <option value="">ทุกแท็ก</option>
+                    <?php foreach ($allTagsForFilter as $tag): ?>
+                    <option value="<?= $tag['id'] ?>"><?= htmlspecialchars($tag['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            
+            <div class="flex gap-2">
+                <!-- Assignment Filter -->
+                <select id="filterAssigned" onchange="applyFilters()" class="flex-1 px-2 py-1.5 bg-white border rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 outline-none">
+                    <option value="">ทุกคน</option>
+                    <option value="me">มอบหมายให้ฉัน</option>
+                    <?php foreach ($allAdmins as $admin): ?>
+                    <option value="<?= $admin['id'] ?>"><?= htmlspecialchars($admin['username'] ?: $admin['display_name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                
+                <!-- Date Range Filter -->
+                <button onclick="toggleDateFilter()" class="px-2 py-1.5 bg-white border rounded-lg text-xs hover:bg-gray-50 flex items-center gap-1" id="dateFilterBtn">
+                    <i class="fas fa-calendar-alt text-gray-500"></i>
+                    <span id="dateFilterLabel">วันที่</span>
+                </button>
+            </div>
+            
+            <!-- Date Range Picker (Hidden by default) -->
+            <div id="dateRangePicker" class="hidden bg-white border rounded-lg p-2 space-y-2">
+                <div class="flex gap-2">
+                    <input type="date" id="filterDateFrom" onchange="applyFilters()" class="flex-1 px-2 py-1 border rounded text-xs" placeholder="จาก">
+                    <input type="date" id="filterDateTo" onchange="applyFilters()" class="flex-1 px-2 py-1 border rounded text-xs" placeholder="ถึง">
+                </div>
+                <button onclick="clearDateFilter()" class="w-full text-xs text-red-500 hover:text-red-700">ล้างวันที่</button>
+            </div>
+            
+            <!-- Active Filters Display -->
+            <div id="activeFilters" class="hidden flex flex-wrap gap-1">
+                <!-- Active filter badges will be inserted here -->
+            </div>
+        </div>
+        
+        <!-- Conversation List with Virtual Scrolling - Requirements: 11.2 -->
         <div id="userList" class="flex-1 overflow-y-auto chat-scroll">
             <?php if (empty($users)): ?>
                 <div class="p-6 text-center text-gray-400">
@@ -744,18 +1119,52 @@ function formatThaiDateTime($datetime) {
                     <p class="text-sm">ยังไม่มีแชท</p>
                 </div>
             <?php else: ?>
-                <?php foreach ($users as $user): ?>
+                <?php foreach ($users as $index => $user): 
+                    // Get assignment info
+                    $assignment = null;
+                    try {
+                        $assignStmt = $db->prepare("SELECT ca.*, au.username as assigned_admin_name FROM conversation_assignments ca LEFT JOIN admin_users au ON ca.assigned_to = au.id WHERE ca.user_id = ?");
+                        $assignStmt->execute([$user['id']]);
+                        $assignment = $assignStmt->fetch(PDO::FETCH_ASSOC);
+                    } catch (PDOException $e) {}
+                    
+                    // Check if this user has SLA violation
+                    $hasSlaWarning = in_array($user['id'], $slaViolationUserIds);
+                    
+                    // Calculate time since last message
+                    $timeSinceLastMsg = '';
+                    if ($user['last_time']) {
+                        $lastMsgTime = strtotime($user['last_time']);
+                        $secondsAgo = time() - $lastMsgTime;
+                        if ($secondsAgo < 60) {
+                            $timeSinceLastMsg = $secondsAgo . ' วินาที';
+                        } elseif ($secondsAgo < 3600) {
+                            $timeSinceLastMsg = floor($secondsAgo / 60) . ' นาที';
+                        } elseif ($secondsAgo < 86400) {
+                            $timeSinceLastMsg = floor($secondsAgo / 3600) . ' ชม.';
+                        } else {
+                            $timeSinceLastMsg = floor($secondsAgo / 86400) . ' วัน';
+                        }
+                    }
+                ?>
                 <a href="?user=<?= $user['id'] ?>" 
-                   class="user-item block p-3 border-b border-gray-50 <?= ($selectedUser && $selectedUser['id'] == $user['id']) ? 'active' : '' ?>" 
+                   class="user-item block p-3 border-b border-gray-50 <?= ($selectedUser && $selectedUser['id'] == $user['id']) ? 'active' : '' ?> <?= $hasSlaWarning ? 'sla-warning' : '' ?>" 
                    data-user-id="<?= $user['id'] ?>"
-                   data-name="<?= strtolower($user['display_name']) ?>">
+                   data-name="<?= strtolower($user['display_name']) ?>"
+                   data-index="<?= $index ?>">
                     <div class="flex items-center gap-3">
                         <div class="relative flex-shrink-0">
                             <img src="<?= $user['picture_url'] ?: 'https://via.placeholder.com/40' ?>" 
-                                 class="w-10 h-10 rounded-full object-cover border-2 border-white shadow">
+                                 class="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                                 loading="lazy">
                             <?php if ($user['unread'] > 0): ?>
                             <div class="unread-badge absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">
                                 <?= $user['unread'] > 9 ? '9+' : $user['unread'] ?>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($hasSlaWarning): ?>
+                            <div class="sla-badge absolute -bottom-1 -right-1 bg-orange-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full" title="เกิน SLA">
+                                <i class="fas fa-exclamation"></i>
                             </div>
                             <?php endif; ?>
                         </div>
@@ -765,10 +1174,34 @@ function formatThaiDateTime($datetime) {
                                 <span class="last-time text-[10px] text-gray-400"><?= formatThaiTime($user['last_time']) ?></span>
                             </div>
                             <p class="last-msg text-xs text-gray-500 truncate"><?= htmlspecialchars(getMessagePreview($user['last_msg'], $user['last_type'])) ?></p>
+                            
+                            <!-- Assignment Indicator & Time Since Last Message - Requirements: 3.2, 6.5 -->
+                            <div class="flex items-center gap-2 mt-1">
+                                <?php if ($assignment && $assignment['status'] === 'active'): ?>
+                                <span class="assignment-badge text-[9px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full flex items-center gap-1">
+                                    <i class="fas fa-user-check"></i>
+                                    <?= htmlspecialchars($assignment['assigned_admin_name'] ?: 'Admin') ?>
+                                </span>
+                                <?php endif; ?>
+                                
+                                <?php if ($timeSinceLastMsg): ?>
+                                <span class="time-since text-[9px] text-gray-400 flex items-center gap-1" title="เวลาตั้งแต่ข้อความล่าสุด">
+                                    <i class="fas fa-clock"></i>
+                                    <?= $timeSinceLastMsg ?>
+                                </span>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
                 </a>
                 <?php endforeach; ?>
+                
+                <!-- Virtual Scroll Sentinel -->
+                <div id="scrollSentinel" class="h-10 flex items-center justify-center">
+                    <span id="loadingMore" class="hidden text-xs text-gray-400">
+                        <i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...
+                    </span>
+                </div>
             <?php endif; ?>
         </div>
     </div>
@@ -815,6 +1248,16 @@ function formatThaiDateTime($datetime) {
 
         <!-- Chat Messages -->
         <div id="chatBox" class="flex-1 overflow-y-auto p-4 space-y-3 chat-scroll">
+            <!-- Load More Button - Requirements: 11.3 -->
+            <div id="loadMoreContainer" class="text-center py-2 hidden">
+                <button id="loadMoreBtn" onclick="loadMoreMessages()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-sm transition-all">
+                    <i class="fas fa-arrow-up mr-1"></i>โหลดข้อความเก่า
+                </button>
+                <span id="loadMoreSpinner" class="hidden">
+                    <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                </span>
+            </div>
+            
             <?php 
             $hasUnread = false;
             foreach ($messages as $msg): 
@@ -844,7 +1287,12 @@ function formatThaiDateTime($datetime) {
                             $imgSrc = 'api/line_content.php?id=' . $content;
                         }
                         ?>
-                        <img src="<?= htmlspecialchars($imgSrc) ?>" class="rounded-xl max-w-[200px] border shadow-sm cursor-pointer hover:opacity-90" onclick="openImage(this.src)" onerror="this.src='assets/images/image-not-found.svg'; this.classList.add('opacity-50')">
+                        <img src="<?= htmlspecialchars($imgSrc) ?>" 
+                             class="rounded-xl max-w-[200px] border shadow-sm cursor-pointer hover:opacity-90 chat-image" 
+                             onclick="openImage(this.src)" 
+                             onerror="handleImageError(this)"
+                             data-original-src="<?= htmlspecialchars($imgSrc) ?>"
+                             loading="lazy">
                     <?php elseif ($type === 'sticker'): ?>
                         <?php 
                         $stickerId = '';
@@ -972,6 +1420,35 @@ function formatThaiDateTime($datetime) {
             </div>
         </div>
 
+        <!-- Quick Reply Template Selector Modal - Requirements: 2.1, 2.2 -->
+        <div id="quickReplyModal" class="hidden absolute bottom-20 left-4 right-4 bg-white rounded-xl shadow-2xl border max-h-80 flex flex-col z-50">
+            <div class="p-3 border-b flex items-center justify-between bg-gray-50 rounded-t-xl">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-bolt text-emerald-500"></i>
+                    <span class="font-medium text-gray-700">Quick Reply Templates</span>
+                </div>
+                <button onclick="closeQuickReplyModal()" class="text-gray-400 hover:text-gray-600 p-1">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-2 border-b">
+                <input type="text" id="quickReplySearch" placeholder="🔍 ค้นหา template..." 
+                       class="w-full px-3 py-2 bg-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                       oninput="filterQuickReplies(this.value)"
+                       onkeydown="handleQuickReplyKeydown(event)">
+            </div>
+            <div id="quickReplyList" class="flex-1 overflow-y-auto chat-scroll">
+                <div class="p-4 text-center text-gray-400 text-sm">
+                    <i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...
+                </div>
+            </div>
+            <div class="p-2 border-t bg-gray-50 rounded-b-xl">
+                <button onclick="openTemplateManager()" class="w-full text-xs text-emerald-600 hover:text-emerald-700 py-1">
+                    <i class="fas fa-cog mr-1"></i>จัดการ Templates
+                </button>
+            </div>
+        </div>
+
         <!-- Input Area -->
         <div class="p-3 bg-white border-t">
             <form id="sendForm" class="flex gap-2 items-end" onsubmit="sendMessage(event)">
@@ -985,11 +1462,11 @@ function formatThaiDateTime($datetime) {
                     <i class="fas fa-image"></i>
                 </button>
                 
-                <div class="flex-1 bg-gray-100 rounded-2xl px-4 py-2 focus-within:ring-2 focus-within:ring-emerald-500">
+                <div class="flex-1 bg-gray-100 rounded-2xl px-4 py-2 focus-within:ring-2 focus-within:ring-emerald-500 relative">
                     <textarea name="message" id="messageInput" rows="1" 
                               class="w-full bg-transparent border-0 outline-none text-sm resize-none max-h-24" 
-                              placeholder="พิมพ์ข้อความ..." 
-                              oninput="autoResize(this)"
+                              placeholder="พิมพ์ข้อความ... (กด / เพื่อเปิด Quick Reply)" 
+                              oninput="autoResize(this); handleMessageInput(this)"
                               onkeydown="handleKeyDown(event)"></textarea>
                 </div>
                 <button type="submit" id="sendBtn" class="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all">
@@ -1027,25 +1504,65 @@ function formatThaiDateTime($datetime) {
     <!-- RIGHT: Customer Panel -->
     <?php if ($selectedUser): ?>
     <?php 
-    // Get user notes
+    // Initialize CustomerNoteService for proper note management - Requirements: 4.4, 4.5
+    $customerNoteService = new CustomerNoteService($db);
+    
+    // Get user notes using CustomerNoteService - Requirements: 4.4, 4.5
     $userNotes = [];
     try {
-        $stmt = $db->prepare("SELECT * FROM user_notes WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
-        $stmt->execute([$selectedUser['id']]);
-        $userNotes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {}
+        $userNotes = $customerNoteService->getNotes($selectedUser['id']);
+    } catch (Exception $e) {
+        // Fallback to old table if customer_notes doesn't exist
+        try {
+            $stmt = $db->prepare("SELECT * FROM user_notes WHERE user_id = ? ORDER BY created_at DESC LIMIT 10");
+            $stmt->execute([$selectedUser['id']]);
+            $userNotes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e2) {}
+    }
     
-    // Get user orders
+    // Get user orders with more details - Requirements: 4.2
     $userOrders = [];
     try {
-        $stmt = $db->prepare("SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+        $stmt = $db->prepare("SELECT t.*, 
+            (SELECT COUNT(*) FROM transaction_items WHERE transaction_id = t.id) as item_count
+            FROM transactions t 
+            WHERE t.user_id = ? 
+            ORDER BY t.created_at DESC LIMIT 5");
         $stmt->execute([$selectedUser['id']]);
         $userOrders = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {}
+    
+    // Get conversation assignment - Requirements: 3.1
+    $currentAssignment = $inboxService->getAssignment($selectedUser['id']);
+    
+    // Get average response time for this customer - Requirements: 6.1
+    $customerAvgResponseTime = 0;
+    try {
+        $stmt = $db->prepare("
+            SELECT AVG(ma.response_time_seconds) as avg_time
+            FROM message_analytics ma
+            WHERE ma.user_id = ?
+            AND ma.response_time_seconds IS NOT NULL
+            AND ma.response_time_seconds > 0
+        ");
+        $stmt->execute([$selectedUser['id']]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $customerAvgResponseTime = (float)($result['avg_time'] ?? 0);
+    } catch (PDOException $e) {}
+    
+    // Get time since last message - Requirements: 6.5
+    $timeSinceLastMsg = $analyticsService->getTimeSinceLastMessage($selectedUser['id']);
+    
+    // Get current admin ID
+    $currentAdminId = $_SESSION['admin_id'] ?? $_SESSION['admin_user']['id'] ?? null;
     ?>
     <div id="customerPanel" class="w-72 bg-white border-l flex-col transition-all duration-300 overflow-hidden hidden lg:flex">
         <div class="p-3 border-b bg-gray-50 flex items-center justify-between flex-shrink-0">
-            <h3 class="text-sm font-bold text-gray-700"><i class="fas fa-user text-emerald-500 mr-2"></i>รายละเอียดลูกค้า</h3>
+            <!-- Mobile: Back button -->
+            <button id="mobilePanelClose" onclick="closePanelMobile()" class="hidden w-8 h-8 items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 mr-2">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+            <h3 class="text-sm font-bold text-gray-700 flex-1"><i class="fas fa-user text-emerald-500 mr-2"></i>รายละเอียดลูกค้า</h3>
             <button onclick="togglePanel()" class="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"><i class="fas fa-times"></i></button>
         </div>
         
@@ -1075,6 +1592,86 @@ function formatThaiDateTime($datetime) {
                     <?php $totalSpent = array_sum(array_column($userOrders, 'grand_total')); ?>
                     <div class="flex justify-between"><span class="text-gray-500">ยอดซื้อรวม</span><span class="font-medium text-emerald-600">฿<?= number_format($totalSpent) ?></span></div>
                     <div class="flex justify-between"><span class="text-gray-500">แต้มสะสม</span><span class="font-medium text-emerald-600"><?= number_format($selectedUser['loyalty_points'] ?? 0) ?></span></div>
+                    <!-- Average Response Time - Requirements: 6.1 -->
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">เวลาตอบเฉลี่ย</span>
+                        <span class="font-medium <?= $customerAvgResponseTime > $slaThreshold ? 'text-orange-500' : 'text-emerald-600' ?>">
+                            <?php 
+                            if ($customerAvgResponseTime > 0) {
+                                if ($customerAvgResponseTime < 60) {
+                                    echo round($customerAvgResponseTime) . ' วินาที';
+                                } elseif ($customerAvgResponseTime < 3600) {
+                                    echo round($customerAvgResponseTime / 60) . ' นาที';
+                                } else {
+                                    echo round($customerAvgResponseTime / 3600, 1) . ' ชม.';
+                                }
+                            } else {
+                                echo '-';
+                            }
+                            ?>
+                        </span>
+                    </div>
+                    <!-- Time Since Last Message -->
+                    <?php if ($timeSinceLastMsg >= 0): ?>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">ข้อความล่าสุด</span>
+                        <span class="font-medium <?= $timeSinceLastMsg > $slaThreshold ? 'text-orange-500' : 'text-gray-700' ?>">
+                            <?php 
+                            if ($timeSinceLastMsg < 60) {
+                                echo $timeSinceLastMsg . ' วินาทีที่แล้ว';
+                            } elseif ($timeSinceLastMsg < 3600) {
+                                echo round($timeSinceLastMsg / 60) . ' นาทีที่แล้ว';
+                            } elseif ($timeSinceLastMsg < 86400) {
+                                echo round($timeSinceLastMsg / 3600) . ' ชม.ที่แล้ว';
+                            } else {
+                                echo round($timeSinceLastMsg / 86400) . ' วันที่แล้ว';
+                            }
+                            ?>
+                        </span>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
+            <!-- Conversation Assignment Section - Requirements: 3.1 -->
+            <div class="panel-section border-t" data-section="assignment">
+                <div class="flex items-center justify-between cursor-pointer py-2" onclick="toggleSection('assignment')">
+                    <h5 class="text-xs font-bold text-gray-700"><i class="fas fa-user-tag text-purple-500 mr-1"></i>มอบหมายงาน</h5>
+                    <i class="fas fa-chevron-down text-gray-400 text-xs section-icon transition-transform"></i>
+                </div>
+                <div class="section-content space-y-2 text-xs">
+                    <div class="flex items-center gap-2">
+                        <select id="assignmentSelect" onchange="assignConversation(this.value)" 
+                                class="flex-1 border rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-purple-500 outline-none">
+                            <option value="">-- ไม่ได้มอบหมาย --</option>
+                            <?php foreach ($allAdmins as $admin): ?>
+                            <option value="<?= $admin['id'] ?>" <?= ($currentAssignment && $currentAssignment['assigned_to'] == $admin['id']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($admin['display_name'] ?: $admin['username']) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <?php if ($currentAssignment): ?>
+                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-purple-700">
+                                <i class="fas fa-user-check mr-1"></i>
+                                <?= htmlspecialchars($currentAssignment['assigned_admin_name'] ?? 'Admin') ?>
+                            </span>
+                            <span class="text-[9px] text-purple-500">
+                                <?= date('d/m H:i', strtotime($currentAssignment['assigned_at'])) ?>
+                            </span>
+                        </div>
+                        <div class="flex gap-2 mt-2">
+                            <button onclick="resolveConversation()" class="flex-1 bg-green-500 hover:bg-green-600 text-white text-[10px] py-1 rounded">
+                                <i class="fas fa-check mr-1"></i>เสร็จสิ้น
+                            </button>
+                            <button onclick="unassignConversation()" class="flex-1 bg-gray-400 hover:bg-gray-500 text-white text-[10px] py-1 rounded">
+                                <i class="fas fa-times mr-1"></i>ยกเลิก
+                            </button>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
             
@@ -1103,47 +1700,113 @@ function formatThaiDateTime($datetime) {
                 </div>
             </div>
             
-            <!-- Notes Section - Collapsible -->
+            <!-- Notes Section - Collapsible - Requirements: 4.4, 4.5 -->
             <div class="panel-section border-t" data-section="notes">
                 <div class="flex items-center justify-between cursor-pointer py-2" onclick="toggleSection('notes')">
-                    <h5 class="text-xs font-bold text-gray-700"><i class="fas fa-sticky-note text-yellow-500 mr-1"></i>โน๊ต</h5>
+                    <h5 class="text-xs font-bold text-gray-700"><i class="fas fa-sticky-note text-yellow-500 mr-1"></i>โน๊ต (<?= count($userNotes) ?>)</h5>
                     <i class="fas fa-chevron-down text-gray-400 text-xs section-icon transition-transform"></i>
                 </div>
                 <div class="section-content">
-                    <form onsubmit="saveNote(event)" class="mb-2">
+                    <form onsubmit="saveCustomerNote(event)" class="mb-2">
                         <textarea id="noteInput" rows="2" class="w-full border rounded-lg px-2 py-1.5 text-xs focus:ring-1 focus:ring-emerald-500 outline-none resize-none" placeholder="เพิ่มโน๊ตเกี่ยวกับลูกค้า..."></textarea>
-                        <button type="submit" class="w-full mt-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs py-1.5 rounded-lg">บันทึกโน๊ต</button>
+                        <div class="flex gap-2 mt-1">
+                            <label class="flex items-center gap-1 text-[10px] text-gray-500">
+                                <input type="checkbox" id="notePinned" class="w-3 h-3">
+                                <i class="fas fa-thumbtack"></i> ปักหมุด
+                            </label>
+                            <button type="submit" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white text-xs py-1.5 rounded-lg">บันทึกโน๊ต</button>
+                        </div>
                     </form>
-                    <div id="notesList" class="space-y-2 max-h-40 overflow-y-auto">
+                    <div id="notesList" class="space-y-2 max-h-48 overflow-y-auto">
                         <?php foreach ($userNotes as $note): ?>
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs relative group">
-                            <p class="text-gray-700"><?= nl2br(htmlspecialchars($note['note'])) ?></p>
-                            <p class="text-[9px] text-gray-400 mt-1"><?= date('d/m/Y H:i', strtotime($note['created_at'])) ?></p>
-                            <button onclick="deleteNote(<?= $note['id'] ?>, this)" class="absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><i class="fas fa-times text-[10px]"></i></button>
+                        <div class="note-item <?= !empty($note['is_pinned']) ? 'bg-yellow-100 border-yellow-300' : 'bg-yellow-50 border-yellow-200' ?> border rounded-lg p-2 text-xs relative group" data-note-id="<?= $note['id'] ?>">
+                            <?php if (!empty($note['is_pinned'])): ?>
+                            <span class="absolute -top-1 -left-1 text-yellow-500 text-[10px]"><i class="fas fa-thumbtack"></i></span>
+                            <?php endif; ?>
+                            <p class="text-gray-700 note-content pr-12"><?= nl2br(htmlspecialchars($note['note'])) ?></p>
+                            <div class="flex justify-between items-center mt-1">
+                                <p class="text-[9px] text-gray-400">
+                                    <?php if (!empty($note['admin_name'])): ?>
+                                    <span class="text-purple-500"><?= htmlspecialchars($note['admin_name']) ?></span> • 
+                                    <?php endif; ?>
+                                    <?= date('d/m/Y H:i', strtotime($note['created_at'])) ?>
+                                </p>
+                            </div>
+                            <div class="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onclick="togglePinNote(<?= $note['id'] ?>, this)" class="text-yellow-500 hover:text-yellow-600 p-1" title="<?= !empty($note['is_pinned']) ? 'เลิกปักหมุด' : 'ปักหมุด' ?>">
+                                    <i class="fas fa-thumbtack text-[10px]"></i>
+                                </button>
+                                <button onclick="editNote(<?= $note['id'] ?>, this)" class="text-blue-400 hover:text-blue-600 p-1" title="แก้ไข">
+                                    <i class="fas fa-edit text-[10px]"></i>
+                                </button>
+                                <button onclick="deleteCustomerNote(<?= $note['id'] ?>, this)" class="text-red-400 hover:text-red-600 p-1" title="ลบ">
+                                    <i class="fas fa-times text-[10px]"></i>
+                                </button>
+                            </div>
                         </div>
                         <?php endforeach; ?>
-                        <?php if (empty($userNotes)): ?><p class="text-gray-400 text-xs text-center py-2">ยังไม่มีโน๊ต</p><?php endif; ?>
+                        <?php if (empty($userNotes)): ?><p id="noNotesMsg" class="text-gray-400 text-xs text-center py-2">ยังไม่มีโน๊ต</p><?php endif; ?>
                     </div>
                 </div>
             </div>
             
-            <!-- Recent Orders - Collapsible -->
-            <?php if (!empty($userOrders)): ?>
+            <!-- Recent Orders - Collapsible - Requirements: 4.2 -->
             <div class="panel-section border-t" data-section="orders">
                 <div class="flex items-center justify-between cursor-pointer py-2" onclick="toggleSection('orders')">
-                    <h5 class="text-xs font-bold text-gray-700"><i class="fas fa-shopping-bag text-blue-500 mr-1"></i>ออเดอร์ล่าสุด</h5>
+                    <h5 class="text-xs font-bold text-gray-700"><i class="fas fa-shopping-bag text-blue-500 mr-1"></i>ออเดอร์ล่าสุด (<?= count($userOrders) ?>)</h5>
                     <i class="fas fa-chevron-down text-gray-400 text-xs section-icon transition-transform"></i>
                 </div>
                 <div class="section-content space-y-1.5">
-                    <?php foreach (array_slice($userOrders, 0, 3) as $order): ?>
-                    <div class="bg-gray-50 rounded-lg p-2 text-xs">
-                        <div class="flex justify-between"><span class="font-medium">#<?= $order['order_number'] ?? $order['id'] ?></span><span class="text-emerald-600">฿<?= number_format($order['grand_total']) ?></span></div>
-                        <div class="text-[9px] text-gray-400"><?= date('d/m/Y', strtotime($order['created_at'])) ?></div>
+                    <?php if (!empty($userOrders)): ?>
+                    <?php foreach (array_slice($userOrders, 0, 5) as $order): ?>
+                    <div class="bg-gray-50 rounded-lg p-2 text-xs hover:bg-gray-100 cursor-pointer transition-colors" onclick="viewOrder(<?= $order['id'] ?>)">
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium text-gray-800">#<?= $order['order_number'] ?? $order['id'] ?></span>
+                            <span class="text-emerald-600 font-semibold">฿<?= number_format($order['grand_total'] ?? 0) ?></span>
+                        </div>
+                        <div class="flex justify-between items-center mt-1">
+                            <span class="text-[9px] text-gray-400"><?= date('d/m/Y H:i', strtotime($order['created_at'])) ?></span>
+                            <?php 
+                            $statusColors = [
+                                'pending' => 'bg-yellow-100 text-yellow-700',
+                                'confirmed' => 'bg-blue-100 text-blue-700',
+                                'processing' => 'bg-purple-100 text-purple-700',
+                                'shipped' => 'bg-cyan-100 text-cyan-700',
+                                'delivered' => 'bg-green-100 text-green-700',
+                                'completed' => 'bg-green-100 text-green-700',
+                                'cancelled' => 'bg-red-100 text-red-700',
+                            ];
+                            $status = $order['status'] ?? 'pending';
+                            $statusClass = $statusColors[$status] ?? 'bg-gray-100 text-gray-700';
+                            $statusLabels = [
+                                'pending' => 'รอดำเนินการ',
+                                'confirmed' => 'ยืนยันแล้ว',
+                                'processing' => 'กำลังจัดเตรียม',
+                                'shipped' => 'จัดส่งแล้ว',
+                                'delivered' => 'ส่งถึงแล้ว',
+                                'completed' => 'เสร็จสิ้น',
+                                'cancelled' => 'ยกเลิก',
+                            ];
+                            ?>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded <?= $statusClass ?>"><?= $statusLabels[$status] ?? $status ?></span>
+                        </div>
+                        <?php if (!empty($order['item_count'])): ?>
+                        <div class="text-[9px] text-gray-500 mt-1">
+                            <i class="fas fa-box mr-1"></i><?= $order['item_count'] ?> รายการ
+                        </div>
+                        <?php endif; ?>
                     </div>
                     <?php endforeach; ?>
+                    <?php if (count($userOrders) > 5): ?>
+                    <a href="shop/orders.php?user_id=<?= $selectedUser['id'] ?>" class="block text-center text-[10px] text-blue-500 hover:text-blue-600 py-1">
+                        ดูทั้งหมด <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                    <?php endif; ?>
+                    <?php else: ?>
+                    <p class="text-gray-400 text-xs text-center py-2">ยังไม่มีออเดอร์</p>
+                    <?php endif; ?>
                 </div>
             </div>
-            <?php endif; ?>
             
             <!-- Actions -->
             <div class="pt-3 border-t space-y-1.5">
@@ -1265,6 +1928,67 @@ function formatThaiDateTime($datetime) {
 <!-- Notification Container -->
 <div id="notificationContainer" class="notification-container"></div>
 
+<!-- Polling Settings Modal - Requirements: 1.1 -->
+<div id="pollingSettingsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div class="p-3 border-b flex justify-between items-center bg-emerald-50">
+            <h3 class="font-bold text-sm text-emerald-700"><i class="fas fa-sync-alt mr-1"></i>ตั้งค่าการอัพเดท Real-time</h3>
+            <button onclick="closePollingSettings()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-4 space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-2">ความถี่ในการอัพเดท (วินาที)</label>
+                <div class="flex items-center gap-3">
+                    <input type="range" id="pollingIntervalSlider" min="2" max="30" step="1" value="5" 
+                           class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                           oninput="updatePollingIntervalDisplay(this.value)">
+                    <span id="pollingIntervalDisplay" class="text-sm font-medium text-emerald-600 w-12 text-center">5 วิ</span>
+                </div>
+                <p class="text-[10px] text-gray-500 mt-1">ค่าน้อย = อัพเดทเร็วขึ้น แต่ใช้ทรัพยากรมากขึ้น</p>
+            </div>
+            
+            <div class="border-t pt-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="desktopNotifyCheckbox" class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                           onchange="toggleDesktopNotificationsFromCheckbox(this.checked)">
+                    <span class="text-xs text-gray-700">เปิดการแจ้งเตือน Desktop</span>
+                </label>
+                <p class="text-[10px] text-gray-500 mt-1 ml-6">แสดงการแจ้งเตือนเมื่อมีข้อความใหม่ (แม้ไม่ได้อยู่หน้านี้)</p>
+            </div>
+            
+            <div class="border-t pt-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="soundEnabledCheckbox" class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                           onchange="toggleSoundFromCheckbox(this.checked)">
+                    <span class="text-xs text-gray-700">เปิดเสียงแจ้งเตือน</span>
+                </label>
+            </div>
+            
+            <div class="border-t pt-3">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-gray-500">สถานะการเชื่อมต่อ:</span>
+                    <span id="connectionStatus" class="flex items-center gap-1">
+                        <span class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></span>
+                        <span class="text-green-600">เชื่อมต่อแล้ว</span>
+                    </span>
+                </div>
+                <div class="flex items-center justify-between text-xs mt-1">
+                    <span class="text-gray-500">Poll ล่าสุด:</span>
+                    <span id="lastPollDisplay" class="text-gray-600">-</span>
+                </div>
+            </div>
+        </div>
+        <div class="p-3 border-t bg-gray-50 flex gap-2">
+            <button onclick="resetPollingSettings()" class="flex-1 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-medium">
+                รีเซ็ต
+            </button>
+            <button onclick="savePollingSettings()" class="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-medium">
+                บันทึก
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Audio for notifications -->
 <audio id="notificationSound" preload="auto">
     <source src="data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNBrv2AAAAAAAAAAAAAAAAAAAAAP/7UMQAA8AAADSAAAAAAAAANIAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+1DEAYPAAADSAAAAAAAAANIAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=" type="audio/mpeg">
@@ -1286,14 +2010,21 @@ console.log('🚀 Inbox initialized:', { userId, lastMessageId, currentUserName 
 // Update sound icon on load
 document.addEventListener('DOMContentLoaded', () => {
     updateSoundIcon();
+    updateDesktopNotifyIcon();
     scrollToBottom();
     
-    // Start polling
+    // Initialize notification permission - Requirements: 1.2
+    initNotificationPermission();
+    
+    // Start polling with configurable interval - Requirements: 1.1
     startPolling();
     
-    // Request notification permission
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
+    // Cache current conversation for instant switching - Requirements: 11.6
+    if (userId) {
+        fetchAndCacheConversation(userId);
+        
+        // Preload adjacent conversations after a short delay
+        setTimeout(preloadAdjacentConversations, 2000);
     }
     
     // Initial poll - ทำทันที
@@ -1304,6 +2035,17 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('⚠️ No user selected, polling for sidebar only');
         pollSidebar();
     }
+    
+    // Global keyboard shortcuts - Requirements: 8.3
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+/ to open quick reply menu - Requirements: 8.3
+        if (e.ctrlKey && e.key === '/') {
+            e.preventDefault();
+            if (userId) {
+                openQuickReplyModal();
+            }
+        }
+    });
 });
 
 function updateSoundIcon() {
@@ -1319,6 +2061,95 @@ function toggleSound() {
     updateSoundIcon();
     showToast(soundEnabled ? '🔊 เปิดเสียงแจ้งเตือน' : '🔇 ปิดเสียงแจ้งเตือน', '', '', 2000);
 }
+
+// ===== Polling Settings Modal Functions - Requirements: 1.1 =====
+function openPollingSettings() {
+    const modal = document.getElementById('pollingSettingsModal');
+    modal.classList.remove('hidden');
+    
+    // Set current values
+    const currentInterval = getPollingInterval() / 1000;
+    document.getElementById('pollingIntervalSlider').value = currentInterval;
+    document.getElementById('pollingIntervalDisplay').textContent = currentInterval + ' วิ';
+    document.getElementById('desktopNotifyCheckbox').checked = desktopNotificationsEnabled;
+    document.getElementById('soundEnabledCheckbox').checked = soundEnabled;
+    
+    // Update last poll time
+    updateLastPollDisplay();
+}
+
+function closePollingSettings() {
+    document.getElementById('pollingSettingsModal').classList.add('hidden');
+}
+
+function updatePollingIntervalDisplay(value) {
+    document.getElementById('pollingIntervalDisplay').textContent = value + ' วิ';
+}
+
+function savePollingSettings() {
+    const interval = parseInt(document.getElementById('pollingIntervalSlider').value) * 1000;
+    setPollingInterval(interval);
+    closePollingSettings();
+    showToast('บันทึกการตั้งค่าแล้ว', '', '', 2000);
+}
+
+function resetPollingSettings() {
+    document.getElementById('pollingIntervalSlider').value = 5;
+    document.getElementById('pollingIntervalDisplay').textContent = '5 วิ';
+    setPollingInterval(POLLING_CONFIG.defaultInterval);
+    showToast('รีเซ็ตเป็นค่าเริ่มต้นแล้ว', '', '', 2000);
+}
+
+function toggleDesktopNotificationsFromCheckbox(checked) {
+    desktopNotificationsEnabled = checked;
+    localStorage.setItem('inboxDesktopNotifications', checked);
+    
+    if (checked && notificationPermission === 'default') {
+        initNotificationPermission();
+    }
+    
+    updateDesktopNotifyIcon();
+}
+
+function toggleSoundFromCheckbox(checked) {
+    soundEnabled = checked;
+    localStorage.setItem('inboxSoundEnabled', checked);
+    updateSoundIcon();
+}
+
+function updateDesktopNotifyIcon() {
+    const icon = document.getElementById('desktopNotifyIcon');
+    if (icon) {
+        icon.className = desktopNotificationsEnabled ? 'fas fa-bell' : 'fas fa-bell-slash';
+    }
+}
+
+function updateLastPollDisplay() {
+    const display = document.getElementById('lastPollDisplay');
+    if (display && lastPollTime) {
+        const secondsAgo = Math.floor((Date.now() - lastPollTime) / 1000);
+        display.textContent = secondsAgo + ' วินาทีที่แล้ว';
+    }
+}
+
+// Update last poll display periodically when modal is open
+setInterval(() => {
+    if (!document.getElementById('pollingSettingsModal').classList.contains('hidden')) {
+        updateLastPollDisplay();
+        
+        // Update connection status
+        const statusEl = document.getElementById('connectionStatus');
+        if (statusEl) {
+            if (pollErrorCount > 3) {
+                statusEl.innerHTML = '<span class="w-2 h-2 bg-red-500 rounded-full"></span><span class="text-red-600">มีปัญหา</span>';
+            } else if (pollErrorCount > 0) {
+                statusEl.innerHTML = '<span class="w-2 h-2 bg-yellow-500 rounded-full"></span><span class="text-yellow-600">ไม่เสถียร</span>';
+            } else {
+                statusEl.innerHTML = '<span class="w-2 h-2 bg-green-500 rounded-full pulse-dot"></span><span class="text-green-600">เชื่อมต่อแล้ว</span>';
+            }
+        }
+    }
+}, 1000);
 
 // ===== Notification Functions =====
 function showNotification(name, message, pictureUrl, userId) {
@@ -1401,11 +2232,86 @@ function formatThaiTimeJS(date) {
     return `${date.getDate()}/${date.getMonth() + 1} ${hours}:${minutes}`;
 }
 
-// ===== Real-time Polling =====
+// ===== Real-time Polling System =====
+// Requirements: 1.1, 1.2, 11.4, 11.6
+
+// Polling Configuration - Requirements: 1.1, 11.4
+const POLLING_CONFIG = {
+    defaultInterval: 5000,      // Default 5 seconds - Requirements: 1.1
+    minInterval: 2000,          // Minimum 2 seconds
+    maxInterval: 30000,         // Maximum 30 seconds
+    errorBackoffMultiplier: 2,  // Double interval on errors
+    maxErrorCount: 10           // Max errors before stopping
+};
+
 let pollErrorCount = 0;
 let lastPollTime = Date.now();
 let globalLastMsgId = <?= !empty($messages) ? end($messages)['id'] ?? 0 : 0 ?>; // Track globally for sidebar
+let currentPollInterval = POLLING_CONFIG.defaultInterval;
 
+// Conversation Cache - Requirements: 11.6
+const conversationCache = new Map();
+const CACHE_MAX_SIZE = 50;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Desktop Notification Settings - Requirements: 1.2
+let desktopNotificationsEnabled = localStorage.getItem('inboxDesktopNotifications') !== 'false';
+let notificationPermission = 'default';
+
+// Initialize notification permission
+async function initNotificationPermission() {
+    if ('Notification' in window) {
+        notificationPermission = Notification.permission;
+        if (notificationPermission === 'default' && desktopNotificationsEnabled) {
+            try {
+                notificationPermission = await Notification.requestPermission();
+            } catch (e) {
+                console.log('Notification permission request failed:', e);
+            }
+        }
+    }
+}
+
+// Toggle desktop notifications - Requirements: 1.2
+function toggleDesktopNotifications() {
+    desktopNotificationsEnabled = !desktopNotificationsEnabled;
+    localStorage.setItem('inboxDesktopNotifications', desktopNotificationsEnabled);
+    
+    if (desktopNotificationsEnabled && notificationPermission === 'default') {
+        initNotificationPermission();
+    }
+    
+    showToast(desktopNotificationsEnabled ? '🔔 เปิดการแจ้งเตือน Desktop' : '🔕 ปิดการแจ้งเตือน Desktop', '', '', 2000);
+}
+
+// Get configurable polling interval from localStorage or use default
+function getPollingInterval() {
+    const stored = localStorage.getItem('inboxPollingInterval');
+    if (stored) {
+        const interval = parseInt(stored);
+        if (interval >= POLLING_CONFIG.minInterval && interval <= POLLING_CONFIG.maxInterval) {
+            return interval;
+        }
+    }
+    return POLLING_CONFIG.defaultInterval;
+}
+
+// Set polling interval - Requirements: 1.1
+function setPollingInterval(interval) {
+    interval = Math.max(POLLING_CONFIG.minInterval, Math.min(POLLING_CONFIG.maxInterval, interval));
+    localStorage.setItem('inboxPollingInterval', interval);
+    currentPollInterval = interval;
+    
+    // Restart polling with new interval
+    if (pollingInterval) {
+        stopPolling();
+        startPolling();
+    }
+    
+    console.log('📡 Polling interval set to:', interval, 'ms');
+}
+
+// Efficient delta polling - Requirements: 11.4
 async function pollMessages() {
     if (!userId || isPolling) {
         console.log('⏭️ Skip poll:', { userId, isPolling });
@@ -1418,8 +2324,9 @@ async function pollMessages() {
     if (indicator) indicator.style.background = '#FCD34D'; // yellow = polling
     
     try {
+        // Delta update: only fetch messages since last check - Requirements: 11.4
         const url = `api/messages.php?action=poll&user_id=${userId}&last_id=${lastMessageId}&_t=${Date.now()}`;
-        console.log('📡 Polling:', url);
+        console.log('📡 Delta polling:', url);
         
         const res = await fetch(url);
         
@@ -1433,11 +2340,12 @@ async function pollMessages() {
         if (data.success) {
             pollErrorCount = 0;
             lastPollTime = Date.now();
+            currentPollInterval = getPollingInterval(); // Reset to normal interval
             if (indicator) indicator.style.background = '#86EFAC'; // green = success
             
-            // Add new messages to chat
+            // Add new messages to chat (delta update)
             if (data.messages && data.messages.length > 0) {
-                console.log('📨 New messages for current user:', data.messages.length);
+                console.log('📨 New messages (delta):', data.messages.length);
                 data.messages.forEach(msg => {
                     const msgId = parseInt(msg.id);
                     const isIncoming = msg.direction === 'incoming';
@@ -1448,8 +2356,12 @@ async function pollMessages() {
                         console.log('✅ Appending message:', msgId);
                         appendMessage(msg);
                         
+                        // Update cache with new message
+                        updateConversationCache(userId, msg);
+                        
+                        // Show notification for incoming messages - Requirements: 1.2
                         if (isIncoming) {
-                            showNotification(
+                            showInboxNotification(
                                 currentUserName || 'ลูกค้า',
                                 msg.content || 'ส่งข้อความใหม่',
                                 currentUserPic,
@@ -1475,10 +2387,10 @@ async function pollMessages() {
                     // Update sidebar item
                     updateSidebarUser(conv);
                     
-                    // Show notification for other users
+                    // Show notification for other users - Requirements: 1.2
                     if (conv.id != userId && conv.last_message) {
                         console.log('🔔 Notification for other user:', conv.display_name);
-                        showNotification(conv.display_name || 'ลูกค้า', conv.last_message, conv.picture_url, conv.id);
+                        showInboxNotification(conv.display_name || 'ลูกค้า', conv.last_message, conv.picture_url, conv.id);
                     }
                 });
             }
@@ -1488,27 +2400,86 @@ async function pollMessages() {
         console.error('Poll error:', err, 'Count:', pollErrorCount);
         if (indicator) indicator.style.background = '#FCA5A5'; // red = error
         
-        // If too many errors, slow down polling
-        if (pollErrorCount > 5) {
-            console.warn('Too many poll errors, slowing down...');
+        // Exponential backoff on errors
+        if (pollErrorCount > 3) {
+            currentPollInterval = Math.min(
+                currentPollInterval * POLLING_CONFIG.errorBackoffMultiplier,
+                POLLING_CONFIG.maxInterval
+            );
+            console.warn('Backing off polling to:', currentPollInterval, 'ms');
+            
+            // Restart with new interval
+            if (pollingInterval && pollErrorCount <= POLLING_CONFIG.maxErrorCount) {
+                stopPolling();
+                startPolling();
+            }
+        }
+        
+        // Stop polling if too many errors
+        if (pollErrorCount > POLLING_CONFIG.maxErrorCount) {
+            console.error('Too many poll errors, stopping polling');
+            stopPolling();
+            showToast('การเชื่อมต่อมีปัญหา กรุณารีเฟรชหน้า', 'error');
         }
     }
     
     isPolling = false;
 }
 
-// Start polling with visibility check
+// Enhanced notification function - Requirements: 1.2
+function showInboxNotification(name, message, pictureUrl, notifyUserId) {
+    // Show in-app toast notification
+    showToast(name, message, pictureUrl, 5000, notifyUserId);
+    
+    // Play notification sound - Requirements: 1.2
+    if (soundEnabled) {
+        playNotificationSound();
+    }
+    
+    // Desktop notification - Requirements: 1.2
+    if (desktopNotificationsEnabled && 
+        !document.hasFocus() && 
+        'Notification' in window && 
+        Notification.permission === 'granted') {
+        
+        try {
+            const notification = new Notification('ข้อความใหม่จาก ' + name, {
+                body: message.substring(0, 100),
+                icon: pictureUrl || 'https://via.placeholder.com/40',
+                tag: 'inbox-' + notifyUserId,
+                requireInteraction: false,
+                silent: true // We handle sound separately
+            });
+            
+            notification.onclick = () => {
+                window.focus();
+                if (notifyUserId) {
+                    window.location.href = '?user=' + notifyUserId;
+                }
+                notification.close();
+            };
+            
+            // Auto close after 5 seconds
+            setTimeout(() => notification.close(), 5000);
+        } catch (e) {
+            console.log('Desktop notification error:', e);
+        }
+    }
+}
+
+// Start polling with configurable interval - Requirements: 1.1, 11.4
 function startPolling() {
     if (pollingInterval) clearInterval(pollingInterval);
     
-    // Poll every 1.5 seconds for faster updates
+    currentPollInterval = getPollingInterval();
+    
     if (userId) {
-        pollingInterval = setInterval(pollMessages, 1500);
-        console.log('🟢 Polling started for user:', userId);
+        pollingInterval = setInterval(pollMessages, currentPollInterval);
+        console.log('🟢 Polling started for user:', userId, 'interval:', currentPollInterval, 'ms');
     } else {
-        // ถ้าไม่ได้เลือก user ก็ poll sidebar อย่างเดียว
-        pollingInterval = setInterval(pollSidebar, 3000);
-        console.log('🟢 Sidebar polling started');
+        // Poll sidebar only when no user selected
+        pollingInterval = setInterval(pollSidebar, currentPollInterval);
+        console.log('🟢 Sidebar polling started, interval:', currentPollInterval, 'ms');
     }
 }
 
@@ -1531,6 +2502,128 @@ async function pollSidebar() {
         }
     } catch (err) {
         console.error('Sidebar poll error:', err);
+    }
+}
+
+// ===== Conversation Caching - Requirements: 11.6 =====
+
+// Cache conversation messages for instant switching
+function cacheConversation(convUserId, messages) {
+    // Limit cache size
+    if (conversationCache.size >= CACHE_MAX_SIZE) {
+        // Remove oldest entry
+        const oldestKey = conversationCache.keys().next().value;
+        conversationCache.delete(oldestKey);
+    }
+    
+    conversationCache.set(convUserId, {
+        messages: messages,
+        timestamp: Date.now(),
+        lastMessageId: messages.length > 0 ? Math.max(...messages.map(m => parseInt(m.id))) : 0
+    });
+    
+    console.log('💾 Cached conversation:', convUserId, 'messages:', messages.length);
+}
+
+// Update cache with new message
+function updateConversationCache(convUserId, newMessage) {
+    const cached = conversationCache.get(convUserId);
+    if (cached) {
+        cached.messages.push(newMessage);
+        cached.lastMessageId = Math.max(cached.lastMessageId, parseInt(newMessage.id));
+        cached.timestamp = Date.now();
+        console.log('💾 Updated cache for:', convUserId);
+    }
+}
+
+// Get cached conversation
+function getCachedConversation(convUserId) {
+    const cached = conversationCache.get(convUserId);
+    if (cached) {
+        // Check if cache is still valid (within TTL)
+        if (Date.now() - cached.timestamp < CACHE_TTL) {
+            console.log('📦 Cache hit for:', convUserId);
+            return cached;
+        } else {
+            // Cache expired
+            conversationCache.delete(convUserId);
+            console.log('⏰ Cache expired for:', convUserId);
+        }
+    }
+    return null;
+}
+
+// Clear conversation cache
+function clearConversationCache() {
+    conversationCache.clear();
+    console.log('🗑️ Conversation cache cleared');
+}
+
+// Preload adjacent conversations for faster switching
+async function preloadAdjacentConversations() {
+    const userItems = document.querySelectorAll('.user-item');
+    const currentIndex = Array.from(userItems).findIndex(item => item.classList.contains('active'));
+    
+    if (currentIndex === -1) return;
+    
+    // Preload previous and next 2 conversations
+    const indicesToPreload = [
+        currentIndex - 2, currentIndex - 1,
+        currentIndex + 1, currentIndex + 2
+    ].filter(i => i >= 0 && i < userItems.length);
+    
+    for (const index of indicesToPreload) {
+        const item = userItems[index];
+        const preloadUserId = item.dataset.userId;
+        
+        if (preloadUserId && !getCachedConversation(preloadUserId)) {
+            try {
+                const res = await fetch(`api/messages.php?action=get_messages&user_id=${preloadUserId}&limit=50`);
+                const data = await res.json();
+                if (data.success && data.messages) {
+                    cacheConversation(preloadUserId, data.messages);
+                }
+            } catch (e) {
+                console.log('Preload failed for:', preloadUserId);
+            }
+            
+            // Small delay between preloads to avoid overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
+}
+
+// Cache current conversation on load
+function cacheCurrentConversation() {
+    if (userId) {
+        const messages = [];
+        document.querySelectorAll('.message-item').forEach(item => {
+            const msgId = item.dataset.msgId;
+            if (msgId) {
+                // Extract message data from DOM (simplified)
+                messages.push({
+                    id: msgId,
+                    // Note: Full message data would need to be stored differently
+                    // This is a simplified version for demonstration
+                });
+            }
+        });
+        
+        // For now, we'll fetch fresh data to cache properly
+        fetchAndCacheConversation(userId);
+    }
+}
+
+// Fetch and cache conversation
+async function fetchAndCacheConversation(convUserId) {
+    try {
+        const res = await fetch(`api/messages.php?action=get_messages&user_id=${convUserId}&limit=50`);
+        const data = await res.json();
+        if (data.success && data.messages) {
+            cacheConversation(convUserId, data.messages);
+        }
+    } catch (e) {
+        console.log('Failed to cache conversation:', convUserId);
     }
 }
 
@@ -1573,14 +2666,22 @@ function stopPolling() {
     }
 }
 
-// Pause polling when tab is hidden
+// Pause polling when tab is hidden, resume when visible - Requirements: 11.4
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         stopPolling();
     } else {
+        // Reset error count when tab becomes visible
+        pollErrorCount = 0;
+        currentPollInterval = getPollingInterval();
+        
         startPolling();
         // Immediate poll when tab becomes visible
-        pollMessages();
+        if (userId) {
+            pollMessages();
+        } else {
+            pollSidebar();
+        }
     }
 });
 
@@ -1613,7 +2714,8 @@ function appendMessage(msg) {
             // ถ้าไม่ใช่ URL และไม่ใช่ ID format ให้ลองใช้เป็น message ID
             imgSrc = 'api/line_content.php?id=' + content;
         }
-        contentHtml = `<img src="${imgSrc}" class="rounded-xl max-w-[200px] border shadow-sm cursor-pointer hover:opacity-90" onclick="openImage(this.src)" onerror="this.src='assets/images/image-not-found.svg'; this.classList.add('opacity-50')">`;
+        // Updated image handling with error handler - Requirements: 7.2
+        contentHtml = `<img src="${imgSrc}" class="rounded-xl max-w-[200px] border shadow-sm cursor-pointer hover:opacity-90 chat-image" onclick="openImage(this.src)" onerror="handleImageError(this)" data-original-src="${imgSrc}" loading="lazy">`;
     } else if (type === 'sticker') {
         let stickerId = '';
         try {
@@ -1942,51 +3044,242 @@ async function removeTag(tagId) {
 function showTagModal() { document.getElementById('tagModal').classList.remove('hidden'); }
 function closeTagModal() { document.getElementById('tagModal').classList.add('hidden'); }
 
-// ===== Notes =====
-async function saveNote(e) {
+// ===== Customer Notes - Requirements: 4.4, 4.5 =====
+async function saveCustomerNote(e) {
     if (e) e.preventDefault();
     const note = document.getElementById('noteInput').value.trim();
+    const isPinned = document.getElementById('notePinned')?.checked || false;
     if (!note) return;
     
     const formData = new FormData();
-    formData.append('action', 'save_note');
+    formData.append('action', 'add_note');
     formData.append('user_id', userId);
     formData.append('note', note);
+    formData.append('is_pinned', isPinned ? '1' : '0');
     
-    const res = await fetch('', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
-    const data = await res.json();
-    
-    if (data.success) {
-        document.getElementById('noteInput').value = '';
-        // Add note to list
-        const notesList = document.getElementById('notesList');
-        const emptyMsg = notesList.querySelector('.text-center');
-        if (emptyMsg) emptyMsg.remove();
+    try {
+        const res = await fetch('api/inbox.php', { method: 'POST', body: formData });
+        const data = await res.json();
         
-        const noteDiv = document.createElement('div');
-        noteDiv.className = 'bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs relative group';
-        noteDiv.innerHTML = `
-            <p class="text-gray-700">${escapeHtml(note)}</p>
-            <p class="text-[9px] text-gray-400 mt-1">${new Date().toLocaleString('th-TH')}</p>
-            <button onclick="deleteNote(${data.id}, this)" class="absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100"><i class="fas fa-times text-[10px]"></i></button>
-        `;
-        notesList.insertBefore(noteDiv, notesList.firstChild);
+        if (data.success) {
+            document.getElementById('noteInput').value = '';
+            if (document.getElementById('notePinned')) {
+                document.getElementById('notePinned').checked = false;
+            }
+            
+            // Remove empty message if exists
+            const notesList = document.getElementById('notesList');
+            const emptyMsg = document.getElementById('noNotesMsg');
+            if (emptyMsg) emptyMsg.remove();
+            
+            // Add note to list
+            const noteDiv = document.createElement('div');
+            noteDiv.className = `note-item ${isPinned ? 'bg-yellow-100 border-yellow-300' : 'bg-yellow-50 border-yellow-200'} border rounded-lg p-2 text-xs relative group`;
+            noteDiv.dataset.noteId = data.data.id;
+            noteDiv.innerHTML = `
+                ${isPinned ? '<span class="absolute -top-1 -left-1 text-yellow-500 text-[10px]"><i class="fas fa-thumbtack"></i></span>' : ''}
+                <p class="text-gray-700 note-content pr-12">${escapeHtml(note)}</p>
+                <div class="flex justify-between items-center mt-1">
+                    <p class="text-[9px] text-gray-400">${new Date().toLocaleString('th-TH')}</p>
+                </div>
+                <div class="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onclick="togglePinNote(${data.data.id}, this)" class="text-yellow-500 hover:text-yellow-600 p-1" title="${isPinned ? 'เลิกปักหมุด' : 'ปักหมุด'}">
+                        <i class="fas fa-thumbtack text-[10px]"></i>
+                    </button>
+                    <button onclick="editNote(${data.data.id}, this)" class="text-blue-400 hover:text-blue-600 p-1" title="แก้ไข">
+                        <i class="fas fa-edit text-[10px]"></i>
+                    </button>
+                    <button onclick="deleteCustomerNote(${data.data.id}, this)" class="text-red-400 hover:text-red-600 p-1" title="ลบ">
+                        <i class="fas fa-times text-[10px]"></i>
+                    </button>
+                </div>
+            `;
+            
+            // Insert at top if pinned, otherwise after pinned notes
+            if (isPinned) {
+                notesList.insertBefore(noteDiv, notesList.firstChild);
+            } else {
+                const firstUnpinned = notesList.querySelector('.note-item:not(.bg-yellow-100)');
+                if (firstUnpinned) {
+                    notesList.insertBefore(noteDiv, firstUnpinned);
+                } else {
+                    notesList.appendChild(noteDiv);
+                }
+            }
+            
+            showToast('บันทึกโน๊ตแล้ว', '', '', 2000);
+        } else {
+            alert('Error: ' + (data.error || 'ไม่สามารถบันทึกโน๊ตได้'));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
     }
 }
 
-async function deleteNote(noteId, btn) {
+async function deleteCustomerNote(noteId, btn) {
     if (!confirm('ลบโน๊ตนี้?')) return;
     
     const formData = new FormData();
     formData.append('action', 'delete_note');
-    formData.append('note_id', noteId);
+    formData.append('id', noteId);
     
-    const res = await fetch('', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData });
-    const data = await res.json();
-    
-    if (data.success) {
-        btn.closest('.bg-yellow-50').remove();
+    try {
+        const res = await fetch('api/inbox.php', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.success) {
+            btn.closest('.note-item').remove();
+            
+            // Show empty message if no notes left
+            const notesList = document.getElementById('notesList');
+            if (!notesList.querySelector('.note-item')) {
+                notesList.innerHTML = '<p id="noNotesMsg" class="text-gray-400 text-xs text-center py-2">ยังไม่มีโน๊ต</p>';
+            }
+            
+            showToast('ลบโน๊ตแล้ว', '', '', 2000);
+        } else {
+            alert('Error: ' + (data.error || 'ไม่สามารถลบโน๊ตได้'));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
     }
+}
+
+async function editNote(noteId, btn) {
+    const noteItem = btn.closest('.note-item');
+    const contentEl = noteItem.querySelector('.note-content');
+    const currentText = contentEl.textContent.trim();
+    
+    const newText = prompt('แก้ไขโน๊ต:', currentText);
+    if (newText === null || newText.trim() === '' || newText === currentText) return;
+    
+    const formData = new FormData();
+    formData.append('action', 'update_note');
+    formData.append('id', noteId);
+    formData.append('note', newText.trim());
+    
+    try {
+        const res = await fetch('api/inbox.php', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.success) {
+            contentEl.innerHTML = escapeHtml(newText.trim()).replace(/\n/g, '<br>');
+            showToast('อัพเดทโน๊ตแล้ว', '', '', 2000);
+        } else {
+            alert('Error: ' + (data.error || 'ไม่สามารถแก้ไขโน๊ตได้'));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+async function togglePinNote(noteId, btn) {
+    const formData = new FormData();
+    formData.append('action', 'toggle_pin');
+    formData.append('id', noteId);
+    
+    try {
+        const res = await fetch('api/inbox.php', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.success) {
+            // Reload to reorder notes
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'ไม่สามารถเปลี่ยนสถานะปักหมุดได้'));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+// Legacy note functions for backward compatibility
+async function saveNote(e) {
+    return saveCustomerNote(e);
+}
+
+async function deleteNote(noteId, btn) {
+    return deleteCustomerNote(noteId, btn);
+}
+
+// ===== Conversation Assignment - Requirements: 3.1 =====
+async function assignConversation(adminId) {
+    if (!userId) return;
+    
+    const formData = new FormData();
+    
+    if (adminId) {
+        formData.append('action', 'assign_conversation');
+        formData.append('user_id', userId);
+        formData.append('assign_to', adminId);
+    } else {
+        formData.append('action', 'unassign_conversation');
+        formData.append('user_id', userId);
+    }
+    
+    try {
+        const res = await fetch('api/inbox.php', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast(adminId ? 'มอบหมายงานแล้ว' : 'ยกเลิกการมอบหมายแล้ว', '', '', 2000);
+            // Reload to update UI
+            setTimeout(() => location.reload(), 500);
+        } else {
+            alert('Error: ' + (data.error || 'ไม่สามารถมอบหมายงานได้'));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+async function unassignConversation() {
+    if (!confirm('ยกเลิกการมอบหมายงานนี้?')) return;
+    
+    const formData = new FormData();
+    formData.append('action', 'unassign_conversation');
+    formData.append('user_id', userId);
+    
+    try {
+        const res = await fetch('api/inbox.php', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast('ยกเลิกการมอบหมายแล้ว', '', '', 2000);
+            setTimeout(() => location.reload(), 500);
+        } else {
+            alert('Error: ' + (data.error || 'ไม่สามารถยกเลิกการมอบหมายได้'));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+async function resolveConversation() {
+    if (!confirm('ทำเครื่องหมายว่าเสร็จสิ้นการสนทนานี้?')) return;
+    
+    const formData = new FormData();
+    formData.append('action', 'resolve_conversation');
+    formData.append('user_id', userId);
+    
+    try {
+        const res = await fetch('api/inbox.php', { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast('ทำเครื่องหมายเสร็จสิ้นแล้ว', '', '', 2000);
+            setTimeout(() => location.reload(), 500);
+        } else {
+            alert('Error: ' + (data.error || 'ไม่สามารถทำเครื่องหมายเสร็จสิ้นได้'));
+        }
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+}
+
+// ===== View Order =====
+function viewOrder(orderId) {
+    window.open('shop/order-detail.php?id=' + orderId, '_blank');
 }
 
 // ===== Medical Info =====
@@ -2234,25 +3527,888 @@ function autoResize(el) {
 }
 
 function handleKeyDown(e) {
+    // Requirements: 8.1, 8.2, 8.4 - Keyboard shortcuts
+    
+    // Escape to close modals - Requirements: 8.4
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        closeQuickReplyModal();
+        closeAIPanel();
+        return;
+    }
+    
+    // Enter to send (without Shift) - Requirements: 8.1
     if (e.key === 'Enter' && !e.shiftKey) {
+        // If quick reply modal is open, select the highlighted item
+        if (!document.getElementById('quickReplyModal').classList.contains('hidden')) {
+            e.preventDefault();
+            selectHighlightedQuickReply();
+            return;
+        }
         e.preventDefault();
         document.getElementById('sendForm').dispatchEvent(new Event('submit'));
+        return;
+    }
+    
+    // Shift+Enter for newline - Requirements: 8.2 (default behavior, no action needed)
+    
+    // Arrow keys for quick reply navigation
+    if (!document.getElementById('quickReplyModal').classList.contains('hidden')) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            navigateQuickReply(1);
+            return;
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            navigateQuickReply(-1);
+            return;
+        }
     }
 }
 
-function filterUsers(query) {
-    const items = document.querySelectorAll('.user-item');
-    query = query.toLowerCase();
-    items.forEach(item => {
-        const name = item.dataset.name || '';
-        item.style.display = name.includes(query) ? '' : 'none';
+// ===== Quick Reply Functions - Requirements: 2.1, 2.2, 2.3 =====
+let quickReplyTemplates = [];
+let filteredTemplates = [];
+let selectedQuickReplyIndex = 0;
+let quickReplyLoaded = false;
+
+// Handle message input for "/" trigger - Requirements: 2.1
+function handleMessageInput(textarea) {
+    const value = textarea.value;
+    
+    // Check if user typed "/" at the start or after a space/newline
+    if (value === '/' || value.endsWith(' /') || value.endsWith('\n/')) {
+        openQuickReplyModal();
+    }
+}
+
+// Open quick reply modal - Requirements: 2.1
+async function openQuickReplyModal() {
+    const modal = document.getElementById('quickReplyModal');
+    modal.classList.remove('hidden');
+    
+    // Focus search input
+    setTimeout(() => {
+        document.getElementById('quickReplySearch').focus();
+    }, 100);
+    
+    // Load templates if not loaded
+    if (!quickReplyLoaded) {
+        await loadQuickReplyTemplates();
+    } else {
+        renderQuickReplyList(quickReplyTemplates);
+    }
+}
+
+// Close quick reply modal
+function closeQuickReplyModal() {
+    document.getElementById('quickReplyModal').classList.add('hidden');
+    document.getElementById('quickReplySearch').value = '';
+    selectedQuickReplyIndex = 0;
+    
+    // Remove "/" from input if it was just typed
+    const input = document.getElementById('messageInput');
+    if (input.value === '/' || input.value.endsWith(' /') || input.value.endsWith('\n/')) {
+        input.value = input.value.slice(0, -1);
+    }
+    
+    // Focus back on message input
+    input.focus();
+}
+
+// Load templates from API
+async function loadQuickReplyTemplates() {
+    const listContainer = document.getElementById('quickReplyList');
+    listContainer.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...</div>';
+    
+    try {
+        const response = await fetch('api/inbox.php?action=get_templates');
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            quickReplyTemplates = data.data;
+            filteredTemplates = [...quickReplyTemplates];
+            quickReplyLoaded = true;
+            renderQuickReplyList(quickReplyTemplates);
+        } else {
+            listContainer.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">ไม่พบ template</div>';
+        }
+    } catch (error) {
+        console.error('Error loading templates:', error);
+        listContainer.innerHTML = '<div class="p-4 text-center text-red-400 text-sm">เกิดข้อผิดพลาด</div>';
+    }
+}
+
+// Filter quick replies - Requirements: 2.2
+function filterQuickReplies(query) {
+    query = query.toLowerCase().trim();
+    
+    if (!query) {
+        filteredTemplates = [...quickReplyTemplates];
+    } else {
+        filteredTemplates = quickReplyTemplates.filter(t => 
+            t.name.toLowerCase().includes(query) || 
+            t.content.toLowerCase().includes(query) ||
+            (t.category && t.category.toLowerCase().includes(query))
+        );
+    }
+    
+    selectedQuickReplyIndex = 0;
+    renderQuickReplyList(filteredTemplates);
+}
+
+// Render quick reply list
+function renderQuickReplyList(templates) {
+    const listContainer = document.getElementById('quickReplyList');
+    
+    if (templates.length === 0) {
+        listContainer.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">ไม่พบ template ที่ตรงกัน</div>';
+        return;
+    }
+    
+    listContainer.innerHTML = templates.map((t, index) => `
+        <div class="quick-reply-item ${index === selectedQuickReplyIndex ? 'selected' : ''}" 
+             data-index="${index}"
+             onclick="selectQuickReply(${index})"
+             onmouseenter="highlightQuickReply(${index})">
+            <div class="quick-reply-name">${escapeHtml(t.name)}</div>
+            <div class="quick-reply-preview">${escapeHtml(t.content.substring(0, 80))}${t.content.length > 80 ? '...' : ''}</div>
+            <div class="quick-reply-meta">
+                ${t.category ? `<span class="quick-reply-category">${escapeHtml(t.category)}</span>` : ''}
+                <span><i class="fas fa-chart-bar"></i> ${t.usage_count || 0} ครั้ง</span>
+                ${t.last_used_at ? `<span><i class="fas fa-clock"></i> ${formatThaiTimeJS(new Date(t.last_used_at))}</span>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+// Highlight quick reply on hover
+function highlightQuickReply(index) {
+    selectedQuickReplyIndex = index;
+    updateQuickReplyHighlight();
+}
+
+// Navigate quick reply with arrow keys
+function navigateQuickReply(direction) {
+    const maxIndex = filteredTemplates.length - 1;
+    selectedQuickReplyIndex += direction;
+    
+    if (selectedQuickReplyIndex < 0) selectedQuickReplyIndex = maxIndex;
+    if (selectedQuickReplyIndex > maxIndex) selectedQuickReplyIndex = 0;
+    
+    updateQuickReplyHighlight();
+    
+    // Scroll into view
+    const selectedItem = document.querySelector('.quick-reply-item.selected');
+    if (selectedItem) {
+        selectedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+// Update highlight styling
+function updateQuickReplyHighlight() {
+    document.querySelectorAll('.quick-reply-item').forEach((item, index) => {
+        item.classList.toggle('selected', index === selectedQuickReplyIndex);
     });
+}
+
+// Select highlighted quick reply (on Enter)
+function selectHighlightedQuickReply() {
+    if (filteredTemplates.length > 0 && selectedQuickReplyIndex < filteredTemplates.length) {
+        selectQuickReply(selectedQuickReplyIndex);
+    }
+}
+
+// Select quick reply and fill placeholders - Requirements: 2.2, 2.3
+async function selectQuickReply(index) {
+    const template = filteredTemplates[index];
+    if (!template) return;
+    
+    // Get customer data for placeholder filling - Requirements: 2.3
+    const customerData = {
+        name: currentUserName || '',
+        phone: '<?= $selectedUser ? ($selectedUser['phone'] ?? '') : '' ?>',
+        email: '<?= $selectedUser ? ($selectedUser['email'] ?? '') : '' ?>',
+        order_id: '' // Could be filled from recent orders
+    };
+    
+    try {
+        // Call API to fill placeholders and record usage
+        const formData = new FormData();
+        formData.append('action', 'use_template');
+        formData.append('id', template.id);
+        formData.append('customer_data', JSON.stringify(customerData));
+        
+        const response = await fetch('api/inbox.php', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            // Insert filled content into message input
+            const input = document.getElementById('messageInput');
+            
+            // Remove the "/" trigger if present
+            let currentValue = input.value;
+            if (currentValue === '/' || currentValue.endsWith(' /') || currentValue.endsWith('\n/')) {
+                currentValue = currentValue.slice(0, -1);
+            }
+            
+            input.value = currentValue + data.data.content;
+            autoResize(input);
+            
+            // Update usage count in local cache
+            template.usage_count = (template.usage_count || 0) + 1;
+            template.last_used_at = new Date().toISOString();
+        } else {
+            // Fallback: use original content
+            const input = document.getElementById('messageInput');
+            let currentValue = input.value;
+            if (currentValue === '/' || currentValue.endsWith(' /') || currentValue.endsWith('\n/')) {
+                currentValue = currentValue.slice(0, -1);
+            }
+            input.value = currentValue + template.content;
+            autoResize(input);
+        }
+    } catch (error) {
+        console.error('Error using template:', error);
+        // Fallback: use original content
+        const input = document.getElementById('messageInput');
+        let currentValue = input.value;
+        if (currentValue === '/' || currentValue.endsWith(' /') || currentValue.endsWith('\n/')) {
+            currentValue = currentValue.slice(0, -1);
+        }
+        input.value = currentValue + template.content;
+        autoResize(input);
+    }
+    
+    closeQuickReplyModal();
+}
+
+// Handle keydown in quick reply search
+function handleQuickReplyKeydown(event) {
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        navigateQuickReply(1);
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        navigateQuickReply(-1);
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        selectHighlightedQuickReply();
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        closeQuickReplyModal();
+    }
+}
+
+// Open template manager (placeholder for future implementation)
+function openTemplateManager() {
+    // Could open a modal or redirect to template management page
+    showToast('จัดการ Templates - Coming soon!', 'info');
+}
+
+// ===== Image Error Handling - Requirements: 7.2, 9.4 =====
+function handleImageError(img) {
+    // Mark as error
+    img.classList.add('image-error');
+    img.style.display = 'none';
+    
+    // Create placeholder
+    const placeholder = document.createElement('div');
+    placeholder.className = 'image-error-placeholder rounded-xl max-w-[200px] border shadow-sm';
+    placeholder.innerHTML = `
+        <i class="fas fa-image"></i>
+        <span>รูปภาพหมดอายุ<br>หรือไม่สามารถโหลดได้</span>
+    `;
+    
+    // Insert placeholder after the image
+    img.parentNode.insertBefore(placeholder, img.nextSibling);
+}
+
+// Mobile-optimized image loading - Requirements: 9.4
+function optimizeImageForMobile(img) {
+    // Add loading class for animation
+    img.classList.add('blur-load');
+    
+    // Create intersection observer for lazy loading
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const image = entry.target;
+                const src = image.dataset.src || image.src;
+                
+                // For mobile, try to load thumbnail first if available
+                if (isMobileDevice() && src.includes('line_content.php')) {
+                    // Add thumbnail parameter for mobile
+                    const thumbnailSrc = src + (src.includes('?') ? '&' : '?') + 'thumb=1';
+                    
+                    // Try thumbnail first
+                    const tempImg = new Image();
+                    tempImg.onload = function() {
+                        image.src = thumbnailSrc;
+                        image.classList.add('loaded');
+                        image.classList.remove('blur-load');
+                    };
+                    tempImg.onerror = function() {
+                        // Fallback to original
+                        image.src = src;
+                        image.classList.add('loaded');
+                        image.classList.remove('blur-load');
+                    };
+                    tempImg.src = thumbnailSrc;
+                } else {
+                    // Desktop or external images - load normally
+                    image.onload = function() {
+                        image.classList.add('loaded');
+                        image.classList.remove('blur-load');
+                    };
+                    if (image.dataset.src) {
+                        image.src = image.dataset.src;
+                    }
+                }
+                
+                observer.unobserve(image);
+            }
+        });
+    }, {
+        rootMargin: '50px 0px',
+        threshold: 0.1
+    });
+    
+    observer.observe(img);
+}
+
+// Initialize lazy loading for all chat images
+function initializeLazyImages() {
+    document.querySelectorAll('.chat-image').forEach(img => {
+        if (!img.classList.contains('loaded') && !img.classList.contains('image-error')) {
+            optimizeImageForMobile(img);
+        }
+    });
+}
+
+// Call on page load and after new messages
+document.addEventListener('DOMContentLoaded', initializeLazyImages);
+
+// Re-initialize when new messages are added
+const chatBoxObserver = new MutationObserver((mutations) => {
+    mutations.forEach(mutation => {
+        mutation.addedNodes.forEach(node => {
+            if (node.nodeType === 1) {
+                const images = node.querySelectorAll ? node.querySelectorAll('.chat-image') : [];
+                images.forEach(img => optimizeImageForMobile(img));
+            }
+        });
+    });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const chatBox = document.getElementById('chatBox');
+    if (chatBox) {
+        chatBoxObserver.observe(chatBox, { childList: true, subtree: true });
+    }
+});
+
+// ===== Message Pagination - Requirements: 11.3 =====
+let messageCurrentPage = 1;
+let messageHasMore = true;
+let isLoadingMessages = false;
+const messagesPerPage = 50;
+
+// Initialize pagination on page load
+function initMessagePagination() {
+    // Check if there might be more messages
+    const chatBox = document.getElementById('chatBox');
+    const messageCount = chatBox.querySelectorAll('.message-item').length;
+    
+    if (messageCount >= messagesPerPage) {
+        messageHasMore = true;
+        document.getElementById('loadMoreContainer').classList.remove('hidden');
+    }
+}
+
+// Load more messages
+async function loadMoreMessages() {
+    if (isLoadingMessages || !messageHasMore || !userId) return;
+    
+    isLoadingMessages = true;
+    const btn = document.getElementById('loadMoreBtn');
+    const spinner = document.getElementById('loadMoreSpinner');
+    
+    btn.classList.add('hidden');
+    spinner.classList.remove('hidden');
+    
+    try {
+        messageCurrentPage++;
+        const response = await fetch(`api/inbox.php?action=get_messages&user_id=${userId}&page=${messageCurrentPage}&limit=${messagesPerPage}`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            const messages = data.data.messages || [];
+            messageHasMore = data.data.has_more;
+            
+            if (messages.length > 0) {
+                // Get the first message element to scroll to after prepending
+                const chatBox = document.getElementById('chatBox');
+                const firstMessage = chatBox.querySelector('.message-item');
+                const scrollHeightBefore = chatBox.scrollHeight;
+                
+                // Prepend messages (they come in DESC order, so reverse)
+                messages.reverse().forEach(msg => {
+                    if (!document.querySelector(`[data-msg-id="${msg.id}"]`)) {
+                        prependMessage(msg);
+                    }
+                });
+                
+                // Maintain scroll position
+                const scrollHeightAfter = chatBox.scrollHeight;
+                chatBox.scrollTop = scrollHeightAfter - scrollHeightBefore;
+            }
+            
+            if (!messageHasMore) {
+                document.getElementById('loadMoreContainer').classList.add('hidden');
+            }
+        }
+    } catch (error) {
+        console.error('Error loading more messages:', error);
+        showToast('เกิดข้อผิดพลาดในการโหลดข้อความ', 'error');
+    } finally {
+        isLoadingMessages = false;
+        btn.classList.remove('hidden');
+        spinner.classList.add('hidden');
+    }
+}
+
+// Prepend message to chat (for pagination)
+function prependMessage(msg) {
+    const chatBox = document.getElementById('chatBox');
+    const loadMoreContainer = document.getElementById('loadMoreContainer');
+    const isMe = msg.direction === 'outgoing';
+    
+    const div = document.createElement('div');
+    div.className = `message-item flex ${isMe ? 'justify-end' : 'justify-start'} group`;
+    div.dataset.msgId = msg.id;
+    
+    let contentHtml = '';
+    const content = msg.content || '';
+    const type = msg.message_type || 'text';
+    
+    if (type === 'text') {
+        contentHtml = `<div class="chat-bubble px-4 py-2.5 text-sm shadow-sm ${isMe ? 'chat-outgoing' : 'chat-incoming'}">${escapeHtml(content).replace(/\n/g, '<br>')}</div>`;
+    } else if (type === 'image') {
+        let imgSrc = content;
+        const match = content.match(/ID:\s*(\d+)/);
+        if (match) {
+            imgSrc = 'api/line_content.php?id=' + match[1];
+        } else if (!content.match(/^https?:\/\//)) {
+            imgSrc = 'api/line_content.php?id=' + content;
+        }
+        contentHtml = `<img src="${imgSrc}" class="rounded-xl max-w-[200px] border shadow-sm cursor-pointer hover:opacity-90 chat-image" onclick="openImage(this.src)" onerror="handleImageError(this)" data-original-src="${imgSrc}" loading="lazy">`;
+    } else if (type === 'sticker') {
+        let stickerId = '';
+        try {
+            const json = JSON.parse(content);
+            if (json.stickerId) stickerId = json.stickerId;
+        } catch(e) {
+            const m = content.match(/Sticker:\s*(\d+)/);
+            if (m) stickerId = m[1];
+        }
+        if (stickerId) {
+            contentHtml = `<img src="https://stickershop.line-scdn.net/stickershop/v1/sticker/${stickerId}/android/sticker.png" class="w-20">`;
+        } else {
+            contentHtml = `<div class="bg-white rounded-lg border p-2 text-xs text-gray-500">😊 Sticker</div>`;
+        }
+    } else {
+        contentHtml = `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-file-alt mr-1"></i>${type}</div>`;
+    }
+    
+    const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString('th-TH', {hour: '2-digit', minute: '2-digit'}) : '';
+    const sentBy = msg.sent_by || '';
+    const isRead = msg.is_read == 1;
+    
+    // Build sender badge
+    let senderBadge = '';
+    if (isMe) {
+        if (sentBy && sentBy.startsWith('admin:')) {
+            const name = sentBy.substring(6);
+            senderBadge = `<span class="sender-badge admin"><i class="fas fa-user-shield"></i> ${escapeHtml(name)}</span>`;
+        } else if (sentBy === 'ai' || (sentBy && sentBy.startsWith('ai:'))) {
+            senderBadge = `<span class="sender-badge ai"><i class="fas fa-robot"></i> AI</span>`;
+        } else if (sentBy === 'bot' || (sentBy && (sentBy.startsWith('bot:') || sentBy.startsWith('system:')))) {
+            senderBadge = `<span class="sender-badge bot"><i class="fas fa-cog"></i> Bot</span>`;
+        } else if (sentBy) {
+            senderBadge = `<span class="sender-badge">${escapeHtml(sentBy)}</span>`;
+        } else {
+            senderBadge = `<span class="sender-badge admin"><i class="fas fa-user-shield"></i> Admin</span>`;
+        }
+    }
+    
+    // Read status
+    let readStatus = '';
+    if (isMe) {
+        readStatus = isRead 
+            ? '<span class="read-status read" title="อ่านแล้ว">✓✓</span>'
+            : '<span class="read-status sent" title="ส่งแล้ว">✓</span>';
+    }
+    
+    div.innerHTML = `
+        ${!isMe ? `<img src="${currentUserPic}" class="w-7 h-7 rounded-full self-end mr-2">` : ''}
+        <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}" style="max-width:70%">
+            ${contentHtml}
+            <div class="msg-meta ${isMe ? '' : 'incoming'}">
+                <span>${time}</span>
+                ${senderBadge}
+                ${readStatus}
+            </div>
+        </div>
+    `;
+    
+    // Insert after load more container
+    if (loadMoreContainer && loadMoreContainer.nextSibling) {
+        chatBox.insertBefore(div, loadMoreContainer.nextSibling);
+    } else {
+        chatBox.insertBefore(div, chatBox.firstChild);
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    if (userId) {
+        initMessagePagination();
+    }
+});
+
+// ===== Search & Filter Functions - Requirements: 5.1, 5.2, 5.3, 5.4, 11.7 =====
+let searchDebounceTimer = null;
+let currentFilters = {
+    search: '',
+    status: '',
+    tag_id: '',
+    assigned_to: '',
+    date_from: '',
+    date_to: ''
+};
+let currentPage = 1;
+let isLoadingMore = false;
+let hasMoreConversations = true;
+const adminId = <?= $_SESSION['admin_id'] ?? 'null' ?>;
+
+// Debounced search function (300ms delay) - Requirements: 11.7
+function debouncedSearch(query) {
+    const spinner = document.getElementById('searchSpinner');
+    
+    // Clear previous timer
+    if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+    }
+    
+    // Show spinner
+    if (query.length > 0) {
+        spinner.classList.remove('hidden');
+    }
+    
+    // Set new timer with 300ms delay
+    searchDebounceTimer = setTimeout(() => {
+        currentFilters.search = query;
+        currentPage = 1;
+        loadConversations(true);
+    }, 300);
+}
+
+// Apply filters from dropdowns
+function applyFilters() {
+    currentFilters.status = document.getElementById('filterStatus').value;
+    currentFilters.tag_id = document.getElementById('filterTag').value;
+    
+    const assignedValue = document.getElementById('filterAssigned').value;
+    if (assignedValue === 'me' && adminId) {
+        currentFilters.assigned_to = adminId;
+    } else {
+        currentFilters.assigned_to = assignedValue;
+    }
+    
+    currentFilters.date_from = document.getElementById('filterDateFrom').value;
+    currentFilters.date_to = document.getElementById('filterDateTo').value;
+    
+    currentPage = 1;
+    loadConversations(true);
+    updateActiveFiltersDisplay();
+}
+
+// Toggle date filter picker
+function toggleDateFilter() {
+    const picker = document.getElementById('dateRangePicker');
+    picker.classList.toggle('hidden');
+}
+
+// Clear date filter
+function clearDateFilter() {
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    document.getElementById('dateFilterLabel').textContent = 'วันที่';
+    applyFilters();
+}
+
+// Update active filters display
+function updateActiveFiltersDisplay() {
+    const container = document.getElementById('activeFilters');
+    const badges = [];
+    
+    if (currentFilters.status) {
+        const statusLabels = { unread: 'ยังไม่อ่าน', assigned: 'มอบหมายแล้ว', resolved: 'แก้ไขแล้ว' };
+        badges.push(`<span class="text-[9px] px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full flex items-center gap-1">${statusLabels[currentFilters.status] || currentFilters.status}<button onclick="clearFilter('status')" class="ml-1 hover:text-red-500">&times;</button></span>`);
+    }
+    
+    if (currentFilters.tag_id) {
+        const tagSelect = document.getElementById('filterTag');
+        const tagName = tagSelect.options[tagSelect.selectedIndex].text;
+        badges.push(`<span class="text-[9px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full flex items-center gap-1">${tagName}<button onclick="clearFilter('tag_id')" class="ml-1 hover:text-red-500">&times;</button></span>`);
+    }
+    
+    if (currentFilters.assigned_to) {
+        const assignSelect = document.getElementById('filterAssigned');
+        const assignName = assignSelect.options[assignSelect.selectedIndex].text;
+        badges.push(`<span class="text-[9px] px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full flex items-center gap-1">${assignName}<button onclick="clearFilter('assigned_to')" class="ml-1 hover:text-red-500">&times;</button></span>`);
+    }
+    
+    if (currentFilters.date_from || currentFilters.date_to) {
+        const dateLabel = currentFilters.date_from && currentFilters.date_to 
+            ? `${currentFilters.date_from} - ${currentFilters.date_to}`
+            : currentFilters.date_from || currentFilters.date_to;
+        badges.push(`<span class="text-[9px] px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full flex items-center gap-1">${dateLabel}<button onclick="clearFilter('date')" class="ml-1 hover:text-red-500">&times;</button></span>`);
+        document.getElementById('dateFilterLabel').textContent = dateLabel.length > 10 ? dateLabel.substring(0, 10) + '...' : dateLabel;
+    }
+    
+    if (badges.length > 0) {
+        container.innerHTML = badges.join('');
+        container.classList.remove('hidden');
+    } else {
+        container.classList.add('hidden');
+    }
+}
+
+// Clear specific filter
+function clearFilter(filterName) {
+    if (filterName === 'status') {
+        document.getElementById('filterStatus').value = '';
+        currentFilters.status = '';
+    } else if (filterName === 'tag_id') {
+        document.getElementById('filterTag').value = '';
+        currentFilters.tag_id = '';
+    } else if (filterName === 'assigned_to') {
+        document.getElementById('filterAssigned').value = '';
+        currentFilters.assigned_to = '';
+    } else if (filterName === 'date') {
+        clearDateFilter();
+        return;
+    }
+    
+    currentPage = 1;
+    loadConversations(true);
+    updateActiveFiltersDisplay();
+}
+
+// Load conversations from API
+async function loadConversations(replace = false) {
+    const userList = document.getElementById('userList');
+    const spinner = document.getElementById('searchSpinner');
+    const loadingMore = document.getElementById('loadingMore');
+    
+    if (isLoadingMore) return;
+    isLoadingMore = true;
+    
+    if (loadingMore) loadingMore.classList.remove('hidden');
+    
+    try {
+        const params = new URLSearchParams({
+            action: 'get_conversations',
+            page: currentPage,
+            limit: 50
+        });
+        
+        if (currentFilters.search) params.append('search', currentFilters.search);
+        if (currentFilters.status) params.append('status', currentFilters.status);
+        if (currentFilters.tag_id) params.append('tag_id', currentFilters.tag_id);
+        if (currentFilters.assigned_to) params.append('assigned_to', currentFilters.assigned_to);
+        if (currentFilters.date_from) params.append('date_from', currentFilters.date_from);
+        if (currentFilters.date_to) params.append('date_to', currentFilters.date_to);
+        
+        const response = await fetch(`api/inbox.php?${params.toString()}`);
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            const conversations = data.data.conversations || [];
+            hasMoreConversations = currentPage < data.data.total_pages;
+            
+            if (replace) {
+                // Clear existing items except sentinel
+                const sentinel = document.getElementById('scrollSentinel');
+                userList.innerHTML = '';
+                if (sentinel) userList.appendChild(sentinel);
+            }
+            
+            if (conversations.length === 0 && replace) {
+                userList.innerHTML = `
+                    <div class="p-6 text-center text-gray-400">
+                        <i class="fas fa-search text-4xl mb-2"></i>
+                        <p class="text-sm">ไม่พบผลลัพธ์</p>
+                    </div>
+                `;
+            } else {
+                const sentinel = document.getElementById('scrollSentinel');
+                conversations.forEach((conv, index) => {
+                    const item = createConversationItem(conv, (currentPage - 1) * 50 + index);
+                    if (sentinel) {
+                        userList.insertBefore(item, sentinel);
+                    } else {
+                        userList.appendChild(item);
+                    }
+                });
+                
+                // Re-add sentinel if needed
+                if (!document.getElementById('scrollSentinel')) {
+                    const newSentinel = document.createElement('div');
+                    newSentinel.id = 'scrollSentinel';
+                    newSentinel.className = 'h-10 flex items-center justify-center';
+                    newSentinel.innerHTML = '<span id="loadingMore" class="hidden text-xs text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...</span>';
+                    userList.appendChild(newSentinel);
+                    setupIntersectionObserver();
+                }
+            }
+            
+            // Update total count
+            document.getElementById('totalUnread').textContent = data.data.total || 0;
+        }
+    } catch (error) {
+        console.error('Error loading conversations:', error);
+    } finally {
+        isLoadingMore = false;
+        if (spinner) spinner.classList.add('hidden');
+        if (loadingMore) loadingMore.classList.add('hidden');
+    }
+}
+
+// Create conversation item HTML element
+function createConversationItem(conv, index) {
+    const a = document.createElement('a');
+    a.href = `?user=${conv.id}`;
+    a.className = `user-item block p-3 border-b border-gray-50 ${conv.unread_count > 0 ? '' : ''} ${conv.sla_warning ? 'sla-warning' : ''}`;
+    a.dataset.userId = conv.id;
+    a.dataset.name = (conv.display_name || '').toLowerCase();
+    a.dataset.index = index;
+    
+    // Calculate time since last message
+    let timeSince = '';
+    if (conv.last_message_at) {
+        const lastTime = new Date(conv.last_message_at);
+        const now = new Date();
+        const seconds = Math.floor((now - lastTime) / 1000);
+        
+        if (seconds < 60) timeSince = seconds + ' วินาที';
+        else if (seconds < 3600) timeSince = Math.floor(seconds / 60) + ' นาที';
+        else if (seconds < 86400) timeSince = Math.floor(seconds / 3600) + ' ชม.';
+        else timeSince = Math.floor(seconds / 86400) + ' วัน';
+    }
+    
+    // Format last message time
+    const lastTimeFormatted = conv.last_message_at ? formatThaiTimeJS(new Date(conv.last_message_at)) : '';
+    
+    // Get message preview
+    let msgPreview = conv.last_message_content || '';
+    if (conv.last_message_direction === 'image') msgPreview = '📷 รูปภาพ';
+    else if (conv.last_message_direction === 'sticker') msgPreview = '😊 สติกเกอร์';
+    else if (msgPreview.length > 30) msgPreview = msgPreview.substring(0, 30) + '...';
+    
+    a.innerHTML = `
+        <div class="flex items-center gap-3">
+            <div class="relative flex-shrink-0">
+                <img src="${conv.picture_url || 'https://via.placeholder.com/40'}" 
+                     class="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                     loading="lazy">
+                ${conv.unread_count > 0 ? `
+                <div class="unread-badge absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">
+                    ${conv.unread_count > 9 ? '9+' : conv.unread_count}
+                </div>` : ''}
+                ${conv.sla_warning ? `
+                <div class="sla-badge absolute -bottom-1 -right-1 bg-orange-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full" title="เกิน SLA">
+                    <i class="fas fa-exclamation"></i>
+                </div>` : ''}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-baseline">
+                    <h3 class="text-sm font-semibold text-gray-800 truncate">${escapeHtml(conv.display_name || 'Unknown')}</h3>
+                    <span class="last-time text-[10px] text-gray-400">${lastTimeFormatted}</span>
+                </div>
+                <p class="last-msg text-xs text-gray-500 truncate">${escapeHtml(msgPreview)}</p>
+                <div class="flex items-center gap-2 mt-1">
+                    ${conv.assigned_admin_name ? `
+                    <span class="assignment-badge text-[9px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full flex items-center gap-1">
+                        <i class="fas fa-user-check"></i>
+                        ${escapeHtml(conv.assigned_admin_name)}
+                    </span>` : ''}
+                    ${timeSince ? `
+                    <span class="time-since text-[9px] text-gray-400 flex items-center gap-1" title="เวลาตั้งแต่ข้อความล่าสุด">
+                        <i class="fas fa-clock"></i>
+                        ${timeSince}
+                    </span>` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return a;
+}
+
+// Virtual Scrolling with Intersection Observer - Requirements: 11.2
+let intersectionObserver = null;
+
+function setupIntersectionObserver() {
+    if (intersectionObserver) {
+        intersectionObserver.disconnect();
+    }
+    
+    const sentinel = document.getElementById('scrollSentinel');
+    if (!sentinel) return;
+    
+    intersectionObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && hasMoreConversations && !isLoadingMore) {
+                currentPage++;
+                loadConversations(false);
+            }
+        });
+    }, {
+        root: document.getElementById('userList'),
+        rootMargin: '100px',
+        threshold: 0.1
+    });
+    
+    intersectionObserver.observe(sentinel);
+}
+
+// Initialize intersection observer on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setupIntersectionObserver();
+});
+
+// Legacy filter function (for backward compatibility)
+function filterUsers(query) {
+    debouncedSearch(query);
 }
 
 function togglePanel() {
     const panel = document.getElementById('customerPanel');
     
-    // Check current visibility
+    // Use mobile-specific toggle on mobile devices
+    if (window.innerWidth <= 768) {
+        togglePanelMobile();
+        return;
+    }
+    
+    // Desktop behavior
     const computedStyle = window.getComputedStyle(panel);
     const isVisible = computedStyle.display !== 'none';
     
@@ -2386,19 +4542,139 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// Mobile: Show chat list (hide chat area)
+// Mobile: Show chat list (hide chat area) - Requirements: 9.1, 9.2
 function showChatList() {
     const sidebar = document.getElementById('inboxSidebar');
+    const customerPanel = document.getElementById('customerPanel');
+    
     sidebar.classList.remove('hidden-mobile');
+    
+    // Also hide customer panel if visible
+    if (customerPanel) {
+        customerPanel.classList.remove('mobile-visible');
+        customerPanel.classList.add('hidden');
+    }
 }
 
-// Mobile: Hide chat list when user is selected
+// Mobile: Hide chat list when user is selected - Requirements: 9.2
 function hideChatListOnMobile() {
     if (window.innerWidth <= 768) {
         const sidebar = document.getElementById('inboxSidebar');
         sidebar.classList.add('hidden-mobile');
     }
 }
+
+// Mobile: Toggle customer panel with animation - Requirements: 9.1
+function togglePanelMobile() {
+    const panel = document.getElementById('customerPanel');
+    
+    if (window.innerWidth <= 768) {
+        // Mobile: slide in/out
+        if (panel.classList.contains('mobile-visible')) {
+            panel.classList.remove('mobile-visible');
+            panel.classList.add('hidden');
+        } else {
+            panel.classList.remove('hidden');
+            panel.classList.add('mobile-visible');
+        }
+    } else {
+        // Desktop: toggle visibility
+        togglePanel();
+    }
+}
+
+// Mobile: Close customer panel
+function closePanelMobile() {
+    const panel = document.getElementById('customerPanel');
+    panel.classList.remove('mobile-visible');
+    panel.classList.add('hidden');
+}
+
+// Detect if device is mobile
+function isMobileDevice() {
+    return window.innerWidth <= 768 || 
+           ('ontouchstart' in window) || 
+           (navigator.maxTouchPoints > 0);
+}
+
+// Handle window resize - adjust layout
+function handleResize() {
+    const sidebar = document.getElementById('inboxSidebar');
+    const panel = document.getElementById('customerPanel');
+    
+    if (window.innerWidth > 768) {
+        // Desktop: reset mobile classes
+        sidebar.classList.remove('hidden-mobile');
+        if (panel) {
+            panel.classList.remove('mobile-visible');
+        }
+    } else {
+        // Mobile: hide sidebar if user is selected
+        <?php if ($selectedUser): ?>
+        sidebar.classList.add('hidden-mobile');
+        <?php endif; ?>
+    }
+}
+
+// Debounced resize handler
+let resizeTimeout;
+window.addEventListener('resize', function() {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(handleResize, 150);
+});
+
+// Mobile: Handle swipe gestures for navigation
+let touchStartX = 0;
+let touchEndX = 0;
+const SWIPE_THRESHOLD = 50;
+
+function handleTouchStart(e) {
+    touchStartX = e.changedTouches[0].screenX;
+}
+
+function handleTouchEnd(e) {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipeGesture();
+}
+
+function handleSwipeGesture() {
+    if (window.innerWidth > 768) return; // Only on mobile
+    
+    const swipeDistance = touchEndX - touchStartX;
+    
+    // Swipe right to show chat list
+    if (swipeDistance > SWIPE_THRESHOLD) {
+        const panel = document.getElementById('customerPanel');
+        if (panel && panel.classList.contains('mobile-visible')) {
+            // Close customer panel first
+            closePanelMobile();
+        } else {
+            // Show chat list
+            showChatList();
+        }
+    }
+    
+    // Swipe left to show customer panel (if in chat)
+    if (swipeDistance < -SWIPE_THRESHOLD) {
+        const sidebar = document.getElementById('inboxSidebar');
+        if (!sidebar.classList.contains('hidden-mobile')) {
+            // Hide chat list if visible
+            hideChatListOnMobile();
+        } else if (userId) {
+            // Show customer panel
+            togglePanelMobile();
+        }
+    }
+}
+
+// Initialize swipe gestures on chat area
+document.addEventListener('DOMContentLoaded', function() {
+    const chatArea = document.getElementById('chatArea');
+    if (chatArea && isMobileDevice()) {
+        chatArea.addEventListener('touchstart', handleTouchStart, { passive: true });
+        chatArea.addEventListener('touchend', handleTouchEnd, { passive: true });
+    }
+});
 
 // Auto hide chat list on mobile when user is selected
 document.addEventListener('DOMContentLoaded', function() {

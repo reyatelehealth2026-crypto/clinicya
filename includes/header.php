@@ -165,7 +165,9 @@ try {
 // Note: Items without 'roles' key are accessible to all staff (per Requirements 9.1, 9.2, 9.3)
 $quickAccessMenus = [
     // ==================== Clinical Station - Unified Care Chat ====================
-    'messages' => ['icon' => 'fa-inbox', 'label' => 'แชท', 'url' => '/inbox', 'page' => 'inbox', 'badge' => $unreadMessages, 'color' => 'green', 'roles' => ['pharmacist', 'staff']],
+    'messages' => ['icon' => 'fa-inbox', 'label' => 'กล่องข้อความ', 'url' => '/inbox', 'page' => 'inbox', 'badge' => $unreadMessages, 'color' => 'green', 'roles' => ['owner', 'admin', 'pharmacist', 'staff']],
+    'quick-reply' => ['icon' => 'fa-reply-all', 'label' => 'Quick Reply', 'url' => '/inbox?tab=templates', 'page' => 'inbox', 'color' => 'blue', 'roles' => ['owner', 'admin', 'pharmacist', 'staff']],
+    'chat-analytics' => ['icon' => 'fa-chart-bar', 'label' => 'สถิติแชท', 'url' => '/inbox?tab=analytics', 'page' => 'inbox', 'color' => 'purple', 'roles' => ['owner', 'admin']],
     'video-call' => ['icon' => 'fa-video', 'label' => 'Video Call', 'url' => '/video-call', 'page' => 'video-call', 'color' => 'red', 'roles' => ['pharmacist', 'staff']],
     'auto-reply' => ['icon' => 'fa-robot', 'label' => 'ตอบอัตโนมัติ', 'url' => '/auto-reply', 'page' => 'auto-reply', 'color' => 'pink', 'roles' => ['pharmacist', 'staff']],
     
@@ -314,6 +316,8 @@ $menuGroups = [
         'roles' => ['owner', 'admin', 'marketing', 'staff'],
         'menus' => [
             ['title' => 'กล่องข้อความ', 'icon' => '💬', 'href' => '/inbox', 'badge' => $unreadMessages],
+            ['title' => 'Quick Reply', 'icon' => '⚡', 'href' => '/inbox?tab=templates'],
+            ['title' => 'สถิติแชท', 'icon' => '📊', 'href' => '/inbox?tab=analytics'],
             ['title' => 'รายชื่อลูกค้า', 'icon' => '📇', 'href' => '/users'],
             ['title' => 'บรอดแคสต์', 'icon' => '📢', 'href' => '/broadcast'],
             ['title' => 'ระบบสมาชิก', 'icon' => '💳', 'href' => '/membership'],

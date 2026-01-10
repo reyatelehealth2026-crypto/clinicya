@@ -20,6 +20,9 @@
         <testsuite name="GoodsReceiveDisposal Tests">
             <directory>tests/GoodsReceiveDisposal</directory>
         </testsuite>
+        <testsuite name="InboxChat Tests">
+            <directory>tests/InboxChat</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>
