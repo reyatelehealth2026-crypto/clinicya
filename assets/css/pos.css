@@ -482,3 +482,215 @@
         display: none !important;
     }
 }
+
+
+/* =========================================
+   Shift Status Bar (เมื่อเปิดกะแล้ว)
+   ========================================= */
+.pos-shift-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #2e7d32, #388e3c);
+    color: white;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.pos-shift-bar .shift-info {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.pos-shift-bar .shift-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.pos-shift-bar .shift-badge.open {
+    background: rgba(255,255,255,0.2);
+}
+
+.pos-shift-bar .shift-badge.open i {
+    color: #69f0ae;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.pos-shift-bar .shift-number,
+.pos-shift-bar .shift-time,
+.pos-shift-bar .shift-sales,
+.pos-shift-bar .shift-total {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.pos-shift-bar .shift-total {
+    font-weight: 600;
+    font-size: 15px;
+    opacity: 1;
+}
+
+.pos-shift-bar .shift-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-shift-action {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-shift-action:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.btn-shift-action.warning {
+    background: rgba(255,152,0,0.8);
+}
+
+.btn-shift-action.warning:hover {
+    background: rgba(255,152,0,1);
+}
+
+/* =========================================
+   Search Hint
+   ========================================= */
+.search-hint {
+    font-size: 12px;
+    color: #999;
+    margin-top: 8px;
+    text-align: center;
+}
+
+/* =========================================
+   Cart Action Buttons (Updated)
+   ========================================= */
+.btn-action {
+    width: 50px;
+    height: 50px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-action.clear {
+    background: #ffebee;
+    color: #f44336;
+}
+
+.btn-action.clear:hover {
+    background: #ffcdd2;
+}
+
+.btn-action.discount {
+    background: #fff3e0;
+    color: #ff9800;
+}
+
+.btn-action.discount:hover {
+    background: #ffe0b2;
+}
+
+/* =========================================
+   Adjust height when shift bar is shown
+   ========================================= */
+.pos-shift-bar + .pos-container {
+    height: calc(100vh - 110px);
+}
+
+
+/* Hold Button */
+.btn-action.hold {
+    background: #ff9800;
+    color: white;
+}
+
+.btn-action.hold:hover {
+    background: #f57c00;
+}
+
+/* Held Items Styles */
+.held-item {
+    transition: all 0.2s;
+}
+
+.held-item:hover {
+    background: #f5f5f5;
+}
+
+/* Return Item Styles */
+.return-item {
+    transition: all 0.2s;
+}
+
+.return-item:hover {
+    background: #f5f5f5;
+}
+
+/* Additional Shift Action Buttons */
+.btn-shift-action {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    background: #f5f5f5;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.btn-shift-action:hover {
+    background: #e0e0e0;
+    transform: translateY(-1px);
+}
+
+.btn-shift-action.warning {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.btn-shift-action.warning:hover {
+    background: #ffe0b2;
+}
+
+/* Price Override Indicator */
+.price-override {
+    color: #ff5722;
+    font-size: 11px;
+}
+
+/* Cash Movement Styles */
+.cash-movement-in {
+    color: #4caf50;
+}
+
+.cash-movement-out {
+    color: #f44336;
+}

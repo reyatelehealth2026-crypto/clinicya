@@ -325,6 +325,7 @@ $menuGroups = [
         'group_icon' => '📦',
         'roles' => ['owner', 'admin', 'staff'],
         'menus' => [
+            ['title' => 'POS ขายหน้าร้าน', 'icon' => '🛒', 'href' => '/pos'],
             ['title' => 'รายการสั่งซื้อ', 'icon' => '🧾', 'href' => '/shop/orders', 'badge' => $pendingOrders],
             ['title' => 'คลังสินค้า', 'icon' => '📦', 'href' => '/inventory'],
             ['title' => 'จัดซื้อ', 'icon' => '🚚', 'href' => '/procurement'],

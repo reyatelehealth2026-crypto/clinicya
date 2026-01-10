@@ -189,6 +189,18 @@ class POSShiftService {
         $stmt->execute([$shiftId]);
         $returnSummary = $stmt->fetch(PDO::FETCH_ASSOC);
         
+        // Get cash movements (in/out)
+        $stmt = $this->db->prepare("
+            SELECT 
+                COALESCE(SUM(CASE WHEN movement_type = 'in' THEN amount ELSE 0 END), 0) as cash_in,
+                COALESCE(SUM(CASE WHEN movement_type = 'out' THEN amount ELSE 0 END), 0) as cash_out
+            FROM pos_cash_movements 
+            WHERE shift_id = ?
+        ");
+        $stmt->execute([$shiftId]);
+        $cashMovements = $stmt->fetch(PDO::FETCH_ASSOC);
+        $cashAdjustments = ($cashMovements['cash_in'] ?? 0) - ($cashMovements['cash_out'] ?? 0);
+        
         // Get top products
         $stmt = $this->db->prepare("
             SELECT 
@@ -215,7 +227,7 @@ class POSShiftService {
             }
         }
         
-        $expectedCash = $shift['opening_cash'] + $cashPayments - $cashRefunds;
+        $expectedCash = $shift['opening_cash'] + $cashPayments - $cashRefunds + $cashAdjustments;
         
         return [
             'shift' => $shift,
@@ -228,11 +240,16 @@ class POSShiftService {
                 'total_refunds' => (float)$returnSummary['total_refunds'],
                 'net_sales' => (float)$transactionSummary['total_sales'] - (float)$returnSummary['total_refunds']
             ],
+            'returns_summary' => [
+                'count' => (int)$returnSummary['return_count'],
+                'total' => (float)$returnSummary['total_refunds']
+            ],
             'payment_breakdown' => $paymentBreakdown,
             'cash_summary' => [
                 'opening_cash' => (float)$shift['opening_cash'],
                 'cash_sales' => $cashPayments,
                 'cash_refunds' => $cashRefunds,
+                'cash_adjustments' => $cashAdjustments,
                 'expected_cash' => $expectedCash,
                 'closing_cash' => $shift['closing_cash'] ? (float)$shift['closing_cash'] : null,
                 'variance' => $shift['variance'] ? (float)$shift['variance'] : null
@@ -278,8 +295,20 @@ class POSShiftService {
         $stmt->execute([$shiftId]);
         $cashRefunds = (float)$stmt->fetchColumn();
         
+        // Get cash movements (in/out)
+        $stmt = $this->db->prepare("
+            SELECT 
+                COALESCE(SUM(CASE WHEN movement_type = 'in' THEN amount ELSE 0 END), 0) as cash_in,
+                COALESCE(SUM(CASE WHEN movement_type = 'out' THEN amount ELSE 0 END), 0) as cash_out
+            FROM pos_cash_movements 
+            WHERE shift_id = ?
+        ");
+        $stmt->execute([$shiftId]);
+        $cashMovements = $stmt->fetch(PDO::FETCH_ASSOC);
+        $cashAdjustments = ($cashMovements['cash_in'] ?? 0) - ($cashMovements['cash_out'] ?? 0);
+        
         // Calculate expected cash
-        $expectedCash = $shift['opening_cash'] + $cashSales - $cashRefunds;
+        $expectedCash = $shift['opening_cash'] + $cashSales - $cashRefunds + $cashAdjustments;
         
         // Calculate variance
         $variance = $actualCash - $expectedCash;
@@ -288,6 +317,7 @@ class POSShiftService {
             'opening_cash' => (float)$shift['opening_cash'],
             'cash_sales' => $cashSales,
             'cash_refunds' => $cashRefunds,
+            'cash_adjustments' => $cashAdjustments,
             'expected_cash' => $expectedCash,
             'actual_cash' => $actualCash,
             'variance' => $variance,

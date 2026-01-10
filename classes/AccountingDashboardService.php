@@ -510,7 +510,39 @@ class AccountingDashboardService {
      * @return array Revenue data
      */
     private function getMonthlyRevenue(string $startDate, string $endDate): array {
-        // Check if orders table exists
+        $totalRevenue = 0;
+        $totalOrders = 0;
+        $posRevenue = 0;
+        $posTransactions = 0;
+        
+        // Get POS sales revenue
+        try {
+            $sql = "
+                SELECT 
+                    COUNT(*) as transaction_count,
+                    COALESCE(SUM(total_amount), 0) as total
+                FROM pos_transactions
+                WHERE DATE(created_at) BETWEEN ? AND ?
+                AND status = 'completed'
+            ";
+            $params = [$startDate, $endDate];
+            
+            if ($this->lineAccountId) {
+                $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
+                $params[] = $this->lineAccountId;
+            }
+            
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            $posResult = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            $posRevenue = (float)($posResult['total'] ?? 0);
+            $posTransactions = (int)($posResult['transaction_count'] ?? 0);
+        } catch (Exception $e) {
+            // POS table doesn't exist
+        }
+        
+        // Get online orders revenue
         try {
             $sql = "
                 SELECT 
@@ -531,13 +563,28 @@ class AccountingDashboardService {
             $stmt->execute($params);
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             
+            $totalRevenue = (float)($result['total'] ?? 0) + $posRevenue;
+            $totalOrders = (int)($result['order_count'] ?? 0) + $posTransactions;
+            
             return [
-                'total' => (float)($result['total'] ?? 0),
-                'order_count' => (int)($result['order_count'] ?? 0)
+                'total' => $totalRevenue,
+                'order_count' => $totalOrders,
+                'online_sales' => (float)($result['total'] ?? 0),
+                'online_orders' => (int)($result['order_count'] ?? 0),
+                'pos_sales' => $posRevenue,
+                'pos_transactions' => $posTransactions
             ];
         } catch (Exception $e) {
-            // Fallback: use AR as revenue proxy
-            return $this->getMonthlyArRevenue($startDate, $endDate);
+            // Fallback: use AR as revenue proxy + POS
+            $arRevenue = $this->getMonthlyArRevenue($startDate, $endDate);
+            return [
+                'total' => $arRevenue['total'] + $posRevenue,
+                'order_count' => $arRevenue['order_count'] + $posTransactions,
+                'online_sales' => $arRevenue['total'],
+                'online_orders' => $arRevenue['order_count'],
+                'pos_sales' => $posRevenue,
+                'pos_transactions' => $posTransactions
+            ];
         }
     }
     

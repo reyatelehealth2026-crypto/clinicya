@@ -19,6 +19,12 @@ class POSService {
     private $batchService;
     private $loyaltyPoints;
     
+    // Transaction statuses
+    const STATUS_PENDING = 'pending';
+    const STATUS_HOLD = 'hold';
+    const STATUS_COMPLETED = 'completed';
+    const STATUS_VOIDED = 'voided';
+    
     // VAT rate (7% for Thailand)
     const VAT_RATE = 0.07;
     
@@ -681,7 +687,7 @@ class POSService {
      */
     private function getProduct(int $productId): ?array {
         $stmt = $this->db->prepare("
-            SELECT id, name, sku, price, cost_price, stock, image_url
+            SELECT id, name, sku, price, 0 as cost_price, stock, image_url
             FROM business_items 
             WHERE id = ? AND is_active = 1
         ");
@@ -955,37 +961,61 @@ class POSService {
      * @return array Matching products
      */
     public function searchProducts(string $query): array {
-        $searchTerm = "%{$query}%";
-        
-        $stmt = $this->db->prepare("
-            SELECT id, name, sku, barcode, price, cost_price, stock, image_url
-            FROM business_items 
-            WHERE is_active = 1 
-            AND (name LIKE ? OR sku LIKE ? OR barcode LIKE ? OR barcode = ?)
-            AND (line_account_id = ? OR line_account_id IS NULL)
-            ORDER BY 
-                CASE WHEN barcode = ? THEN 0 ELSE 1 END,
-                name ASC
-            LIMIT 20
-        ");
-        $stmt->execute([
-            $searchTerm, $searchTerm, $searchTerm, $query,
-            $this->lineAccountId, $query
-        ]);
-        
-        $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Add batch info if available
-        if ($this->batchService) {
-            foreach ($products as &$product) {
-                $nextBatch = $this->batchService->getNextBatchForPicking($product['id'], 'FEFO');
-                $product['next_batch'] = $nextBatch;
-                $product['is_expired'] = $nextBatch ? $nextBatch['is_expired'] : false;
-                $product['days_until_expiry'] = $nextBatch ? $nextBatch['days_until_expiry'] : null;
+        try {
+            $searchTerm = "%{$query}%";
+            
+            // Query business_items table - only use columns that exist
+            $stmt = $this->db->prepare("
+                SELECT 
+                    id, 
+                    name, 
+                    COALESCE(sku, '') as sku, 
+                    COALESCE(barcode, '') as barcode, 
+                    COALESCE(price, 0) as price, 
+                    0 as cost_price,
+                    COALESCE(stock, 0) as stock, 
+                    COALESCE(image_url, '') as image_url,
+                    COALESCE(image_url, '') as image
+                FROM business_items 
+                WHERE is_active = 1 
+                AND (
+                    name LIKE ? 
+                    OR COALESCE(sku, '') LIKE ? 
+                    OR COALESCE(barcode, '') LIKE ? 
+                    OR COALESCE(barcode, '') = ?
+                )
+                ORDER BY 
+                    CASE WHEN COALESCE(barcode, '') = ? THEN 0 ELSE 1 END,
+                    name ASC
+                LIMIT 20
+            ");
+            $stmt->execute([
+                $searchTerm, $searchTerm, $searchTerm, $query, $query
+            ]);
+            
+            $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Add batch info if available
+            if ($this->batchService) {
+                foreach ($products as &$product) {
+                    try {
+                        $nextBatch = $this->batchService->getNextBatchForPicking($product['id'], 'FEFO');
+                        $product['next_batch'] = $nextBatch;
+                        $product['is_expired'] = $nextBatch ? $nextBatch['is_expired'] : false;
+                        $product['days_until_expiry'] = $nextBatch ? $nextBatch['days_until_expiry'] : null;
+                    } catch (Exception $e) {
+                        $product['next_batch'] = null;
+                        $product['is_expired'] = false;
+                        $product['days_until_expiry'] = null;
+                    }
+                }
             }
+            
+            return $products;
+        } catch (Exception $e) {
+            error_log("POSService::searchProducts error: " . $e->getMessage());
+            return [];
         }
-        
-        return $products;
     }
     
     /**
@@ -1049,5 +1079,329 @@ class POSService {
         $stmt->execute($params);
         
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    // =========================================
+    // Hold/Park Transaction Methods
+    // =========================================
+    
+    /**
+     * Hold (park) a transaction for later
+     * 
+     * @param int $transactionId Transaction ID
+     * @param string $note Optional note
+     * @return array Updated transaction
+     */
+    public function holdTransaction(int $transactionId, string $note = ''): array {
+        $transaction = $this->getTransaction($transactionId);
+        if (!$transaction) {
+            throw new Exception('ไม่พบรายการ', 404);
+        }
+        
+        if ($transaction['status'] !== 'draft') {
+            throw new Exception('สามารถพักได้เฉพาะรายการที่ยังไม่ชำระ', 400);
+        }
+        
+        if (empty($transaction['items'])) {
+            throw new Exception('ไม่มีสินค้าในตะกร้า', 400);
+        }
+        
+        $stmt = $this->db->prepare("
+            UPDATE pos_transactions 
+            SET status = 'hold', hold_note = ?, hold_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$note, $transactionId]);
+        
+        return $this->getTransaction($transactionId);
+    }
+    
+    /**
+     * Get all held transactions
+     * 
+     * @param int|null $shiftId Filter by shift
+     * @return array Held transactions
+     */
+    public function getHeldTransactions(?int $shiftId = null): array {
+        $sql = "
+            SELECT t.*, 
+                   u.display_name as customer_name,
+                   c.display_name as cashier_name,
+                   (SELECT COUNT(*) FROM pos_transaction_items WHERE transaction_id = t.id) as item_count
+            FROM pos_transactions t
+            LEFT JOIN users u ON t.customer_id = u.id
+            LEFT JOIN admin_users c ON t.cashier_id = c.id
+            WHERE t.line_account_id = ? AND t.status = 'hold'
+        ";
+        $params = [$this->lineAccountId];
+        
+        if ($shiftId) {
+            $sql .= " AND t.shift_id = ?";
+            $params[] = $shiftId;
+        }
+        
+        $sql .= " ORDER BY t.hold_at DESC";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    /**
+     * Recall a held transaction
+     * 
+     * @param int $transactionId Transaction ID
+     * @return array Recalled transaction
+     */
+    public function recallTransaction(int $transactionId): array {
+        $transaction = $this->getTransaction($transactionId);
+        if (!$transaction) {
+            throw new Exception('ไม่พบรายการ', 404);
+        }
+        
+        if ($transaction['status'] !== 'hold') {
+            throw new Exception('รายการนี้ไม่ได้ถูกพักไว้', 400);
+        }
+        
+        $stmt = $this->db->prepare("
+            UPDATE pos_transactions 
+            SET status = 'draft', hold_note = NULL, hold_at = NULL
+            WHERE id = ?
+        ");
+        $stmt->execute([$transactionId]);
+        
+        return $this->getTransaction($transactionId);
+    }
+    
+    /**
+     * Delete a held transaction
+     * 
+     * @param int $transactionId Transaction ID
+     * @return bool Success
+     */
+    public function deleteHeldTransaction(int $transactionId): bool {
+        $transaction = $this->getTransaction($transactionId);
+        if (!$transaction) {
+            throw new Exception('ไม่พบรายการ', 404);
+        }
+        
+        if ($transaction['status'] !== 'hold') {
+            throw new Exception('สามารถลบได้เฉพาะรายการที่พักไว้', 400);
+        }
+        
+        $this->db->beginTransaction();
+        try {
+            // Delete items first
+            $stmt = $this->db->prepare("DELETE FROM pos_transaction_items WHERE transaction_id = ?");
+            $stmt->execute([$transactionId]);
+            
+            // Delete transaction
+            $stmt = $this->db->prepare("DELETE FROM pos_transactions WHERE id = ?");
+            $stmt->execute([$transactionId]);
+            
+            $this->db->commit();
+            return true;
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+    
+    // =========================================
+    // Price Override Methods
+    // =========================================
+    
+    /**
+     * Override item price (requires authorization)
+     * 
+     * @param int $itemId Item ID
+     * @param float $newPrice New price
+     * @param string $reason Reason for override
+     * @param int|null $authorizedBy Manager ID
+     * @return array Updated item
+     */
+    public function overrideItemPrice(int $itemId, float $newPrice, string $reason, ?int $authorizedBy = null): array {
+        $item = $this->getCartItemById($itemId);
+        if (!$item) {
+            throw new Exception('ไม่พบรายการสินค้า', 404);
+        }
+        
+        if ($newPrice < 0) {
+            throw new Exception('ราคาต้องไม่ติดลบ', 400);
+        }
+        
+        if (empty($reason)) {
+            throw new Exception('กรุณาระบุเหตุผลในการแก้ไขราคา', 400);
+        }
+        
+        $originalPrice = $item['unit_price'];
+        $lineTotal = $newPrice * $item['quantity'];
+        
+        $stmt = $this->db->prepare("
+            UPDATE pos_transaction_items 
+            SET unit_price = ?, 
+                original_price = ?,
+                line_total = ?,
+                price_override_reason = ?,
+                price_override_by = ?,
+                price_override_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([
+            $newPrice, 
+            $originalPrice,
+            $lineTotal,
+            $reason,
+            $authorizedBy,
+            $itemId
+        ]);
+        
+        // Recalculate totals
+        $this->calculateTotals($item['transaction_id']);
+        
+        return $this->getCartItemById($itemId);
+    }
+    
+    // =========================================
+    // Cash Drawer Operations
+    // =========================================
+    
+    /**
+     * Record cash in/out (not from sales)
+     * 
+     * @param int $shiftId Shift ID
+     * @param string $type 'in' or 'out'
+     * @param float $amount Amount
+     * @param string $reason Reason
+     * @param int $userId User ID
+     * @return array Created record
+     */
+    public function recordCashMovement(int $shiftId, string $type, float $amount, string $reason, int $userId): array {
+        if (!in_array($type, ['in', 'out'])) {
+            throw new Exception('ประเภทไม่ถูกต้อง', 400);
+        }
+        
+        if ($amount <= 0) {
+            throw new Exception('จำนวนเงินต้องมากกว่า 0', 400);
+        }
+        
+        if (empty($reason)) {
+            throw new Exception('กรุณาระบุเหตุผล', 400);
+        }
+        
+        // Check shift exists and is open
+        $stmt = $this->db->prepare("SELECT * FROM pos_shifts WHERE id = ? AND status = 'open'");
+        $stmt->execute([$shiftId]);
+        $shift = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$shift) {
+            throw new Exception('ไม่พบกะที่เปิดอยู่', 404);
+        }
+        
+        $stmt = $this->db->prepare("
+            INSERT INTO pos_cash_movements 
+            (line_account_id, shift_id, movement_type, amount, reason, created_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([
+            $this->lineAccountId,
+            $shiftId,
+            $type,
+            $amount,
+            $reason,
+            $userId
+        ]);
+        
+        $movementId = (int)$this->db->lastInsertId();
+        
+        // Update shift cash balance
+        $adjustAmount = $type === 'in' ? $amount : -$amount;
+        $stmt = $this->db->prepare("
+            UPDATE pos_shifts 
+            SET cash_adjustments = COALESCE(cash_adjustments, 0) + ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$adjustAmount, $shiftId]);
+        
+        return $this->getCashMovement($movementId);
+    }
+    
+    /**
+     * Get cash movement by ID
+     */
+    public function getCashMovement(int $movementId): ?array {
+        $stmt = $this->db->prepare("
+            SELECT cm.*, a.display_name as created_by_name
+            FROM pos_cash_movements cm
+            LEFT JOIN admin_users a ON cm.created_by = a.id
+            WHERE cm.id = ?
+        ");
+        $stmt->execute([$movementId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+    
+    /**
+     * Get cash movements for shift
+     */
+    public function getCashMovements(int $shiftId): array {
+        $stmt = $this->db->prepare("
+            SELECT cm.*, a.display_name as created_by_name
+            FROM pos_cash_movements cm
+            LEFT JOIN admin_users a ON cm.created_by = a.id
+            WHERE cm.shift_id = ?
+            ORDER BY cm.created_at DESC
+        ");
+        $stmt->execute([$shiftId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    // =========================================
+    // Reprint Receipt
+    // =========================================
+    
+    /**
+     * Get transaction for reprint
+     * 
+     * @param string $transactionNumber Transaction number
+     * @return array|null Transaction data
+     */
+    public function findTransactionByNumber(string $transactionNumber): ?array {
+        $stmt = $this->db->prepare("
+            SELECT t.*, 
+                   u.display_name as customer_name,
+                   c.display_name as cashier_name
+            FROM pos_transactions t
+            LEFT JOIN users u ON t.customer_id = u.id
+            LEFT JOIN admin_users c ON t.cashier_id = c.id
+            WHERE t.transaction_number = ? AND t.line_account_id = ?
+        ");
+        $stmt->execute([$transactionNumber, $this->lineAccountId]);
+        $transaction = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($transaction) {
+            $transaction['items'] = $this->getTransactionItems($transaction['id']);
+            
+            // Get payments
+            $stmt = $this->db->prepare("SELECT * FROM pos_payments WHERE transaction_id = ?");
+            $stmt->execute([$transaction['id']]);
+            $transaction['payments'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+        
+        return $transaction ?: null;
+    }
+    
+    /**
+     * Log receipt reprint
+     */
+    public function logReceiptReprint(int $transactionId, int $userId): void {
+        $stmt = $this->db->prepare("
+            UPDATE pos_transactions 
+            SET reprint_count = COALESCE(reprint_count, 0) + 1,
+                last_reprint_at = NOW(),
+                last_reprint_by = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$userId, $transactionId]);
     }
 }

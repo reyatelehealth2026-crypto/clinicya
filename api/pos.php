@@ -15,10 +15,22 @@
  * Requirements: 1.1-1.6, 2.1-2.4, 3.1-3.5, 4.1-4.7, 7.1-7.5, 8.1-8.5, 12.1-12.10
  */
 
+// Start session first
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+
+// Check authentication
+if (!isset($_SESSION['admin_user']) && !isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'error' => 'กรุณาเข้าสู่ระบบก่อน']);
+    exit;
+}
 require_once __DIR__ . '/../classes/POSService.php';
 require_once __DIR__ . '/../classes/POSPaymentService.php';
 require_once __DIR__ . '/../classes/POSShiftService.php';
@@ -38,8 +50,8 @@ if (file_exists(__DIR__ . '/../classes/LoyaltyPoints.php')) {
 
 try {
     $db = Database::getInstance()->getConnection();
-    $lineAccountId = $_SESSION['line_account_id'] ?? 1;
-    $userId = $_SESSION['admin_id'] ?? $_SESSION['user_id'] ?? null;
+    $lineAccountId = $_SESSION['current_bot_id'] ?? $_SESSION['line_account_id'] ?? 1;
+    $userId = $_SESSION['admin_user']['id'] ?? $_SESSION['admin_id'] ?? $_SESSION['user_id'] ?? null;
     
     // Initialize services
     $posService = new POSService($db, $lineAccountId);
@@ -111,12 +123,17 @@ function handleGet($action, $posService, $shiftService, $returnService, $receipt
         // Product Search
         // =========================================
         case 'search_products':
-            $query = $_GET['q'] ?? '';
-            if (strlen($query) < 1) {
-                return ['success' => false, 'message' => 'กรุณาระบุคำค้นหา'];
+            try {
+                $query = $_GET['q'] ?? '';
+                if (strlen($query) < 1) {
+                    return ['success' => true, 'data' => []];
+                }
+                $products = $posService->searchProducts($query);
+                return ['success' => true, 'data' => $products];
+            } catch (Exception $e) {
+                error_log("search_products error: " . $e->getMessage());
+                return ['success' => false, 'message' => 'เกิดข้อผิดพลาดในการค้นหา', 'data' => []];
             }
-            $products = $posService->searchProducts($query);
-            return ['success' => true, 'data' => $products];
             
         // =========================================
         // Customer Search
@@ -153,6 +170,36 @@ function handleGet($action, $posService, $shiftService, $returnService, $receipt
             ];
             $transactions = $posService->getTransactionHistory(array_filter($filters));
             return ['success' => true, 'data' => $transactions];
+            
+        // =========================================
+        // Hold/Recall
+        // =========================================
+        case 'held_transactions':
+            $shiftId = $_GET['shift_id'] ?? null;
+            $transactions = $posService->getHeldTransactions($shiftId ? (int)$shiftId : null);
+            return ['success' => true, 'data' => $transactions];
+            
+        case 'find_transaction':
+            $number = $_GET['number'] ?? '';
+            if (!$number) {
+                return ['success' => false, 'message' => 'กรุณาระบุเลขที่บิล'];
+            }
+            $transaction = $posService->findTransactionByNumber($number);
+            if (!$transaction) {
+                return ['success' => false, 'message' => 'ไม่พบบิล'];
+            }
+            return ['success' => true, 'data' => $transaction];
+            
+        // =========================================
+        // Cash Movements
+        // =========================================
+        case 'cash_movements':
+            $shiftId = (int)($_GET['shift_id'] ?? 0);
+            if (!$shiftId) {
+                return ['success' => false, 'message' => 'กรุณาระบุ ID กะ'];
+            }
+            $movements = $posService->getCashMovements($shiftId);
+            return ['success' => true, 'data' => $movements];
             
         // =========================================
         // Shift
@@ -355,6 +402,89 @@ function handlePost($action, $input, $posService, $paymentService, $shiftService
             }
             $transaction = $posService->setCustomer($transactionId, $customerId);
             return ['success' => true, 'data' => $transaction, 'message' => 'เลือกลูกค้าสำเร็จ'];
+            
+        // =========================================
+        // Hold/Recall Transaction
+        // =========================================
+        case 'hold_transaction':
+            $transactionId = (int)($input['transaction_id'] ?? 0);
+            $note = $input['note'] ?? '';
+            if (!$transactionId) {
+                return ['success' => false, 'message' => 'กรุณาระบุ ID'];
+            }
+            $transaction = $posService->holdTransaction($transactionId, $note);
+            return ['success' => true, 'data' => $transaction, 'message' => 'พักบิลสำเร็จ'];
+            
+        case 'recall_transaction':
+            $transactionId = (int)($input['transaction_id'] ?? 0);
+            if (!$transactionId) {
+                return ['success' => false, 'message' => 'กรุณาระบุ ID'];
+            }
+            $transaction = $posService->recallTransaction($transactionId);
+            return ['success' => true, 'data' => $transaction, 'message' => 'เรียกบิลกลับสำเร็จ'];
+            
+        case 'delete_held_transaction':
+            $transactionId = (int)($input['transaction_id'] ?? 0);
+            if (!$transactionId) {
+                return ['success' => false, 'message' => 'กรุณาระบุ ID'];
+            }
+            $posService->deleteHeldTransaction($transactionId);
+            return ['success' => true, 'message' => 'ลบบิลที่พักไว้สำเร็จ'];
+            
+        // =========================================
+        // Price Override
+        // =========================================
+        case 'override_price':
+            $itemId = (int)($input['item_id'] ?? 0);
+            $newPrice = (float)($input['new_price'] ?? 0);
+            $reason = $input['reason'] ?? '';
+            $authorizedBy = $input['authorized_by'] ?? $userId;
+            if (!$itemId) {
+                return ['success' => false, 'message' => 'กรุณาระบุ ID'];
+            }
+            $item = $posService->overrideItemPrice($itemId, $newPrice, $reason, $authorizedBy);
+            return ['success' => true, 'data' => $item, 'message' => 'แก้ไขราคาสำเร็จ'];
+            
+        // =========================================
+        // Cash Drawer Operations
+        // =========================================
+        case 'cash_in':
+            if (!$userId) {
+                return ['success' => false, 'message' => 'กรุณาเข้าสู่ระบบ'];
+            }
+            $shiftId = (int)($input['shift_id'] ?? 0);
+            $amount = (float)($input['amount'] ?? 0);
+            $reason = $input['reason'] ?? '';
+            if (!$shiftId || !$amount) {
+                return ['success' => false, 'message' => 'ข้อมูลไม่ครบถ้วน'];
+            }
+            $movement = $posService->recordCashMovement($shiftId, 'in', $amount, $reason, $userId);
+            return ['success' => true, 'data' => $movement, 'message' => 'บันทึกเงินเข้าสำเร็จ'];
+            
+        case 'cash_out':
+            if (!$userId) {
+                return ['success' => false, 'message' => 'กรุณาเข้าสู่ระบบ'];
+            }
+            $shiftId = (int)($input['shift_id'] ?? 0);
+            $amount = (float)($input['amount'] ?? 0);
+            $reason = $input['reason'] ?? '';
+            if (!$shiftId || !$amount) {
+                return ['success' => false, 'message' => 'ข้อมูลไม่ครบถ้วน'];
+            }
+            $movement = $posService->recordCashMovement($shiftId, 'out', $amount, $reason, $userId);
+            return ['success' => true, 'data' => $movement, 'message' => 'บันทึกเงินออกสำเร็จ'];
+            
+        // =========================================
+        // Reprint Receipt
+        // =========================================
+        case 'reprint_receipt':
+            $transactionId = (int)($input['transaction_id'] ?? 0);
+            if (!$transactionId) {
+                return ['success' => false, 'message' => 'กรุณาระบุ ID'];
+            }
+            $posService->logReceiptReprint($transactionId, $userId);
+            $html = $receiptService->getReceiptHTML($transactionId);
+            return ['success' => true, 'data' => ['html' => $html], 'message' => 'พิมพ์ใบเสร็จซ้ำสำเร็จ'];
             
         // =========================================
         // Payment

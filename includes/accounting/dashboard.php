@@ -158,6 +158,11 @@ function formatMoney($amount) {
                 <p class="text-xs text-blue-600 mb-1">รายได้ (Revenue)</p>
                 <p class="text-xl font-bold text-blue-700">฿<?= formatMoney($profitLoss['revenue']['total']) ?></p>
                 <p class="text-xs text-blue-500 mt-1"><?= $profitLoss['revenue']['order_count'] ?> รายการ</p>
+                <?php if (isset($profitLoss['revenue']['pos_sales']) && $profitLoss['revenue']['pos_sales'] > 0): ?>
+                <p class="text-xs text-green-600 mt-1">
+                    <i class="fas fa-cash-register"></i> POS: ฿<?= formatMoney($profitLoss['revenue']['pos_sales']) ?>
+                </p>
+                <?php endif; ?>
             </div>
             
             <!-- COGS -->
@@ -548,6 +553,16 @@ function formatMoney($amount) {
         <div>
             <p class="font-medium text-gray-800">จัดซื้อ</p>
             <p class="text-xs text-gray-500">PO / GR</p>
+        </div>
+    </a>
+    
+    <a href="pos.php?tab=reports" class="flex items-center gap-3 p-4 bg-white rounded-xl shadow hover:shadow-md transition-shadow">
+        <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+            <i class="fas fa-cash-register text-green-500"></i>
+        </div>
+        <div>
+            <p class="font-medium text-gray-800">POS รายงาน</p>
+            <p class="text-xs text-gray-500">ยอดขายหน้าร้าน</p>
         </div>
     </a>
 </div>
