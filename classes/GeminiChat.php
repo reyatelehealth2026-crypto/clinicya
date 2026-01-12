@@ -101,22 +101,29 @@ class GeminiChat
         
         try {
             $startTime = microtime(true);
+            error_log("GeminiChat: Starting generateResponse for message: " . mb_substr($userMessage, 0, 50));
             
             // สร้าง Full Prompt ตามโหมด
             $prompt = $this->buildPrompt($userMessage, $userId, $conversationHistory);
+            error_log("GeminiChat: Prompt built, length: " . strlen($prompt));
             
             // ส่งประวัติการคุยเพื่อให้ AI ทราบบริบทต่อเนื่อง
             $fullHistory = $conversationHistory;
             $fullHistory[] = ['role' => 'user', 'content' => $userMessage];
             
+            error_log("GeminiChat: Calling Gemini API...");
             $response = $this->callGeminiAPI($prompt, $fullHistory);
+            error_log("GeminiChat: API returned - success: " . ($response['success'] ? 'yes' : 'no'));
             
             $responseTimeMs = round((microtime(true) - $startTime) * 1000);
+            error_log("GeminiChat: Response time: {$responseTimeMs}ms");
             
             if ($response['success']) {
                 $this->logResponse($userId, $userMessage, $response['text'], $responseTimeMs);
+                error_log("GeminiChat: Returning response, length: " . mb_strlen($response['text']));
                 return $response['text'];
             } else {
+                error_log("GeminiChat: API failed, returning fallback");
                 return $this->settings['fallback_message'];
             }
             
