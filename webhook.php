@@ -1781,6 +1781,46 @@ if (!$line) {
                 // รองรับ backtick หรือ character พิเศษข้างหน้า
                 $cleanText = preg_replace('/^[`\'"\s]+/', '', $originalText);
                 
+                // ===== ตรวจสอบ "/" เดียว → เริ่ม AI และแสดงคำอธิบาย =====
+                if ($cleanText === '/' || $cleanText === '@') {
+                    // ตรวจสอบว่าเคยใช้ AI หรือยัง
+                    $isFirstTime = true;
+                    if ($userId) {
+                        try {
+                            $stmt = $db->prepare("SELECT COUNT(*) FROM ai_chat_logs WHERE user_id = ? LIMIT 1");
+                            $stmt->execute([$userId]);
+                            $isFirstTime = ($stmt->fetchColumn() == 0);
+                        } catch (Exception $e) {}
+                    }
+                    
+                    // บันทึกโหมด AI
+                    if ($userId) {
+                        setUserAIMode($db, $userId, 'pharmacy');
+                    }
+                    
+                    if ($isFirstTime) {
+                        // ครั้งแรก - แสดงคำอธิบายการใช้งาน
+                        return [[
+                            'type' => 'text',
+                            'text' => "🤖 ยินดีต้อนรับสู่ AI Assistant!\n\n✨ วิธีใช้งาน:\n• พิมพ์คำถามหรือสิ่งที่ต้องการได้เลย\n• AI จะช่วยตอบคำถาม แนะนำสินค้า และให้ข้อมูล\n\n📝 ตัวอย่าง:\n• \"มีสินค้าอะไรบ้าง\"\n• \"แนะนำสินค้าขายดี\"\n• \"ราคาสินค้า XXX\"\n\n💡 พิมพ์ /exit เพื่อออกจากโหมด AI\n\n🎯 เริ่มต้นได้เลย! พิมพ์คำถามของคุณ:",
+                            'sender' => [
+                                'name' => '🤖 AI Assistant',
+                                'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/4712/4712109.png'
+                            ]
+                        ]];
+                    } else {
+                        // เคยใช้แล้ว - แสดงข้อความสั้นๆ
+                        return [[
+                            'type' => 'text',
+                            'text' => "🤖 AI พร้อมให้บริการค่ะ!\n\nพิมพ์คำถามหรือสิ่งที่ต้องการได้เลย\n(พิมพ์ /exit เพื่อออก)",
+                            'sender' => [
+                                'name' => '🤖 AI Assistant',
+                                'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/4712/4712109.png'
+                            ]
+                        ]];
+                    }
+                }
+                
                 // รองรับทั้ง / และ @ นำหน้า command (รองรับทั้ง English และ Thai)
                 if (preg_match('/^[\/\@]([\w\p{Thai}]+)\s*(.*)/u', $cleanText, $matches)) {
                     $command = mb_strtolower($matches[1]);
@@ -1791,6 +1831,7 @@ if (!$line) {
                         'ai' => 'pharmacy',      // /ai = PharmacyAI (ทั่วไป)
                         'pharmacy' => 'pharmacy',
                         'ยา' => 'pharmacy',
+                        'ถาม' => 'pharmacy',     // /ถาม = เริ่ม AI
                         
                         'mims' => 'mims',        // /mims = MIMS AI (ความรู้ทางการแพทย์)
                         'med' => 'mims',
