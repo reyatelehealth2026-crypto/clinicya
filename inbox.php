@@ -3076,29 +3076,38 @@ async function sendImage() {
 
 // ===== AI Reply =====
 async function generateAIReply() {
-    const lastIncoming = [...document.querySelectorAll('.message-item')].reverse().find(el => {
-        return el.querySelector('.chat-incoming');
+    // Get last few messages for context
+    const messageItems = [...document.querySelectorAll('.message-item')].slice(-10);
+    let conversationContext = [];
+    let lastCustomerMessage = '';
+    
+    messageItems.forEach(el => {
+        const bubble = el.querySelector('.chat-bubble');
+        if (bubble) {
+            const text = bubble.textContent.trim();
+            if (el.querySelector('.chat-incoming')) {
+                conversationContext.push({ role: 'customer', text });
+                lastCustomerMessage = text;
+            } else if (el.querySelector('.chat-outgoing')) {
+                conversationContext.push({ role: 'admin', text });
+            }
+        }
     });
     
-    let lastMessage = '';
-    if (lastIncoming) {
-        const bubble = lastIncoming.querySelector('.chat-bubble');
-        if (bubble) lastMessage = bubble.textContent.trim();
-    }
-    
-    if (!lastMessage) {
-        alert('ไม่พบข้อความล่าสุดจากลูกค้า');
+    if (!lastCustomerMessage) {
+        alert('ไม่พบข้อความจากลูกค้า');
         return;
     }
     
     document.getElementById('aiPanel').classList.remove('hidden');
-    document.getElementById('aiSuggestion').innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังคิด...';
+    document.getElementById('aiSuggestion').innerHTML = '<i class="fas fa-spinner fa-spin"></i> AI กำลังวิเคราะห์บริบทและคิดคำตอบ...';
     
     try {
         const formData = new FormData();
         formData.append('action', 'ai_reply');
         formData.append('user_id', userId);
-        formData.append('last_message', lastMessage);
+        formData.append('last_message', lastCustomerMessage);
+        formData.append('context', JSON.stringify(conversationContext));
         
         const res = await fetch('', {
             method: 'POST',
@@ -3688,6 +3697,13 @@ let quickReplyLoaded = false;
 function handleMessageInput(textarea) {
     const value = textarea.value;
     
+    // Check for AI command: /ai or /ช่วย
+    if (value.match(/^\/ai\s*$/i) || value.match(/^\/ช่วย\s*$/)) {
+        textarea.value = '';
+        generateAIReply();
+        return;
+    }
+    
     // Check if user typed "/" at the start or after a space/newline
     if (value === '/' || value.endsWith(' /') || value.endsWith('\n/')) {
         openQuickReplyModal();
@@ -3773,12 +3789,27 @@ function filterQuickReplies(query) {
 function renderQuickReplyList(templates) {
     const listContainer = document.getElementById('quickReplyList');
     
+    // Add AI option at the top
+    let aiOption = `
+        <div class="quick-reply-item ai-option ${selectedQuickReplyIndex === -1 ? 'selected' : ''}" 
+             data-index="-1"
+             onclick="triggerAIReply()"
+             onmouseenter="highlightQuickReply(-1)"
+             style="background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); border-left: 3px solid #6366F1;">
+            <div class="quick-reply-name" style="color: #4F46E5;"><i class="fas fa-robot mr-2"></i>AI ช่วยคิดคำตอบ</div>
+            <div class="quick-reply-preview" style="color: #6B7280;">ให้ AI วิเคราะห์ข้อความลูกค้าและแนะนำคำตอบที่เหมาะสม</div>
+            <div class="quick-reply-meta">
+                <span style="color: #6366F1;"><i class="fas fa-magic"></i> พิมพ์ /ai หรือ /ช่วย</span>
+            </div>
+        </div>
+    `;
+    
     if (templates.length === 0) {
-        listContainer.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">ไม่พบ template ที่ตรงกัน</div>';
+        listContainer.innerHTML = aiOption + '<div class="p-4 text-center text-gray-400 text-sm">ไม่พบ template ที่ตรงกัน</div>';
         return;
     }
     
-    listContainer.innerHTML = templates.map((t, index) => `
+    listContainer.innerHTML = aiOption + templates.map((t, index) => `
         <div class="quick-reply-item ${index === selectedQuickReplyIndex ? 'selected' : ''}" 
              data-index="${index}"
              onclick="selectQuickReply(${index})"
@@ -3792,6 +3823,12 @@ function renderQuickReplyList(templates) {
             </div>
         </div>
     `).join('');
+}
+
+// Trigger AI reply from quick reply modal
+function triggerAIReply() {
+    closeQuickReplyModal();
+    generateAIReply();
 }
 
 // Highlight quick reply on hover
