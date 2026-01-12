@@ -8,6 +8,8 @@ ini_set('display_errors', 1);
 
 require_once __DIR__ . '/../config/database.php';
 
+$db = Database::getInstance()->getConnection();
+
 echo "<h2>Test Code Flow</h2>";
 
 // Simulate checkAIChatbot function
