@@ -3878,23 +3878,24 @@ async function openProductSearchModal(initialQuery = '') {
         modal = document.createElement('div');
         modal.id = 'productSearchModal';
         modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-end sm:items-center justify-center';
+        modal.onclick = function(e) {
+            if (e.target === modal) closeProductSearchModal();
+        };
         modal.innerHTML = `
-            <div class="bg-white w-full sm:w-[500px] sm:max-h-[70vh] max-h-[60vh] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col">
+            <div class="bg-white w-full sm:w-[500px] sm:max-h-[70vh] max-h-[60vh] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col" onclick="event.stopPropagation()">
                 <div class="p-4 border-b flex items-center justify-between bg-emerald-50 rounded-t-2xl">
                     <div class="flex items-center gap-2">
                         <i class="fas fa-box text-emerald-600"></i>
                         <span class="font-semibold text-emerald-800">ค้นหาสินค้า</span>
                     </div>
-                    <button onclick="closeProductSearchModal()" class="text-gray-400 hover:text-gray-600">
+                    <button type="button" class="text-gray-400 hover:text-gray-600 close-product-modal">
                         <i class="fas fa-times text-lg"></i>
                     </button>
                 </div>
                 <div class="p-3 border-b">
                     <input type="text" id="productSearchInput" 
                            class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                           placeholder="พิมพ์ SKU หรือชื่อสินค้า..."
-                           oninput="searchProducts(this.value)"
-                           onkeydown="handleProductSearchKeydown(event)">
+                           placeholder="พิมพ์ SKU หรือชื่อสินค้า...">
                 </div>
                 <div id="productSearchResults" class="flex-1 overflow-y-auto p-2">
                     <div class="p-4 text-center text-gray-400 text-sm">พิมพ์เพื่อค้นหาสินค้า</div>
@@ -3902,6 +3903,13 @@ async function openProductSearchModal(initialQuery = '') {
             </div>
         `;
         document.body.appendChild(modal);
+        
+        // Add event listeners
+        modal.querySelector('.close-product-modal').addEventListener('click', closeProductSearchModal);
+        modal.querySelector('#productSearchInput').addEventListener('input', function(e) {
+            searchProducts(e.target.value);
+        });
+        modal.querySelector('#productSearchInput').addEventListener('keydown', handleProductSearchKeydown);
     }
     
     modal.classList.remove('hidden');
@@ -4018,7 +4026,8 @@ function handleProductSearchKeydown(e) {
     }
 }
 
-async function selectProduct(index) {
+// Make selectProduct global
+window.selectProduct = function(index) {
     const product = productSearchResults[index];
     if (!product) return;
     
