@@ -2185,13 +2185,25 @@ if (!$line) {
                         set_time_limit(60);
                         
                         $startTime = microtime(true);
-                        devLog($db, 'debug', 'AI_sales', 'Calling generateResponse...', [], null);
+                        devLog($db, 'debug', 'AI_sales', 'Calling generateResponse...', [
+                            'message_length' => mb_strlen($messageToProcess)
+                        ], null);
                         
+                        $response = null;
                         try {
                             $response = $gemini->generateResponse($messageToProcess, $userId, $history);
+                            devLog($db, 'debug', 'AI_sales', 'generateResponse returned', [
+                                'response_type' => gettype($response),
+                                'response_null' => $response === null ? 'yes' : 'no'
+                            ], null);
                         } catch (Exception $e) {
-                            devLog($db, 'error', 'AI_sales', 'generateResponse exception: ' . $e->getMessage(), [], null);
-                            $response = null;
+                            devLog($db, 'error', 'AI_sales', 'generateResponse exception: ' . $e->getMessage(), [
+                                'trace' => mb_substr($e->getTraceAsString(), 0, 500)
+                            ], null);
+                        } catch (Throwable $t) {
+                            devLog($db, 'error', 'AI_sales', 'generateResponse throwable: ' . $t->getMessage(), [
+                                'trace' => mb_substr($t->getTraceAsString(), 0, 500)
+                            ], null);
                         }
                         
                         $elapsed = round((microtime(true) - $startTime) * 1000);

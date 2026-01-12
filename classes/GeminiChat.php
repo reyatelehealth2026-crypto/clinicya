@@ -472,12 +472,22 @@ class GeminiChat
         // Log curl error if any
         if ($curlError || $curlErrno) {
             error_log("GeminiChat curl error: [{$curlErrno}] {$curlError}");
+            $this->devLog('GeminiChat', 'Curl error', [
+                'errno' => $curlErrno,
+                'error' => $curlError
+            ]);
         }
         
         $result = json_decode($response, true);
         
         // Log API response for debugging
         error_log("GeminiChat API: httpCode={$httpCode}, hasCandidate=" . (isset($result['candidates'][0]) ? 'yes' : 'no'));
+        $this->devLog('GeminiChat', 'API response', [
+            'httpCode' => $httpCode,
+            'hasCandidate' => isset($result['candidates'][0]) ? 'yes' : 'no',
+            'error' => $result['error']['message'] ?? null,
+            'response_length' => strlen($response ?? '')
+        ]);
         
         if ($httpCode === 200 && isset($result['candidates'][0]['content']['parts'][0]['text'])) {
             $text = trim($result['candidates'][0]['content']['parts'][0]['text']);
