@@ -397,6 +397,7 @@ if (!$line) {
      * Send welcome message to new follower
      * ใช้ replyMessage เพื่อประหยัด quota (ฟรี!) ถ้ามี replyToken
      * ถ้าไม่มี replyToken จะ fallback ไปใช้ pushMessage
+     * V5.1: ใช้ welcome_settings จากหลังบ้านเท่านั้น - ไม่มี default hardcode
      */
     function sendWelcomeMessage($db, $line, $userId, $replyToken = null, $lineAccountId = null) {
         try {
@@ -405,20 +406,10 @@ if (!$line) {
             $displayName = $profile['displayName'] ?? 'คุณลูกค้า';
             $pictureUrl = $profile['pictureUrl'] ?? null;
             
-            // Get shop name and bot_mode - แยกตาม LINE Account
+            // Get shop name - แยกตาม LINE Account
             $shopName = 'LINE Shop';
-            $botMode = 'shop';
-            $liffId = '';
             try {
                 if ($lineAccountId) {
-                    $stmt = $db->prepare("SELECT bot_mode, liff_id FROM line_accounts WHERE id = ?");
-                    $stmt->execute([$lineAccountId]);
-                    $accountSettings = $stmt->fetch();
-                    if ($accountSettings) {
-                        $botMode = $accountSettings['bot_mode'] ?? 'shop';
-                        $liffId = $accountSettings['liff_id'] ?? '';
-                    }
-                    
                     $stmt = $db->prepare("SELECT shop_name FROM shop_settings WHERE line_account_id = ?");
                     $stmt->execute([$lineAccountId]);
                 } else {
@@ -439,7 +430,7 @@ if (!$line) {
                 }
             };
             
-            // Get welcome settings for this account FIRST
+            // Get welcome settings for this account - ใช้จากหลังบ้านเท่านั้น
             $welcomeSettings = null;
             try {
                 $stmt = $db->prepare("SELECT * FROM welcome_settings WHERE (line_account_id = ? OR line_account_id IS NULL) AND is_enabled = 1 ORDER BY line_account_id DESC LIMIT 1");
@@ -471,103 +462,13 @@ if (!$line) {
                 }
             }
             
-            // ถ้าไม่มี welcome_settings - ใช้ default TELECARE Style (เฉพาะ shop mode)
-            if ($botMode === 'shop' && $liffId) {
-                $liffUrl = "https://liff.line.me/{$liffId}";
-                
-                // TELECARE Welcome Flex - Video Version
-                $welcomeFlex = [
-                    'type' => 'bubble',
-                    'size' => 'kilo',
-                    'hero' => [
-                        'type' => 'video',
-                        'url' => 'https://drive.google.com/uc?export=download&id=1OWvnjcQsnGgYpp2qVvkrNyBtahJgTaBd',
-                        'previewUrl' => 'https://lh3.googleusercontent.com/d/1OWvnjcQsnGgYpp2qVvkrNyBtahJgTaBd',
-                        'altContent' => [
-                            'type' => 'image',
-                            'size' => 'full',
-                            'aspectRatio' => '20:13',
-                            'aspectMode' => 'cover',
-                            'url' => 'https://lh3.googleusercontent.com/d/1OWvnjcQsnGgYpp2qVvkrNyBtahJgTaBd'
-                        ]
-                    ],
-                    'body' => [
-                        'type' => 'box',
-                        'layout' => 'vertical',
-                        'backgroundColor' => '#11B0A6',
-                        'paddingAll' => '20px',
-                        'contents' => [
-                            ['type' => 'text', 'text' => '🏥 TELECARE', 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'xl', 'align' => 'center'],
-                            ['type' => 'text', 'text' => "ยินดีต้อนรับคุณ{$displayName}", 'color' => '#E0F7F5', 'size' => 'sm', 'align' => 'center', 'margin' => 'md'],
-                            ['type' => 'text', 'text' => $shopName, 'color' => '#FFFFFF', 'size' => 'md', 'weight' => 'bold', 'align' => 'center', 'margin' => 'sm'],
-                            ['type' => 'separator', 'margin' => 'lg', 'color' => '#FFFFFF40'],
-                            [
-                                'type' => 'box',
-                                'layout' => 'horizontal',
-                                'margin' => 'lg',
-                                'spacing' => 'sm',
-                                'contents' => [
-                                    [
-                                        'type' => 'box',
-                                        'layout' => 'vertical',
-                                        'flex' => 1,
-                                        'alignItems' => 'center',
-                                        'contents' => [
-                                            ['type' => 'text', 'text' => '🤖', 'size' => 'xl'],
-                                            ['type' => 'text', 'text' => 'AI Chat', 'size' => 'xxs', 'color' => '#FFFFFF', 'margin' => 'sm']
-                                        ],
-                                        'action' => ['type' => 'message', 'label' => 'AI Chat', 'text' => '@ai']
-                                    ],
-                                    [
-                                        'type' => 'box',
-                                        'layout' => 'vertical',
-                                        'flex' => 1,
-                                        'alignItems' => 'center',
-                                        'contents' => [
-                                            ['type' => 'text', 'text' => '💊', 'size' => 'xl'],
-                                            ['type' => 'text', 'text' => 'Shop', 'size' => 'xxs', 'color' => '#FFFFFF', 'margin' => 'sm']
-                                        ],
-                                        'action' => ['type' => 'uri', 'label' => 'Shop', 'uri' => $liffUrl]
-                                    ],
-                                    [
-                                        'type' => 'box',
-                                        'layout' => 'vertical',
-                                        'flex' => 1,
-                                        'alignItems' => 'center',
-                                        'contents' => [
-                                            ['type' => 'text', 'text' => '📅', 'size' => 'xl'],
-                                            ['type' => 'text', 'text' => 'นัดหมาย', 'size' => 'xxs', 'color' => '#FFFFFF', 'margin' => 'sm']
-                                        ],
-                                        'action' => ['type' => 'uri', 'label' => 'นัดหมาย', 'uri' => $liffUrl]
-                                    ]
-                                ]
-                            ]
-                        ]
-                    ]
-                ];
-                
-                $flexMessage = [
-                    'type' => 'flex',
-                    'altText' => "🏥 ยินดีต้อนรับคุณ{$displayName} เข้าสู่ TELECARE",
-                    'contents' => $welcomeFlex
-                ];
-                
-                $sendMessage([$flexMessage]);
-                return;
-            }
+            // ถ้าไม่มี welcome_settings - ไม่ส่งข้อความต้อนรับ (ให้ตั้งค่าจากหลังบ้าน)
+            // Log เพื่อแจ้งให้ทราบว่ายังไม่ได้ตั้งค่า
+            devLog($db, 'info', 'welcome_message', 'No welcome_settings configured', [
+                'line_account_id' => $lineAccountId,
+                'user_id' => $userId
+            ], $userId);
             
-            // Fallback - Use beautiful default Flex Message
-            $welcomeBubble = FlexTemplates::welcome($displayName, $pictureUrl, $shopName);
-            $message = FlexTemplates::toMessage($welcomeBubble, "ยินดีต้อนรับคุณ {$displayName}!");
-            
-            // Add quick reply buttons
-            $message = FlexTemplates::withQuickReply($message, [
-                ['label' => '🛒 ดูสินค้า', 'text' => 'shop'],
-                ['label' => '📋 เมนู', 'text' => 'menu'],
-                ['label' => '💬 ติดต่อเรา', 'text' => 'contact']
-            ]);
-            
-            $sendMessage([$message]);
         } catch (Exception $e) {
             // Table doesn't exist or error - ignore
             error_log("Welcome message error: " . $e->getMessage());
@@ -1116,13 +1017,13 @@ if (!$line) {
             
             // ถ้าพิมพ์ขอคุยกับเภสัชกร - หยุด AI
             if ($isStopAICommand) {
+                // ใช้ sender จาก ai_settings
+                $stopSender = getAISenderSettings($db, $lineAccountId, 'pharmacist');
+                
                 $stopMessage = [
                     'type' => 'text',
                     'text' => "📞 รับทราบค่ะ กำลังส่งต่อให้เภสัชกรดูแลค่ะ\n\nกรุณารอสักครู่ เภสัชกรจะติดต่อกลับโดยเร็วที่สุดค่ะ 🙏",
-                    'sender' => [
-                        'name' => '💊 เภสัชกร AI',
-                        'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png'
-                    ]
+                    'sender' => $stopSender
                 ];
                 $line->replyMessage($replyToken, [$stopMessage]);
                 saveOutgoingMessage($db, $user['id'], json_encode($stopMessage), 'system', 'text');
@@ -1926,6 +1827,7 @@ if (!$line) {
                 }
                 
                 // ===== DEBUG: Log after command parsing =====
+                error_log("AI_TRACE_1: commandMode=$commandMode, line=" . __LINE__);
                 try {
                     devLog($db, 'debug', 'AI_trace_1', 'After command parsing', [
                         'commandMode' => $commandMode,
@@ -1964,15 +1866,15 @@ if (!$line) {
                     'line' => __LINE__
                 ], null);
                 
+                // ดึง sender settings สำหรับ system messages
+                $systemSender = getAISenderSettings($db, $lineAccountId);
+                
                 // ===== /exit - ออกจากโหมด AI =====
                 if ($commandMode === 'exit') {
                     return [[
                         'type' => 'text',
                         'text' => "✅ ออกจากโหมด AI แล้วค่ะ\n\nข้อความถัดไปจะส่งถึงแอดมินโดยตรง\n\n💡 พิมพ์ /ai, /mims หรือ /triage เพื่อกลับมาใช้ AI ได้ทุกเมื่อค่ะ",
-                        'sender' => [
-                            'name' => '💊 ระบบร้านยา',
-                            'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png'
-                        ]
+                        'sender' => $systemSender
                     ]];
                 }
                 
@@ -1981,17 +1883,14 @@ if (!$line) {
                     return [[
                         'type' => 'text',
                         'text' => "🤖 คำสั่ง AI ที่ใช้ได้:\n\n" .
-                                "/ai - เข้าโหมด AI เภสัชกร\n" .
+                                "/ai - เข้าโหมด AI ตามที่ตั้งค่าไว้\n" .
                                 "/mims - เข้าโหมด MIMS (ข้อมูลยา)\n" .
                                 "/triage - เริ่มซักประวัติอาการ\n" .
                                 "/human - ขอคุยกับเภสัชกรจริง\n" .
                                 "/exit - ออกจากโหมด AI\n\n" .
                                 "💡 เมื่อเข้าโหมดแล้ว พิมพ์ข้อความได้เลย\n" .
                                 "AI จะตอบต่อจนกว่าจะพิมพ์ /exit",
-                        'sender' => [
-                            'name' => '💊 ระบบร้านยา',
-                            'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png'
-                        ]
+                        'sender' => $systemSender
                     ]];
                 }
                 
@@ -2015,10 +1914,7 @@ if (!$line) {
                     return [[
                         'type' => 'text',
                         'text' => "เข้าใจค่ะ 🙏\n\nระบบได้แจ้งเภสัชกรแล้ว จะมีเภสัชกรติดต่อกลับภายใน 5-10 นาทีค่ะ\n\n📞 หากต้องการติดต่อด่วน โทร: 02-XXX-XXXX\n\n(บอทจะหยุดตอบชั่วคราว 20 นาที)\n\n💡 พิมพ์ /ai เพื่อกลับมาใช้บอทได้ทุกเมื่อ",
-                        'sender' => [
-                            'name' => '💊 ระบบร้านยา',
-                            'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png'
-                        ]
+                        'sender' => $systemSender
                     ]];
                 }
                 
@@ -2039,10 +1935,7 @@ if (!$line) {
                             return [[
                                 'type' => 'text',
                                 'text' => "เข้าใจค่ะ 🙏\n\nระบบได้แจ้งเภสัชกรแล้ว จะมีเภสัชกรติดต่อกลับภายใน 5-10 นาทีค่ะ\n\n📞 หากต้องการติดต่อด่วน โทร: 02-XXX-XXXX\n\n(บอทจะหยุดตอบชั่วคราว 20 นาที)\n\n💡 พิมพ์ /ai เพื่อกลับมาใช้บอทได้ทุกเมื่อ",
-                                'sender' => [
-                                    'name' => '💊 ระบบร้านยา',
-                                    'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png'
-                                ]
+                                'sender' => $systemSender
                             ]];
                         }
                     }
@@ -2062,6 +1955,9 @@ if (!$line) {
                             $isEnabled = $adapter->isEnabled();
                             devLog($db, 'debug', 'AI_mims', 'MIMS isEnabled', ['enabled' => $isEnabled, 'commandMessage' => $commandMessage], null);
                             
+                            // ดึง sender settings สำหรับ MIMS mode
+                            $mimsSender = getAISenderSettings($db, $lineAccountId, 'mims');
+                            
                             if ($isEnabled) {
                                 // ถ้าไม่มีข้อความ ให้แสดงคำแนะนำ
                                 if (empty($commandMessage)) {
@@ -2069,10 +1965,7 @@ if (!$line) {
                                     return [[
                                         'type' => 'text',
                                         'text' => "📚 MIMS Pharmacist AI พร้อมให้บริการค่ะ\n\nสามารถถามข้อมูลเกี่ยวกับ:\n• ข้อมูลยาและสรรพคุณ\n• อาการและการรักษา\n• ข้อควรระวังในการใช้ยา\n\n💡 ตัวอย่าง:\n/mims ยา paracetamol\n/mims อาการปวดหัวไมเกรน\n/mims ยาแก้แพ้ตัวไหนดี",
-                                        'sender' => [
-                                            'name' => '📚 MIMS Pharmacist AI',
-                                            'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png'
-                                        ]
+                                        'sender' => $mimsSender
                                     ]];
                                 }
                                 
@@ -2090,6 +1983,10 @@ if (!$line) {
                                             $msg['text'] = $result['response'] ?? 'ขออภัยค่ะ ไม่สามารถประมวลผลได้';
                                             devLog($db, 'warning', 'AI_mims', 'MIMS message missing text, using response', ['response' => mb_substr($msg['text'], 0, 100)], null);
                                         }
+                                        // เพิ่ม sender ถ้ายังไม่มี
+                                        if (!isset($msg['sender'])) {
+                                            $msg['sender'] = $mimsSender;
+                                        }
                                         devLog($db, 'debug', 'AI_mims', 'MIMS returning message array', ['type' => $msg['type'], 'textLength' => strlen($msg['text'] ?? '')], null);
                                         return [$msg];
                                     }
@@ -2099,10 +1996,7 @@ if (!$line) {
                                         return [[
                                             'type' => 'text',
                                             'text' => $msg,
-                                            'sender' => [
-                                                'name' => '📚 MIMS Pharmacist AI',
-                                                'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png'
-                                            ]
+                                            'sender' => $mimsSender
                                         ]];
                                     }
                                     devLog($db, 'debug', 'AI_mims', 'MIMS message format unknown', ['messageType' => gettype($msg)], null);
@@ -2115,10 +2009,7 @@ if (!$line) {
                                     return [[
                                         'type' => 'text',
                                         'text' => $result['response'],
-                                        'sender' => [
-                                            'name' => '📚 MIMS Pharmacist AI',
-                                            'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png'
-                                        ]
+                                        'sender' => $mimsSender
                                     ]];
                                 }
                                 
@@ -2129,7 +2020,7 @@ if (!$line) {
                                     return [[
                                         'type' => 'text',
                                         'text' => "❌ MIMS AI ขัดข้อง: {$errorMsg}\n\nลองใช้ /ai แทนได้ค่ะ",
-                                        'sender' => ['name' => '💊 ระบบร้านยา', 'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png']
+                                        'sender' => $mimsSender
                                     ]];
                                 }
                             } else {
@@ -2137,7 +2028,7 @@ if (!$line) {
                                 return [[
                                     'type' => 'text',
                                     'text' => "❌ MIMS AI ยังไม่ได้ตั้งค่า API Key\n\nกรุณาติดต่อผู้ดูแลระบบ หรือลองใช้ /ai แทนได้ค่ะ",
-                                    'sender' => ['name' => '💊 ระบบร้านยา', 'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png']
+                                    'sender' => $mimsSender
                                 ]];
                             }
                         } catch (\Throwable $e) {
@@ -2145,7 +2036,7 @@ if (!$line) {
                             return [[
                                 'type' => 'text',
                                 'text' => "❌ MIMS AI ขัดข้อง\n\nลองใช้ /ai แทนได้ค่ะ",
-                                'sender' => ['name' => '💊 ระบบร้านยา', 'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png']
+                                'sender' => $mimsSender
                             ]];
                         }
                     }
@@ -2153,13 +2044,16 @@ if (!$line) {
                     return [[
                         'type' => 'text',
                         'text' => "❌ MIMS AI ไม่พร้อมใช้งานขณะนี้\n\nลองใช้ /ai แทนได้ค่ะ",
-                        'sender' => ['name' => '💊 ระบบร้านยา', 'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png']
+                        'sender' => getAISenderSettings($db, $lineAccountId, 'mims')
                     ]];
                 }
                 
                 // ===== 4. /triage - ซักประวัติอาการ =====
                 if ($commandMode === 'triage') {
                     devLog($db, 'debug', 'AI_triage', 'Triage command', ['userId' => $userId], null);
+                    
+                    // ดึง sender settings สำหรับ triage mode
+                    $triageSender = getAISenderSettings($db, $lineAccountId, 'triage');
                     
                     if (file_exists(__DIR__ . '/modules/AIChat/Services/TriageEngine.php')) {
                         try {
@@ -2178,10 +2072,7 @@ if (!$line) {
                             $lineMessage = [
                                 'type' => 'text',
                                 'text' => $responseText,
-                                'sender' => [
-                                    'name' => '🩺 ซักประวัติ AI',
-                                    'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png'
-                                ]
+                                'sender' => $triageSender
                             ];
                             
                             if (!empty($result['quickReplies'])) {
@@ -2194,14 +2085,14 @@ if (!$line) {
                             return [[
                                 'type' => 'text',
                                 'text' => "❌ ระบบซักประวัติขัดข้อง\n\nลองใช้ /ai แทนได้ค่ะ",
-                                'sender' => ['name' => '💊 ระบบร้านยา', 'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png']
+                                'sender' => $triageSender
                             ]];
                         }
                     } else {
                         return [[
                             'type' => 'text',
                             'text' => "❌ ระบบซักประวัติไม่พร้อมใช้งาน\n\nลองใช้ /ai แทนได้ค่ะ",
-                            'sender' => ['name' => '💊 ระบบร้านยา', 'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/3774/3774299.png']
+                            'sender' => $triageSender
                         ]];
                     }
                 }
@@ -2279,13 +2170,13 @@ if (!$line) {
                         $response = $gemini->generateResponse($messageToProcess, $userId, $history);
                         
                         if ($response) {
+                            // ใช้ sender จาก ai_settings
+                            $sender = getAISenderSettings($db, $lineAccountId, $currentAIMode);
+                            
                             $message = [
                                 'type' => 'text',
                                 'text' => $response,
-                                'sender' => [
-                                    'name' => '🛒 พนักงานขาย AI',
-                                    'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/4712/4712109.png'
-                                ]
+                                'sender' => $sender
                             ];
                             
                             devLog($db, 'debug', 'AI_sales', 'AI response generated (Sales Mode)', [
@@ -2604,6 +2495,65 @@ if (!$line) {
                 // Table might not exist - log to error_log instead
                 error_log("[{$type}] [{$source}] {$message} " . ($data ? json_encode($data) : ''));
             }
+        }
+        
+        /**
+         * Get AI Sender Settings from ai_settings table
+         * @param PDO $db Database connection
+         * @param int|null $lineAccountId LINE Account ID
+         * @param string|null $overrideMode Override AI mode (optional)
+         * @return array ['name' => string, 'iconUrl' => string]
+         */
+        function getAISenderSettings($db, $lineAccountId = null, $overrideMode = null) {
+            $defaultSender = [
+                'name' => '🤖 AI Assistant',
+                'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/4712/4712109.png'
+            ];
+            
+            try {
+                $stmt = $db->prepare("SELECT sender_name, sender_icon, ai_mode FROM ai_settings WHERE line_account_id = ? LIMIT 1");
+                $stmt->execute([$lineAccountId]);
+                $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($settings) {
+                    $mode = $overrideMode ?? $settings['ai_mode'] ?? 'sales';
+                    
+                    // ใช้ sender_name จาก settings ถ้ามี
+                    if (!empty($settings['sender_name'])) {
+                        $defaultSender['name'] = $settings['sender_name'];
+                    } else {
+                        // Default sender name ตาม ai_mode
+                        switch ($mode) {
+                            case 'pharmacist':
+                            case 'pharmacy':
+                                $defaultSender['name'] = '💊 เภสัชกร AI';
+                                break;
+                            case 'mims':
+                                $defaultSender['name'] = '📚 MIMS Pharmacist AI';
+                                break;
+                            case 'triage':
+                                $defaultSender['name'] = '🩺 ซักประวัติ AI';
+                                break;
+                            case 'support':
+                                $defaultSender['name'] = '💬 ซัพพอร์ต AI';
+                                break;
+                            case 'sales':
+                            default:
+                                $defaultSender['name'] = '🛒 พนักงานขาย AI';
+                                break;
+                        }
+                    }
+                    
+                    // ใช้ sender_icon จาก settings ถ้ามี
+                    if (!empty($settings['sender_icon'])) {
+                        $defaultSender['iconUrl'] = $settings['sender_icon'];
+                    }
+                }
+            } catch (Exception $e) {
+                // Use default
+            }
+            
+            return $defaultSender;
         }
         
         /**

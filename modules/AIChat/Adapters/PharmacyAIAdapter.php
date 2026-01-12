@@ -190,13 +190,47 @@ class PharmacyAIAdapter
             
             $responseText = $result['text'] ?? $result['message'] ?? 'ขออภัยค่ะ เกิดข้อผิดพลาด';
             
+            // ดึง sender settings จาก ai_settings
+            $senderName = '🤖 AI Assistant';
+            $senderIcon = 'https://cdn-icons-png.flaticon.com/512/4712/4712109.png';
+            
+            try {
+                $stmt = $this->db->prepare("SELECT sender_name, sender_icon, ai_mode FROM ai_settings WHERE line_account_id = ? LIMIT 1");
+                $stmt->execute([$this->lineAccountId]);
+                $settings = $stmt->fetch(\PDO::FETCH_ASSOC);
+                
+                if ($settings) {
+                    if (!empty($settings['sender_name'])) {
+                        $senderName = $settings['sender_name'];
+                    } else {
+                        $mode = $settings['ai_mode'] ?? 'sales';
+                        switch ($mode) {
+                            case 'pharmacist':
+                            case 'pharmacy':
+                                $senderName = '💊 เภสัชกร AI';
+                                break;
+                            case 'support':
+                                $senderName = '💬 ซัพพอร์ต AI';
+                                break;
+                            case 'sales':
+                            default:
+                                $senderName = '🛒 พนักงานขาย AI';
+                                break;
+                        }
+                    }
+                    if (!empty($settings['sender_icon'])) {
+                        $senderIcon = $settings['sender_icon'];
+                    }
+                }
+            } catch (\Exception $e) {}
+            
             // สร้าง LINE Message
             $lineMessage = [
                 'type' => 'text',
                 'text' => $responseText,
                 'sender' => [
-                    'name' => '� พนักงาน ขาย AI',
-                    'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/4712/4712109.png'
+                    'name' => $senderName,
+                    'iconUrl' => $senderIcon
                 ]
             ];
             
@@ -942,16 +976,53 @@ PROMPT;
     }
     
     /**
-     * Build LINE Message
+     * Build LINE Message - ใช้ sender จาก ai_settings
      */
     private function buildLINEMessage(string $text): array
     {
+        // ดึง sender settings จาก ai_settings
+        $senderName = '🤖 AI Assistant';
+        $senderIcon = 'https://cdn-icons-png.flaticon.com/512/4712/4712109.png';
+        
+        try {
+            $stmt = $this->db->prepare("SELECT sender_name, sender_icon, ai_mode FROM ai_settings WHERE line_account_id = ? LIMIT 1");
+            $stmt->execute([$this->lineAccountId]);
+            $settings = $stmt->fetch(\PDO::FETCH_ASSOC);
+            
+            if ($settings) {
+                if (!empty($settings['sender_name'])) {
+                    $senderName = $settings['sender_name'];
+                } else {
+                    // Default sender name ตาม ai_mode
+                    $mode = $settings['ai_mode'] ?? 'sales';
+                    switch ($mode) {
+                        case 'pharmacist':
+                        case 'pharmacy':
+                            $senderName = '💊 เภสัชกร AI';
+                            break;
+                        case 'support':
+                            $senderName = '💬 ซัพพอร์ต AI';
+                            break;
+                        case 'sales':
+                        default:
+                            $senderName = '🛒 พนักงานขาย AI';
+                            break;
+                    }
+                }
+                if (!empty($settings['sender_icon'])) {
+                    $senderIcon = $settings['sender_icon'];
+                }
+            }
+        } catch (\Exception $e) {
+            // Use default
+        }
+        
         $message = [
             'type' => 'text',
             'text' => $text,
             'sender' => [
-                'name' => '� พนักงาน ขาย AI',
-                'iconUrl' => 'https://cdn-icons-png.flaticon.com/512/4712/4712109.png'
+                'name' => $senderName,
+                'iconUrl' => $senderIcon
             ]
         ];
         

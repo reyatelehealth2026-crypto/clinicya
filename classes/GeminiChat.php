@@ -69,8 +69,8 @@ class GeminiChat
     
     public function getMode()
     {
-        // Force sales mode - ignore database setting
-        return 'sales';
+        // ใช้ ai_mode จาก settings ที่โหลดมาจาก database
+        return $this->settings['ai_mode'] ?? 'sales';
     }
     
     /**
