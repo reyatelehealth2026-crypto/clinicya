@@ -2207,7 +2207,9 @@ if (!$line) {
                         ], null);
                         
                         // Extend timeout for AI processing
-                        set_time_limit(60);
+                        devLog($db, 'debug', 'AI_sales', 'Before set_time_limit', [], null);
+                        @set_time_limit(60);
+                        devLog($db, 'debug', 'AI_sales', 'After set_time_limit', [], null);
                         
                         $startTime = microtime(true);
                         devLog($db, 'debug', 'AI_sales', 'Calling generateResponse...', [
