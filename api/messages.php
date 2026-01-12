@@ -22,17 +22,24 @@ $action = $_GET['action'] ?? $_POST['action'] ?? '';
 try {
     switch ($action) {
         case 'get_conversations':
-            // Get list of conversations with last message
+            // Get list of conversations with last message - only users with messages
             $search = $_GET['search'] ?? '';
             $limit = min(intval($_GET['limit'] ?? 50), 100);
             $offset = intval($_GET['offset'] ?? 0);
             
+            // Use JOIN to only get users with messages and get accurate last_time
             $sql = "SELECT u.id, u.line_user_id, u.display_name, u.picture_url, u.phone,
-                    (SELECT content FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_message,
-                    (SELECT message_type FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_type,
-                    (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_time,
+                    m_last.content as last_message,
+                    m_last.message_type as last_type,
+                    m_last.created_at as last_time,
                     (SELECT COUNT(*) FROM messages WHERE user_id = u.id AND direction = 'incoming' AND is_read = 0) as unread_count
                     FROM users u 
+                    INNER JOIN (
+                        SELECT user_id, MAX(id) as max_id
+                        FROM messages
+                        GROUP BY user_id
+                    ) m_max ON u.id = m_max.user_id
+                    INNER JOIN messages m_last ON m_max.max_id = m_last.id
                     WHERE u.line_account_id = ?";
             
             $params = [$currentBotId];
@@ -43,7 +50,7 @@ try {
                 $params[] = "%$search%";
             }
             
-            $sql .= " ORDER BY last_time DESC LIMIT ? OFFSET ?";
+            $sql .= " ORDER BY m_last.created_at DESC LIMIT ? OFFSET ?";
             $params[] = $limit;
             $params[] = $offset;
             
