@@ -1863,8 +1863,13 @@ if (!$line) {
                             'cleaned' => $cleanText
                         ], null);
                     } else {
-                        devLog($db, 'debug', 'AI_command', 'Unknown command', [
+                        // Unknown command → ถือว่าเป็นคำถามถาม AI
+                        // เช่น /มีพารามั้ย → ส่ง "มีพารามั้ย" ไป AI
+                        $commandMode = 'pharmacy';
+                        $commandMessage = $command . ($commandMessage ? ' ' . $commandMessage : '');
+                        devLog($db, 'debug', 'AI_command', 'Unknown command - treating as AI question', [
                             'command' => $command,
+                            'message' => $commandMessage,
                             'original' => $originalText
                         ], null);
                     }
