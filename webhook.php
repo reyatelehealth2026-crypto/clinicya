@@ -2189,6 +2189,13 @@ if (!$line) {
                     }
                 }
                 
+                // ===== DEBUG: Log before section 5 =====
+                devLog($db, 'debug', 'AI_debug', 'Before section 5', [
+                    'commandMode' => $commandMode,
+                    'userId' => $userId,
+                    'text' => mb_substr($text, 0, 50)
+                ], null);
+                
                 // ===== 5. /ai, /sales หรือ Default - ตรวจสอบ AI Mode ก่อน =====
                 // ถ้าใช้ command /ai หรือ /sales ให้ใช้ข้อความหลัง command
                 $messageToProcess = $text;
