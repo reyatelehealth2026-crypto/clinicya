@@ -2208,6 +2208,12 @@ if (!$line) {
                     
                     $gemini = new GeminiChat($db, $lineAccountId);
                     
+                    devLog($db, 'debug', 'AI_sales', 'GeminiChat check', [
+                        'line_account_id' => $lineAccountId,
+                        'is_enabled' => $gemini->isEnabled() ? 'yes' : 'no',
+                        'mode' => $gemini->getMode()
+                    ], null);
+                    
                     if ($gemini->isEnabled()) {
                         $history = $userId ? $gemini->getConversationHistory($userId, 10) : [];
                         
@@ -2236,7 +2242,16 @@ if (!$line) {
                             ], null);
                             
                             return [$message];
+                        } else {
+                            devLog($db, 'warning', 'AI_sales', 'GeminiChat returned null response', [
+                                'user_id' => $userId,
+                                'message' => mb_substr($messageToProcess, 0, 50)
+                            ], null);
                         }
+                    } else {
+                        devLog($db, 'warning', 'AI_sales', 'GeminiChat not enabled', [
+                            'line_account_id' => $lineAccountId
+                        ], null);
                     }
                 }
                 
@@ -2305,8 +2320,9 @@ if (!$line) {
                     }
                 }
                 
-                // ===== Fallback: ลองใช้ GeminiChatAdapter =====
-                $useNewModule = file_exists(__DIR__ . '/modules/AIChat/Autoloader.php');
+                // ===== Fallback: ลองใช้ GeminiChatAdapter (เฉพาะ pharmacist mode) =====
+                // ถ้าเป็น sales mode ไม่ต้อง fallback เพราะ GeminiChat ควรทำงานแล้ว
+                $useNewModule = ($currentAIMode !== 'sales') && file_exists(__DIR__ . '/modules/AIChat/Autoloader.php');
                 
                 if ($useNewModule) {
                     try {
