@@ -935,32 +935,39 @@ try {
             }
             
             // Send via LINE API
-            require_once __DIR__ . '/../classes/LineAccountManager.php';
-            $lineManager = new LineAccountManager($db);
-            $line = $lineManager->getLineAPI($user['line_account_id']);
-            
-            $result = $line->pushMessage($user['line_user_id'], [$flexMessage]);
-            
-            // Check result - pushMessage returns ['code' => httpCode, 'body' => ...]
-            if ($result && $result['code'] == 200) {
-                // Save to messages table
-                $stmt = $db->prepare("INSERT INTO messages (user_id, line_account_id, direction, message_type, content, created_at) VALUES (?, ?, 'outgoing', 'flex', ?, NOW())");
-                $stmt->execute([$userId, $user['line_account_id'], '📦 ' . $product['name'] . ' - ฿' . $price]);
+            try {
+                require_once __DIR__ . '/../classes/LineAccountManager.php';
+                $lineManager = new LineAccountManager($db);
+                $line = $lineManager->getLineAPI($user['line_account_id']);
                 
-                echo json_encode(['success' => true, 'message' => 'Flex message sent']);
-            } else {
-                $errorMsg = isset($result['body']['message']) ? $result['body']['message'] : 'Unknown error';
-                $errorDetails = isset($result['body']['details']) ? json_encode($result['body']['details']) : '';
-                error_log('LINE Flex Error: ' . $errorMsg . ' ' . $errorDetails);
-                throw new Exception('LINE Error: ' . $errorMsg);
+                if (!$line) {
+                    throw new Exception('Failed to get LINE API instance');
+                }
+                
+                $result = $line->pushMessage($user['line_user_id'], [$flexMessage]);
+                
+                // Check result - pushMessage returns ['code' => httpCode, 'body' => ...]
+                if ($result && $result['code'] == 200) {
+                    // Save to messages table
+                    $stmt = $db->prepare("INSERT INTO messages (user_id, line_account_id, direction, message_type, content, created_at) VALUES (?, ?, 'outgoing', 'flex', ?, NOW())");
+                    $stmt->execute([$userId, $user['line_account_id'], '📦 ' . $product['name'] . ' - ฿' . $price]);
+                    
+                    echo json_encode(['success' => true, 'message' => 'Flex message sent']);
+                } else {
+                    $errorMsg = isset($result['body']['message']) ? $result['body']['message'] : 'Unknown error';
+                    $errorDetails = isset($result['body']['details']) ? json_encode($result['body']['details']) : '';
+                    throw new Exception('LINE Error: ' . $errorMsg . ' ' . $errorDetails);
+                }
+            } catch (Throwable $lineErr) {
+                throw new Exception('LINE API Error: ' . $lineErr->getMessage());
             }
             break;
             
         default:
             throw new Exception('Invalid action: ' . $action);
     }
-} catch (Exception $e) {
-    $code = $e->getCode();
+} catch (Throwable $e) {
+    $code = method_exists($e, 'getCode') ? $e->getCode() : 0;
     if ($code >= 400 && $code < 600) {
         http_response_code($code);
     } else {
