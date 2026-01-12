@@ -1,8 +1,8 @@
 <?php
 /**
  * GeminiChat - AI Chat Response using Google Gemini
- * Version 3.0 - Professional AI Pharmacist with Info Extraction
- * อัปเกรด: ระบบวิเคราะห์บริบท (Context Extraction) เพื่อการซักประวัติที่เป็นมืออาชีพและไม่ถามซ้ำ
+ * Version 4.0 - Multi-Mode AI (Pharmacist / Sales / Support)
+ * รองรับ: เภสัชกร, พนักงานขาย, ซัพพอร์ต
  */
 
 class GeminiChat
@@ -32,38 +32,29 @@ class GeminiChat
             'is_enabled' => false,
             'model' => self::DEFAULT_MODEL,
             'system_prompt' => '',
-            'temperature' => 0.4, // ต่ำเพื่อให้คำตอบแม่นยำและเป็นวิชาการ
+            'temperature' => 0.7,
             'max_tokens' => 500,
             'response_style' => 'professional',
             'fallback_message' => 'ขออภัยค่ะ ไม่เข้าใจคำถาม กรุณาติดต่อเจ้าหน้าที่',
             'business_info' => '',
-            'product_knowledge' => ''
+            'product_knowledge' => '',
+            'ai_mode' => 'sales', // Default to sales mode
+            'sales_prompt' => '',
+            'auto_load_products' => 1,
+            'product_load_limit' => 50
         ];
         
         try {
-            if ($this->lineAccountId) {
-                $stmt = $this->db->prepare("SELECT * FROM ai_chat_settings WHERE line_account_id = ?");
-                $stmt->execute([$this->lineAccountId]);
-                $result = $stmt->fetch(PDO::FETCH_ASSOC);
-                
-                if ($result) {
-                    $this->settings = array_merge($this->settings, $result);
-                    $this->apiKey = $result['gemini_api_key'] ?? '';
-                    $this->model = $result['model'] ?? self::DEFAULT_MODEL;
-                    return;
-                }
-            }
-            
-            // Fallback: ตาราง ai_settings (column-based structure)
-            $stmt = $this->db->prepare("SELECT gemini_api_key, is_enabled, system_prompt, model FROM ai_settings WHERE line_account_id = ? LIMIT 1");
+            // Load from ai_settings table
+            $stmt = $this->db->prepare("SELECT * FROM ai_settings WHERE line_account_id = ? LIMIT 1");
             $stmt->execute([$this->lineAccountId]);
-            $aiSettings = $stmt->fetch(PDO::FETCH_ASSOC);
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
             
-            if ($aiSettings) {
-                $this->apiKey = $aiSettings['gemini_api_key'] ?? '';
-                $this->settings['is_enabled'] = ($aiSettings['is_enabled'] == 1);
-                $this->settings['system_prompt'] = $aiSettings['system_prompt'] ?? '';
-                $this->model = $aiSettings['model'] ?? self::DEFAULT_MODEL;
+            if ($result) {
+                $this->settings = array_merge($this->settings, $result);
+                $this->apiKey = $result['gemini_api_key'] ?? '';
+                $this->model = $result['model'] ?? self::DEFAULT_MODEL;
+                $this->settings['is_enabled'] = ($result['is_enabled'] == 1);
             }
             
         } catch (Exception $e) {
@@ -74,6 +65,11 @@ class GeminiChat
     public function isEnabled()
     {
         return $this->settings['is_enabled'] && !empty($this->apiKey);
+    }
+    
+    public function getMode()
+    {
+        return $this->settings['ai_mode'] ?? 'sales';
     }
     
     /**
@@ -88,7 +84,7 @@ class GeminiChat
         try {
             $startTime = microtime(true);
             
-            // สร้าง Full Prompt พร้อมข้อมูลที่วิเคราะห์ได้
+            // สร้าง Full Prompt ตามโหมด
             $prompt = $this->buildPrompt($userMessage, $userId, $conversationHistory);
             
             // ส่งประวัติการคุยเพื่อให้ AI ทราบบริบทต่อเนื่อง
@@ -113,54 +109,143 @@ class GeminiChat
     }
     
     /**
-     * สร้าง Prompt พร้อมวิเคราะห์ข้อมูลเชิงลึก
+     * สร้าง Prompt ตามโหมด AI
      */
     private function buildPrompt($userMessage, $userId = null, $conversationHistory = [])
     {
+        $mode = $this->getMode();
+        
+        switch ($mode) {
+            case 'sales':
+                return $this->buildSalesPrompt($userMessage, $userId, $conversationHistory);
+            case 'support':
+                return $this->buildSupportPrompt($userMessage, $userId, $conversationHistory);
+            case 'pharmacist':
+            default:
+                return $this->buildPharmacistPrompt($userMessage, $userId, $conversationHistory);
+        }
+    }
+    
+    /**
+     * Prompt สำหรับโหมดพนักงานขาย
+     */
+    private function buildSalesPrompt($userMessage, $userId = null, $conversationHistory = [])
+    {
         $parts = [];
         
-        // 1. รวมข้อความล่าสุดเข้ากับประวัติเพื่อการวิเคราะห์
+        // 1. บทบาทพนักงานขาย
+        $salesRole = "
+[บทบาท: พนักงานขายมืออาชีพ]
+- บุคลิก: เป็นมิตร กระตือรือร้น พร้อมช่วยเหลือ ใช้ภาษาสุภาพ
+- เป้าหมาย: ช่วยลูกค้าหาสินค้าที่ต้องการ แนะนำสินค้าที่เหมาะสม ปิดการขาย
+- การตอบ: สั้น กระชับ ตรงประเด็น 1-3 ประโยค
+- เทคนิค: ถามความต้องการ -> แนะนำสินค้า -> บอกราคา -> ชวนสั่งซื้อ
+- สำคัญ: ตอบเฉพาะเรื่องสินค้าและบริการของร้าน ถ้าไม่รู้ให้บอกว่าจะให้เจ้าหน้าที่ติดต่อกลับ
+";
+        $parts[] = $salesRole;
+        
+        // 2. Custom Sales Prompt (ถ้ามี)
+        if (!empty($this->settings['sales_prompt'])) {
+            $parts[] = "คำแนะนำเพิ่มเติม:\n" . $this->settings['sales_prompt'];
+        }
+        
+        // 3. System Prompt
+        $systemPrompt = $this->settings['system_prompt'];
+        if (!empty($systemPrompt)) {
+            $parts[] = "บทบาทหลัก:\n" . $systemPrompt;
+        }
+        
+        // 4. ข้อมูลธุรกิจ
+        if (!empty($this->settings['business_info'])) {
+            $parts[] = "ข้อมูลร้าน:\n" . $this->settings['business_info'];
+        }
+        
+        // 5. โหลดสินค้า
+        $products = $this->getProductsForAI();
+        if ($products) {
+            $parts[] = "รายการสินค้าที่มี:\n" . $products;
+        }
+        
+        // 6. ข้อมูลลูกค้า
+        if ($userId) {
+            $customerInfo = $this->getCustomerInfo($userId);
+            if ($customerInfo) {
+                $parts[] = "ข้อมูลลูกค้า:\n" . $customerInfo;
+            }
+        }
+        
+        // 7. คำสั่งสุดท้าย
+        $parts[] = "\n[คำสั่ง]: ตอบคำถามลูกค้าอย่างเป็นมิตร แนะนำสินค้าที่เหมาะสม บอกราคา และชวนสั่งซื้อ";
+        
+        return implode("\n\n", $parts);
+    }
+    
+    /**
+     * Prompt สำหรับโหมดซัพพอร์ต
+     */
+    private function buildSupportPrompt($userMessage, $userId = null, $conversationHistory = [])
+    {
+        $parts = [];
+        
+        $supportRole = "
+[บทบาท: เจ้าหน้าที่ดูแลลูกค้า]
+- บุคลิก: สุภาพ อดทน พร้อมช่วยเหลือ
+- เป้าหมาย: แก้ไขปัญหาให้ลูกค้า ตอบคำถามเกี่ยวกับบริการ
+- การตอบ: ชัดเจน เป็นขั้นตอน
+";
+        $parts[] = $supportRole;
+        
+        if (!empty($this->settings['system_prompt'])) {
+            $parts[] = "บทบาทหลัก:\n" . $this->settings['system_prompt'];
+        }
+        
+        if (!empty($this->settings['business_info'])) {
+            $parts[] = "ข้อมูลร้าน:\n" . $this->settings['business_info'];
+        }
+        
+        return implode("\n\n", $parts);
+    }
+    
+    /**
+     * Prompt สำหรับโหมดเภสัชกร (เดิม)
+     */
+    private function buildPharmacistPrompt($userMessage, $userId = null, $conversationHistory = [])
+    {
+        $parts = [];
+        
         $fullHistory = $conversationHistory;
         $fullHistory[] = ['role' => 'user', 'content' => $userMessage];
-        
-        // 2. วิเคราะห์ข้อมูลที่ลูกค้าเคยบอกแล้ว
         $extractedInfo = $this->extractInfoFromHistory($fullHistory);
         
-        // 3. กฎเหล็ก: เภสัชกรวิชาชีพ (Professional Pharmacist Rules)
         $proRules = "
-[โปรโตคอล: เภสัชกรวิชาชีพ (Professional Pharmacist)]
-- บุคลิก: มีความน่าเชื่อถือ สุภาพ เป็นทางการ (แทนตัวเองว่า 'เภสัชกร' หรือ 'ทางเรา')
-- การตอบ: สั้น กระชับ 1-2 ประโยค ห้ามใช้ตัวเลขหรือ Bullet points ระหว่างซักประวัติ
-- Flow: แสดงความเห็นอกเห็นใจ (Empathy) -> ถามสิ่งที่ขาดทีละอย่าง -> สรุปและแนะนำยา OTC เมื่อข้อมูลครบ
-- **สำคัญ**: ห้ามถามซ้ำข้อมูลที่ปรากฏใน [ข้อมูลที่ทราบแล้ว] ด้านล่าง
-- หากลูกค้าตอบ 'ไม่มี/ไม่แพ้' ให้ยอมรับทันที ห้ามถามย้ำ
+[โปรโตคอล: เภสัชกรวิชาชีพ]
+- บุคลิก: มีความน่าเชื่อถือ สุภาพ เป็นทางการ
+- การตอบ: สั้น กระชับ 1-2 ประโยค
+- Flow: แสดงความเห็นอกเห็นใจ -> ถามสิ่งที่ขาดทีละอย่าง -> สรุปและแนะนำยา
+- สำคัญ: ห้ามถามซ้ำข้อมูลที่ทราบแล้ว
 ";
         $parts[] = $proRules;
         
-        // 4. แสดงข้อมูลที่ระบบวิเคราะห์ได้ (เพื่อให้ AI ไม่ถามซ้ำ)
         if (!empty($extractedInfo)) {
-            $infoSection = "\n[ข้อมูลที่ทราบแล้ว - ห้ามถามซ้ำ!]\n";
+            $infoSection = "\n[ข้อมูลที่ทราบแล้ว]\n";
             foreach ($extractedInfo as $key => $value) {
                 $infoSection .= "- {$key}: {$value}\n";
             }
             $parts[] = $infoSection;
         }
         
-        // 5. บทบาทหลัก (System Prompt)
-        $systemPrompt = $this->settings['system_prompt'] ?: $this->getDefaultSystemPrompt();
-        $parts[] = "บทบาทหลักของคุณ:\n" . $systemPrompt;
+        $systemPrompt = $this->settings['system_prompt'] ?: 'คุณคือเภสัชกรวิชาชีพ ให้คำปรึกษาด้านสุขภาพเบื้องต้น';
+        $parts[] = "บทบาทหลัก:\n" . $systemPrompt;
         
-        // 6. ข้อมูลสินค้าและธุรกิจ
         if (!empty($this->settings['business_info'])) {
             $parts[] = "ข้อมูลร้านยา:\n" . $this->settings['business_info'];
         }
         
-        $products = $this->settings['product_knowledge'] ?: $this->getTopProducts();
+        $products = $this->getProductsForAI();
         if ($products) {
-            $parts[] = "ยาสามัญประจำบ้าน (OTC) ที่มีในคลัง:\n" . $products;
+            $parts[] = "ยาที่มีในคลัง:\n" . $products;
         }
         
-        // 7. ข้อมูลคนไข้จากฐานข้อมูล
         if ($userId) {
             $medicalInfo = $this->getUserMedicalInfo($userId);
             if ($medicalInfo) {
@@ -168,31 +253,82 @@ class GeminiChat
             }
         }
         
-        // 8. กำหนดเป้าหมายถัดไป
-        $missing = [];
-        if (!isset($extractedInfo['อาการ'])) $missing[] = 'อาการหลัก';
-        if (!isset($extractedInfo['ระยะเวลา'])) $missing[] = 'เป็นมานานกี่วัน';
-        if (!isset($extractedInfo['อาการร่วม'])) $missing[] = 'อาการร่วมอื่นๆ';
-        if (!isset($extractedInfo['แพ้ยา'])) $missing[] = 'ประวัติแพ้ยา';
-        if (!isset($extractedInfo['โรคประจำตัว'])) $missing[] = 'โรคประจำตัว';
-        
-        if (empty($missing)) {
-            $parts[] = "\n[คำสั่งสุดท้าย]: ข้อมูลครบถ้วนแล้ว ให้สรุปอาการทั้งหมด แนะนำยา OTC และบอกให้รอเภสัชกรยืนยัน";
-        } else {
-            $next = $missing[0];
-            $parts[] = "\n[คำสั่งสุดท้าย]: ข้อมูลที่ยังขาด: " . implode(', ', $missing) . " - ให้เลือกถามเรื่อง '{$next}' เพียงประโยคเดียวสั้นๆ";
-        }
-        
         return implode("\n\n", $parts);
     }
     
-    private function getDefaultSystemPrompt()
+    /**
+     * โหลดสินค้าสำหรับ AI
+     */
+    private function getProductsForAI()
     {
-        return 'คุณคือเภสัชกรวิชาชีพ ให้คำปรึกษาด้านสุขภาพเบื้องต้นอย่างถูกต้อง สุภาพ และคำนึงถึงความปลอดภัยของผู้ป่วยเป็นอันดับแรก';
+        // ใช้ product_knowledge ถ้ามี
+        if (!empty($this->settings['product_knowledge'])) {
+            return $this->settings['product_knowledge'];
+        }
+        
+        // Auto load จาก database
+        if (!$this->settings['auto_load_products']) {
+            return null;
+        }
+        
+        try {
+            $limit = intval($this->settings['product_load_limit'] ?? 50);
+            $stmt = $this->db->prepare("
+                SELECT name, sku, price, description 
+                FROM business_items 
+                WHERE is_active = 1 
+                AND (line_account_id = ? OR line_account_id IS NULL)
+                ORDER BY name ASC
+                LIMIT ?
+            ");
+            $stmt->execute([$this->lineAccountId, $limit]);
+            $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            if (empty($products)) return null;
+            
+            $text = "";
+            foreach ($products as $p) {
+                $price = number_format($p['price'] ?? 0);
+                $text .= "- {$p['name']}";
+                if (!empty($p['sku'])) $text .= " (รหัส: {$p['sku']})";
+                $text .= " - ฿{$price}";
+                if (!empty($p['description'])) {
+                    $desc = mb_substr($p['description'], 0, 50);
+                    $text .= " | {$desc}";
+                }
+                $text .= "\n";
+            }
+            return $text;
+            
+        } catch (Exception $e) {
+            error_log("getProductsForAI error: " . $e->getMessage());
+            return null;
+        }
     }
     
     /**
-     * ระบบสกัดข้อมูลจากประวัติการคุย (Information Extraction)
+     * ดึงข้อมูลลูกค้า
+     */
+    private function getCustomerInfo($userId)
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT display_name, phone, email FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$user) return null;
+            
+            $info = "- ชื่อ: " . ($user['display_name'] ?: 'ไม่ระบุ');
+            if (!empty($user['phone'])) $info .= "\n- โทร: {$user['phone']}";
+            
+            return $info;
+        } catch (Exception $e) {
+            return null;
+        }
+    }
+    
+    /**
+     * ระบบสกัดข้อมูลจากประวัติการคุย (สำหรับโหมดเภสัชกร)
      */
     private function extractInfoFromHistory($conversationHistory)
     {
@@ -201,12 +337,12 @@ class GeminiChat
         foreach ($conversationHistory as $msg) { $fullText .= $msg['content'] . ' '; }
         $fullText = mb_strtolower($fullText);
         
-        // 1. ค้นหาระยะเวลา (วัน)
+        // ค้นหาระยะเวลา
         if (preg_match('/(\d+)\s*วัน|(\d+)วัน|อาทิตย์|สัปดาห์/u', $fullText, $m)) {
             $info['ระยะเวลา'] = $m[0];
         }
         
-        // 2. ค้นหาอาการที่พบบ่อย
+        // ค้นหาอาการ
         $patterns = ['ปวดหัว', 'ปวดคอ', 'ปวดหลัง', 'ไข้', 'ไอ', 'เจ็บคอ', 'น้ำมูก', 'ท้องเสีย', 'ชา', 'หายใจไม่สะดวก'];
         $foundSymptoms = [];
         foreach ($patterns as $p) {
@@ -214,7 +350,7 @@ class GeminiChat
         }
         if (!empty($foundSymptoms)) $info['อาการ'] = implode(', ', $foundSymptoms);
         
-        // 3. วิเคราะห์คำถามและคำตอบ (QA Pairs)
+        // วิเคราะห์ QA Pairs
         $lastQuestion = '';
         foreach ($conversationHistory as $msg) {
             if ($msg['role'] === 'assistant') {
@@ -231,7 +367,6 @@ class GeminiChat
             }
         }
         
-        // 4. ค้นหาคีย์เวิร์ดปฏิเสธโดยตรง
         if (!isset($info['แพ้ยา']) && mb_strpos($fullText, 'ไม่แพ้ยา') !== false) $info['แพ้ยา'] = 'ไม่มี';
         if (!isset($info['โรคประจำตัว']) && mb_strpos($fullText, 'ไม่มีโรค') !== false) $info['โรคประจำตัว'] = 'ไม่มี';
         
@@ -239,19 +374,16 @@ class GeminiChat
     }
     
     /**
-     * เรียกใช้งาน Gemini API (Multi-turn Support)
+     * เรียกใช้งาน Gemini API
      */
     private function callGeminiAPI($systemPrompt, $conversationHistory = [])
     {
         $url = self::API_BASE . $this->model . ':generateContent?key=' . $this->apiKey;
         
         $contents = [];
-        // ใส่คำสั่งหลักเป็น User Message แรก
         $contents[] = ['role' => 'user', 'parts' => [['text' => $systemPrompt]]];
-        // ให้ AI ยอมรับเงื่อนไข
-        $contents[] = ['role' => 'model', 'parts' => [['text' => 'รับทราบข้อกำหนดของเภสัชกรวิชาชีพ จะตอบสั้นๆ และอ้างอิงข้อมูลที่ได้รับมาค่ะ']]];
+        $contents[] = ['role' => 'model', 'parts' => [['text' => 'รับทราบค่ะ พร้อมให้บริการแล้ว']]];
         
-        // ใส่ประวัติการคุยจริง
         foreach ($conversationHistory as $msg) {
             $contents[] = [
                 'role' => ($msg['role'] === 'user' ? 'user' : 'model'),
@@ -262,8 +394,8 @@ class GeminiChat
         $data = [
             'contents' => $contents,
             'generationConfig' => [
-                'temperature' => floatval($this->settings['temperature']),
-                'maxOutputTokens' => intval($this->settings['max_tokens']),
+                'temperature' => floatval($this->settings['temperature'] ?? 0.7),
+                'maxOutputTokens' => intval($this->settings['max_tokens'] ?? 500),
                 'topP' => 0.9,
                 'topK' => 30
             ]
@@ -296,10 +428,16 @@ class GeminiChat
     private function logResponse($userId, $userMessage, $aiResponse, $responseTimeMs)
     {
         try {
-            $this->db->exec("CREATE TABLE IF NOT EXISTS ai_chat_logs (id INT AUTO_INCREMENT PRIMARY KEY, line_account_id INT, user_id INT, user_message TEXT, ai_response TEXT, response_time_ms INT, model_used VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
             $stmt = $this->db->prepare("INSERT INTO ai_chat_logs (line_account_id, user_id, user_message, ai_response, response_time_ms, model_used) VALUES (?, ?, ?, ?, ?, ?)");
             $stmt->execute([$this->lineAccountId, $userId, $userMessage, $aiResponse, $responseTimeMs, $this->model]);
-        } catch (Exception $e) {}
+        } catch (Exception $e) {
+            // Create table if not exists
+            try {
+                $this->db->exec("CREATE TABLE IF NOT EXISTS ai_chat_logs (id INT AUTO_INCREMENT PRIMARY KEY, line_account_id INT, user_id INT, user_message TEXT, ai_response TEXT, response_time_ms INT, model_used VARCHAR(50), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+                $stmt = $this->db->prepare("INSERT INTO ai_chat_logs (line_account_id, user_id, user_message, ai_response, response_time_ms, model_used) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$this->lineAccountId, $userId, $userMessage, $aiResponse, $responseTimeMs, $this->model]);
+            } catch (Exception $e2) {}
+        }
     }
     
     public function getConversationHistory($userId, $limit = 10)
@@ -311,18 +449,6 @@ class GeminiChat
         } catch (Exception $e) { return []; }
     }
     
-    private function getTopProducts($limit = 10)
-    {
-        try {
-            $stmt = $this->db->prepare("SELECT name, price FROM business_items WHERE is_active = 1 AND (line_account_id = ? OR line_account_id IS NULL) LIMIT ?");
-            $stmt->execute([$this->lineAccountId, $limit]);
-            $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $text = "";
-            foreach ($products as $p) { $text .= "- {$p['name']} ({$p['price']} บ.)\n"; }
-            return $text;
-        } catch (Exception $e) { return null; }
-    }
-    
     public function getUserMedicalInfo($userId)
     {
         try {
@@ -330,5 +456,13 @@ class GeminiChat
             $stmt->execute([$userId]);
             return $stmt->fetch(PDO::FETCH_ASSOC);
         } catch (Exception $e) { return null; }
+    }
+    
+    /**
+     * Get settings for display
+     */
+    public function getSettings()
+    {
+        return $this->settings;
     }
 }
