@@ -1770,6 +1770,13 @@ if (!$line) {
          */
         function checkAIChatbot($db, $text, $lineAccountId = null, $userId = null) {
             try {
+                // Log entry point
+                devLog($db, 'debug', 'AI_entry', 'checkAIChatbot called', [
+                    'text' => mb_substr($text, 0, 50),
+                    'line_account_id' => $lineAccountId,
+                    'user_id' => $userId
+                ], null);
+                
                 $textLower = mb_strtolower(trim($text));
                 $originalText = trim($text);
                 
