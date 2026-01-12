@@ -1925,6 +1925,13 @@ if (!$line) {
                     ], null);
                 }
                 
+                // ===== DEBUG: Log after command parsing =====
+                devLog($db, 'debug', 'AI_trace_1', 'After command parsing', [
+                    'commandMode' => $commandMode,
+                    'commandMessage' => mb_substr($commandMessage ?? '', 0, 30),
+                    'line' => __LINE__
+                ], null);
+                
                 // ===== 0.5 ตรวจสอบ AI Mode ของ user =====
                 // ถ้า user เคยพิมพ์ /ai, /mims, /triage → จำโหมดไว้
                 // ข้อความถัดไปจะใช้โหมดนั้นต่อจนกว่าจะเปลี่ยน
@@ -1946,6 +1953,12 @@ if (!$line) {
                 if (($commandMode === 'human' || $commandMode === 'exit') && $userId) {
                     clearUserAIMode($db, $userId);
                 }
+                
+                // ===== DEBUG: Log after mode check =====
+                devLog($db, 'debug', 'AI_trace_2', 'After mode check', [
+                    'commandMode' => $commandMode,
+                    'line' => __LINE__
+                ], null);
                 
                 // ===== /exit - ออกจากโหมด AI =====
                 if ($commandMode === 'exit') {
