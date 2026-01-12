@@ -2038,9 +2038,6 @@ let isPolling = false;
 let sentMessageIds = new Set();
 let soundEnabled = localStorage.getItem('inboxSoundEnabled') !== 'false'; // default true
 
-// Debug: แสดงค่าเริ่มต้น
-console.log('🚀 Inbox initialized:', { userId, lastMessageId, currentUserName, lineAccountId });
-
 // Update sound icon on load
 document.addEventListener('DOMContentLoaded', () => {
     updateSoundIcon();
@@ -2063,10 +2060,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initial poll - ทำทันที
     if (userId) {
-        console.log('📡 Starting initial poll for user:', userId);
         pollMessages();
     } else {
-        console.log('⚠️ No user selected, polling for sidebar only');
         pollSidebar();
     }
     
@@ -2341,14 +2336,11 @@ function setPollingInterval(interval) {
         stopPolling();
         startPolling();
     }
-    
-    console.log('📡 Polling interval set to:', interval, 'ms');
 }
 
 // Efficient delta polling - Requirements: 11.4
 async function pollMessages() {
     if (!userId || isPolling) {
-        console.log('⏭️ Skip poll:', { userId, isPolling });
         return;
     }
     isPolling = true;
@@ -2360,52 +2352,20 @@ async function pollMessages() {
     try {
         // Delta update: only fetch messages since last check - Requirements: 11.4
         const url = `api/messages.php?action=poll&user_id=${userId}&last_id=${lastMessageId}&_t=${Date.now()}`;
-        console.log('📡 Delta polling:', url);
         
-        // Also fetch all conversations to update sidebar order
-        const [msgRes, convRes] = await Promise.all([
-            fetch(url),
-            fetch(`api/messages.php?action=get_conversations&_t=${Date.now()}`)
-        ]);
+        const msgRes = await fetch(url);
         
         if (!msgRes.ok) {
             throw new Error(`HTTP ${msgRes.status}`);
         }
         
         const data = await msgRes.json();
-        const convData = await convRes.json();
-        console.log('📥 Poll response:', data);
-        console.log('📥 Conv response:', convData);
         
         if (data.success) {
             pollErrorCount = 0;
             lastPollTime = Date.now();
-            currentPollInterval = getPollingInterval(); // Reset to normal interval
+            currentPollInterval = getPollingInterval();
             if (indicator) indicator.style.background = '#86EFAC'; // green = success
-            
-            // Update sidebar order from conversations data
-            if (convData.success && convData.conversations) {
-                console.log('📋 Conversations count:', convData.conversations.length);
-                console.log('📋 First 5 conversations:', convData.conversations.slice(0, 5).map(c => ({id: c.id, name: c.display_name, time: c.last_time})));
-                
-                // API already returns sorted by last_time DESC, but sort again to be sure
-                const sortedConvs = convData.conversations.sort((a, b) => {
-                    const timeA = a.last_time ? new Date(a.last_time).getTime() : 0;
-                    const timeB = b.last_time ? new Date(b.last_time).getTime() : 0;
-                    return timeB - timeA;
-                });
-                
-                console.log('📋 First 5 sorted:', sortedConvs.slice(0, 5).map(c => ({id: c.id, name: c.display_name, time: c.last_time})));
-                
-                reorderSidebar(sortedConvs);
-                sortedConvs.forEach(conv => updateSidebarUser(conv));
-                
-                if (convData.total_unread > 0) {
-                    document.getElementById('totalUnread').textContent = convData.total_unread;
-                }
-            } else {
-                console.log('❌ Conv data failed:', convData);
-            }
             
             // Add new messages to chat (delta update)
             if (data.messages && data.messages.length > 0) {
@@ -2414,16 +2374,10 @@ async function pollMessages() {
                     const msgId = parseInt(msg.id);
                     const isIncoming = msg.direction === 'incoming';
                     
-                    console.log('Processing msg:', { msgId, lastMessageId, exists: !!document.querySelector(`[data-msg-id="${msgId}"]`) });
-                    
                     if (msgId > lastMessageId && !sentMessageIds.has(msgId) && !document.querySelector(`[data-msg-id="${msgId}"]`)) {
-                        console.log('✅ Appending message:', msgId);
                         appendMessage(msg);
-                        
-                        // Update cache with new message
                         updateConversationCache(userId, msg);
                         
-                        // Show notification for incoming messages - Requirements: 1.2
                         if (isIncoming) {
                             showInboxNotification(
                                 currentUserName || 'ลูกค้า',
@@ -2440,13 +2394,13 @@ async function pollMessages() {
                 scrollToBottom();
             }
             
-            // Update sidebar
+            // Update sidebar unread counts
             if (data.unread_users) {
                 data.unread_users.forEach(u => updateUserUnread(u.id, u.unread));
             }
             
-            // Notifications for other users + update sidebar
-            if (data.updated_conversations) {
+            // Handle updated conversations - move to top of sidebar
+            if (data.updated_conversations && data.updated_conversations.length > 0) {
                 // Sort by last_time (newest first)
                 const sortedConvs = data.updated_conversations.sort((a, b) => {
                     const timeA = a.last_time ? new Date(a.last_time).getTime() : 0;
@@ -2454,13 +2408,14 @@ async function pollMessages() {
                     return timeB - timeA;
                 });
                 
+                // Move updated conversations to top of sidebar
+                reorderSidebar(sortedConvs);
+                
                 sortedConvs.forEach(conv => {
-                    // Update sidebar item and move to top
                     updateSidebarUser(conv);
                     
-                    // Show notification for other users - Requirements: 1.2
+                    // Show notification for other users
                     if (conv.id != userId && conv.last_message) {
-                        console.log('🔔 Notification for other user:', conv.display_name);
                         showInboxNotification(conv.display_name || 'ลูกค้า', conv.last_message, conv.picture_url, conv.id);
                     }
                 });
@@ -2546,11 +2501,9 @@ function startPolling() {
     
     if (userId) {
         pollingInterval = setInterval(pollMessages, currentPollInterval);
-        console.log('🟢 Polling started for user:', userId, 'interval:', currentPollInterval, 'ms');
     } else {
         // Poll sidebar only when no user selected
         pollingInterval = setInterval(pollSidebar, currentPollInterval);
-        console.log('🟢 Sidebar polling started, interval:', currentPollInterval, 'ms');
     }
 }
 
@@ -2586,47 +2539,21 @@ async function pollSidebar() {
     }
 }
 
-// Reorder sidebar items to match sorted conversations
-function reorderSidebar(sortedConvs) {
+// Move updated conversations to top of sidebar (efficient - only moves changed items)
+function reorderSidebar(updatedConvs) {
     const userList = document.getElementById('userList');
-    if (!userList) {
-        console.log('❌ userList not found');
+    if (!userList || !updatedConvs || updatedConvs.length === 0) {
         return;
     }
     
-    console.log('🔄 Reordering sidebar with', sortedConvs.length, 'conversations');
-    
-    // Create a document fragment for efficient DOM manipulation
-    const fragment = document.createDocumentFragment();
-    const existingItems = new Map();
-    
-    // Collect all existing items
-    userList.querySelectorAll('.user-item').forEach(item => {
-        const userId = item.dataset.userId;
-        if (userId) {
-            existingItems.set(userId, item);
+    // Move each updated conversation to top (in reverse order so newest ends up first)
+    for (let i = updatedConvs.length - 1; i >= 0; i--) {
+        const conv = updatedConvs[i];
+        const item = userList.querySelector(`.user-item[data-user-id="${conv.id}"]`);
+        if (item && userList.firstChild !== item) {
+            userList.insertBefore(item, userList.firstChild);
         }
-    });
-    
-    // Reorder items according to sortedConvs
-    sortedConvs.forEach((conv, index) => {
-        const item = existingItems.get(String(conv.id));
-        if (item) {
-            fragment.appendChild(item);
-            existingItems.delete(String(conv.id));
-        }
-    });
-    
-    // Append any remaining items (not in sortedConvs)
-    existingItems.forEach(item => {
-        fragment.appendChild(item);
-    });
-    
-    // Clear and re-append all items in correct order
-    userList.innerHTML = '';
-    userList.appendChild(fragment);
-    
-    console.log('✅ Sidebar reordered');
+    }
 }
 
 // ===== Conversation Caching - Requirements: 11.6 =====
@@ -2645,8 +2572,6 @@ function cacheConversation(convUserId, messages) {
         timestamp: Date.now(),
         lastMessageId: messages.length > 0 ? Math.max(...messages.map(m => parseInt(m.id))) : 0
     });
-    
-    console.log('💾 Cached conversation:', convUserId, 'messages:', messages.length);
 }
 
 // Update cache with new message
@@ -2656,7 +2581,6 @@ function updateConversationCache(convUserId, newMessage) {
         cached.messages.push(newMessage);
         cached.lastMessageId = Math.max(cached.lastMessageId, parseInt(newMessage.id));
         cached.timestamp = Date.now();
-        console.log('💾 Updated cache for:', convUserId);
     }
 }
 
@@ -2666,12 +2590,10 @@ function getCachedConversation(convUserId) {
     if (cached) {
         // Check if cache is still valid (within TTL)
         if (Date.now() - cached.timestamp < CACHE_TTL) {
-            console.log('📦 Cache hit for:', convUserId);
             return cached;
         } else {
             // Cache expired
             conversationCache.delete(convUserId);
-            console.log('⏰ Cache expired for:', convUserId);
         }
     }
     return null;
@@ -2680,7 +2602,6 @@ function getCachedConversation(convUserId) {
 // Clear conversation cache
 function clearConversationCache() {
     conversationCache.clear();
-    console.log('🗑️ Conversation cache cleared');
 }
 
 // Preload adjacent conversations for faster switching
