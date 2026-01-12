@@ -126,7 +126,7 @@ try {
             $stmt->execute([$currentBotId, $userId]);
             $unreadUsers = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            // Check for new conversations (users who sent first message)
+            // Check for recently updated conversations (within last poll interval)
             $stmt = $db->prepare("SELECT u.id, u.display_name, u.picture_url,
                                   (SELECT content FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_message,
                                   (SELECT message_type FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_type,
@@ -134,9 +134,9 @@ try {
                                   (SELECT COUNT(*) FROM messages WHERE user_id = u.id AND direction = 'incoming' AND is_read = 0) as unread_count
                                   FROM users u 
                                   WHERE u.line_account_id = ? 
-                                  AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id AND id > ?)
-                                  ORDER BY last_time DESC LIMIT 10");
-            $stmt->execute([$currentBotId, $lastId]);
+                                  AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id AND created_at >= DATE_SUB(NOW(), INTERVAL 5 SECOND))
+                                  ORDER BY last_time DESC LIMIT 20");
+            $stmt->execute([$currentBotId]);
             $updatedConversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             echo json_encode([
