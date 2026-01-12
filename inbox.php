@@ -3970,8 +3970,7 @@ function renderProductResults() {
                     <div class="font-medium text-gray-800 truncate">${escapeHtml(p.name)}</div>
                     <div class="text-xs text-gray-500">${p.sku ? `SKU: ${escapeHtml(p.sku)}` : ''}</div>
                     <div class="flex items-center gap-2 mt-1">
-                        <span class="text-emerald-600 font-semibold">฿${Number(p.price).toLocaleString()}</span>
-                        ${p.stock_quantity !== undefined ? `<span class="text-xs ${p.stock_quantity > 0 ? 'text-green-600' : 'text-red-500'}">คงเหลือ: ${p.stock_quantity}</span>` : ''}
+                        <span class="text-emerald-600 font-semibold">฿${Number(p.price || 0).toLocaleString()}</span>
                     </div>
                 </div>
             </div>
@@ -4005,9 +4004,8 @@ async function selectProduct(index) {
     // Format product message
     const message = `📦 ${product.name}\n` +
         (product.sku ? `รหัส: ${product.sku}\n` : '') +
-        `💰 ราคา: ฿${Number(product.price).toLocaleString()}\n` +
-        (product.description ? `📝 ${product.description.substring(0, 100)}${product.description.length > 100 ? '...' : ''}\n` : '') +
-        (product.stock_quantity !== undefined ? `📊 คงเหลือ: ${product.stock_quantity} ชิ้น` : '');
+        `💰 ราคา: ฿${Number(product.price || 0).toLocaleString()}` +
+        (product.description ? `\n📝 ${product.description.substring(0, 100)}${product.description.length > 100 ? '...' : ''}` : '');
     
     // Put in message input
     document.getElementById('messageInput').value = message;
