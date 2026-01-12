@@ -2375,6 +2375,7 @@ async function pollMessages() {
         const data = await msgRes.json();
         const convData = await convRes.json();
         console.log('📥 Poll response:', data);
+        console.log('📥 Conv response:', convData);
         
         if (data.success) {
             pollErrorCount = 0;
@@ -2384,7 +2385,8 @@ async function pollMessages() {
             
             // Update sidebar order from conversations data
             if (convData.success && convData.conversations) {
-                console.log('📋 Conversations from API:', convData.conversations.map(c => ({id: c.id, name: c.display_name, time: c.last_time})));
+                console.log('📋 Conversations count:', convData.conversations.length);
+                console.log('📋 First 5 conversations:', convData.conversations.slice(0, 5).map(c => ({id: c.id, name: c.display_name, time: c.last_time})));
                 
                 // API already returns sorted by last_time DESC, but sort again to be sure
                 const sortedConvs = convData.conversations.sort((a, b) => {
@@ -2393,7 +2395,7 @@ async function pollMessages() {
                     return timeB - timeA;
                 });
                 
-                console.log('📋 Sorted conversations:', sortedConvs.map(c => ({id: c.id, name: c.display_name, time: c.last_time})));
+                console.log('📋 First 5 sorted:', sortedConvs.slice(0, 5).map(c => ({id: c.id, name: c.display_name, time: c.last_time})));
                 
                 reorderSidebar(sortedConvs);
                 sortedConvs.forEach(conv => updateSidebarUser(conv));
@@ -2401,6 +2403,8 @@ async function pollMessages() {
                 if (convData.total_unread > 0) {
                     document.getElementById('totalUnread').textContent = convData.total_unread;
                 }
+            } else {
+                console.log('❌ Conv data failed:', convData);
             }
             
             // Add new messages to chat (delta update)
