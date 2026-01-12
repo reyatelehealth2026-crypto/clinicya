@@ -831,6 +831,120 @@ try {
                 echo json_encode(['success' => false, 'error' => $e->getMessage()]);
             }
             break;
+        
+        // ============================================
+        // Send Product as Flex Message
+        // ============================================
+        case 'send_product_flex':
+            if ($method !== 'POST') {
+                throw new Exception('Method not allowed', 405);
+            }
+            
+            $userId = intval($_POST['user_id'] ?? 0);
+            $productId = intval($_POST['product_id'] ?? 0);
+            
+            if (!$userId || !$productId) {
+                throw new Exception('user_id and product_id required');
+            }
+            
+            // Get user info
+            $stmt = $db->prepare("SELECT line_user_id, line_account_id FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$user) {
+                throw new Exception('User not found');
+            }
+            
+            // Get product info
+            $stmt = $db->prepare("SELECT * FROM business_items WHERE id = ?");
+            $stmt->execute([$productId]);
+            $product = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$product) {
+                throw new Exception('Product not found');
+            }
+            
+            // Build Flex Message
+            $price = number_format($product['price'] ?? 0);
+            $imageUrl = $product['image_url'] ?: 'https://via.placeholder.com/300x200?text=No+Image';
+            
+            $flexMessage = [
+                'type' => 'flex',
+                'altText' => '📦 ' . $product['name'] . ' - ฿' . $price,
+                'contents' => [
+                    'type' => 'bubble',
+                    'hero' => [
+                        'type' => 'image',
+                        'url' => $imageUrl,
+                        'size' => 'full',
+                        'aspectRatio' => '4:3',
+                        'aspectMode' => 'cover'
+                    ],
+                    'body' => [
+                        'type' => 'box',
+                        'layout' => 'vertical',
+                        'contents' => [
+                            [
+                                'type' => 'text',
+                                'text' => $product['name'],
+                                'weight' => 'bold',
+                                'size' => 'lg',
+                                'wrap' => true
+                            ],
+                            [
+                                'type' => 'text',
+                                'text' => '฿' . $price,
+                                'size' => 'xl',
+                                'color' => '#10B981',
+                                'weight' => 'bold',
+                                'margin' => 'md'
+                            ]
+                        ]
+                    ]
+                ]
+            ];
+            
+            // Add SKU if exists
+            if (!empty($product['sku'])) {
+                $flexMessage['contents']['body']['contents'][] = [
+                    'type' => 'text',
+                    'text' => 'รหัส: ' . $product['sku'],
+                    'size' => 'sm',
+                    'color' => '#888888',
+                    'margin' => 'sm'
+                ];
+            }
+            
+            // Add description if exists
+            if (!empty($product['description'])) {
+                $flexMessage['contents']['body']['contents'][] = [
+                    'type' => 'text',
+                    'text' => mb_substr($product['description'], 0, 100) . (mb_strlen($product['description']) > 100 ? '...' : ''),
+                    'size' => 'sm',
+                    'color' => '#666666',
+                    'wrap' => true,
+                    'margin' => 'md'
+                ];
+            }
+            
+            // Send via LINE API
+            require_once __DIR__ . '/../classes/LineAccountManager.php';
+            $lineManager = new LineAccountManager($db);
+            $line = $lineManager->getLineAPI($user['line_account_id']);
+            
+            $result = $line->pushMessage($user['line_user_id'], [$flexMessage]);
+            
+            if ($result) {
+                // Save to messages table
+                $stmt = $db->prepare("INSERT INTO messages (user_id, line_account_id, direction, message_type, content, created_at) VALUES (?, ?, 'outgoing', 'flex', ?, NOW())");
+                $stmt->execute([$userId, $user['line_account_id'], '📦 ' . $product['name'] . ' - ฿' . $price]);
+                
+                echo json_encode(['success' => true, 'message' => 'Flex message sent']);
+            } else {
+                throw new Exception('Failed to send message');
+            }
+            break;
             
         default:
             throw new Exception('Invalid action: ' . $action);

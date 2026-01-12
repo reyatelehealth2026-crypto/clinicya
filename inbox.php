@@ -4063,18 +4063,137 @@ function doSelectProduct(index) {
     
     closeProductSearchModal();
     
-    // Format product message
+    // Show send options modal
+    showProductSendOptions(product);
+}
+
+function showProductSendOptions(product) {
+    // Create modal if not exists
+    let modal = document.getElementById('productSendModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'productSendModal';
+        modal.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center';
+        modal.onclick = function(e) {
+            if (e.target === modal) closeProductSendModal();
+        };
+        document.body.appendChild(modal);
+    }
+    
+    const imgUrl = product.image_url || '';
+    const price = Number(product.price || 0).toLocaleString();
+    
+    modal.innerHTML = `
+        <div class="bg-white w-[90%] max-w-md rounded-2xl shadow-2xl overflow-hidden" onclick="event.stopPropagation()">
+            <div class="p-4 border-b bg-emerald-50">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-emerald-800"><i class="fas fa-paper-plane mr-2"></i>ส่งข้อมูลสินค้า</span>
+                    <button onclick="closeProductSendModal()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Product Preview -->
+            <div class="p-4 border-b">
+                <div class="flex gap-3">
+                    <div class="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                        ${imgUrl ? `<img src="${imgUrl}" class="w-full h-full object-cover">` : '<div class="w-full h-full flex items-center justify-center text-gray-300"><i class="fas fa-box text-3xl"></i></div>'}
+                    </div>
+                    <div>
+                        <div class="font-medium">${product.name}</div>
+                        <div class="text-sm text-gray-500">${product.sku || ''}</div>
+                        <div class="text-emerald-600 font-semibold mt-1">฿${price}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Send Options -->
+            <div class="p-4 space-y-3">
+                <button onclick="sendProductAsText()" class="w-full p-3 border-2 border-gray-200 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 transition flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-font text-gray-600"></i>
+                    </div>
+                    <div class="text-left">
+                        <div class="font-medium">ส่งเป็นข้อความ</div>
+                        <div class="text-xs text-gray-500">ข้อความธรรมดา ไม่มีรูป</div>
+                    </div>
+                </button>
+                
+                ${imgUrl ? `
+                <button onclick="sendProductAsFlex()" class="w-full p-3 border-2 border-emerald-500 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition flex items-center gap-3">
+                    <div class="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-image text-white"></i>
+                    </div>
+                    <div class="text-left">
+                        <div class="font-medium text-emerald-700">ส่งเป็น Flex (แนะนำ)</div>
+                        <div class="text-xs text-emerald-600">รูป + ข้อมูล + ปุ่มสั่งซื้อ ใน 1 ข้อความ</div>
+                    </div>
+                </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    
+    // Store product for later use
+    window.selectedProductToSend = product;
+    modal.classList.remove('hidden');
+}
+
+function closeProductSendModal() {
+    const modal = document.getElementById('productSendModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function sendProductAsText() {
+    const product = window.selectedProductToSend;
+    if (!product) return;
+    
+    closeProductSendModal();
+    
     const message = `📦 ${product.name}\n` +
         (product.sku ? `รหัส: ${product.sku}\n` : '') +
         `💰 ราคา: ฿${Number(product.price || 0).toLocaleString()}` +
         (product.description ? `\n📝 ${product.description.substring(0, 100)}${product.description.length > 100 ? '...' : ''}` : '');
     
-    // Put in message input
     const input = document.getElementById('messageInput');
     if (input) {
         input.value = message;
         input.focus();
         autoResize(input);
+    }
+}
+
+async function sendProductAsFlex() {
+    const product = window.selectedProductToSend;
+    if (!product || !userId) return;
+    
+    closeProductSendModal();
+    
+    // Show sending indicator
+    showToast('กำลังส่ง Flex Message...', 'info');
+    
+    try {
+        const formData = new FormData();
+        formData.append('action', 'send_product_flex');
+        formData.append('user_id', userId);
+        formData.append('product_id', product.id);
+        
+        const res = await fetch('api/inbox.php', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast('ส่ง Flex Message สำเร็จ', 'success');
+            // Refresh messages
+            if (typeof pollMessages === 'function') pollMessages();
+        } else {
+            showToast('Error: ' + (data.error || 'ส่งไม่สำเร็จ'), 'error');
+        }
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
     }
 }
 
