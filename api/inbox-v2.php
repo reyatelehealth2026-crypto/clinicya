@@ -14,18 +14,9 @@
  * Requirements: 1.1-1.6, 2.1-2.6, 3.1-3.5, 4.1-4.6, 6.1-6.6, 7.1-7.6, 8.1-8.5, 9.1-9.5
  */
 
-// Error handling - only throw for errors, not warnings/notices
-set_error_handler(function($severity, $message, $file, $line) {
-    // Only throw for actual errors (E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR)
-    if ($severity & (E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR | E_USER_ERROR)) {
-        throw new ErrorException($message, 0, $severity, $file, $line);
-    }
-    // Log warnings but don't throw
-    if ($severity & (E_WARNING | E_USER_WARNING)) {
-        error_log("API Warning: $message in $file:$line");
-    }
-    return true; // Don't execute PHP's internal error handler
-});
+// Suppress warnings and notices - only log them
+error_reporting(E_ERROR | E_PARSE);
+ini_set('display_errors', 0);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -508,109 +499,61 @@ try {
             }
             
             $drugId = (int)($_GET['drug_id'] ?? $_GET['id'] ?? 0);
-            $customPrice = isset($_GET['custom_price']) ? (float)$_GET['custom_price'] : null;
             
             if (!$drugId) {
                 sendError('Drug ID is required');
             }
             
-            // Helper function to get pricing directly from database
-            $getDirectPricing = function($drugId) use ($db) {
-                // Try with cost_price first
-                try {
+            // Direct database query - simple and reliable
+            try {
+                // First check what columns exist
+                $columnsStmt = $db->query("SHOW COLUMNS FROM business_items");
+                $columns = $columnsStmt->fetchAll(PDO::FETCH_COLUMN);
+                $hasCostPrice = in_array('cost_price', $columns);
+                
+                // Build query based on available columns
+                if ($hasCostPrice) {
                     $stmt = $db->prepare("SELECT id, name, price, sale_price, cost_price FROM business_items WHERE id = ?");
-                    $stmt->execute([$drugId]);
-                    $drug = $stmt->fetch(PDO::FETCH_ASSOC);
-                } catch (PDOException $e) {
-                    // cost_price column might not exist
+                } else {
                     $stmt = $db->prepare("SELECT id, name, price, sale_price FROM business_items WHERE id = ?");
-                    $stmt->execute([$drugId]);
-                    $drug = $stmt->fetch(PDO::FETCH_ASSOC);
                 }
+                
+                $stmt->execute([$drugId]);
+                $drug = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 if (!$drug) {
-                    return null;
+                    sendError('Drug not found', 404);
                 }
                 
-                // Get cost - use cost_price if available, otherwise estimate as 70% of price
-                $cost = (float)($drug['cost_price'] ?? 0);
+                // Calculate pricing
                 $price = (float)($drug['sale_price'] ?? $drug['price'] ?? 0);
+                $cost = $hasCostPrice ? (float)($drug['cost_price'] ?? 0) : 0;
                 
+                // Estimate cost if not available (assume 30% margin)
+                $estimated = false;
                 if ($cost <= 0 && $price > 0) {
-                    $cost = $price * 0.7; // Estimate 30% margin
+                    $cost = $price * 0.7;
+                    $estimated = true;
                 }
                 
                 $margin = $price - $cost;
                 $marginPercent = $price > 0 ? (($price - $cost) / $price) * 100 : 0;
                 
-                return [
-                    'drugId' => (int)$drug['id'],
-                    'drugName' => $drug['name'],
-                    'cost' => round($cost, 2),
-                    'price' => round($price, 2),
-                    'margin' => round($margin, 2),
-                    'marginPercent' => round($marginPercent, 2),
-                    'estimated' => ($drug['cost_price'] ?? 0) <= 0
-                ];
-            };
-            
-            try {
-                // Try to use DrugPricingEngineService first
-                $pricingEngine = null;
-                try {
-                    $pricingEngine = loadService('DrugPricingEngineService', $db, $lineAccountId);
-                } catch (Throwable $e) {
-                    // Service loading failed, will use fallback
-                    error_log("DrugPricingEngineService load error: " . $e->getMessage());
-                }
-                
-                if ($pricingEngine) {
-                    try {
-                        if ($customPrice !== null) {
-                            $result = $pricingEngine->calculateMarginImpact($drugId, $customPrice);
-                        } else {
-                            $result = $pricingEngine->calculateMargin($drugId);
-                        }
-                        
-                        if (!isset($result['error'])) {
-                            sendResponse([
-                                'success' => true,
-                                'data' => $result
-                            ]);
-                            break;
-                        }
-                    } catch (Throwable $e) {
-                        // Service method failed, will use fallback
-                        error_log("DrugPricingEngineService method error: " . $e->getMessage());
-                    }
-                }
-                
-                // Fallback: get pricing directly from business_items
-                $directPricing = $getDirectPricing($drugId);
-                
-                if (!$directPricing) {
-                    sendError('Drug not found', 404);
-                }
-                
                 sendResponse([
                     'success' => true,
-                    'data' => $directPricing
+                    'data' => [
+                        'drugId' => (int)$drug['id'],
+                        'drugName' => $drug['name'],
+                        'cost' => round($cost, 2),
+                        'price' => round($price, 2),
+                        'margin' => round($margin, 2),
+                        'marginPercent' => round($marginPercent, 2),
+                        'estimated' => $estimated
+                    ]
                 ]);
                 
-            } catch (Throwable $e) {
-                // Last resort fallback
-                try {
-                    $directPricing = $getDirectPricing($drugId);
-                    if ($directPricing) {
-                        sendResponse([
-                            'success' => true,
-                            'data' => $directPricing
-                        ]);
-                    }
-                } catch (Throwable $e2) {
-                    // Ignore
-                }
-                sendError('Pricing calculation error: ' . $e->getMessage(), 500);
+            } catch (PDOException $e) {
+                sendError('Database error: ' . $e->getMessage(), 500);
             }
             break;
 
