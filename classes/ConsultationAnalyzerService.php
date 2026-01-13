@@ -930,6 +930,8 @@ class ConsultationAnalyzerService
     /**
      * Search drugs from message text
      * Extracts drug names and searches in business_items
+     * Enhanced: Search Thai name, English name, generic name
+     * Enhanced: Detect "มี" + drug name pattern
      * @param string $message Customer message
      * @return array Matched drugs with full data
      */
@@ -938,11 +940,35 @@ class ConsultationAnalyzerService
         $drugs = [];
         $messageLower = mb_strtolower($message);
         
-        // First, try to find exact or close matches with product names in database
+        // Check for "มี" pattern - indicates asking about product availability
+        $hasAvailabilityQuery = preg_match('/มี\s*(.+)/u', $message, $availMatch);
+        $searchTerm = $hasAvailabilityQuery ? trim($availMatch[1]) : $message;
+        $searchTermLower = mb_strtolower($searchTerm);
+        
+        // Remove common suffixes like "มั้ย", "ไหม", "บ้าง", "ครับ", "ค่ะ"
+        $searchTermLower = preg_replace('/(มั้ย|ไหม|บ้าง|ครับ|ค่ะ|นะ|จ้า|หรือเปล่า)\s*$/u', '', $searchTermLower);
+        $searchTermLower = trim($searchTermLower);
+        
         try {
+            // Check available columns
+            $columnsStmt = $this->db->query("SHOW COLUMNS FROM business_items");
+            $columns = $columnsStmt->fetchAll(PDO::FETCH_COLUMN);
+            $hasGenericName = in_array('generic_name', $columns);
+            $hasNameEn = in_array('name_en', $columns);
+            $hasActiveIngredient = in_array('active_ingredient', $columns);
+            $hasManufacturer = in_array('manufacturer', $columns);
+            $hasUnit = in_array('unit', $columns);
+            
+            $selectCols = "id, name, sku, price, sale_price, stock, description, image_url";
+            if ($hasGenericName) $selectCols .= ", generic_name";
+            if ($hasNameEn) $selectCols .= ", name_en";
+            if ($hasActiveIngredient) $selectCols .= ", active_ingredient";
+            if ($hasManufacturer) $selectCols .= ", manufacturer";
+            if ($hasUnit) $selectCols .= ", unit";
+            
             // Get all active products to match against message
             $stmt = $this->db->prepare("
-                SELECT id, name, sku, price, sale_price, stock, description, image_url
+                SELECT {$selectCols}
                 FROM business_items 
                 WHERE is_active = 1 
                 AND stock > 0
@@ -954,31 +980,91 @@ class ConsultationAnalyzerService
             $allProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             $matchedProducts = [];
+            $matchScores = [];
             
             foreach ($allProducts as $product) {
-                $productName = mb_strtolower($product['name']);
+                $score = 0;
+                $productName = $product['name'];
+                $productNameLower = mb_strtolower($productName);
                 $productSku = mb_strtolower($product['sku'] ?? '');
+                $genericName = mb_strtolower($product['generic_name'] ?? '');
+                $nameEn = mb_strtolower($product['name_en'] ?? '');
+                $activeIngredient = mb_strtolower($product['active_ingredient'] ?? '');
                 
-                // Extract first word or main name (before space or special chars)
-                $mainName = preg_split('/[\s\-\/\(\[]+/u', $productName)[0];
+                // Priority 1: Exact match with search term (highest score)
+                if ($searchTermLower && mb_strlen($searchTermLower) >= 2) {
+                    // Check exact match in Thai name
+                    if (mb_strpos($productNameLower, $searchTermLower) !== false) {
+                        $score += 100;
+                    }
+                    // Check exact match in English name
+                    if ($nameEn && mb_strpos($nameEn, $searchTermLower) !== false) {
+                        $score += 100;
+                    }
+                    // Check exact match in generic name
+                    if ($genericName && mb_strpos($genericName, $searchTermLower) !== false) {
+                        $score += 80;
+                    }
+                    // Check exact match in SKU
+                    if ($productSku && mb_strpos($productSku, $searchTermLower) !== false) {
+                        $score += 90;
+                    }
+                    // Check exact match in active ingredient
+                    if ($activeIngredient && mb_strpos($activeIngredient, $searchTermLower) !== false) {
+                        $score += 70;
+                    }
+                }
                 
-                // Check if product name or SKU appears in message
+                // Priority 2: Word boundary match
+                $mainName = preg_split('/[\s\-\/\(\[]+/u', $productNameLower)[0];
                 if (mb_strlen($mainName) >= 3 && mb_strpos($messageLower, $mainName) !== false) {
-                    $matchedProducts[] = $product;
-                } elseif ($productSku && mb_strlen($productSku) >= 3 && mb_strpos($messageLower, $productSku) !== false) {
-                    $matchedProducts[] = $product;
-                } else {
-                    // Check if any significant word from product name is in message
-                    $nameWords = preg_split('/[\s\-\/\(\)\[\]]+/u', $productName);
-                    foreach ($nameWords as $word) {
+                    $score += 50;
+                }
+                
+                // Priority 3: Check English name words
+                if ($nameEn) {
+                    $enWords = preg_split('/[\s\-\/\(\)\[\]]+/u', $nameEn);
+                    foreach ($enWords as $word) {
                         $word = trim($word);
-                        if (mb_strlen($word) >= 4 && mb_strpos($messageLower, $word) !== false) {
-                            $matchedProducts[] = $product;
+                        if (mb_strlen($word) >= 3 && mb_strpos($messageLower, $word) !== false) {
+                            $score += 40;
                             break;
                         }
                     }
                 }
+                
+                // Priority 4: Check generic name words
+                if ($genericName) {
+                    $genWords = preg_split('/[\s\-\/\(\)\[\]]+/u', $genericName);
+                    foreach ($genWords as $word) {
+                        $word = trim($word);
+                        if (mb_strlen($word) >= 3 && mb_strpos($messageLower, $word) !== false) {
+                            $score += 30;
+                            break;
+                        }
+                    }
+                }
+                
+                // Priority 5: Check any significant word from product name
+                $nameWords = preg_split('/[\s\-\/\(\)\[\]]+/u', $productNameLower);
+                foreach ($nameWords as $word) {
+                    $word = trim($word);
+                    if (mb_strlen($word) >= 4 && mb_strpos($messageLower, $word) !== false) {
+                        $score += 20;
+                        break;
+                    }
+                }
+                
+                if ($score > 0) {
+                    $matchedProducts[] = $product;
+                    $matchScores[$product['id']] = $score;
+                }
             }
+            
+            // Sort by score (highest first)
+            usort($matchedProducts, function($a, $b) use ($matchScores) {
+                return ($matchScores[$b['id']] ?? 0) - ($matchScores[$a['id']] ?? 0);
+            });
             
             // Remove duplicates and limit
             $seenIds = [];
@@ -994,15 +1080,20 @@ class ConsultationAnalyzerService
                     'id' => (int)$product['id'],
                     'drugId' => (int)$product['id'],
                     'name' => $product['name'],
+                    'nameEn' => $product['name_en'] ?? '',
+                    'genericName' => $product['generic_name'] ?? '',
                     'sku' => $product['sku'],
                     'price' => $price,
                     'originalPrice' => (float)($product['price'] ?? 0),
                     'costPrice' => $cost,
                     'margin' => $margin,
                     'stock' => (int)($product['stock'] ?? 0),
+                    'unit' => $product['unit'] ?? '',
+                    'manufacturer' => $product['manufacturer'] ?? '',
                     'category' => 'ยาทั่วไป',
                     'dosage' => $product['description'] ?? '',
-                    'imageUrl' => $product['image_url']
+                    'imageUrl' => $product['image_url'],
+                    'matchScore' => $matchScores[$product['id']] ?? 0
                 ];
                 
                 if (count($drugs) >= 5) break;
