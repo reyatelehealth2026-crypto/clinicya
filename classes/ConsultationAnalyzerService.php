@@ -929,7 +929,7 @@ class ConsultationAnalyzerService
     
     /**
      * Search drugs from message text
-     * Extracts keywords and searches in business_items
+     * Extracts drug names and searches in business_items
      * @param string $message Customer message
      * @return array Matched drugs with full data
      */
@@ -938,143 +938,74 @@ class ConsultationAnalyzerService
         $drugs = [];
         $messageLower = mb_strtolower($message);
         
-        // Common drug-related keywords to search for
-        $searchTerms = [];
-        
-        // Extract potential drug names (words with 3+ characters)
-        $words = preg_split('/[\s,.\-\/]+/u', $message);
-        foreach ($words as $word) {
-            $word = trim($word);
-            if (mb_strlen($word) >= 3) {
-                $searchTerms[] = $word;
-            }
-        }
-        
-        // Add common drug ingredient keywords if found in message
-        $ingredientKeywords = [
-            'paracetamol', 'พาราเซตามอล', 'ibuprofen', 'ไอบูโพรเฟน',
-            'aspirin', 'แอสไพริน', 'amoxicillin', 'อะม็อกซีซิลลิน',
-            'vitamin', 'วิตามิน', 'antibiotic', 'ยาปฏิชีวนะ',
-            'antacid', 'ยาลดกรด', 'antihistamine', 'ยาแก้แพ้',
-            'cough', 'แก้ไอ', 'cold', 'หวัด', 'flu', 'ไข้หวัด',
-            'pain', 'แก้ปวด', 'fever', 'ลดไข้',
-            'diarrhea', 'ท้องเสีย', 'constipation', 'ท้องผูก',
-            'allergy', 'แพ้', 'skin', 'ผิวหนัง', 'cream', 'ครีม',
-            'eye', 'ตา', 'ear', 'หู', 'nose', 'จมูก',
-            'stomach', 'กระเพาะ', 'headache', 'ปวดหัว',
-            'muscle', 'กล้ามเนื้อ', 'joint', 'ข้อ',
-            'sleep', 'นอนหลับ', 'anxiety', 'วิตกกังวล'
-        ];
-        
-        foreach ($ingredientKeywords as $keyword) {
-            if (mb_stripos($messageLower, mb_strtolower($keyword)) !== false) {
-                $searchTerms[] = $keyword;
-            }
-        }
-        
-        $searchTerms = array_unique($searchTerms);
-        
-        if (empty($searchTerms)) {
-            return [];
-        }
-        
+        // First, try to find exact or close matches with product names in database
         try {
-            // Build search query
-            $conditions = [];
-            $params = [];
+            // Get all active products to match against message
+            $stmt = $this->db->prepare("
+                SELECT id, name, sku, price, sale_price, stock, description, image_url
+                FROM business_items 
+                WHERE is_active = 1 
+                AND stock > 0
+                AND (line_account_id = ? OR line_account_id IS NULL)
+                ORDER BY stock DESC
+                LIMIT 500
+            ");
+            $stmt->execute([$this->lineAccountId]);
+            $allProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            foreach ($searchTerms as $term) {
-                $conditions[] = "(LOWER(bi.name) LIKE ? OR LOWER(bi.description) LIKE ? OR LOWER(bi.sku) LIKE ?)";
-                $termPattern = '%' . mb_strtolower($term) . '%';
-                $params[] = $termPattern;
-                $params[] = $termPattern;
-                $params[] = $termPattern;
+            $matchedProducts = [];
+            
+            foreach ($allProducts as $product) {
+                $productName = mb_strtolower($product['name']);
+                $productSku = mb_strtolower($product['sku'] ?? '');
+                
+                // Extract first word or main name (before space or special chars)
+                $mainName = preg_split('/[\s\-\/\(\[]+/u', $productName)[0];
+                
+                // Check if product name or SKU appears in message
+                if (mb_strlen($mainName) >= 3 && mb_strpos($messageLower, $mainName) !== false) {
+                    $matchedProducts[] = $product;
+                } elseif ($productSku && mb_strlen($productSku) >= 3 && mb_strpos($messageLower, $productSku) !== false) {
+                    $matchedProducts[] = $product;
+                } else {
+                    // Check if any significant word from product name is in message
+                    $nameWords = preg_split('/[\s\-\/\(\)\[\]]+/u', $productName);
+                    foreach ($nameWords as $word) {
+                        $word = trim($word);
+                        if (mb_strlen($word) >= 4 && mb_strpos($messageLower, $word) !== false) {
+                            $matchedProducts[] = $product;
+                            break;
+                        }
+                    }
+                }
             }
             
-            // Try with cost_price first, fallback without it
-            $hasCostPrice = true;
-            try {
-                $sql = "
-                    SELECT bi.id, bi.name, bi.sku, bi.price, bi.sale_price, 
-                           bi.stock, bi.description, bi.image_url, bi.cost_price,
-                           ic.name as category
-                    FROM business_items bi
-                    LEFT JOIN item_categories ic ON bi.category_id = ic.id
-                    WHERE bi.is_active = 1 
-                    AND bi.stock > 0
-                    AND (" . implode(' OR ', $conditions) . ")
-                ";
+            // Remove duplicates and limit
+            $seenIds = [];
+            foreach ($matchedProducts as $product) {
+                if (isset($seenIds[$product['id']])) continue;
+                $seenIds[$product['id']] = true;
                 
-                if ($this->lineAccountId) {
-                    $sql .= " AND (bi.line_account_id = ? OR bi.line_account_id IS NULL)";
-                    $params[] = $this->lineAccountId;
-                }
-                
-                $sql .= " ORDER BY bi.stock DESC, bi.name ASC LIMIT 5";
-                
-                $stmt = $this->db->prepare($sql);
-                $stmt->execute($params);
-                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            } catch (PDOException $e) {
-                // cost_price column might not exist
-                $hasCostPrice = false;
-                $params = [];
-                
-                foreach ($searchTerms as $term) {
-                    $termPattern = '%' . mb_strtolower($term) . '%';
-                    $params[] = $termPattern;
-                    $params[] = $termPattern;
-                    $params[] = $termPattern;
-                }
-                
-                $sql = "
-                    SELECT bi.id, bi.name, bi.sku, bi.price, bi.sale_price, 
-                           bi.stock, bi.description, bi.image_url,
-                           ic.name as category
-                    FROM business_items bi
-                    LEFT JOIN item_categories ic ON bi.category_id = ic.id
-                    WHERE bi.is_active = 1 
-                    AND bi.stock > 0
-                    AND (" . implode(' OR ', $conditions) . ")
-                ";
-                
-                if ($this->lineAccountId) {
-                    $sql .= " AND (bi.line_account_id = ? OR bi.line_account_id IS NULL)";
-                    $params[] = $this->lineAccountId;
-                }
-                
-                $sql .= " ORDER BY bi.stock DESC, bi.name ASC LIMIT 5";
-                
-                $stmt = $this->db->prepare($sql);
-                $stmt->execute($params);
-                $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            }
-            
-            foreach ($results as $drug) {
-                $price = (float)($drug['sale_price'] ?? $drug['price'] ?? 0);
-                $cost = (float)($drug['cost_price'] ?? 0);
-                
-                // Estimate cost if not available
-                if ($cost <= 0 && $price > 0) {
-                    $cost = $price * 0.7;
-                }
-                
+                $price = (float)($product['sale_price'] ?? $product['price'] ?? 0);
+                $cost = $price * 0.7; // Estimate cost
                 $margin = $price > 0 ? round((($price - $cost) / $price) * 100, 1) : null;
                 
                 $drugs[] = [
-                    'id' => (int)$drug['id'],
-                    'drugId' => (int)$drug['id'],
-                    'name' => $drug['name'],
-                    'sku' => $drug['sku'],
+                    'id' => (int)$product['id'],
+                    'drugId' => (int)$product['id'],
+                    'name' => $product['name'],
+                    'sku' => $product['sku'],
                     'price' => $price,
-                    'originalPrice' => (float)($drug['price'] ?? 0),
+                    'originalPrice' => (float)($product['price'] ?? 0),
                     'costPrice' => $cost,
                     'margin' => $margin,
-                    'stock' => (int)($drug['stock'] ?? 0),
-                    'category' => $drug['category'] ?? 'ยาทั่วไป',
-                    'dosage' => $drug['description'] ?? '',
-                    'imageUrl' => $drug['image_url']
+                    'stock' => (int)($product['stock'] ?? 0),
+                    'category' => 'ยาทั่วไป',
+                    'dosage' => $product['description'] ?? '',
+                    'imageUrl' => $product['image_url']
                 ];
+                
+                if (count($drugs) >= 5) break;
             }
             
         } catch (PDOException $e) {
@@ -1082,6 +1013,9 @@ class ConsultationAnalyzerService
         }
         
         return $drugs;
+    }
+    
+    /**
     }
     
     /**
