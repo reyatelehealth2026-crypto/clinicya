@@ -1582,28 +1582,34 @@ function formatThaiDateTime($datetime) {
                 <div class="hud-widget-body widget-content">
                     <?php if ($customerClassification): ?>
                     <div class="flex items-center justify-between mb-3">
-                        <span class="text-xs text-gray-500">ประเภทการสื่อสาร</span>
+                        <span class="text-xs text-gray-500">รูปแบบการสื่อสาร</span>
                         <span class="customer-type-badge type-<?= strtolower($customerClassification['type'] ?? 'a') ?>">
                             <?php 
-                            $typeLabels = ['A' => '⚡ Direct', 'B' => '💝 Concerned', 'C' => '📊 Detailed'];
-                            echo $typeLabels[$customerClassification['type'] ?? 'A'] ?? 'Unknown';
+                            // A = ตรงไปตรงมา, B = ใส่ใจรายละเอียด, C = สบายๆ
+                            $typeLabels = [
+                                'A' => '⚡ ตรงไปตรงมา',
+                                'B' => '💝 ใส่ใจรายละเอียด', 
+                                'C' => '📊 สบายๆ ค่อยๆคุย'
+                            ];
+                            echo $typeLabels[$customerClassification['type'] ?? 'A'] ?? 'ไม่ระบุ';
                             ?>
                         </span>
                     </div>
                     <?php if (isset($customerClassification['confidence'])): ?>
                     <div class="mb-3">
                         <div class="flex justify-between text-xs mb-1">
-                            <span class="text-gray-500">ความมั่นใจ</span>
+                            <span class="text-gray-500">ความแม่นยำ</span>
                             <span class="font-medium"><?= round(($customerClassification['confidence'] ?? 0) * 100) ?>%</span>
                         </div>
                         <div class="w-full bg-gray-200 rounded-full h-1.5">
                             <div class="bg-purple-500 h-1.5 rounded-full" style="width: <?= ($customerClassification['confidence'] ?? 0) * 100 ?>%"></div>
                         </div>
+                        <p class="text-[10px] text-gray-400 mt-1">* คำนวณจากประวัติการสนทนา</p>
                     </div>
                     <?php endif; ?>
                     <?php if (!empty($customerClassification['tips'])): ?>
                     <div class="bg-purple-50 rounded-lg p-2 text-xs">
-                        <p class="font-medium text-purple-700 mb-1">💡 เคล็ดลับการสื่อสาร</p>
+                        <p class="font-medium text-purple-700 mb-1">💡 เคล็ดลับการตอบ</p>
                         <?php foreach ((array)$customerClassification['tips'] as $tip): ?>
                         <p class="text-purple-600 text-[11px]">• <?= htmlspecialchars($tip) ?></p>
                         <?php endforeach; ?>
@@ -2592,7 +2598,7 @@ function updateSymptomWidget(data) {
 function addDetectedToOrder() {
     const drugs = window.detectedDrugs || [];
     if (drugs.length === 0) {
-        showToast('ไม่มีสินค้าที่ตรวจจับได้', 'warning');
+        showNotification('ไม่มีสินค้าที่ตรวจจับได้', 'warning');
         return;
     }
     
@@ -2605,7 +2611,7 @@ function addDetectedToOrder() {
         }
     });
     
-    showToast(`เพิ่ม ${drugs.length} รายการในออเดอร์แล้ว`, 'success');
+    showNotification(`เพิ่ม ${drugs.length} รายการในออเดอร์แล้ว`, 'success');
 }
 
 /**
@@ -2615,7 +2621,7 @@ function addAllCheckedToOrder() {
     const checkboxes = document.querySelectorAll('.drug-want-checkbox:checked');
     
     if (checkboxes.length === 0) {
-        showToast('กรุณาเลือกสินค้าอย่างน้อย 1 รายการ', 'warning');
+        showNotification('กรุณาเลือกสินค้าอย่างน้อย 1 รายการ', 'warning');
         return;
     }
     
@@ -2629,7 +2635,7 @@ function addAllCheckedToOrder() {
         }
     });
     
-    showToast(`เพิ่ม ${checkboxes.length} รายการในออเดอร์แล้ว`, 'success');
+    showNotification(`เพิ่ม ${checkboxes.length} รายการในออเดอร์แล้ว`, 'success');
 }
 
 /**
@@ -2642,7 +2648,7 @@ async function searchDrugManual() {
     
     const query = input.value.trim();
     if (!query || query.length < 2) {
-        showToast('กรุณาพิมพ์อย่างน้อย 2 ตัวอักษร', 'warning');
+        showNotification('กรุณาพิมพ์อย่างน้อย 2 ตัวอักษร', 'warning');
         return;
     }
     
@@ -3550,21 +3556,29 @@ function updateHealthProfileWidget(data) {
     const commType = profile.communication_type || 'A';
     const confidence = profile.confidence || 100;
     
+    // Communication type labels in Thai
+    const typeLabels = {
+        'A': '⚡ ตรงไปตรงมา',
+        'B': '💝 ใส่ใจรายละเอียด',
+        'C': '📊 สบายๆ ค่อยๆคุย'
+    };
+    
     content.innerHTML = `
         <div class="space-y-2">
             <div class="flex justify-between items-center">
-                <span class="text-xs text-gray-500">ประเภทการสื่อสาร</span>
+                <span class="text-xs text-gray-500">รูปแบบการสื่อสาร</span>
                 <span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
-                    ${commType === 'A' ? 'Direct' : commType === 'B' ? 'Detailed' : 'Casual'}
+                    ${typeLabels[commType] || 'ไม่ระบุ'}
                 </span>
             </div>
             <div class="flex justify-between items-center">
-                <span class="text-xs text-gray-500">ความมั่นใจ</span>
+                <span class="text-xs text-gray-500">ความแม่นยำ</span>
                 <span class="text-xs font-medium">${confidence}%</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-1.5">
                 <div class="bg-purple-500 h-1.5 rounded-full" style="width: ${confidence}%"></div>
             </div>
+            <p class="text-[10px] text-gray-400">* คำนวณจากประวัติการสนทนา</p>
             ${profile.allergies && profile.allergies.length > 0 ? `
             <div class="mt-2 p-2 bg-red-50 rounded text-xs">
                 <span class="text-red-600 font-medium">⚠️ แพ้ยา:</span>
