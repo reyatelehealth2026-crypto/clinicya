@@ -1299,36 +1299,6 @@ function formatThaiDateTime($datetime) {
 
         <!-- Quick Actions Bar - Requirements: 9.1, 9.2, 9.3, 9.4, 9.5 -->
         <div id="quickActionsBar" class="px-3 py-2 bg-gradient-to-r from-slate-50 to-gray-50 border-t border-gray-100">
-            <!-- Purchase Stage Actions - Always visible for quick access -->
-            <div class="purchase-actions-bar mb-2">
-                <div class="action-title">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span>ตัดสินใจซื้อ</span>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <button onclick="openCreateOrderModal()" class="purchase-action-btn create-order">
-                        <i class="fas fa-cart-plus"></i>
-                        <span>สร้างออเดอร์</span>
-                    </button>
-                    <button onclick="sendPaymentLink()" class="purchase-action-btn payment-link">
-                        <i class="fas fa-credit-card"></i>
-                        <span>ส่งลิงก์ชำระเงิน</span>
-                    </button>
-                    <button onclick="openScheduleDeliveryModal()" class="purchase-action-btn schedule-delivery">
-                        <i class="fas fa-truck"></i>
-                        <span>นัดส่งสินค้า</span>
-                    </button>
-                    <button onclick="openUsePointsModal()" class="purchase-action-btn use-points">
-                        <i class="fas fa-star"></i>
-                        <span>ใช้แต้มสะสม</span>
-                    </button>
-                    <button onclick="sendRichMenu()" class="purchase-action-btn send-menu">
-                        <i class="fas fa-th-large"></i>
-                        <span>ส่งเมนู</span>
-                    </button>
-                </div>
-            </div>
-            
             <!-- Dynamic Quick Actions based on consultation stage -->
             <div class="flex items-center gap-2 mb-2">
                 <span class="text-xs font-medium text-gray-500 flex items-center gap-1">
@@ -1666,6 +1636,109 @@ const ghostDraftState = {
     lastCustomerMessage: '',
     draftAccepted: false
 };
+
+// Order State - for managing items to add to order
+const orderState = {
+    items: [],
+    subtotal: 0,
+    discount: 0,
+    total: 0
+};
+
+/**
+ * Add drug to order
+ * @param {number} drugId Drug ID
+ * @param {string} drugName Drug name
+ * @param {number} price Drug price
+ */
+function addDrugToOrder(drugId, drugName, price) {
+    // Check if already in order
+    const existingIndex = orderState.items.findIndex(item => item.id === drugId);
+    
+    if (existingIndex >= 0) {
+        // Increase quantity
+        orderState.items[existingIndex].qty += 1;
+    } else {
+        // Add new item
+        orderState.items.push({
+            id: drugId,
+            name: drugName,
+            price: price,
+            qty: 1
+        });
+    }
+    
+    // Update totals
+    updateOrderTotals();
+    
+    // Show notification
+    showNotification(`เพิ่ม "${drugName}" ในออเดอร์แล้ว (${orderState.items.length} รายการ)`, 'success');
+    
+    // Update order modal if open
+    updateOrderItemsList();
+}
+
+/**
+ * Update order totals
+ */
+function updateOrderTotals() {
+    orderState.subtotal = orderState.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    orderState.total = orderState.subtotal - orderState.discount;
+}
+
+/**
+ * Update order items list in modal
+ */
+function updateOrderItemsList() {
+    const container = document.getElementById('orderItemsList');
+    if (!container) return;
+    
+    if (orderState.items.length === 0) {
+        container.innerHTML = `
+            <p class="text-gray-500 text-sm text-center py-4">
+                <i class="fas fa-info-circle mr-1"></i>
+                เลือกยาจาก HUD Dashboard แล้วกด "เพิ่มในออเดอร์"
+            </p>
+        `;
+    } else {
+        container.innerHTML = orderState.items.map((item, index) => `
+            <div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                <div class="flex-1">
+                    <div class="text-sm font-medium">${escapeHtml(item.name)}</div>
+                    <div class="text-xs text-gray-500">฿${item.price.toLocaleString()} x ${item.qty}</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-green-600">฿${(item.price * item.qty).toLocaleString()}</span>
+                    <button onclick="removeFromOrder(${index})" class="text-red-500 hover:text-red-700 p-1">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    // Update totals display
+    const subtotalEl = document.getElementById('orderSubtotal');
+    const discountEl = document.getElementById('orderDiscount');
+    const totalEl = document.getElementById('orderTotal');
+    
+    if (subtotalEl) subtotalEl.textContent = `฿${orderState.subtotal.toLocaleString()}`;
+    if (discountEl) discountEl.textContent = `-฿${orderState.discount.toLocaleString()}`;
+    if (totalEl) totalEl.textContent = `฿${orderState.total.toLocaleString()}`;
+}
+
+/**
+ * Remove item from order
+ * @param {number} index Item index
+ */
+function removeFromOrder(index) {
+    if (index >= 0 && index < orderState.items.length) {
+        const removed = orderState.items.splice(index, 1)[0];
+        updateOrderTotals();
+        updateOrderItemsList();
+        showNotification(`ลบ "${removed.name}" ออกจากออเดอร์แล้ว`, 'info');
+    }
+}
 
 // Debounce helper
 function debounce(func, wait) {
@@ -2432,8 +2505,13 @@ function updateDrugInfoWidget(data) {
                     ` : ''}
                     <div class="flex gap-2">
                         <button onclick="insertDrugToMessage(${drug.id || 0})" class="flex-1 text-xs py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg">
-                            <i class="fas fa-plus mr-1"></i>เพิ่มในข้อความ
+                            <i class="fas fa-comment mr-1"></i>เพิ่มในข้อความ
                         </button>
+                        <button onclick="addDrugToOrder(${drug.id || 0}, '${escapeAttr(drug.name || '')}', ${drug.price || 0})" class="flex-1 text-xs py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg">
+                            <i class="fas fa-cart-plus mr-1"></i>เพิ่มในออเดอร์
+                        </button>
+                    </div>
+                    <div class="flex gap-2 mt-1">
                         <button onclick="checkDrugInteractions(${drug.id || 0})" class="flex-1 text-xs py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg">
                             <i class="fas fa-exchange-alt mr-1"></i>ตรวจยาตีกัน
                         </button>
@@ -3784,8 +3862,8 @@ async function sendPaymentLink() {
     
     const messageInput = document.getElementById('messageInput');
     
-    // Generate LIFF checkout URL
-    const checkoutUrl = `${window.location.origin}/liff-checkout.php?user_id=${ghostDraftState.userId}`;
+    // Generate LIFF checkout URL - using unified liff/index.php
+    const checkoutUrl = `${window.location.origin}/liff/index.php?page=checkout`;
     
     if (messageInput) {
         messageInput.value = `💳 ลิงก์ชำระเงิน\n\n${checkoutUrl}\n\n✅ กดลิงก์ด้านบนเพื่อดูรายการสินค้าและชำระเงินค่ะ\n📦 หลังชำระเงินจะจัดส่งให้ภายใน 1-3 วันทำการค่ะ`;
@@ -3991,10 +4069,11 @@ async function sendRichMenu() {
     }
     
     const messageInput = document.getElementById('messageInput');
-    const shopUrl = `${window.location.origin}/liff-shop.php`;
+    const baseUrl = window.location.origin;
+    const liffBase = `${baseUrl}/liff/index.php`;
     
     if (messageInput) {
-        messageInput.value = `📋 เมนูบริการ\n\n🛒 สั่งซื้อสินค้า: ${shopUrl}\n💊 ปรึกษาเภสัชกร: ${window.location.origin}/liff-pharmacy-consult.php\n📦 ติดตามออเดอร์: ${window.location.origin}/liff-my-orders.php\n⭐ แต้มสะสม: ${window.location.origin}/liff-points-history.php\n\n✨ กดลิงก์เพื่อใช้บริการได้เลยค่ะ`;
+        messageInput.value = `📋 เมนูบริการ\n\n🛒 สั่งซื้อสินค้า: ${liffBase}?page=shop\n💊 ปรึกษาเภสัชกร: ${liffBase}?page=consult\n📦 ติดตามออเดอร์: ${liffBase}?page=orders\n⭐ แต้มสะสม: ${liffBase}?page=points\n\n✨ กดลิงก์เพื่อใช้บริการได้เลยค่ะ`;
         autoResize(messageInput);
         messageInput.focus();
         showNotification('เมนูพร้อมส่ง', 'success');
@@ -4005,13 +4084,28 @@ async function sendRichMenu() {
  * Confirm Create Order
  */
 function confirmCreateOrder() {
-    // For now, redirect to shop order page
-    const userId = ghostDraftState.userId;
-    if (userId) {
-        window.open(`shop/create-order.php?user_id=${userId}`, '_blank');
+    if (orderState.items.length === 0) {
+        showNotification('กรุณาเพิ่มสินค้าในออเดอร์ก่อน', 'warning');
+        return;
     }
+    
+    const messageInput = document.getElementById('messageInput');
+    if (messageInput) {
+        // Build order summary message
+        let orderMsg = `🛒 สรุปรายการสั่งซื้อ\n\n`;
+        orderState.items.forEach((item, i) => {
+            orderMsg += `${i + 1}. ${item.name}\n   ฿${item.price.toLocaleString()} x ${item.qty} = ฿${(item.price * item.qty).toLocaleString()}\n`;
+        });
+        orderMsg += `\n💰 รวมทั้งหมด: ฿${orderState.total.toLocaleString()}\n`;
+        orderMsg += `\n✅ กรุณายืนยันรายการสั่งซื้อค่ะ`;
+        
+        messageInput.value = orderMsg;
+        autoResize(messageInput);
+        messageInput.focus();
+    }
+    
     closeModal('createOrderModal');
-    showNotification('เปิดหน้าสร้างออเดอร์แล้ว', 'success');
+    showNotification('สรุปออเดอร์พร้อมส่ง', 'success');
 }
 
 /**
