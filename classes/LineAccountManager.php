@@ -3,6 +3,8 @@
  * LINE Account Manager - จัดการหลายบัญชี LINE OA
  */
 
+require_once __DIR__ . '/LineAPI.php';
+
 class LineAccountManager
 {
     private $db;
