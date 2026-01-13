@@ -9,7 +9,6 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 
 $db = Database::getInstance()->getConnection();
-$lineAccountId = 1;
 
 echo "<h1>🔍 Debug Inbox V2 API</h1>";
 echo "<style>
@@ -21,10 +20,14 @@ body { font-family: sans-serif; padding: 20px; background: #f5f5f5; }
 pre { background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
 </style>";
 
-// Get a test user
-$stmt = $db->prepare("SELECT id, display_name FROM users WHERE line_account_id = ? LIMIT 1");
-$stmt->execute([$lineAccountId]);
+// Get a test user - find any user with messages
+$stmt = $db->query("SELECT u.id, u.display_name, u.line_account_id FROM users u 
+    INNER JOIN messages m ON u.id = m.user_id 
+    GROUP BY u.id ORDER BY MAX(m.created_at) DESC LIMIT 1");
 $testUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Get line_account_id from the user
+$lineAccountId = $testUser['line_account_id'] ?? 1;
 
 if (!$testUser) {
     echo "<div class='test error'><h3>❌ No test user found</h3></div>";
@@ -32,7 +35,7 @@ if (!$testUser) {
 }
 
 $userId = $testUser['id'];
-echo "<div class='test'><h3>📋 Test User: {$testUser['display_name']} (ID: {$userId})</h3></div>";
+echo "<div class='test'><h3>📋 Test User: {$testUser['display_name']} (ID: {$userId}, LINE Account: {$lineAccountId})</h3></div>";
 
 // Test 1: Check Services
 echo "<div class='test'><h3>1️⃣ Check Services</h3>";
