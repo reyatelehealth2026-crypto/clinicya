@@ -1545,16 +1545,16 @@ function formatThaiDateTime($datetime) {
                 </div>
             </div>
             
-            <!-- Symptom Analyzer Widget - Requirements: 4.1 -->
+            <!-- Product Detection Widget - Wholesale Mode -->
             <div class="hud-widget symptom-widget" id="symptomWidget">
                 <div class="hud-widget-header" onclick="toggleWidget('symptomWidget')">
-                    <h4><i class="fas fa-stethoscope text-purple-500"></i> วิเคราะห์อาการ</h4>
+                    <h4><i class="fas fa-box-open text-purple-500"></i> ตรวจจับสินค้า</h4>
                     <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
                 </div>
                 <div class="hud-widget-body">
                     <div id="symptomContent" class="text-center text-gray-400 text-xs py-4">
-                        <i class="fas fa-comment-medical mb-2"></i>
-                        <p>รอวิเคราะห์อาการจากการสนทนา</p>
+                        <i class="fas fa-box-open mb-2"></i>
+                        <p>รอตรวจจับชื่อสินค้าจากข้อความ</p>
                     </div>
                 </div>
             </div>
@@ -2438,85 +2438,98 @@ async function updateWidgetByType(widget) {
 }
 
 /**
- * Update Symptom Widget - Requirements: 4.1
- * Enhanced: Checklist format - admin can tick items customer wants
+ * Update Symptom Widget - Wholesale Mode
+ * Focus on product name detection from customer message
  * @param {Object} data Widget data
  */
 function updateSymptomWidget(data) {
     const content = document.getElementById('symptomContent');
     if (!content) return;
     
-    // Fade out animation - Requirements: 4.6
+    // Fade out animation
     content.style.opacity = '0';
     content.style.transition = 'opacity 0.15s ease';
     
     setTimeout(() => {
         if (data.recommendations && data.recommendations.length > 0) {
+            // Separate found vs not found
+            const found = data.recommendations.filter(d => d.stock > 0);
+            const notFound = data.recommendations.filter(d => d.stock <= 0);
+            
             let html = `
                 <div class="mb-2 flex justify-between items-center">
-                    <span class="text-[11px] font-medium text-gray-700">📋 รายการที่ลูกค้าต้องการ</span>
-                    <button onclick="addAllCheckedToOrder()" class="text-[10px] px-2 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded">
-                        <i class="fas fa-cart-plus mr-1"></i>เพิ่มที่เลือก
-                    </button>
+                    <span class="text-[11px] font-medium text-gray-700">
+                        📦 ตรวจจับสินค้า 
+                        <span class="text-emerald-500">(พบ ${found.length})</span>
+                        ${notFound.length > 0 ? `<span class="text-red-400">(ไม่พบ ${notFound.length})</span>` : ''}
+                    </span>
                 </div>
-                <div class="space-y-1.5" id="customerWantsList">
             `;
             
-            data.recommendations.forEach((drug, index) => {
-                const hasStock = drug.stock > 0;
-                const stockClass = hasStock ? (drug.stock > 10 ? 'text-emerald-500' : 'text-yellow-500') : 'text-red-500';
-                const stockText = hasStock ? `มี ${drug.stock}` : 'หมด';
-                const drugId = drug.id || drug.drugId || 0;
-                const drugNameSafe = escapeAttr(drug.name || '');
-                const checkboxId = `drug_check_${drugId}`;
-                
+            // Show found items with checkbox
+            if (found.length > 0) {
+                html += `<div class="space-y-1" id="customerWantsList">`;
+                found.forEach(drug => {
+                    const stockClass = drug.stock > 10 ? 'text-emerald-500' : 'text-yellow-500';
+                    const drugId = drug.id || drug.drugId || 0;
+                    const drugNameSafe = escapeAttr(drug.name || '');
+                    const checkboxId = `drug_check_${drugId}`;
+                    
+                    html += `
+                        <div class="flex items-center gap-2 p-1.5 bg-emerald-50 border border-emerald-100 rounded-lg">
+                            <input type="checkbox" id="${checkboxId}" 
+                                data-drug-id="${drugId}" 
+                                data-drug-name="${drugNameSafe}" 
+                                data-drug-price="${drug.price || 0}"
+                                class="drug-want-checkbox w-4 h-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400" checked>
+                            <label for="${checkboxId}" class="flex-1 cursor-pointer">
+                                <div class="flex justify-between items-center">
+                                    <div class="flex-1">
+                                        <div class="text-[11px] font-medium text-gray-800">${escapeHtml(drug.name)}</div>
+                                        ${drug.nameEn ? `<div class="text-[9px] text-gray-400">${escapeHtml(drug.nameEn)}</div>` : ''}
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-[10px] font-bold text-emerald-600">฿${(drug.price || 0).toLocaleString()}</div>
+                                        <span class="text-[9px] ${stockClass}">มี ${drug.stock}</span>
+                                    </div>
+                                </div>
+                            </label>
+                            <button onclick="selectDrugForInfo(${drugId}, '${drugNameSafe}')" class="text-gray-400 hover:text-emerald-500 p-1" title="ดูรายละเอียด">
+                                <i class="fas fa-info-circle text-xs"></i>
+                            </button>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+            
+            // Show not found items
+            if (notFound.length > 0) {
                 html += `
-                    <div class="flex items-center gap-2 p-2 rounded-lg ${hasStock ? 'bg-white border border-gray-100 hover:border-emerald-200' : 'bg-gray-50 border border-gray-100 opacity-60'}">
-                        <input type="checkbox" id="${checkboxId}" 
-                            data-drug-id="${drugId}" 
-                            data-drug-name="${drugNameSafe}" 
-                            data-drug-price="${drug.price || 0}"
-                            data-has-stock="${hasStock}"
-                            class="drug-want-checkbox w-4 h-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400"
-                            ${hasStock ? 'checked' : 'disabled'}>
-                        <label for="${checkboxId}" class="flex-1 cursor-pointer">
-                            <div class="flex justify-between items-start">
-                                <div class="flex-1">
-                                    <div class="text-[11px] font-medium ${hasStock ? 'text-gray-800' : 'text-gray-400'}">${escapeHtml(drug.name || 'ยา')}</div>
-                                    ${drug.nameEn ? `<div class="text-[9px] text-gray-400">${escapeHtml(drug.nameEn)}</div>` : ''}
-                                </div>
-                                <div class="text-right">
-                                    <div class="text-[10px] font-bold ${hasStock ? 'text-emerald-600' : 'text-gray-400'}">฿${(drug.price || 0).toLocaleString()}</div>
-                                    <span class="text-[9px] ${stockClass}">${stockText}</span>
-                                </div>
-                            </div>
-                        </label>
-                        ${hasStock ? `
-                        <button onclick="selectDrugForInfo(${drugId}, '${drugNameSafe}')" class="text-gray-400 hover:text-emerald-500 p-1" title="ดูรายละเอียด">
-                            <i class="fas fa-info-circle text-xs"></i>
-                        </button>
-                        ` : ''}
+                    <div class="mt-2 p-2 bg-red-50 border border-red-100 rounded-lg">
+                        <div class="text-[10px] text-red-600 font-medium mb-1">❌ ไม่พบ/หมดสต็อก:</div>
+                        <div class="text-[10px] text-red-500">${notFound.map(d => d.name).join(', ')}</div>
                     </div>
                 `;
-            });
+            }
             
-            html += '</div>';
-            
-            // Summary of checked items
+            // Summary and add button
             html += `
-                <div id="checkedSummary" class="mt-2 p-2 bg-emerald-50 rounded-lg hidden">
+                <div id="checkedSummary" class="mt-2 p-2 bg-emerald-100 rounded-lg flex justify-between items-center">
                     <div class="text-[10px] text-emerald-700">
-                        <span id="checkedCount">0</span> รายการ | รวม ฿<span id="checkedTotal">0</span>
+                        <span id="checkedCount">${found.length}</span> รายการ | ฿<span id="checkedTotal">${found.reduce((sum, d) => sum + (d.price || 0), 0).toLocaleString()}</span>
                     </div>
+                    <button onclick="addAllCheckedToOrder()" class="text-[10px] px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded font-medium">
+                        <i class="fas fa-cart-plus mr-1"></i>เพิ่มทั้งหมด
+                    </button>
                 </div>
             `;
             
-            // Add search box for admin to search more
+            // Search box
             html += `
-                <div class="mt-3 pt-2 border-t border-gray-100">
-                    <div class="text-[10px] text-gray-500 mb-1">🔍 ค้นหาเพิ่มเติม (ถ้าไม่พบในรายการ)</div>
+                <div class="mt-2 pt-2 border-t border-gray-100">
                     <div class="flex gap-1">
-                        <input type="text" id="drugSearchInput" placeholder="พิมพ์ชื่อยา..." 
+                        <input type="text" id="drugSearchInput" placeholder="🔍 ค้นหาสินค้าเพิ่ม..." 
                             class="flex-1 text-xs px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
                             onkeypress="if(event.key==='Enter') searchDrugManual()">
                         <button onclick="searchDrugManual()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs rounded-lg">
@@ -2529,24 +2542,23 @@ function updateSymptomWidget(data) {
             
             content.innerHTML = html;
             
-            // Add event listeners for checkboxes
+            // Add event listeners
             document.querySelectorAll('.drug-want-checkbox').forEach(cb => {
                 cb.addEventListener('change', updateCheckedSummary);
             });
-            updateCheckedSummary();
         } else {
+            // No products detected - show search
             content.innerHTML = `
                 <div class="text-center text-gray-400 text-xs py-2">
-                    <i class="fas fa-comment-medical mb-2"></i>
-                    <p>รอวิเคราะห์จากการสนทนา</p>
+                    <i class="fas fa-box-open text-2xl mb-2"></i>
+                    <p>รอตรวจจับชื่อสินค้าจากข้อความ</p>
                 </div>
-                <div class="mt-3 pt-2 border-t border-gray-100">
-                    <div class="text-[10px] text-gray-500 mb-1">🔍 ค้นหายา</div>
+                <div class="mt-2">
                     <div class="flex gap-1">
-                        <input type="text" id="drugSearchInput" placeholder="พิมพ์ชื่อยา..." 
+                        <input type="text" id="drugSearchInput" placeholder="🔍 ค้นหาสินค้า..." 
                             class="flex-1 text-xs px-2 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-400"
                             onkeypress="if(event.key==='Enter') searchDrugManual()">
-                        <button onclick="searchDrugManual()" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs rounded-lg">
+                        <button onclick="searchDrugManual()" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs rounded-lg">
                             <i class="fas fa-search"></i>
                         </button>
                     </div>
@@ -2555,7 +2567,6 @@ function updateSymptomWidget(data) {
             `;
         }
         
-        // Fade in animation - Requirements: 4.6
         content.style.opacity = '1';
     }, 150);
 }
