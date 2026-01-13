@@ -149,7 +149,7 @@ class GeminiChat
     private function devLog($source, $message, $data = [])
     {
         try {
-            $stmt = $this->db->prepare("INSERT INTO dev_logs (level, source, message, data) VALUES ('debug', ?, ?, ?)");
+            $stmt = $this->db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('debug', ?, ?, ?, NOW())");
             $stmt->execute([$source, $message, json_encode($data, JSON_UNESCAPED_UNICODE)]);
         } catch (Exception $e) {
             error_log("devLog error: " . $e->getMessage());

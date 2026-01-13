@@ -951,14 +951,78 @@ try {
             
             $userId = (int)($_GET['user_id'] ?? 0);
             $symptoms = $_GET['symptoms'] ?? '';
+            $type = $_GET['type'] ?? '';
             $limit = (int)($_GET['limit'] ?? 5);
             
             if (!$userId) {
                 sendError('User ID is required');
             }
             
-            if (empty($symptoms)) {
-                sendError('Symptoms are required');
+            // If type=context, get popular/recent drugs from business_items instead of requiring symptoms
+            if ($type === 'context' || empty($symptoms)) {
+                // Return popular drugs from business_items table
+                try {
+                    $sql = "
+                        SELECT bi.id, bi.name, bi.sku, bi.price, bi.sale_price, 
+                               bi.stock, bi.description, bi.image_url,
+                               ic.name as category
+                        FROM business_items bi
+                        LEFT JOIN item_categories ic ON bi.category_id = ic.id
+                        WHERE bi.is_active = 1 
+                        AND bi.stock > 0
+                    ";
+                    
+                    if ($lineAccountId) {
+                        $sql .= " AND (bi.line_account_id = ? OR bi.line_account_id IS NULL)";
+                    }
+                    
+                    $sql .= " ORDER BY bi.stock DESC, bi.name ASC LIMIT ?";
+                    
+                    $stmt = $db->prepare($sql);
+                    if ($lineAccountId) {
+                        $stmt->execute([$lineAccountId, $limit]);
+                    } else {
+                        $stmt->execute([$limit]);
+                    }
+                    
+                    $drugs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    $recommendations = [];
+                    foreach ($drugs as $drug) {
+                        $recommendations[] = [
+                            'id' => (int)$drug['id'],
+                            'drugId' => (int)$drug['id'],
+                            'name' => $drug['name'],
+                            'sku' => $drug['sku'],
+                            'price' => (float)($drug['sale_price'] ?? $drug['price'] ?? 0),
+                            'originalPrice' => (float)($drug['price'] ?? 0),
+                            'stock' => (int)($drug['stock'] ?? 0),
+                            'category' => $drug['category'] ?? 'ยาทั่วไป',
+                            'description' => $drug['description'],
+                            'imageUrl' => $drug['image_url']
+                        ];
+                    }
+                    
+                    sendResponse([
+                        'success' => true,
+                        'data' => [
+                            'recommendations' => $recommendations,
+                            'type' => 'popular',
+                            'userId' => $userId
+                        ]
+                    ]);
+                } catch (PDOException $e) {
+                    sendResponse([
+                        'success' => true,
+                        'data' => [
+                            'recommendations' => [],
+                            'type' => 'popular',
+                            'userId' => $userId,
+                            'error' => $e->getMessage()
+                        ]
+                    ]);
+                }
+                break;
             }
             
             // Parse symptoms (comma-separated or JSON array)

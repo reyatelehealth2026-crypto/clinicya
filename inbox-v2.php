@@ -1447,6 +1447,20 @@ function formatThaiDateTime($datetime) {
                 </div>
             </div>
             
+            <!-- Drug Recommendations Widget - Requirements: 7.1 -->
+            <div class="hud-widget" id="drugRecommendationsWidget" data-widget="drug-recommendations">
+                <div class="hud-widget-header" onclick="toggleWidget('drugRecommendationsWidget')">
+                    <h4><i class="fas fa-prescription-bottle-alt text-teal-500"></i> แนะนำยา</h4>
+                    <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+                </div>
+                <div class="hud-widget-body widget-content">
+                    <div class="text-center text-gray-400 text-xs py-4">
+                        <i class="fas fa-pills text-2xl mb-2"></i>
+                        <p>กำลังโหลดยาแนะนำ...</p>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Customer Profile Widget -->
             <div class="hud-widget" id="customerProfileWidget" data-widget="health-profile">
                 <div class="hud-widget-header" onclick="toggleWidget('customerProfileWidget')">
