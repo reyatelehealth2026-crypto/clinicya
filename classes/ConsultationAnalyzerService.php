@@ -851,11 +851,32 @@ class ConsultationAnalyzerService
     private function checkForDrugNames(string $message, int $userId): array
     {
         $widgets = [];
+        $messageLower = mb_strtolower($message);
         
         try {
-            // Get drug names from database
+            // First, search for drugs that match words in the message
+            $matchedDrugs = $this->searchDrugsFromMessage($message);
+            
+            if (!empty($matchedDrugs)) {
+                // Build symptom widget with matched drugs as recommendations
+                $widgets[] = [
+                    'type' => 'symptom',
+                    'title' => 'แนะนำยาจากข้อความ',
+                    'titleEn' => 'Drug Recommendations',
+                    'icon' => '💊',
+                    'keyword' => 'ค้นหาจากข้อความ',
+                    'category' => 'search',
+                    'recommendations' => $matchedDrugs,
+                    'actions' => [
+                        ['label' => 'ดูรายละเอียด', 'action' => 'view_recommendations'],
+                        ['label' => 'ตรวจสอบยาตีกัน', 'action' => 'check_interactions']
+                    ]
+                ];
+            }
+            
+            // Also check for exact drug name matches
             $stmt = $this->db->prepare("
-                SELECT id, name, sku, price, stock
+                SELECT id, name, sku, price, sale_price, stock, description
                 FROM business_items 
                 WHERE is_active = 1 
                 AND (line_account_id = ? OR line_account_id IS NULL)
@@ -864,22 +885,29 @@ class ConsultationAnalyzerService
             $stmt->execute([$this->lineAccountId]);
             $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
-            $messageLower = mb_strtolower($message);
-            
             foreach ($products as $product) {
                 $nameLower = mb_strtolower($product['name']);
+                // Check if product name (at least 3 chars) appears in message
                 if (mb_strlen($nameLower) >= 3 && mb_strpos($messageLower, $nameLower) !== false) {
                     $widgets[] = [
                         'type' => 'drug_info',
                         'title' => 'ข้อมูลยา: ' . $product['name'],
                         'titleEn' => 'Drug Info: ' . $product['name'],
                         'icon' => '💊',
-                        'drugId' => $product['id'],
+                        'drugId' => (int)$product['id'],
                         'drugName' => $product['name'],
                         'sku' => $product['sku'],
-                        'price' => (float)$product['price'],
-                        'stock' => (int)$product['stock'],
+                        'price' => (float)($product['sale_price'] ?? $product['price'] ?? 0),
+                        'stock' => (int)($product['stock'] ?? 0),
                         'inStock' => ($product['stock'] ?? 0) > 0,
+                        'drug' => [
+                            'id' => (int)$product['id'],
+                            'name' => $product['name'],
+                            'sku' => $product['sku'],
+                            'price' => (float)($product['sale_price'] ?? $product['price'] ?? 0),
+                            'stock' => (int)($product['stock'] ?? 0),
+                            'description' => $product['description']
+                        ],
                         'actions' => [
                             ['label' => 'ดูรายละเอียด', 'action' => 'view_drug_info'],
                             ['label' => 'ตรวจสอบยาตีกัน', 'action' => 'check_interactions']
@@ -887,7 +915,7 @@ class ConsultationAnalyzerService
                     ];
                     
                     // Limit to 2 drug widgets
-                    if (count($widgets) >= 2) {
+                    if (count($widgets) >= 3) {
                         break;
                     }
                 }
@@ -897,6 +925,120 @@ class ConsultationAnalyzerService
         }
         
         return $widgets;
+    }
+    
+    /**
+     * Search drugs from message text
+     * Extracts keywords and searches in business_items
+     * @param string $message Customer message
+     * @return array Matched drugs with full data
+     */
+    private function searchDrugsFromMessage(string $message): array
+    {
+        $drugs = [];
+        $messageLower = mb_strtolower($message);
+        
+        // Common drug-related keywords to search for
+        $searchTerms = [];
+        
+        // Extract potential drug names (words with 3+ characters)
+        $words = preg_split('/[\s,.\-\/]+/u', $message);
+        foreach ($words as $word) {
+            $word = trim($word);
+            if (mb_strlen($word) >= 3) {
+                $searchTerms[] = $word;
+            }
+        }
+        
+        // Add common drug ingredient keywords if found in message
+        $ingredientKeywords = [
+            'paracetamol', 'พาราเซตามอล', 'ibuprofen', 'ไอบูโพรเฟน',
+            'aspirin', 'แอสไพริน', 'amoxicillin', 'อะม็อกซีซิลลิน',
+            'vitamin', 'วิตามิน', 'antibiotic', 'ยาปฏิชีวนะ',
+            'antacid', 'ยาลดกรด', 'antihistamine', 'ยาแก้แพ้',
+            'cough', 'แก้ไอ', 'cold', 'หวัด', 'flu', 'ไข้หวัด',
+            'pain', 'แก้ปวด', 'fever', 'ลดไข้',
+            'diarrhea', 'ท้องเสีย', 'constipation', 'ท้องผูก',
+            'allergy', 'แพ้', 'skin', 'ผิวหนัง', 'cream', 'ครีม',
+            'eye', 'ตา', 'ear', 'หู', 'nose', 'จมูก',
+            'stomach', 'กระเพาะ', 'headache', 'ปวดหัว',
+            'muscle', 'กล้ามเนื้อ', 'joint', 'ข้อ',
+            'sleep', 'นอนหลับ', 'anxiety', 'วิตกกังวล'
+        ];
+        
+        foreach ($ingredientKeywords as $keyword) {
+            if (mb_stripos($messageLower, mb_strtolower($keyword)) !== false) {
+                $searchTerms[] = $keyword;
+            }
+        }
+        
+        $searchTerms = array_unique($searchTerms);
+        
+        if (empty($searchTerms)) {
+            return [];
+        }
+        
+        try {
+            // Build search query
+            $conditions = [];
+            $params = [];
+            
+            foreach ($searchTerms as $term) {
+                $conditions[] = "(LOWER(bi.name) LIKE ? OR LOWER(bi.description) LIKE ? OR LOWER(bi.sku) LIKE ?)";
+                $termPattern = '%' . mb_strtolower($term) . '%';
+                $params[] = $termPattern;
+                $params[] = $termPattern;
+                $params[] = $termPattern;
+            }
+            
+            $sql = "
+                SELECT bi.id, bi.name, bi.sku, bi.price, bi.sale_price, 
+                       bi.stock, bi.description, bi.image_url, bi.cost_price,
+                       ic.name as category
+                FROM business_items bi
+                LEFT JOIN item_categories ic ON bi.category_id = ic.id
+                WHERE bi.is_active = 1 
+                AND bi.stock > 0
+                AND (" . implode(' OR ', $conditions) . ")
+            ";
+            
+            if ($this->lineAccountId) {
+                $sql .= " AND (bi.line_account_id = ? OR bi.line_account_id IS NULL)";
+                $params[] = $this->lineAccountId;
+            }
+            
+            $sql .= " ORDER BY bi.stock DESC, bi.name ASC LIMIT 5";
+            
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            foreach ($results as $drug) {
+                $price = (float)($drug['sale_price'] ?? $drug['price'] ?? 0);
+                $cost = (float)($drug['cost_price'] ?? 0);
+                $margin = $cost > 0 ? round((($price - $cost) / $price) * 100, 1) : null;
+                
+                $drugs[] = [
+                    'id' => (int)$drug['id'],
+                    'drugId' => (int)$drug['id'],
+                    'name' => $drug['name'],
+                    'sku' => $drug['sku'],
+                    'price' => $price,
+                    'originalPrice' => (float)($drug['price'] ?? 0),
+                    'costPrice' => $cost,
+                    'margin' => $margin,
+                    'stock' => (int)($drug['stock'] ?? 0),
+                    'category' => $drug['category'] ?? 'ยาทั่วไป',
+                    'dosage' => $drug['description'] ?? '',
+                    'imageUrl' => $drug['image_url']
+                ];
+            }
+            
+        } catch (PDOException $e) {
+            error_log("ConsultationAnalyzer searchDrugsFromMessage error: " . $e->getMessage());
+        }
+        
+        return $drugs;
     }
     
     /**

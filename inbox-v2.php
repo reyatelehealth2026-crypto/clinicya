@@ -2627,9 +2627,9 @@ async function selectDrugForInfo(drugId, drugName) {
         if (result.success && result.data) {
             updateDrugInfoWidget({ drug: result.data });
             
-            // Also update pricing widget
-            if (result.data.pricing) {
-                updatePricingWidget({ pricing: result.data.pricing });
+            // Also fetch and update pricing widget
+            if (drugId) {
+                await loadDrugPricing(drugId);
             }
             
             // Expand drug info widget if collapsed
@@ -2637,10 +2637,40 @@ async function selectDrugForInfo(drugId, drugName) {
             if (drugWidget && drugWidget.classList.contains('collapsed')) {
                 toggleWidget('drugInfoWidget');
             }
+            
+            // Expand pricing widget if collapsed
+            const pricingWidget = document.getElementById('pricingWidget');
+            if (pricingWidget && pricingWidget.classList.contains('collapsed')) {
+                toggleWidget('pricingWidget');
+            }
         }
     } catch (error) {
         console.error('Select drug error:', error);
         showNotification('ไม่สามารถโหลดข้อมูลยาได้', 'error');
+    }
+}
+
+/**
+ * Load drug pricing and update widget
+ * @param {number} drugId Drug ID
+ */
+async function loadDrugPricing(drugId) {
+    if (!drugId) return;
+    
+    try {
+        const params = new URLSearchParams({
+            action: 'drug_pricing',
+            id: drugId
+        });
+        
+        const response = await fetch(`api/inbox-v2.php?${params.toString()}`);
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            updatePricingWidget({ pricing: result.data });
+        }
+    } catch (error) {
+        console.error('Load pricing error:', error);
     }
 }
 
