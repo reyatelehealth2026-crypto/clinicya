@@ -594,20 +594,136 @@ class ConsultationAnalyzerService
     /**
      * Get symptom recommendations
      * @param string $category Symptom category
-     * @return array Recommendations
+     * @return array Recommendations with full drug data from business_items
      */
     private function getSymptomRecommendations(string $category): array
     {
-        $categoryDrugs = [
-            'pain' => ['พาราเซตามอล', 'ไอบูโพรเฟน'],
-            'fever' => ['พาราเซตามอล', 'ไอบูโพรเฟน'],
-            'respiratory' => ['ยาแก้ไอ', 'ยาลดน้ำมูก'],
-            'digestive' => ['ยาธาตุน้ำขาว', 'ยาแก้ท้องเสีย'],
-            'skin' => ['ยาแก้แพ้', 'ครีมทาผื่น'],
-            'general' => ['พาราเซตามอล', 'วิตามินซี']
+        // Map category to search keywords
+        $categoryKeywords = [
+            'pain' => ['paracetamol', 'ibuprofen', 'พาราเซตามอล', 'ไอบูโพรเฟน', 'แก้ปวด'],
+            'fever' => ['paracetamol', 'พาราเซตามอล', 'ลดไข้'],
+            'respiratory' => ['แก้ไอ', 'ลดน้ำมูก', 'cough', 'cold'],
+            'digestive' => ['ธาตุน้ำขาว', 'แก้ท้องเสีย', 'antacid'],
+            'skin' => ['แก้แพ้', 'antihistamine', 'calamine'],
+            'general' => ['paracetamol', 'vitamin', 'พาราเซตามอล', 'วิตามิน']
         ];
         
-        return $categoryDrugs[$category] ?? $categoryDrugs['general'];
+        $keywords = $categoryKeywords[$category] ?? $categoryKeywords['general'];
+        
+        try {
+            // Build search conditions
+            $conditions = [];
+            $params = [];
+            foreach ($keywords as $keyword) {
+                $conditions[] = "(bi.name LIKE ? OR bi.description LIKE ?)";
+                $params[] = "%{$keyword}%";
+                $params[] = "%{$keyword}%";
+            }
+            
+            $sql = "
+                SELECT bi.id, bi.name, bi.sku, bi.price, bi.sale_price, 
+                       bi.stock, bi.description, bi.image_url,
+                       ic.name as category
+                FROM business_items bi
+                LEFT JOIN item_categories ic ON bi.category_id = ic.id
+                WHERE bi.is_active = 1 
+                AND bi.stock > 0
+                AND (" . implode(' OR ', $conditions) . ")
+            ";
+            
+            if ($this->lineAccountId) {
+                $sql .= " AND (bi.line_account_id = ? OR bi.line_account_id IS NULL)";
+                $params[] = $this->lineAccountId;
+            }
+            
+            $sql .= " ORDER BY bi.stock DESC LIMIT 5";
+            
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            $drugs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $recommendations = [];
+            foreach ($drugs as $drug) {
+                $recommendations[] = [
+                    'id' => (int)$drug['id'],
+                    'drugId' => (int)$drug['id'],
+                    'name' => $drug['name'],
+                    'sku' => $drug['sku'],
+                    'price' => (float)($drug['sale_price'] ?? $drug['price'] ?? 0),
+                    'originalPrice' => (float)($drug['price'] ?? 0),
+                    'stock' => (int)($drug['stock'] ?? 0),
+                    'category' => $drug['category'] ?? 'ยาทั่วไป',
+                    'dosage' => $drug['description'] ?? ''
+                ];
+            }
+            
+            // If no drugs found, return fallback with popular items
+            if (empty($recommendations)) {
+                return $this->getPopularDrugs(3);
+            }
+            
+            return $recommendations;
+            
+        } catch (PDOException $e) {
+            error_log("ConsultationAnalyzer getSymptomRecommendations error: " . $e->getMessage());
+            return $this->getPopularDrugs(3);
+        }
+    }
+    
+    /**
+     * Get popular drugs as fallback
+     * @param int $limit Number of drugs to return
+     * @return array Popular drugs
+     */
+    private function getPopularDrugs(int $limit = 5): array
+    {
+        try {
+            $sql = "
+                SELECT bi.id, bi.name, bi.sku, bi.price, bi.sale_price, 
+                       bi.stock, bi.description, bi.image_url,
+                       ic.name as category
+                FROM business_items bi
+                LEFT JOIN item_categories ic ON bi.category_id = ic.id
+                WHERE bi.is_active = 1 
+                AND bi.stock > 0
+            ";
+            
+            if ($this->lineAccountId) {
+                $sql .= " AND (bi.line_account_id = ? OR bi.line_account_id IS NULL)";
+            }
+            
+            $sql .= " ORDER BY bi.stock DESC, bi.name ASC LIMIT ?";
+            
+            $stmt = $this->db->prepare($sql);
+            if ($this->lineAccountId) {
+                $stmt->execute([$this->lineAccountId, $limit]);
+            } else {
+                $stmt->execute([$limit]);
+            }
+            
+            $drugs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            $recommendations = [];
+            foreach ($drugs as $drug) {
+                $recommendations[] = [
+                    'id' => (int)$drug['id'],
+                    'drugId' => (int)$drug['id'],
+                    'name' => $drug['name'],
+                    'sku' => $drug['sku'],
+                    'price' => (float)($drug['sale_price'] ?? $drug['price'] ?? 0),
+                    'originalPrice' => (float)($drug['price'] ?? 0),
+                    'stock' => (int)($drug['stock'] ?? 0),
+                    'category' => $drug['category'] ?? 'ยาทั่วไป',
+                    'dosage' => $drug['description'] ?? ''
+                ];
+            }
+            
+            return $recommendations;
+            
+        } catch (PDOException $e) {
+            error_log("ConsultationAnalyzer getPopularDrugs error: " . $e->getMessage());
+            return [];
+        }
     }
     
     /**
