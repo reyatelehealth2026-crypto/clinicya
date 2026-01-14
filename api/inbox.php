@@ -45,7 +45,14 @@ try {
 }
 
 $method = $_SERVER['REQUEST_METHOD'];
-$action = $_POST['action'] ?? $_GET['action'] ?? '';
+
+// Parse JSON input for POST requests
+$jsonInput = null;
+if ($method === 'POST' && strpos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false) {
+    $jsonInput = json_decode(file_get_contents('php://input'), true);
+}
+
+$action = $jsonInput['action'] ?? $_POST['action'] ?? $_GET['action'] ?? '';
 
 // Get LINE account ID from session or request
 $lineAccountId = $_SESSION['current_bot_id'] ?? $_SESSION['line_account_id'] ?? $_GET['line_account_id'] ?? $_POST['line_account_id'] ?? 1;
@@ -194,15 +201,17 @@ try {
                 throw new Exception('Method not allowed', 405);
             }
             
-            $name = $_POST['name'] ?? '';
-            $content = $_POST['content'] ?? '';
-            $category = $_POST['category'] ?? '';
+            $input = $jsonInput ?? $_POST;
+            $name = $input['name'] ?? '';
+            $content = $input['content'] ?? '';
+            $category = $input['category'] ?? '';
+            $quickReply = $input['quick_reply'] ?? null;
             
             if (empty($name) || empty($content)) {
                 throw new Exception('Template name and content are required');
             }
             
-            $templateId = $templateService->createTemplate($name, $content, $category, $adminId);
+            $templateId = $templateService->createTemplate($name, $content, $category, $adminId, $quickReply);
             
             echo json_encode([
                 'success' => true,
@@ -216,15 +225,17 @@ try {
                 throw new Exception('Method not allowed', 405);
             }
             
-            $templateId = (int)($_POST['id'] ?? 0);
+            $input = $jsonInput ?? $_POST;
+            $templateId = (int)($input['id'] ?? 0);
             if (!$templateId) {
                 throw new Exception('Template ID is required');
             }
             
             $data = [];
-            if (isset($_POST['name'])) $data['name'] = $_POST['name'];
-            if (isset($_POST['content'])) $data['content'] = $_POST['content'];
-            if (isset($_POST['category'])) $data['category'] = $_POST['category'];
+            if (isset($input['name'])) $data['name'] = $input['name'];
+            if (isset($input['content'])) $data['content'] = $input['content'];
+            if (isset($input['category'])) $data['category'] = $input['category'];
+            if (isset($input['quick_reply'])) $data['quick_reply'] = $input['quick_reply'];
             
             $success = $templateService->updateTemplate($templateId, $data);
             

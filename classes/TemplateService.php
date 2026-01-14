@@ -68,7 +68,7 @@ class TemplateService {
      * @param int|null $createdBy Admin user ID who created
      * @return int Template ID
      */
-    public function createTemplate(string $name, string $content, string $category = '', ?int $createdBy = null): int {
+    public function createTemplate(string $name, string $content, string $category = '', ?int $createdBy = null, ?string $quickReply = null): int {
         $name = trim($name);
         $content = trim($content);
         $category = trim($category);
@@ -83,15 +83,16 @@ class TemplateService {
         
         $stmt = $this->db->prepare("
             INSERT INTO quick_reply_templates 
-            (line_account_id, name, content, category, created_by)
-            VALUES (?, ?, ?, ?, ?)
+            (line_account_id, name, content, category, created_by, quick_reply)
+            VALUES (?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $this->lineAccountId,
             $name,
             $content,
             $category,
-            $createdBy
+            $createdBy,
+            $quickReply
         ]);
         
         return (int)$this->db->lastInsertId();
