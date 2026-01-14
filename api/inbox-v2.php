@@ -1851,6 +1851,14 @@ try {
                     $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 } catch (Exception $e) {}
                 
+                // Get all available tags for selector
+                $allTags = [];
+                try {
+                    $stmt = $db->prepare("SELECT id, name, color FROM user_tags WHERE line_account_id = ? OR line_account_id IS NULL ORDER BY name");
+                    $stmt->execute([$lineAccountId]);
+                    $allTags = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (Exception $e) {}
+                
                 // Get notes
                 $notes = [];
                 try {
@@ -1875,6 +1883,7 @@ try {
                         'tier' => $tier,
                         'stats' => $stats,
                         'tags' => $tags,
+                        'all_tags' => $allTags,
                         'notes' => $notes,
                         'transactions' => $transactions
                     ]
@@ -1985,6 +1994,93 @@ try {
                 ]);
             } catch (Exception $e) {
                 sendError('Failed to remove tag: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // POST /assign_tag - Assign existing tag to customer
+        // ============================================
+        case 'assign_tag':
+            if ($method !== 'POST') {
+                sendError('Method not allowed', 405);
+            }
+            
+            $userId = (int)($_POST['user_id'] ?? 0);
+            $tagId = (int)($_POST['tag_id'] ?? 0);
+            
+            if (!$userId || !$tagId) {
+                sendError('User ID and tag ID are required');
+            }
+            
+            try {
+                $stmt = $db->prepare("INSERT IGNORE INTO user_tag_assignments (user_id, tag_id, assigned_by, created_at) VALUES (?, ?, ?, NOW())");
+                $stmt->execute([$userId, $tagId, $adminId ?? 'Admin']);
+                
+                sendResponse([
+                    'success' => true,
+                    'message' => 'Tag assigned successfully'
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to assign tag: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // POST /update_customer_info - Update customer field
+        // ============================================
+        case 'update_customer_info':
+            if ($method !== 'POST') {
+                sendError('Method not allowed', 405);
+            }
+            
+            $userId = (int)($_POST['user_id'] ?? 0);
+            $field = $_POST['field'] ?? '';
+            $value = trim($_POST['value'] ?? '');
+            
+            // Whitelist allowed fields
+            $allowedFields = ['display_name', 'phone', 'address', 'email', 'real_name', 'birthday', 'province', 'postal_code'];
+            
+            if (!$userId || !in_array($field, $allowedFields)) {
+                sendError('Invalid user ID or field');
+            }
+            
+            try {
+                $stmt = $db->prepare("UPDATE users SET {$field} = ? WHERE id = ?");
+                $stmt->execute([$value ?: null, $userId]);
+                
+                sendResponse([
+                    'success' => true,
+                    'message' => 'Customer info updated successfully'
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to update customer info: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // POST /delete_customer_note - Delete a note
+        // ============================================
+        case 'delete_customer_note':
+            if ($method !== 'POST') {
+                sendError('Method not allowed', 405);
+            }
+            
+            $noteId = (int)($_POST['note_id'] ?? 0);
+            
+            if (!$noteId) {
+                sendError('Note ID is required');
+            }
+            
+            try {
+                $stmt = $db->prepare("DELETE FROM customer_notes WHERE id = ?");
+                $stmt->execute([$noteId]);
+                
+                sendResponse([
+                    'success' => true,
+                    'message' => 'Note deleted successfully'
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to delete note: ' . $e->getMessage());
             }
             break;
 

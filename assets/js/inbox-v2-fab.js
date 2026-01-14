@@ -11,7 +11,6 @@ const FAB = {
     isOpen: false,
     
     init() {
-        // Close FAB when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.fab-container') && this.isOpen) {
                 this.close();
@@ -20,17 +19,12 @@ const FAB = {
     },
     
     toggle() {
-        if (this.isOpen) {
-            this.close();
-        } else {
-            this.open();
-        }
+        this.isOpen ? this.close() : this.open();
     },
     
     open() {
         const btn = document.getElementById('fabMainBtn');
         const menu = document.getElementById('fabMenu');
-        
         if (btn && menu) {
             btn.classList.add('active');
             menu.classList.add('show');
@@ -41,7 +35,6 @@ const FAB = {
     close() {
         const btn = document.getElementById('fabMainBtn');
         const menu = document.getElementById('fabMenu');
-        
         if (btn && menu) {
             btn.classList.remove('active');
             menu.classList.remove('show');
@@ -49,42 +42,17 @@ const FAB = {
         }
     },
     
-    // Action handlers
     action(type) {
         this.close();
-        
-        switch(type) {
-            case 'order':
-                if (typeof openCreateOrderModal === 'function') {
-                    openCreateOrderModal();
-                }
-                break;
-            case 'payment':
-                if (typeof sendPaymentLink === 'function') {
-                    sendPaymentLink();
-                }
-                break;
-            case 'delivery':
-                if (typeof openScheduleDeliveryModal === 'function') {
-                    openScheduleDeliveryModal();
-                }
-                break;
-            case 'points':
-                if (typeof openUsePointsModal === 'function') {
-                    openUsePointsModal();
-                }
-                break;
-            case 'menu':
-                if (typeof sendRichMenu === 'function') {
-                    sendRichMenu();
-                }
-                break;
-            case 'image':
-                if (typeof toggleImageAnalysisMenu === 'function') {
-                    toggleImageAnalysisMenu();
-                }
-                break;
-        }
+        const actions = {
+            'order': () => typeof openCreateOrderModal === 'function' && openCreateOrderModal(),
+            'payment': () => typeof sendPaymentLink === 'function' && sendPaymentLink(),
+            'delivery': () => typeof openScheduleDeliveryModal === 'function' && openScheduleDeliveryModal(),
+            'points': () => typeof openUsePointsModal === 'function' && openUsePointsModal(),
+            'menu': () => typeof sendRichMenu === 'function' && sendRichMenu(),
+            'image': () => typeof toggleImageAnalysisMenu === 'function' && toggleImageAnalysisMenu()
+        };
+        actions[type] && actions[type]();
     }
 };
 
@@ -93,10 +61,11 @@ const FAB = {
 // ============================================
 
 const HUDMode = {
-    currentMode: 'ai', // 'ai' or 'crm'
+    currentMode: 'ai',
+    allTags: [],
+    userTags: [],
     
     init() {
-        // Load saved mode from localStorage
         const savedMode = localStorage.getItem('hudMode') || 'ai';
         this.switchMode(savedMode, false);
     },
@@ -105,12 +74,10 @@ const HUDMode = {
         this.currentMode = mode;
         localStorage.setItem('hudMode', mode);
         
-        // Update buttons
         document.querySelectorAll('.hud-mode-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.mode === mode);
         });
         
-        // Show/hide panels
         const aiPanel = document.getElementById('hudAIPanel');
         const crmPanel = document.getElementById('hudCRMPanel');
         
@@ -121,14 +88,15 @@ const HUDMode = {
             } else {
                 aiPanel.style.display = 'none';
                 crmPanel.style.display = 'block';
-                // Load CRM data if not loaded
                 this.loadCRMData();
             }
-            
-            if (animate) {
-                const activePanel = mode === 'ai' ? aiPanel : crmPanel;
-                activePanel.style.animation = 'fadeIn 0.3s ease';
-            }
+        }
+    },
+    
+    toggleSection(sectionId) {
+        const section = document.getElementById(sectionId);
+        if (section) {
+            section.classList.toggle('collapsed');
         }
     },
     
@@ -149,64 +117,236 @@ const HUDMode = {
     },
     
     renderCRMData(data) {
-        // Update member card
+        // Points
         const pointsDisplay = document.getElementById('crmPointsDisplay');
-        if (pointsDisplay) {
-            pointsDisplay.textContent = (data.points?.available_points || 0).toLocaleString();
-        }
+        if (pointsDisplay) pointsDisplay.textContent = (data.points?.available_points || 0).toLocaleString();
         
-        // Update tier
+        // Tier
         const tierBadge = document.getElementById('crmTierBadge');
-        if (tierBadge && data.tier) {
-            tierBadge.innerHTML = `${data.tier.icon} ${data.tier.name}`;
-        }
+        if (tierBadge && data.tier) tierBadge.innerHTML = `${data.tier.icon} ${data.tier.name}`;
         
-        // Update stats
+        // Stats
         if (data.stats) {
-            const orderCount = document.getElementById('crmOrderCount');
-            const totalSpent = document.getElementById('crmTotalSpent');
-            const msgCount = document.getElementById('crmMsgCount');
-            
-            if (orderCount) orderCount.textContent = (data.stats.order_count || 0).toLocaleString();
-            if (totalSpent) totalSpent.textContent = '฿' + (data.stats.total_spent || 0).toLocaleString();
-            if (msgCount) msgCount.textContent = (data.stats.message_count || 0).toLocaleString();
+            const el = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
+            el('crmOrderCount', (data.stats.order_count || 0).toLocaleString());
+            el('crmTotalSpent', '฿' + (data.stats.total_spent || 0).toLocaleString());
+            el('crmMsgCount', (data.stats.message_count || 0).toLocaleString());
         }
         
-        // Update customer info
+        // Customer info
         if (data.user) {
-            const fields = ['phone', 'email', 'birthday', 'address'];
-            fields.forEach(field => {
-                const el = document.getElementById(`crm_${field}`);
-                if (el) {
-                    el.textContent = data.user[field] || '-';
-                }
-            });
+            this.renderCustomerInfo(data.user);
         }
         
-        // Update tags
-        this.renderTags(data.tags || []);
+        // Tags
+        this.allTags = data.all_tags || [];
+        this.userTags = data.tags || [];
+        this.renderTags();
         
-        // Update notes
+        // Notes
         this.renderNotes(data.notes || []);
         
-        // Update transactions
+        // Transactions
         this.renderTransactions(data.transactions || []);
     },
     
-    renderTags(tags) {
+    renderCustomerInfo(user) {
+        const fields = [
+            { id: 'crm_display_name', field: 'display_name', label: 'ชื่อ' },
+            { id: 'crm_phone', field: 'phone', label: 'เบอร์โทร' },
+            { id: 'crm_address', field: 'address', label: 'ที่อยู่' }
+        ];
+        
+        fields.forEach(f => {
+            const el = document.getElementById(f.id);
+            if (el) el.textContent = user[f.field] || '-';
+        });
+    },
+    
+    editField(field, currentValue) {
+        const container = document.getElementById(`crm_${field}_container`);
+        if (!container) return;
+        
+        const label = container.querySelector('.label').textContent;
+        container.classList.add('editing');
+        container.innerHTML = `
+            <div class="label">${label}</div>
+            <input type="text" class="edit-input" id="edit_${field}" value="${escapeHtml(currentValue || '')}" placeholder="กรอก${label}...">
+            <div class="edit-actions">
+                <button class="cancel-btn" onclick="HUDMode.cancelEdit('${field}', '${escapeHtml(currentValue || '-')}', '${label}')">ยกเลิก</button>
+                <button class="save-btn" onclick="HUDMode.saveField('${field}')">บันทึก</button>
+            </div>
+        `;
+        document.getElementById(`edit_${field}`).focus();
+    },
+    
+    cancelEdit(field, value, label) {
+        const container = document.getElementById(`crm_${field}_container`);
+        if (!container) return;
+        
+        container.classList.remove('editing');
+        container.innerHTML = `
+            <div class="info-left">
+                <div class="label">${label}</div>
+                <div class="value" id="crm_${field}">${value}</div>
+            </div>
+            <button class="edit-btn" onclick="HUDMode.editField('${field}', '${escapeHtml(value === '-' ? '' : value)}')">
+                <i class="fas fa-pen"></i>
+            </button>
+        `;
+    },
+    
+    async saveField(field) {
+        const input = document.getElementById(`edit_${field}`);
+        const value = input?.value?.trim() || '';
+        const userId = window.ghostDraftState?.userId;
+        if (!userId) return;
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'update_customer_info');
+            formData.append('user_id', userId);
+            formData.append('field', field);
+            formData.append('value', value);
+            formData.append('line_account_id', window.currentBotId || 1);
+            
+            const response = await fetch('api/inbox-v2.php', { method: 'POST', body: formData });
+            const result = await response.json();
+            
+            if (result.success) {
+                this.loadCRMData();
+                showNotification && showNotification('✓ บันทึกสำเร็จ', 'success');
+            } else {
+                showNotification && showNotification('❌ ' + (result.error || 'เกิดข้อผิดพลาด'), 'error');
+            }
+        } catch (error) {
+            console.error('Save field error:', error);
+        }
+    },
+    
+    renderTags() {
         const container = document.getElementById('crmTagsContainer');
         if (!container) return;
         
-        let html = tags.map(tag => `
+        let html = this.userTags.map(tag => `
             <span class="tag-badge" style="background-color: ${tag.color || '#6B7280'}">
                 ${escapeHtml(tag.name)}
                 <span class="remove-tag" onclick="HUDMode.removeTag(${tag.id})">&times;</span>
             </span>
         `).join('');
         
-        html += `<button class="add-tag-btn" onclick="HUDMode.showAddTagModal()">+ เพิ่ม Tag</button>`;
+        html += `<button class="add-tag-btn" onclick="HUDMode.showTagSelector()">+ เพิ่ม Tag</button>`;
+        html += `<div id="tagSelectorContainer"></div>`;
         
         container.innerHTML = html;
+    },
+    
+    showTagSelector() {
+        const container = document.getElementById('tagSelectorContainer');
+        if (!container) return;
+        
+        // Filter out already assigned tags
+        const userTagIds = this.userTags.map(t => t.id);
+        const availableTags = this.allTags.filter(t => !userTagIds.includes(t.id));
+        
+        let html = `<div class="tag-selector">`;
+        
+        if (availableTags.length > 0) {
+            html += `<div class="tag-selector-title">เลือก Tag ที่มีอยู่</div>`;
+            html += `<div class="tag-selector-list">`;
+            availableTags.forEach(tag => {
+                html += `<span class="tag-selector-item" style="background-color: ${tag.color || '#6B7280'}; color: white;" onclick="HUDMode.addExistingTag(${tag.id})">${escapeHtml(tag.name)}</span>`;
+            });
+            html += `</div>`;
+        }
+        
+        html += `
+            <div class="tag-selector-new">
+                <input type="text" id="newTagInput" placeholder="หรือสร้าง Tag ใหม่..." onkeypress="if(event.key==='Enter')HUDMode.addNewTag()">
+                <button onclick="HUDMode.addNewTag()">เพิ่ม</button>
+            </div>
+        </div>`;
+        
+        container.innerHTML = html;
+    },
+    
+    hideTagSelector() {
+        const container = document.getElementById('tagSelectorContainer');
+        if (container) container.innerHTML = '';
+    },
+    
+    async addExistingTag(tagId) {
+        const userId = window.ghostDraftState?.userId;
+        if (!userId) return;
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'assign_tag');
+            formData.append('user_id', userId);
+            formData.append('tag_id', tagId);
+            formData.append('line_account_id', window.currentBotId || 1);
+            
+            const response = await fetch('api/inbox-v2.php', { method: 'POST', body: formData });
+            const result = await response.json();
+            
+            if (result.success) {
+                this.hideTagSelector();
+                this.loadCRMData();
+                showNotification && showNotification('✓ เพิ่ม Tag สำเร็จ', 'success');
+            }
+        } catch (error) {
+            console.error('Add tag error:', error);
+        }
+    },
+    
+    async addNewTag() {
+        const input = document.getElementById('newTagInput');
+        const tagName = input?.value?.trim();
+        if (!tagName) return;
+        
+        const userId = window.ghostDraftState?.userId;
+        if (!userId) return;
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'add_customer_tag');
+            formData.append('user_id', userId);
+            formData.append('tag_name', tagName);
+            formData.append('line_account_id', window.currentBotId || 1);
+            
+            const response = await fetch('api/inbox-v2.php', { method: 'POST', body: formData });
+            const result = await response.json();
+            
+            if (result.success) {
+                this.hideTagSelector();
+                this.loadCRMData();
+                showNotification && showNotification('✓ เพิ่ม Tag สำเร็จ', 'success');
+            }
+        } catch (error) {
+            console.error('Add new tag error:', error);
+        }
+    },
+    
+    async removeTag(tagId) {
+        const userId = window.ghostDraftState?.userId;
+        if (!userId) return;
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'remove_customer_tag');
+            formData.append('user_id', userId);
+            formData.append('tag_id', tagId);
+            formData.append('line_account_id', window.currentBotId || 1);
+            
+            const response = await fetch('api/inbox-v2.php', { method: 'POST', body: formData });
+            const result = await response.json();
+            
+            if (result.success) {
+                this.loadCRMData();
+            }
+        } catch (error) {
+            console.error('Remove tag error:', error);
+        }
     },
     
     renderNotes(notes) {
@@ -214,16 +354,72 @@ const HUDMode = {
         if (!container) return;
         
         if (notes.length === 0) {
-            container.innerHTML = '<p class="text-gray-400 text-xs text-center py-2">ยังไม่มีโน้ต</p>';
+            container.innerHTML = '<div class="notes-empty">ยังไม่มีโน้ต</div>';
             return;
         }
         
-        container.innerHTML = notes.slice(0, 5).map(note => `
+        container.innerHTML = notes.slice(0, 10).map(note => `
             <div class="note-item">
                 <div>${escapeHtml(note.content)}</div>
-                <div class="note-meta">${note.created_by || 'Admin'} • ${formatDate(note.created_at)}</div>
+                <div class="note-meta">
+                    <span>${note.created_by || 'Admin'} • ${formatDate(note.created_at)}</span>
+                    <span class="delete-note" onclick="HUDMode.deleteNote(${note.id})"><i class="fas fa-trash"></i></span>
+                </div>
             </div>
         `).join('');
+    },
+    
+    async addNote() {
+        const textarea = document.getElementById('crmNoteInput');
+        const content = textarea?.value?.trim();
+        if (!content) return;
+        
+        const userId = window.ghostDraftState?.userId;
+        if (!userId) return;
+        
+        const btn = document.querySelector('.add-note-btn');
+        if (btn) btn.disabled = true;
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'add_customer_note');
+            formData.append('user_id', userId);
+            formData.append('content', content);
+            formData.append('line_account_id', window.currentBotId || 1);
+            
+            const response = await fetch('api/inbox-v2.php', { method: 'POST', body: formData });
+            const result = await response.json();
+            
+            if (result.success) {
+                textarea.value = '';
+                this.loadCRMData();
+                showNotification && showNotification('✓ เพิ่มโน้ตสำเร็จ', 'success');
+            }
+        } catch (error) {
+            console.error('Add note error:', error);
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    },
+    
+    async deleteNote(noteId) {
+        if (!confirm('ต้องการลบโน้ตนี้?')) return;
+        
+        try {
+            const formData = new FormData();
+            formData.append('action', 'delete_customer_note');
+            formData.append('note_id', noteId);
+            formData.append('line_account_id', window.currentBotId || 1);
+            
+            const response = await fetch('api/inbox-v2.php', { method: 'POST', body: formData });
+            const result = await response.json();
+            
+            if (result.success) {
+                this.loadCRMData();
+            }
+        } catch (error) {
+            console.error('Delete note error:', error);
+        }
     },
     
     renderTransactions(transactions) {
@@ -231,7 +427,7 @@ const HUDMode = {
         if (!container) return;
         
         if (transactions.length === 0) {
-            container.innerHTML = '<p class="text-gray-400 text-xs text-center py-2">ยังไม่มีรายการ</p>';
+            container.innerHTML = '<div class="notes-empty">ยังไม่มีรายการ</div>';
             return;
         }
         
@@ -246,109 +442,9 @@ const HUDMode = {
         `).join('');
     },
     
-    async addNote() {
-        const textarea = document.getElementById('crmNoteInput');
-        const content = textarea?.value?.trim();
-        
-        if (!content) return;
-        
-        const userId = window.ghostDraftState?.userId;
-        if (!userId) return;
-        
-        try {
-            const formData = new FormData();
-            formData.append('action', 'add_customer_note');
-            formData.append('user_id', userId);
-            formData.append('content', content);
-            formData.append('line_account_id', window.currentBotId || 1);
-            
-            const response = await fetch('api/inbox-v2.php', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                textarea.value = '';
-                this.loadCRMData(); // Refresh
-                if (typeof showNotification === 'function') {
-                    showNotification('✓ เพิ่มโน้ตสำเร็จ', 'success');
-                }
-            }
-        } catch (error) {
-            console.error('Add note error:', error);
-        }
-    },
-    
-    async removeTag(tagId) {
-        const userId = window.ghostDraftState?.userId;
-        if (!userId || !confirm('ต้องการลบ Tag นี้?')) return;
-        
-        try {
-            const formData = new FormData();
-            formData.append('action', 'remove_customer_tag');
-            formData.append('user_id', userId);
-            formData.append('tag_id', tagId);
-            formData.append('line_account_id', window.currentBotId || 1);
-            
-            const response = await fetch('api/inbox-v2.php', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                this.loadCRMData(); // Refresh
-            }
-        } catch (error) {
-            console.error('Remove tag error:', error);
-        }
-    },
-    
-    showAddTagModal() {
-        // Simple prompt for now - can be enhanced with a proper modal
-        const tagName = prompt('ชื่อ Tag ใหม่:');
-        if (tagName) {
-            this.addTag(tagName);
-        }
-    },
-    
-    async addTag(tagName) {
-        const userId = window.ghostDraftState?.userId;
-        if (!userId) return;
-        
-        try {
-            const formData = new FormData();
-            formData.append('action', 'add_customer_tag');
-            formData.append('user_id', userId);
-            formData.append('tag_name', tagName);
-            formData.append('line_account_id', window.currentBotId || 1);
-            
-            const response = await fetch('api/inbox-v2.php', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                this.loadCRMData(); // Refresh
-                if (typeof showNotification === 'function') {
-                    showNotification('✓ เพิ่ม Tag สำเร็จ', 'success');
-                }
-            }
-        } catch (error) {
-            console.error('Add tag error:', error);
-        }
-    },
-    
     openUserDetail() {
         const userId = window.ghostDraftState?.userId;
-        if (userId) {
-            window.open(`user-detail.php?id=${userId}`, '_blank');
-        }
+        if (userId) window.open(`user-detail.php?id=${userId}`, '_blank');
     }
 };
 
@@ -366,7 +462,7 @@ function formatDate(dateStr) {
     return date.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-// Initialize on DOM ready
+// Initialize
 document.addEventListener('DOMContentLoaded', function() {
     FAB.init();
     HUDMode.init();
