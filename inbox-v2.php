@@ -1852,7 +1852,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Callback when conversation list updates
         onConversationUpdate: function(conversations) {
             console.log('[Inbox] onConversationUpdate called with', conversations.length, 'conversations');
-            updateConversationListUI(conversations);
+            // TEMPORARILY DISABLED - testing if this is the cause
+            // updateConversationListUI(conversations);
+            console.log('[Inbox] updateConversationListUI DISABLED for testing');
         },
         
         // Error callback
@@ -1861,9 +1863,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Start polling - TEMPORARILY DISABLED FOR DEBUGGING
-    // InboxRealtime.start();
-    console.log('[Inbox] Realtime polling DISABLED for debugging');
+    // Start polling - RE-ENABLED for testing
+    InboxRealtime.start();
+    console.log('[Inbox] Realtime polling ENABLED');
     
     // Stop polling when page is hidden, resume when visible
     document.addEventListener('visibilitychange', function() {
