@@ -34,21 +34,37 @@ try {
         throw new Exception('Invalid image data format');
     }
     
+    // บีบอัดเพิ่มถ้าไฟล์ยังใหญ่เกิน 400KB
+    $fileSize = strlen($imageContent);
+    if ($fileSize > 400000) {
+        $img = imagecreatefromstring($imageContent);
+        if ($img) {
+            ob_start();
+            imagejpeg($img, null, 65); // quality 65
+            $imageContent = ob_get_clean();
+            imagedestroy($img);
+            $imageType = 'jpeg';
+            error_log("Rich Menu API: compressed to " . round(strlen($imageContent) / 1024) . "KB");
+        }
+    }
+    
     $contentType = ($imageType === 'png') ? 'image/png' : 'image/jpeg';
     
-    // Upload directly to LINE API
+    // Upload directly to LINE API (bypass nginx)
     $url = 'https://api-data.line.me/v2/bot/richmenu/' . $richMenuId . '/content';
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Authorization: Bearer ' . $account['channel_access_token'],
-        'Content-Type: ' . $contentType
+        'Content-Type: ' . $contentType,
+        'Content-Length: ' . strlen($imageContent)
     ]);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $imageContent);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 90);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -56,6 +72,7 @@ try {
     curl_close($ch);
     
     if ($httpCode === 200) {
+        error_log("Rich Menu uploaded: " . round(strlen($imageContent) / 1024) . "KB");
         echo json_encode(['success' => true, 'message' => 'Upload successful']);
     } else {
         error_log("LINE Rich Menu Upload failed: HTTP {$httpCode}, error: {$error}, response: {$response}");

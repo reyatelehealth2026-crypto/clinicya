@@ -371,39 +371,71 @@ class LineAPI {
 
     /**
      * Upload Rich Menu Image
+     * ส่งตรงไป LINE API โดยไม่ผ่าน proxy
      */
     public function uploadRichMenuImage($richMenuId, $imagePath) {
         $url = 'https://api-data.line.me/v2/bot/richmenu/' . $richMenuId . '/content';
         
-        // Detect content type from file
-        $contentType = 'image/png';
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        if ($finfo) {
-            $mimeType = finfo_file($finfo, $imagePath);
-            finfo_close($finfo);
-            if ($mimeType === 'image/jpeg' || $mimeType === 'image/jpg') {
+        // อ่านไฟล์และบีบอัดถ้าจำเป็น
+        $imageData = file_get_contents($imagePath);
+        $fileSize = strlen($imageData);
+        
+        // ถ้าไฟล์ใหญ่เกิน 500KB ให้บีบอัดใหม่
+        if ($fileSize > 500000) {
+            $imageInfo = getimagesize($imagePath);
+            if ($imageInfo) {
+                $img = null;
+                switch ($imageInfo['mime']) {
+                    case 'image/jpeg':
+                    case 'image/jpg':
+                        $img = imagecreatefromjpeg($imagePath);
+                        break;
+                    case 'image/png':
+                        $img = imagecreatefrompng($imagePath);
+                        break;
+                }
+                
+                if ($img) {
+                    // บีบอัดเป็น JPEG quality 70
+                    ob_start();
+                    imagejpeg($img, null, 70);
+                    $imageData = ob_get_clean();
+                    imagedestroy($img);
+                    $contentType = 'image/jpeg';
+                    error_log("Rich Menu image compressed: " . round(strlen($imageData) / 1024) . "KB");
+                } else {
+                    $contentType = 'image/jpeg';
+                }
+            } else {
                 $contentType = 'image/jpeg';
             }
         } else {
-            // Fallback: check extension
-            $ext = strtolower(pathinfo($imagePath, PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg', 'jpeg'])) {
+            // ตรวจสอบ content type
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo) {
+                $mimeType = finfo_file($finfo, $imagePath);
+                finfo_close($finfo);
+                $contentType = ($mimeType === 'image/png') ? 'image/png' : 'image/jpeg';
+            } else {
                 $contentType = 'image/jpeg';
             }
         }
         
         $headers = [
             'Authorization: Bearer ' . $this->channelAccessToken,
-            'Content-Type: ' . $contentType
+            'Content-Type: ' . $contentType,
+            'Content-Length: ' . strlen($imageData)
         ];
 
+        // ใช้ CURL ส่งตรงไป LINE API
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, file_get_contents($imagePath));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $imageData);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 90);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -412,6 +444,8 @@ class LineAPI {
 
         if ($httpCode !== 200) {
             error_log("Rich Menu image upload failed: HTTP {$httpCode}, error: {$error}, response: {$response}");
+        } else {
+            error_log("Rich Menu image uploaded successfully: " . round(strlen($imageData) / 1024) . "KB");
         }
 
         return [
