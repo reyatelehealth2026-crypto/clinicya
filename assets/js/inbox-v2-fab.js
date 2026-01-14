@@ -64,13 +64,45 @@ const HUDMode = {
     currentMode: 'ai',
     allTags: [],
     userTags: [],
+    collapsedSections: {}, // Store collapsed state
     
     init() {
         const savedMode = localStorage.getItem('hudMode') || 'ai';
         this.switchMode(savedMode, false);
+        
+        // Load collapsed sections from localStorage
+        this.loadCollapsedSections();
     },
     
-    switchMode(mode, animate = true) {
+    // Load collapsed sections state from localStorage
+    loadCollapsedSections() {
+        try {
+            const saved = localStorage.getItem('hudCollapsedSections');
+            if (saved) {
+                this.collapsedSections = JSON.parse(saved);
+                // Apply saved state to sections
+                Object.keys(this.collapsedSections).forEach(sectionId => {
+                    const section = document.getElementById(sectionId);
+                    if (section && this.collapsedSections[sectionId]) {
+                        section.classList.add('collapsed');
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('Failed to load collapsed sections:', e);
+        }
+    },
+    
+    // Save collapsed sections state to localStorage
+    saveCollapsedSections() {
+        try {
+            localStorage.setItem('hudCollapsedSections', JSON.stringify(this.collapsedSections));
+        } catch (e) {
+            console.warn('Failed to save collapsed sections:', e);
+        }
+    },
+    
+    switchMode(mode) {
         this.currentMode = mode;
         localStorage.setItem('hudMode', mode);
         
@@ -97,6 +129,9 @@ const HUDMode = {
         const section = document.getElementById(sectionId);
         if (section) {
             section.classList.toggle('collapsed');
+            // Save state to localStorage
+            this.collapsedSections[sectionId] = section.classList.contains('collapsed');
+            this.saveCollapsedSections();
         }
     },
     

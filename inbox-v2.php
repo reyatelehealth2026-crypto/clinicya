@@ -692,31 +692,53 @@ function formatThaiDateTime($datetime) {
 <link rel="stylesheet" href="assets/css/inbox-v2-fab.css?v=<?= time() ?>">
 
 <style>
-:root { --primary: #10B981; --primary-dark: #059669; --vibe-purple: #8B5CF6; --vibe-purple-dark: #7C3AED; }
+:root { --primary: #06C755; --primary-dark: #05A847; --vibe-purple: #8B5CF6; --vibe-purple-dark: #7C3AED; }
 .chat-scroll::-webkit-scrollbar { width: 5px; }
-.chat-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 3px; }
-.chat-bubble { white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; max-width: 100%; }
-.chat-incoming { background: #F1F5F9; color: #1E293B; border-radius: 4px 12px 12px 12px; }
-.chat-outgoing { background: #10B981; color: white; border-radius: 12px 4px 12px 12px; }
-.user-item.active { background: linear-gradient(90deg, #D1FAE5 0%, #ECFDF5 100%); border-left: 3px solid var(--primary); }
+.chat-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+
+/* Chat Bubbles - LINE style, fit content */
+.chat-bubble { 
+    white-space: pre-wrap; 
+    word-wrap: break-word; 
+    line-height: 1.5; 
+    display: inline-block;
+    max-width: 100%;
+}
+.chat-incoming { 
+    background: white; 
+    color: #1F2937; 
+    border-radius: 4px 18px 18px 18px; 
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.chat-outgoing { 
+    background: #06C755; 
+    color: white; 
+    border-radius: 18px 4px 18px 18px; 
+}
+
+/* User list */
+.user-item.active { background: #E8F5E9; border-left: 3px solid #06C755; }
 .user-item:hover { background: #F0FDF4; }
-.user-item.sla-warning { border-left: 3px solid #F97316; background: linear-gradient(90deg, #FFF7ED 0%, #FFFFFF 100%); }
+.user-item.sla-warning { border-left: 3px solid #F97316; background: #FFF7ED; }
 .tag-badge { font-size: 0.6rem; padding: 2px 6px; border-radius: 9999px; font-weight: 500; }
-#chatBox { background: #FFFFFF; }
+
+/* Chat area background - clean gray like LINE */
+#chatBox { background: #8B9DC3; }
+.chat-area-wrapper { background: #8B9DC3; }
 
 /* V2 Vibe Selling OS Styles */
-.vibe-header { background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 50%, #10B981 100%); }
-.vibe-badge { background: linear-gradient(135deg, #8B5CF6, #6366F1); color: white; font-size: 9px; padding: 2px 6px; border-radius: 4px; }
+.vibe-header { background: #06C755; }
+.vibe-badge { background: #06C755; color: white; font-size: 9px; padding: 2px 6px; border-radius: 4px; }
 
-/* HUD Dashboard Styles - Requirements: 4.1-4.6 */
+/* HUD Dashboard Styles - Clean solid colors */
 .hud-dashboard {
     position: fixed;
     top: 0;
     right: 0;
     width: 320px;
     height: 100vh;
-    background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
-    border-left: 1px solid #E2E8F0;
+    background: #F5F5F5;
+    border-left: 1px solid #E0E0E0;
     overflow-y: auto;
     z-index: 40;
     transition: transform 0.3s ease, width 0.3s ease;
@@ -731,23 +753,23 @@ function formatThaiDateTime($datetime) {
 /* HUD Widget Base Styles */
 .hud-widget {
     background: white;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    margin: 12px;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    margin: 10px;
     overflow: hidden;
-    transition: all 0.3s ease;
-    animation: widgetFadeIn 0.3s ease;
+    transition: all 0.2s ease;
 }
 .hud-widget:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 .hud-widget-header {
     padding: 10px 12px;
-    border-bottom: 1px solid #F1F5F9;
+    border-bottom: 1px solid #EEEEEE;
     display: flex;
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
+    background: #FAFAFA;
 }
 .hud-widget-header h4 {
     font-size: 12px;
