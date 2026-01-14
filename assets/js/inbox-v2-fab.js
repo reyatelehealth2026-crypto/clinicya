@@ -61,13 +61,14 @@ const FAB = {
 // ============================================
 
 const HUDMode = {
-    currentMode: 'ai',
+    currentMode: 'crm',
     allTags: [],
     userTags: [],
     collapsedSections: {}, // Store collapsed state
     
     init() {
-        const savedMode = localStorage.getItem('hudMode') || 'ai';
+        // Default to 'crm' for first time users
+        const savedMode = localStorage.getItem('hudMode') || 'crm';
         this.switchMode(savedMode, false);
         
         // Load collapsed sections from localStorage
@@ -110,29 +111,23 @@ const HUDMode = {
             btn.classList.toggle('active', btn.dataset.mode === mode);
         });
         
-        const aiPanel = document.getElementById('hudAIPanel');
         const crmPanel = document.getElementById('hudCRMPanel');
-        const quickReplyPanel = document.getElementById('hudQuickReplyPanel');
+        const aiPanel = document.getElementById('hudAIPanel');
         const templatesPanel = document.getElementById('hudTemplatesPanel');
         
         // Hide all panels
-        if (aiPanel) aiPanel.style.display = 'none';
         if (crmPanel) crmPanel.style.display = 'none';
-        if (quickReplyPanel) quickReplyPanel.style.display = 'none';
+        if (aiPanel) aiPanel.style.display = 'none';
         if (templatesPanel) templatesPanel.style.display = 'none';
         
         // Show selected panel
         switch (mode) {
-            case 'ai':
-                if (aiPanel) aiPanel.style.display = 'block';
-                break;
             case 'crm':
                 if (crmPanel) crmPanel.style.display = 'block';
                 this.loadCRMData();
                 break;
-            case 'quickreply':
-                if (quickReplyPanel) quickReplyPanel.style.display = 'block';
-                this.loadQuickReplies();
+            case 'ai':
+                if (aiPanel) aiPanel.style.display = 'block';
                 break;
             case 'templates':
                 if (templatesPanel) templatesPanel.style.display = 'block';
@@ -141,101 +136,30 @@ const HUDMode = {
         }
     },
     
-    // Quick Reply functions
-    quickReplies: [],
-    filteredQuickReplies: [],
+    // Templates functions (combined Quick Reply + Templates)
+    templates: [],
+    filteredTemplates: [],
+    templatesLoaded: false,
     
-    async loadQuickReplies() {
-        const listContainer = document.getElementById('quickReplyList');
-        if (!listContainer) return;
-        
-        listContainer.innerHTML = '<div class="text-center text-gray-400 text-sm py-4"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</div>';
-        
-        try {
-            const response = await fetch(`api/inbox.php?action=get_templates`);
-            const data = await response.json();
-            
-            if (data.success && data.data) {
-                this.quickReplies = data.data;
-                this.filteredQuickReplies = [...this.quickReplies];
-                this.renderQuickReplies();
-            } else {
-                listContainer.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">ไม่พบ Quick Reply</div>';
-            }
-        } catch (error) {
-            console.error('Error loading quick replies:', error);
-            listContainer.innerHTML = '<div class="text-center text-red-400 text-sm py-4">เกิดข้อผิดพลาด</div>';
-        }
-    },
-    
-    searchQuickReply(query) {
-        const q = query.toLowerCase().trim();
-        if (!q) {
-            this.filteredQuickReplies = [...this.quickReplies];
-        } else {
-            this.filteredQuickReplies = this.quickReplies.filter(t => 
-                t.name.toLowerCase().includes(q) || 
-                t.content.toLowerCase().includes(q)
-            );
-        }
-        this.renderQuickReplies();
-    },
-    
-    renderQuickReplies() {
-        const listContainer = document.getElementById('quickReplyList');
-        if (!listContainer) return;
-        
-        if (this.filteredQuickReplies.length === 0) {
-            listContainer.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">ไม่พบ Quick Reply</div>';
+    async loadTemplates() {
+        if (this.templatesLoaded && this.templates.length > 0) {
+            this.renderTemplates();
             return;
         }
         
-        listContainer.innerHTML = this.filteredQuickReplies.map(t => `
-            <div class="quick-reply-item bg-white border rounded-lg p-3 cursor-pointer hover:bg-gray-50 hover:border-teal-300 transition" onclick="HUDMode.useQuickReply(${t.id})">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">${escapeHtml(t.shortcut || '#')}</span>
-                    <span class="text-sm font-medium text-gray-800 truncate">${escapeHtml(t.name)}</span>
-                </div>
-                <p class="text-xs text-gray-500 line-clamp-2">${escapeHtml(t.content.substring(0, 80))}${t.content.length > 80 ? '...' : ''}</p>
-            </div>
-        `).join('');
-    },
-    
-    useQuickReply(id) {
-        const template = this.quickReplies.find(t => t.id === id);
-        if (!template) return;
-        
-        const messageInput = document.getElementById('messageInput');
-        if (messageInput) {
-            // Replace placeholders
-            let content = template.content;
-            const userName = window.ghostDraftState?.userName || 'ลูกค้า';
-            content = content.replace(/\{name\}/g, userName);
-            content = content.replace(/\{ชื่อ\}/g, userName);
-            
-            messageInput.value = content;
-            messageInput.focus();
-            messageInput.dispatchEvent(new Event('input'));
-        }
-    },
-    
-    // Templates functions
-    templates: [],
-    filteredTemplates: [],
-    
-    async loadTemplates() {
         const listContainer = document.getElementById('templateList');
         if (!listContainer) return;
         
         listContainer.innerHTML = '<div class="text-center text-gray-400 text-sm py-4"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</div>';
         
         try {
-            const response = await fetch(`api/inbox.php?action=get_templates`);
+            const response = await fetch('api/inbox.php?action=get_templates');
             const data = await response.json();
             
             if (data.success && data.data) {
                 this.templates = data.data;
                 this.filteredTemplates = [...this.templates];
+                this.templatesLoaded = true;
                 this.renderTemplates();
             } else {
                 listContainer.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">ไม่พบเทมเพลต</div>';
@@ -254,7 +178,8 @@ const HUDMode = {
             this.filteredTemplates = this.templates.filter(t => 
                 t.name.toLowerCase().includes(q) || 
                 t.content.toLowerCase().includes(q) ||
-                (t.category && t.category.toLowerCase().includes(q))
+                (t.category && t.category.toLowerCase().includes(q)) ||
+                (t.shortcut && t.shortcut.toLowerCase().includes(q))
             );
         }
         this.renderTemplates();
@@ -283,7 +208,10 @@ const HUDMode = {
                 <div class="text-xs font-medium text-gray-500 mb-2 px-1">${escapeHtml(category)}</div>
                 ${items.map(t => `
                     <div class="template-item bg-white border rounded-lg p-3 mb-2 cursor-pointer hover:bg-gray-50 hover:border-teal-300 transition" onclick="HUDMode.useTemplate(${t.id})">
-                        <div class="text-sm font-medium text-gray-800 mb-1">${escapeHtml(t.name)}</div>
+                        <div class="flex items-center gap-2 mb-1">
+                            ${t.shortcut ? `<span class="text-xs px-2 py-0.5 bg-teal-100 text-teal-700 rounded font-mono">${escapeHtml(t.shortcut)}</span>` : ''}
+                            <span class="text-sm font-medium text-gray-800 truncate">${escapeHtml(t.name)}</span>
+                        </div>
                         <p class="text-xs text-gray-500 line-clamp-2">${escapeHtml(t.content.substring(0, 100))}${t.content.length > 100 ? '...' : ''}</p>
                     </div>
                 `).join('')}
@@ -308,6 +236,11 @@ const HUDMode = {
             messageInput.value = content;
             messageInput.focus();
             messageInput.dispatchEvent(new Event('input'));
+            
+            // Show notification
+            if (typeof showNotification === 'function') {
+                showNotification('✓ ใส่เทมเพลตแล้ว', 'success');
+            }
         }
     },
     

@@ -1720,16 +1720,13 @@ function formatThaiDateTime($datetime) {
                     </button>
                 </div>
             </div>
-            <!-- Mode Switcher -->
+            <!-- Mode Switcher - Order: CRM / AI / เทมเพลต -->
             <div class="hud-mode-switcher">
-                <button class="hud-mode-btn active" data-mode="ai" onclick="HUDMode.switchMode('ai')">
-                    <i class="fas fa-robot"></i> AI
-                </button>
-                <button class="hud-mode-btn" data-mode="crm" onclick="HUDMode.switchMode('crm')">
+                <button class="hud-mode-btn active" data-mode="crm" onclick="HUDMode.switchMode('crm')">
                     <i class="fas fa-user-circle"></i> CRM
                 </button>
-                <button class="hud-mode-btn" data-mode="quickreply" onclick="HUDMode.switchMode('quickreply')">
-                    <i class="fas fa-bolt"></i> Quick
+                <button class="hud-mode-btn" data-mode="ai" onclick="HUDMode.switchMode('ai')">
+                    <i class="fas fa-robot"></i> AI
                 </button>
                 <button class="hud-mode-btn" data-mode="templates" onclick="HUDMode.switchMode('templates')">
                     <i class="fas fa-file-alt"></i> เทมเพลต
@@ -1737,8 +1734,162 @@ function formatThaiDateTime($datetime) {
             </div>
         </div>
         
+        <!-- CRM Mode Panel (Default - shown first) -->
+        <div id="hudCRMPanel" class="hud-scroll" style="max-height: calc(100vh - 120px); overflow-y: auto;">
+            
+            <!-- Member Card Mini (Always visible) -->
+            <div class="crm-section" style="border-bottom: none;">
+                <div class="member-card-mini">
+                    <div class="flex items-center justify-between">
+                        <span class="tier-badge" id="crmTierBadge">🥉 Member</span>
+                        <span class="text-xs opacity-80">ID: <?= str_pad($selectedUser['id'], 6, '0', STR_PAD_LEFT) ?></span>
+                    </div>
+                    <div class="points-display" id="crmPointsDisplay">0</div>
+                    <div class="points-label">แต้มคงเหลือ</div>
+                </div>
+            </div>
+            
+            <!-- Stats Mini (Collapsible) -->
+            <div class="crm-section" id="crmStatsSection">
+                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmStatsSection')">
+                    <div class="crm-section-title"><i class="fas fa-chart-bar"></i> สถิติ</div>
+                    <i class="fas fa-chevron-down crm-section-toggle"></i>
+                </div>
+                <div class="crm-section-body">
+                    <div class="stats-mini-grid">
+                        <div class="stat-mini-item highlight">
+                            <div class="stat-value" id="crmOrderCount">0</div>
+                            <div class="stat-label">ออเดอร์</div>
+                        </div>
+                        <div class="stat-mini-item">
+                            <div class="stat-value" id="crmTotalSpent">฿0</div>
+                            <div class="stat-label">ยอดซื้อ</div>
+                        </div>
+                        <div class="stat-mini-item">
+                            <div class="stat-value" id="crmMsgCount">0</div>
+                            <div class="stat-label">ข้อความ</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Customer Info (Collapsible + Editable) -->
+            <div class="crm-section" id="crmInfoSection">
+                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmInfoSection')">
+                    <div class="crm-section-title"><i class="fas fa-user"></i> ข้อมูลลูกค้า</div>
+                    <i class="fas fa-chevron-down crm-section-toggle"></i>
+                </div>
+                <div class="crm-section-body">
+                    <div class="customer-info-grid">
+                        <div class="customer-info-item" id="crm_display_name_container">
+                            <div class="info-left">
+                                <div class="label">ชื่อ</div>
+                                <div class="value" id="crm_display_name"><?= htmlspecialchars($selectedUser['display_name'] ?? '-') ?></div>
+                            </div>
+                            <button class="edit-btn" onclick="HUDMode.editField('display_name', '<?= htmlspecialchars($selectedUser['display_name'] ?? '') ?>')">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                        </div>
+                        <div class="customer-info-item" id="crm_phone_container">
+                            <div class="info-left">
+                                <div class="label">เบอร์โทร</div>
+                                <div class="value" id="crm_phone"><?= htmlspecialchars($selectedUser['phone'] ?? '-') ?></div>
+                            </div>
+                            <button class="edit-btn" onclick="HUDMode.editField('phone', '<?= htmlspecialchars($selectedUser['phone'] ?? '') ?>')">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                        </div>
+                        <div class="customer-info-item" id="crm_address_container">
+                            <div class="info-left">
+                                <div class="label">ที่อยู่</div>
+                                <div class="value" id="crm_address"><?= htmlspecialchars($selectedUser['address'] ?? '-') ?></div>
+                            </div>
+                            <button class="edit-btn" onclick="HUDMode.editField('address', '<?= htmlspecialchars($selectedUser['address'] ?? '') ?>')">
+                                <i class="fas fa-pen"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chat Status (Collapsible) -->
+            <div class="crm-section" id="crmChatStatusSection">
+                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmChatStatusSection')">
+                    <div class="crm-section-title"><i class="fas fa-tasks"></i> สถานะงาน</div>
+                    <i class="fas fa-chevron-down crm-section-toggle"></i>
+                </div>
+                <div class="crm-section-body">
+                    <div class="chat-status-selector">
+                        <select id="crmChatStatus" onchange="HUDMode.updateChatStatus(this.value)" class="chat-status-select">
+                            <option value="">-- ไม่ระบุ --</option>
+                            <option value="pending" <?= ($selectedUser['chat_status'] ?? '') === 'pending' ? 'selected' : '' ?>>🔴 ต้องดำเนินการ</option>
+                            <option value="completed" <?= ($selectedUser['chat_status'] ?? '') === 'completed' ? 'selected' : '' ?>>🟢 ดำเนินการแล้ว</option>
+                            <option value="shipping" <?= ($selectedUser['chat_status'] ?? '') === 'shipping' ? 'selected' : '' ?>>📦 รอจัดส่ง</option>
+                            <option value="tracking" <?= ($selectedUser['chat_status'] ?? '') === 'tracking' ? 'selected' : '' ?>>🚚 ติดตามสถานะ</option>
+                            <option value="billing" <?= ($selectedUser['chat_status'] ?? '') === 'billing' ? 'selected' : '' ?>>💰 ติดตามบิล</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tags (Collapsible) -->
+            <div class="crm-section" id="crmTagsSection">
+                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmTagsSection')">
+                    <div class="crm-section-title"><i class="fas fa-tags"></i> TAGS</div>
+                    <i class="fas fa-chevron-down crm-section-toggle"></i>
+                </div>
+                <div class="crm-section-body">
+                    <div class="tags-container" id="crmTagsContainer">
+                        <button class="add-tag-btn" onclick="HUDMode.showTagSelector()">+ เพิ่ม Tag</button>
+                        <div id="tagSelectorContainer"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Notes (Collapsible) -->
+            <div class="crm-section" id="crmNotesSection">
+                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmNotesSection')">
+                    <div class="crm-section-title"><i class="fas fa-sticky-note"></i> โน้ต</div>
+                    <i class="fas fa-chevron-down crm-section-toggle"></i>
+                </div>
+                <div class="crm-section-body">
+                    <div class="notes-list" id="crmNotesList">
+                        <div class="notes-empty">ยังไม่มีโน้ต</div>
+                    </div>
+                    <div class="add-note-form">
+                        <textarea id="crmNoteInput" placeholder="เพิ่มโน้ต..."></textarea>
+                        <button class="add-note-btn" onclick="HUDMode.addNote()">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Transactions (Collapsible) -->
+            <div class="crm-section" id="crmTransactionsSection">
+                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmTransactionsSection')">
+                    <div class="crm-section-title"><i class="fas fa-receipt"></i> รายการล่าสุด</div>
+                    <i class="fas fa-chevron-down crm-section-toggle"></i>
+                </div>
+                <div class="crm-section-body">
+                    <div class="transaction-mini-list" id="crmTransactionsList">
+                        <div class="notes-empty">ยังไม่มีรายการ</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Edit Button -->
+            <div class="crm-section" style="padding: 12px;">
+                <button class="quick-edit-btn" onclick="HUDMode.openUserDetail()">
+                    <i class="fas fa-external-link-alt"></i>
+                    ดูรายละเอียดเพิ่มเติม
+                </button>
+            </div>
+            
+        </div><!-- End hudCRMPanel -->
+        
         <!-- AI Mode Panel -->
-        <div id="hudAIPanel" class="hud-scroll" style="max-height: calc(100vh - 120px); overflow-y: auto;">
+        <div id="hudAIPanel" class="hud-scroll" style="display: none; max-height: calc(100vh - 120px); overflow-y: auto;">
         
         <div id="hudWidgets" class="pb-4">
             <!-- Allergy Warning Widget - Requirements: 4.5 -->
@@ -1918,176 +2069,6 @@ function formatThaiDateTime($datetime) {
             </div>
         </div>
         </div><!-- End hudAIPanel -->
-        
-        <!-- CRM Mode Panel -->
-        <div id="hudCRMPanel" class="hud-scroll" style="display: none; max-height: calc(100vh - 120px); overflow-y: auto;">
-            
-            <!-- Member Card Mini (Always visible) -->
-            <div class="crm-section" style="border-bottom: none;">
-                <div class="member-card-mini">
-                    <div class="flex items-center justify-between">
-                        <span class="tier-badge" id="crmTierBadge">🥉 Member</span>
-                        <span class="text-xs opacity-80">ID: <?= str_pad($selectedUser['id'], 6, '0', STR_PAD_LEFT) ?></span>
-                    </div>
-                    <div class="points-display" id="crmPointsDisplay">0</div>
-                    <div class="points-label">แต้มคงเหลือ</div>
-                </div>
-            </div>
-            
-            <!-- Stats Mini (Collapsible) -->
-            <div class="crm-section" id="crmStatsSection">
-                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmStatsSection')">
-                    <div class="crm-section-title"><i class="fas fa-chart-bar"></i> สถิติ</div>
-                    <i class="fas fa-chevron-down crm-section-toggle"></i>
-                </div>
-                <div class="crm-section-body">
-                    <div class="stats-mini-grid">
-                        <div class="stat-mini-item highlight">
-                            <div class="stat-value" id="crmOrderCount">0</div>
-                            <div class="stat-label">ออเดอร์</div>
-                        </div>
-                        <div class="stat-mini-item">
-                            <div class="stat-value" id="crmTotalSpent">฿0</div>
-                            <div class="stat-label">ยอดซื้อ</div>
-                        </div>
-                        <div class="stat-mini-item">
-                            <div class="stat-value" id="crmMsgCount">0</div>
-                            <div class="stat-label">ข้อความ</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Customer Info (Collapsible + Editable) -->
-            <div class="crm-section" id="crmInfoSection">
-                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmInfoSection')">
-                    <div class="crm-section-title"><i class="fas fa-user"></i> ข้อมูลลูกค้า</div>
-                    <i class="fas fa-chevron-down crm-section-toggle"></i>
-                </div>
-                <div class="crm-section-body">
-                    <div class="customer-info-grid">
-                        <div class="customer-info-item" id="crm_display_name_container">
-                            <div class="info-left">
-                                <div class="label">ชื่อ</div>
-                                <div class="value" id="crm_display_name"><?= htmlspecialchars($selectedUser['display_name'] ?? '-') ?></div>
-                            </div>
-                            <button class="edit-btn" onclick="HUDMode.editField('display_name', '<?= htmlspecialchars($selectedUser['display_name'] ?? '') ?>')">
-                                <i class="fas fa-pen"></i>
-                            </button>
-                        </div>
-                        <div class="customer-info-item" id="crm_phone_container">
-                            <div class="info-left">
-                                <div class="label">เบอร์โทร</div>
-                                <div class="value" id="crm_phone"><?= htmlspecialchars($selectedUser['phone'] ?? '-') ?></div>
-                            </div>
-                            <button class="edit-btn" onclick="HUDMode.editField('phone', '<?= htmlspecialchars($selectedUser['phone'] ?? '') ?>')">
-                                <i class="fas fa-pen"></i>
-                            </button>
-                        </div>
-                        <div class="customer-info-item" id="crm_address_container">
-                            <div class="info-left">
-                                <div class="label">ที่อยู่</div>
-                                <div class="value" id="crm_address"><?= htmlspecialchars($selectedUser['address'] ?? '-') ?></div>
-                            </div>
-                            <button class="edit-btn" onclick="HUDMode.editField('address', '<?= htmlspecialchars($selectedUser['address'] ?? '') ?>')">
-                                <i class="fas fa-pen"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Chat Status (Collapsible) -->
-            <div class="crm-section" id="crmChatStatusSection">
-                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmChatStatusSection')">
-                    <div class="crm-section-title"><i class="fas fa-tasks"></i> สถานะงาน</div>
-                    <i class="fas fa-chevron-down crm-section-toggle"></i>
-                </div>
-                <div class="crm-section-body">
-                    <div class="chat-status-selector">
-                        <select id="crmChatStatus" onchange="HUDMode.updateChatStatus(this.value)" class="chat-status-select">
-                            <option value="">-- ไม่ระบุ --</option>
-                            <option value="pending" <?= ($selectedUser['chat_status'] ?? '') === 'pending' ? 'selected' : '' ?>>🔴 ต้องดำเนินการ</option>
-                            <option value="completed" <?= ($selectedUser['chat_status'] ?? '') === 'completed' ? 'selected' : '' ?>>🟢 ดำเนินการแล้ว</option>
-                            <option value="shipping" <?= ($selectedUser['chat_status'] ?? '') === 'shipping' ? 'selected' : '' ?>>📦 รอจัดส่ง</option>
-                            <option value="tracking" <?= ($selectedUser['chat_status'] ?? '') === 'tracking' ? 'selected' : '' ?>>🚚 ติดตามสถานะ</option>
-                            <option value="billing" <?= ($selectedUser['chat_status'] ?? '') === 'billing' ? 'selected' : '' ?>>💰 ติดตามบิล</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Tags (Collapsible) -->
-            <div class="crm-section" id="crmTagsSection">
-                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmTagsSection')">
-                    <div class="crm-section-title"><i class="fas fa-tags"></i> TAGS</div>
-                    <i class="fas fa-chevron-down crm-section-toggle"></i>
-                </div>
-                <div class="crm-section-body">
-                    <div class="tags-container" id="crmTagsContainer">
-                        <button class="add-tag-btn" onclick="HUDMode.showTagSelector()">+ เพิ่ม Tag</button>
-                        <div id="tagSelectorContainer"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Notes (Collapsible) -->
-            <div class="crm-section" id="crmNotesSection">
-                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmNotesSection')">
-                    <div class="crm-section-title"><i class="fas fa-sticky-note"></i> โน้ต</div>
-                    <i class="fas fa-chevron-down crm-section-toggle"></i>
-                </div>
-                <div class="crm-section-body">
-                    <div class="notes-list" id="crmNotesList">
-                        <div class="notes-empty">ยังไม่มีโน้ต</div>
-                    </div>
-                    <div class="add-note-form">
-                        <textarea id="crmNoteInput" placeholder="เพิ่มโน้ต..."></textarea>
-                        <button class="add-note-btn" onclick="HUDMode.addNote()">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Recent Transactions (Collapsible) -->
-            <div class="crm-section" id="crmTransactionsSection">
-                <div class="crm-section-header" onclick="HUDMode.toggleSection('crmTransactionsSection')">
-                    <div class="crm-section-title"><i class="fas fa-receipt"></i> รายการล่าสุด</div>
-                    <i class="fas fa-chevron-down crm-section-toggle"></i>
-                </div>
-                <div class="crm-section-body">
-                    <div class="transaction-mini-list" id="crmTransactionsList">
-                        <div class="notes-empty">ยังไม่มีรายการ</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Quick Edit Button -->
-            <div class="crm-section" style="padding: 12px;">
-                <button class="quick-edit-btn" onclick="HUDMode.openUserDetail()">
-                    <i class="fas fa-external-link-alt"></i>
-                    ดูรายละเอียดเพิ่มเติม
-                </button>
-            </div>
-            
-        </div><!-- End hudCRMPanel -->
-        
-        <!-- Quick Reply Panel -->
-        <div id="hudQuickReplyPanel" class="hud-scroll" style="display: none; max-height: calc(100vh - 120px); overflow-y: auto;">
-            <div class="p-3">
-                <div class="relative mb-3">
-                    <input type="text" id="quickReplySearch" placeholder="🔍 ค้นหา Quick Reply..." 
-                           class="w-full px-3 py-2 bg-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-                           oninput="HUDMode.searchQuickReply(this.value)">
-                </div>
-                <div id="quickReplyList" class="space-y-2">
-                    <div class="text-center text-gray-400 text-sm py-4">
-                        <i class="fas fa-spinner fa-spin"></i> กำลังโหลด...
-                    </div>
-                </div>
-            </div>
-        </div><!-- End hudQuickReplyPanel -->
         
         <!-- Templates Panel -->
         <div id="hudTemplatesPanel" class="hud-scroll" style="display: none; max-height: calc(100vh - 120px); overflow-y: auto;">
