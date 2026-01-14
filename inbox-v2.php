@@ -1314,7 +1314,7 @@ function formatThaiDateTime($datetime) {
                                 <h3 class="text-sm font-semibold text-gray-800 truncate"><?= htmlspecialchars($user['display_name']) ?></h3>
                                 <span class="last-time text-[10px] text-gray-400"><?= formatThaiTime($user['last_time']) ?></span>
                             </div>
-                            <p class="last-msg text-xs text-gray-500 truncate"><?= htmlspecialchars(getMessagePreview($user['last_msg'], $user['last_type'])) ?></p>
+                            <p class="last-msg text-xs text-gray-500 truncate" data-initial="<?= htmlspecialchars($user['last_msg'] ?? '') ?>"><?= htmlspecialchars(getMessagePreview($user['last_msg'], $user['last_type'])) ?></p>
                             
                             <?php if ($assignment && $assignment['status'] === 'active'): ?>
                             <span class="text-[9px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full">
@@ -1918,7 +1918,8 @@ function updateConversationListUI(conversations) {
                 
                 // Debug: log if jame.ver (id=15) or Kratae (id=492)
                 if (conv.id === 15 || conv.id === 492) {
-                    console.log(`[updateConversationListUI] ${conv.display_name} (${conv.id}): DOM="${lastMsgEl.textContent}" -> API="${newText}" (raw: "${conv.last_message}")`);
+                    const initialValue = lastMsgEl.dataset.initial || 'N/A';
+                    console.log(`[updateConversationListUI] ${conv.display_name} (${conv.id}): initial="${initialValue}" DOM="${lastMsgEl.textContent}" -> API="${newText}" (raw: "${conv.last_message}")`);
                 }
                 
                 lastMsgEl.textContent = newText;
