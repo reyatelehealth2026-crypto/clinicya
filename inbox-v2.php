@@ -702,10 +702,10 @@ function formatThaiDateTime($datetime) {
     word-wrap: break-word; 
     line-height: 1.5;
     font-size: 14px;
-    display: inline-block;
+    display: inline-block !important;
     padding: 10px 14px;
-    max-width: 100%;
-    width: fit-content;
+    max-width: 70%;
+    width: auto !important;
 }
 .chat-incoming { 
     background: #E8E8E8; 
@@ -723,16 +723,15 @@ function formatThaiDateTime($datetime) {
     margin-bottom: 8px;
     display: flex;
 }
-.message-item .flex-col {
+.message-item > div.flex-col {
     max-width: 70%;
-    display: flex;
-    flex-direction: column;
+    align-items: inherit !important;
 }
-.message-item.justify-end .flex-col {
-    align-items: flex-end;
+.message-item.justify-end > div.flex-col {
+    align-items: flex-end !important;
 }
-.message-item.justify-start .flex-col {
-    align-items: flex-start;
+.message-item.justify-start > div.flex-col {
+    align-items: flex-start !important;
 }
 
 /* User list */
