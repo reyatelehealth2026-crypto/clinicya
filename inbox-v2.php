@@ -571,7 +571,7 @@ $pageTitle = 'Inbox V2 - Vibe Selling OS';
 $hideAiChatWidget = true;
 require_once 'includes/header.php';
 
-// Get Users List - use subqueries for accurate latest message
+// Get Users List - use subqueries for accurate latest message (v2.1 - fixed 2026-01-15)
 $sql = "SELECT u.*, 
         (SELECT content FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_msg,
         (SELECT message_type FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_type,
