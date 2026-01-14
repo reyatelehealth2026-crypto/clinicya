@@ -1,0 +1,512 @@
+/**
+ * Inbox V2 - Floating Action Button & HUD Mode Switcher
+ * LINE-style UI improvements
+ */
+
+/* ============================================
+   FLOATING ACTION BUTTON (FAB)
+   ============================================ */
+
+.fab-container {
+    position: fixed;
+    bottom: 100px;
+    right: 340px; /* Account for HUD panel width */
+    z-index: 100;
+}
+
+@media (max-width: 1024px) {
+    .fab-container {
+        right: 20px;
+        bottom: 80px;
+    }
+}
+
+.fab-main {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.fab-main:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+}
+
+.fab-main.active {
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+    transform: rotate(45deg);
+}
+
+.fab-main .fab-icon {
+    transition: transform 0.3s ease;
+}
+
+.fab-main.active .fab-icon {
+    transform: rotate(45deg);
+}
+
+/* FAB Menu Items */
+.fab-menu {
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(20px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fab-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.fab-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.fab-item-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: white;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease;
+}
+
+.fab-item-btn:hover {
+    transform: scale(1.1);
+}
+
+.fab-item-label {
+    background: white;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+}
+
+/* FAB Item Colors */
+.fab-item-btn.order { background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); }
+.fab-item-btn.payment { background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); }
+.fab-item-btn.delivery { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); }
+.fab-item-btn.points { background: linear-gradient(135deg, #EC4899 0%, #DB2777 100%); }
+.fab-item-btn.menu { background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); }
+.fab-item-btn.image { background: linear-gradient(135deg, #14B8A6 0%, #0D9488 100%); }
+
+/* Animation delays for staggered effect */
+.fab-menu.show .fab-item:nth-child(1) { animation: fabItemIn 0.3s ease forwards; animation-delay: 0.05s; }
+.fab-menu.show .fab-item:nth-child(2) { animation: fabItemIn 0.3s ease forwards; animation-delay: 0.1s; }
+.fab-menu.show .fab-item:nth-child(3) { animation: fabItemIn 0.3s ease forwards; animation-delay: 0.15s; }
+.fab-menu.show .fab-item:nth-child(4) { animation: fabItemIn 0.3s ease forwards; animation-delay: 0.2s; }
+.fab-menu.show .fab-item:nth-child(5) { animation: fabItemIn 0.3s ease forwards; animation-delay: 0.25s; }
+.fab-menu.show .fab-item:nth-child(6) { animation: fabItemIn 0.3s ease forwards; animation-delay: 0.3s; }
+
+@keyframes fabItemIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* ============================================
+   HUD MODE SWITCHER
+   ============================================ */
+
+.hud-mode-switcher {
+    display: flex;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+}
+
+.hud-mode-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hud-mode-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.hud-mode-btn.active {
+    background: white;
+    color: #7C3AED;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   CRM MODE STYLES
+   ============================================ */
+
+.crm-section {
+    padding: 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.crm-section:last-child {
+    border-bottom: none;
+}
+
+.crm-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Member Card Mini */
+.member-card-mini {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    padding: 12px;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.member-card-mini::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+}
+
+.member-card-mini .tier-badge {
+    font-size: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.member-card-mini .points-display {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 8px 0 4px;
+}
+
+.member-card-mini .points-label {
+    font-size: 10px;
+    opacity: 0.8;
+}
+
+/* Customer Info Grid */
+.customer-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.customer-info-item {
+    background: #F9FAFB;
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+.customer-info-item .label {
+    font-size: 10px;
+    color: #9CA3AF;
+    margin-bottom: 2px;
+}
+
+.customer-info-item .value {
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.customer-info-item.full-width {
+    grid-column: span 2;
+}
+
+/* Tags Section */
+.tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.tag-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tag-badge .remove-tag {
+    cursor: pointer;
+    opacity: 0.7;
+    font-size: 10px;
+}
+
+.tag-badge .remove-tag:hover {
+    opacity: 1;
+}
+
+.add-tag-btn {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    background: #E5E7EB;
+    color: #6B7280;
+    border: 1px dashed #D1D5DB;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.add-tag-btn:hover {
+    background: #D1D5DB;
+    color: #374151;
+}
+
+/* Notes Section */
+.notes-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.note-item {
+    background: #FFFBEB;
+    border-left: 3px solid #F59E0B;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border-radius: 0 8px 8px 0;
+    font-size: 12px;
+}
+
+.note-item .note-meta {
+    font-size: 10px;
+    color: #9CA3AF;
+    margin-top: 4px;
+}
+
+.add-note-form {
+    display: flex;
+    gap: 8px;
+}
+
+.add-note-form textarea {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    font-size: 12px;
+    resize: none;
+    min-height: 60px;
+}
+
+.add-note-form textarea:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.add-note-btn {
+    padding: 8px 12px;
+    background: #8B5CF6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    align-self: flex-end;
+}
+
+.add-note-btn:hover {
+    background: #7C3AED;
+}
+
+/* Stats Mini Grid */
+.stats-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.stat-mini-item {
+    text-align: center;
+    padding: 10px 8px;
+    background: #F9FAFB;
+    border-radius: 8px;
+}
+
+.stat-mini-item .stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: #374151;
+}
+
+.stat-mini-item .stat-label {
+    font-size: 10px;
+    color: #9CA3AF;
+    margin-top: 2px;
+}
+
+.stat-mini-item.highlight {
+    background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+}
+
+.stat-mini-item.highlight .stat-value {
+    color: #6366F1;
+}
+
+/* Quick Edit Button */
+.quick-edit-btn {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%);
+    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.quick-edit-btn:hover {
+    background: linear-gradient(135deg, #E5E7EB 0%, #D1D5DB 100%);
+}
+
+/* Transaction History Mini */
+.transaction-mini-list {
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.transaction-mini-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #F3F4F6;
+    font-size: 12px;
+}
+
+.transaction-mini-item:last-child {
+    border-bottom: none;
+}
+
+.transaction-mini-item .tx-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.transaction-mini-item .tx-id {
+    font-weight: 500;
+    color: #374151;
+}
+
+.transaction-mini-item .tx-date {
+    font-size: 10px;
+    color: #9CA3AF;
+}
+
+.transaction-mini-item .tx-amount {
+    font-weight: 600;
+    color: #10B981;
+}
+
+/* LINE-style Chat Bubble Improvements */
+.chat-bubble-line {
+    max-width: 70%;
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.chat-bubble-line.incoming {
+    background: white;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.chat-bubble-line.outgoing {
+    background: #06C755;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+/* Scrollbar Styling */
+.hud-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+
+.hud-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.hud-scroll::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 2px;
+}
+
+.hud-scroll::-webkit-scrollbar-thumb:hover {
+    background: #9CA3AF;
+}

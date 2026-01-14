@@ -688,6 +688,8 @@ function formatThaiDateTime($datetime) {
 }
 ?>
 
+<!-- FAB & HUD Mode Switcher CSS -->
+<link rel="stylesheet" href="assets/css/inbox-v2-fab.css?v=<?= time() ?>">
 
 <style>
 :root { --primary: #10B981; --primary-dark: #059669; --vibe-purple: #8B5CF6; --vibe-purple-dark: #7C3AED; }
@@ -1439,45 +1441,9 @@ function formatThaiDateTime($datetime) {
             </div>
         </div>
 
-        <!-- Quick Actions Bar - Unified Menu -->
-        <div id="quickActionsBar" class="px-3 py-2 bg-gradient-to-r from-slate-50 to-gray-50 border-t border-gray-100">
-            <div class="purchase-actions-bar">
-                <div class="action-title">
-                    <i class="fas fa-bolt text-yellow-500"></i>
-                    Quick Actions
-                    <button onclick="refreshQuickActions()" class="ml-2 text-xs text-gray-400 hover:text-gray-600" title="รีเฟรช">
-                        <i class="fas fa-sync-alt" id="quickActionsRefreshIcon"></i>
-                    </button>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <!-- Purchase Actions -->
-                    <button type="button" onclick="openCreateOrderModal()" class="purchase-action-btn create-order">
-                        <i class="fas fa-cart-plus"></i>
-                        สร้างออเดอร์
-                    </button>
-                    <button type="button" onclick="sendPaymentLink()" class="purchase-action-btn payment-link">
-                        <i class="fas fa-credit-card"></i>
-                        ส่งลิงก์ชำระเงิน
-                    </button>
-                    <button type="button" onclick="openScheduleDeliveryModal()" class="purchase-action-btn schedule-delivery">
-                        <i class="fas fa-truck"></i>
-                        นัดส่งสินค้า
-                    </button>
-                    <button type="button" onclick="openUsePointsModal()" class="purchase-action-btn use-points">
-                        <i class="fas fa-star"></i>
-                        ใช้แต้มสะสม
-                    </button>
-                    <button type="button" onclick="sendRichMenu()" class="purchase-action-btn send-menu">
-                        <i class="fas fa-bars"></i>
-                        ส่งเมนู
-                    </button>
-                    <!-- Image Analysis Button -->
-                    <button type="button" onclick="showQuickImageAnalysisMenu(event)" class="quick-action-btn">
-                        <span class="action-icon">📷</span>
-                        วิเคราะห์รูป
-                    </button>
-                </div>
-            </div>
+        <!-- Quick Actions Bar - Hidden, replaced by FAB -->
+        <div id="quickActionsBar" class="hidden">
+            <!-- Legacy Quick Actions - now handled by FAB -->
         </div>
 
         <!-- Input Area with Ghost Draft -->
@@ -1597,24 +1563,88 @@ function formatThaiDateTime($datetime) {
         <?php endif; ?>
     </div>
 
+    <!-- FLOATING ACTION BUTTON (FAB) -->
+    <?php if ($selectedUser): ?>
+    <div class="fab-container" id="fabContainer">
+        <!-- FAB Menu Items -->
+        <div class="fab-menu" id="fabMenu">
+            <div class="fab-item">
+                <span class="fab-item-label">วิเคราะห์รูป AI</span>
+                <button class="fab-item-btn image" onclick="FAB.action('image')" title="วิเคราะห์รูป">
+                    <i class="fas fa-camera"></i>
+                </button>
+            </div>
+            <div class="fab-item">
+                <span class="fab-item-label">ส่งเมนู</span>
+                <button class="fab-item-btn menu" onclick="FAB.action('menu')" title="ส่งเมนู">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            <div class="fab-item">
+                <span class="fab-item-label">ใช้แต้มสะสม</span>
+                <button class="fab-item-btn points" onclick="FAB.action('points')" title="ใช้แต้ม">
+                    <i class="fas fa-star"></i>
+                </button>
+            </div>
+            <div class="fab-item">
+                <span class="fab-item-label">นัดส่งสินค้า</span>
+                <button class="fab-item-btn delivery" onclick="FAB.action('delivery')" title="นัดส่ง">
+                    <i class="fas fa-truck"></i>
+                </button>
+            </div>
+            <div class="fab-item">
+                <span class="fab-item-label">ส่งลิงก์ชำระเงิน</span>
+                <button class="fab-item-btn payment" onclick="FAB.action('payment')" title="ชำระเงิน">
+                    <i class="fas fa-credit-card"></i>
+                </button>
+            </div>
+            <div class="fab-item">
+                <span class="fab-item-label">สร้างออเดอร์</span>
+                <button class="fab-item-btn order" onclick="FAB.action('order')" title="สร้างออเดอร์">
+                    <i class="fas fa-cart-plus"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Main FAB Button -->
+        <button class="fab-main" id="fabMainBtn" onclick="FAB.toggle()" title="Quick Actions">
+            <i class="fas fa-bolt fab-icon"></i>
+        </button>
+    </div>
+    <?php endif; ?>
 
     <!-- RIGHT: HUD Dashboard - Requirements: 4.1-4.6 -->
     <?php if ($selectedUser): ?>
     <div id="hudDashboard" class="hud-dashboard">
-        <div class="p-3 border-b bg-gradient-to-r from-purple-600 to-indigo-600 flex items-center justify-between">
-            <h3 class="text-white font-bold text-sm flex items-center gap-2">
-                <i class="fas fa-th-large"></i>
-                HUD Dashboard
-            </h3>
-            <div class="flex gap-1">
-                <button onclick="refreshHUD()" class="w-7 h-7 rounded bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-xs" title="รีเฟรช">
-                    <i class="fas fa-sync-alt"></i>
+        <!-- HUD Header with Mode Switcher -->
+        <div class="p-3 border-b bg-gradient-to-r from-purple-600 to-indigo-600">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-white font-bold text-sm flex items-center gap-2">
+                    <i class="fas fa-th-large"></i>
+                    HUD
+                </h3>
+                <div class="flex gap-1">
+                    <button onclick="refreshHUD()" class="w-7 h-7 rounded bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-xs" title="รีเฟรช">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button onclick="toggleHUD()" class="w-7 h-7 rounded bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-xs" title="ปิด">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <!-- Mode Switcher -->
+            <div class="hud-mode-switcher">
+                <button class="hud-mode-btn active" data-mode="ai" onclick="HUDMode.switchMode('ai')">
+                    <i class="fas fa-robot"></i> AI ขาย
                 </button>
-                <button onclick="toggleHUD()" class="w-7 h-7 rounded bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-xs" title="ปิด">
-                    <i class="fas fa-times"></i>
+                <button class="hud-mode-btn" data-mode="crm" onclick="HUDMode.switchMode('crm')">
+                    <i class="fas fa-user-circle"></i> CRM
                 </button>
             </div>
         </div>
+        
+        <!-- AI Mode Panel -->
+        <div id="hudAIPanel" class="hud-scroll" style="max-height: calc(100vh - 120px); overflow-y: auto;">
         
         <div id="hudWidgets" class="pb-4">
             <!-- Allergy Warning Widget - Requirements: 4.5 -->
@@ -1793,6 +1823,109 @@ function formatThaiDateTime($datetime) {
                 </div>
             </div>
         </div>
+        </div><!-- End hudAIPanel -->
+        
+        <!-- CRM Mode Panel -->
+        <div id="hudCRMPanel" class="hud-scroll" style="display: none; max-height: calc(100vh - 120px); overflow-y: auto;">
+            
+            <!-- Member Card Mini -->
+            <div class="crm-section">
+                <div class="member-card-mini">
+                    <div class="flex items-center justify-between">
+                        <span class="tier-badge" id="crmTierBadge">🥉 Member</span>
+                        <span class="text-xs opacity-80">ID: <?= str_pad($selectedUser['id'], 6, '0', STR_PAD_LEFT) ?></span>
+                    </div>
+                    <div class="points-display" id="crmPointsDisplay">0</div>
+                    <div class="points-label">แต้มคงเหลือ</div>
+                </div>
+            </div>
+            
+            <!-- Stats Mini -->
+            <div class="crm-section">
+                <div class="crm-section-title"><i class="fas fa-chart-bar"></i> สถิติ</div>
+                <div class="stats-mini-grid">
+                    <div class="stat-mini-item highlight">
+                        <div class="stat-value" id="crmOrderCount">0</div>
+                        <div class="stat-label">ออเดอร์</div>
+                    </div>
+                    <div class="stat-mini-item">
+                        <div class="stat-value" id="crmTotalSpent">฿0</div>
+                        <div class="stat-label">ยอดซื้อ</div>
+                    </div>
+                    <div class="stat-mini-item">
+                        <div class="stat-value" id="crmMsgCount">0</div>
+                        <div class="stat-label">ข้อความ</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Customer Info -->
+            <div class="crm-section">
+                <div class="crm-section-title"><i class="fas fa-user"></i> ข้อมูลลูกค้า</div>
+                <div class="customer-info-grid">
+                    <div class="customer-info-item">
+                        <div class="label">ชื่อ</div>
+                        <div class="value"><?= htmlspecialchars($selectedUser['display_name'] ?? '-') ?></div>
+                    </div>
+                    <div class="customer-info-item">
+                        <div class="label">เบอร์โทร</div>
+                        <div class="value" id="crm_phone"><?= htmlspecialchars($selectedUser['phone'] ?? '-') ?></div>
+                    </div>
+                    <div class="customer-info-item">
+                        <div class="label">อีเมล</div>
+                        <div class="value" id="crm_email"><?= htmlspecialchars($selectedUser['email'] ?? '-') ?></div>
+                    </div>
+                    <div class="customer-info-item">
+                        <div class="label">วันเกิด</div>
+                        <div class="value" id="crm_birthday"><?= $selectedUser['birthday'] ? date('d/m/Y', strtotime($selectedUser['birthday'])) : '-' ?></div>
+                    </div>
+                    <div class="customer-info-item full-width">
+                        <div class="label">ที่อยู่</div>
+                        <div class="value" id="crm_address"><?= htmlspecialchars($selectedUser['address'] ?? '-') ?></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tags -->
+            <div class="crm-section">
+                <div class="crm-section-title"><i class="fas fa-tags"></i> Tags</div>
+                <div class="tags-container" id="crmTagsContainer">
+                    <button class="add-tag-btn" onclick="HUDMode.showAddTagModal()">+ เพิ่ม Tag</button>
+                </div>
+            </div>
+            
+            <!-- Notes -->
+            <div class="crm-section">
+                <div class="crm-section-title"><i class="fas fa-sticky-note"></i> โน้ต</div>
+                <div class="notes-list" id="crmNotesList">
+                    <p class="text-gray-400 text-xs text-center py-2">ยังไม่มีโน้ต</p>
+                </div>
+                <div class="add-note-form mt-2">
+                    <textarea id="crmNoteInput" placeholder="เพิ่มโน้ต..."></textarea>
+                    <button class="add-note-btn" onclick="HUDMode.addNote()">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Recent Transactions -->
+            <div class="crm-section">
+                <div class="crm-section-title"><i class="fas fa-receipt"></i> รายการล่าสุด</div>
+                <div class="transaction-mini-list" id="crmTransactionsList">
+                    <p class="text-gray-400 text-xs text-center py-2">ยังไม่มีรายการ</p>
+                </div>
+            </div>
+            
+            <!-- Quick Edit Button -->
+            <div class="crm-section">
+                <button class="quick-edit-btn" onclick="HUDMode.openUserDetail()">
+                    <i class="fas fa-external-link-alt"></i>
+                    ดูรายละเอียดเพิ่มเติม
+                </button>
+            </div>
+            
+        </div><!-- End hudCRMPanel -->
+        
     </div>
     <?php endif; ?>
 </div>
@@ -1815,6 +1948,12 @@ function formatThaiDateTime($datetime) {
 
 <!-- Real-time Updates Script -->
 <script src="assets/js/inbox-realtime.js?v=<?= time() ?>"></script>
+<!-- FAB & HUD Mode Switcher -->
+<script src="assets/js/inbox-v2-fab.js?v=<?= time() ?>"></script>
+<script>
+// Set global variables for FAB/HUD
+window.currentBotId = <?= $currentBotId ?>;
+</script>
 <script>
 /**
  * Real-time Inbox Updates - Auto-refresh conversations and messages

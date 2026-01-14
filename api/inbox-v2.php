@@ -1789,6 +1789,206 @@ try {
             break;
 
         // ============================================
+        // GET /customer_crm - Get CRM data for HUD panel
+        // ============================================
+        case 'customer_crm':
+            $userId = (int)($_GET['user_id'] ?? $_POST['user_id'] ?? 0);
+            
+            if (!$userId) {
+                sendError('User ID is required');
+            }
+            
+            try {
+                // Get user info
+                $stmt = $db->prepare("SELECT * FROM users WHERE id = ?");
+                $stmt->execute([$userId]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$user) {
+                    sendError('User not found', 404);
+                }
+                
+                // Get loyalty points
+                $points = ['available_points' => 0, 'total_points' => 0, 'used_points' => 0];
+                $tier = ['name' => 'Member', 'icon' => '🥉', 'color' => '#9CA3AF'];
+                
+                try {
+                    require_once __DIR__ . '/../classes/LoyaltyPoints.php';
+                    $loyalty = new LoyaltyPoints($db, $lineAccountId);
+                    $points = $loyalty->getUserPoints($userId);
+                    
+                    $totalPts = $points['total_points'] ?? 0;
+                    if ($totalPts >= 10000) {
+                        $tier = ['name' => 'Platinum', 'icon' => '💎', 'color' => '#6366F1'];
+                    } elseif ($totalPts >= 5000) {
+                        $tier = ['name' => 'Gold', 'icon' => '🥇', 'color' => '#F59E0B'];
+                    } elseif ($totalPts >= 1000) {
+                        $tier = ['name' => 'Silver', 'icon' => '🥈', 'color' => '#6B7280'];
+                    }
+                } catch (Exception $e) {}
+                
+                // Get stats
+                $stats = ['order_count' => 0, 'total_spent' => 0, 'message_count' => 0];
+                try {
+                    $stmt = $db->prepare("SELECT COUNT(*) as cnt, COALESCE(SUM(grand_total), 0) as total FROM transactions WHERE user_id = ? AND status NOT IN ('cancelled', 'pending')");
+                    $stmt->execute([$userId]);
+                    $txStats = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $stats['order_count'] = $txStats['cnt'] ?? 0;
+                    $stats['total_spent'] = $txStats['total'] ?? 0;
+                    
+                    $stmt = $db->prepare("SELECT COUNT(*) FROM messages WHERE user_id = ?");
+                    $stmt->execute([$userId]);
+                    $stats['message_count'] = $stmt->fetchColumn();
+                } catch (Exception $e) {}
+                
+                // Get tags
+                $tags = [];
+                try {
+                    $stmt = $db->prepare("SELECT ut.id, ut.name, ut.color FROM user_tags ut 
+                                          JOIN user_tag_assignments uta ON ut.id = uta.tag_id 
+                                          WHERE uta.user_id = ?");
+                    $stmt->execute([$userId]);
+                    $tags = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (Exception $e) {}
+                
+                // Get notes
+                $notes = [];
+                try {
+                    $stmt = $db->prepare("SELECT * FROM customer_notes WHERE user_id = ? ORDER BY created_at DESC LIMIT 10");
+                    $stmt->execute([$userId]);
+                    $notes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (Exception $e) {}
+                
+                // Get recent transactions
+                $transactions = [];
+                try {
+                    $stmt = $db->prepare("SELECT id, grand_total, status, created_at FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+                    $stmt->execute([$userId]);
+                    $transactions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (Exception $e) {}
+                
+                sendResponse([
+                    'success' => true,
+                    'data' => [
+                        'user' => $user,
+                        'points' => $points,
+                        'tier' => $tier,
+                        'stats' => $stats,
+                        'tags' => $tags,
+                        'notes' => $notes,
+                        'transactions' => $transactions
+                    ]
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to load CRM data: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // POST /add_customer_note - Add note to customer
+        // ============================================
+        case 'add_customer_note':
+            if ($method !== 'POST') {
+                sendError('Method not allowed', 405);
+            }
+            
+            $userId = (int)($_POST['user_id'] ?? 0);
+            $content = trim($_POST['content'] ?? '');
+            
+            if (!$userId || empty($content)) {
+                sendError('User ID and content are required');
+            }
+            
+            try {
+                $stmt = $db->prepare("INSERT INTO customer_notes (user_id, content, created_by, created_at) VALUES (?, ?, ?, NOW())");
+                $stmt->execute([$userId, $content, $adminId ?? 'Admin']);
+                
+                sendResponse([
+                    'success' => true,
+                    'message' => 'Note added successfully',
+                    'note_id' => $db->lastInsertId()
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to add note: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // POST /add_customer_tag - Add tag to customer
+        // ============================================
+        case 'add_customer_tag':
+            if ($method !== 'POST') {
+                sendError('Method not allowed', 405);
+            }
+            
+            $userId = (int)($_POST['user_id'] ?? 0);
+            $tagName = trim($_POST['tag_name'] ?? '');
+            
+            if (!$userId || empty($tagName)) {
+                sendError('User ID and tag name are required');
+            }
+            
+            try {
+                // Find or create tag
+                $stmt = $db->prepare("SELECT id FROM user_tags WHERE name = ? AND (line_account_id = ? OR line_account_id IS NULL)");
+                $stmt->execute([$tagName, $lineAccountId]);
+                $tag = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$tag) {
+                    // Create new tag with random color
+                    $colors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#6366F1'];
+                    $color = $colors[array_rand($colors)];
+                    
+                    $stmt = $db->prepare("INSERT INTO user_tags (name, color, line_account_id, created_at) VALUES (?, ?, ?, NOW())");
+                    $stmt->execute([$tagName, $color, $lineAccountId]);
+                    $tagId = $db->lastInsertId();
+                } else {
+                    $tagId = $tag['id'];
+                }
+                
+                // Assign tag to user
+                $stmt = $db->prepare("INSERT IGNORE INTO user_tag_assignments (user_id, tag_id, assigned_by, created_at) VALUES (?, ?, ?, NOW())");
+                $stmt->execute([$userId, $tagId, $adminId ?? 'Admin']);
+                
+                sendResponse([
+                    'success' => true,
+                    'message' => 'Tag added successfully',
+                    'tag_id' => $tagId
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to add tag: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // POST /remove_customer_tag - Remove tag from customer
+        // ============================================
+        case 'remove_customer_tag':
+            if ($method !== 'POST') {
+                sendError('Method not allowed', 405);
+            }
+            
+            $userId = (int)($_POST['user_id'] ?? 0);
+            $tagId = (int)($_POST['tag_id'] ?? 0);
+            
+            if (!$userId || !$tagId) {
+                sendError('User ID and tag ID are required');
+            }
+            
+            try {
+                $stmt = $db->prepare("DELETE FROM user_tag_assignments WHERE user_id = ? AND tag_id = ?");
+                $stmt->execute([$userId, $tagId]);
+                
+                sendResponse([
+                    'success' => true,
+                    'message' => 'Tag removed successfully'
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to remove tag: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
         // Default - Unknown action
         // ============================================
         default:
