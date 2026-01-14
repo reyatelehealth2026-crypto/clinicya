@@ -357,14 +357,16 @@
 }
 
 .tag-badge {
-    padding: 4px 10px;
+    padding: 5px 12px;
     border-radius: 14px;
     font-size: 11px;
-    font-weight: 500;
-    color: white;
+    font-weight: 600;
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    /* Dark background with white text for better readability */
+    background: #374151 !important;
+    color: white !important;
 }
 
 .tag-badge .remove-tag {
@@ -377,12 +379,12 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: rgba(0,0,0,0.2);
+    background: rgba(255,255,255,0.3);
 }
 
 .tag-badge .remove-tag:hover {
     opacity: 1;
-    background: rgba(0,0,0,0.3);
+    background: rgba(255,255,255,0.4);
 }
 
 .add-tag-btn {
@@ -483,8 +485,8 @@
 }
 
 .note-item {
-    background: #FFFBEB;
-    border-left: 3px solid #F59E0B;
+    background: #E6F4F2;
+    border-left: 3px solid #0C665D;
     padding: 10px 12px;
     margin-bottom: 8px;
     border-radius: 0 8px 8px 0;
@@ -495,7 +497,7 @@
 
 .note-item .note-meta {
     font-size: 10px;
-    color: #9CA3AF;
+    color: #6B7280;
     margin-top: 6px;
     display: flex;
     justify-content: space-between;
