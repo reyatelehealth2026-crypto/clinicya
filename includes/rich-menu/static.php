@@ -647,7 +647,7 @@ try {
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">รูปภาพ Rich Menu</label>
-                        <input type="file" name="image" id="imageInput" accept="image/png,image/jpeg" onchange="handleImageSelect(this); previewImage(this);" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="file" name="image" id="imageInput" accept="image/png,image/jpeg" onchange="handleImageSelect(this);" class="w-full px-4 py-2 border rounded-lg">
                         <p class="text-xs text-gray-500 mt-1">PNG/JPEG ขนาด 2500 x 1686 หรือ 2500 x 843 px (รูปจะถูก resize อัตโนมัติ)</p>
                         <div id="imageInfo" class="text-xs mt-1"></div>
                     </div>
