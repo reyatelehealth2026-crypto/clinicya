@@ -5,6 +5,9 @@
     <!-- Lazy Load Script -->
     <script src="<?= $baseUrl ?? '' ?>assets/js/lazy-load.js"></script>
     
+    <!-- Dashboard Notification (real-time message alerts) -->
+    <script src="<?= $baseUrl ?? '' ?>assets/js/dashboard-notification.js"></script>
+    
     <script>
     // Toast notification
     function showToast(message, type = 'success') {

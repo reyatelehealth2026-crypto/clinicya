@@ -373,6 +373,7 @@ $menuGroups = [
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#06C755">
     <meta name="base-url" content="<?= $baseUrl ?>">
+    <meta name="line-account-id" content="<?= $_SESSION['current_bot_id'] ?? $_SESSION['line_account_id'] ?? 1 ?>">
     <title>Re-ya Pharmachy</title>
     
     <!-- Favicon & Icons -->
