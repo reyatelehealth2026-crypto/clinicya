@@ -739,6 +739,154 @@ let currentAreaIndex = -1;
 let editingMenuId = null;
 const CANVAS_WIDTH = 2500;
 let canvasHeight = 1686;
+let compressedImageBlob = null;
+
+// Compress image before upload (client-side)
+async function compressImage(file, maxWidth, maxHeight, maxSizeKB = 900) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                canvas.width = maxWidth;
+                canvas.height = maxHeight;
+                const ctx = canvas.getContext('2d');
+                
+                // White background
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, maxWidth, maxHeight);
+                
+                // Calculate crop/resize (cover mode)
+                const srcRatio = img.width / img.height;
+                const dstRatio = maxWidth / maxHeight;
+                let sx, sy, sw, sh;
+                
+                if (srcRatio > dstRatio) {
+                    sh = img.height;
+                    sw = img.height * dstRatio;
+                    sx = (img.width - sw) / 2;
+                    sy = 0;
+                } else {
+                    sw = img.width;
+                    sh = img.width / dstRatio;
+                    sx = 0;
+                    sy = (img.height - sh) / 2;
+                }
+                
+                ctx.drawImage(img, sx, sy, sw, sh, 0, 0, maxWidth, maxHeight);
+                
+                // Try different quality levels
+                let quality = 0.85;
+                let blob;
+                
+                const tryCompress = () => {
+                    canvas.toBlob((b) => {
+                        blob = b;
+                        const sizeKB = blob.size / 1024;
+                        console.log(`Compressed: ${sizeKB.toFixed(0)}KB at quality ${quality}`);
+                        
+                        if (sizeKB > maxSizeKB && quality > 0.3) {
+                            quality -= 0.1;
+                            tryCompress();
+                        } else {
+                            resolve(blob);
+                        }
+                    }, 'image/jpeg', quality);
+                };
+                
+                tryCompress();
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// Handle form submit with compressed image
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('richMenuForm');
+    if (form) {
+        form.addEventListener('submit', async function(e) {
+            const imageInput = document.getElementById('imageInput');
+            if (imageInput && imageInput.files && imageInput.files[0]) {
+                e.preventDefault();
+                
+                const submitBtn = document.getElementById('submitBtn');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังบีบอัดรูป...';
+                submitBtn.disabled = true;
+                
+                try {
+                    const height = parseInt(document.getElementById('sizeHeight').value) || 1686;
+                    const blob = await compressImage(imageInput.files[0], 2500, height, 900);
+                    
+                    // Create new FormData with compressed image
+                    const formData = new FormData(form);
+                    formData.delete('image');
+                    formData.set('image', blob, 'richmenu.jpg');
+                    
+                    // Submit via fetch
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังอัพโหลด...';
+                    
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    // Redirect to refresh page
+                    window.location.href = 'rich-menu.php?tab=static';
+                } catch (err) {
+                    console.error('Compression error:', err);
+                    alert('เกิดข้อผิดพลาดในการบีบอัดรูป: ' + err.message);
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }
+            }
+        });
+    }
+    
+    // Also handle upload_image forms
+    document.querySelectorAll('form[action*="upload_image"], form').forEach(f => {
+        if (f.querySelector('input[name="action"][value="upload_image"]')) {
+            f.addEventListener('submit', async function(e) {
+                const imageInput = f.querySelector('input[type="file"]');
+                if (imageInput && imageInput.files && imageInput.files[0]) {
+                    e.preventDefault();
+                    
+                    const submitBtn = f.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบีบอัด...';
+                    submitBtn.disabled = true;
+                    
+                    try {
+                        const blob = await compressImage(imageInput.files[0], 2500, 1686, 900);
+                        
+                        const formData = new FormData(f);
+                        formData.delete('image');
+                        formData.set('image', blob, 'richmenu.jpg');
+                        
+                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังอัพโหลด...';
+                        
+                        await fetch(f.action, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        window.location.href = 'rich-menu.php?tab=static';
+                    } catch (err) {
+                        console.error('Upload error:', err);
+                        alert('เกิดข้อผิดพลาด: ' + err.message);
+                        submitBtn.innerHTML = originalText;
+                        submitBtn.disabled = false;
+                    }
+                }
+            });
+        }
+    });
+});
 
 function openModal(isEdit = false) {
     document.getElementById('modal').classList.remove('hidden');
