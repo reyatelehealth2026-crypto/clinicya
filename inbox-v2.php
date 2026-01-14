@@ -1723,10 +1723,16 @@ function formatThaiDateTime($datetime) {
             <!-- Mode Switcher -->
             <div class="hud-mode-switcher">
                 <button class="hud-mode-btn active" data-mode="ai" onclick="HUDMode.switchMode('ai')">
-                    <i class="fas fa-robot"></i> AI ขาย
+                    <i class="fas fa-robot"></i> AI
                 </button>
                 <button class="hud-mode-btn" data-mode="crm" onclick="HUDMode.switchMode('crm')">
                     <i class="fas fa-user-circle"></i> CRM
+                </button>
+                <button class="hud-mode-btn" data-mode="quickreply" onclick="HUDMode.switchMode('quickreply')">
+                    <i class="fas fa-bolt"></i> Quick
+                </button>
+                <button class="hud-mode-btn" data-mode="templates" onclick="HUDMode.switchMode('templates')">
+                    <i class="fas fa-file-alt"></i> เทมเพลต
                 </button>
             </div>
         </div>
@@ -2066,6 +2072,44 @@ function formatThaiDateTime($datetime) {
             </div>
             
         </div><!-- End hudCRMPanel -->
+        
+        <!-- Quick Reply Panel -->
+        <div id="hudQuickReplyPanel" class="hud-scroll" style="display: none; max-height: calc(100vh - 120px); overflow-y: auto;">
+            <div class="p-3">
+                <div class="relative mb-3">
+                    <input type="text" id="quickReplySearch" placeholder="🔍 ค้นหา Quick Reply..." 
+                           class="w-full px-3 py-2 bg-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                           oninput="HUDMode.searchQuickReply(this.value)">
+                </div>
+                <div id="quickReplyList" class="space-y-2">
+                    <div class="text-center text-gray-400 text-sm py-4">
+                        <i class="fas fa-spinner fa-spin"></i> กำลังโหลด...
+                    </div>
+                </div>
+            </div>
+        </div><!-- End hudQuickReplyPanel -->
+        
+        <!-- Templates Panel -->
+        <div id="hudTemplatesPanel" class="hud-scroll" style="display: none; max-height: calc(100vh - 120px); overflow-y: auto;">
+            <div class="p-3">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-sm font-medium text-gray-700">เทมเพลตข้อความ</span>
+                    <button onclick="HUDMode.openTemplateManager()" class="text-xs text-teal-600 hover:text-teal-700">
+                        <i class="fas fa-cog"></i> จัดการ
+                    </button>
+                </div>
+                <div class="relative mb-3">
+                    <input type="text" id="templateSearch" placeholder="🔍 ค้นหาเทมเพลต..." 
+                           class="w-full px-3 py-2 bg-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                           oninput="HUDMode.searchTemplates(this.value)">
+                </div>
+                <div id="templateList" class="space-y-2">
+                    <div class="text-center text-gray-400 text-sm py-4">
+                        <i class="fas fa-spinner fa-spin"></i> กำลังโหลด...
+                    </div>
+                </div>
+            </div>
+        </div><!-- End hudTemplatesPanel -->
         
     </div>
     <?php endif; ?>
