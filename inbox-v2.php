@@ -692,60 +692,58 @@ function formatThaiDateTime($datetime) {
 <link rel="stylesheet" href="assets/css/inbox-v2-fab.css?v=<?= time() ?>">
 
 <style>
-:root { --primary: #06C755; --primary-dark: #05A847; --vibe-purple: #8B5CF6; --vibe-purple-dark: #7C3AED; }
+:root { --primary: #0C665D; --primary-dark: #0A5550; --vibe-purple: #8B5CF6; --vibe-purple-dark: #7C3AED; }
 .chat-scroll::-webkit-scrollbar { width: 5px; }
 .chat-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
 
-/* Chat Bubbles - LINE OA style */
+/* Chat Bubbles - LINE OA style - fit content */
 .chat-bubble { 
     white-space: pre-wrap; 
     word-wrap: break-word; 
-    line-height: 1.45;
+    line-height: 1.5;
     font-size: 14px;
-    max-width: fit-content;
+    display: inline-block;
+    padding: 10px 14px;
 }
 .chat-incoming { 
-    background: #FFFFFF; 
-    color: #333333; 
-    border-radius: 0 18px 18px 18px;
-    box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+    background: #E8E8E8; 
+    color: #1A1A1A; 
+    border-radius: 4px 20px 20px 20px;
 }
 .chat-outgoing { 
-    background: #06C755; 
+    background: #0C665D; 
     color: #FFFFFF; 
-    border-radius: 18px 0 18px 18px;
+    border-radius: 20px 4px 20px 20px;
 }
 
-/* Message container - fit content */
-.message-item .flex-col {
-    max-width: 65%;
+/* Message container - remove max-width to fit content */
+.message-item {
+    margin-bottom: 8px;
 }
-.message-item .chat-bubble {
-    padding: 10px 14px;
+.message-item .flex-col {
+    max-width: 70%;
 }
 
 /* User list */
-.user-item.active { background: #E8F5E9; border-left: 3px solid #06C755; }
-.user-item:hover { background: #F0FDF4; }
+.user-item.active { background: #E0F2F1; border-left: 3px solid #0C665D; }
+.user-item:hover { background: #F5F5F5; }
 .user-item.sla-warning { border-left: 3px solid #F97316; background: #FFF7ED; }
 .tag-badge { font-size: 0.6rem; padding: 2px 6px; border-radius: 9999px; font-weight: 500; }
 
-/* Chat area background - LINE OA teal/blue-green */
-#chatBox { background: #7494A8; }
-.chat-area-wrapper { background: #7494A8; }
+/* Chat area background - Light gray like LINE OA */
+#chatBox { background: #F0F0F0; }
+.chat-area-wrapper { background: #F0F0F0; }
 
 /* Message meta - time and sender */
 .msg-meta { 
-    font-size: 11px !important; 
-    margin-top: 4px;
-    opacity: 0.7;
+    font-size: 11px; 
+    margin-top: 3px;
+    color: #888888;
 }
-.message-item.justify-end .msg-meta { color: #666; }
-.message-item.justify-start .msg-meta { color: #666; }
 
 /* V2 Vibe Selling OS Styles */
-.vibe-header { background: #06C755; }
-.vibe-badge { background: #06C755; color: white; font-size: 9px; padding: 2px 6px; border-radius: 4px; }
+.vibe-header { background: #0C665D; }
+.vibe-badge { background: #0C665D; color: white; font-size: 9px; padding: 2px 6px; border-radius: 4px; }
 
 /* HUD Dashboard Styles - Clean solid colors */
 .hud-dashboard {
