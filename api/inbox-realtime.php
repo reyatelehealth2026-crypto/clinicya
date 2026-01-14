@@ -26,6 +26,9 @@ $db = Database::getInstance()->getConnection();
 $lineAccountId = $_SESSION['current_bot_id'] ?? $_GET['line_account_id'] ?? 1;
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
+// Debug log
+error_log("[inbox-realtime] Session bot_id: " . ($_SESSION['current_bot_id'] ?? 'NOT SET') . ", GET line_account_id: " . ($_GET['line_account_id'] ?? 'NOT SET') . ", Using: $lineAccountId");
+
 /**
  * Send JSON response
  */
@@ -130,7 +133,8 @@ try {
                 'new_count' => $newCount,
                 'has_new_for_current' => $hasNewForCurrent,
                 'conversations' => $formattedConversations,
-                'server_time' => date('Y-m-d H:i:s')
+                'server_time' => date('Y-m-d H:i:s'),
+                'debug_line_account_id' => $lineAccountId
             ]);
             break;
             
