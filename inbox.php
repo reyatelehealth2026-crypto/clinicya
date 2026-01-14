@@ -5804,6 +5804,11 @@ $templates = $templateService->getTemplates();
                 <textarea id="templateContent" rows="4" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="พิมพ์ข้อความ... ใช้ {name}, {phone}, {email} สำหรับ placeholder" required></textarea>
                 <p class="text-xs text-gray-500 mt-1">Placeholders: {name}, {phone}, {email}, {order_id}</p>
             </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Quick Reply Buttons (JSON)</label>
+                <textarea id="templateQuickReply" rows="3" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono text-sm" placeholder='[{"type":"action","action":{"type":"message","label":"ดูสินค้า","text":"shop"}}]'></textarea>
+                <p class="text-xs text-gray-500 mt-1">ตัวอย่าง: [{"type":"action","action":{"type":"message","label":"ดูสินค้า","text":"shop"}}]</p>
+            </div>
         </form>
         <div class="p-4 border-t flex gap-2 justify-end">
             <button onclick="closeTemplateModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg">ยกเลิก</button>
@@ -5819,6 +5824,7 @@ function openCreateTemplateModal() {
     document.getElementById('templateName').value = '';
     document.getElementById('templateCategory').value = '';
     document.getElementById('templateContent').value = '';
+    document.getElementById('templateQuickReply').value = '';
     document.getElementById('templateModal').classList.remove('hidden');
 }
 
@@ -5836,6 +5842,7 @@ async function editTemplate(id) {
             document.getElementById('templateName').value = data.data.name;
             document.getElementById('templateCategory').value = data.data.category || '';
             document.getElementById('templateContent').value = data.data.content;
+            document.getElementById('templateQuickReply').value = data.data.quick_reply || '';
             document.getElementById('templateModal').classList.remove('hidden');
         }
     } catch (e) {
@@ -5848,10 +5855,32 @@ async function saveTemplate() {
     const name = document.getElementById('templateName').value.trim();
     const category = document.getElementById('templateCategory').value.trim();
     const content = document.getElementById('templateContent').value.trim();
+    const quickReply = document.getElementById('templateQuickReply').value.trim();
     
     if (!name || !content) {
         alert('กรุณากรอกชื่อและเนื้อหา');
         return;
+    }
+    
+    // Validate Quick Reply JSON if provided
+    if (quickReply) {
+        try {
+            const parsed = JSON.parse(quickReply);
+            if (!Array.isArray(parsed)) {
+                alert('Quick Reply ต้องเป็น Array');
+                return;
+            }
+            // Validate structure
+            for (const item of parsed) {
+                if (item.type !== 'action' || !item.action || !item.action.type || !item.action.label) {
+                    alert('Quick Reply format ไม่ถูกต้อง\nต้องมี: {"type":"action","action":{"type":"message","label":"...","text":"..."}}');
+                    return;
+                }
+            }
+        } catch (e) {
+            alert('Quick Reply JSON ไม่ถูกต้อง: ' + e.message);
+            return;
+        }
     }
     
     try {
@@ -5861,7 +5890,8 @@ async function saveTemplate() {
             body: JSON.stringify({
                 action: id ? 'update_template' : 'create_template',
                 id: id || undefined,
-                name, category, content
+                name, category, content,
+                quick_reply: quickReply || null
             })
         });
         const data = await res.json();

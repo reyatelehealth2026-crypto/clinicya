@@ -1025,8 +1025,11 @@ function updateQuickReplyHidden() {
     
     const items = quickReplyItems.filter(item => item.label).map(item => {
         const result = {
-            type: item.type,
-            label: item.label
+            type: 'action',
+            action: {
+                type: item.type,
+                label: item.label
+            }
         };
         
         // Add icon if exists
@@ -1037,21 +1040,21 @@ function updateQuickReplyHidden() {
         // Add action-specific fields
         switch (item.type) {
             case 'message':
-                result.text = item.text || item.label;
+                result.action.text = item.text || item.label;
                 break;
             case 'uri':
-                result.uri = item.uri;
+                result.action.uri = item.uri;
                 break;
             case 'postback':
-                result.data = item.data;
-                if (item.displayText) result.displayText = item.displayText;
+                result.action.data = item.data;
+                if (item.displayText) result.action.displayText = item.displayText;
                 break;
             case 'datetimepicker':
-                result.data = item.data;
-                result.mode = item.mode || 'datetime';
-                if (item.initial) result.initial = item.initial;
-                if (item.min) result.min = item.min;
-                if (item.max) result.max = item.max;
+                result.action.data = item.data;
+                result.action.mode = item.mode || 'datetime';
+                if (item.initial) result.action.initial = item.initial;
+                if (item.min) result.action.min = item.min;
+                if (item.max) result.action.max = item.max;
                 break;
             // camera, cameraRoll, location - no extra fields needed
         }
@@ -1073,8 +1076,8 @@ const templates = {
         tags: 'greeting,welcome',
         sender_name: '🛒 Shop',
         quick_reply: JSON.stringify([
-            {label: '🛒 ดูสินค้า', text: 'shop'},
-            {label: '📋 เมนู', text: 'menu'}
+            {type: 'action', action: {type: 'message', label: '🛒 ดูสินค้า', text: 'shop'}},
+            {type: 'action', action: {type: 'message', label: '📋 เมนู', text: 'menu'}}
         ])
     },
     thanks: {
@@ -1094,8 +1097,8 @@ const templates = {
         description: 'ตอบกลับเมื่อถามราคา',
         tags: 'price,product',
         quick_reply: JSON.stringify([
-            {label: '🛒 ดูสินค้า', text: 'shop'},
-            {label: '🏷️ โปรโมชั่น', text: 'promo'}
+            {type: 'action', action: {type: 'message', label: '🛒 ดูสินค้า', text: 'shop'}},
+            {type: 'action', action: {type: 'message', label: '🏷️ โปรโมชั่น', text: 'promo'}}
         ])
     },
     shipping: {
