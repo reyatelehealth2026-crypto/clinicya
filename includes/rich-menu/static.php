@@ -92,12 +92,15 @@ function resizeRichMenuImage($sourcePath, $targetWidth, $targetHeight) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'static') {
     $action = $_POST['action'] ?? '';
     $errorMessage = '';
+    $skipImage = !empty($_POST['skip_image']);
     
     if ($action === 'create') {
-        // ตรวจสอบว่ามีรูปภาพหรือไม่
-        if (empty($_FILES['image']['tmp_name']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
-            $errorMessage = "กรุณาอัพโหลดรูปภาพ Rich Menu (Error: " . ($_FILES['image']['error'] ?? 'No file') . ")";
-        } else {
+        // ถ้า skip_image ไม่ต้องตรวจสอบรูป
+        if (!$skipImage && (empty($_FILES['image']['tmp_name']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK)) {
+            $errorMessage = "กรุณาอัพโหลดรูปภาพ Rich Menu";
+        }
+        
+        if (empty($errorMessage)) {
             $areas = json_decode($_POST['areas'], true) ?: [];
             $targetHeight = (int)$_POST['size_height'];
             
@@ -132,29 +135,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
             if ($result['code'] === 200 && isset($result['body']['richMenuId'])) {
                 $richMenuId = $result['body']['richMenuId'];
                 
-                // Check and resize image
-                $imagePath = $_FILES['image']['tmp_name'];
-                $imageInfo = getimagesize($imagePath);
-                
-                if ($imageInfo) {
-                    $srcWidth = $imageInfo[0];
-                    $srcHeight = $imageInfo[1];
+                // Upload image if provided (not skipped)
+                if (!$skipImage && !empty($_FILES['image']['tmp_name'])) {
+                    $imagePath = $_FILES['image']['tmp_name'];
+                    $imageInfo = getimagesize($imagePath);
                     
-                    // Check if resize needed
-                    if ($srcWidth !== 2500 || $srcHeight !== $targetHeight) {
-                        $resizedPath = resizeRichMenuImage($imagePath, 2500, $targetHeight);
-                        if ($resizedPath) {
-                            $imagePath = $resizedPath;
-                        } else {
-                            $errorMessage = "ไม่สามารถ resize รูปภาพได้";
+                    if ($imageInfo) {
+                        $srcWidth = $imageInfo[0];
+                        $srcHeight = $imageInfo[1];
+                        
+                        if ($srcWidth !== 2500 || $srcHeight !== $targetHeight) {
+                            $resizedPath = resizeRichMenuImage($imagePath, 2500, $targetHeight);
+                            if ($resizedPath) {
+                                $imagePath = $resizedPath;
+                            }
                         }
                     }
-                }
-                
-                if (empty($errorMessage)) {
+                    
                     $uploadResult = $line->uploadRichMenuImage($richMenuId, $imagePath);
                     
-                    // Clean up temp file
                     if (isset($resizedPath) && file_exists($resizedPath)) {
                         unlink($resizedPath);
                     }
@@ -165,8 +164,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
                     }
                 }
                 
-                // บันทึกลง DB ถ้าสร้าง Rich Menu สำเร็จ
-                if (!empty($richMenuId) && empty($errorMessage)) {
+                // บันทึกลง DB
+                if (!empty($richMenuId)) {
                     try {
                         $stmt = $db->query("SHOW COLUMNS FROM rich_menus LIKE 'line_account_id'");
                         if ($stmt->rowCount() > 0) {
@@ -179,6 +178,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
                     } catch (Exception $e) {
                         $stmt = $db->prepare("INSERT INTO rich_menus (line_rich_menu_id, name, chat_bar_text, size_height, areas) VALUES (?, ?, ?, ?, ?)");
                         $stmt->execute([$richMenuId, $_POST['name'], $_POST['chat_bar_text'], $_POST['size_height'], $_POST['areas']]);
+                    }
+                    
+                    // Return richMenuId for JavaScript to upload image
+                    if ($skipImage) {
+                        echo "richMenuId: " . $richMenuId;
+                        $_SESSION['rich_menu_success'] = 'สร้าง Rich Menu สำเร็จ (รอ upload รูป)';
+                    } else {
+                        $_SESSION['rich_menu_success'] = 'สร้าง Rich Menu สำเร็จ';
                     }
                 }
             } else {
@@ -561,18 +568,18 @@ try {
             <p class="text-sm text-gray-500 mb-3"><?= htmlspecialchars($menu['chat_bar_text']) ?></p>
             
             <?php if (!$imageData): ?>
-            <!-- Upload Image Form -->
-            <form method="POST" action="rich-menu.php?tab=static" enctype="multipart/form-data" class="mb-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                <input type="hidden" name="action" value="upload_image">
-                <input type="hidden" name="id" value="<?= $menu['id'] ?>">
+            <!-- Upload Image Button (uses JavaScript API) -->
+            <div class="mb-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                 <label class="block text-sm font-medium text-yellow-700 mb-2">
                     <i class="fas fa-exclamation-triangle mr-1"></i>ต้อง upload รูปก่อนใช้งาน
                 </label>
-                <input type="file" name="image" accept="image/png,image/jpeg" required class="w-full text-sm mb-2">
-                <button type="submit" class="w-full py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm">
-                    <i class="fas fa-upload mr-1"></i>Upload รูป
+                <button type="button" 
+                        data-menu-id="<?= $menu['id'] ?>"
+                        onclick="uploadImageToMenu(<?= $menu['id'] ?>, '<?= htmlspecialchars($menu['line_rich_menu_id']) ?>')" 
+                        class="w-full py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm">
+                    <i class="fas fa-upload mr-1"></i>เลือกและ Upload รูป
                 </button>
-            </form>
+            </div>
             <?php endif; ?>
             
             <div class="flex space-x-2">
@@ -640,7 +647,7 @@ try {
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">รูปภาพ Rich Menu</label>
-                        <input type="file" name="image" id="imageInput" accept="image/png,image/jpeg" onchange="previewImage(this); validateImage(this);" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="file" name="image" id="imageInput" accept="image/png,image/jpeg" onchange="handleImageSelect(this); previewImage(this);" class="w-full px-4 py-2 border rounded-lg">
                         <p class="text-xs text-gray-500 mt-1">PNG/JPEG ขนาด 2500 x 1686 หรือ 2500 x 843 px (รูปจะถูก resize อัตโนมัติ)</p>
                         <div id="imageInfo" class="text-xs mt-1"></div>
                     </div>
@@ -739,10 +746,10 @@ let currentAreaIndex = -1;
 let editingMenuId = null;
 const CANVAS_WIDTH = 2500;
 let canvasHeight = 1686;
-let compressedImageBlob = null;
+let pendingImageBase64 = null;
 
-// Compress image before upload (client-side)
-async function compressImage(file, maxWidth, maxHeight, maxSizeKB = 900) {
+// Compress image and return base64
+async function compressImageToBase64(file, maxWidth, maxHeight, maxSizeKB = 800) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -777,22 +784,19 @@ async function compressImage(file, maxWidth, maxHeight, maxSizeKB = 900) {
                 ctx.drawImage(img, sx, sy, sw, sh, 0, 0, maxWidth, maxHeight);
                 
                 // Try different quality levels
-                let quality = 0.85;
-                let blob;
+                let quality = 0.8;
                 
                 const tryCompress = () => {
-                    canvas.toBlob((b) => {
-                        blob = b;
-                        const sizeKB = blob.size / 1024;
-                        console.log(`Compressed: ${sizeKB.toFixed(0)}KB at quality ${quality}`);
-                        
-                        if (sizeKB > maxSizeKB && quality > 0.3) {
-                            quality -= 0.1;
-                            tryCompress();
-                        } else {
-                            resolve(blob);
-                        }
-                    }, 'image/jpeg', quality);
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    const sizeKB = (dataUrl.length * 0.75) / 1024; // base64 is ~33% larger
+                    console.log(`Compressed: ${sizeKB.toFixed(0)}KB at quality ${quality}`);
+                    
+                    if (sizeKB > maxSizeKB && quality > 0.2) {
+                        quality -= 0.1;
+                        tryCompress();
+                    } else {
+                        resolve(dataUrl);
+                    }
                 };
                 
                 tryCompress();
@@ -805,90 +809,136 @@ async function compressImage(file, maxWidth, maxHeight, maxSizeKB = 900) {
     });
 }
 
-// Handle form submit with compressed image
+// Upload image via API (bypass nginx limit)
+async function uploadImageViaAPI(richMenuId, base64Data) {
+    const response = await fetch('api/rich-menu-upload.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            richMenuId: richMenuId,
+            imageData: base64Data
+        })
+    });
+    
+    const result = await response.json();
+    if (!result.success) {
+        throw new Error(result.error || 'Upload failed');
+    }
+    return result;
+}
+
+// Handle image selection - compress immediately
+async function handleImageSelect(input) {
+    if (input.files && input.files[0]) {
+        const height = parseInt(document.getElementById('sizeHeight').value) || 1686;
+        const infoDiv = document.getElementById('imageInfo');
+        
+        infoDiv.innerHTML = '<span class="text-blue-500"><i class="fas fa-spinner fa-spin"></i> กำลังบีบอัดรูป...</span>';
+        
+        try {
+            pendingImageBase64 = await compressImageToBase64(input.files[0], 2500, height, 800);
+            const sizeKB = (pendingImageBase64.length * 0.75) / 1024;
+            infoDiv.innerHTML = `<span class="text-green-500">✓ บีบอัดแล้ว: ${sizeKB.toFixed(0)}KB</span>`;
+            
+            // Preview
+            document.getElementById('previewImage').src = pendingImageBase64;
+            document.getElementById('previewImage').classList.remove('hidden');
+        } catch (err) {
+            infoDiv.innerHTML = `<span class="text-red-500">✗ Error: ${err.message}</span>`;
+            pendingImageBase64 = null;
+        }
+    }
+}
+
+// Handle form submit - create menu then upload image via API
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('richMenuForm');
     if (form) {
         form.addEventListener('submit', async function(e) {
-            const imageInput = document.getElementById('imageInput');
-            if (imageInput && imageInput.files && imageInput.files[0]) {
-                e.preventDefault();
-                
-                const submitBtn = document.getElementById('submitBtn');
-                const originalText = submitBtn.innerHTML;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังบีบอัดรูป...';
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.innerHTML;
+            
+            try {
+                // Step 1: Create Rich Menu (without image)
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังสร้าง Rich Menu...';
                 submitBtn.disabled = true;
                 
-                try {
-                    const height = parseInt(document.getElementById('sizeHeight').value) || 1686;
-                    const blob = await compressImage(imageInput.files[0], 2500, height, 900);
-                    
-                    // Create new FormData with compressed image
-                    const formData = new FormData(form);
-                    formData.delete('image');
-                    formData.set('image', blob, 'richmenu.jpg');
-                    
-                    // Submit via fetch
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังอัพโหลด...';
-                    
-                    const response = await fetch(form.action, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    // Redirect to refresh page
-                    window.location.href = 'rich-menu.php?tab=static';
-                } catch (err) {
-                    console.error('Compression error:', err);
-                    alert('เกิดข้อผิดพลาดในการบีบอัดรูป: ' + err.message);
-                    submitBtn.innerHTML = originalText;
-                    submitBtn.disabled = false;
+                const formData = new FormData(form);
+                formData.delete('image'); // Remove image from form
+                formData.set('skip_image', '1'); // Flag to skip image upload
+                
+                const createResponse = await fetch(form.action, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const responseText = await createResponse.text();
+                
+                // Extract richMenuId from response if available
+                const richMenuIdMatch = responseText.match(/richMenuId['":\s]+([a-zA-Z0-9-]+)/);
+                
+                // Step 2: Upload image via API if we have pending image
+                if (pendingImageBase64 && richMenuIdMatch) {
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังอัพโหลดรูป...';
+                    await uploadImageViaAPI(richMenuIdMatch[1], pendingImageBase64);
                 }
+                
+                // Redirect
+                window.location.href = 'rich-menu.php?tab=static';
+                
+            } catch (err) {
+                console.error('Error:', err);
+                alert('เกิดข้อผิดพลาด: ' + err.message);
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
             }
         });
     }
-    
-    // Also handle upload_image forms
-    document.querySelectorAll('form[action*="upload_image"], form').forEach(f => {
-        if (f.querySelector('input[name="action"][value="upload_image"]')) {
-            f.addEventListener('submit', async function(e) {
-                const imageInput = f.querySelector('input[type="file"]');
-                if (imageInput && imageInput.files && imageInput.files[0]) {
-                    e.preventDefault();
-                    
-                    const submitBtn = f.querySelector('button[type="submit"]');
-                    const originalText = submitBtn.innerHTML;
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบีบอัด...';
-                    submitBtn.disabled = true;
-                    
-                    try {
-                        const blob = await compressImage(imageInput.files[0], 2500, 1686, 900);
-                        
-                        const formData = new FormData(f);
-                        formData.delete('image');
-                        formData.set('image', blob, 'richmenu.jpg');
-                        
-                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังอัพโหลด...';
-                        
-                        await fetch(f.action, {
-                            method: 'POST',
-                            body: formData
-                        });
-                        
-                        window.location.href = 'rich-menu.php?tab=static';
-                    } catch (err) {
-                        console.error('Upload error:', err);
-                        alert('เกิดข้อผิดพลาด: ' + err.message);
-                        submitBtn.innerHTML = originalText;
-                        submitBtn.disabled = false;
-                    }
-                }
-            });
-        }
-    });
 });
 
+// Standalone upload for existing menus
+async function uploadImageToMenu(menuId, lineRichMenuId) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg';
+    
+    input.onchange = async function() {
+        if (this.files && this.files[0]) {
+            const btn = document.querySelector(`[data-menu-id="${menuId}"]`);
+            const originalText = btn ? btn.innerHTML : '';
+            
+            try {
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    btn.disabled = true;
+                }
+                
+                // Compress
+                const base64 = await compressImageToBase64(this.files[0], 2500, 1686, 800);
+                
+                // Upload via API
+                await uploadImageViaAPI(lineRichMenuId, base64);
+                
+                alert('อัพโหลดรูปสำเร็จ!');
+                window.location.reload();
+                
+            } catch (err) {
+                alert('เกิดข้อผิดพลาด: ' + err.message);
+                if (btn) {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            }
+        }
+    };
+    
+    input.click();
+}
+
 function openModal(isEdit = false) {
+    pendingImageBase64 = null;
     document.getElementById('modal').classList.remove('hidden');
     document.getElementById('modal').classList.add('flex');
     
