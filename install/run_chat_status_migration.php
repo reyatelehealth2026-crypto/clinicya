@@ -4,13 +4,14 @@
  * เพิ่ม chat_status column และ history table
  */
 
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 
 echo "<h2>🔄 Running Chat Status Migration</h2>";
 echo "<pre>";
 
 try {
-    $db = getDB();
+    $db = Database::getInstance()->getConnection();
     
     // Check if chat_status column exists
     $stmt = $db->query("SHOW COLUMNS FROM users LIKE 'chat_status'");
