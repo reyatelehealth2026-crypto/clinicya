@@ -1802,10 +1802,265 @@ function formatThaiDateTime($datetime) {
 <!-- Notification Container -->
 <div id="notificationContainer" class="notification-container"></div>
 
+<!-- Real-time Status Indicator -->
+<?php if ($currentTab === 'inbox'): ?>
+<div id="realtimeIndicator" class="realtime-indicator" title="Real-time updates active">
+    <div class="pulse"></div>
+    <span>Live</span>
+</div>
+<?php endif; ?>
+
 <!-- Audio for notifications -->
 <audio id="notificationSound" preload="auto">
     <source src="data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNBrv2AAAAAAAAAAAAAAAAAAAAAP/7UMQAA8AAADSAAAAAAAAANIAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+1DEAYPAAADSAAAAAAAAANIAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=" type="audio/mpeg">
 </audio>
+
+<!-- Real-time Updates Script -->
+<script src="assets/js/inbox-realtime.js"></script>
+<script>
+/**
+ * Real-time Inbox Updates - Auto-refresh conversations and messages
+ * 
+ * Features:
+ * - Auto-move conversations with new messages to top
+ * - Real-time message updates in active chat
+ * - Sound notification for new messages
+ * - Desktop notification when tab is not active
+ */
+
+// Initialize real-time updates when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Only initialize for inbox tab
+    <?php if ($currentTab === 'inbox'): ?>
+    
+    InboxRealtime.init({
+        userId: <?= $selectedUser ? $selectedUser['id'] : 'null' ?>,
+        pollInterval: 3000, // Poll every 3 seconds
+        enableSound: true,
+        enableDesktopNotification: true,
+        
+        // Callback when new messages arrive
+        onNewMessage: function(data) {
+            console.log('[Inbox] New messages:', data.new_count);
+            
+            // Show notification toast
+            if (typeof showNotification === 'function') {
+                showNotification(`📬 มี ${data.new_count} ข้อความใหม่`, 'info');
+            }
+        },
+        
+        // Callback when conversation list updates
+        onConversationUpdate: function(conversations) {
+            updateConversationListUI(conversations);
+        },
+        
+        // Error callback
+        onError: function(error) {
+            console.error('[Inbox] Real-time error:', error);
+        }
+    });
+    
+    // Start polling
+    InboxRealtime.start();
+    
+    // Stop polling when page is hidden, resume when visible
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            // Keep polling but at slower rate when hidden
+        } else {
+            // Resume normal polling
+            if (!InboxRealtime.isRunning()) {
+                InboxRealtime.start();
+            }
+        }
+    });
+    
+    <?php endif; ?>
+});
+
+/**
+ * Update conversation list UI with new data
+ * @param {array} conversations Updated conversation list
+ */
+function updateConversationListUI(conversations) {
+    const container = document.getElementById('userList');
+    if (!container) return;
+    
+    const currentUserId = <?= $selectedUser ? $selectedUser['id'] : 'null' ?>;
+    
+    conversations.forEach((conv, index) => {
+        const existingItem = container.querySelector(`a[href*="user=${conv.id}"]`);
+        
+        if (existingItem) {
+            // Update existing item content
+            const lastMsgEl = existingItem.querySelector('.text-gray-500.text-xs.truncate');
+            if (lastMsgEl) {
+                const prefix = conv.last_direction === 'outgoing' ? 'คุณ: ' : '';
+                lastMsgEl.textContent = prefix + conv.last_message;
+            }
+            
+            // Update time
+            const timeEl = existingItem.querySelector('.text-gray-400.text-xs');
+            if (timeEl) {
+                timeEl.textContent = conv.last_time_formatted;
+            }
+            
+            // Update unread badge
+            let badgeEl = existingItem.querySelector('.unread-badge, .bg-red-500.text-white.text-xs');
+            if (conv.unread_count > 0) {
+                if (!badgeEl) {
+                    // Create badge if doesn't exist
+                    const avatarContainer = existingItem.querySelector('.relative');
+                    if (avatarContainer) {
+                        badgeEl = document.createElement('div');
+                        badgeEl.className = 'absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold unread-badge';
+                        avatarContainer.appendChild(badgeEl);
+                    }
+                }
+                if (badgeEl) {
+                    badgeEl.textContent = conv.unread_count > 9 ? '9+' : conv.unread_count;
+                    badgeEl.classList.remove('hidden');
+                }
+            } else if (badgeEl) {
+                badgeEl.classList.add('hidden');
+            }
+            
+            // Move to top if has new messages and not already at top
+            if (conv.unread_count > 0 && index === 0) {
+                const currentIndex = Array.from(container.children).indexOf(existingItem);
+                if (currentIndex > 0) {
+                    container.prepend(existingItem);
+                    // Add highlight animation
+                    existingItem.style.animation = 'highlightNew 2s ease-out';
+                    setTimeout(() => {
+                        existingItem.style.animation = '';
+                    }, 2000);
+                }
+            }
+        }
+    });
+}
+
+/**
+ * Append new message to chat (called by InboxRealtime)
+ * @param {object} msg Message object
+ */
+function appendNewMessageToChat(msg) {
+    const chatContainer = document.getElementById('chatBox');
+    if (!chatContainer) return;
+    
+    // Check if message already exists
+    if (chatContainer.querySelector(`[data-msg-id="${msg.id}"]`)) {
+        return;
+    }
+    
+    const isIncoming = msg.direction === 'incoming';
+    const alignClass = isIncoming ? '' : 'flex-row-reverse';
+    const bgClass = isIncoming ? 'bg-white' : 'bg-emerald-500 text-white';
+    const roundedClass = isIncoming ? 'rounded-tl-none' : 'rounded-tr-none';
+    
+    let contentHtml = '';
+    
+    switch (msg.type) {
+        case 'image':
+            contentHtml = `<img src="${escapeHtml(msg.content)}" class="max-w-[200px] rounded-lg cursor-pointer" onclick="window.open('${escapeHtml(msg.content)}', '_blank')">`;
+            break;
+        case 'sticker':
+            contentHtml = `<div class="text-4xl">😊</div>`;
+            break;
+        default:
+            contentHtml = `<div class="whitespace-pre-wrap break-words">${escapeHtml(msg.content)}</div>`;
+    }
+    
+    const messageHtml = `
+        <div class="flex gap-2 ${alignClass}" data-msg-id="${msg.id}" style="animation: fadeIn 0.3s ease-out;">
+            ${isIncoming ? `<img src="<?= $selectedUser ? htmlspecialchars($selectedUser['picture_url'] ?: '') : '' ?>" class="w-7 h-7 rounded-full self-end" onerror="this.style.display='none'">` : ''}
+            <div class="flex flex-col ${isIncoming ? 'items-start' : 'items-end'}" style="max-width:70%">
+                <div class="${bgClass} rounded-2xl ${roundedClass} px-4 py-2 shadow-sm">
+                    ${contentHtml}
+                </div>
+                <div class="msg-meta flex items-center gap-1 text-[10px] ${isIncoming ? 'text-gray-500' : 'text-gray-400'} mt-1">
+                    ${msg.time}
+                    ${!isIncoming && msg.sent_by ? `<span class="sender-badge admin"><i class="fas fa-user-shield"></i> ${escapeHtml(msg.sent_by.replace('admin:', ''))}</span>` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    chatContainer.insertAdjacentHTML('beforeend', messageHtml);
+    
+    // Scroll to bottom
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    
+    // Play notification sound for incoming messages
+    if (isIncoming) {
+        playNotificationSound();
+    }
+}
+
+/**
+ * Play notification sound
+ */
+function playNotificationSound() {
+    try {
+        const audio = document.getElementById('notificationSound');
+        if (audio) {
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+        }
+    } catch (e) {}
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// Add CSS for animations
+const realtimeStyles = document.createElement('style');
+realtimeStyles.textContent = `
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes highlightNew {
+        0% { background-color: rgba(16, 185, 129, 0.3); }
+        100% { background-color: transparent; }
+    }
+    .realtime-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #10B981;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        z-index: 1000;
+    }
+    .realtime-indicator .pulse {
+        width: 8px;
+        height: 8px;
+        background: white;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+`;
+document.head.appendChild(realtimeStyles);
+</script>
 
 <!-- Ghost Draft & Inbox V2 JavaScript -->
 <script>
