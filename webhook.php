@@ -1415,7 +1415,25 @@ if (!$line) {
                     ['label' => '📋 เมนู', 'text' => 'menu'],
                     ['label' => '📦 ออเดอร์', 'text' => 'orders']
                 ]);
-                $line->replyMessage($replyToken, [$contactMessage]);
+                
+                // Send and log response
+                $replyResult = $line->replyMessage($replyToken, [$contactMessage]);
+                
+                devLog($db, 'debug', 'webhook', 'Contact command reply result', [
+                    'user_id' => $userId,
+                    'code' => $replyResult['code'] ?? 0,
+                    'body' => $replyResult['body'] ?? null,
+                    'has_reply_token' => !empty($replyToken)
+                ], $userId);
+                
+                if (($replyResult['code'] ?? 0) !== 200) {
+                    devLog($db, 'error', 'webhook', 'Contact command reply FAILED', [
+                        'user_id' => $userId,
+                        'code' => $replyResult['code'] ?? 0,
+                        'error' => $replyResult['body'] ?? null
+                    ], $userId);
+                }
+                
                 saveOutgoingMessage($db, $user['id'], 'contact');
                 return;
             }
