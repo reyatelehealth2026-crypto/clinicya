@@ -24,7 +24,9 @@ try {
 
 // Handle AJAX requests for rewards
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
-    header('Content-Type: application/json; charset=utf-8');
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+    }
     $action = $_POST['reward_action'];
     
     try {

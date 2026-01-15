@@ -1380,6 +1380,11 @@ if (!$line) {
                 // เช็ค Auto Reply ก่อน
                 $autoReply = checkAutoReply($db, $messageText, $lineAccountId);
                 if ($autoReply) {
+                    devLog($db, 'info', 'webhook', 'Auto reply matched (non-general mode)', [
+                        'user_id' => $userId,
+                        'message' => mb_substr($messageText, 0, 100),
+                        'bot_mode' => $botMode
+                    ], $userId);
                     $line->replyMessage($replyToken, [$autoReply]);
                     saveOutgoingMessage($db, $user['id'], json_encode($autoReply));
                     return;
@@ -1470,6 +1475,22 @@ if (!$line) {
             }
             
             // Points/loyalty command - handled by BusinessBot.showPoints()
+
+            // เช็ค Auto Reply ก่อน BusinessBot (สำหรับข้อความทั่วไป)
+            // ยกเว้นคำสั่งพิเศษที่ BusinessBot ต้องจัดการ
+            $specialCommands = ['shop', 'menu', 'orders', 'สินค้า', 'เมนู', 'ออเดอร์', 'points', 'แต้ม'];
+            if (!in_array($textLower, $specialCommands) && !$isSlipCommand && !$isOrderCommand) {
+                $autoReply = checkAutoReply($db, $messageText, $lineAccountId);
+                if ($autoReply) {
+                    devLog($db, 'info', 'webhook', 'Auto reply matched (before BusinessBot)', [
+                        'user_id' => $userId,
+                        'message' => mb_substr($messageText, 0, 100)
+                    ], $userId);
+                    $line->replyMessage($replyToken, [$autoReply]);
+                    saveOutgoingMessage($db, $user['id'], json_encode($autoReply));
+                    return;
+                }
+            }
 
             // V2.5: Check Business commands (ใช้ BusinessBot เท่านั้น)
             $botMode = 'shop'; // default

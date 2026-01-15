@@ -190,8 +190,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send'
     $stmt = $db->prepare("INSERT INTO broadcasts (line_account_id, title, message_type, content, target_type, target_group_id, sent_count, status, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'sent', NOW())");
     $stmt->execute([$currentBotId, $title, $messageType, $content, $targetType, $targetGroupId, $sentCount]);
     
-    header('Location: broadcast.php?tab=send&sent=' . $sentCount);
-    exit;
+    // Use output buffering to prevent headers already sent error
+    if (!headers_sent()) {
+        header('Location: broadcast.php?tab=send&sent=' . $sentCount);
+        exit;
+    } else {
+        echo '<script>window.location.href = "broadcast.php?tab=send&sent=' . $sentCount . '";</script>';
+        exit;
+    }
 }
 
 // Get groups for dropdown
