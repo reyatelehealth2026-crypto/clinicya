@@ -1112,6 +1112,9 @@ if (!$line) {
             }
             
             // ===== / command - ส่งไปให้ AI ตอบโดยตรง =====
+            // ===== AI DISABLED FOR PERFORMANCE =====
+            // AI ถูกปิดเพื่อลดเวลาประมวลผล webhook
+            /*
             if ($isSlashCommand && isset($user['id'])) {
                 devLog($db, 'info', 'webhook', 'Slash command detected', [
                     'user_id' => $userId,
@@ -1132,6 +1135,7 @@ if (!$line) {
                     return;
                 }
             }
+            */
             
             // ===== AI ตอบเฉพาะเมื่อใช้ / หรือ @ command =====
             // ===== AI SIMPLE MODE: DISABLED - ให้แอดมินตอบเอง =====
@@ -1316,6 +1320,10 @@ if (!$line) {
             }
             
             // ถ้าเรียก AI (@บอท xxx) - ส่งไปให้ AI ตอบ (fallback)
+            // ===== AI DISABLED FOR PERFORMANCE =====
+            // AI ถูกปิดเพื่อลดเวลาประมวลผล webhook
+            // ใช้ Ghost Draft ใน Inbox V2 แทน
+            /*
             if ($isAICall && !empty($aiMessage)) {
                 devLog($db, 'info', 'webhook', 'AI called with @bot', [
                     'user_id' => $userId,
@@ -1341,6 +1349,7 @@ if (!$line) {
                     return;
                 }
             }
+            */
             
             // ถ้าเป็นคำสั่งร้านค้า - ส่ง LIFF URL
             if ($isShopCommand && $liffId) {
