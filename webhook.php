@@ -35,6 +35,9 @@ require_once 'classes/OpenAI.php';
 require_once 'classes/TelegramAPI.php';
 require_once 'classes/FlexTemplates.php';
 
+// Webhook helper functions
+require_once 'includes/webhook_functions.php';
+
 // V2.5: Load BusinessBot if available, fallback to ShopBot
 if (file_exists(__DIR__ . '/classes/BusinessBot.php')) {
     require_once 'classes/BusinessBot.php';
