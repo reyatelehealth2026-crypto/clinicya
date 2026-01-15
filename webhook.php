@@ -1842,8 +1842,21 @@ if (!$line) {
          * V4.0: เพิ่ม Keyword Routing + Bot Pause Feature
          * V3.0: รองรับ PharmacyAI Adapter (Triage System)
          * V2.6: รองรับ Module ใหม่ (modules/AIChat)
+         * 
+         * ===== AI COMPLETELY DISABLED FOR PERFORMANCE =====
+         * AI processing has been disabled to improve webhook response time
+         * Use Inbox V2 (inbox-v2.php) for AI features instead
          */
         function checkAIChatbot($db, $text, $lineAccountId = null, $userId = null) {
+            // ===== AI DISABLED - RETURN NULL IMMEDIATELY =====
+            devLog($db, 'info', 'AI_disabled', 'AI is disabled in webhook', [
+                'text' => mb_substr($text, 0, 50),
+                'line_account_id' => $lineAccountId,
+                'user_id' => $userId
+            ], $userId);
+            return null;
+            
+            /* ===== ORIGINAL AI CODE DISABLED =====
             try {
                 // Log entry point
                 error_log("AI_entry: checkAIChatbot called - text: " . mb_substr($text, 0, 50) . ", lineAccountId: $lineAccountId, userId: $userId");
