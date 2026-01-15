@@ -986,6 +986,10 @@ if (!$line) {
                 }
             } catch (Exception $e) {}
             
+            // ตรวจสอบคำสั่งและการเรียก AI
+            $textLower = mb_strtolower(trim($messageText));
+            $textTrimmed = trim($messageText);
+            
             devLog($db, 'debug', 'webhook', 'Bot mode check', [
                 'user_id' => $userId,
                 'bot_mode' => $botMode,
@@ -1031,10 +1035,6 @@ if (!$line) {
                 ], $userId);
                 return; // ไม่ตอบกลับ - ข้อมูลถูกบันทึกไว้แล้วด้านบน
             }
-            
-            // ตรวจสอบคำสั่งและการเรียก AI
-            $textLower = mb_strtolower(trim($messageText));
-            $textTrimmed = trim($messageText);
             
             // ===== LIFF Message Handler - Process LIFF-triggered messages =====
             // Requirements: 20.3, 20.9, 20.12
