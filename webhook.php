@@ -59,6 +59,31 @@ $signature = $_SERVER['HTTP_X_LINE_SIGNATURE'] ?? '';
 
 $db = Database::getInstance()->getConnection();
 
+/**
+ * Developer Log - บันทึก log สำหรับ debug
+ * @param PDO $db Database connection
+ * @param string $type Log type: error, warning, info, debug, webhook
+ * @param string $source Source of log (e.g., 'webhook', 'BusinessBot', 'LineAPI')
+ * @param string $message Log message
+ * @param array|null $data Additional data
+ * @param string|null $userId LINE user ID (optional)
+ */
+function devLog($db, $type, $source, $message, $data = null, $userId = null) {
+    try {
+        $stmt = $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, user_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+        $stmt->execute([
+            $type,
+            $source,
+            $message,
+            $data ? json_encode($data, JSON_UNESCAPED_UNICODE) : null,
+            $userId
+        ]);
+    } catch (Exception $e) {
+        // Table might not exist - log to error_log instead
+        error_log("[{$type}] [{$source}] {$message} " . ($data ? json_encode($data) : ''));
+    }
+}
+
 // Multi-account support: ตรวจสอบว่ามาจาก account ไหน
 $lineAccountId = null;
 $lineAccount = null;
@@ -2671,31 +2696,6 @@ if (!$line) {
                 // Fallback
                 $stmt = $db->prepare("INSERT INTO analytics (event_type, event_data) VALUES (?, ?)");
                 $stmt->execute([$eventType, json_encode($data)]);
-            }
-        }
-        
-        /**
-         * Developer Log - บันทึก log สำหรับ debug
-         * @param PDO $db Database connection
-         * @param string $type Log type: error, warning, info, debug, webhook
-         * @param string $source Source of log (e.g., 'webhook', 'BusinessBot', 'LineAPI')
-         * @param string $message Log message
-         * @param array|null $data Additional data
-         * @param string|null $userId LINE user ID (optional)
-         */
-        function devLog($db, $type, $source, $message, $data = null, $userId = null) {
-            try {
-                $stmt = $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, user_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
-                $stmt->execute([
-                    $type,
-                    $source,
-                    $message,
-                    $data ? json_encode($data, JSON_UNESCAPED_UNICODE) : null,
-                    $userId
-                ]);
-            } catch (Exception $e) {
-                // Table might not exist - log to error_log instead
-                error_log("[{$type}] [{$source}] {$message} " . ($data ? json_encode($data) : ''));
             }
         }
         
