@@ -1399,6 +1399,27 @@ if (!$line) {
                 return;
             }
 
+            // Check for contact command FIRST (ก่อน Auto Reply)
+            if (in_array($textLower, ['contact', 'ติดต่อ', 'ติดต่อเรา'])) {
+                $contactBubble = FlexTemplates::notification(
+                    'ติดต่อเรา',
+                    'สามารถพิมพ์ข้อความถึงเราได้เลย\nทีมงานจะตอบกลับโดยเร็วที่สุด',
+                    '📞',
+                    '#3B82F6',
+                    [['label' => '🛒 ดูสินค้า', 'text' => 'shop', 'style' => 'secondary']]
+                );
+                $contactMessage = FlexTemplates::toMessage($contactBubble, 'ติดต่อเรา');
+                // เพิ่ม Quick Reply
+                $contactMessage = FlexTemplates::withQuickReply($contactMessage, [
+                    ['label' => '🛒 ดูสินค้า', 'text' => 'shop'],
+                    ['label' => '📋 เมนู', 'text' => 'menu'],
+                    ['label' => '📦 ออเดอร์', 'text' => 'orders']
+                ]);
+                $line->replyMessage($replyToken, [$contactMessage]);
+                saveOutgoingMessage($db, $user['id'], 'contact');
+                return;
+            }
+            
             // Check for slip command: "สลิป", "slip", "แนบสลิป", "ส่งสลิป"
             if (in_array($textLower, ['สลิป', 'slip', 'แนบสลิป', 'ส่งสลิป', 'โอนเงิน', 'โอนแล้ว'])) {
                 devLog($db, 'debug', 'webhook', 'Slip command detected', ['user_id' => $user['id'], 'text' => $textLower], $userId);
@@ -1450,27 +1471,6 @@ if (!$line) {
                 $menuMessage = FlexTemplates::toMessage($menuCarousel, "เมนูทั้งหมด {$shopName}");
                 $line->replyMessage($replyToken, [$menuMessage]);
                 saveOutgoingMessage($db, $user['id'], 'quickmenu');
-                return;
-            }
-            
-            // Check for contact command
-            if (in_array($textLower, ['contact', 'ติดต่อ', 'ติดต่อเรา'])) {
-                $contactBubble = FlexTemplates::notification(
-                    'ติดต่อเรา',
-                    'สามารถพิมพ์ข้อความถึงเราได้เลย\nทีมงานจะตอบกลับโดยเร็วที่สุด',
-                    '📞',
-                    '#3B82F6',
-                    [['label' => '🛒 ดูสินค้า', 'text' => 'shop', 'style' => 'secondary']]
-                );
-                $contactMessage = FlexTemplates::toMessage($contactBubble, 'ติดต่อเรา');
-                // เพิ่ม Quick Reply
-                $contactMessage = FlexTemplates::withQuickReply($contactMessage, [
-                    ['label' => '🛒 ดูสินค้า', 'text' => 'shop'],
-                    ['label' => '📋 เมนู', 'text' => 'menu'],
-                    ['label' => '📦 ออเดอร์', 'text' => 'orders']
-                ]);
-                $line->replyMessage($replyToken, [$contactMessage]);
-                saveOutgoingMessage($db, $user['id'], 'contact');
                 return;
             }
             
