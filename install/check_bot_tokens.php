@@ -40,13 +40,16 @@ echo "<style>
 
 echo "<h1>🔍 ตรวจสอบ LINE Bot Tokens</h1>";
 
-// ดึงข้อมูล Bot ทั้งหมด
-$stmt = $db->query("
-    SELECT id, bot_name, channel_access_token, channel_secret, 
-           webhook_url, is_active, created_at
-    FROM line_accounts
-    ORDER BY id
-");
+// ตรวจสอบโครงสร้างตารางก่อน
+try {
+    $columns = $db->query("SHOW COLUMNS FROM line_accounts")->fetchAll(PDO::FETCH_COLUMN);
+    echo "<div class='info'><strong>Columns in line_accounts:</strong> " . implode(', ', $columns) . "</div>";
+} catch (Exception $e) {
+    echo "<div class='info'><strong>Error checking columns:</strong> " . $e->getMessage() . "</div>";
+}
+
+// ดึงข้อมูล Bot ทั้งหมด - ใช้ชื่อคอลัมน์ที่มีจริง
+$stmt = $db->query("SELECT * FROM line_accounts ORDER BY id");
 $bots = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 echo "<h2>📊 Bot ทั้งหมดในระบบ</h2>";
@@ -65,6 +68,9 @@ foreach ($bots as $bot) {
     $tokenStatus = '';
     $tokenPreview = '';
     
+    // ใช้ชื่อคอลัมน์ที่มีจริง
+    $botName = $bot['name'] ?? $bot['bot_name'] ?? $bot['channel_name'] ?? 'Bot #' . $bot['id'];
+    
     if (empty($bot['channel_access_token'])) {
         $tokenStatus = '<span class="error">❌ ไม่มี Token</span>';
         $tokenPreview = '-';
@@ -82,12 +88,12 @@ foreach ($bots as $bot) {
         $tokenPreview = substr($token, 0, 20) . '...' . substr($token, -10);
     }
     
-    $activeStatus = $bot['is_active'] ? '<span class="ok">✅ เปิด</span>' : '<span class="error">❌ ปิด</span>';
+    $activeStatus = ($bot['is_active'] ?? 1) ? '<span class="ok">✅ เปิด</span>' : '<span class="error">❌ ปิด</span>';
     $webhookUrl = $bot['webhook_url'] ?? '-';
     
     echo "<tr>";
     echo "<td><strong>{$bot['id']}</strong></td>";
-    echo "<td>" . htmlspecialchars($bot['bot_name']) . "</td>";
+    echo "<td>" . htmlspecialchars($botName) . "</td>";
     echo "<td>{$tokenStatus}</td>";
     echo "<td class='token'>{$tokenPreview}</td>";
     echo "<td class='token'>" . htmlspecialchars($webhookUrl) . "</td>";
@@ -111,8 +117,10 @@ if (isset($_GET['test_bot_id'])) {
     $bot = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if ($bot && !empty($bot['channel_access_token'])) {
+        $botName = $bot['name'] ?? $bot['bot_name'] ?? $bot['channel_name'] ?? 'Bot #' . $bot['id'];
+        
         echo "<div class='info'>";
-        echo "<h3>ทดสอบ Bot ID: {$bot['id']} - {$bot['bot_name']}</h3>";
+        echo "<h3>ทดสอบ Bot ID: {$bot['id']} - {$botName}</h3>";
         
         // ทดสอบ 1: Get Bot Info
         $ch = curl_init('https://api.line.me/v2/bot/info');
