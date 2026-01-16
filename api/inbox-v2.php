@@ -2229,6 +2229,14 @@ try {
                 sendError('Admin ID(s) to assign is required');
             }
             
+            // Parse JSON string if needed
+            if (is_string($assignTo)) {
+                $decoded = json_decode($assignTo, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $assignTo = $decoded;
+                }
+            }
+            
             // Support both single ID and array of IDs
             $adminIds = is_array($assignTo) ? $assignTo : [$assignTo];
             $adminIds = array_map('intval', $adminIds);
