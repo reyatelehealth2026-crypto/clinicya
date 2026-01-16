@@ -1355,6 +1355,17 @@ function formatThaiDateTime($datetime) {
                     <i class="fas fa-check-double"></i> อ่านทั้งหมด
                 </button>
             </div>
+            <!-- Assignee Filter -->
+            <div class="flex gap-2">
+                <select id="filterAssignee" onchange="applyFilters()" class="flex-1 px-2 py-1.5 bg-white border rounded-lg text-xs focus:ring-2 focus:ring-teal-500 outline-none">
+                    <option value="">ทุกคน</option>
+                    <option value="me">มอบหมายให้ฉัน</option>
+                    <option value="unassigned">ยังไม่มอบหมาย</option>
+                    <?php foreach ($allAdmins as $admin): ?>
+                    <option value="<?= $admin['id'] ?>"><?= htmlspecialchars($admin['display_name'] ?: $admin['username']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
         </div>
         
         <!-- Conversation List -->
@@ -2219,6 +2230,23 @@ window.currentBotId = <?= $currentBotId ?>;
 window.customerCommunicationType = '<?= $customerClassification['type'] ?? 'A' ?>';
 // Current consultation stage
 window.currentConsultationStage = 'symptom_assessment';
+// Current bot ID
+window.currentBotId = <?= $currentBotId ?>;
+// Conversation assignees map (for filtering)
+window.conversationAssignees = {
+    <?php 
+    foreach ($users as $user) {
+        try {
+            $stmt = $db->prepare("SELECT admin_id FROM conversation_multi_assignees WHERE user_id = ? AND status = 'active'");
+            $stmt->execute([$user['id']]);
+            $adminIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            if (!empty($adminIds)) {
+                echo $user['id'] . ': [' . implode(',', $adminIds) . '],';
+            }
+        } catch (PDOException $e) {}
+    }
+    ?>
+};
 // Initialize ghostDraftState early so FAB/HUD can access it
 window.ghostDraftState = {
     currentDraft: null,
@@ -4819,6 +4847,8 @@ function applyFilters() {
     const status = document.getElementById('filterStatus')?.value || '';
     const tag = document.getElementById('filterTag')?.value || '';
     const chatStatus = document.getElementById('filterChatStatus')?.value || '';
+    const assignee = document.getElementById('filterAssignee')?.value || '';
+    const currentAdminId = <?= $_SESSION['admin_id'] ?? 0 ?>;
     
     // Apply filters
     const userItems = document.querySelectorAll('#userList .user-item');
@@ -4847,8 +4877,38 @@ function applyFilters() {
             show = show && (itemChatStatus === chatStatus);
         }
         
+        // Filter by assignee (NEW)
+        if (assignee) {
+            const userId = item.dataset.userId;
+            if (assignee === 'me') {
+                // Show only conversations assigned to current admin
+                show = show && checkIfAssignedToMe(userId, currentAdminId);
+            } else if (assignee === 'unassigned') {
+                // Show only unassigned conversations
+                const isAssigned = item.dataset.assigned === '1';
+                show = show && !isAssigned;
+            } else {
+                // Show conversations assigned to specific admin
+                show = show && checkIfAssignedToAdmin(userId, assignee);
+            }
+        }
+        
         item.style.display = show ? '' : 'none';
     });
+}
+
+// Helper function to check if conversation is assigned to specific admin
+function checkIfAssignedToMe(userId, adminId) {
+    // This will be populated by server-side data
+    if (!window.conversationAssignees) return false;
+    const assignees = window.conversationAssignees[userId] || [];
+    return assignees.includes(parseInt(adminId));
+}
+
+function checkIfAssignedToAdmin(userId, adminId) {
+    if (!window.conversationAssignees) return false;
+    const assignees = window.conversationAssignees[userId] || [];
+    return assignees.includes(parseInt(adminId));
 }
 
 // Mark all messages as read

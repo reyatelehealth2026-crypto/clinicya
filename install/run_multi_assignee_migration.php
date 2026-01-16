@@ -64,17 +64,21 @@ try {
     // Show statistics
     echo "<h3>Statistics:</h3>";
     
-    $stmt = $db->query("SELECT COUNT(*) as count FROM conversation_multi_assignees");
-    $count = $stmt->fetch(PDO::FETCH_ASSOC);
-    echo "<p>Total assignments: <strong>{$count['count']}</strong></p>";
-    
-    $stmt = $db->query("SELECT COUNT(DISTINCT user_id) as count FROM conversation_multi_assignees WHERE status = 'active'");
-    $count = $stmt->fetch(PDO::FETCH_ASSOC);
-    echo "<p>Active conversations: <strong>{$count['count']}</strong></p>";
-    
-    $stmt = $db->query("SELECT COUNT(DISTINCT admin_id) as count FROM conversation_multi_assignees WHERE status = 'active'");
-    $count = $stmt->fetch(PDO::FETCH_ASSOC);
-    echo "<p>Admins with assignments: <strong>{$count['count']}</strong></p>";
+    try {
+        $stmt = $db->query("SELECT COUNT(*) as count FROM conversation_multi_assignees");
+        $count = $stmt->fetch(PDO::FETCH_ASSOC);
+        echo "<p>Total assignments: <strong>{$count['count']}</strong></p>";
+        
+        $stmt = $db->query("SELECT COUNT(DISTINCT user_id) as count FROM conversation_multi_assignees WHERE status = 'active'");
+        $count = $stmt->fetch(PDO::FETCH_ASSOC);
+        echo "<p>Active conversations: <strong>{$count['count']}</strong></p>";
+        
+        $stmt = $db->query("SELECT COUNT(DISTINCT admin_id) as count FROM conversation_multi_assignees WHERE status = 'active'");
+        $count = $stmt->fetch(PDO::FETCH_ASSOC);
+        echo "<p>Admins with assignments: <strong>{$count['count']}</strong></p>";
+    } catch (PDOException $e) {
+        echo "<p class='info'>⚠ Could not fetch statistics: " . htmlspecialchars($e->getMessage()) . "</p>";
+    }
     
     echo "<hr>";
     echo "<p><a href='../inbox-v2.php'>← กลับไปหน้า Inbox</a></p>";
