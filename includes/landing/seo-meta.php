@@ -24,7 +24,15 @@ if (!isset($seoService) || !($seoService instanceof LandingSEOService)) {
 $metaTags = $seoService->getMetaTags();
 $ogTags = $seoService->getOpenGraphTags();
 $twitterTags = $seoService->getTwitterCardTags();
+$faviconUrl = $seoService->getFaviconUrl();
 ?>
+
+<!-- Favicon -->
+<?php if (!empty($faviconUrl)): ?>
+<link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($faviconUrl) ?>">
+<link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($faviconUrl) ?>">
+<link rel="apple-touch-icon" href="<?= htmlspecialchars($faviconUrl) ?>">
+<?php endif; ?>
 
 <!-- SEO Meta Tags (Requirements: 1.1, 1.2, 1.3) -->
 <?php if (!empty($metaTags['canonical'])): ?>
@@ -56,3 +64,4 @@ $twitterTags = $seoService->getTwitterCardTags();
 <?php foreach ($twitterTags as $name => $content): ?>
 <meta name="<?= htmlspecialchars($name) ?>" content="<?= htmlspecialchars($content) ?>">
 <?php endforeach; ?>
+

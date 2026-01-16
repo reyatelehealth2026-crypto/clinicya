@@ -99,18 +99,19 @@ class LandingSEOService {
      * @return array Array of meta tags
      */
     public function getMetaTags(): array {
-        $shopName = $this->getShopSetting('shop_name', 'LINE Telepharmacy');
+        $pageTitle = $this->getLandingSetting('page_title', 
+            $this->getShopSetting('shop_name', 'LINE Telepharmacy'));
         $description = $this->getLandingSetting('meta_description', 
             $this->getShopSetting('welcome_message', 'ร้านยาออนไลน์ครบวงจร พร้อมบริการปรึกษาเภสัชกร'));
         $keywords = $this->getLandingSetting('meta_keywords', 
             'ร้านยาออนไลน์, เภสัชกร, ส่งยาถึงบ้าน, ปรึกษาเภสัชกร, ยา, สุขภาพ');
         
         return [
-            'title' => $shopName,
+            'title' => $pageTitle,
             'description' => $description,
             'keywords' => $keywords,
             'robots' => 'index, follow',
-            'author' => $shopName,
+            'author' => $pageTitle,
             'canonical' => $this->getCanonicalUrl()
         ];
     }
@@ -133,7 +134,8 @@ class LandingSEOService {
      * @return array
      */
     public function getOpenGraphTags(): array {
-        $shopName = $this->getShopSetting('shop_name', 'LINE Telepharmacy');
+        $pageTitle = $this->getLandingSetting('page_title', 
+            $this->getShopSetting('shop_name', 'LINE Telepharmacy'));
         $description = $this->getLandingSetting('meta_description', 
             $this->getShopSetting('welcome_message', 'ร้านยาออนไลน์ครบวงจร'));
         $shopLogo = $this->getShopSetting('shop_logo', '');
@@ -141,10 +143,10 @@ class LandingSEOService {
         $tags = [
             'og:type' => 'website',
             'og:url' => $this->getCanonicalUrl(),
-            'og:title' => $shopName,
+            'og:title' => $pageTitle,
             'og:description' => $description,
             'og:locale' => 'th_TH',
-            'og:site_name' => $shopName
+            'og:site_name' => $pageTitle
         ];
         
         if (!empty($shopLogo)) {
@@ -154,7 +156,7 @@ class LandingSEOService {
                 $imageUrl = $this->baseUrl . '/' . ltrim($imageUrl, '/');
             }
             $tags['og:image'] = $imageUrl;
-            $tags['og:image:alt'] = $shopName;
+            $tags['og:image:alt'] = $pageTitle;
         }
         
         return $tags;
@@ -167,14 +169,15 @@ class LandingSEOService {
      * @return array
      */
     public function getTwitterCardTags(): array {
-        $shopName = $this->getShopSetting('shop_name', 'LINE Telepharmacy');
+        $pageTitle = $this->getLandingSetting('page_title', 
+            $this->getShopSetting('shop_name', 'LINE Telepharmacy'));
         $description = $this->getLandingSetting('meta_description', 
             $this->getShopSetting('welcome_message', 'ร้านยาออนไลน์ครบวงจร'));
         $shopLogo = $this->getShopSetting('shop_logo', '');
         
         $tags = [
             'twitter:card' => 'summary_large_image',
-            'twitter:title' => $shopName,
+            'twitter:title' => $pageTitle,
             'twitter:description' => $description
         ];
         
@@ -197,7 +200,8 @@ class LandingSEOService {
      * @return array JSON-LD structured data
      */
     public function getStructuredData(): array {
-        $shopName = $this->getShopSetting('shop_name', 'LINE Telepharmacy');
+        $pageTitle = $this->getLandingSetting('page_title', 
+            $this->getShopSetting('shop_name', 'LINE Telepharmacy'));
         $description = $this->getLandingSetting('meta_description', 
             $this->getShopSetting('welcome_message', 'ร้านยาออนไลน์ครบวงจร'));
         $phone = $this->getShopSetting('contact_phone', '');
@@ -209,7 +213,7 @@ class LandingSEOService {
         $structuredData = [
             '@context' => 'https://schema.org',
             '@type' => 'Pharmacy',
-            'name' => $shopName,
+            'name' => $pageTitle,
             'description' => $description,
             'url' => $this->getCanonicalUrl()
         ];
@@ -451,6 +455,8 @@ class LandingSEOService {
         $html = '';
         $html .= "<!-- SEO Meta Tags -->\n";
         $html .= $this->renderMetaTags();
+        $html .= "\n<!-- Favicon -->\n";
+        $html .= $this->renderFaviconTags();
         $html .= "\n<!-- Open Graph Tags -->\n";
         $html .= $this->renderOpenGraphTags();
         $html .= "\n<!-- Twitter Card Tags -->\n";
@@ -468,6 +474,67 @@ class LandingSEOService {
      */
     public function getShopName(): string {
         return $this->getShopSetting('shop_name', 'LINE Telepharmacy');
+    }
+    
+    /**
+     * Get page title
+     * 
+     * @return string
+     */
+    public function getPageTitle(): string {
+        return $this->getLandingSetting('page_title', 
+            $this->getShopSetting('shop_name', 'LINE Telepharmacy'));
+    }
+    
+    /**
+     * Get app name
+     * 
+     * @return string
+     */
+    public function getAppName(): string {
+        return $this->getLandingSetting('app_name', 
+            $this->getShopSetting('shop_name', 'LINE Telepharmacy'));
+    }
+    
+    /**
+     * Get favicon URL
+     * 
+     * @return string
+     */
+    public function getFaviconUrl(): string {
+        $faviconUrl = $this->getLandingSetting('favicon_url', '');
+        
+        // Return empty if not set
+        if (empty($faviconUrl)) {
+            return '';
+        }
+        
+        // Make absolute URL if relative
+        if (strpos($faviconUrl, 'http') !== 0) {
+            return $this->baseUrl . '/' . ltrim($faviconUrl, '/');
+        }
+        
+        return $faviconUrl;
+    }
+    
+    /**
+     * Render favicon link tags
+     * 
+     * @return string HTML link tags for favicon
+     */
+    public function renderFaviconTags(): string {
+        $faviconUrl = $this->getFaviconUrl();
+        
+        if (empty($faviconUrl)) {
+            return '';
+        }
+        
+        $html = '';
+        $html .= '<link rel="icon" type="image/x-icon" href="' . htmlspecialchars($faviconUrl) . '">' . "\n";
+        $html .= '<link rel="shortcut icon" type="image/x-icon" href="' . htmlspecialchars($faviconUrl) . '">' . "\n";
+        $html .= '<link rel="apple-touch-icon" href="' . htmlspecialchars($faviconUrl) . '">' . "\n";
+        
+        return $html;
     }
     
     /**

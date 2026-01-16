@@ -141,6 +141,51 @@ if (!$line) {
         }
     }
 
+    /**
+     * ส่งข้อความด้วย Reply Token พร้อม Auto-Fallback
+     * ถ้า reply ล้มเหลว (token หมดอายุหรือถูกใช้ไปแล้ว) จะ fallback ไปใช้ push อัตโนมัติ
+     * 
+     * @param LineAPI $line - LINE API instance
+     * @param string $replyToken - Reply token จาก webhook event
+     * @param string $userId - LINE User ID (สำหรับ fallback)
+     * @param array $messages - Array of LINE messages
+     * @param PDO $db - Database connection (optional, for logging)
+     * @return array - ['method' => 'reply'|'push', 'success' => bool, 'code' => int]
+     */
+    function sendMessageWithFallback($line, $replyToken, $userId, $messages, $db = null) {
+        // ลอง reply ก่อน (ฟรี! ไม่นับ quota)
+        $replyResult = $line->replyMessage($replyToken, $messages);
+        $replyCode = $replyResult['code'] ?? 0;
+        
+        // ถ้า reply สำเร็จ - เสร็จสิ้น
+        if ($replyCode === 200) {
+            return ['method' => 'reply', 'success' => true, 'code' => $replyCode];
+        }
+        
+        // ถ้า reply ล้มเหลว - fallback ไปใช้ push (นับ quota)
+        $pushResult = $line->pushMessage($userId, $messages);
+        $pushCode = $pushResult['code'] ?? 0;
+        
+        // Log fallback
+        if ($db) {
+            try {
+                devLog($db, 'info', 'webhook', 'Reply failed, used push fallback', [
+                    'reply_code' => $replyCode,
+                    'push_code' => $pushCode,
+                    'user_id' => $userId,
+                    'reason' => $replyCode === 400 ? 'Token expired or already used' : 'Unknown error'
+                ], $userId);
+            } catch (Exception $e) {}
+        }
+        
+        return [
+            'method' => 'push',
+            'success' => $pushCode === 200,
+            'reply_code' => $replyCode,
+            'push_code' => $pushCode
+        ];
+    }
+
     // Log incoming webhook
     if (!empty($events)) {
         try {
@@ -562,7 +607,7 @@ if (!$line) {
             
             // ตอบกลับลูกค้า
             $replyText = "✅ ขอบคุณที่สนใจ {$item['item_name']}\n\nทีมงานจะติดต่อกลับโดยเร็วที่สุดค่ะ 🙏";
-            $line->replyMessage($replyToken, [['type' => 'text', 'text' => $replyText]]);
+            sendMessageWithFallback($line, $replyToken, $lineUserId, [['type' => 'text', 'text' => $replyText]], $db);
             
             // แจ้ง Telegram
             sendTelegramNotification($db, 'broadcast_click', $item['item_name'], "ลูกค้าสนใจสินค้า: {$item['item_name']}", $lineUserId, $dbUserId);
@@ -3515,6 +3560,14 @@ if (!$line) {
          * Handle payment slip for specific order
          */
         function handlePaymentSlipForOrder($db, $line, $dbUserId, $messageId, $replyToken, $orderId) {
+            // Get LINE user ID for fallback
+            $userId = null;
+            try {
+                $stmt = $db->prepare("SELECT line_user_id FROM users WHERE id = ?");
+                $stmt->execute([$dbUserId]);
+                $userId = $stmt->fetchColumn();
+            } catch (Exception $e) {}
+            
             // Get order - ลองหาจากทั้ง orders และ transactions
             $order = null;
             $orderTable = 'orders';
@@ -3539,14 +3592,14 @@ if (!$line) {
             }
             
             if (!$order) {
-                $line->replyMessage($replyToken, "❌ ไม่พบคำสั่งซื้อ กรุณาลองใหม่");
+                sendMessageWithFallback($line, $replyToken, $userId, [['type' => 'text', 'text' => "❌ ไม่พบคำสั่งซื้อ กรุณาลองใหม่"]], $db);
                 return true;
             }
             
             // Download image from LINE and save
             $imageData = $line->getMessageContent($messageId);
             if (!$imageData || strlen($imageData) < 100) {
-                $line->replyMessage($replyToken, "❌ ไม่สามารถรับรูปภาพได้ กรุณาส่งใหม่อีกครั้ง");
+                sendMessageWithFallback($line, $replyToken, $userId, [['type' => 'text', 'text' => "❌ ไม่สามารถรับรูปภาพได้ กรุณาส่งใหม่อีกครั้ง"]], $db);
                 return true;
             }
             
@@ -3554,14 +3607,14 @@ if (!$line) {
             $uploadDir = __DIR__ . '/uploads/slips/';
             if (!is_dir($uploadDir)) {
                 if (!mkdir($uploadDir, 0755, true)) {
-                    $line->replyMessage($replyToken, "❌ ระบบมีปัญหา ไม่สามารถบันทึกรูปได้ กรุณาติดต่อแอดมิน");
+                    sendMessageWithFallback($line, $replyToken, $userId, [['type' => 'text', 'text' => "❌ ระบบมีปัญหา ไม่สามารถบันทึกรูปได้ กรุณาติดต่อแอดมิน"]], $db);
                     return true;
                 }
             }
             
             // Check if directory is writable
             if (!is_writable($uploadDir)) {
-                $line->replyMessage($replyToken, "❌ ระบบมีปัญหา (permission) กรุณาติดต่อแอดมิน");
+                sendMessageWithFallback($line, $replyToken, $userId, [['type' => 'text', 'text' => "❌ ระบบมีปัญหา (permission) กรุณาติดต่อแอดมิน"]], $db);
                 return true;
             }
             
@@ -3570,7 +3623,7 @@ if (!$line) {
             
             $bytesWritten = file_put_contents($filepath, $imageData);
             if ($bytesWritten === false || $bytesWritten < 100) {
-                $line->replyMessage($replyToken, "❌ ไม่สามารถบันทึกรูปได้ กรุณาส่งใหม่");
+                sendMessageWithFallback($line, $replyToken, $userId, [['type' => 'text', 'text' => "❌ ไม่สามารถบันทึกรูปได้ กรุณาส่งใหม่"]], $db);
                 return true;
             }
             
@@ -3603,7 +3656,7 @@ if (!$line) {
                 ['label' => '📦 เช็คสถานะ', 'text' => 'orders'],
                 ['label' => '🛒 ช้อปต่อ', 'text' => 'shop']
             ]);
-            $line->replyMessage($replyToken, [$slipMessage]);
+            sendMessageWithFallback($line, $replyToken, $userId, [$slipMessage], $db);
             
             // Notify admin via Telegram
             notifyAdminNewSlip($db, $line, $order, $dbUserId, $imageData, $baseUrl);

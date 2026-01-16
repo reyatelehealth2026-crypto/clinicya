@@ -106,6 +106,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // SEO Settings actions (Requirements: 10.1, 10.2)
         if ($action === 'save_seo') {
             $settings = [
+                'page_title' => trim($_POST['page_title'] ?? ''),
+                'app_name' => trim($_POST['app_name'] ?? ''),
+                'favicon_url' => trim($_POST['favicon_url'] ?? ''),
                 'meta_keywords' => trim($_POST['meta_keywords'] ?? ''),
                 'meta_description' => trim($_POST['meta_description'] ?? ''),
                 'latitude' => trim($_POST['latitude'] ?? ''),

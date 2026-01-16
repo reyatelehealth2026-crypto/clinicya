@@ -7,6 +7,9 @@
  */
 
 // Get current values
+$pageTitle = $landingSettings['page_title'] ?? '';
+$appName = $landingSettings['app_name'] ?? '';
+$faviconUrl = $landingSettings['favicon_url'] ?? '';
 $metaKeywords = $landingSettings['meta_keywords'] ?? '';
 $metaDescription = $landingSettings['meta_description'] ?? '';
 $latitude = $landingSettings['latitude'] ?? '';
@@ -40,7 +43,7 @@ $days = [
         </h2>
         <div class="bg-white rounded-lg p-4 text-gray-800">
             <div class="text-blue-600 text-lg font-medium hover:underline cursor-pointer">
-                <?= htmlspecialchars($seoService->getShopName()) ?>
+                <?= htmlspecialchars($pageTitle ?: $seoService->getShopName()) ?>
             </div>
             <div class="text-green-700 text-sm">
                 <?= htmlspecialchars($seoService->getCanonicalUrl()) ?>
@@ -54,6 +57,63 @@ $days = [
     <!-- SEO Settings Form -->
     <form method="POST" class="space-y-6">
         <input type="hidden" name="action" value="save_seo">
+        
+        <!-- Branding Section -->
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <span class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-palette text-purple-600"></i>
+                </span>
+                ตั้งค่าแบรนด์และไอคอน
+            </h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-heading text-purple-600"></i>
+                        Title (ชื่อหน้าเว็บที่แสดงบนแท็บเบราว์เซอร์)
+                    </label>
+                    <input type="text" name="page_title" 
+                        class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="ร้านยาออนไลน์ - ส่งยาถึงบ้าน"
+                        value="<?= htmlspecialchars($pageTitle) ?>">
+                    <p class="text-xs text-gray-500 mt-1">ชื่อที่จะแสดงบนแท็บเบราว์เซอร์และผลการค้นหา Google</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-mobile-alt text-purple-600"></i>
+                        ชื่อแอพ (App Name)
+                    </label>
+                    <input type="text" name="app_name" 
+                        class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="ร้านยาออนไลน์"
+                        value="<?= htmlspecialchars($appName) ?>">
+                    <p class="text-xs text-gray-500 mt-1">ชื่อที่จะแสดงเมื่อบันทึกเป็น PWA บนหน้าจอโทรศัพท์</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-image text-purple-600"></i>
+                        Favicon URL
+                    </label>
+                    <div class="flex gap-3">
+                        <?php if (!empty($faviconUrl)): ?>
+                        <div class="flex-shrink-0">
+                            <img src="<?= htmlspecialchars($faviconUrl) ?>" alt="Favicon" class="w-12 h-12 rounded border border-gray-200">
+                        </div>
+                        <?php endif; ?>
+                        <div class="flex-1">
+                            <input type="text" name="favicon_url" 
+                                class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                placeholder="https://example.com/favicon.ico หรือ /assets/images/favicon.png"
+                                value="<?= htmlspecialchars($faviconUrl) ?>">
+                            <p class="text-xs text-gray-500 mt-1">ไอคอนที่แสดงบนแท็บเบราว์เซอร์ (แนะนำขนาด 32x32 หรือ 64x64 px)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <!-- Meta Tags Section -->
         <div class="bg-white rounded-xl shadow-sm p-6">

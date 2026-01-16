@@ -15,6 +15,7 @@ error_reporting(E_ALL);
 
 require_once '../config/config.php';
 require_once '../config/database.php';
+require_once '../classes/LandingSEOService.php';
 
 $db = Database::getInstance()->getConnection();
 
@@ -90,6 +91,12 @@ try {
     $lineAccountId = 1;
 }
 
+// Initialize SEO service for title and favicon
+$seoService = new LandingSEOService($db, $lineAccountId);
+$pageTitle = $seoService->getPageTitle();
+$appName = $seoService->getAppName();
+$faviconUrl = $seoService->getFaviconUrl();
+
 $baseUrl = rtrim(BASE_URL, '/');
 
 // Page configuration
@@ -121,7 +128,17 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <meta name="theme-color" content="#11B0A6">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title><?= htmlspecialchars($currentPage['title']) ?> - <?= htmlspecialchars($shopName) ?></title>
+    <title><?= htmlspecialchars($currentPage['title']) ?> - <?= htmlspecialchars($appName) ?></title>
+    
+    <!-- Favicon -->
+    <?php if (!empty($faviconUrl)): ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($faviconUrl) ?>">
+    <link rel="shortcut icon" type="image/x-icon" href="<?= htmlspecialchars($faviconUrl) ?>">
+    <link rel="apple-touch-icon" href="<?= htmlspecialchars($faviconUrl) ?>">
+    <?php endif; ?>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="<?= $baseUrl ?>/api/manifest.php">
     
     <!-- LIFF SDK -->
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
