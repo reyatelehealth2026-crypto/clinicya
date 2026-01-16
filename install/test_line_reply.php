@@ -38,8 +38,12 @@ echo "<style>
 echo "<h1>🧪 ทดสอบส่งข้อความ LINE API</h1>";
 
 // ดึงรายการ Bot
-$stmt = $db->query("SELECT * FROM line_accounts WHERE is_active = 1 ORDER BY id");
-$bots = $stmt->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $stmt = $db->query("SELECT * FROM line_accounts ORDER BY id");
+    $bots = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    die("<p class='error'>Error loading bots: " . htmlspecialchars($e->getMessage()) . "</p></div></body></html>");
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $botId = $_POST['bot_id'] ?? null;
