@@ -1,0 +1,411 @@
+# Implementation Plan
+
+## Phase 1: Core Infrastructure & Caching
+
+- [x] 1. Implement LRUCache class
+  - [x] 1.1 Create assets/js/lru-cache.js with get, set, has, clear methods
+    - Implement eviction when size exceeds limit
+    - Track access order for LRU
+    - _Requirements: 3.5, 8.1, 8.2_
+  - [ ]* 1.2 Write property test for LRU eviction
+    - **Property 8: LRU Cache Eviction**
+    - **Validates: Requirements 3.5, 8.1, 8.2**
+
+- [x] 2. Implement ConversationListManager
+  - [x] 2.1 Create assets/js/conversation-list-manager.js with core methods
+    - Implement conversation array management
+    - Add search and filter methods
+    - _Requirements: 5.1, 5.4_
+  - [x] 2.2 Implement bumpConversation method with animation
+    - Move conversation to top of list
+    - Add smooth CSS transition
+    - Handle pinned conversations
+    - _Requirements: 2.1, 2.5_
+  - [ ]* 2.3 Write property test for conversation bumping
+    - **Property 1: Conversation Bumping to Top**
+    - **Validates: Requirements 2.1**
+  - [ ]* 2.4 Write property test for conversation sorting
+    - **Property 2: Conversation Sorting by Timestamp**
+    - **Validates: Requirements 2.2**
+  - [ ]* 2.5 Write property test for pinned conversation stability
+    - **Property 3: Pinned Conversation Stability**
+    - **Validates: Requirements 2.5**
+
+- [x] 3. Implement ChatPanelManager
+  - [x] 3.1 Create assets/js/chat-panel-manager.js with AJAX loading
+    - Implement loadConversation with cache check
+    - Add fetchMessages with cursor pagination
+    - Implement updateURL with History API
+    - _Requirements: 1.1, 1.5, 3.1, 3.4_
+  - [x] 3.2 Implement message caching with LRUCache
+    - Cache messages with 30-second TTL
+    - Check cache before API call
+    - _Requirements: 3.3, 3.4_
+  - [ ]* 3.3 Write property test for cache TTL validation
+    - **Property 7: Cache TTL Validation**
+    - **Validates: Requirements 3.4**
+  - [ ]* 3.4 Write property test for cache retrieval performance
+    - **Property 6: Cache Retrieval Performance**
+    - **Validates: Requirements 3.3**
+  - [x] 3.5 Implement sendMessage with optimistic UI
+    - Add message to UI immediately
+    - Show sending indicator
+    - Handle retry on failure
+    - _Requirements: 7.5, 9.3, 9.4_
+  - [ ]* 3.6 Write property test for optimistic UI updates
+    - **Property 23: Optimistic UI Updates**
+    - **Validates: Requirements 7.5**
+
+- [x] 4. Checkpoint - Make sure all tests are passing
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 2: Backend API Optimization
+
+- [x] 5. Enhance InboxService for performance
+  - [x] 5.1 Update classes/InboxService.php with getConversationsDelta method
+    - Implement cursor-based pagination
+    - Add delta updates (only since timestamp)
+    - Select only necessary fields
+    - _Requirements: 7.1, 7.2, 11.4_
+  - [ ]* 5.2 Write property test for minimal field selection
+    - **Property 19: Minimal Field Selection**
+    - **Validates: Requirements 7.1**
+  - [x] 5.3 Implement getMessagesCursor method
+    - Use message ID as cursor instead of OFFSET
+    - Limit to 50 messages per page
+    - _Requirements: 3.1, 3.2, 7.2_
+  - [ ]* 5.4 Write property test for cursor-based pagination
+    - **Property 20: Cursor-Based Pagination**
+    - **Validates: Requirements 7.2**
+  - [ ]* 5.5 Write property test for initial message fetch limit
+    - **Property 4: Initial Message Fetch Limit**
+    - **Validates: Requirements 3.1**
+  - [ ]* 5.6 Write property test for lazy load batch size
+    - **Property 5: Lazy Load Batch Size**
+    - **Validates: Requirements 3.2**
+  - [x] 5.7 Implement pollUpdates method for delta updates
+    - Query only messages since last check
+    - Return with user info for bumping
+    - _Requirements: 4.3_
+  - [ ]* 5.8 Write property test for delta update efficiency
+    - **Property 11: Delta Update Efficiency**
+    - **Validates: Requirements 4.3**
+
+- [x] 6. Create database migration for performance indexes
+  - [x] 6.1 Create database/migration_inbox_v2_performance.sql
+    - Add covering index for conversation list
+    - Add cursor pagination index
+    - Add polling query index
+    - _Requirements: 12.1, 12.3_
+  - [x] 6.2 Create install/run_inbox_v2_performance_migration.php
+    - Run migration script
+    - _Requirements: 12.1_
+
+- [x] 7. Update api/inbox-v2.php with new endpoints
+  - [x] 7.1 Add getConversations endpoint with cursor pagination
+    - Support cursor, limit, since parameters
+    - Return conversations with next cursor
+    - _Requirements: 7.2_
+  - [x] 7.2 Add getMessages endpoint with cursor pagination
+    - Support user_id, cursor, limit parameters
+    - Return messages with next cursor
+    - _Requirements: 7.2_
+  - [x] 7.3 Add poll endpoint for delta updates
+    - Support since parameter
+    - Return only new messages
+    - _Requirements: 4.3_
+  - [x] 7.4 Add HTTP caching headers to responses
+    - Add ETag or Last-Modified headers
+    - Support If-None-Match / If-Modified-Since
+    - _Requirements: 7.4_
+  - [ ]* 7.5 Write property test for HTTP cache headers
+    - **Property 22: HTTP Cache Headers**
+    - **Validates: Requirements 7.4**
+
+- [x] 8. Checkpoint - Make sure all tests are passing
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 3: WebSocket Real-time Infrastructure
+
+- [x] 9. Set up WebSocket server
+  - [x] 9.1 Create websocket-server.js with Socket.IO
+    - Set up Express + Socket.IO server
+    - Implement authentication
+    - Add room management (by LINE account)
+    - _Requirements: 4.1, 4.2_
+  - [x] 9.2 Implement Redis pub/sub integration
+    - Subscribe to inbox_updates channel
+    - Broadcast messages to connected clients
+    - _Requirements: 4.1_
+  - [x] 9.3 Add typing indicator support
+    - Listen for typing events
+    - Broadcast to other admins in same conversation
+    - _Requirements: 4.1.1, 4.1.2_
+  - [x] 9.4 Implement sync endpoint for missed messages
+    - Handle sync requests when tab becomes active
+    - Return messages since last check
+    - _Requirements: 4.5_
+  - [x] 9.5 Add graceful shutdown handling
+    - Handle SIGTERM signal
+    - Close connections cleanly
+    - _Requirements: 8.4_
+  - [x] 9.6 Create package.json with dependencies
+    - Add socket.io, express, mysql2, redis
+    - Add start script
+    - _Requirements: 4.1_
+
+- [x] 10. Create PHP WebSocket integration
+  - [x] 10.1 Create classes/WebSocketNotifier.php
+    - Implement Redis publish for new messages
+    - Add notifyNewMessage method
+    - _Requirements: 4.1_
+  - [x] 10.2 Integrate with webhook.php
+    - Call WebSocketNotifier when message received
+    - Publish to Redis channel
+    - _Requirements: 4.1_
+
+- [x] 11. Implement RealtimeManager (Frontend)
+  - [x] 11.1 Create assets/js/realtime-manager.js
+    - Implement WebSocket connection with Socket.IO client
+    - Add authentication with token
+    - Handle connection/disconnection events
+    - _Requirements: 4.1, 4.2, 4.4_
+  - [x] 11.2 Implement polling fallback
+    - Detect WebSocket failure
+    - Switch to polling automatically
+    - _Requirements: 4.2, 4.6, 4.7_
+  - [ ]* 11.3 Write property test for active polling interval
+    - **Property 9: Active Polling Interval**
+    - **Validates: Requirements 4.6**
+  - [ ]* 11.4 Write property test for inactive polling interval
+    - **Property 10: Inactive Polling Interval**
+    - **Validates: Requirements 4.7**
+  - [x] 11.5 Implement exponential backoff for reconnection
+    - Calculate delay: min(3 * 2^N, 30) seconds
+    - Attempt reconnection with backoff
+    - _Requirements: 4.4_
+  - [ ]* 11.6 Write property test for exponential backoff
+    - **Property 12: Exponential Backoff on Failure**
+    - **Validates: Requirements 4.4**
+  - [x] 11.7 Implement typing indicator handling
+    - Send typing events when user types
+    - Display typing indicators from other admins
+    - Clear after 3 seconds of inactivity
+    - _Requirements: 4.1.1, 4.1.2, 4.1.3_
+  - [x] 11.8 Handle tab visibility changes
+    - Adjust behavior when tab inactive/active
+    - Sync missed messages when tab becomes active
+    - _Requirements: 4.7_
+
+- [x] 12. Checkpoint - Make sure all tests are passing
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 4: Virtual Scrolling & Performance
+
+- [x] 13. Implement virtual scrolling for conversation list
+  - [x] 13.1 Add Intersection Observer for conversation list
+    - Render only visible items + 10 buffer
+    - Implement infinite scroll for loading more
+    - _Requirements: 5.1, 5.3, 11.2_
+  - [ ]* 13.2 Write property test for virtual scrolling buffer size
+    - **Property 13: Virtual Scrolling Buffer Size**
+    - **Validates: Requirements 5.3**
+  - [x] 13.3 Optimize DOM updates for conversation list
+    - Use incremental updates (don't re-render unchanged items)
+    - Implement efficient sorting
+    - _Requirements: 5.5_
+  - [ ]* 13.4 Write property test for incremental DOM updates
+    - **Property 15: Incremental DOM Updates**
+    - **Validates: Requirements 5.5, 6.5**
+  - [x] 13.5 Add search debouncing
+    - Debounce search input by 300ms
+    - Cancel pending requests on new input
+    - _Requirements: 5.4, 11.7_
+  - [ ]* 13.6 Write property test for debounce timing
+    - **Property 14: Debounce Timing**
+    - **Validates: Requirements 5.4**
+
+- [x] 14. Implement virtual scrolling for message list
+  - [x] 14.1 Add Intersection Observer for message list
+    - Render only visible messages + buffer
+    - Handle reverse scrolling (newest at bottom)
+    - _Requirements: 6.1, 11.3_
+  - [x] 14.2 Implement lazy loading for older messages
+    - Load more when scrolling to top
+    - Show loading indicator
+    - _Requirements: 3.2, 9.2_
+  - [x] 14.3 Add lazy image loading
+    - Load images only when entering viewport
+    - Show placeholder while loading
+    - _Requirements: 6.2, 9.4_
+  - [ ]* 14.4 Write property test for lazy image loading
+    - **Property 16: Lazy Image Loading**
+    - **Validates: Requirements 6.2**
+  - [x] 14.5 Implement Flex Message caching
+    - Cache rendered HTML for reuse
+    - Check cache before re-rendering
+    - _Requirements: 6.3_
+  - [ ]* 14.6 Write property test for Flex Message caching
+    - **Property 17: Flex Message Caching**
+    - **Validates: Requirements 6.3**
+
+- [x] 15. Add DOM cleanup for memory management
+  - [x] 15.1 Implement DOM node limit enforcement
+    - Count total DOM nodes
+    - Remove off-screen nodes when exceeding 1000
+    - _Requirements: 8.3_
+  - [ ]* 15.2 Write property test for DOM node cleanup
+    - **Property 24: DOM Node Cleanup**
+    - **Validates: Requirements 8.3**
+  - [x] 15.3 Implement event listener cleanup
+    - Track event listeners
+    - Remove when components unmount
+    - _Requirements: 8.4_
+  - [ ]* 15.4 Write property test for event listener cleanup
+    - **Property 25: Event Listener Cleanup**
+    - **Validates: Requirements 8.4**
+
+- [x] 16. Checkpoint - Make sure all tests are passing
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 5: UI/UX Enhancements
+
+- [x] 17. Update inbox-v2.php with AJAX conversation switching
+  - [x] 17.1 Modify conversation list click handlers
+    - Prevent default link behavior
+    - Call ChatPanelManager.loadConversation
+    - Update active state
+    - _Requirements: 1.1, 1.2_
+  - [x] 17.2 Add loading states
+    - Show skeleton loader in chat panel
+    - Show spinner for loading more messages
+    - Show sending indicator on messages
+    - _Requirements: 9.1, 9.2, 9.3_
+  - [x] 17.3 Add error states
+    - Show retry button on failed messages
+    - Show slow connection warning
+    - Show offline indicator
+    - _Requirements: 9.4, 9.5, 11.1_
+  - [x] 17.4 Preserve scroll position in conversation list
+    - Save scroll position before switching
+    - Restore after returning
+    - _Requirements: 1.2_
+
+- [x] 18. Implement keyboard navigation
+  - [x] 18.1 Add Up/Down arrow navigation
+    - Navigate between conversations
+    - Update focus and selection
+    - _Requirements: 10.1_
+  - [ ]* 18.2 Write property test for keyboard navigation
+    - **Property 26: Keyboard Navigation**
+    - **Validates: Requirements 10.1**
+  - [x] 18.3 Add keyboard shortcuts
+    - Enter: Open conversation
+    - Ctrl+K: Quick search
+    - Escape: Close modals
+    - Ctrl+F: Focus search
+    - _Requirements: 10.2, 10.3, 10.4, 10.5_
+
+- [x] 19. Add offline support
+  - [x] 19.1 Implement offline detection
+    - Listen to online/offline events
+    - Show offline indicator
+    - _Requirements: 11.1_
+  - [x] 19.2 Implement message queue for offline messages
+    - Queue messages when offline
+    - Store in localStorage
+    - _Requirements: 11.3_
+  - [ ]* 19.3 Write property test for message queue persistence
+    - **Property 28: Message Queue Persistence**
+    - **Validates: Requirements 11.3, 11.4**
+  - [x] 19.4 Implement auto-send on reconnection
+    - Detect when back online
+    - Send queued messages
+    - _Requirements: 11.4_
+  - [x] 19.5 Allow viewing cached data offline
+    - Access cached conversations
+    - Access cached messages
+    - _Requirements: 11.2_
+  - [ ]* 19.6 Write property test for offline cache access
+    - **Property 27: Offline Cache Access**
+    - **Validates: Requirements 11.2**
+
+- [x] 20. Checkpoint - Make sure all tests are passing
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 6: Performance Monitoring & Testing
+
+- [x] 21. Implement performance monitoring
+  - [x] 21.1 Create classes/PerformanceMetricsService.php
+    - Add logMetric method
+    - Add getMetrics method for dashboard
+    - _Requirements: 12.1, 12.2, 12.3, 12.4_
+  - [x] 21.2 Add frontend performance tracking
+    - Measure page load (TTI)
+    - Measure conversation switch time
+    - Measure message render time
+    - Measure API response time
+    - _Requirements: 12.1, 12.2, 12.3, 12.4_
+  - [ ]* 21.3 Write property test for performance metric logging
+    - **Property 29: Performance Metric Logging**
+    - **Validates: Requirements 12.1, 12.2, 12.3, 12.4**
+  - [x] 21.4 Add performance degradation warnings
+    - Log warnings when thresholds exceeded
+    - Include operation details
+    - _Requirements: 12.5_
+  - [ ]* 21.5 Write property test for performance degradation warnings
+    - **Property 30: Performance Degradation Warnings**
+    - **Validates: Requirements 12.5**
+  - [x] 21.6 Create performance dashboard
+    - Show average metrics
+    - Show percentiles (p50, p95, p99)
+    - Show error rates
+    - _Requirements: 12.1_
+
+- [x] 22. Add scrolling performance optimization
+  - [x] 22.1 Implement frame rate monitoring
+    - Use requestAnimationFrame
+    - Measure frame time
+    - _Requirements: 5.2, 6.4_
+  - [ ]* 22.2 Write property test for scrolling performance
+    - **Property 18: Scrolling Performance**
+    - **Validates: Requirements 5.2, 6.4**
+  - [x] 22.3 Optimize CSS for smooth scrolling
+    - Use transform instead of position
+    - Add will-change hints
+    - Use contain property
+    - _Requirements: 5.2, 6.4_
+
+- [x] 23. Final Checkpoint - Make sure all tests are passing
+  - Ensure all tests pass, ask the user if questions arise.
+
+## Phase 7: Documentation & Deployment
+
+- [x] 24. Create deployment documentation
+  - [x] 24.1 Document WebSocket server setup
+    - Installation steps
+    - Configuration
+    - Running as service (systemd/pm2)
+    - _Requirements: 4.1_
+  - [x] 24.2 Document Redis setup
+    - Installation
+    - Configuration
+    - Security settings
+    - _Requirements: 4.1_
+  - [x] 24.3 Create environment configuration guide
+    - Required environment variables
+    - Optional settings
+    - Performance tuning
+    - _Requirements: 4.1_
+
+- [x] 25. Create rollout plan
+  - [x] 25.1 Add feature flag for gradual rollout
+    - Enable for internal team first
+    - A/B test with 10% users
+    - Monitor metrics
+    - _Requirements: All_
+  - [x] 25.2 Create rollback procedure
+    - Document rollback steps
+    - Prepare fallback code
+    - _Requirements: All_
+

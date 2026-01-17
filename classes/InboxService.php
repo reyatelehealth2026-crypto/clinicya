@@ -219,6 +219,99 @@ class InboxService {
 
     
     /**
+     * Get conversations with delta updates (only since timestamp)
+     * Uses cursor-based pagination for better performance
+     * Requirements: 7.1, 7.2, 11.4
+     * 
+     * @param int $accountId LINE account ID
+     * @param int $since Unix timestamp for delta updates (0 for all)
+     * @param string|null $cursor Pagination cursor (last_message_at timestamp)
+     * @param int $limit Items per page (default 50)
+     * @return array ['conversations' => [], 'next_cursor' => string|null, 'has_more' => bool]
+     */
+    public function getConversationsDelta(
+        int $accountId, 
+        int $since = 0, 
+        ?string $cursor = null, 
+        int $limit = 50
+    ): array {
+        $limit = max(1, min(100, $limit)); // Cap at 100
+        
+        // Build query with cursor-based pagination
+        // Select only necessary fields (no full message content)
+        $sql = "
+            SELECT 
+                u.id,
+                u.display_name,
+                u.picture_url,
+                u.last_interaction as last_message_at,
+                (SELECT COUNT(*) FROM messages m 
+                 WHERE m.user_id = u.id 
+                 AND m.direction = 'incoming' 
+                 AND m.is_read = 0) as unread_count,
+                (SELECT SUBSTRING(content, 1, 100) FROM messages m2 
+                 WHERE m2.user_id = u.id 
+                 ORDER BY m2.created_at DESC LIMIT 1) as last_message_preview,
+                ca.assigned_to,
+                ca.status as assignment_status
+            FROM users u
+            LEFT JOIN conversation_assignments ca ON ca.user_id = u.id
+            WHERE u.line_account_id = ?
+            AND u.last_interaction IS NOT NULL
+        ";
+        
+        $params = [$accountId];
+        
+        // Delta updates: only conversations updated since timestamp
+        if ($since > 0) {
+            $sql .= " AND u.last_interaction > FROM_UNIXTIME(?)";
+            $params[] = $since;
+        }
+        
+        // Cursor-based pagination: use last_message_at as cursor
+        if ($cursor !== null) {
+            $sql .= " AND u.last_interaction < ?";
+            $params[] = $cursor;
+        }
+        
+        // Order by most recent first and limit
+        $sql .= " ORDER BY u.last_interaction DESC LIMIT ?";
+        $params[] = $limit + 1; // Fetch one extra to check if there are more
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Check if there are more results
+        $hasMore = count($conversations) > $limit;
+        if ($hasMore) {
+            array_pop($conversations); // Remove the extra item
+        }
+        
+        // Get next cursor (last_message_at of last item)
+        $nextCursor = null;
+        if ($hasMore && !empty($conversations)) {
+            $lastConv = end($conversations);
+            $nextCursor = $lastConv['last_message_at'];
+        }
+        
+        // Get tags for each conversation
+        foreach ($conversations as &$conv) {
+            $conv['tags'] = $this->getUserTags($conv['id']);
+            
+            // Get all assignees (multi-assignee support)
+            $conv['assignees'] = $this->getAssignedAdminIds($conv['id']);
+        }
+        
+        return [
+            'conversations' => $conversations,
+            'next_cursor' => $nextCursor,
+            'has_more' => $hasMore,
+            'count' => count($conversations)
+        ];
+    }
+    
+    /**
      * Get user tags
      * 
      * @param int $userId User ID
@@ -287,6 +380,158 @@ class InboxService {
             'page' => $page,
             'limit' => $limit,
             'has_more' => ($offset + $limit) < $total
+        ];
+    }
+    
+    /**
+     * Get messages with cursor-based pagination (more efficient than offset)
+     * Uses message ID as cursor instead of OFFSET for better performance on large datasets
+     * Requirements: 3.1, 3.2, 7.2
+     * 
+     * @param int $userId User ID
+     * @param string|null $cursor Pagination cursor (message ID)
+     * @param int $limit Messages per page (default 50)
+     * @return array ['messages' => [], 'next_cursor' => string|null, 'has_more' => bool]
+     */
+    public function getMessagesCursor(
+        int $userId, 
+        ?string $cursor = null, 
+        int $limit = 50
+    ): array {
+        $limit = max(1, min(100, $limit)); // Cap at 100
+        
+        // Build query with cursor-based pagination
+        // Cursor is the message ID - fetch messages with ID less than cursor (older messages)
+        $sql = "
+            SELECT 
+                id,
+                user_id,
+                direction,
+                message_type,
+                content,
+                is_read,
+                sent_by,
+                created_at
+            FROM messages
+            WHERE user_id = ?
+        ";
+        
+        $params = [$userId];
+        
+        // Add cursor condition if provided (for loading older messages)
+        if ($cursor !== null) {
+            $sql .= " AND id < ?";
+            $params[] = (int)$cursor;
+        }
+        
+        // Order by ID descending (newest first) and limit
+        // Fetch one extra to check if there are more
+        $sql .= " ORDER BY id DESC LIMIT ?";
+        $params[] = $limit + 1;
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Check if there are more results
+        $hasMore = count($messages) > $limit;
+        if ($hasMore) {
+            array_pop($messages); // Remove the extra item
+        }
+        
+        // Get next cursor (ID of last message)
+        $nextCursor = null;
+        if ($hasMore && !empty($messages)) {
+            $lastMessage = end($messages);
+            $nextCursor = (string)$lastMessage['id'];
+        }
+        
+        // Reverse to show oldest first (chat order)
+        $messages = array_reverse($messages);
+        
+        return [
+            'messages' => $messages,
+            'next_cursor' => $nextCursor,
+            'has_more' => $hasMore,
+            'count' => count($messages)
+        ];
+    }
+    
+    /**
+     * Poll for new messages and conversation updates since timestamp
+     * Efficient query to get only delta updates for real-time polling
+     * Requirements: 4.3
+     * 
+     * @param int $accountId LINE account ID
+     * @param int $since Unix timestamp (only fetch messages after this time)
+     * @return array ['new_messages' => [], 'updated_conversations' => []]
+     */
+    public function pollUpdates(int $accountId, int $since): array {
+        // Efficient query to get only new incoming messages since last check
+        // Include user info for conversation bumping
+        $sql = "
+            SELECT 
+                m.id,
+                m.user_id,
+                m.direction,
+                m.message_type,
+                m.content,
+                m.is_read,
+                m.created_at,
+                u.display_name,
+                u.picture_url,
+                u.last_interaction
+            FROM messages m
+            JOIN users u ON u.id = m.user_id
+            WHERE u.line_account_id = ?
+            AND m.created_at > FROM_UNIXTIME(?)
+            AND m.direction = 'incoming'
+            ORDER BY m.created_at ASC
+        ";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$accountId, $since]);
+        $newMessages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Get updated conversations (conversations with new messages)
+        // Group by user_id to get conversation-level updates
+        $updatedConversations = [];
+        $seenUsers = [];
+        
+        foreach ($newMessages as $message) {
+            $userId = $message['user_id'];
+            
+            // Only add each conversation once
+            if (!in_array($userId, $seenUsers)) {
+                $seenUsers[] = $userId;
+                
+                // Get unread count for this conversation
+                $unreadSql = "
+                    SELECT COUNT(*) 
+                    FROM messages 
+                    WHERE user_id = ? 
+                    AND direction = 'incoming' 
+                    AND is_read = 0
+                ";
+                $unreadStmt = $this->db->prepare($unreadSql);
+                $unreadStmt->execute([$userId]);
+                $unreadCount = (int)$unreadStmt->fetchColumn();
+                
+                $updatedConversations[] = [
+                    'user_id' => $userId,
+                    'display_name' => $message['display_name'],
+                    'picture_url' => $message['picture_url'],
+                    'last_message_at' => $message['last_interaction'],
+                    'last_message_preview' => substr($message['content'], 0, 100),
+                    'unread_count' => $unreadCount
+                ];
+            }
+        }
+        
+        return [
+            'new_messages' => $newMessages,
+            'updated_conversations' => $updatedConversations,
+            'count' => count($newMessages)
         ];
     }
     

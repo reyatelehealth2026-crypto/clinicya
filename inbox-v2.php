@@ -692,6 +692,9 @@ function formatThaiDateTime($datetime) {
 <!-- FAB & HUD Mode Switcher CSS -->
 <link rel="stylesheet" href="assets/css/inbox-v2-fab.css?v=<?= time() ?>">
 
+<!-- Inbox V2 Performance Upgrade - Animation Styles -->
+<link rel="stylesheet" href="assets/css/inbox-v2-animations.css?v=<?= time() ?>">
+
 <style>
 :root { --primary: #0C665D; --primary-dark: #0A5550; }
 .chat-scroll::-webkit-scrollbar { width: 5px; }
@@ -1369,7 +1372,7 @@ function formatThaiDateTime($datetime) {
         </div>
         
         <!-- Conversation List -->
-        <div id="userList" class="flex-1 overflow-y-auto chat-scroll">
+        <div id="userList" class="flex-1 overflow-y-auto chat-scroll" tabindex="0">
             <?php if (empty($users)): ?>
                 <div class="p-6 text-center text-gray-400">
                     <i class="fas fa-inbox text-4xl mb-2"></i>
@@ -1418,7 +1421,8 @@ function formatThaiDateTime($datetime) {
                    data-name="<?= strtolower($user['display_name']) ?>"
                    data-chat-status="<?= htmlspecialchars($chatStatus) ?>"
                    data-tags="<?= implode(',', $userTagIds) ?>"
-                   data-assigned="<?= count($assignees) > 0 ? '1' : '0' ?>">
+                   data-assigned="<?= count($assignees) > 0 ? '1' : '0' ?>"
+                   tabindex="0">
                     <div class="flex items-center gap-3">
                         <div class="relative flex-shrink-0">
                             <img src="<?= $user['picture_url'] ?: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3Cpath d=%22M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E' ?>" 
@@ -6891,6 +6895,913 @@ async function sendImageWithoutAnalysis() {
     
     await sendImage();
 }
+
+/**
+ * ============================================================================
+ * AJAX CONVERSATION SWITCHING - Task 17
+ * ============================================================================
+ * Integrates Phase 1-4 components for seamless conversation switching
+ * Requirements: 1.1, 1.2, 9.1, 9.2, 9.3, 9.4, 9.5, 11.1
+ */
+
+// Global manager instances
+let conversationListManager = null;
+let chatPanelManager = null;
+let realtimeManager = null;
+
+// Initialize managers on DOM ready
+document.addEventListener('DOMContentLoaded', function() {
+    initializeAJAXConversationSwitching();
+});
+
+/**
+ * Initialize AJAX conversation switching with all managers
+ * Task 17.1, 17.2, 17.3, 17.4
+ */
+function initializeAJAXConversationSwitching() {
+    console.log('[AJAX] Initializing conversation switching...');
+    
+    // Get DOM elements
+    const conversationListContainer = document.getElementById('userList');
+    const chatContainer = document.getElementById('chatArea');
+    const messageContainer = document.getElementById('chatBox');
+    
+    if (!conversationListContainer || !chatContainer || !messageContainer) {
+        console.warn('[AJAX] Required containers not found, skipping initialization');
+        return;
+    }
+    
+    // Initialize ConversationListManager (Phase 1)
+    try {
+        conversationListManager = new ConversationListManager({
+            container: conversationListContainer,
+            itemHeight: 80,
+            bufferSize: 10,
+            searchDebounceMs: 300,
+            onConversationClick: handleConversationClick
+        });
+        
+        conversationListManager.initialize();
+        
+        // Load initial conversations from DOM
+        loadInitialConversations();
+        
+        console.log('[AJAX] ConversationListManager initialized');
+    } catch (error) {
+        console.error('[AJAX] Failed to initialize ConversationListManager:', error);
+    }
+    
+    // Initialize ChatPanelManager (Phase 1)
+    try {
+        chatPanelManager = new ChatPanelManager({
+            container: chatContainer,
+            messageContainer: messageContainer,
+            loadingIndicator: createLoadingIndicator(),
+            cacheTTL: 30000, // 30 seconds
+            cacheMaxSize: 10,
+            messageLimit: 50,
+            apiEndpoint: '/api/inbox-v2.php',
+            onConversationLoaded: handleConversationLoaded,
+            onMessageSent: handleMessageSent,
+            onError: handleChatError
+        });
+        
+        chatPanelManager.initialize();
+        
+        console.log('[AJAX] ChatPanelManager initialized');
+    } catch (error) {
+        console.error('[AJAX] Failed to initialize ChatPanelManager:', error);
+    }
+    
+    // Initialize RealtimeManager (Phase 3)
+    try {
+        const authToken = getAuthToken();
+        const lineAccountId = <?= $currentBotId ?>;
+        
+        realtimeManager = new RealtimeManager({
+            websocketUrl: 'http://localhost:3000',
+            authToken: authToken,
+            lineAccountId: lineAccountId,
+            onNewMessage: handleRealtimeNewMessage,
+            onConversationUpdate: handleRealtimeConversationUpdate,
+            onTyping: handleRealtimeTyping,
+            onConnectionChange: handleRealtimeConnectionChange
+        });
+        
+        realtimeManager.start();
+        
+        console.log('[AJAX] RealtimeManager initialized');
+    } catch (error) {
+        console.error('[AJAX] Failed to initialize RealtimeManager:', error);
+        console.log('[AJAX] Continuing without real-time updates');
+    }
+    
+    // Task 17.1: Modify conversation list click handlers
+    setupConversationClickHandlers();
+    
+    // Task 17.4: Preserve scroll position
+    setupScrollPositionPreservation();
+    
+    // Task 17.3: Setup offline detection
+    setupOfflineDetection();
+    
+    // Setup keyboard navigation (Task 18.1, 18.3)
+    setupKeyboardNavigation();
+    
+    console.log('[AJAX] Conversation switching initialized successfully');
+}
+
+/**
+ * Task 17.1: Setup conversation click handlers to prevent default and use AJAX
+ * Requirements: 1.1, 1.2
+ */
+function setupConversationClickHandlers() {
+    const conversationListContainer = document.getElementById('userList');
+    if (!conversationListContainer) return;
+    
+    // Use event delegation for better performance
+    conversationListContainer.addEventListener('click', function(e) {
+        // Find the conversation link
+        const conversationLink = e.target.closest('a.user-item[data-user-id]');
+        
+        if (conversationLink) {
+            // Prevent default page reload (Requirement 1.1)
+            e.preventDefault();
+            
+            const userId = conversationLink.getAttribute('data-user-id');
+            const userName = conversationLink.getAttribute('data-name');
+            
+            if (!userId) {
+                console.warn('[AJAX] No user ID found on conversation link');
+                return;
+            }
+            
+            // Get user data from the link
+            const userData = extractUserDataFromElement(conversationLink);
+            
+            // Load conversation via AJAX (Requirement 1.1)
+            loadConversationAJAX(userId, userData);
+            
+            // Update active state (Requirement 1.2)
+            updateActiveConversation(userId);
+            
+            // Hide mobile sidebar if on mobile
+            if (window.innerWidth <= 768) {
+                const sidebar = document.getElementById('inboxSidebar');
+                if (sidebar) {
+                    sidebar.classList.add('hidden-mobile');
+                }
+            }
+        }
+    });
+    
+    console.log('[AJAX] Conversation click handlers setup complete');
+}
+
+/**
+ * Extract user data from conversation element
+ * @param {HTMLElement} element - Conversation element
+ * @returns {Object} User data
+ */
+function extractUserDataFromElement(element) {
+    const img = element.querySelector('img');
+    const nameEl = element.querySelector('h3');
+    
+    return {
+        id: element.getAttribute('data-user-id'),
+        display_name: nameEl ? nameEl.textContent.trim() : '',
+        picture_url: img ? img.src : '',
+        chat_status: element.getAttribute('data-chat-status') || '',
+        tags: element.getAttribute('data-tags') ? element.getAttribute('data-tags').split(',') : []
+    };
+}
+
+/**
+ * Load conversation via AJAX
+ * Task 17.1, 17.2
+ * Requirements: 1.1, 9.1
+ * @param {string} userId - User ID
+ * @param {Object} userData - User data
+ */
+async function loadConversationAJAX(userId, userData) {
+    if (!chatPanelManager) {
+        console.error('[AJAX] ChatPanelManager not initialized');
+        return;
+    }
+    
+    try {
+        // Task 17.2: Show loading state (Requirement 9.1)
+        showConversationLoadingState();
+        
+        // Load conversation (uses cache if available)
+        await chatPanelManager.loadConversation(userId, true, userData);
+        
+        // Update chat header with user data
+        updateChatHeader(userData);
+        
+        // Load HUD data
+        if (typeof initializeHUD === 'function') {
+            const lastMessage = getLastCustomerMessage();
+            initializeHUD(lastMessage || '');
+        }
+        
+        // Mark messages as read
+        if (typeof markMessagesAsReadOnLine === 'function') {
+            markMessagesAsReadOnLine(userId);
+        }
+        
+        // Update ghost draft state
+        if (typeof ghostDraftState !== 'undefined') {
+            ghostDraftState.userId = userId;
+        }
+        
+        // Hide loading state
+        hideConversationLoadingState();
+        
+    } catch (error) {
+        console.error('[AJAX] Error loading conversation:', error);
+        
+        // Task 17.3: Show error state (Requirement 9.4)
+        showConversationErrorState(error.message || 'Failed to load conversation');
+    }
+}
+
+/**
+ * Task 17.2: Show loading state - skeleton loader
+ * Requirement: 9.1
+ */
+function showConversationLoadingState() {
+    const chatBox = document.getElementById('chatBox');
+    if (!chatBox) return;
+    
+    // Add loading overlay
+    const loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'conversationLoadingOverlay';
+    loadingOverlay.className = 'absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50';
+    loadingOverlay.innerHTML = `
+        <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mb-3"></div>
+            <p class="text-gray-600 text-sm">กำลังโหลดการสนทนา...</p>
+        </div>
+    `;
+    
+    const chatArea = document.getElementById('chatArea');
+    if (chatArea) {
+        chatArea.style.position = 'relative';
+        chatArea.appendChild(loadingOverlay);
+    }
+}
+
+/**
+ * Task 17.2: Hide loading state
+ */
+function hideConversationLoadingState() {
+    const loadingOverlay = document.getElementById('conversationLoadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.remove();
+    }
+}
+
+/**
+ * Task 17.3: Show error state with retry button
+ * Requirement: 9.4
+ */
+function showConversationErrorState(errorMessage) {
+    const chatBox = document.getElementById('chatBox');
+    if (!chatBox) return;
+    
+    // Remove loading overlay if present
+    hideConversationLoadingState();
+    
+    // Show error message
+    const errorOverlay = document.createElement('div');
+    errorOverlay.id = 'conversationErrorOverlay';
+    errorOverlay.className = 'absolute inset-0 bg-white flex items-center justify-center z-50';
+    errorOverlay.innerHTML = `
+        <div class="text-center p-6">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">เกิดข้อผิดพลาด</h3>
+            <p class="text-gray-600 text-sm mb-4">${escapeHtml(errorMessage)}</p>
+            <button onclick="retryLoadConversation()" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition">
+                <i class="fas fa-redo mr-2"></i>ลองอีกครั้ง
+            </button>
+        </div>
+    `;
+    
+    const chatArea = document.getElementById('chatArea');
+    if (chatArea) {
+        chatArea.style.position = 'relative';
+        chatArea.appendChild(errorOverlay);
+    }
+}
+
+/**
+ * Retry loading conversation after error
+ */
+function retryLoadConversation() {
+    const errorOverlay = document.getElementById('conversationErrorOverlay');
+    if (errorOverlay) {
+        errorOverlay.remove();
+    }
+    
+    // Get current user ID from active conversation
+    const activeConv = document.querySelector('.user-item.active');
+    if (activeConv) {
+        const userId = activeConv.getAttribute('data-user-id');
+        const userData = extractUserDataFromElement(activeConv);
+        loadConversationAJAX(userId, userData);
+    }
+}
+
+/**
+ * Task 17.3: Show slow connection warning
+ * Requirement: 9.5
+ */
+function showSlowConnectionWarning() {
+    // Check if warning already exists
+    if (document.getElementById('slowConnectionWarning')) {
+        return;
+    }
+    
+    const warning = document.createElement('div');
+    warning.id = 'slowConnectionWarning';
+    warning.className = 'fixed top-4 right-4 bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3';
+    warning.innerHTML = `
+        <i class="fas fa-exclamation-triangle text-amber-600"></i>
+        <div>
+            <p class="font-semibold text-sm">การเชื่อมต่อช้า</p>
+            <p class="text-xs">กำลังพยายามเชื่อมต่อใหม่...</p>
+        </div>
+        <button onclick="this.parentElement.remove()" class="ml-2 text-amber-600 hover:text-amber-800">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    
+    document.body.appendChild(warning);
+    
+    // Auto-remove after 10 seconds
+    setTimeout(() => {
+        if (warning.parentElement) {
+            warning.remove();
+        }
+    }, 10000);
+}
+
+/**
+ * Task 17.3 & 19.1-19.5: Setup offline detection and message queuing
+ * Requirements: 11.1, 11.2, 11.3, 11.4
+ */
+function setupOfflineDetection() {
+    // Initialize OfflineManager (Task 19.2, 19.4, 19.5)
+    window.offlineManager = new OfflineManager({
+        onOnline: function() {
+            console.log('🟢 Back online');
+            hideOfflineIndicator();
+            
+            // Show reconnection notification
+            if (typeof showNotification === 'function') {
+                showNotification('✓ กลับมาออนไลน์แล้ว', 'success');
+            }
+            
+            // Show queue status if there are messages
+            const queueSize = window.offlineManager.getQueueSize();
+            if (queueSize > 0) {
+                if (typeof showNotification === 'function') {
+                    showNotification(`📤 กำลังส่งข้อความที่รอคิว (${queueSize} ข้อความ)...`, 'info');
+                }
+            }
+        },
+        
+        onOffline: function() {
+            console.log('🔴 Gone offline');
+            showOfflineIndicator();
+            
+            if (typeof showNotification === 'function') {
+                showNotification('⚠️ ออฟไลน์ - ข้อความจะถูกส่งเมื่อกลับมาออนไลน์', 'warning');
+            }
+        },
+        
+        onMessageQueued: function(queueItem) {
+            console.log('📥 Message queued:', queueItem);
+            
+            if (typeof showNotification === 'function') {
+                showNotification('📥 ข้อความถูกเก็บไว้ในคิว จะส่งเมื่อกลับมาออนไลน์', 'info');
+            }
+        },
+        
+        onMessageSent: function(queueItem) {
+            console.log('✅ Queued message sent:', queueItem);
+        }
+    });
+    
+    // Show offline indicator if currently offline
+    if (!navigator.onLine) {
+        showOfflineIndicator();
+    }
+    
+    // Show queue status on load if there are queued messages
+    const queueSize = window.offlineManager.getQueueSize();
+    if (queueSize > 0) {
+        console.log(`📊 Found ${queueSize} queued messages from previous session`);
+        
+        if (typeof showNotification === 'function') {
+            showNotification(`📊 พบข้อความที่รอส่ง ${queueSize} ข้อความ`, 'info');
+        }
+        
+        // Try to send if online
+        if (navigator.onLine) {
+            setTimeout(() => {
+                window.offlineManager.sendQueuedMessages().then(result => {
+                    if (result.sent > 0 && typeof showNotification === 'function') {
+                        showNotification(`✅ ส่งข้อความสำเร็จ ${result.sent} ข้อความ`, 'success');
+                    }
+                    if (result.failed > 0 && typeof showNotification === 'function') {
+                        showNotification(`⚠️ ส่งข้อความไม่สำเร็จ ${result.failed} ข้อความ`, 'warning');
+                    }
+                });
+            }, 1000); // Wait 1 second after page load
+        }
+    }
+}
+
+/**
+ * Show offline indicator
+ * Requirement: 11.1
+ */
+function showOfflineIndicator() {
+    // Check if indicator already exists
+    if (document.getElementById('offlineIndicator')) {
+        return;
+    }
+    
+    const indicator = document.createElement('div');
+    indicator.id = 'offlineIndicator';
+    indicator.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3';
+    indicator.innerHTML = `
+        <i class="fas fa-wifi-slash"></i>
+        <div>
+            <p class="font-semibold text-sm">ออฟไลน์</p>
+            <p class="text-xs">ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้</p>
+        </div>
+    `;
+    
+    document.body.appendChild(indicator);
+}
+
+/**
+ * Hide offline indicator
+ */
+function hideOfflineIndicator() {
+    const indicator = document.getElementById('offlineIndicator');
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
+/**
+ * Task 17.4: Setup scroll position preservation
+ * Requirement: 1.2
+ */
+function setupScrollPositionPreservation() {
+    const conversationListContainer = document.getElementById('userList');
+    if (!conversationListContainer) return;
+    
+    // Store scroll position before switching
+    let savedScrollPosition = 0;
+    
+    conversationListContainer.addEventListener('scroll', function() {
+        savedScrollPosition = conversationListContainer.scrollTop;
+    });
+    
+    // Restore scroll position when needed
+    window.restoreConversationListScroll = function() {
+        if (conversationListContainer && savedScrollPosition > 0) {
+            conversationListContainer.scrollTop = savedScrollPosition;
+        }
+    };
+}
+
+/**
+ * Update active conversation in list
+ * Requirement: 1.2
+ */
+function updateActiveConversation(userId) {
+    const conversationListContainer = document.getElementById('userList');
+    if (!conversationListContainer) return;
+    
+    // Remove active class from all conversations
+    conversationListContainer.querySelectorAll('.user-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    // Add active class to selected conversation
+    const selectedConv = conversationListContainer.querySelector(`[data-user-id="${userId}"]`);
+    if (selectedConv) {
+        selectedConv.classList.add('active');
+    }
+}
+
+/**
+ * Update chat header with user data
+ */
+function updateChatHeader(userData) {
+    if (!userData) return;
+    
+    // Update user name
+    const nameEl = document.querySelector('#chatArea h3');
+    if (nameEl && userData.display_name) {
+        nameEl.textContent = userData.display_name;
+    }
+    
+    // Update user picture
+    const imgEl = document.querySelector('#chatArea img');
+    if (imgEl && userData.picture_url) {
+        imgEl.src = userData.picture_url;
+    }
+}
+
+/**
+ * Load initial conversations from DOM
+ */
+function loadInitialConversations() {
+    if (!conversationListManager) return;
+    
+    const conversationElements = document.querySelectorAll('.user-item[data-user-id]');
+    const conversations = [];
+    
+    conversationElements.forEach(el => {
+        const userData = extractUserDataFromElement(el);
+        const lastMsgEl = el.querySelector('.last-msg');
+        const lastTimeEl = el.querySelector('.last-time');
+        const unreadBadge = el.querySelector('.unread-badge');
+        
+        conversations.push({
+            id: userData.id,
+            user_id: userData.id,
+            display_name: userData.display_name,
+            picture_url: userData.picture_url,
+            last_message: lastMsgEl ? lastMsgEl.textContent.trim() : '',
+            last_message_at: lastTimeEl ? lastTimeEl.getAttribute('data-timestamp') || new Date().toISOString() : new Date().toISOString(),
+            unread_count: unreadBadge ? parseInt(unreadBadge.textContent) || 0 : 0,
+            chat_status: userData.chat_status,
+            tags: userData.tags,
+            is_pinned: false
+        });
+    });
+    
+    conversationListManager.setConversations(conversations);
+    console.log(`[AJAX] Loaded ${conversations.length} initial conversations`);
+}
+
+/**
+ * Handle conversation loaded callback
+ */
+function handleConversationLoaded(userId, messages, fromCache) {
+    console.log(`[AJAX] Conversation loaded: ${userId} (${messages.length} messages, from cache: ${fromCache})`);
+    
+    // Update unread count to 0 for this conversation
+    if (conversationListManager) {
+        conversationListManager.updateConversationData(userId, {
+            unread_count: 0
+        });
+    }
+}
+
+/**
+ * Handle message sent callback
+ */
+function handleMessageSent(message) {
+    console.log('[AJAX] Message sent:', message);
+    
+    // Update conversation list with new message
+    if (conversationListManager && message.user_id) {
+        conversationListManager.updateConversationData(message.user_id, {
+            last_message: message.content || message.text || '',
+            last_message_at: message.created_at || new Date().toISOString()
+        });
+    }
+}
+
+/**
+ * Handle chat error callback
+ */
+function handleChatError(errorType, error) {
+    console.error(`[AJAX] Chat error (${errorType}):`, error);
+    
+    if (typeof showNotification === 'function') {
+        showNotification('❌ เกิดข้อผิดพลาด: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Handle real-time new message
+ */
+function handleRealtimeNewMessage(message) {
+    console.log('[AJAX] Real-time new message:', message);
+    
+    // Bump conversation to top
+    if (conversationListManager && message.user_id) {
+        conversationListManager.bumpConversation(message.user_id, message);
+    }
+    
+    // If viewing this conversation, append message
+    if (chatPanelManager && chatPanelManager.currentUserId === message.user_id) {
+        if (typeof appendNewMessageToChat === 'function') {
+            appendNewMessageToChat(message);
+        }
+    }
+    
+    // Play notification sound
+    if (typeof playNotificationSound === 'function') {
+        playNotificationSound();
+    }
+}
+
+/**
+ * Handle real-time conversation update
+ */
+function handleRealtimeConversationUpdate(data) {
+    console.log('[AJAX] Real-time conversation update:', data);
+    
+    if (conversationListManager && data.user_id) {
+        conversationListManager.updateConversationData(data.user_id, {
+            last_message_at: data.last_message_at,
+            unread_count: data.unread_count
+        });
+    }
+}
+
+/**
+ * Handle real-time typing indicator
+ */
+function handleRealtimeTyping(data) {
+    console.log('[AJAX] Real-time typing:', data);
+    
+    // Show/hide typing indicator
+    const typingIndicator = document.getElementById('typingIndicator');
+    if (typingIndicator && data.user_id === chatPanelManager?.currentUserId) {
+        if (data.is_typing) {
+            typingIndicator.classList.remove('hidden');
+        } else {
+            typingIndicator.classList.add('hidden');
+        }
+    }
+}
+
+/**
+ * Handle real-time connection change
+ */
+function handleRealtimeConnectionChange(status, type) {
+    console.log(`[AJAX] Connection ${status} (${type})`);
+    
+    const liveIndicator = document.getElementById('liveIndicator');
+    if (liveIndicator) {
+        if (status === 'connected') {
+            liveIndicator.classList.remove('bg-red-500');
+            liveIndicator.classList.add('bg-green-300');
+            liveIndicator.title = `Real-time Active (${type})`;
+        } else if (status === 'disconnected') {
+            liveIndicator.classList.remove('bg-green-300');
+            liveIndicator.classList.add('bg-amber-500');
+            liveIndicator.title = 'Reconnecting...';
+        } else if (status === 'offline') {
+            liveIndicator.classList.remove('bg-green-300', 'bg-amber-500');
+            liveIndicator.classList.add('bg-red-500');
+            liveIndicator.title = 'Offline';
+        }
+    }
+    
+    // Show slow connection warning if reconnecting
+    if (status === 'disconnected') {
+        showSlowConnectionWarning();
+    }
+}
+
+/**
+ * Task 18.1, 18.3: Setup keyboard navigation
+ * Requirements: 10.1, 10.2, 10.3, 10.4, 10.5
+ */
+function setupKeyboardNavigation() {
+    document.addEventListener('keydown', function(e) {
+        // Don't interfere with input fields
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            // Allow Escape to blur input fields
+            if (e.key === 'Escape') {
+                e.target.blur();
+                const conversationList = document.getElementById('userList');
+                if (conversationList) {
+                    conversationList.focus();
+                }
+            }
+            return;
+        }
+        
+        // Ctrl+K: Quick search (Requirement 10.3)
+        if (e.ctrlKey && e.key === 'k') {
+            e.preventDefault();
+            const searchInput = document.getElementById('userSearch');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+            return;
+        }
+        
+        // Ctrl+F: Focus search (Requirement 10.5)
+        if (e.ctrlKey && e.key === 'f') {
+            e.preventDefault();
+            const searchInput = document.getElementById('userSearch');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+            return;
+        }
+        
+        // Escape: Close modals or return focus to conversation list (Requirement 10.4)
+        if (e.key === 'Escape') {
+            // Close any open modals first
+            const modals = document.querySelectorAll('.modal, [role="dialog"]');
+            let modalClosed = false;
+            modals.forEach(modal => {
+                if (modal.style.display !== 'none' && !modal.classList.contains('hidden')) {
+                    modal.style.display = 'none';
+                    modal.classList.add('hidden');
+                    modalClosed = true;
+                }
+            });
+            
+            if (!modalClosed) {
+                // Return focus to conversation list
+                const conversationList = document.getElementById('userList');
+                if (conversationList) {
+                    conversationList.focus();
+                    // Select first conversation if none selected
+                    const selected = document.querySelector('.user-item.keyboard-selected');
+                    if (!selected) {
+                        const firstConv = document.querySelector('.user-item[data-user-id]');
+                        if (firstConv) {
+                            firstConv.classList.add('keyboard-selected');
+                            firstConv.focus();
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        
+        // Up/Down arrows: Navigate conversations (Requirement 10.1)
+        // Enter: Open conversation (Requirement 10.2)
+        const activeElement = document.activeElement;
+        const conversationList = document.getElementById('userList');
+        
+        if (conversationList && (activeElement === conversationList || conversationList.contains(activeElement))) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                navigateConversations(e.key === 'ArrowDown' ? 'next' : 'prev');
+            }
+            
+            // Enter: Open selected conversation (Requirement 10.2)
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const focusedConv = document.querySelector('.user-item:focus, .user-item.keyboard-selected');
+                if (focusedConv) {
+                    focusedConv.click();
+                }
+            }
+        }
+    });
+    
+    // Auto-focus conversation list on page load
+    window.addEventListener('load', function() {
+        const conversationList = document.getElementById('userList');
+        if (conversationList) {
+            // Don't steal focus if user is already typing
+            if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+                conversationList.focus();
+            }
+        }
+    });
+}
+
+/**
+ * Navigate between conversations with keyboard
+ * Requirement 10.1: Up/Down arrow navigation
+ */
+function navigateConversations(direction) {
+    const conversations = Array.from(document.querySelectorAll('.user-item[data-user-id]'));
+    if (conversations.length === 0) return;
+    
+    let currentIndex = conversations.findIndex(conv => 
+        conv.classList.contains('keyboard-selected') || conv === document.activeElement
+    );
+    
+    // Remove previous selection
+    conversations.forEach(conv => conv.classList.remove('keyboard-selected'));
+    
+    // Calculate new index
+    if (currentIndex === -1) {
+        // No selection, start at first item
+        currentIndex = 0;
+    } else if (direction === 'next') {
+        currentIndex = Math.min(currentIndex + 1, conversations.length - 1);
+    } else {
+        currentIndex = Math.max(currentIndex - 1, 0);
+    }
+    
+    // Select new conversation
+    const newConv = conversations[currentIndex];
+    if (newConv) {
+        newConv.classList.add('keyboard-selected');
+        newConv.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        newConv.focus();
+    }
+}
+
+/**
+ * Get auth token for WebSocket
+ */
+function getAuthToken() {
+    // Try to get from session or generate a simple token
+    // In production, this should be a proper JWT or session token
+    return 'session_' + Date.now();
+}
+
+/**
+ * Create loading indicator element
+ */
+function createLoadingIndicator() {
+    const indicator = document.createElement('div');
+    indicator.className = 'loading-indicator hidden';
+    indicator.innerHTML = '<div class="spinner"></div>';
+    return indicator;
+}
+
+// Add CSS for keyboard navigation
+const ajaxStyles = document.createElement('style');
+ajaxStyles.textContent = `
+    /* Keyboard navigation styles - Task 18.1 */
+    .user-item.keyboard-selected {
+        outline: 2px solid #0C665D;
+        outline-offset: -2px;
+        background-color: rgba(12, 102, 93, 0.05);
+    }
+    
+    .user-item:focus {
+        outline: 2px solid #0C665D;
+        outline-offset: -2px;
+    }
+    
+    /* Remove default focus outline from userList container */
+    #userList:focus {
+        outline: none;
+    }
+    
+    /* Make user-item focusable and improve accessibility */
+    .user-item {
+        cursor: pointer;
+        transition: background-color 0.15s ease, outline 0.15s ease;
+    }
+    
+    .user-item:hover {
+        background-color: rgba(12, 102, 93, 0.03);
+    }
+    
+    #conversationLoadingOverlay {
+        animation: fadeIn 0.2s ease-out;
+    }
+    
+    #conversationErrorOverlay {
+        animation: fadeIn 0.3s ease-out;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    
+    .conversation-bumping {
+        background-color: rgba(16, 185, 129, 0.1);
+    }
+`;
+document.head.appendChild(ajaxStyles);
+
+console.log('[AJAX] Conversation switching script loaded');
+</script>
+
+<!-- Load JavaScript Managers (Phase 1-4) -->
+<script src="assets/js/lru-cache.js?v=<?= time() ?>"></script>
+<script src="assets/js/conversation-list-manager.js?v=<?= time() ?>"></script>
+<script src="assets/js/chat-panel-manager.js?v=<?= time() ?>"></script>
+<script src="assets/js/realtime-manager.js?v=<?= time() ?>"></script>
+<script src="assets/js/offline-manager.js?v=<?= time() ?>"></script>
+
+<!-- Performance Tracker (Phase 6 - Task 21.2) -->
+<!-- Requirements: 12.1, 12.2, 12.3, 12.4, 12.5 -->
+<script src="assets/js/performance-tracker.js?v=<?= time() ?>"></script>
+
 </script>
 <?php endif; ?>
 
@@ -7141,6 +8052,120 @@ async function sendImageWithoutAnalysis() {
             </div>
         </div>
         
+        <!-- Performance Metrics Dashboard -->
+        <!-- Requirements: 12.1 (Performance Monitoring) -->
+        <div class="mt-8">
+            <div class="bg-white rounded-xl shadow-sm p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <i class="fas fa-tachometer-alt text-indigo-600"></i>
+                        Performance Metrics
+                    </h3>
+                    <button onclick="loadPerformanceMetrics()" class="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                        <i class="fas fa-sync-alt"></i>
+                        รีเฟรช
+                    </button>
+                </div>
+                
+                <!-- Performance Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <!-- Page Load -->
+                    <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium text-indigo-900">Page Load</span>
+                            <i class="fas fa-rocket text-indigo-600"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-indigo-900" id="perfPageLoad">-</div>
+                        <div class="text-xs text-indigo-600 mt-1">
+                            <span id="perfPageLoadP95">-</span> (p95)
+                        </div>
+                    </div>
+                    
+                    <!-- Conversation Switch -->
+                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium text-blue-900">Conversation Switch</span>
+                            <i class="fas fa-exchange-alt text-blue-600"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-blue-900" id="perfConvSwitch">-</div>
+                        <div class="text-xs text-blue-600 mt-1">
+                            <span id="perfConvSwitchP95">-</span> (p95)
+                        </div>
+                    </div>
+                    
+                    <!-- Message Render -->
+                    <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium text-green-900">Message Render</span>
+                            <i class="fas fa-comments text-green-600"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-green-900" id="perfMsgRender">-</div>
+                        <div class="text-xs text-green-600 mt-1">
+                            <span id="perfMsgRenderP95">-</span> (p95)
+                        </div>
+                    </div>
+                    
+                    <!-- API Call -->
+                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium text-purple-900">API Call</span>
+                            <i class="fas fa-server text-purple-600"></i>
+                        </div>
+                        <div class="text-2xl font-bold text-purple-900" id="perfApiCall">-</div>
+                        <div class="text-xs text-purple-600 mt-1">
+                            <span id="perfApiCallP95">-</span> (p95)
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Detailed Performance Table -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Metric</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Count</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Average</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Min</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Max</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">p50</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">p95</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">p99</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Error Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="perfMetricsTable" class="divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="9" class="px-4 py-8 text-center text-gray-500">
+                                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                                    Loading performance metrics...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Performance Thresholds Legend -->
+                <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                    <div class="text-xs font-semibold text-gray-700 mb-2">Performance Thresholds:</div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-600">
+                        <div>
+                            <span class="font-medium">Page Load:</span> &lt; 2000ms
+                        </div>
+                        <div>
+                            <span class="font-medium">Conversation:</span> &lt; 1000ms
+                        </div>
+                        <div>
+                            <span class="font-medium">Message Render:</span> &lt; 200ms
+                        </div>
+                        <div>
+                            <span class="font-medium">API Call:</span> &lt; 500ms
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- No Data State -->
         <div id="noDataState" class="hidden">
             <div class="bg-white rounded-xl shadow-sm p-12 text-center">
@@ -7370,6 +8395,155 @@ function showNoDataState() {
  */
 function formatNumber(num) {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/**
+ * Load performance metrics
+ * Requirements: 12.1 (Performance Monitoring Dashboard)
+ */
+async function loadPerformanceMetrics() {
+    try {
+        const startDate = document.getElementById('analyticsStartDate').value;
+        const endDate = document.getElementById('analyticsEndDate').value;
+        
+        const response = await fetch(`/api/inbox-v2.php?action=getPerformanceMetrics&start_date=${startDate}&end_date=${endDate}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load performance metrics');
+        }
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || 'Failed to load performance metrics');
+        }
+        
+        const stats = result.data || {};
+        
+        // Update summary cards
+        updatePerfCard('page_load', stats.page_load);
+        updatePerfCard('conversation_switch', stats.conversation_switch);
+        updatePerfCard('message_render', stats.message_render);
+        updatePerfCard('api_call', stats.api_call);
+        
+        // Update detailed table
+        updatePerfTable(stats);
+        
+    } catch (error) {
+        console.error('Error loading performance metrics:', error);
+        // Show error in table
+        document.getElementById('perfMetricsTable').innerHTML = `
+            <tr>
+                <td colspan="9" class="px-4 py-8 text-center text-red-500">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    Error loading performance metrics: ${error.message}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+/**
+ * Update performance card
+ * @param {string} type Metric type
+ * @param {object} stats Statistics object
+ */
+function updatePerfCard(type, stats) {
+    if (!stats) return;
+    
+    const typeMap = {
+        'page_load': 'PageLoad',
+        'conversation_switch': 'ConvSwitch',
+        'message_render': 'MsgRender',
+        'api_call': 'ApiCall'
+    };
+    
+    const prefix = 'perf' + typeMap[type];
+    const avgEl = document.getElementById(prefix);
+    const p95El = document.getElementById(prefix + 'P95');
+    
+    if (avgEl && stats.average !== undefined) {
+        avgEl.textContent = Math.round(stats.average) + 'ms';
+    }
+    
+    if (p95El && stats.p95 !== undefined) {
+        p95El.textContent = Math.round(stats.p95) + 'ms';
+    }
+}
+
+/**
+ * Update performance table
+ * @param {object} stats All statistics
+ */
+function updatePerfTable(stats) {
+    const tbody = document.getElementById('perfMetricsTable');
+    
+    if (!stats || Object.keys(stats).length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="px-4 py-8 text-center text-gray-500">
+                    No performance data available for this date range
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    const metricTypes = [
+        { key: 'page_load', label: 'Page Load', threshold: 2000 },
+        { key: 'conversation_switch', label: 'Conversation Switch', threshold: 1000 },
+        { key: 'message_render', label: 'Message Render', threshold: 200 },
+        { key: 'api_call', label: 'API Call', threshold: 500 }
+    ];
+    
+    let html = '';
+    
+    metricTypes.forEach(metric => {
+        const data = stats[metric.key];
+        if (!data || data.count === 0) {
+            html += `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium text-gray-700">${metric.label}</td>
+                    <td colspan="8" class="px-4 py-3 text-center text-gray-400">No data</td>
+                </tr>
+            `;
+            return;
+        }
+        
+        // Calculate error rate (values exceeding threshold)
+        const errorRate = data.error_rate !== undefined 
+            ? data.error_rate 
+            : (data.max > metric.threshold ? ((data.max - metric.threshold) / data.max * 100) : 0);
+        
+        const errorClass = errorRate > 10 ? 'text-red-600 font-semibold' : 'text-gray-600';
+        
+        html += `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 font-medium text-gray-700">${metric.label}</td>
+                <td class="px-4 py-3 text-right text-gray-600">${formatNumber(data.count)}</td>
+                <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.average)}ms</td>
+                <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.min)}ms</td>
+                <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.max)}ms</td>
+                <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.p50)}ms</td>
+                <td class="px-4 py-3 text-right font-semibold text-gray-700">${Math.round(data.p95)}ms</td>
+                <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.p99)}ms</td>
+                <td class="px-4 py-3 text-right ${errorClass}">${errorRate.toFixed(1)}%</td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// Load performance metrics when analytics tab is loaded
+if (document.getElementById('analyticsContainer')) {
+    loadPerformanceMetrics();
 }
 </script>
 <?php endif; ?>

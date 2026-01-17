@@ -111,6 +111,77 @@ class VibeSellingHelper
     }
     
     /**
+     * Check if performance upgrade features are enabled
+     * 
+     * @param int|null $lineAccountId LINE account ID
+     * @return bool
+     */
+    public function isPerformanceUpgradeEnabled(?int $lineAccountId = null): bool
+    {
+        $this->loadSettings($lineAccountId);
+        return ($this->settings['performance_upgrade_enabled'] ?? '0') === '1';
+    }
+    
+    /**
+     * Check if WebSocket real-time updates are enabled
+     * 
+     * @param int|null $lineAccountId LINE account ID
+     * @return bool
+     */
+    public function isWebSocketEnabled(?int $lineAccountId = null): bool
+    {
+        $this->loadSettings($lineAccountId);
+        return ($this->settings['websocket_enabled'] ?? '0') === '1';
+    }
+    
+    /**
+     * Check if user is in A/B test group for performance features
+     * Uses consistent hashing to ensure same user always gets same result
+     * 
+     * @param int $userId User ID
+     * @param int $percentage Percentage of users to include (0-100)
+     * @return bool
+     */
+    public function isInPerformanceTestGroup(int $userId, int $percentage = 10): bool
+    {
+        if ($percentage <= 0) {
+            return false;
+        }
+        if ($percentage >= 100) {
+            return true;
+        }
+        
+        // Use consistent hashing to determine group
+        $hash = crc32("performance_test_{$userId}");
+        $bucket = $hash % 100;
+        
+        return $bucket < $percentage;
+    }
+    
+    /**
+     * Check if performance features should be used for this user
+     * Combines feature flag and A/B test logic
+     * 
+     * @param int $userId User ID
+     * @param int|null $lineAccountId LINE account ID
+     * @return bool
+     */
+    public function shouldUsePerformanceFeatures(int $userId, ?int $lineAccountId = null): bool
+    {
+        // Check if performance upgrade is enabled
+        if (!$this->isPerformanceUpgradeEnabled($lineAccountId)) {
+            return false;
+        }
+        
+        // Get rollout percentage
+        $this->loadSettings($lineAccountId);
+        $rolloutPercentage = intval($this->settings['performance_rollout_percentage'] ?? '100');
+        
+        // Check if user is in test group
+        return $this->isInPerformanceTestGroup($userId, $rolloutPercentage);
+    }
+    
+    /**
      * Check if auto-switch on error is enabled
      * 
      * @param int|null $lineAccountId LINE account ID

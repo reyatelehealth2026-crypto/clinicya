@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM Cleanup Test - Inbox v2 Performance</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .test-section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .stats {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        
+        .stats-item {
+            margin: 5px 0;
+            font-family: monospace;
+        }
+        
+        .pass {
+            color: green;
+            font-weight: bold;
+        }
+        
+        .fail {
+            color: red;
+            font-weight: bold;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        #conversation-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            position: relative;
+        }
+        
+        #message-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        
+        .conversation-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        
+        .conversation-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .message {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background: #e3f2fd;
+        }
+        
+        .message-incoming {
+            background: #f5f5f5;
+        }
+        
+        .message-outgoing {
+            background: #e3f2fd;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <h1>DOM Cleanup & Memory Management Test</h1>
+    <p>Testing Task 15: DOM node limit enforcement and event listener cleanup</p>
+    
+    <!-- Test 1: ConversationListManager DOM Cleanup -->
+    <div class="test-section">
+        <h2>Test 1: ConversationListManager - DOM Node Limit</h2>
+        <p>Tests that DOM nodes are cleaned up when exceeding 1000 nodes</p>
+        
+        <div class="stats" id="conv-stats">
+            <div class="stats-item">Total Conversations: <span id="conv-total">0</span></div>
+            <div class="stats-item">Rendered Items: <span id="conv-rendered">0</span></div>
+            <div class="stats-item">DOM Node Count: <span id="conv-nodes">0</span></div>
+            <div class="stats-item">Status: <span id="conv-status">Not started</span></div>
+        </div>
+        
+        <button onclick="testConversationDOMCleanup()">Run Test</button>
+        <button onclick="clearConversationTest()">Clear</button>
+        
+        <div id="conversation-container"></div>
+    </div>
+    
+    <!-- Test 2: ChatPanelManager DOM Cleanup -->
+    <div class="test-section">
+        <h2>Test 2: ChatPanelManager - DOM Node Limit</h2>
+        <p>Tests that message DOM nodes are cleaned up when exceeding 1000 nodes</p>
+        
+        <div class="stats" id="msg-stats">
+            <div class="stats-item">Total Messages: <span id="msg-total">0</span></div>
+            <div class="stats-item">Visible Messages: <span id="msg-visible">0</span></div>
+            <div class="stats-item">DOM Node Count: <span id="msg-nodes">0</span></div>
+            <div class="stats-item">Status: <span id="msg-status">Not started</span></div>
+        </div>
+        
+        <button onclick="testMessageDOMCleanup()">Run Test</button>
+        <button onclick="clearMessageTest()">Clear</button>
+        
+        <div id="message-container"></div>
+    </div>
+    
+    <!-- Test 3: Event Listener Cleanup -->
+    <div class="test-section">
+        <h2>Test 3: Event Listener Cleanup</h2>
+        <p>Tests that event listeners are properly tracked and removed</p>
+        
+        <div class="stats" id="listener-stats">
+            <div class="stats-item">Tracked Listeners: <span id="listener-count">0</span></div>
+            <div class="stats-item">Status: <span id="listener-status">Not started</span></div>
+        </div>
+        
+        <button onclick="testEventListenerCleanup()">Run Test</button>
+    </div>
+    
+    <script src="assets/js/lru-cache.js"></script>
+    <script src="assets/js/conversation-list-manager.js"></script>
+    <script src="assets/js/chat-panel-manager.js"></script>
+    
+    <script>
+        let convManager = null;
+        let chatManager = null;
+        
+        // Test 1: ConversationListManager DOM Cleanup
+        function testConversationDOMCleanup() {
+            const container = document.getElementById('conversation-container');
+            container.innerHTML = '';
+            
+            document.getElementById('conv-status').textContent = 'Running...';
+            document.getElementById('conv-status').className = '';
+            
+            // Create manager
+            convManager = new ConversationListManager({
+                container: container,
+                itemHeight: 80,
+                bufferSize: 10
+            });
+            
+            convManager.initialize();
+            
+            // Generate 200 conversations (should trigger virtual scrolling at 100+)
+            const conversations = [];
+            for (let i = 0; i < 200; i++) {
+                conversations.push({
+                    id: `user_${i}`,
+                    user_id: `user_${i}`,
+                    display_name: `User ${i}`,
+                    last_message: `This is message ${i}`,
+                    last_message_at: new Date(Date.now() - i * 60000).toISOString(),
+                    unread_count: Math.floor(Math.random() * 10),
+                    picture_url: '/assets/images/default-avatar.png'
+                });
+            }
+            
+            convManager.setConversations(conversations);
+            
+            // Update stats
+            setTimeout(() => {
+                const nodeCount = convManager.countDOMNodes();
+                const renderedCount = convManager.virtualScroller ? 
+                    convManager.virtualScroller.renderedItems.size : 0;
+                
+                document.getElementById('conv-total').textContent = conversations.length;
+                document.getElementById('conv-rendered').textContent = renderedCount;
+                document.getElementById('conv-nodes').textContent = nodeCount;
+                
+                // Check if DOM node limit is enforced
+                if (nodeCount <= 1000) {
+                    document.getElementById('conv-status').innerHTML = 
+                        '<span class="pass">✓ PASS</span> - DOM nodes within limit';
+                } else {
+                    document.getElementById('conv-status').innerHTML = 
+                        '<span class="fail">✗ FAIL</span> - DOM nodes exceed limit';
+                }
+                
+                console.log('ConversationListManager Test:', {
+                    total: conversations.length,
+                    rendered: renderedCount,
+                    domNodes: nodeCount,
+                    pass: nodeCount <= 1000
+                });
+            }, 500);
+        }
+        
+        function clearConversationTest() {
+            if (convManager) {
+                convManager.destroy();
+                convManager = null;
+            }
+            document.getElementById('conversation-container').innerHTML = '';
+            document.getElementById('conv-total').textContent = '0';
+            document.getElementById('conv-rendered').textContent = '0';
+            document.getElementById('conv-nodes').textContent = '0';
+            document.getElementById('conv-status').textContent = 'Cleared';
+        }
+        
+        // Test 2: ChatPanelManager DOM Cleanup
+        function testMessageDOMCleanup() {
+            const container = document.getElementById('message-container');
+            container.innerHTML = '';
+            
+            document.getElementById('msg-status').textContent = 'Running...';
+            document.getElementById('msg-status').className = '';
+            
+            // Create manager
+            chatManager = new ChatPanelManager({
+                container: container,
+                messageContainer: container,
+                enableVirtualScroll: true,
+                virtualScrollThreshold: 50
+            });
+            
+            chatManager.initialize();
+            
+            // Generate 150 messages (should trigger virtual scrolling)
+            const messages = [];
+            for (let i = 0; i < 150; i++) {
+                messages.push({
+                    id: `msg_${i}`,
+                    user_id: 'test_user',
+                    content: `This is test message number ${i}. Lorem ipsum dolor sit amet.`,
+                    type: 'text',
+                    direction: i % 2 === 0 ? 'incoming' : 'outgoing',
+                    created_at: new Date(Date.now() - i * 60000).toISOString()
+                });
+            }
+            
+            // Render messages
+            chatManager.allMessages = messages;
+            chatManager.renderMessages(messages);
+            
+            // Update stats
+            setTimeout(() => {
+                const nodeCount = chatManager.countDOMNodes();
+                const visibleCount = chatManager.visibleMessages.size;
+                
+                document.getElementById('msg-total').textContent = messages.length;
+                document.getElementById('msg-visible').textContent = visibleCount;
+                document.getElementById('msg-nodes').textContent = nodeCount;
+                
+                // Check if DOM node limit is enforced
+                if (nodeCount <= 1000) {
+                    document.getElementById('msg-status').innerHTML = 
+                        '<span class="pass">✓ PASS</span> - DOM nodes within limit';
+                } else {
+                    document.getElementById('msg-status').innerHTML = 
+                        '<span class="fail">✗ FAIL</span> - DOM nodes exceed limit';
+                }
+                
+                console.log('ChatPanelManager Test:', {
+                    total: messages.length,
+                    visible: visibleCount,
+                    domNodes: nodeCount,
+                    pass: nodeCount <= 1000
+                });
+            }, 500);
+        }
+        
+        function clearMessageTest() {
+            if (chatManager) {
+                chatManager.destroy();
+                chatManager = null;
+            }
+            document.getElementById('message-container').innerHTML = '';
+            document.getElementById('msg-total').textContent = '0';
+            document.getElementById('msg-visible').textContent = '0';
+            document.getElementById('msg-nodes').textContent = '0';
+            document.getElementById('msg-status').textContent = 'Cleared';
+        }
+        
+        // Test 3: Event Listener Cleanup
+        function testEventListenerCleanup() {
+            document.getElementById('listener-status').textContent = 'Running...';
+            document.getElementById('listener-status').className = '';
+            
+            // Create a temporary container
+            const tempContainer = document.createElement('div');
+            tempContainer.style.height = '200px';
+            tempContainer.style.overflow = 'auto';
+            
+            // Create manager
+            const testManager = new ConversationListManager({
+                container: tempContainer,
+                itemHeight: 80
+            });
+            
+            testManager.initialize();
+            
+            // Add some conversations to trigger event listeners
+            const conversations = [];
+            for (let i = 0; i < 50; i++) {
+                conversations.push({
+                    id: `user_${i}`,
+                    display_name: `User ${i}`,
+                    last_message: `Message ${i}`,
+                    last_message_at: new Date().toISOString()
+                });
+            }
+            
+            testManager.setConversations(conversations);
+            
+            // Check tracked listeners
+            const listenerCount = testManager.eventListeners ? 
+                testManager.eventListeners.length : 0;
+            
+            document.getElementById('listener-count').textContent = listenerCount;
+            
+            // Destroy and check cleanup
+            testManager.destroy();
+            
+            const afterDestroyCount = testManager.eventListeners ? 
+                testManager.eventListeners.length : 0;
+            
+            if (afterDestroyCount === 0 && listenerCount > 0) {
+                document.getElementById('listener-status').innerHTML = 
+                    '<span class="pass">✓ PASS</span> - All listeners cleaned up';
+            } else if (listenerCount === 0) {
+                document.getElementById('listener-status').innerHTML = 
+                    '<span class="fail">✗ FAIL</span> - No listeners were tracked';
+            } else {
+                document.getElementById('listener-status').innerHTML = 
+                    '<span class="fail">✗ FAIL</span> - Listeners not cleaned up';
+            }
+            
+            console.log('Event Listener Cleanup Test:', {
+                before: listenerCount,
+                after: afterDestroyCount,
+                pass: afterDestroyCount === 0 && listenerCount > 0
+            });
+        }
+        
+        // Auto-run tests on load
+        window.addEventListener('load', () => {
+            console.log('DOM Cleanup Test Page Loaded');
+            console.log('Click buttons to run tests');
+        });
+    </script>
+</body>
+</html>

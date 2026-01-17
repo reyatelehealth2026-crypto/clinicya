@@ -2430,6 +2430,266 @@ try {
             break;
 
         // ============================================
+        // PERFORMANCE UPGRADE ENDPOINTS
+        // Requirements: Inbox V2 Performance Upgrade
+        // ============================================
+
+        // ============================================
+        // GET /getConversations - Get conversations with cursor pagination
+        // Supports delta updates (only since timestamp)
+        // Requirements: 7.1, 7.2
+        // ============================================
+        case 'getConversations':
+        case 'get_conversations':
+            if ($method !== 'GET') {
+                sendError('Method not allowed', 405);
+            }
+            
+            $since = (int)($_GET['since'] ?? 0);
+            $cursor = $_GET['cursor'] ?? null;
+            $limit = (int)($_GET['limit'] ?? 50);
+            
+            // Validate limit
+            if ($limit < 1 || $limit > 100) {
+                $limit = 50;
+            }
+            
+            try {
+                require_once __DIR__ . '/../classes/InboxService.php';
+                $inboxService = new InboxService($db, $lineAccountId);
+                
+                $result = $inboxService->getConversationsDelta($lineAccountId, $since, $cursor, $limit);
+                
+                // Add ETag for HTTP caching
+                $etag = md5(json_encode($result));
+                header("ETag: \"{$etag}\"");
+                header("Cache-Control: private, max-age=30");
+                
+                // Check If-None-Match header
+                $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+                if ($ifNoneMatch === "\"{$etag}\"") {
+                    http_response_code(304);
+                    exit;
+                }
+                
+                sendResponse([
+                    'success' => true,
+                    'data' => $result
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to get conversations: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // GET /getMessages - Get messages with cursor pagination
+        // Requirements: 7.2
+        // ============================================
+        case 'getMessages':
+        case 'get_messages':
+            if ($method !== 'GET') {
+                sendError('Method not allowed', 405);
+            }
+            
+            $userId = (int)($_GET['user_id'] ?? 0);
+            $cursor = $_GET['cursor'] ?? null;
+            $limit = (int)($_GET['limit'] ?? 50);
+            
+            if (!$userId) {
+                sendError('User ID is required');
+            }
+            
+            // Validate limit
+            if ($limit < 1 || $limit > 100) {
+                $limit = 50;
+            }
+            
+            try {
+                require_once __DIR__ . '/../classes/InboxService.php';
+                $inboxService = new InboxService($db, $lineAccountId);
+                
+                $result = $inboxService->getMessagesCursor($userId, $cursor, $limit);
+                
+                // Add ETag for HTTP caching
+                $etag = md5(json_encode($result));
+                header("ETag: \"{$etag}\"");
+                header("Cache-Control: private, max-age=30");
+                
+                // Check If-None-Match header
+                $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+                if ($ifNoneMatch === "\"{$etag}\"") {
+                    http_response_code(304);
+                    exit;
+                }
+                
+                sendResponse([
+                    'success' => true,
+                    'data' => $result
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to get messages: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // GET /poll - Poll for delta updates
+        // Returns only new messages since last check
+        // Requirements: 4.3
+        // ============================================
+        case 'poll':
+        case 'poll_updates':
+            if ($method !== 'GET') {
+                sendError('Method not allowed', 405);
+            }
+            
+            $since = (int)($_GET['since'] ?? 0);
+            
+            if (!$since) {
+                sendError('Since timestamp is required');
+            }
+            
+            try {
+                require_once __DIR__ . '/../classes/InboxService.php';
+                $inboxService = new InboxService($db, $lineAccountId);
+                
+                $result = $inboxService->pollUpdates($lineAccountId, $since);
+                
+                // Add Last-Modified header for HTTP caching
+                $lastModified = gmdate('D, d M Y H:i:s', time()) . ' GMT';
+                header("Last-Modified: {$lastModified}");
+                header("Cache-Control: no-cache, must-revalidate");
+                
+                // Check If-Modified-Since header
+                $ifModifiedSince = $_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '';
+                if (!empty($result['new_messages']) && $ifModifiedSince === $lastModified) {
+                    http_response_code(304);
+                    exit;
+                }
+                
+                sendResponse([
+                    'success' => true,
+                    'data' => $result,
+                    'timestamp' => time()
+                ]);
+            } catch (Exception $e) {
+                sendError('Failed to poll updates: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // POST /logPerformanceMetric - Log performance metrics
+        // Requirements: 12.1, 12.2, 12.3, 12.4
+        // ============================================
+        case 'logPerformanceMetric':
+        case 'log_performance_metric':
+            if ($method !== 'POST') {
+                sendError('Method not allowed', 405);
+            }
+            
+            try {
+                // Get JSON input
+                $input = json_decode(file_get_contents('php://input'), true);
+                
+                if (!$input) {
+                    sendError('Invalid JSON input');
+                }
+                
+                // Support both single metric and batch of metrics
+                $metrics = isset($input['metrics']) ? $input['metrics'] : [$input];
+                
+                require_once __DIR__ . '/../classes/PerformanceMetricsService.php';
+                $perfService = new PerformanceMetricsService($db, $lineAccountId);
+                
+                $successCount = 0;
+                $failCount = 0;
+                
+                foreach ($metrics as $metric) {
+                    $metricType = $metric['metric_type'] ?? null;
+                    $durationMs = $metric['duration_ms'] ?? null;
+                    $userAgent = $metric['user_agent'] ?? $_SERVER['HTTP_USER_AGENT'] ?? null;
+                    $operationDetails = $metric['operation_details'] ?? null;
+                    
+                    if (!$metricType || $durationMs === null) {
+                        $failCount++;
+                        continue;
+                    }
+                    
+                    $result = $perfService->logMetric(
+                        $metricType,
+                        $durationMs,
+                        $userAgent,
+                        $operationDetails
+                    );
+                    
+                    if ($result) {
+                        $successCount++;
+                    } else {
+                        $failCount++;
+                    }
+                }
+                
+                sendResponse([
+                    'success' => true,
+                    'message' => "Logged {$successCount} metrics" . ($failCount > 0 ? ", {$failCount} failed" : ''),
+                    'logged' => $successCount,
+                    'failed' => $failCount
+                ]);
+                
+            } catch (Exception $e) {
+                sendError('Failed to log performance metrics: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
+        // GET /getPerformanceMetrics - Get performance statistics
+        // Requirements: 12.1
+        // ============================================
+        case 'getPerformanceMetrics':
+        case 'get_performance_metrics':
+            if ($method !== 'GET') {
+                sendError('Method not allowed', 405);
+            }
+            
+            try {
+                $startDate = $_GET['start_date'] ?? null;
+                $endDate = $_GET['end_date'] ?? null;
+                
+                require_once __DIR__ . '/../classes/PerformanceMetricsService.php';
+                $perfService = new PerformanceMetricsService($db, $lineAccountId);
+                
+                // Get statistics for all metric types
+                $stats = $perfService->getAllMetricStats($startDate, $endDate);
+                
+                // Calculate error rates for each type
+                $thresholds = [
+                    'page_load' => 2000,
+                    'conversation_switch' => 1000,
+                    'message_render' => 200,
+                    'api_call' => 500
+                ];
+                
+                foreach ($stats as $type => $data) {
+                    if (isset($thresholds[$type])) {
+                        $stats[$type]['error_rate'] = $perfService->getErrorRate(
+                            $type,
+                            $thresholds[$type],
+                            $startDate,
+                            $endDate
+                        );
+                    }
+                }
+                
+                sendResponse([
+                    'success' => true,
+                    'data' => $stats
+                ]);
+                
+            } catch (Exception $e) {
+                sendError('Failed to get performance metrics: ' . $e->getMessage());
+            }
+            break;
+
+        // ============================================
         // Default - Unknown action
         // ============================================
         default:

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LRU Cache Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .pass {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .fail {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        h2 {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>LRU Cache Test Suite</h1>
+    <div id="results"></div>
+
+    <script src="assets/js/lru-cache.js"></script>
+    <script>
+        const resultsDiv = document.getElementById('results');
+        let testsPassed = 0;
+        let testsFailed = 0;
+
+        function assert(condition, testName, message) {
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'test-result';
+            
+            if (condition) {
+                resultDiv.classList.add('pass');
+                resultDiv.textContent = `✓ PASS: ${testName}`;
+                testsPassed++;
+            } else {
+                resultDiv.classList.add('fail');
+                resultDiv.textContent = `✗ FAIL: ${testName} - ${message}`;
+                testsFailed++;
+            }
+            
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        // Test 1: Basic set and get
+        console.log('Test 1: Basic set and get');
+        const cache1 = new LRUCache(3);
+        cache1.set('a', 1);
+        cache1.set('b', 2);
+        assert(cache1.get('a') === 1, 'Test 1.1', 'Should get value 1 for key "a"');
+        assert(cache1.get('b') === 2, 'Test 1.2', 'Should get value 2 for key "b"');
+        assert(cache1.get('c') === null, 'Test 1.3', 'Should return null for non-existent key');
+
+        // Test 2: LRU eviction when exceeding maxSize
+        console.log('Test 2: LRU eviction');
+        const cache2 = new LRUCache(3);
+        cache2.set('a', 1);
+        cache2.set('b', 2);
+        cache2.set('c', 3);
+        cache2.set('d', 4); // Should evict 'a' (least recently used)
+        assert(cache2.get('a') === null, 'Test 2.1', 'Key "a" should be evicted');
+        assert(cache2.get('b') === 2, 'Test 2.2', 'Key "b" should still exist');
+        assert(cache2.get('c') === 3, 'Test 2.3', 'Key "c" should still exist');
+        assert(cache2.get('d') === 4, 'Test 2.4', 'Key "d" should exist');
+
+        // Test 3: Access order updates (get moves to end)
+        console.log('Test 3: Access order updates');
+        const cache3 = new LRUCache(3);
+        cache3.set('a', 1);
+        cache3.set('b', 2);
+        cache3.set('c', 3);
+        cache3.get('a'); // Access 'a', moves it to end
+        cache3.set('d', 4); // Should evict 'b' (now least recently used)
+        assert(cache3.get('a') === 1, 'Test 3.1', 'Key "a" should still exist (was accessed)');
+        assert(cache3.get('b') === null, 'Test 3.2', 'Key "b" should be evicted');
+        assert(cache3.get('c') === 3, 'Test 3.3', 'Key "c" should still exist');
+        assert(cache3.get('d') === 4, 'Test 3.4', 'Key "d" should exist');
+
+        // Test 4: has() method
+        console.log('Test 4: has() method');
+        const cache4 = new LRUCache(3);
+        cache4.set('a', 1);
+        assert(cache4.has('a') === true, 'Test 4.1', 'Should return true for existing key');
+        assert(cache4.has('b') === false, 'Test 4.2', 'Should return false for non-existent key');
+
+        // Test 5: clear() method
+        console.log('Test 5: clear() method');
+        const cache5 = new LRUCache(3);
+        cache5.set('a', 1);
+        cache5.set('b', 2);
+        cache5.clear();
+        assert(cache5.get('a') === null, 'Test 5.1', 'Cache should be empty after clear');
+        assert(cache5.get('b') === null, 'Test 5.2', 'Cache should be empty after clear');
+        assert(cache5.size === 0, 'Test 5.3', 'Cache size should be 0 after clear');
+
+        // Test 6: Updating existing key
+        console.log('Test 6: Updating existing key');
+        const cache6 = new LRUCache(3);
+        cache6.set('a', 1);
+        cache6.set('b', 2);
+        cache6.set('c', 3);
+        cache6.set('a', 10); // Update 'a', moves it to end
+        cache6.set('d', 4); // Should evict 'b' (now least recently used)
+        assert(cache6.get('a') === 10, 'Test 6.1', 'Key "a" should have updated value');
+        assert(cache6.get('b') === null, 'Test 6.2', 'Key "b" should be evicted');
+        assert(cache6.get('c') === 3, 'Test 6.3', 'Key "c" should still exist');
+
+        // Test 7: Size property
+        console.log('Test 7: Size property');
+        const cache7 = new LRUCache(5);
+        assert(cache7.size === 0, 'Test 7.1', 'Initial size should be 0');
+        cache7.set('a', 1);
+        assert(cache7.size === 1, 'Test 7.2', 'Size should be 1 after adding one item');
+        cache7.set('b', 2);
+        cache7.set('c', 3);
+        assert(cache7.size === 3, 'Test 7.3', 'Size should be 3 after adding three items');
+
+        // Test 8: Requirement 3.5 - Conversation cache (max 10)
+        console.log('Test 8: Requirement 3.5 - Conversation cache');
+        const conversationCache = new LRUCache(10);
+        for (let i = 1; i <= 10; i++) {
+            conversationCache.set(`conv${i}`, { id: i, messages: [] });
+        }
+        assert(conversationCache.size === 10, 'Test 8.1', 'Should have 10 conversations');
+        conversationCache.set('conv11', { id: 11, messages: [] }); // Should evict conv1
+        assert(conversationCache.size === 10, 'Test 8.2', 'Should still have 10 conversations');
+        assert(conversationCache.get('conv1') === null, 'Test 8.3', 'First conversation should be evicted');
+        assert(conversationCache.get('conv11') !== null, 'Test 8.4', 'New conversation should exist');
+
+        // Test 9: Requirement 8.1 - Message cache (max 500)
+        console.log('Test 9: Requirement 8.1 - Message cache');
+        const messageCache = new LRUCache(500);
+        for (let i = 1; i <= 500; i++) {
+            messageCache.set(`msg${i}`, { id: i, content: `Message ${i}` });
+        }
+        assert(messageCache.size === 500, 'Test 9.1', 'Should have 500 messages');
+        messageCache.set('msg501', { id: 501, content: 'Message 501' }); // Should evict msg1
+        assert(messageCache.size === 500, 'Test 9.2', 'Should still have 500 messages');
+        assert(messageCache.get('msg1') === null, 'Test 9.3', 'First message should be evicted');
+        assert(messageCache.get('msg501') !== null, 'Test 9.4', 'New message should exist');
+
+        // Test 10: keys() method
+        console.log('Test 10: keys() method');
+        const cache10 = new LRUCache(3);
+        cache10.set('a', 1);
+        cache10.set('b', 2);
+        cache10.set('c', 3);
+        const keys = cache10.keys();
+        assert(Array.isArray(keys), 'Test 10.1', 'keys() should return an array');
+        assert(keys.length === 3, 'Test 10.2', 'Should have 3 keys');
+        assert(keys[0] === 'a' && keys[1] === 'b' && keys[2] === 'c', 'Test 10.3', 'Keys should be in order');
+
+        // Test 11: delete() method
+        console.log('Test 11: delete() method');
+        const cache11 = new LRUCache(3);
+        cache11.set('a', 1);
+        cache11.set('b', 2);
+        const deleted = cache11.delete('a');
+        assert(deleted === true, 'Test 11.1', 'delete() should return true for existing key');
+        assert(cache11.get('a') === null, 'Test 11.2', 'Deleted key should not exist');
+        assert(cache11.delete('c') === false, 'Test 11.3', 'delete() should return false for non-existent key');
+
+        // Summary
+        const summaryDiv = document.createElement('div');
+        summaryDiv.style.marginTop = '30px';
+        summaryDiv.style.padding = '20px';
+        summaryDiv.style.backgroundColor = testsFailed === 0 ? '#d4edda' : '#f8d7da';
+        summaryDiv.style.border = testsFailed === 0 ? '2px solid #28a745' : '2px solid #dc3545';
+        summaryDiv.style.borderRadius = '5px';
+        summaryDiv.innerHTML = `
+            <h2>Test Summary</h2>
+            <p><strong>Total Tests:</strong> ${testsPassed + testsFailed}</p>
+            <p><strong>Passed:</strong> ${testsPassed}</p>
+            <p><strong>Failed:</strong> ${testsFailed}</p>
+            <p><strong>Success Rate:</strong> ${((testsPassed / (testsPassed + testsFailed)) * 100).toFixed(2)}%</p>
+        `;
+        resultsDiv.appendChild(summaryDiv);
+
+        console.log(`\n=== Test Summary ===`);
+        console.log(`Total: ${testsPassed + testsFailed}`);
+        console.log(`Passed: ${testsPassed}`);
+        console.log(`Failed: ${testsFailed}`);
+    </script>
+</body>
+</html>

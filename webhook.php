@@ -52,6 +52,10 @@ if (file_exists(__DIR__ . '/classes/AutoTagManager.php')) {
 if (file_exists(__DIR__ . '/classes/LiffMessageHandler.php')) {
     require_once 'classes/LiffMessageHandler.php';
 }
+// WebSocket Notifier for real-time updates
+if (file_exists(__DIR__ . '/classes/WebSocketNotifier.php')) {
+    require_once 'classes/WebSocketNotifier.php';
+}
 
 // Get request body and signature
 $body = file_get_contents('php://input');
@@ -777,6 +781,37 @@ if (!$line) {
             } catch (Exception $e) {
                 $stmt = $db->prepare("INSERT INTO messages (user_id, direction, message_type, content, reply_token) VALUES (?, 'incoming', ?, ?, ?)");
                 $stmt->execute([$user['id'], $messageType, $messageContent, $replyToken]);
+            }
+            
+            // Get the inserted message ID for WebSocket notification
+            $messageId = $db->lastInsertId();
+            
+            // Notify WebSocket server of new message (real-time updates)
+            try {
+                if (class_exists('WebSocketNotifier') && $lineAccountId) {
+                    $wsNotifier = new WebSocketNotifier();
+                    if ($wsNotifier->isConnected()) {
+                        $wsNotifier->notifyNewMessage(
+                            [
+                                'id' => $messageId,
+                                'user_id' => $user['id'],
+                                'content' => $messageContent,
+                                'direction' => 'incoming',
+                                'type' => $messageType,
+                                'created_at' => date('Y-m-d H:i:s'),
+                                'is_read' => 0
+                            ],
+                            $lineAccountId,
+                            [
+                                'display_name' => $user['display_name'] ?? '',
+                                'picture_url' => $user['picture_url'] ?? ''
+                            ]
+                        );
+                    }
+                }
+            } catch (Exception $e) {
+                // Log error but don't fail the webhook
+                error_log('WebSocket notification failed: ' . $e->getMessage());
             }
 
             logAnalytics($db, 'message_received', ['user_id' => $userId, 'type' => $messageType, 'line_account_id' => $lineAccountId, 'source' => $sourceType], $lineAccountId);
@@ -2696,6 +2731,45 @@ if (!$line) {
                     $stmt = $db->prepare("INSERT INTO messages (user_id, direction, message_type, content) VALUES (?, 'outgoing', ?, ?)");
                     $stmt->execute([$userId, $messageType, $contentStr]);
                 }
+                
+                // Get the inserted message ID for WebSocket notification
+                $messageId = $db->lastInsertId();
+                
+                // Notify WebSocket server of outgoing message (real-time updates)
+                try {
+                    if (class_exists('WebSocketNotifier')) {
+                        // Get user's line_account_id
+                        $userStmt = $db->prepare("SELECT line_account_id, display_name, picture_url FROM users WHERE id = ?");
+                        $userStmt->execute([$userId]);
+                        $userData = $userStmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        if ($userData && $userData['line_account_id']) {
+                            $wsNotifier = new WebSocketNotifier();
+                            if ($wsNotifier->isConnected()) {
+                                $wsNotifier->notifyNewMessage(
+                                    [
+                                        'id' => $messageId,
+                                        'user_id' => $userId,
+                                        'content' => $contentStr,
+                                        'direction' => 'outgoing',
+                                        'type' => $messageType,
+                                        'created_at' => date('Y-m-d H:i:s'),
+                                        'sent_by' => $sentBy
+                                    ],
+                                    $userData['line_account_id'],
+                                    [
+                                        'display_name' => $userData['display_name'] ?? '',
+                                        'picture_url' => $userData['picture_url'] ?? ''
+                                    ]
+                                );
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    // Log error but don't fail
+                    error_log('WebSocket notification failed for outgoing message: ' . $e->getMessage());
+                }
+                
             } catch (Exception $e) {
                 error_log("saveOutgoingMessage error: " . $e->getMessage());
             }
