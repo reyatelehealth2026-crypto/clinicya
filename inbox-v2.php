@@ -702,8 +702,8 @@ function formatThaiDateTime($datetime) {
 <style>
 /* Critical layout styles - loaded immediately before Tailwind */
 #inboxContainer { display: flex !important; height: 100vh !important; background: white !important; overflow: hidden !important; position: relative !important; }
-#inboxSidebar { width: 18rem !important; background: white !important; border-right: 1px solid #e5e7eb !important; display: flex !important; flex-direction: column !important; }
-#chatArea { flex: 1 !important; display: flex !important; flex-direction: column !important; background: #f1f5f9 !important; min-width: 0 !important; }
+#inboxSidebar { width: 18rem !important; background: white !important; border-right: 1px solid #e5e7eb !important; display: flex !important; flex-direction: column !important; flex-shrink: 0 !important; }
+#chatArea { flex: 1 !important; display: flex !important; flex-direction: column !important; background: #f1f5f9 !important; min-width: 0 !important; margin-right: 320px !important; }
 .user-item { display: block !important; padding: 0.75rem !important; border-bottom: 1px solid #f9fafb !important; }
 .user-item .flex { display: flex !important; align-items: center !important; gap: 0.75rem !important; }
 .user-item img { width: 2.5rem !important; height: 2.5rem !important; border-radius: 9999px !important; flex-shrink: 0 !important; }
