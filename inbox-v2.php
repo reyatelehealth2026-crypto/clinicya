@@ -1652,18 +1652,12 @@ function formatThaiDateTime($datetime) {
                     $chatStatus = $user['chat_status'] ?? '';
                     $statusBadge = $chatStatusBadges[$chatStatus] ?? null;
                 ?>
-                <div class="user-item block p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 <?= ($selectedUser && $selectedUser['id'] == $user['id']) ? 'active' : '' ?> <?= $hasSlaWarning ? 'sla-warning' : '' ?>" 
+                <a href="?user=<?= $user['id'] ?>" class="user-item block p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 <?= ($selectedUser && $selectedUser['id'] == $user['id']) ? 'active' : '' ?> <?= $hasSlaWarning ? 'sla-warning' : '' ?>" 
                    data-user-id="<?= $user['id'] ?>"
                    data-name="<?= strtolower($user['display_name']) ?>"
                    data-chat-status="<?= htmlspecialchars($chatStatus) ?>"
                    data-tags="<?= implode(',', $userTagIds) ?>"
                    data-assigned="<?= count($assignees) > 0 ? '1' : '0' ?>"
-                   data-display-name="<?= htmlspecialchars($user['display_name']) ?>"
-                   data-picture-url="<?= htmlspecialchars($user['picture_url'] ?: '') ?>"
-                   data-last-message="<?= htmlspecialchars($user['last_msg'] ?? '') ?>"
-                   data-last-type="<?= htmlspecialchars($user['last_type'] ?? 'text') ?>"
-                   data-last-time="<?= htmlspecialchars($user['last_time'] ?? '') ?>"
-                   data-unread="<?= intval($user['unread']) ?>"
                    tabindex="0">
                     <div class="flex items-center gap-3">
                         <div class="relative flex-shrink-0">
@@ -1705,7 +1699,7 @@ function formatThaiDateTime($datetime) {
                             </div>
                         </div>
                     </div>
-                </div>
+                </a>
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
@@ -7152,8 +7146,22 @@ let chatPanelManager = null;
 let realtimeManager = null;
 
 // Initialize managers on DOM ready
+/**
+ * Initialize page with lazy loading and auto-bump
+ * Simplified version without AJAX conversation switching
+ */
+function initializeInboxV2() {
+    console.log('[Inbox V2] Initializing with lazy loading and auto-bump...');
+    
+    // Initialize lazy loading and auto-bump
+    loadInitialConversations();
+    
+    console.log('[Inbox V2] Initialization complete');
+}
+
+// Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', function() {
-    initializeAJAXConversationSwitching();
+    initializeInboxV2();
 });
 
 /**
@@ -7728,64 +7736,217 @@ function updateChatHeader(userData) {
 }
 
 /**
- * Load initial conversations from DOM
+ * Load initial conversations from DOM - Simplified for page reload mode
+ * Implements lazy loading for images and auto-bump functionality
  */
 function loadInitialConversations() {
-    if (!conversationListManager) return;
+    console.log('[Lazy Load] Initializing conversation list with lazy loading...');
     
-    const conversationElements = document.querySelectorAll('.user-item[data-user-id]');
-    const conversations = [];
-    
-    conversationElements.forEach(el => {
-        const userId = el.getAttribute('data-user-id');
-        const displayName = el.getAttribute('data-display-name') || el.getAttribute('data-name') || 'Unknown';
-        const pictureUrl = el.getAttribute('data-picture-url') || '';
-        const lastMessage = el.getAttribute('data-last-message') || '';
-        const lastType = el.getAttribute('data-last-type') || 'text';
-        const lastTime = el.getAttribute('data-last-time') || new Date().toISOString();
-        const unreadCount = parseInt(el.getAttribute('data-unread')) || 0;
-        const chatStatus = el.getAttribute('data-chat-status') || '';
-        const tags = el.getAttribute('data-tags') ? el.getAttribute('data-tags').split(',') : [];
-        
-        const conversationData = {
-            id: userId,
-            user_id: userId,
-            display_name: displayName,
-            picture_url: pictureUrl,
-            last_message: lastMessage,
-            last_type: lastType,
-            last_message_at: lastTime,
-            last_time: lastTime,
-            unread_count: unreadCount,
-            unread: unreadCount,
-            chat_status: chatStatus,
-            tags: tags,
-            is_pinned: false
-        };
-        
-        conversations.push(conversationData);
-        
-        // Attach click handler to existing DOM element
-        el.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('[AJAX] Conversation clicked (DOM element):', userId);
-            handleConversationClick(conversationData);
-        });
-        
-        // Add keyboard support
-        el.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('[AJAX] Conversation activated via keyboard:', userId);
-                handleConversationClick(conversationData);
+    // Implement Intersection Observer for lazy loading images
+    const imageObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const img = entry.target;
+                const src = img.getAttribute('data-src');
+                if (src) {
+                    img.src = src;
+                    img.removeAttribute('data-src');
+                }
+                observer.unobserve(img);
             }
         });
+    }, {
+        rootMargin: '50px' // Start loading 50px before entering viewport
     });
     
-    conversationListManager.setConversations(conversations);
-    console.log(`[AJAX] Loaded ${conversations.length} initial conversations and attached click handlers`);
+    // Apply lazy loading to all conversation images
+    const conversationImages = document.querySelectorAll('.user-item img[loading="lazy"]');
+    conversationImages.forEach(img => {
+        // Store original src in data-src for lazy loading
+        if (img.src && !img.hasAttribute('data-src')) {
+            img.setAttribute('data-src', img.src);
+            // Set placeholder while loading
+            img.src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3C/svg%3E';
+        }
+        imageObserver.observe(img);
+    });
+    
+    console.log(`[Lazy Load] Applied lazy loading to ${conversationImages.length} images`);
+    
+    // Setup auto-bump functionality via WebSocket or polling
+    setupAutoBump();
+}
+
+/**
+ * Setup auto-bump functionality
+ * Listens for new messages and bumps conversations to top
+ */
+function setupAutoBump() {
+    // Check if RealtimeManager is available
+    if (typeof realtimeManager !== 'undefined' && realtimeManager) {
+        console.log('[Auto-Bump] Using RealtimeManager for auto-bump');
+        
+        // Listen for new messages
+        realtimeManager.on('new_message', function(data) {
+            if (data && data.user_id) {
+                bumpConversationToTop(data.user_id, data);
+            }
+        });
+    } else {
+        // Fallback to polling every 10 seconds
+        console.log('[Auto-Bump] Using polling for auto-bump (10s interval)');
+        setInterval(checkForNewMessages, 10000);
+    }
+}
+
+/**
+ * Bump conversation to top of list with animation
+ * @param {number} userId - User ID of conversation to bump
+ * @param {Object} messageData - New message data
+ */
+function bumpConversationToTop(userId, messageData) {
+    const conversationList = document.getElementById('userList');
+    if (!conversationList) return;
+    
+    const conversationItem = conversationList.querySelector(`[data-user-id="${userId}"]`);
+    if (!conversationItem) return;
+    
+    // Don't bump if already at top
+    const firstItem = conversationList.querySelector('.user-item');
+    if (firstItem === conversationItem) {
+        // Just update the message preview
+        updateConversationPreview(conversationItem, messageData);
+        return;
+    }
+    
+    // Get current position for animation
+    const oldRect = conversationItem.getBoundingClientRect();
+    
+    // Move to top
+    conversationList.insertBefore(conversationItem, firstItem);
+    
+    // Update message preview
+    updateConversationPreview(conversationItem, messageData);
+    
+    // Get new position
+    const newRect = conversationItem.getBoundingClientRect();
+    
+    // Calculate distance
+    const deltaY = oldRect.top - newRect.top;
+    
+    // Animate using FLIP technique
+    if (Math.abs(deltaY) > 5) {
+        conversationItem.style.transform = `translateY(${deltaY}px)`;
+        conversationItem.style.transition = 'none';
+        conversationItem.classList.add('conversation-bumping');
+        
+        // Force reflow
+        conversationItem.offsetHeight;
+        
+        // Animate to final position
+        conversationItem.style.transition = 'transform 0.4s cubic-bezier(0.4, 0.0, 0.2, 1), background-color 0.4s ease';
+        conversationItem.style.transform = 'translateY(0)';
+        
+        // Cleanup after animation
+        setTimeout(() => {
+            conversationItem.style.transform = '';
+            conversationItem.style.transition = '';
+            conversationItem.classList.remove('conversation-bumping');
+        }, 500);
+    }
+    
+    console.log(`[Auto-Bump] Bumped conversation ${userId} to top`);
+}
+
+/**
+ * Update conversation preview with new message
+ * @param {HTMLElement} conversationItem - Conversation element
+ * @param {Object} messageData - New message data
+ */
+function updateConversationPreview(conversationItem, messageData) {
+    // Update last message
+    const lastMsgEl = conversationItem.querySelector('.last-msg');
+    if (lastMsgEl && messageData.content) {
+        lastMsgEl.textContent = messageData.content;
+    }
+    
+    // Update timestamp
+    const lastTimeEl = conversationItem.querySelector('.last-time');
+    if (lastTimeEl) {
+        lastTimeEl.textContent = formatThaiTime(new Date());
+    }
+    
+    // Update or add unread badge
+    let unreadBadge = conversationItem.querySelector('.unread-badge');
+    if (!unreadBadge) {
+        // Create unread badge
+        const imgContainer = conversationItem.querySelector('.relative.flex-shrink-0');
+        if (imgContainer) {
+            unreadBadge = document.createElement('div');
+            unreadBadge.className = 'unread-badge absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold';
+            unreadBadge.textContent = '1';
+            imgContainer.appendChild(unreadBadge);
+        }
+    } else {
+        // Increment unread count
+        const currentCount = parseInt(unreadBadge.textContent) || 0;
+        const newCount = currentCount + 1;
+        unreadBadge.textContent = newCount > 9 ? '9+' : newCount;
+    }
+}
+
+/**
+ * Check for new messages via API (polling fallback)
+ */
+async function checkForNewMessages() {
+    try {
+        const response = await fetch('/api/inbox-realtime.php?action=check_updates&last_check=' + Date.now());
+        const data = await response.json();
+        
+        if (data.success && data.new_messages && data.new_messages.length > 0) {
+            data.new_messages.forEach(msg => {
+                bumpConversationToTop(msg.user_id, msg);
+            });
+        }
+    } catch (error) {
+        console.error('[Auto-Bump] Error checking for new messages:', error);
+    }
+}
+
+/**
+ * Format Thai time (client-side)
+ * @param {Date} date - Date object
+ * @returns {string} Formatted time string
+ */
+function formatThaiTime(date) {
+    const now = new Date();
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    
+    // Same day
+    if (date.toDateString() === now.toDateString()) {
+        return `${hours}:${minutes} น.`;
+    }
+    
+    // Yesterday
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+        return `เมื่อวาน ${hours}:${minutes}`;
+    }
+    
+    // Within last week
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays < 7) {
+        const thaiDays = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+        return `${thaiDays[date.getDay()]} ${hours}:${minutes}`;
+    }
+    
+    // Older
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    return `${day}/${month} ${hours}:${minutes}`;
 }
 
 /**
