@@ -671,23 +671,28 @@ const HUDMode = {
             showNotification && showNotification('❌ ไม่พบข้อมูลลูกค้า', 'error');
             return;
         }
-        
+
         try {
             const formData = new FormData();
             formData.append('action', 'update_chat_status');
             formData.append('user_id', userId);
             formData.append('status', status);
             formData.append('line_account_id', window.currentBotId || 1);
-            
-            const response = await fetch('api/inbox-v2.php', { method: 'POST', body: formData });
+
+            const response = await fetch('/api/inbox-v2.php', { method: 'POST', body: formData });
             const result = await response.json();
-            
+
             if (result.success) {
                 showNotification && showNotification('✓ อัปเดตสถานะสำเร็จ', 'success');
-                // Update the user-item data attribute in sidebar
-                const userItem = document.querySelector(`a[data-user-id="${userId}"]`);
+
+                // Update the user-item in sidebar
+                const userItem = document.querySelector(`[data-user-id="${userId}"]`);
                 if (userItem) {
+                    // Update data attribute
                     userItem.dataset.chatStatus = status;
+
+                    // Update the visible status badge
+                    this.updateStatusBadgeInSidebar(userItem, status);
                 }
             } else {
                 showNotification && showNotification('❌ ' + (result.error || 'เกิดข้อผิดพลาด'), 'error');
@@ -696,6 +701,51 @@ const HUDMode = {
             console.error('Update chat status error:', error);
             showNotification && showNotification('❌ เกิดข้อผิดพลาด', 'error');
         }
+    },
+
+    /**
+     * Update the status badge in sidebar after status change
+     */
+    updateStatusBadgeInSidebar(userItem, status) {
+        const statusBadges = {
+            'pending': { icon: '🔴', color: '#EF4444', bg: '#FEE2E2' },
+            'completed': { icon: '🟢', color: '#10B981', bg: '#D1FAE5' },
+            'shipping': { icon: '📦', color: '#F59E0B', bg: '#FEF3C7' },
+            'tracking': { icon: '🚚', color: '#3B82F6', bg: '#DBEAFE' },
+            'billing': { icon: '💰', color: '#8B5CF6', bg: '#EDE9FE' }
+        };
+
+        // Find badge container
+        let badgeContainer = userItem.querySelector('.flex.items-center.gap-1.mt-1');
+        if (!badgeContainer) {
+            // Create container if doesn't exist
+            const flex1 = userItem.querySelector('.flex-1.min-w-0');
+            if (flex1) {
+                badgeContainer = document.createElement('div');
+                badgeContainer.className = 'flex items-center gap-1 mt-1 flex-wrap';
+                flex1.appendChild(badgeContainer);
+            }
+        }
+
+        if (!badgeContainer) return;
+
+        // Remove existing status badge
+        const existingBadge = badgeContainer.querySelector('.chat-status-badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+
+        // Add new badge if status is set
+        if (status && statusBadges[status]) {
+            const badge = statusBadges[status];
+            const newBadge = document.createElement('span');
+            newBadge.className = 'chat-status-badge';
+            newBadge.style.cssText = `background: ${badge.bg}; color: ${badge.color}; border: 1px solid ${badge.color}30;`;
+            newBadge.textContent = badge.icon;
+            badgeContainer.insertBefore(newBadge, badgeContainer.firstChild);
+        }
+
+        console.log(`[HUDMode] Updated status badge for user ${userItem.dataset.userId} to ${status || 'none'}`);
     },
     
     // ============================================

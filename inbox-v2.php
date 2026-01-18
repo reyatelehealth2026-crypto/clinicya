@@ -5154,19 +5154,53 @@ async function performHybridSearch(query) {
 
 /**
  * Perform local search on loaded conversations
+ * Now respects current filters and uses 'block' display
  */
 function performLocalSearch(lowerQuery) {
-    const userItems = document.querySelectorAll('#userList .user-item');
+    const userItems = document.querySelectorAll('#userList .user-item:not(.search-result-server)');
     const matches = [];
+
+    // Get current filter values for combined filtering
+    const filterStatus = document.getElementById('filterStatus')?.value || '';
+    const filterChatStatus = document.getElementById('filterChatStatus')?.value || '';
+    const filterTag = document.getElementById('filterTag')?.value || '';
 
     userItems.forEach(item => {
         const name = item.dataset.name || '';
         const lastMsg = item.querySelector('.last-msg')?.textContent?.toLowerCase() || '';
-        const chatStatus = item.dataset.chatStatus || '';
 
-        if (name.includes(lowerQuery) || lastMsg.includes(lowerQuery)) {
+        // Check if matches search query
+        const matchesSearch = name.includes(lowerQuery) || lastMsg.includes(lowerQuery);
+
+        // Check if matches filters
+        let matchesFilters = true;
+
+        // Filter by chat status
+        if (filterChatStatus && item.dataset.chatStatus !== filterChatStatus) {
+            matchesFilters = false;
+        }
+
+        // Filter by unread
+        if (filterStatus === 'unread') {
+            const hasUnread = item.querySelector('.unread-badge') !== null;
+            if (!hasUnread) matchesFilters = false;
+        }
+
+        // Filter by assigned
+        if (filterStatus === 'assigned') {
+            if (item.dataset.assigned !== '1') matchesFilters = false;
+        }
+
+        // Filter by tag
+        if (filterTag) {
+            const itemTags = (item.dataset.tags || '').split(',').filter(t => t);
+            if (!itemTags.includes(filterTag)) matchesFilters = false;
+        }
+
+        // Show if matches both search AND filters
+        if (matchesSearch && matchesFilters) {
             matches.push(item.dataset.userId);
-            item.style.display = '';
+            item.style.display = 'block';
             item.classList.add('search-match');
         } else {
             item.style.display = 'none';
@@ -5342,22 +5376,22 @@ function resetSearch() {
     searchState.localResults = [];
     searchState.serverResults = [];
 
-    // Show all loaded conversations
-    document.querySelectorAll('#userList .user-item').forEach(item => {
-        item.style.display = '';
-        item.classList.remove('search-match', 'search-result-server');
-    });
-
-    // Remove server-only results
+    // Remove server-only results first
     document.querySelectorAll('#userList .search-result-server').forEach(item => {
         item.remove();
+    });
+
+    // Show all loaded conversations (will be filtered by applyFilters)
+    document.querySelectorAll('#userList .user-item').forEach(item => {
+        item.style.display = 'block';
+        item.classList.remove('search-match');
     });
 
     // Hide search info
     hideSearchResultsInfo();
     hideSearchingIndicator();
 
-    // Re-apply filters if any
+    // Re-apply filters if any are selected
     applyFilters();
 }
 
@@ -5479,13 +5513,23 @@ function applyFilters() {
     const chatStatus = document.getElementById('filterChatStatus')?.value || '';
     const assignee = document.getElementById('filterAssignee')?.value || '';
     const currentAdminId = <?= $_SESSION['admin_id'] ?? 0 ?>;
-    
-    // Apply filters
-    const userItems = document.querySelectorAll('#userList .user-item');
-    
+
+    // Check if there's an active search - if so, re-run search with new filters
+    const searchInput = document.getElementById('userSearch');
+    const hasActiveSearch = searchInput && searchInput.value.trim().length > 0;
+
+    if (hasActiveSearch) {
+        // Re-run search with new filters
+        performHybridSearch(searchInput.value);
+        return;
+    }
+
+    // No active search - just apply filters
+    const userItems = document.querySelectorAll('#userList .user-item:not(.search-result-server)');
+
     userItems.forEach(item => {
         let show = true;
-        
+
         // Filter by read/assigned status
         if (status === 'unread') {
             const unreadBadge = item.querySelector('.unread-badge');
@@ -5494,36 +5538,38 @@ function applyFilters() {
             const isAssigned = item.dataset.assigned === '1';
             show = show && isAssigned;
         }
-        
+
         // Filter by tag
         if (tag) {
             const itemTags = (item.dataset.tags || '').split(',').filter(t => t);
             show = show && itemTags.includes(tag);
         }
-        
+
         // Filter by chat status (work status)
         if (chatStatus) {
             const itemChatStatus = item.dataset.chatStatus || '';
             show = show && (itemChatStatus === chatStatus);
         }
-        
-        // Filter by assignee (NEW)
+
+        // Filter by assignee
         if (assignee) {
             const userId = item.dataset.userId;
             if (assignee === 'me') {
-                // Show only conversations assigned to current admin
                 show = show && checkIfAssignedToMe(userId, currentAdminId);
             } else if (assignee === 'unassigned') {
-                // Show only unassigned conversations
                 const isAssigned = item.dataset.assigned === '1';
                 show = show && !isAssigned;
             } else {
-                // Show conversations assigned to specific admin
                 show = show && checkIfAssignedToAdmin(userId, assignee);
             }
         }
-        
-        item.style.display = show ? '' : 'none';
+
+        item.style.display = show ? 'block' : 'none';
+    });
+
+    // Remove any server search results when just filtering (no search)
+    document.querySelectorAll('#userList .search-result-server').forEach(item => {
+        item.remove();
     });
 }
 
