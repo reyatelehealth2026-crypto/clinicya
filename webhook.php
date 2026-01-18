@@ -816,18 +816,16 @@ if (!$line) {
 
             logAnalytics($db, 'message_received', ['user_id' => $userId, 'type' => $messageType, 'line_account_id' => $lineAccountId, 'source' => $sourceType], $lineAccountId);
             
-            // บันทึก reply_token ใน users table (หมดอายุใน 20 นาที)
+            // บันทึก reply_token ใน users table (หมดอายุใน 50 วินาที - LINE tokens expire in 1 minute)
             if ($replyToken) {
                 try {
-                    // ตรวจสอบว่ามี column หรือไม่
-                    $checkCol = $db->query("SHOW COLUMNS FROM users LIKE 'reply_token'");
-                    if ($checkCol->rowCount() > 0) {
-                        $expires = date('Y-m-d H:i:s', time() + (19 * 60)); // หมดอายุใน 19 นาที (เผื่อ delay)
-                        $stmt = $db->prepare("UPDATE users SET reply_token = ?, reply_token_expires = ? WHERE id = ?");
-                        $stmt->execute([$replyToken, $expires, $user['id']]);
-                    }
+                    $expires = date('Y-m-d H:i:s', time() + 50); // หมดอายุใน 50 วินาที (เผื่อ delay)
+                    $stmt = $db->prepare("UPDATE users SET reply_token = ?, reply_token_expires = ? WHERE id = ?");
+                    $stmt->execute([$replyToken, $expires, $user['id']]);
+                    error_log("Reply token saved for user {$user['id']}, expires: {$expires}");
                 } catch (Exception $e) {
-                    // Ignore error
+                    error_log('Reply token save failed: ' . $e->getMessage());
+                    error_log('User ID: ' . ($user['id'] ?? 'unknown') . ', Token: ' . substr($replyToken, 0, 20));
                 }
             }
             
