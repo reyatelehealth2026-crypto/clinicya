@@ -726,9 +726,37 @@ if (!$line) {
                     } catch (Exception $e) {
                         error_log("Failed to save LINE image: " . $e->getMessage());
                     }
+                } elseif ($messageType === 'video') {
+                    try {
+                        $videoData = $line->getMessageContent($messageId);
+                        if ($videoData && strlen($videoData) > 100) {
+                            $uploadDir = __DIR__ . '/uploads/line_videos/';
+                            if (!is_dir($uploadDir)) {
+                                mkdir($uploadDir, 0755, true);
+                            }
+                            
+                            // Detect extension from binary
+                            $finfo = new finfo(FILEINFO_MIME_TYPE);
+                            $mimeType = $finfo->buffer($videoData) ?: 'video/mp4';
+                            $ext = 'mp4';
+                            if (strpos($mimeType, 'video/quicktime') !== false) $ext = 'mov';
+                            elseif (strpos($mimeType, 'video/x-msvideo') !== false) $ext = 'avi';
+                            
+                            $filename = 'line_' . $messageId . '_' . time() . '.' . $ext;
+                            $filepath = $uploadDir . $filename;
+                            
+                            if (file_put_contents($filepath, $videoData)) {
+                                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+                                $host = $_SERVER['HTTP_HOST'] ?? (defined('BASE_URL') ? parse_url(BASE_URL, PHP_URL_HOST) : 'localhost');
+                                $savedMediaUrl = $protocol . $host . '/uploads/line_videos/' . $filename;
+                            }
+                        }
+                    } catch (Exception $e) {
+                        error_log("Failed to save LINE video: " . $e->getMessage());
+                    }
                 }
                 
-                // ถ้าบันทึกรูปได้ ใช้ URL ที่บันทึก ถ้าไม่ได้ใช้ LINE message ID เป็น fallback
+                // ถ้าบันทึกรูป/วิดีโอได้ ใช้ URL ที่บันทึก ถ้าไม่ได้ใช้ LINE message ID เป็น fallback
                 if ($savedMediaUrl) {
                     $messageContent = $savedMediaUrl;
                 } else {

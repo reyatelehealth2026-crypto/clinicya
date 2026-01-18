@@ -1875,14 +1875,17 @@ function formatThaiDateTime($datetime) {
                     <?php elseif ($type === 'video'): ?>
                         <?php 
                         $videoSrc = $content;
-                        if (preg_match('/ID:\s*(\d+)/', $content, $m)) {
+                        // Check if it's a saved video URL (starts with http)
+                        if (preg_match('/^https?:\/\//', $content)) {
+                            $videoSrc = $content;
+                        } elseif (preg_match('/ID:\s*(\d+)/', $content, $m)) {
                             $videoSrc = 'api/line_content.php?id=' . $m[1];
                         } elseif (!preg_match('/^https?:\/\//', $content)) {
                             $videoSrc = 'api/line_content.php?id=' . $content;
                         }
                         ?>
-                        <div class="video-message rounded-xl overflow-hidden max-w-[300px] border shadow-sm">
-                            <video controls class="w-full" preload="metadata">
+                        <div class="video-message rounded-xl overflow-hidden max-w-[300px] border shadow-sm bg-black">
+                            <video controls class="w-full" preload="metadata" style="max-height: 400px;">
                                 <source src="<?= htmlspecialchars($videoSrc) ?>" type="video/mp4">
                                 เบราว์เซอร์ของคุณไม่รองรับการเล่นวิดีโอ
                             </video>
