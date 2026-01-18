@@ -13,20 +13,19 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-try {
-    require_once __DIR__ . '/../config/config.php';
-    require_once __DIR__ . '/../config/database.php';
-    require_once __DIR__ . '/../classes/Database.php';
-} catch (Exception $e) {
-    die("Error loading files: " . $e->getMessage());
-}
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/database.php';
 
 header('Content-Type: text/html; charset=utf-8');
 
+$db = null;
 try {
     $db = Database::getInstance()->getConnection();
 } catch (Exception $e) {
-    die("Database connection failed: " . $e->getMessage());
+    echo "<h1 style='color: red;'>Database Connection Failed</h1>";
+    echo "<p>" . htmlspecialchars($e->getMessage()) . "</p>";
+    echo "<p>Please check your database configuration in config/config.php</p>";
+    exit;
 }
 
 echo "<h1>Reply Token Storage Diagnostic</h1>";

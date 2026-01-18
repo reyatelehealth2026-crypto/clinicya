@@ -7,14 +7,20 @@
  */
 
 require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../classes/Database.php';
+require_once __DIR__ . '/../config/database.php';
 
 header('Content-Type: text/html; charset=utf-8');
 
 echo "<h1>🧪 Live Reply Token Test</h1>";
 
 // Get test user
-$db = Database::getInstance()->getConnection();
+$db = null;
+try {
+    $db = Database::getInstance()->getConnection();
+} catch (Exception $e) {
+    echo "<p style='color: red;'>❌ Database connection failed: " . htmlspecialchars($e->getMessage()) . "</p>";
+    exit;
+}
 $stmt = $db->query("SELECT * FROM users WHERE line_user_id IS NOT NULL LIMIT 1");
 $testUser = $stmt->fetch(PDO::FETCH_ASSOC);
 

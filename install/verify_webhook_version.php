@@ -7,7 +7,7 @@
  */
 
 require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../classes/Database.php';
+require_once __DIR__ . '/../config/database.php';
 
 header('Content-Type: text/html; charset=utf-8');
 
@@ -110,8 +110,18 @@ if (!$foundLog) {
 
 echo "<h2>3. Database Check</h2>";
 
+$db = null;
 try {
     $db = Database::getInstance()->getConnection();
+} catch (Exception $e) {
+    echo "<p style='color: red;'>Database error: " . htmlspecialchars($e->getMessage()) . "</p>";
+    echo "<p>Cannot check database. Please verify database configuration.</p>";
+    echo "<hr>";
+    echo "<p><small>Generated at: " . date('Y-m-d H:i:s') . "</small></p>";
+    exit;
+}
+
+try {
     
     // Check recent messages
     $stmt = $db->query("
