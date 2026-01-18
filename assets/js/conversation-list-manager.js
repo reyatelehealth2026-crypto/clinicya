@@ -855,10 +855,13 @@ class ConversationListManager {
      * @private
      */
     createConversationElement(conversation, index) {
-        const element = document.createElement('div');
-        element.className = 'conversation-item';
-        element.dataset.userId = conversation.id || conversation.user_id;
+        const element = document.createElement('a');
+        const userId = conversation.id || conversation.user_id;
+        element.href = `?user=${userId}`;
+        element.className = 'user-item block p-3 border-b border-gray-50';
+        element.dataset.userId = userId;
         element.dataset.index = index;
+        element.setAttribute('tabindex', '0');
         
         // Set position for virtual scrolling
         element.style.position = 'absolute';
@@ -869,9 +872,10 @@ class ConversationListManager {
         // Populate content (this will be customized based on actual UI)
         element.innerHTML = this.getConversationHTML(conversation);
         
-        // Add click handler
+        // Add click handler (override default link behavior if callback provided)
         if (this.onConversationClick) {
-            element.addEventListener('click', () => {
+            element.addEventListener('click', (e) => {
+                e.preventDefault();
                 this.onConversationClick(conversation);
             });
         }
@@ -923,39 +927,77 @@ class ConversationListManager {
     
     /**
      * Get HTML for a conversation item
+     * Matches the PHP-generated structure in inbox-v2.php
      * @param {Object} conversation - Conversation object
      * @returns {string} HTML string
      * @private
      */
     getConversationHTML(conversation) {
-        const unreadCount = conversation.unread_count || 0;
+        const unreadCount = conversation.unread_count || conversation.unread || 0;
         const displayName = conversation.display_name || 'Unknown';
-        const lastMessage = conversation.last_message || '';
-        const pictureUrl = conversation.picture_url || '/assets/images/default-avatar.png';
-        const timestamp = this.formatTimestamp(conversation.last_message_at);
-        const isPinned = conversation.is_pinned ? 'pinned' : '';
+        const lastMessage = conversation.last_message || conversation.last_msg || '';
+        const lastType = conversation.last_type || 'text';
+        const pictureUrl = conversation.picture_url || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3Cpath d=%22M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E';
+        const timestamp = this.formatTimestamp(conversation.last_message_at || conversation.last_time);
+        const isPinned = conversation.is_pinned;
+        const chatStatus = conversation.chat_status || '';
+        
+        // Format message preview based on type
+        let messagePreview = lastMessage;
+        if (lastType === 'image') messagePreview = '📷 รูปภาพ';
+        else if (lastType === 'sticker') messagePreview = '😊 สติกเกอร์';
+        else if (lastType === 'video') messagePreview = '🎥 วิดีโอ';
+        else if (lastType === 'audio') messagePreview = '🎵 เสียง';
+        else if (lastType === 'file') messagePreview = '📎 ไฟล์';
+        else if (lastType === 'location') messagePreview = '📍 ตำแหน่ง';
+        
+        // Chat status badges
+        const statusBadges = {
+            'pending': { icon: '🔴', color: '#EF4444', bg: '#FEE2E2' },
+            'completed': { icon: '🟢', color: '#10B981', bg: '#D1FAE5' },
+            'shipping': { icon: '📦', color: '#F59E0B', bg: '#FEF3C7' },
+            'tracking': { icon: '🚚', color: '#3B82F6', bg: '#DBEAFE' },
+            'billing': { icon: '💰', color: '#8B5CF6', bg: '#EDE9FE' }
+        };
+        const statusBadge = statusBadges[chatStatus];
         
         return `
-            <div class="conversation-avatar">
-                <img src="${pictureUrl}" alt="${displayName}">
-            </div>
-            <div class="conversation-content">
-                <div class="conversation-header">
-                    <span class="conversation-name">${displayName}</span>
-                    ${isPinned ? '<i class="fas fa-thumbtack pin-icon"></i>' : ''}
-                    <span class="timestamp">${timestamp}</span>
+            <div class="flex items-center gap-3">
+                <div class="relative flex-shrink-0">
+                    <img src="${pictureUrl}" 
+                         class="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                         loading="lazy"
+                         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3Cpath d=%22M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E'"
+                         alt="${displayName}">
+                    ${unreadCount > 0 ? `
+                    <div class="unread-badge absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">
+                        ${unreadCount > 9 ? '9+' : unreadCount}
+                    </div>
+                    ` : ''}
                 </div>
-                <div class="conversation-preview">
-                    <span class="last-message">${lastMessage}</span>
-                    ${unreadCount > 0 ? `<span class="unread-count">${unreadCount}</span>` : ''}
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-baseline">
+                        <h3 class="text-sm font-semibold text-gray-800 truncate">${displayName}</h3>
+                        <span class="last-time text-[10px] text-gray-400">${timestamp}</span>
+                    </div>
+                    <p class="last-msg text-xs text-gray-500 truncate">${messagePreview}</p>
+                    
+                    <div class="flex items-center gap-1 mt-1 flex-wrap">
+                        ${statusBadge ? `
+                        <span class="chat-status-badge" style="background: ${statusBadge.bg}; color: ${statusBadge.color}; border: 1px solid ${statusBadge.color}30;">
+                            ${statusBadge.icon}
+                        </span>
+                        ` : ''}
+                    </div>
                 </div>
             </div>
         `;
     }
     
     /**
-     * Format timestamp for display
-     * @param {string} timestamp - ISO timestamp
+     * Format timestamp for display (Thai format)
+     * Matches the PHP formatThaiTime function
+     * @param {string} timestamp - ISO timestamp or date string
      * @returns {string} Formatted timestamp
      * @private
      */
@@ -964,17 +1006,40 @@ class ConversationListManager {
         
         const date = new Date(timestamp);
         const now = new Date();
+        
+        // Check if same day
+        if (date.toDateString() === now.toDateString()) {
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes} น.`;
+        }
+        
+        // Check if yesterday
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (date.toDateString() === yesterday.toDateString()) {
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `เมื่อวาน ${hours}:${minutes}`;
+        }
+        
+        // Check if within last week
         const diffMs = now - date;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
+        if (diffDays < 7) {
+            const thaiDays = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+            const dayName = thaiDays[date.getDay()];
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${dayName} ${hours}:${minutes}`;
+        }
         
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        
-        return date.toLocaleDateString();
+        // Older than a week
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+        return `${day}/${month} ${hours}:${minutes}`;
     }
     
     /**
@@ -991,6 +1056,7 @@ class ConversationListManager {
             // For non-virtual scrolling, use relative positioning
             element.style.position = 'relative';
             element.style.top = 'auto';
+            element.style.height = 'auto';
             this.container.appendChild(element);
         });
     }
