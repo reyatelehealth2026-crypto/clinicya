@@ -201,3 +201,132 @@ if ($replyToken) {
 - `install/check_reply_token_by_account.php` - ตรวจสอบสถิติ
 - `install/debug_webhook_reply_token.php` - Debug real-time
 - `webhook_debug.log` - Log file สำหรับ debug
+
+
+---
+
+## 🔍 NEW: Advanced Debug Logging (Added 2026-01-18)
+
+### Problem Update
+User confirmed webhook URL and tokens are correct, but Account 3 still receives 0% reply tokens (416 messages, all NULL).
+
+### Debug Logging Added
+Added comprehensive debug logging in `webhook.php` to track exactly what LINE sends:
+
+**Location 1: Event Extraction (line ~207)**
+```php
+if ($lineAccountId == 3) {
+    error_log("=== ACCOUNT 3 DEBUG ===");
+    error_log("Event Type: " . ($event['type'] ?? 'unknown'));
+    error_log("User ID: " . ($userId ?? 'none'));
+    error_log("Reply Token from event: " . ($event['replyToken'] ?? 'NULL'));
+    error_log("Reply Token variable: " . ($replyToken ?? 'NULL'));
+    error_log("Full event JSON: " . json_encode($event));
+    error_log("======================");
+}
+```
+
+**Location 2: Token Storage (line ~820)**
+```php
+if ($replyToken) {
+    // Log successful token save for Account 3
+} else {
+    if ($lineAccountId == 3) {
+        error_log("=== ACCOUNT 3 NO TOKEN ===");
+        error_log("User ID: " . ($user['id'] ?? 'unknown'));
+        error_log("Message Type: " . $messageType);
+        error_log("Message Content: " . mb_substr($messageContent, 0, 50));
+        error_log("==========================");
+    }
+}
+```
+
+### How to Check Debug Logs
+
+**Method 1: Use the log checker script**
+```bash
+php install/check_account3_logs.php
+```
+
+**Method 2: Check error_log directly**
+```bash
+# Real-time monitoring
+tail -f error_log | grep "ACCOUNT 3"
+
+# View recent entries
+tail -200 error_log | grep "ACCOUNT 3"
+```
+
+### What the Logs Will Tell Us
+
+**Scenario A: Token Exists in Event**
+```
+=== ACCOUNT 3 DEBUG ===
+Reply Token from event: abc123xyz789...
+Reply Token variable: abc123xyz789...
+======================
+```
+→ **Conclusion**: LINE IS sending token, problem is in storage logic
+
+**Scenario B: Token is NULL in Event**
+```
+=== ACCOUNT 3 DEBUG ===
+Reply Token from event: NULL
+Reply Token variable: NULL
+======================
+```
+→ **Conclusion**: LINE is NOT sending token, check webhook config or LINE API issue
+
+**Scenario C: No Logs Appear**
+→ **Conclusion**: Webhook is not being called, verify URL in LINE Console
+
+### Next Steps Based on Results
+
+**If Token Exists (Scenario A):**
+1. Check database column types
+2. Check for exceptions during INSERT
+3. Verify $lineAccountId is correctly set to 3
+4. Check for transaction rollbacks
+
+**If Token is NULL (Scenario B):**
+1. Verify webhook URL in LINE Developers Console
+2. Check if Account 3 has different channel type
+3. Test with LINE webhook debugger
+4. Compare event structure with Account 4
+
+**If No Logs (Scenario C):**
+1. Verify webhook URL: `https://cny.re-ya.com/webhook.php?account=3`
+2. Check webhook is enabled in LINE Console
+3. Test webhook with "Verify" button in LINE Console
+4. Check server access logs
+
+### Testing Instructions
+
+1. **Deploy the debug code** (already done via git push)
+2. **Send test message** to Account 3 LINE bot
+3. **Check logs immediately**:
+   ```bash
+   php install/check_account3_logs.php
+   ```
+4. **Analyze the output** and follow appropriate next steps
+
+### Tools Available
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `install/check_account3_logs.php` | View debug logs | After sending test message |
+| `install/check_reply_token_by_account.php` | Statistics by account | To verify problem still exists |
+| `install/debug_webhook_reply_token.php` | Real-time webhook debugging | Alternative debug method |
+| `install/analyze_account3_messages.php` | Message type analysis | To check message patterns |
+
+### Expected Timeline
+
+1. **Now**: Debug code deployed to production
+2. **Next**: User sends test message to Account 3
+3. **Then**: Check logs to see what LINE actually sends
+4. **Finally**: Fix based on log results
+
+This debug approach will definitively show whether the problem is:
+- LINE not sending tokens (API/config issue)
+- Webhook not receiving tokens (code issue)
+- Database not storing tokens (storage issue)
