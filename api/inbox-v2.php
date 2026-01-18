@@ -2444,37 +2444,62 @@ try {
             if ($method !== 'GET') {
                 sendError('Method not allowed', 405);
             }
-            
+
             $since = (int)($_GET['since'] ?? 0);
             $cursor = $_GET['cursor'] ?? null;
             $limit = (int)($_GET['limit'] ?? 50);
-            
+
+            // Search and filter parameters
+            $search = isset($_GET['search']) ? trim($_GET['search']) : null;
+            $filters = [];
+
+            // Parse filter parameters
+            if (!empty($_GET['chatStatus'])) {
+                $filters['chatStatus'] = $_GET['chatStatus'];
+            }
+            if (!empty($_GET['unreadOnly']) && $_GET['unreadOnly'] === 'true') {
+                $filters['unreadOnly'] = true;
+            }
+            if (!empty($_GET['tagId'])) {
+                $filters['tagId'] = (int)$_GET['tagId'];
+            }
+            if (!empty($_GET['assigneeId'])) {
+                $filters['assigneeId'] = $_GET['assigneeId']; // Can be 'unassigned' or admin ID
+            }
+
             // Validate limit
             if ($limit < 1 || $limit > 100) {
                 $limit = 50;
             }
-            
+
             try {
                 require_once __DIR__ . '/../classes/InboxService.php';
                 $inboxService = new InboxService($db, $lineAccountId);
-                
-                $result = $inboxService->getConversationsDelta($lineAccountId, $since, $cursor, $limit);
-                
-                // Add ETag for HTTP caching
-                $etag = md5(json_encode($result));
-                header("ETag: \"{$etag}\"");
-                header("Cache-Control: private, max-age=30");
-                
-                // Check If-None-Match header
-                $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
-                if ($ifNoneMatch === "\"{$etag}\"") {
-                    http_response_code(304);
-                    exit;
+
+                $result = $inboxService->getConversationsDelta($lineAccountId, $since, $cursor, $limit, $search, $filters);
+
+                // Don't cache search results (they change frequently)
+                if ($search || !empty($filters)) {
+                    header("Cache-Control: no-cache, no-store, must-revalidate");
+                } else {
+                    // Add ETag for HTTP caching
+                    $etag = md5(json_encode($result));
+                    header("ETag: \"{$etag}\"");
+                    header("Cache-Control: private, max-age=30");
+
+                    // Check If-None-Match header
+                    $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
+                    if ($ifNoneMatch === "\"{$etag}\"") {
+                        http_response_code(304);
+                        exit;
+                    }
                 }
-                
+
                 sendResponse([
                     'success' => true,
-                    'data' => $result
+                    'data' => $result,
+                    'search' => $search,
+                    'filters' => $filters
                 ]);
             } catch (Exception $e) {
                 sendError('Failed to get conversations: ' . $e->getMessage());

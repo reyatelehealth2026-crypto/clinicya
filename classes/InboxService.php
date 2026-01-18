@@ -222,36 +222,44 @@ class InboxService {
      * Get conversations with delta updates (only since timestamp)
      * Uses cursor-based pagination for better performance
      * Requirements: 7.1, 7.2, 11.4
-     * 
+     *
      * @param int $accountId LINE account ID
      * @param int $since Unix timestamp for delta updates (0 for all)
      * @param string|null $cursor Pagination cursor (last_message_at timestamp)
      * @param int $limit Items per page (default 50)
+     * @param string|null $search Search query for filtering conversations
+     * @param array $filters Additional filters (status, chatStatus, tag, assignee)
      * @return array ['conversations' => [], 'next_cursor' => string|null, 'has_more' => bool]
      */
     public function getConversationsDelta(
-        int $accountId, 
-        int $since = 0, 
-        ?string $cursor = null, 
-        int $limit = 50
+        int $accountId,
+        int $since = 0,
+        ?string $cursor = null,
+        int $limit = 50,
+        ?string $search = null,
+        array $filters = []
     ): array {
         $limit = max(1, min(100, $limit)); // Cap at 100
-        
+
         // Build query with cursor-based pagination
         // Select only necessary fields (no full message content)
         $sql = "
-            SELECT 
+            SELECT
                 u.id,
                 u.display_name,
                 u.picture_url,
+                u.chat_status,
                 u.last_interaction as last_message_at,
-                (SELECT COUNT(*) FROM messages m 
-                 WHERE m.user_id = u.id 
-                 AND m.direction = 'incoming' 
+                (SELECT COUNT(*) FROM messages m
+                 WHERE m.user_id = u.id
+                 AND m.direction = 'incoming'
                  AND m.is_read = 0) as unread_count,
-                (SELECT SUBSTRING(content, 1, 100) FROM messages m2 
-                 WHERE m2.user_id = u.id 
+                (SELECT SUBSTRING(content, 1, 100) FROM messages m2
+                 WHERE m2.user_id = u.id
                  ORDER BY m2.created_at DESC LIMIT 1) as last_message_preview,
+                (SELECT message_type FROM messages m3
+                 WHERE m3.user_id = u.id
+                 ORDER BY m3.created_at DESC LIMIT 1) as last_message_type,
                 ca.assigned_to,
                 ca.status as assignment_status
             FROM users u
@@ -259,21 +267,82 @@ class InboxService {
             WHERE u.line_account_id = ?
             AND u.last_interaction IS NOT NULL
         ";
-        
+
         $params = [$accountId];
-        
+
+        // Search filter: search in display_name and last message
+        if ($search !== null && trim($search) !== '') {
+            $searchTerm = '%' . trim($search) . '%';
+            $sql .= " AND (
+                u.display_name LIKE ?
+                OR EXISTS (
+                    SELECT 1 FROM messages m_search
+                    WHERE m_search.user_id = u.id
+                    AND m_search.content LIKE ?
+                    LIMIT 1
+                )
+            )";
+            $params[] = $searchTerm;
+            $params[] = $searchTerm;
+        }
+
+        // Filter by chat status (work status)
+        if (!empty($filters['chatStatus'])) {
+            $sql .= " AND u.chat_status = ?";
+            $params[] = $filters['chatStatus'];
+        }
+
+        // Filter by unread only
+        if (!empty($filters['unreadOnly'])) {
+            $sql .= " AND EXISTS (
+                SELECT 1 FROM messages m_unread
+                WHERE m_unread.user_id = u.id
+                AND m_unread.direction = 'incoming'
+                AND m_unread.is_read = 0
+            )";
+        }
+
+        // Filter by tag
+        if (!empty($filters['tagId'])) {
+            $sql .= " AND EXISTS (
+                SELECT 1 FROM user_tag_assignments uta
+                WHERE uta.user_id = u.id
+                AND uta.tag_id = ?
+            )";
+            $params[] = (int)$filters['tagId'];
+        }
+
+        // Filter by assignee
+        if (!empty($filters['assigneeId'])) {
+            if ($filters['assigneeId'] === 'unassigned') {
+                $sql .= " AND NOT EXISTS (
+                    SELECT 1 FROM conversation_multi_assignees cma
+                    WHERE cma.user_id = u.id
+                    AND cma.status = 'active'
+                )";
+            } else {
+                $sql .= " AND EXISTS (
+                    SELECT 1 FROM conversation_multi_assignees cma
+                    WHERE cma.user_id = u.id
+                    AND cma.admin_id = ?
+                    AND cma.status = 'active'
+                )";
+                $params[] = (int)$filters['assigneeId'];
+            }
+        }
+
         // Delta updates: only conversations updated since timestamp
         if ($since > 0) {
             $sql .= " AND u.last_interaction > FROM_UNIXTIME(?)";
             $params[] = $since;
         }
-        
+
         // Cursor-based pagination: use last_message_at as cursor
         if ($cursor !== null) {
             $sql .= " AND u.last_interaction < ?";
             $params[] = $cursor;
         }
-        
+
         // Order by most recent first and limit
         $sql .= " ORDER BY u.last_interaction DESC LIMIT ?";
         $params[] = $limit + 1; // Fetch one extra to check if there are more

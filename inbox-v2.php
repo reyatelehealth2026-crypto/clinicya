@@ -574,20 +574,41 @@ $pageTitle = 'Inbox V2 - Vibe Selling OS';
 $hideAiChatWidget = true;
 require_once 'includes/header.php';
 
+// Progressive Loading Configuration
+$conversationLimit = 50; // Initial load limit (can be adjusted)
+$hasMoreConversations = false;
+$totalConversations = 0;
+
+// First, get total count for UI indicator
+$countSql = "SELECT COUNT(*) FROM users u WHERE u.line_account_id = ? AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)";
+$countStmt = $db->prepare($countSql);
+$countStmt->execute([$currentBotId]);
+$totalConversations = (int) $countStmt->fetchColumn();
+$hasMoreConversations = $totalConversations > $conversationLimit;
+
 // Get Users List - use subqueries for accurate latest message (v2.1 - fixed 2026-01-15)
-$sql = "SELECT u.*, 
+// Now with LIMIT for progressive loading
+$sql = "SELECT u.*,
         u.chat_status,
         (SELECT content FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_msg,
         (SELECT message_type FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_type,
         (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_time,
         (SELECT COUNT(*) FROM messages WHERE user_id = u.id AND direction = 'incoming' AND is_read = 0) as unread
-        FROM users u 
+        FROM users u
         WHERE u.line_account_id = ?
         AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)
-        ORDER BY last_time DESC";
+        ORDER BY last_time DESC
+        LIMIT ?";
 $stmt = $db->prepare($sql);
-$stmt->execute([$currentBotId]);
+$stmt->execute([$currentBotId, $conversationLimit]);
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get last conversation timestamp for cursor-based pagination
+$lastConversationCursor = null;
+if (!empty($users)) {
+    $lastUser = end($users);
+    $lastConversationCursor = $lastUser['last_time'] ?? null;
+}
 
 // Get Selected User
 $selectedUser = null;
@@ -1701,6 +1722,19 @@ function formatThaiDateTime($datetime) {
                     </div>
                 </a>
                 <?php endforeach; ?>
+            <?php endif; ?>
+
+            <?php if ($hasMoreConversations): ?>
+            <!-- Load More Sentinel for Infinite Scroll -->
+            <div id="loadMoreSentinel" class="p-4 text-center" data-cursor="<?= htmlspecialchars($lastConversationCursor ?? '') ?>" data-has-more="true">
+                <div id="loadMoreSpinner" class="hidden">
+                    <i class="fas fa-spinner fa-spin text-teal-500 text-xl"></i>
+                    <p class="text-xs text-gray-400 mt-1">กำลังโหลดเพิ่มเติม...</p>
+                </div>
+                <div id="loadMoreInfo" class="text-xs text-gray-400">
+                    แสดง <?= count($users) ?> จาก <?= $totalConversations ?> รายการ
+                </div>
+            </div>
             <?php endif; ?>
         </div>
     </div>
@@ -5062,25 +5096,381 @@ function appendPdfMessage(fileUrl, fileName, time, sentBy) {
     chatBox.appendChild(msgDiv);
 }
 
-// Search and filter functions
-const debouncedSearch = debounce(function(query) {
-    filterUsers(query);
-}, 300);
+// ============================================
+// Hybrid Search System (Local + Server)
+// - Local search: instant, searches loaded conversations
+// - Server search: comprehensive, searches all conversations
+// ============================================
 
-function filterUsers(query) {
+// Search state
+let searchState = {
+    query: '',
+    isServerSearch: false,
+    localResults: [],
+    serverResults: [],
+    pendingRequest: null,
+    minCharsForServerSearch: 2 // Minimum characters to trigger server search
+};
+
+const debouncedSearch = debounce(function(query) {
+    performHybridSearch(query);
+}, 200); // Reduced from 300ms for faster response
+
+/**
+ * Perform hybrid search (local first, then server)
+ */
+async function performHybridSearch(query) {
+    searchState.query = query.trim();
+    const lowerQuery = searchState.query.toLowerCase();
+
+    // Cancel any pending server search
+    if (searchState.pendingRequest) {
+        searchState.pendingRequest.abort();
+        searchState.pendingRequest = null;
+    }
+
+    // If query is empty, show all loaded conversations
+    if (!searchState.query) {
+        resetSearch();
+        return;
+    }
+
+    // Step 1: Instant local search
+    const localMatches = performLocalSearch(lowerQuery);
+    searchState.localResults = localMatches;
+
+    // Update UI with local results immediately
+    updateSearchUI(localMatches, 'local');
+
+    // Step 2: Server search if query is long enough and we might have more results
+    if (searchState.query.length >= searchState.minCharsForServerSearch) {
+        // Show "searching server..." indicator
+        showSearchingIndicator();
+
+        // Debounced server search (additional 300ms delay)
+        setTimeout(() => performServerSearch(searchState.query), 300);
+    }
+}
+
+/**
+ * Perform local search on loaded conversations
+ */
+function performLocalSearch(lowerQuery) {
     const userItems = document.querySelectorAll('#userList .user-item');
-    const lowerQuery = query.toLowerCase();
-    
+    const matches = [];
+
     userItems.forEach(item => {
         const name = item.dataset.name || '';
         const lastMsg = item.querySelector('.last-msg')?.textContent?.toLowerCase() || '';
-        
+        const chatStatus = item.dataset.chatStatus || '';
+
         if (name.includes(lowerQuery) || lastMsg.includes(lowerQuery)) {
+            matches.push(item.dataset.userId);
             item.style.display = '';
+            item.classList.add('search-match');
         } else {
             item.style.display = 'none';
+            item.classList.remove('search-match');
         }
     });
+
+    return matches;
+}
+
+/**
+ * Perform server search for comprehensive results
+ */
+async function performServerSearch(query) {
+    // Don't search if query changed
+    if (query !== searchState.query) return;
+
+    const abortController = new AbortController();
+    searchState.pendingRequest = abortController;
+
+    try {
+        // Get current filter values
+        const chatStatus = document.getElementById('filterChatStatus')?.value || '';
+        const tagId = document.getElementById('filterTag')?.value || '';
+        const assigneeId = document.getElementById('filterAssignee')?.value || '';
+        const status = document.getElementById('filterStatus')?.value || '';
+
+        // Build URL with search and filters
+        let url = `/api/inbox-v2.php?action=getConversations&limit=50&search=${encodeURIComponent(query)}`;
+        if (chatStatus) url += `&chatStatus=${encodeURIComponent(chatStatus)}`;
+        if (tagId) url += `&tagId=${encodeURIComponent(tagId)}`;
+        if (assigneeId) url += `&assigneeId=${encodeURIComponent(assigneeId)}`;
+        if (status === 'unread') url += `&unreadOnly=true`;
+
+        const response = await fetch(url, {
+            signal: abortController.signal,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.data && data.data.conversations) {
+            searchState.serverResults = data.data.conversations;
+            searchState.isServerSearch = true;
+
+            // Merge server results with local (add new ones)
+            mergeServerResults(data.data.conversations);
+
+            // Update UI
+            hideSearchingIndicator();
+            updateSearchResultsInfo(searchState.localResults.length, data.data.conversations.length);
+        }
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            console.error('[Search] Server search failed:', error);
+        }
+        hideSearchingIndicator();
+    } finally {
+        searchState.pendingRequest = null;
+    }
+}
+
+/**
+ * Merge server results into the conversation list
+ */
+function mergeServerResults(serverConversations) {
+    const userList = document.getElementById('userList');
+    const sentinel = document.getElementById('loadMoreSentinel');
+    const existingIds = new Set();
+
+    // Collect existing user IDs
+    document.querySelectorAll('#userList .user-item').forEach(item => {
+        existingIds.add(item.dataset.userId);
+    });
+
+    // Add new conversations from server that aren't already loaded
+    serverConversations.forEach(conv => {
+        const userId = String(conv.id || conv.user_id);
+
+        if (!existingIds.has(userId)) {
+            // Create new conversation element
+            const element = createServerSearchResultElement(conv);
+            element.classList.add('search-result-server', 'search-match');
+
+            // Insert before sentinel or at end
+            if (sentinel) {
+                userList.insertBefore(element, sentinel);
+            } else {
+                userList.appendChild(element);
+            }
+        } else {
+            // Show existing item if it matches
+            const existingItem = userList.querySelector(`[data-user-id="${userId}"]`);
+            if (existingItem) {
+                existingItem.style.display = '';
+                existingItem.classList.add('search-match');
+            }
+        }
+    });
+}
+
+/**
+ * Create element for server search result
+ */
+function createServerSearchResultElement(conv) {
+    const userId = conv.id || conv.user_id;
+    const displayName = conv.display_name || 'Unknown';
+    const lastMsg = getMessagePreviewLocal(conv.last_message_preview || conv.last_message || '', conv.last_message_type || conv.last_type);
+    const lastTime = formatThaiTimeLocal(conv.last_message_at || conv.last_time);
+    const unreadCount = conv.unread_count || conv.unread || 0;
+    const pictureUrl = conv.picture_url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e5e7eb'/%3E%3Cpath d='M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z' fill='%239ca3af'/%3E%3C/svg%3E";
+    const chatStatus = conv.chat_status || '';
+
+    const element = document.createElement('a');
+    element.href = `?user=${userId}`;
+    element.className = 'user-item block p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50';
+    element.dataset.userId = userId;
+    element.dataset.name = displayName.toLowerCase();
+    element.dataset.chatStatus = chatStatus;
+    element.tabIndex = 0;
+
+    // Status badge
+    const statusBadges = {
+        'pending': { icon: '🔴', color: '#EF4444', bg: '#FEE2E2' },
+        'completed': { icon: '🟢', color: '#10B981', bg: '#D1FAE5' },
+        'shipping': { icon: '📦', color: '#F59E0B', bg: '#FEF3C7' },
+        'tracking': { icon: '🚚', color: '#3B82F6', bg: '#DBEAFE' },
+        'billing': { icon: '💰', color: '#8B5CF6', bg: '#EDE9FE' }
+    };
+    const statusBadge = statusBadges[chatStatus];
+    const statusBadgeHtml = statusBadge
+        ? `<span class="chat-status-badge" style="background: ${statusBadge.bg}; color: ${statusBadge.color}; border: 1px solid ${statusBadge.color}30;">${statusBadge.icon}</span>`
+        : '';
+
+    element.innerHTML = `
+        <div class="flex items-center gap-3">
+            <div class="relative flex-shrink-0">
+                <img src="${pictureUrl}"
+                     class="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                     loading="lazy"
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3Cpath d=%22M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E'">
+                ${unreadCount > 0 ? `
+                <div class="unread-badge absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">
+                    ${unreadCount > 9 ? '9+' : unreadCount}
+                </div>
+                ` : ''}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-baseline">
+                    <h3 class="text-sm font-semibold text-gray-800 truncate">${escapeHtmlLocal(displayName)}</h3>
+                    <span class="last-time text-[10px] text-gray-400">${lastTime}</span>
+                </div>
+                <p class="last-msg text-xs text-gray-500 truncate">${escapeHtmlLocal(lastMsg)}</p>
+                <div class="flex items-center gap-1 mt-1 flex-wrap">
+                    ${statusBadgeHtml}
+                    <span class="text-[9px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded">🔍 ผลการค้นหา</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return element;
+}
+
+/**
+ * Reset search and show all loaded conversations
+ */
+function resetSearch() {
+    searchState.query = '';
+    searchState.isServerSearch = false;
+    searchState.localResults = [];
+    searchState.serverResults = [];
+
+    // Show all loaded conversations
+    document.querySelectorAll('#userList .user-item').forEach(item => {
+        item.style.display = '';
+        item.classList.remove('search-match', 'search-result-server');
+    });
+
+    // Remove server-only results
+    document.querySelectorAll('#userList .search-result-server').forEach(item => {
+        item.remove();
+    });
+
+    // Hide search info
+    hideSearchResultsInfo();
+    hideSearchingIndicator();
+
+    // Re-apply filters if any
+    applyFilters();
+}
+
+/**
+ * Update search UI
+ */
+function updateSearchUI(matches, source) {
+    const count = matches.length;
+    console.log(`[Search] Found ${count} local matches for "${searchState.query}"`);
+}
+
+/**
+ * Show searching indicator
+ */
+function showSearchingIndicator() {
+    let indicator = document.getElementById('searchingIndicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'searchingIndicator';
+        indicator.className = 'px-3 py-2 bg-blue-50 text-blue-600 text-xs flex items-center gap-2';
+        indicator.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังค้นหาเพิ่มเติม...';
+
+        const userList = document.getElementById('userList');
+        userList.parentNode.insertBefore(indicator, userList);
+    }
+    indicator.style.display = 'flex';
+}
+
+/**
+ * Hide searching indicator
+ */
+function hideSearchingIndicator() {
+    const indicator = document.getElementById('searchingIndicator');
+    if (indicator) {
+        indicator.style.display = 'none';
+    }
+}
+
+/**
+ * Update search results info
+ */
+function updateSearchResultsInfo(localCount, serverCount) {
+    let infoEl = document.getElementById('searchResultsInfo');
+    if (!infoEl) {
+        infoEl = document.createElement('div');
+        infoEl.id = 'searchResultsInfo';
+        infoEl.className = 'px-3 py-2 bg-teal-50 text-teal-700 text-xs flex items-center justify-between';
+
+        const userList = document.getElementById('userList');
+        userList.parentNode.insertBefore(infoEl, userList);
+    }
+
+    const totalShown = document.querySelectorAll('#userList .user-item.search-match').length;
+    infoEl.innerHTML = `
+        <span>🔍 พบ ${totalShown} รายการสำหรับ "${escapeHtmlLocal(searchState.query)}"</span>
+        <button onclick="resetSearch(); document.getElementById('userSearch').value = '';" class="text-teal-600 hover:text-teal-800 underline">
+            ล้างการค้นหา
+        </button>
+    `;
+    infoEl.style.display = 'flex';
+}
+
+/**
+ * Hide search results info
+ */
+function hideSearchResultsInfo() {
+    const infoEl = document.getElementById('searchResultsInfo');
+    if (infoEl) {
+        infoEl.style.display = 'none';
+    }
+}
+
+// Helper functions for search
+function getMessagePreviewLocal(content, type) {
+    if (!content) return '';
+    if (type === 'image') return '📷 รูปภาพ';
+    if (type === 'sticker') return '😊 สติกเกอร์';
+    if (type === 'video') return '🎥 วิดีโอ';
+    if (type === 'audio') return '🎵 เสียง';
+    if (type === 'file') return '📎 ไฟล์';
+    if (type === 'location') return '📍 ตำแหน่ง';
+    return content.substring(0, 50) + (content.length > 50 ? '...' : '');
+}
+
+function formatThaiTimeLocal(timestamp) {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+
+    if (date.toDateString() === now.toDateString()) {
+        return `${hours}:${minutes} น.`;
+    }
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+        return `เมื่อวาน`;
+    }
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    return `${day}/${month}`;
+}
+
+function escapeHtmlLocal(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+}
+
+// Legacy function for backward compatibility
+function filterUsers(query) {
+    performHybridSearch(query);
 }
 
 function applyFilters() {
@@ -7902,7 +8292,7 @@ async function checkForNewMessages() {
     try {
         const response = await fetch('/api/inbox-realtime.php?action=check_updates&last_check=' + Date.now());
         const data = await response.json();
-        
+
         if (data.success && data.new_messages && data.new_messages.length > 0) {
             data.new_messages.forEach(msg => {
                 bumpConversationToTop(msg.user_id, msg);
@@ -7912,6 +8302,271 @@ async function checkForNewMessages() {
         console.error('[Auto-Bump] Error checking for new messages:', error);
     }
 }
+
+// ============================================
+// Progressive Loading / Infinite Scroll
+// Loads conversations in batches of 50 as user scrolls
+// ============================================
+
+/**
+ * Progressive Conversation Loader
+ * Uses Intersection Observer for infinite scroll
+ */
+class ConversationLoader {
+    constructor() {
+        this.isLoading = false;
+        this.hasMore = true;
+        this.cursor = null;
+        this.loadedCount = 0;
+        this.observer = null;
+
+        this.init();
+    }
+
+    init() {
+        const sentinel = document.getElementById('loadMoreSentinel');
+        if (!sentinel) {
+            console.log('[Progressive Load] No more conversations to load');
+            return;
+        }
+
+        this.cursor = sentinel.dataset.cursor;
+        this.hasMore = sentinel.dataset.hasMore === 'true';
+        this.loadedCount = document.querySelectorAll('#userList .user-item').length;
+
+        // Setup Intersection Observer
+        this.observer = new IntersectionObserver(
+            (entries) => this.handleIntersection(entries),
+            {
+                root: document.getElementById('userList'),
+                rootMargin: '200px', // Start loading 200px before reaching bottom
+                threshold: 0
+            }
+        );
+
+        this.observer.observe(sentinel);
+        console.log(`[Progressive Load] Initialized with ${this.loadedCount} conversations, cursor: ${this.cursor}`);
+    }
+
+    async handleIntersection(entries) {
+        const entry = entries[0];
+
+        if (entry.isIntersecting && this.hasMore && !this.isLoading) {
+            await this.loadMore();
+        }
+    }
+
+    async loadMore() {
+        if (this.isLoading || !this.hasMore) return;
+
+        this.isLoading = true;
+        this.showLoadingSpinner();
+
+        try {
+            const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=50`);
+            const data = await response.json();
+
+            if (data.success && data.data && data.data.conversations) {
+                const conversations = data.data.conversations;
+
+                if (conversations.length > 0) {
+                    this.appendConversations(conversations);
+                    this.cursor = data.data.next_cursor;
+                    this.hasMore = data.data.has_more;
+                    this.loadedCount += conversations.length;
+
+                    // Update sentinel
+                    this.updateSentinel();
+
+                    console.log(`[Progressive Load] Loaded ${conversations.length} more conversations (total: ${this.loadedCount})`);
+                } else {
+                    this.hasMore = false;
+                }
+            } else {
+                console.error('[Progressive Load] Invalid response:', data);
+                this.hasMore = false;
+            }
+        } catch (error) {
+            console.error('[Progressive Load] Error loading conversations:', error);
+        } finally {
+            this.isLoading = false;
+            this.hideLoadingSpinner();
+        }
+    }
+
+    appendConversations(conversations) {
+        const userList = document.getElementById('userList');
+        const sentinel = document.getElementById('loadMoreSentinel');
+
+        conversations.forEach(conv => {
+            const element = this.createConversationElement(conv);
+            // Insert before sentinel
+            userList.insertBefore(element, sentinel);
+        });
+
+        // Apply lazy loading to new images
+        this.applyLazyLoading();
+    }
+
+    createConversationElement(conv) {
+        const userId = conv.id || conv.user_id;
+        const displayName = conv.display_name || 'Unknown';
+        const lastMsg = this.getMessagePreview(conv.last_message || conv.last_msg, conv.last_type);
+        const lastTime = this.formatThaiTime(conv.last_message_at || conv.last_time);
+        const unreadCount = conv.unread_count || conv.unread || 0;
+        const pictureUrl = conv.picture_url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e5e7eb'/%3E%3Cpath d='M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z' fill='%239ca3af'/%3E%3C/svg%3E";
+        const chatStatus = conv.chat_status || '';
+
+        const element = document.createElement('a');
+        element.href = `?user=${userId}`;
+        element.className = 'user-item block p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50';
+        element.dataset.userId = userId;
+        element.dataset.name = displayName.toLowerCase();
+        element.dataset.chatStatus = chatStatus;
+        element.tabIndex = 0;
+
+        // Chat status badge HTML
+        const statusBadges = {
+            'pending': { icon: '🔴', color: '#EF4444', bg: '#FEE2E2' },
+            'completed': { icon: '🟢', color: '#10B981', bg: '#D1FAE5' },
+            'shipping': { icon: '📦', color: '#F59E0B', bg: '#FEF3C7' },
+            'tracking': { icon: '🚚', color: '#3B82F6', bg: '#DBEAFE' },
+            'billing': { icon: '💰', color: '#8B5CF6', bg: '#EDE9FE' }
+        };
+        const statusBadge = statusBadges[chatStatus];
+        const statusBadgeHtml = statusBadge
+            ? `<span class="chat-status-badge" style="background: ${statusBadge.bg}; color: ${statusBadge.color}; border: 1px solid ${statusBadge.color}30;">${statusBadge.icon}</span>`
+            : '';
+
+        element.innerHTML = `
+            <div class="flex items-center gap-3">
+                <div class="relative flex-shrink-0">
+                    <img src="${pictureUrl}"
+                         class="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                         loading="lazy"
+                         onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3Cpath d=%22M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E'">
+                    ${unreadCount > 0 ? `
+                    <div class="unread-badge absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">
+                        ${unreadCount > 9 ? '9+' : unreadCount}
+                    </div>
+                    ` : ''}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex justify-between items-baseline">
+                        <h3 class="text-sm font-semibold text-gray-800 truncate">${this.escapeHtml(displayName)}</h3>
+                        <span class="last-time text-[10px] text-gray-400">${lastTime}</span>
+                    </div>
+                    <p class="last-msg text-xs text-gray-500 truncate">${this.escapeHtml(lastMsg)}</p>
+                    <div class="flex items-center gap-1 mt-1 flex-wrap">
+                        ${statusBadgeHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        return element;
+    }
+
+    getMessagePreview(content, type) {
+        if (!content) return '';
+        if (type === 'image') return '📷 รูปภาพ';
+        if (type === 'sticker') return '😊 สติกเกอร์';
+        if (type === 'video') return '🎥 วิดีโอ';
+        if (type === 'audio') return '🎵 เสียง';
+        if (type === 'file') return '📎 ไฟล์';
+        if (type === 'location') return '📍 ตำแหน่ง';
+        return content.substring(0, 50) + (content.length > 50 ? '...' : '');
+    }
+
+    formatThaiTime(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        const now = new Date();
+        const hours = date.getHours().toString().padStart(2, '0');
+        const minutes = date.getMinutes().toString().padStart(2, '0');
+
+        if (date.toDateString() === now.toDateString()) {
+            return `${hours}:${minutes} น.`;
+        }
+
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (date.toDateString() === yesterday.toDateString()) {
+            return `เมื่อวาน ${hours}:${minutes}`;
+        }
+
+        const diffMs = now - date;
+        const diffDays = Math.floor(diffMs / 86400000);
+        if (diffDays < 7) {
+            const thaiDays = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+            return `${thaiDays[date.getDay()]} ${hours}:${minutes}`;
+        }
+
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        return `${day}/${month} ${hours}:${minutes}`;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
+    updateSentinel() {
+        const sentinel = document.getElementById('loadMoreSentinel');
+        if (!sentinel) return;
+
+        sentinel.dataset.cursor = this.cursor || '';
+        sentinel.dataset.hasMore = this.hasMore ? 'true' : 'false';
+
+        const infoEl = document.getElementById('loadMoreInfo');
+        if (infoEl) {
+            if (this.hasMore) {
+                infoEl.textContent = `โหลดแล้ว ${this.loadedCount} รายการ`;
+            } else {
+                infoEl.textContent = `แสดงทั้งหมด ${this.loadedCount} รายการ`;
+                // Hide spinner permanently
+                const spinner = document.getElementById('loadMoreSpinner');
+                if (spinner) spinner.classList.add('hidden');
+            }
+        }
+    }
+
+    showLoadingSpinner() {
+        const spinner = document.getElementById('loadMoreSpinner');
+        const info = document.getElementById('loadMoreInfo');
+        if (spinner) spinner.classList.remove('hidden');
+        if (info) info.classList.add('hidden');
+    }
+
+    hideLoadingSpinner() {
+        const spinner = document.getElementById('loadMoreSpinner');
+        const info = document.getElementById('loadMoreInfo');
+        if (spinner) spinner.classList.add('hidden');
+        if (info) info.classList.remove('hidden');
+    }
+
+    applyLazyLoading() {
+        // Apply lazy loading to newly added images
+        const newImages = document.querySelectorAll('#userList .user-item img[loading="lazy"]:not([data-observed])');
+        newImages.forEach(img => {
+            img.dataset.observed = 'true';
+        });
+    }
+
+    destroy() {
+        if (this.observer) {
+            this.observer.disconnect();
+        }
+    }
+}
+
+// Initialize Progressive Loader
+let conversationLoader = null;
+document.addEventListener('DOMContentLoaded', function() {
+    conversationLoader = new ConversationLoader();
+});
 
 /**
  * Format Thai time (client-side)
