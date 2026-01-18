@@ -4,7 +4,13 @@
       "Bash(wc:*)",
       "Bash(php -l:*)",
       "Bash(find:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(ls:*)",
+      "Bash(du:*)"
     ]
   }
 }

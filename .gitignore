@@ -38,3 +38,27 @@ test*.php
 *.tmp
 *.temp
 cache/
+
+# Composer
+composer.phar
+
+# SSH Keys & Certificates
+*.pem
+*.key
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+
+# Sensitive Files
+.env.local
+config/config.local.php
+*.secret
+
+# Backup Files
+*.bak
+*.backup
+*.old
+*_backup
+*_old

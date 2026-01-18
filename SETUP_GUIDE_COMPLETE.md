@@ -10,7 +10,6 @@
 2. [การติดตั้งระบบ (Installation)](#2-การติดตั้งระบบ)
 3. [การตั้งค่า LINE Platform](#3-การตั้งค่า-line-platform)
 4. [การตั้งค่า Database](#4-การตั้งค่า-database)
-5. [การตั้งค่า WebSocket Server](#5-การตั้งค่า-websocket-server)
 6. [การตั้งค่า Cron Jobs](#6-การตั้งค่า-cron-jobs)
 7. [การตั้งค่า AI Services](#7-การตั้งค่า-ai-services)
 8. [การตั้งค่า Admin Panel](#8-การตั้งค่า-admin-panel)
