@@ -7624,7 +7624,7 @@ class LiffApp {
         if (!container) return;
 
         try {
-            const response = await fetch(`${this.config.BASE_URL}/api/points.php?action=rewards&line_account_id=${this.config.ACCOUNT_ID}`);
+            const response = await fetch(`${this.config.BASE_URL}/api/points-history.php?action=rewards&line_account_id=${this.config.ACCOUNT_ID}`);
             const data = await response.json();
 
             if (data.success && data.rewards?.length > 0) {
@@ -7633,7 +7633,8 @@ class LiffApp {
                 
                 let html = '';
                 data.rewards.forEach(reward => {
-                    const canRedeem = userPoints >= reward.points_required;
+                    const canRedeem = userPoints >= reward.points_required && (reward.stock === null || reward.stock === -1 || reward.stock > 0);
+                    const isOutOfStock = reward.stock !== null && reward.stock !== -1 && reward.stock <= 0;
                     html += `
                         <div class="reward-card ${!canRedeem ? 'disabled' : ''}" onclick="${canRedeem ? `window.liffApp.showRewardDetail(${reward.id})` : ''}">
                             <img src="${reward.image_url || this.config.BASE_URL + '/assets/images/image-placeholder.svg'}" 
@@ -7642,7 +7643,7 @@ class LiffApp {
                             <div class="reward-info">
                                 <div class="reward-name">${reward.name}</div>
                                 <div class="reward-points">${this.formatNumber(reward.points_required)} แต้ม</div>
-                                ${!canRedeem ? '<div class="reward-insufficient">แต้มไม่พอ</div>' : ''}
+                                ${isOutOfStock ? '<div class="reward-insufficient">หมดแล้ว</div>' : !canRedeem ? '<div class="reward-insufficient">แต้มไม่พอ</div>' : ''}
                             </div>
                         </div>
                     `;
@@ -7666,7 +7667,7 @@ class LiffApp {
     async showRewardDetail(rewardId) {
         try {
             // Fetch reward details
-            const response = await fetch(`${this.config.BASE_URL}/api/points.php?action=rewards&line_account_id=${this.config.ACCOUNT_ID}`);
+            const response = await fetch(`${this.config.BASE_URL}/api/points-history.php?action=rewards&line_account_id=${this.config.ACCOUNT_ID}`);
             const data = await response.json();
 
             if (!data.success || !data.rewards) {
@@ -7795,17 +7796,15 @@ class LiffApp {
         }
 
         try {
-            const response = await fetch(`${this.config.BASE_URL}/api/points.php`, {
+            const formData = new FormData();
+            formData.append('action', 'redeem');
+            formData.append('line_user_id', profile.userId);
+            formData.append('line_account_id', this.config.ACCOUNT_ID);
+            formData.append('reward_id', rewardId);
+
+            const response = await fetch(`${this.config.BASE_URL}/api/points-history.php`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: 'redeem',
-                    line_user_id: profile.userId,
-                    line_account_id: this.config.ACCOUNT_ID,
-                    reward_id: rewardId
-                })
+                body: formData
             });
 
             const data = await response.json();
@@ -7813,22 +7812,54 @@ class LiffApp {
             if (data.success) {
                 // Update member points
                 const member = window.store?.get('member');
-                if (member && data.new_balance !== undefined) {
-                    member.points = data.new_balance;
+                if (member) {
+                    // Deduct points locally
+                    const reward = data.reward || {};
+                    const pointsUsed = reward.points_required || 0;
+                    member.points = Math.max(0, (member.points || 0) - pointsUsed);
                     window.store?.set('member', member);
                 }
 
                 // Close modal
                 this.closeRewardModal();
 
-                // Show success
-                this.showToast('แลกรางวัลสำเร็จ! 🎉', 'success');
+                // Show success with redemption code
+                const successHtml = `
+                    <div class="modal-overlay success-modal" id="successModal" onclick="if(event.target === this) window.liffApp.closeSuccessModal()">
+                        <div class="modal-content success-modal-content">
+                            <div class="success-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <h2>แลกรางวัลสำเร็จ!</h2>
+                            <p class="success-subtitle">รหัสรับรางวัลของคุณ</p>
+                            <div class="redemption-code-box">
+                                <code class="redemption-code">${data.redemption_code || ''}</code>
+                                <button class="copy-code-btn" onclick="window.liffApp.copyCode('${data.redemption_code || ''}')">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                            </div>
+                            <p class="success-note">กรุณาแสดงรหัสนี้เพื่อรับรางวัล</p>
+                            <button class="btn btn-primary btn-block" onclick="window.liffApp.closeSuccessModal()">
+                                เข้าใจแล้ว
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = successHtml;
+                document.body.appendChild(tempDiv.firstElementChild);
+                
+                setTimeout(() => {
+                    const modal = document.getElementById('successModal');
+                    if (modal) modal.classList.add('show');
+                }, 10);
 
-                // Reload rewards list
-                setTimeout(() => this.loadRewards(), 500);
+                // Reload rewards list after closing success modal
+                setTimeout(() => this.loadRewards(), 1000);
 
             } else {
-                throw new Error(data.message || 'ไม่สามารถแลกรางวัลได้');
+                throw new Error(data.error || data.message || 'ไม่สามารถแลกรางวัลได้');
             }
 
         } catch (error) {
@@ -7840,6 +7871,37 @@ class LiffApp {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-gift"></i> แลกรางวัลนี้';
             }
+        }
+    }
+
+    closeSuccessModal() {
+        const modal = document.getElementById('successModal');
+        if (modal) {
+            modal.classList.remove('show');
+            setTimeout(() => modal.remove(), 300);
+        }
+    }
+
+    async copyCode(code) {
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(code);
+                this.showToast('คัดลอกรหัสแล้ว', 'success');
+            } else {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = code;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                this.showToast('คัดลอกรหัสแล้ว', 'success');
+            }
+        } catch (error) {
+            console.error('Error copying code:', error);
+            this.showToast('ไม่สามารถคัดลอกได้', 'error');
         }
     }
 

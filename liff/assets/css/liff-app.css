@@ -16078,3 +16078,169 @@ body:has(.ai-chat-page) .bottom-nav {
         font-size: 16px;
     }
 }
+
+/* ==================== Success Modal for Rewards ==================== */
+.modal-overlay.success-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    padding: var(--space-4);
+}
+
+.modal-overlay.success-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content.success-modal-content {
+    background: white;
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.success-modal.show .modal-content.success-modal-content {
+    transform: scale(1);
+}
+
+.success-modal-content .success-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto var(--space-4);
+    background: linear-gradient(135deg, #10b981, #059669);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: successPulse 0.6s ease;
+}
+
+@keyframes successPulse {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.success-modal-content .success-icon i {
+    font-size: 40px;
+    color: white;
+}
+
+.success-modal-content h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-2);
+}
+
+.success-modal-content .success-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0 0 var(--space-4);
+}
+
+.success-modal-content .redemption-code-box {
+    background: var(--bg-light);
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    margin-bottom: var(--space-4);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.success-modal-content .redemption-code {
+    font-family: 'Courier New', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: 2px;
+    flex: 1;
+}
+
+.success-modal-content .copy-code-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: var(--primary);
+    color: white;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.success-modal-content .copy-code-btn:hover {
+    background: var(--primary-dark);
+    transform: scale(1.05);
+}
+
+.success-modal-content .copy-code-btn:active {
+    transform: scale(0.95);
+}
+
+.success-modal-content .copy-code-btn i {
+    font-size: 16px;
+}
+
+.success-modal-content .success-note {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 var(--space-5);
+}
+
+.success-modal-content .btn-block {
+    width: 100%;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .modal-overlay.success-modal {
+        padding: var(--space-3);
+    }
+
+    .modal-content.success-modal-content {
+        padding: var(--space-5);
+    }
+
+    .success-modal-content .success-icon {
+        width: 70px;
+        height: 70px;
+    }
+
+    .success-modal-content .success-icon i {
+        font-size: 35px;
+    }
+
+    .success-modal-content h2 {
+        font-size: 20px;
+    }
+
+    .success-modal-content .redemption-code {
+        font-size: 18px;
+    }
+}
