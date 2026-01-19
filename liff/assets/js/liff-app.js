@@ -7823,6 +7823,16 @@ class LiffApp {
             });
 
             console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers.get('content-type'));
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('Non-JSON response:', text.substring(0, 500));
+                throw new Error('API ส่งข้อมูลผิดพลาด กรุณาลองใหม่อีกครั้ง');
+            }
+            
             const data = await response.json();
             console.log('Response data:', data);
 
