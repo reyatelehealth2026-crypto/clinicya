@@ -7581,39 +7581,31 @@ class LiffApp {
     /**
      * Render Redeem Points page
      */
-    renderRedeemPage() {
-        const member = window.store?.get('member');
-        const points = member?.points || 0;
+    async renderRedeemPage() {
+        // Initialize RewardsCatalog component if not already done
+        if (!window.rewardsCatalog) {
+            window.rewardsCatalog = new window.RewardsCatalog({
+                baseUrl: this.config.BASE_URL,
+                accountId: this.config.ACCOUNT_ID
+            });
+        }
 
-        // Load rewards
-        setTimeout(() => this.loadRewards(), 100);
+        // Load rewards data
+        const profile = window.store?.get('profile');
+        const lineUserId = profile?.userId;
 
-        return `
-            <div class="redeem-page">
-                <div class="redeem-header">
-                    <button class="back-btn" onclick="window.router.back()">
-                        <i class="fas fa-arrow-left"></i>
-                    </button>
-                    <h1 class="page-title" style="flex: 1; margin-left: 12px;">แลกแต้ม</h1>
-                </div>
-                
-                <div class="points-balance-card">
-                    <div class="points-balance-label">แต้มสะสมของคุณ</div>
-                    <div class="points-balance-value">${this.formatNumber(points)}</div>
-                </div>
+        if (lineUserId) {
+            setTimeout(async () => {
+                await window.rewardsCatalog.loadRewardsData(lineUserId);
+                const container = document.querySelector('.app-content');
+                if (container) {
+                    container.innerHTML = window.rewardsCatalog.render();
+                }
+            }, 100);
+        }
 
-                <h3 style="margin-bottom: 12px; font-weight: 600;">รางวัลที่แลกได้</h3>
-                <div id="rewards-list">
-                    <div class="reward-card">
-                        <div class="skeleton" style="width: 80px; height: 80px; border-radius: 8px;"></div>
-                        <div class="reward-info">
-                            <div class="skeleton skeleton-text" style="height: 18px; margin-bottom: 8px;"></div>
-                            <div class="skeleton skeleton-text" style="height: 14px; width: 50%;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        // Return skeleton loading
+        return window.rewardsCatalog.renderSkeleton();
     }
 
     /**

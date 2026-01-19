@@ -257,7 +257,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     </script>
 
     <!-- App Scripts -->
-    <?php $v = '202601192050'; // Cache bust version - Force reload with timestamp ?>
+    <?php $v = '202601200130'; // Cache bust version - Force reload with timestamp - Fixed rewards modal ?>
     <script>window.debugLog('Loading scripts...', 'info');</script>
     <script src="<?= $baseUrl ?>/liff/assets/js/store.js?v=<?= $v ?>" onerror="window.debugLog('FAILED: store.js', 'error')"></script>
     <script>window.debugLog('store.js loaded', 'success');</script>
@@ -276,6 +276,8 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <script>window.debugLog('ai-chat.js loaded, AIChat=' + (typeof AIChat), 'info');</script>
     <script src="<?= $baseUrl ?>/liff/assets/js/components/health-profile.js?v=<?= $v ?>" onerror="window.debugLog('FAILED: health-profile.js', 'error')"></script>
     <script src="<?= $baseUrl ?>/liff/assets/js/components/points-dashboard.js?v=<?= $v ?>" onerror="window.debugLog('FAILED: points-dashboard.js', 'error')"></script>
+    <script src="<?= $baseUrl ?>/liff/assets/js/components/rewards-catalog.js?v=<?= $v ?>" onerror="window.debugLog('FAILED: rewards-catalog.js', 'error')"></script>
+    <script>window.debugLog('rewards-catalog.js loaded', 'success');</script>
     <script src="<?= $baseUrl ?>/liff/assets/js/liff-app.js?v=<?= $v ?>" onerror="window.debugLog('FAILED: liff-app.js', 'error')"></script>
     <script>window.debugLog('All scripts loaded!', 'success');</script>
 </body>
