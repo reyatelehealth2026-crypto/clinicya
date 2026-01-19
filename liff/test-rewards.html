@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Rewards Loading</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .reward-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            display: flex;
+            gap: 15px;
+        }
+        .reward-card img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .reward-info h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .reward-info p {
+            margin: 5px 0;
+            color: #666;
+        }
+        .points {
+            color: #e53e3e;
+            font-weight: bold;
+        }
+        .stock {
+            color: #38a169;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #fee;
+            border: 1px solid #fcc;
+            padding: 15px;
+            border-radius: 8px;
+            color: #c00;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Rewards API</h1>
+        <div id="status" class="loading">กำลังโหลด...</div>
+        <div id="debug"></div>
+        <div id="rewards"></div>
+    </div>
+
+    <script>
+        const BASE_URL = window.location.origin;
+        const ACCOUNT_ID = 1;
+
+        async function loadRewards() {
+            const statusDiv = document.getElementById('status');
+            const debugDiv = document.getElementById('debug');
+            const rewardsDiv = document.getElementById('rewards');
+
+            try {
+                const url = `${BASE_URL}/api/rewards.php?action=list&line_account_id=${ACCOUNT_ID}`;
+                console.log('Fetching from:', url);
+
+                statusDiv.innerHTML = `<p>กำลังโหลดจาก: ${url}</p>`;
+
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
+
+                const text = await response.text();
+                console.log('Response text:', text);
+
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error('Invalid JSON: ' + text.substring(0, 200));
+                }
+
+                console.log('Parsed data:', data);
+
+                // Show debug info
+                debugDiv.innerHTML = `
+                    <h2>Debug Info</h2>
+                    <pre>${JSON.stringify(data, null, 2).substring(0, 500)}</pre>
+                `;
+
+                if (data.success) {
+                    statusDiv.innerHTML = `<p style="color: green;">✅ โหลดสำเร็จ! พบ ${data.rewards.length} รางวัล</p>`;
+
+                    if (data.rewards.length === 0) {
+                        rewardsDiv.innerHTML = '<p>ไม่พบรางวัล</p>';
+                        return;
+                    }
+
+                    let html = '<h2>รายการรางวัล</h2>';
+                    data.rewards.forEach(reward => {
+                        const stock = reward.stock === -1 || reward.stock === '-1' ? 'ไม่จำกัด' :
+                                     reward.stock === 0 || reward.stock === '0' ? 'หมดแล้ว' :
+                                     `เหลือ ${reward.stock} ชิ้น`;
+
+                        html += `
+                            <div class="reward-card">
+                                ${reward.image_url ? `<img src="${reward.image_url}" alt="${reward.name}">` : ''}
+                                <div class="reward-info">
+                                    <h3>${reward.name}</h3>
+                                    <p>${reward.description || ''}</p>
+                                    <p class="points">แต้มที่ใช้: ${reward.points_required}</p>
+                                    <p class="stock">สต๊อก: ${stock}</p>
+                                    <p>Active: ${reward.is_active}</p>
+                                    <p>ID: ${reward.id}, Account: ${reward.line_account_id}</p>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    rewardsDiv.innerHTML = html;
+                } else {
+                    statusDiv.innerHTML = `<div class="error">❌ Error: ${data.message || data.error}</div>`;
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                debugDiv.innerHTML = `<pre>${error.stack}</pre>`;
+            }
+        }
+
+        // Load on page load
+        window.addEventListener('DOMContentLoaded', loadRewards);
+    </script>
+</body>
+</html>
