@@ -104,12 +104,18 @@ class RewardsCatalog {
      */
     async loadUserPoints(lineUserId) {
         try {
-            const url = `${this.config.baseUrl}/api/points-history.php?action=dashboard&line_user_id=${lineUserId}`;
+            const url = `${this.config.baseUrl}/api/points-history.php?action=dashboard&line_user_id=${lineUserId}&line_account_id=${this.config.accountId}`;
+            console.log('RewardsCatalog: Loading user points from:', url);
             const response = await fetch(url);
             const data = await response.json();
+            console.log('RewardsCatalog: User points response:', data);
 
             if (data.success && data.user) {
                 this.userPoints = parseInt(data.user.available_points) || 0;
+                console.log('RewardsCatalog: User points loaded:', this.userPoints);
+            } else {
+                console.warn('RewardsCatalog: Failed to load user points:', data.message);
+                this.userPoints = 0;
             }
         } catch (error) {
             console.error('RewardsCatalog: Failed to load user points', error);

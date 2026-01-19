@@ -257,7 +257,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     </script>
 
     <!-- App Scripts -->
-    <?php $v = '202601200135'; // Cache bust version - Force reload - Allow click on disabled reward cards ?>
+    <?php $v = '202601200140'; // Cache bust version - Fix user points loading with line_account_id ?>
     <script>window.debugLog('Loading scripts...', 'info');</script>
     <script src="<?= $baseUrl ?>/liff/assets/js/store.js?v=<?= $v ?>" onerror="window.debugLog('FAILED: store.js', 'error')"></script>
     <script>window.debugLog('store.js loaded', 'success');</script>
