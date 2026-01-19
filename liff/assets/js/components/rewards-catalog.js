@@ -307,9 +307,10 @@ class RewardsCatalog {
         if (isInsufficientPoints && !isOutOfStock) cardClasses += ' insufficient-points';
 
         return `
-            <div class="${cardClasses}" 
+            <div class="${cardClasses}"
                  data-reward-id="${reward.id}"
-                 onclick="${!isDisabled ? `window.rewardsCatalog?.showRewardDetail(${reward.id})` : ''}">
+                 onclick="window.rewardsCatalog?.showRewardDetail(${reward.id})"
+                 style="cursor: pointer;">
                 <div class="reward-card-image">
                     ${reward.image_url 
                         ? `<img src="${this.escapeHtml(reward.image_url)}" alt="${this.escapeHtml(reward.name)}" loading="lazy">`
