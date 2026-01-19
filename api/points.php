@@ -204,24 +204,40 @@ function handleRedeem($db, $data) {
         jsonResponse(false, 'ไม่พบข้อมูลผู้ใช้');
     }
     
-    // Get reward
+    // Get reward - Try rewards table first, then point_rewards
+    $reward = null;
+
     try {
-        $stmt = $db->prepare("SELECT * FROM point_rewards WHERE id = ? AND is_active = 1");
+        // Try new rewards table
+        $stmt = $db->query("SHOW COLUMNS FROM rewards LIKE 'is_active'");
+        $hasIsActive = $stmt->fetch() !== false;
+
+        $sql = "SELECT * FROM rewards WHERE id = ?";
+        if ($hasIsActive) {
+            $sql .= " AND is_active = 1";
+        }
+
+        $stmt = $db->prepare($sql);
         $stmt->execute([$rewardId]);
         $reward = $stmt->fetch(PDO::FETCH_ASSOC);
     } catch (Exception $e) {
-        // Sample rewards for demo
-        $sampleRewards = [
-            1 => ['id' => 1, 'name' => 'ส่วนลด 50 บาท', 'points_required' => 100, 'type' => 'discount', 'value' => 50],
-            2 => ['id' => 2, 'name' => 'ส่วนลด 100 บาท', 'points_required' => 200, 'type' => 'discount', 'value' => 100],
-            3 => ['id' => 3, 'name' => 'จัดส่งฟรี', 'points_required' => 150, 'type' => 'shipping', 'value' => 0],
-            4 => ['id' => 4, 'name' => 'ของขวัญพิเศษ', 'points_required' => 500, 'type' => 'gift', 'value' => 0],
-        ];
-        $reward = $sampleRewards[$rewardId] ?? null;
+        // Fallback to point_rewards table
+        try {
+            $stmt = $db->prepare("SELECT * FROM point_rewards WHERE id = ? AND is_active = 1");
+            $stmt->execute([$rewardId]);
+            $reward = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (Exception $e2) {
+            // No table found
+        }
     }
-    
+
     if (!$reward) {
         jsonResponse(false, 'ไม่พบของรางวัลนี้');
+    }
+
+    // Check stock
+    if (isset($reward['stock']) && $reward['stock'] !== null && $reward['stock'] <= 0) {
+        jsonResponse(false, 'ของรางวัลหมดแล้ว');
     }
     
     // Check points
@@ -232,33 +248,74 @@ function handleRedeem($db, $data) {
         ]);
     }
     
-    // Deduct points
-    $newBalance = $user['points'] - $reward['points_required'];
-    $stmt = $db->prepare("UPDATE users SET points = ? WHERE id = ?");
-    $stmt->execute([$newBalance, $user['id']]);
-    
-    // Log redemption
-    $stmt = $db->prepare("
-        INSERT INTO points_history (line_account_id, user_id, points, type, description, reference_type, reference_id, balance_after)
-        VALUES (?, ?, ?, 'redeem', ?, 'reward', ?, ?)
-    ");
-    $stmt->execute([
-        $lineAccountId,
-        $user['id'],
-        -$reward['points_required'],
-        'แลก: ' . $reward['name'],
-        $reward['id'],
-        $newBalance
-    ]);
-    
-    // Generate coupon code
-    $couponCode = 'RW' . date('ymd') . strtoupper(substr(md5(uniqid()), 0, 6));
-    
-    jsonResponse(true, 'แลกของรางวัลสำเร็จ!', [
-        'reward' => $reward,
-        'coupon_code' => $couponCode,
-        'new_balance' => $newBalance
-    ]);
+    // Start transaction
+    $db->beginTransaction();
+
+    try {
+        // Deduct points
+        $newBalance = $user['points'] - $reward['points_required'];
+        $stmt = $db->prepare("UPDATE users SET points = ? WHERE id = ?");
+        $stmt->execute([$newBalance, $user['id']]);
+
+        // Update stock if applicable
+        if (isset($reward['stock']) && $reward['stock'] !== null && $reward['stock'] > 0) {
+            // Try rewards table first
+            try {
+                $stmt = $db->prepare("UPDATE rewards SET stock = stock - 1 WHERE id = ?");
+                $stmt->execute([$reward['id']]);
+            } catch (Exception $e) {
+                // Try point_rewards table
+                $stmt = $db->prepare("UPDATE point_rewards SET stock = stock - 1 WHERE id = ?");
+                $stmt->execute([$reward['id']]);
+            }
+        }
+
+        // Generate coupon code
+        $couponCode = 'RW' . date('ymd') . strtoupper(substr(md5(uniqid()), 0, 6));
+
+        // Log redemption
+        $stmt = $db->prepare("
+            INSERT INTO points_history (line_account_id, user_id, points, type, description, reference_type, reference_id, balance_after)
+            VALUES (?, ?, ?, 'redeem', ?, 'reward', ?, ?)
+        ");
+        $stmt->execute([
+            $lineAccountId,
+            $user['id'],
+            -$reward['points_required'],
+            'แลก: ' . $reward['name'],
+            $reward['id'],
+            $newBalance
+        ]);
+
+        // Save redemption record (if table exists)
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO point_redemptions (line_account_id, user_id, reward_id, points_used, coupon_code, status, redeemed_at)
+                VALUES (?, ?, ?, ?, ?, 'pending', NOW())
+            ");
+            $stmt->execute([
+                $lineAccountId,
+                $user['id'],
+                $reward['id'],
+                $reward['points_required'],
+                $couponCode
+            ]);
+        } catch (Exception $e) {
+            // Table doesn't exist, skip
+        }
+
+        // Commit transaction
+        $db->commit();
+
+        jsonResponse(true, 'แลกของรางวัลสำเร็จ! 🎉', [
+            'reward' => $reward,
+            'coupon_code' => $couponCode,
+            'new_balance' => $newBalance
+        ]);
+    } catch (Exception $e) {
+        $db->rollBack();
+        jsonResponse(false, 'เกิดข้อผิดพลาด: ' . $e->getMessage());
+    }
 }
 
 function jsonResponse($success, $message, $data = []) {
