@@ -47,22 +47,28 @@ class RewardsCatalog {
         this.isLoading = true;
 
         try {
-            const url = `${this.config.baseUrl}/api/points-history.php?action=rewards&line_user_id=${lineUserId}`;
+            // Use rewards.php API for consistency with backend logic
+            const url = `${this.config.baseUrl}/api/rewards.php?action=list&line_account_id=${this.config.accountId}`;
             const response = await fetch(url);
             const data = await response.json();
 
             if (data.success) {
                 // Deserialize and reconstruct rewards data (Requirement 23.13)
                 this.rewards = this.deserializeRewards(data.rewards || []);
-                this.myRedemptions = this.deserializeRedemptions(data.my_redemptions || []);
-                this.userPoints = parseInt(data.available_points) || 0;
+
+                // Load user redemptions separately
+                await this.loadUserRedemptions(lineUserId);
+
+                // Load user points from member info
+                await this.loadUserPoints(lineUserId);
+
                 return {
                     rewards: this.rewards,
                     myRedemptions: this.myRedemptions,
                     userPoints: this.userPoints
                 };
             } else {
-                console.error('RewardsCatalog: API error', data.error);
+                console.error('RewardsCatalog: API error', data.message || data.error);
                 return null;
             }
         } catch (error) {
@@ -70,6 +76,44 @@ class RewardsCatalog {
             return null;
         } finally {
             this.isLoading = false;
+        }
+    }
+
+    /**
+     * Load user redemptions from API
+     * @param {string} lineUserId - LINE user ID
+     */
+    async loadUserRedemptions(lineUserId) {
+        try {
+            const url = `${this.config.baseUrl}/api/rewards.php?action=my_redemptions&line_user_id=${lineUserId}&line_account_id=${this.config.accountId}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success) {
+                this.myRedemptions = this.deserializeRedemptions(data.redemptions || []);
+            }
+        } catch (error) {
+            console.error('RewardsCatalog: Failed to load redemptions', error);
+            this.myRedemptions = [];
+        }
+    }
+
+    /**
+     * Load user points from member info
+     * @param {string} lineUserId - LINE user ID
+     */
+    async loadUserPoints(lineUserId) {
+        try {
+            const url = `${this.config.baseUrl}/api/points-history.php?action=dashboard&line_user_id=${lineUserId}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success && data.user) {
+                this.userPoints = parseInt(data.user.available_points) || 0;
+            }
+        } catch (error) {
+            console.error('RewardsCatalog: Failed to load user points', error);
+            this.userPoints = 0;
         }
     }
 
@@ -107,10 +151,10 @@ class RewardsCatalog {
         return redemptions.map(r => ({
             id: parseInt(r.id),
             reward_id: parseInt(r.reward_id),
-            reward_name: r.reward_name || '',
-            image_url: r.image_url || r.reward_image || null,
-            points_used: parseInt(r.points_used) || 0,
-            redemption_code: r.redemption_code || '',
+            reward_name: r.reward_name || r.name || '',
+            image_url: r.image_url || r.reward_image || r.image || null,
+            points_used: parseInt(r.points_used) || parseInt(r.points) || 0,
+            redemption_code: r.redemption_code || r.code || '',
             status: r.status || 'pending',
             notes: r.notes || null,
             approved_at: r.approved_at || null,
@@ -626,12 +670,14 @@ class RewardsCatalog {
         }
 
         try {
+            // Use rewards.php API for redemption
             const formData = new FormData();
             formData.append('action', 'redeem');
             formData.append('line_user_id', window.APP_CONFIG?.LINE_USER_ID || '');
+            formData.append('line_account_id', this.config.accountId);
             formData.append('reward_id', rewardId);
 
-            const response = await fetch(`${this.config.baseUrl}/api/points-history.php`, {
+            const response = await fetch(`${this.config.baseUrl}/api/rewards.php`, {
                 method: 'POST',
                 body: formData
             });
@@ -641,8 +687,12 @@ class RewardsCatalog {
                 // Close detail modal
                 this.closeRewardDetail();
 
-                // Update user points (Requirement 23.7 - deduct points)
-                this.userPoints -= reward.points_required;
+                // Update user points from response (Requirement 23.7 - deduct points)
+                if (data.new_balance !== undefined) {
+                    this.userPoints = parseInt(data.new_balance) || 0;
+                } else {
+                    this.userPoints -= reward.points_required;
+                }
 
                 // Update reward stock
                 if (reward.stock_quantity > 0) {
@@ -652,7 +702,7 @@ class RewardsCatalog {
                 // Show success modal (Requirement 23.8)
                 this.showSuccessModal({
                     redemption_code: data.redemption_code,
-                    reward_name: reward.name
+                    reward_name: data.reward?.name || reward.name
                 });
 
                 // Send LINE notification (Requirement 23.9)
@@ -661,7 +711,7 @@ class RewardsCatalog {
                 // Refresh data
                 await this.refreshData();
             } else {
-                this.showToast(data.error || 'ไม่สามารถแลกรางวัลได้', 'error');
+                this.showToast(data.message || data.error || 'ไม่สามารถแลกรางวัลได้', 'error');
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-exchange-alt"></i> แลกเลย';

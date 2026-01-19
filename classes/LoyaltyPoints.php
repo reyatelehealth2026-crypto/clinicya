@@ -241,24 +241,37 @@ class LoyaltyPoints
         try {
             $hasLineAccountId = $this->columnExists('rewards', 'line_account_id');
             $hasIsActive = $this->columnExists('rewards', 'is_active');
-            
+
             $sql = "SELECT * FROM rewards WHERE 1=1";
             $params = [];
-            
+
             if ($hasLineAccountId) {
                 $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
                 $params[] = $this->lineAccountId;
             }
-            
+
             if ($activeOnly && $hasIsActive) {
                 $sql .= " AND is_active = 1";
             }
-            
+
             $sql .= " ORDER BY points_required ASC";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $rewards = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Normalize stock field for consistency
+            foreach ($rewards as &$reward) {
+                // Convert stock to integer, handle NULL as -1 (unlimited)
+                if (!isset($reward['stock']) || $reward['stock'] === null) {
+                    $reward['stock'] = -1;
+                } else {
+                    $reward['stock'] = (int)$reward['stock'];
+                }
+            }
+
+            return $rewards;
         } catch (PDOException $e) {
+            error_log("Error getting rewards: " . $e->getMessage());
             return [];
         }
     }
@@ -349,19 +362,30 @@ class LoyaltyPoints
     public function redeemReward($userId, $rewardId)
     {
         $reward = $this->getReward($rewardId);
-        if (!$reward || !$reward['is_active']) return ['success' => false, 'message' => 'Reward not found'];
-        if ($reward['stock'] == 0) return ['success' => false, 'message' => 'Out of stock'];
+        if (!$reward) return ['success' => false, 'message' => 'ไม่พบรางวัล'];
 
-        $userPoints = $this->getUserPoints($userId);
-        if ($userPoints['available_points'] < $reward['points_required']) return ['success' => false, 'message' => 'Not enough points'];
-
-        // Deduct points (Requirement 23.7)
-        if (!$this->deductPoints($userId, $reward['points_required'], 'reward', $rewardId, "Redeemed: {$reward['name']}")) {
-            return ['success' => false, 'message' => 'Failed to deduct points'];
+        // Check if reward is active (handle both string and boolean values)
+        if (isset($reward['is_active']) && ($reward['is_active'] === 0 || $reward['is_active'] === '0' || $reward['is_active'] === false)) {
+            return ['success' => false, 'message' => 'รางวัลนี้ไม่พร้อมให้บริการ'];
         }
 
-        // Update stock if limited
-        if ($reward['stock'] > 0) {
+        // Check stock
+        if (isset($reward['stock']) && $reward['stock'] !== null && $reward['stock'] !== -1 && $reward['stock'] <= 0) {
+            return ['success' => false, 'message' => 'รางวัลหมดแล้ว'];
+        }
+
+        $userPoints = $this->getUserPoints($userId);
+        if ($userPoints['available_points'] < $reward['points_required']) {
+            return ['success' => false, 'message' => 'แต้มไม่เพียงพอ'];
+        }
+
+        // Deduct points (Requirement 23.7)
+        if (!$this->deductPoints($userId, $reward['points_required'], 'reward', $rewardId, "แลกรางวัล: {$reward['name']}")) {
+            return ['success' => false, 'message' => 'ไม่สามารถหักแต้มได้'];
+        }
+
+        // Update stock if limited (check for positive stock, not -1 which means unlimited)
+        if (isset($reward['stock']) && $reward['stock'] !== null && $reward['stock'] > 0 && $reward['stock'] !== -1) {
             $stmt = $this->db->prepare("UPDATE rewards SET stock = stock - 1 WHERE id = ? AND stock > 0");
             $stmt->execute([$rewardId]);
         }
@@ -381,9 +405,9 @@ class LoyaltyPoints
         $stmt->execute([$userId, $rewardId, $this->lineAccountId, $reward['points_required'], $code, $expiresAt]);
 
         return [
-            'success' => true, 
-            'message' => 'Success!', 
-            'redemption_code' => $code, 
+            'success' => true,
+            'message' => 'แลกรางวัลสำเร็จ!',
+            'redemption_code' => $code,
             'reward' => $reward,
             'redemption_id' => $this->db->lastInsertId(),
             'expires_at' => $expiresAt
