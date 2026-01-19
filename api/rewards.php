@@ -56,11 +56,24 @@ try {
  */
 function handleGetRewards($db) {
     $lineAccountId = $_GET['line_account_id'] ?? 1;
-    
+
     try {
         $loyalty = new LoyaltyPoints($db, $lineAccountId);
         $rewards = $loyalty->getActiveRewards();
-        
+
+        // If no rewards found, try with default account
+        if (empty($rewards) && $lineAccountId != 1) {
+            // Get default account
+            $stmt = $db->prepare("SELECT id FROM line_accounts WHERE is_default = 1 LIMIT 1");
+            $stmt->execute();
+            $defaultAccount = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($defaultAccount) {
+                $loyalty = new LoyaltyPoints($db, $defaultAccount['id']);
+                $rewards = $loyalty->getActiveRewards();
+            }
+        }
+
         jsonResponse(true, 'OK', ['rewards' => $rewards]);
     } catch (Exception $e) {
         error_log("Error getting rewards: " . $e->getMessage());
