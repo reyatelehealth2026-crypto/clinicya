@@ -5278,11 +5278,13 @@ const debouncedSearch = debounce(function(query) {
 
 /**
  * Perform autocomplete search with dropdown
+ * Searches both loaded conversations AND server
  */
 async function performAutocompleteSearch(query) {
     searchState.query = query.trim();
     const autocompleteDiv = document.getElementById('searchAutocomplete');
-    
+    const lowerQuery = searchState.query.toLowerCase();
+
     // Cancel any pending request
     if (searchState.pendingRequest) {
         searchState.pendingRequest.abort();
@@ -5296,11 +5298,38 @@ async function performAutocompleteSearch(query) {
         return;
     }
 
-    // Show autocomplete dropdown
-    autocompleteDiv.classList.remove('hidden');
-    autocompleteDiv.innerHTML = '<div class="p-3 text-center text-gray-500 text-sm"><i class="fas fa-spinner fa-spin"></i> กำลังค้นหา...</div>';
+    // Step 1: Instant local search on loaded conversations
+    const localMatches = [];
+    const userItems = document.querySelectorAll('#userList .user-item');
 
-    // Search server immediately
+    userItems.forEach(item => {
+        const name = item.dataset.name || '';
+        const lastMsg = item.querySelector('.last-msg')?.textContent?.toLowerCase() || '';
+
+        if (name.includes(lowerQuery) || lastMsg.includes(lowerQuery)) {
+            localMatches.push({
+                id: item.dataset.userId,
+                display_name: item.querySelector('h3')?.textContent || 'Unknown',
+                picture_url: item.querySelector('img')?.src || '',
+                last_message_preview: item.querySelector('.last-msg')?.textContent || '',
+                unread_count: item.querySelector('.unread-badge')?.textContent || 0
+            });
+        }
+    });
+
+    // If we have local results, show them immediately
+    if (localMatches.length > 0) {
+        displayAutocompleteResults(localMatches.slice(0, 10));
+
+        // Also filter the main list
+        filterMainList(lowerQuery);
+    } else {
+        // Show loading while fetching from server
+        autocompleteDiv.classList.remove('hidden');
+        autocompleteDiv.innerHTML = '<div class="p-3 text-center text-gray-500 text-sm"><i class="fas fa-spinner fa-spin"></i> กำลังค้นหา...</div>';
+    }
+
+    // Step 2: Also search server for comprehensive results
     try {
         const controller = new AbortController();
         searchState.pendingRequest = controller;
@@ -5309,26 +5338,68 @@ async function performAutocompleteSearch(query) {
             action: 'search_conversations',
             query: searchState.query,
             line_account_id: window.currentBotId || <?= $currentBotId ?>,
-            limit: 10
+            limit: 20
         });
 
         const response = await fetch(`api/inbox-v2.php?${params.toString()}`, {
             signal: controller.signal
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success && result.data && result.data.conversations) {
-            displayAutocompleteResults(result.data.conversations);
-        } else {
-            autocompleteDiv.innerHTML = '<div class="p-3 text-center text-gray-500 text-sm">ไม่พบผลลัพธ์</div>';
+            // Merge local and server results (remove duplicates)
+            const serverResults = result.data.conversations;
+            const mergedResults = [...localMatches];
+            const existingIds = new Set(localMatches.map(m => String(m.id)));
+
+            serverResults.forEach(conv => {
+                const convId = String(conv.id || conv.user_id);
+                if (!existingIds.has(convId)) {
+                    mergedResults.push(conv);
+                    existingIds.add(convId);
+                }
+            });
+
+            if (mergedResults.length > 0) {
+                displayAutocompleteResults(mergedResults.slice(0, 15));
+            } else {
+                autocompleteDiv.classList.remove('hidden');
+                autocompleteDiv.innerHTML = '<div class="p-3 text-center text-gray-500 text-sm">ไม่พบผลลัพธ์</div>';
+            }
         }
     } catch (error) {
         if (error.name !== 'AbortError') {
             console.error('[Autocomplete] Error:', error);
-            autocompleteDiv.innerHTML = '<div class="p-3 text-center text-red-500 text-sm">เกิดข้อผิดพลาด</div>';
+            // Still show local results if server failed
+            if (localMatches.length === 0) {
+                autocompleteDiv.classList.remove('hidden');
+                autocompleteDiv.innerHTML = '<div class="p-3 text-center text-gray-500 text-sm">ไม่พบผลลัพธ์</div>';
+            }
         }
     }
+}
+
+/**
+ * Filter main conversation list based on query
+ */
+function filterMainList(lowerQuery) {
+    const userItems = document.querySelectorAll('#userList .user-item');
+    let matchCount = 0;
+
+    userItems.forEach(item => {
+        const name = item.dataset.name || '';
+        const lastMsg = item.querySelector('.last-msg')?.textContent?.toLowerCase() || '';
+
+        if (name.includes(lowerQuery) || lastMsg.includes(lowerQuery)) {
+            item.style.display = 'block';
+            matchCount++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+
+    console.log(`[Search] Found ${matchCount} matches for "${lowerQuery}"`);
 }
 
 /**
