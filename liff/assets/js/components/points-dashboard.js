@@ -73,6 +73,9 @@ class PointsDashboard {
             pending_points: parseInt(data.pending_points || 0),
             pending_confirmation_date: data.pending_confirmation_date || null,
             tier: data.tier?.name || data.tier || 'Silver',
+            tier_color: data.tier?.color || data.tier_color || '#9CA3AF',
+            tier_icon: data.tier?.icon || data.tier_icon || '',
+            tier_code: data.tier?.code || data.tier_code || 'silver',
             tier_points: parseInt(data.tier_points || 0),
             points_to_next_tier: parseInt(data.points_to_next_tier || 2000),
             next_tier_name: data.next_tier_name || 'Gold',
@@ -229,28 +232,21 @@ class PointsDashboard {
      * @returns {string} HTML string
      */
     renderTierProgress(data) {
-        const tierColors = {
-            'silver': 'var(--tier-silver)',
-            'gold': 'var(--tier-gold)',
-            'platinum': 'var(--tier-platinum)',
-            'bronze': 'var(--tier-bronze)'
-        };
+        const tierColor = data.tier_color || '#9CA3AF';
+        const tierIcon = data.tier_icon || this.getTierIcon(data.tier);
 
-        const tierLower = (data.tier || 'silver').toLowerCase();
-        const tierColor = tierColors[tierLower] || tierColors['silver'];
-        
         // Calculate progress percentage (bounded 0-100)
         const totalForNextTier = data.tier_points + data.points_to_next_tier;
-        const progress = totalForNextTier > 0 
+        const progress = totalForNextTier > 0
             ? Math.min(100, Math.max(0, (data.tier_points / totalForNextTier) * 100))
             : 0;
 
         return `
             <div class="tier-progress-card">
                 <div class="tier-progress-header">
-                    <div class="tier-badge" style="background: ${tierColor}">
-                        ${this.getTierIcon(data.tier)}
-                        <span>${data.tier}</span>
+                    <div class="tier-badge" style="background: ${tierColor}; color: #fff; border: 1px solid rgba(255,255,255,0.2);">
+                        ${tierIcon}
+                        <span style="margin-left: 4px;">${data.tier}</span>
                     </div>
                     <div class="tier-next">
                         <span class="tier-next-label">ระดับถัดไป</span>
@@ -259,7 +255,7 @@ class PointsDashboard {
                 </div>
                 <div class="tier-progress-bar-container">
                     <div class="tier-progress-bar">
-                        <div class="tier-progress-fill" style="width: ${progress}%"></div>
+                        <div class="tier-progress-fill" style="width: ${progress}%; background-color: ${tierColor};"></div>
                     </div>
                     <div class="tier-progress-labels">
                         <span>${this.formatNumber(data.tier_points)} pt</span>
@@ -285,7 +281,7 @@ class PointsDashboard {
             return '';
         }
 
-        const expiryDate = data.nearest_expiry_date 
+        const expiryDate = data.nearest_expiry_date
             ? this.formatDate(data.nearest_expiry_date)
             : 'เร็วๆ นี้';
 
@@ -318,7 +314,7 @@ class PointsDashboard {
             return '';
         }
 
-        const confirmDate = data.pending_confirmation_date 
+        const confirmDate = data.pending_confirmation_date
             ? this.formatDate(data.pending_confirmation_date)
             : 'รอยืนยัน';
 
@@ -347,7 +343,7 @@ class PointsDashboard {
      */
     renderRecentTransactions(data) {
         const transactions = data.recent_transactions || [];
-        
+
         // Limit to 5 transactions (Requirement 21.6)
         const recentFive = transactions.slice(0, 5);
 
@@ -545,10 +541,10 @@ class PointsDashboard {
         if (!dateStr) return '-';
         try {
             const date = new Date(dateStr);
-            return date.toLocaleDateString('th-TH', { 
-                day: 'numeric', 
-                month: 'short', 
-                year: '2-digit' 
+            return date.toLocaleDateString('th-TH', {
+                day: 'numeric',
+                month: 'short',
+                year: '2-digit'
             });
         } catch (e) {
             return dateStr;
@@ -562,8 +558,8 @@ class PointsDashboard {
         if (!dateStr) return '-';
         try {
             const date = new Date(dateStr);
-            return date.toLocaleDateString('th-TH', { 
-                day: 'numeric', 
+            return date.toLocaleDateString('th-TH', {
+                day: 'numeric',
                 month: 'short',
                 hour: '2-digit',
                 minute: '2-digit'
@@ -589,11 +585,11 @@ class PointsDashboard {
         const animate = (currentTime) => {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            
+
             // Easing function (ease-out)
             const easeOut = 1 - Math.pow(1 - progress, 3);
             const currentValue = Math.floor(startValue + (target - startValue) * easeOut);
-            
+
             counter.textContent = this.formatNumber(currentValue);
 
             if (progress < 1) {

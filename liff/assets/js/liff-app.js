@@ -708,8 +708,20 @@ class LiffApp {
 
         // Determine tier styling - use color from API if available
         const tierName = tier?.name || member.tier || 'Silver';
-        const tierClass = this.getTierClass(tierName);
-        const tierColor = tier?.color || this.getTierDefaultColor(tierName);
+        // Fix: Use dynamic color with robust fallback
+        let tierColor = tier?.color;
+        if (!tierColor || tierColor === '') {
+            // Fallback map including VIP and Diamond
+            const colors = {
+                'silver': '#C0C0C0',
+                'gold': '#FFD700',
+                'platinum': '#334155',
+                'bronze': '#CD7F32',
+                'vip': '#10B981',
+                'diamond': '#EF4444'
+            };
+            tierColor = colors[String(tierName).toLowerCase()] || '#9CA3AF';
+        }
         const points = member.points || 0;
         const nextTierPoints = tier?.next_tier_points || 2000;
         const currentTierPoints = tier?.current_tier_points || tier?.min_points || 0;
