@@ -243,13 +243,16 @@ class InboxService {
 
         // Build query with cursor-based pagination
         // Select only necessary fields (no full message content)
+        // Use subquery for last_message_at to match the initial page load query
         $sql = "
             SELECT
                 u.id,
                 u.display_name,
                 u.picture_url,
                 u.chat_status,
-                u.last_interaction as last_message_at,
+                (SELECT created_at FROM messages m_last
+                 WHERE m_last.user_id = u.id
+                 ORDER BY m_last.created_at DESC LIMIT 1) as last_message_at,
                 (SELECT COUNT(*) FROM messages m
                  WHERE m.user_id = u.id
                  AND m.direction = 'incoming'
@@ -265,7 +268,7 @@ class InboxService {
             FROM users u
             LEFT JOIN conversation_assignments ca ON ca.user_id = u.id
             WHERE u.line_account_id = ?
-            AND u.last_interaction IS NOT NULL
+            AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)
         ";
 
         $params = [$accountId];
@@ -333,18 +336,18 @@ class InboxService {
 
         // Delta updates: only conversations updated since timestamp
         if ($since > 0) {
-            $sql .= " AND u.last_interaction > FROM_UNIXTIME(?)";
+            $sql .= " AND (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) > FROM_UNIXTIME(?)";
             $params[] = $since;
         }
 
-        // Cursor-based pagination: use last_message_at as cursor
-        if ($cursor !== null) {
-            $sql .= " AND u.last_interaction < ?";
+        // Cursor-based pagination: use last_message_at (from messages table) as cursor
+        if ($cursor !== null && trim($cursor) !== '') {
+            $sql .= " AND (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) < ?";
             $params[] = $cursor;
         }
 
-        // Order by most recent first and limit
-        $sql .= " ORDER BY u.last_interaction DESC LIMIT ?";
+        // Order by most recent message first and limit
+        $sql .= " ORDER BY (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) DESC LIMIT ?";
         $params[] = $limit + 1; // Fetch one extra to check if there are more
         
         $stmt = $this->db->prepare($sql);
