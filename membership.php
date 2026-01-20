@@ -41,18 +41,18 @@ require_once __DIR__ . '/includes/functions/reward_notifications.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
     header('Content-Type: application/json; charset=utf-8');
     $action = $_POST['reward_action'];
-    
+
     try {
         switch ($action) {
             case 'create':
                 $data = [
                     'name' => trim($_POST['name'] ?? ''),
                     'description' => trim($_POST['description'] ?? ''),
-                    'points_required' => (int)($_POST['points_required'] ?? 0),
+                    'points_required' => (int) ($_POST['points_required'] ?? 0),
                     'reward_type' => $_POST['reward_type'] ?? 'gift',
                     'reward_value' => trim($_POST['reward_value'] ?? ''),
-                    'stock' => (int)($_POST['stock'] ?? -1),
-                    'max_per_user' => (int)($_POST['max_per_user'] ?? 0),
+                    'stock' => (int) ($_POST['stock'] ?? -1),
+                    'max_per_user' => (int) ($_POST['max_per_user'] ?? 0),
                     'is_active' => isset($_POST['is_active']) ? 1 : 0,
                     'image_url' => trim($_POST['image_url'] ?? ''),
                     'terms' => trim($_POST['terms'] ?? '')
@@ -69,31 +69,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
                 if (!empty($_POST['valid_until'])) {
                     $data['end_date'] = $_POST['valid_until'];
                 }
-                
+
                 $id = $loyalty->createReward($data);
                 echo json_encode(['success' => true, 'id' => $id, 'message' => 'เพิ่มรางวัลสำเร็จ']);
                 exit;
 
             case 'update':
-                $id = (int)($_POST['id'] ?? 0);
+                $id = (int) ($_POST['id'] ?? 0);
                 $data = [
                     'name' => trim($_POST['name'] ?? ''),
                     'description' => trim($_POST['description'] ?? ''),
-                    'points_required' => (int)($_POST['points_required'] ?? 0),
+                    'points_required' => (int) ($_POST['points_required'] ?? 0),
                     'reward_type' => $_POST['reward_type'] ?? 'gift',
                     'reward_value' => trim($_POST['reward_value'] ?? ''),
-                    'stock' => (int)($_POST['stock'] ?? -1),
-                    'max_per_user' => (int)($_POST['max_per_user'] ?? 0),
+                    'stock' => (int) ($_POST['stock'] ?? -1),
+                    'max_per_user' => (int) ($_POST['max_per_user'] ?? 0),
                     'is_active' => isset($_POST['is_active']) ? 1 : 0,
                     'image_url' => trim($_POST['image_url'] ?? '')
                 ];
-                
+
                 $loyalty->updateReward($id, $data);
                 echo json_encode(['success' => true, 'message' => 'อัปเดตสำเร็จ']);
                 exit;
-                
+
             case 'delete':
-                $id = (int)($_POST['id'] ?? 0);
+                $id = (int) ($_POST['id'] ?? 0);
                 $stmt = $db->prepare("SELECT COUNT(*) FROM reward_redemptions WHERE reward_id = ?");
                 $stmt->execute([$id]);
                 if ($stmt->fetchColumn() > 0) {
@@ -104,9 +104,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
                     echo json_encode(['success' => true, 'message' => 'ลบสำเร็จ']);
                 }
                 exit;
-                
+
             case 'toggle':
-                $id = (int)($_POST['id'] ?? 0);
+                $id = (int) ($_POST['id'] ?? 0);
                 $reward = $loyalty->getReward($id);
                 if ($reward) {
                     $loyalty->updateReward($id, ['is_active' => $reward['is_active'] ? 0 : 1]);
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
                 exit;
 
             case 'approve_redemption':
-                $redemptionId = (int)($_POST['redemption_id'] ?? 0);
+                $redemptionId = (int) ($_POST['redemption_id'] ?? 0);
                 $notes = trim($_POST['notes'] ?? '');
 
                 // Get redemption details for notification
@@ -140,9 +140,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
 
                 echo json_encode(['success' => true, 'message' => 'อนุมัติสำเร็จ']);
                 exit;
-                
+
             case 'deliver_redemption':
-                $redemptionId = (int)($_POST['redemption_id'] ?? 0);
+                $redemptionId = (int) ($_POST['redemption_id'] ?? 0);
                 $notes = trim($_POST['notes'] ?? '');
 
                 // Get redemption details for notification
@@ -165,9 +165,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
 
                 echo json_encode(['success' => true, 'message' => 'บันทึกการส่งมอบสำเร็จ']);
                 exit;
-                
+
             case 'cancel_redemption':
-                $redemptionId = (int)($_POST['redemption_id'] ?? 0);
+                $redemptionId = (int) ($_POST['redemption_id'] ?? 0);
                 $notes = trim($_POST['notes'] ?? '');
 
                 // Get redemption details with reward and user info
@@ -207,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['settings_action'])) {
     header('Content-Type: application/json; charset=utf-8');
     $action = $_POST['settings_action'];
-    
+
     try {
         switch ($action) {
             case 'update_rules':
@@ -220,66 +220,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['settings_action'])) {
                 $loyalty->updateSettings($data);
                 echo json_encode(['success' => true, 'message' => 'บันทึกการตั้งค่าสำเร็จ']);
                 exit;
-                
+
             case 'create_campaign':
                 $name = trim($_POST['name'] ?? '');
                 $multiplier = floatval($_POST['multiplier'] ?? 2.0);
                 $startDate = $_POST['start_date'] ?? date('Y-m-d');
                 $endDate = $_POST['end_date'] ?? date('Y-m-d', strtotime('+7 days'));
                 $isActive = isset($_POST['is_active']) ? 1 : 0;
-                if (empty($name)) { echo json_encode(['success' => false, 'message' => 'กรุณาระบุชื่อแคมเปญ']); exit; }
+                if (empty($name)) {
+                    echo json_encode(['success' => false, 'message' => 'กรุณาระบุชื่อแคมเปญ']);
+                    exit;
+                }
                 $stmt = $db->prepare("INSERT INTO points_campaigns (line_account_id, name, multiplier, start_date, end_date, is_active) VALUES (?, ?, ?, ?, ?, ?)");
                 $stmt->execute([$lineAccountId, $name, $multiplier, $startDate, $endDate, $isActive]);
                 echo json_encode(['success' => true, 'message' => 'สร้างแคมเปญสำเร็จ', 'id' => $db->lastInsertId()]);
                 exit;
-                
+
             case 'update_campaign':
                 $id = intval($_POST['id'] ?? 0);
-                if (!$id) { echo json_encode(['success' => false, 'message' => 'Invalid campaign ID']); exit; }
+                if (!$id) {
+                    echo json_encode(['success' => false, 'message' => 'Invalid campaign ID']);
+                    exit;
+                }
                 $stmt = $db->prepare("UPDATE points_campaigns SET name = ?, multiplier = ?, start_date = ?, end_date = ?, is_active = ?, updated_at = NOW() WHERE id = ?");
                 $stmt->execute([trim($_POST['name'] ?? ''), floatval($_POST['multiplier'] ?? 2.0), $_POST['start_date'] ?? null, $_POST['end_date'] ?? null, isset($_POST['is_active']) ? 1 : 0, $id]);
                 echo json_encode(['success' => true, 'message' => 'อัปเดตแคมเปญสำเร็จ']);
                 exit;
-                
+
             case 'delete_campaign':
                 $id = intval($_POST['id'] ?? 0);
                 $stmt = $db->prepare("DELETE FROM points_campaigns WHERE id = ?");
                 $stmt->execute([$id]);
                 echo json_encode(['success' => true, 'message' => 'ลบแคมเปญสำเร็จ']);
                 exit;
-                
+
             case 'toggle_campaign':
                 $id = intval($_POST['id'] ?? 0);
                 $stmt = $db->prepare("UPDATE points_campaigns SET is_active = NOT is_active WHERE id = ?");
                 $stmt->execute([$id]);
                 echo json_encode(['success' => true, 'message' => 'เปลี่ยนสถานะสำเร็จ']);
                 exit;
-                
+
             case 'save_category_bonus':
                 $categoryId = intval($_POST['category_id'] ?? 0);
                 $multiplier = floatval($_POST['multiplier'] ?? 1.0);
-                if (!$categoryId) { echo json_encode(['success' => false, 'message' => 'กรุณาเลือกหมวดหมู่']); exit; }
+                if (!$categoryId) {
+                    echo json_encode(['success' => false, 'message' => 'กรุณาเลือกหมวดหมู่']);
+                    exit;
+                }
                 $stmt = $db->prepare("INSERT INTO category_points_bonus (line_account_id, category_id, multiplier) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE multiplier = VALUES(multiplier), updated_at = NOW()");
                 $stmt->execute([$lineAccountId, $categoryId, $multiplier]);
                 echo json_encode(['success' => true, 'message' => 'บันทึกโบนัสหมวดหมู่สำเร็จ']);
                 exit;
-                
+
             case 'delete_category_bonus':
                 $id = intval($_POST['id'] ?? 0);
                 $stmt = $db->prepare("DELETE FROM category_points_bonus WHERE id = ?");
                 $stmt->execute([$id]);
                 echo json_encode(['success' => true, 'message' => 'ลบโบนัสหมวดหมู่สำเร็จ']);
                 exit;
-                
+
             case 'save_tier_settings':
                 $tierNames = $_POST['tier_name'] ?? [];
                 $tierPoints = $_POST['tier_points'] ?? [];
                 $tierMultipliers = $_POST['tier_multiplier'] ?? [];
-                if (empty($tierNames)) { echo json_encode(['success' => false, 'message' => 'กรุณาระบุข้อมูลระดับสมาชิก']); exit; }
+                $tierColors = $_POST['tier_color'] ?? [];
+                if (empty($tierNames)) {
+                    echo json_encode(['success' => false, 'message' => 'กรุณาระบุข้อมูลระดับสมาชิก']);
+                    exit;
+                }
                 $prevPoints = -1;
                 for ($i = 0; $i < count($tierPoints); $i++) {
                     $minPoints = intval($tierPoints[$i] ?? 0);
-                    if ($minPoints <= $prevPoints && $prevPoints >= 0) { echo json_encode(['success' => false, 'message' => 'คะแนนขั้นต่ำต้องเรียงจากน้อยไปมาก']); exit; }
+                    if ($minPoints <= $prevPoints && $prevPoints >= 0) {
+                        echo json_encode(['success' => false, 'message' => 'คะแนนขั้นต่ำต้องเรียงจากน้อยไปมาก']);
+                        exit;
+                    }
                     $prevPoints = $minPoints;
                 }
                 $stmt = $db->prepare("DELETE FROM tier_settings WHERE line_account_id = ?");
@@ -288,10 +304,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['settings_action'])) {
                 $stmt = $db->prepare("INSERT INTO tier_settings (line_account_id, name, min_points, multiplier, badge_color) VALUES (?, ?, ?, ?, ?)");
                 for ($i = 0; $i < count($tierNames); $i++) {
                     if (!empty($tierNames[$i])) {
-                        $badgeColor = $defaultColors[$i % count($defaultColors)];
+                        // Use color from form, or fallback to default
+                        $badgeColor = !empty($tierColors[$i]) ? $tierColors[$i] : $defaultColors[$i % count($defaultColors)];
                         $stmt->execute([$lineAccountId, trim($tierNames[$i]), intval($tierPoints[$i] ?? 0), floatval($tierMultipliers[$i] ?? 1.0), $badgeColor]);
                     }
                 }
+                // Clear tier cache
+                require_once __DIR__ . '/classes/TierService.php';
+                TierService::clearCache();
                 echo json_encode(['success' => true, 'message' => 'บันทึกระดับสมาชิกสำเร็จ']);
                 exit;
         }
@@ -344,7 +364,7 @@ require_once __DIR__ . '/includes/header.php';
     <p class="text-gray-500 mt-1">จัดการสมาชิก รางวัล และระบบแต้มสะสม</p>
 </div>
 
-<?php 
+<?php
 // Output tab styles
 echo getTabsStyles();
 
@@ -354,36 +374,36 @@ echo renderTabs($tabs, $activeTab, ['style' => 'pills']);
 
 <!-- Tab Content -->
 <div class="tab-panel">
-<?php
-// Load content based on active tab
-switch ($activeTab) {
-    case 'rewards':
-        if ($loyalty) {
-            include __DIR__ . '/includes/membership/rewards.php';
-        } else {
-            echo '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6">';
-            echo '<h2 class="text-xl font-bold text-yellow-800 mb-4"><i class="fas fa-exclamation-triangle mr-2"></i>ไม่พบ LoyaltyPoints Class</h2>';
-            echo '<p class="text-yellow-700">กรุณาตรวจสอบว่าไฟล์ classes/LoyaltyPoints.php มีอยู่และถูกต้อง</p>';
-            echo '</div>';
-        }
-        break;
-        
-    case 'settings':
-        if ($loyalty) {
-            include __DIR__ . '/includes/membership/settings.php';
-        } else {
-            echo '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6">';
-            echo '<h2 class="text-xl font-bold text-yellow-800 mb-4"><i class="fas fa-exclamation-triangle mr-2"></i>ไม่พบ LoyaltyPoints Class</h2>';
-            echo '<p class="text-yellow-700">กรุณาตรวจสอบว่าไฟล์ classes/LoyaltyPoints.php มีอยู่และถูกต้อง</p>';
-            echo '</div>';
-        }
-        break;
-        
-    default: // members
-        include __DIR__ . '/includes/membership/members.php';
-        break;
-}
-?>
+    <?php
+    // Load content based on active tab
+    switch ($activeTab) {
+        case 'rewards':
+            if ($loyalty) {
+                include __DIR__ . '/includes/membership/rewards.php';
+            } else {
+                echo '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6">';
+                echo '<h2 class="text-xl font-bold text-yellow-800 mb-4"><i class="fas fa-exclamation-triangle mr-2"></i>ไม่พบ LoyaltyPoints Class</h2>';
+                echo '<p class="text-yellow-700">กรุณาตรวจสอบว่าไฟล์ classes/LoyaltyPoints.php มีอยู่และถูกต้อง</p>';
+                echo '</div>';
+            }
+            break;
+
+        case 'settings':
+            if ($loyalty) {
+                include __DIR__ . '/includes/membership/settings.php';
+            } else {
+                echo '<div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6">';
+                echo '<h2 class="text-xl font-bold text-yellow-800 mb-4"><i class="fas fa-exclamation-triangle mr-2"></i>ไม่พบ LoyaltyPoints Class</h2>';
+                echo '<p class="text-yellow-700">กรุณาตรวจสอบว่าไฟล์ classes/LoyaltyPoints.php มีอยู่และถูกต้อง</p>';
+                echo '</div>';
+            }
+            break;
+
+        default: // members
+            include __DIR__ . '/includes/membership/members.php';
+            break;
+    }
+    ?>
 </div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

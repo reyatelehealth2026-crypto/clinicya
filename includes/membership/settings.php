@@ -182,7 +182,8 @@ $settingsTab = $_GET['settings_tab'] ?? 'rules';
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="text-center p-4 bg-purple-50 rounded-lg">
                     <div class="text-2xl font-bold text-purple-600">
-                        <?= rtrim(rtrim(number_format($settings['points_per_baht'] ?? 1, 6), '0'), '.') ?></div>
+                        <?= rtrim(rtrim(number_format($settings['points_per_baht'] ?? 1, 6), '0'), '.') ?>
+                    </div>
                     <div class="text-sm text-gray-600">แต้ม/บาท</div>
                 </div>
                 <div class="text-center p-4 bg-blue-50 rounded-lg">
@@ -198,7 +199,8 @@ $settingsTab = $_GET['settings_tab'] ?? 'rules';
                 <div class="text-center p-4 <?= ($settings['is_active'] ?? 1) ? 'bg-green-50' : 'bg-red-50' ?> rounded-lg">
                     <div
                         class="text-2xl font-bold <?= ($settings['is_active'] ?? 1) ? 'text-green-600' : 'text-red-600' ?>">
-                        <?= ($settings['is_active'] ?? 1) ? 'เปิด' : 'ปิด' ?></div>
+                        <?= ($settings['is_active'] ?? 1) ? 'เปิด' : 'ปิด' ?>
+                    </div>
                     <div class="text-sm text-gray-600">สถานะระบบ</div>
                 </div>
             </div>
@@ -382,7 +384,7 @@ $settingsTab = $_GET['settings_tab'] ?? 'rules';
                                 <?php foreach ($categories as $cat):
                                     $alreadyAdded = in_array($cat['id'], array_column($categoryBonuses, 'category_id')); ?>
                                     <option value="<?= $cat['id'] ?>" <?= $alreadyAdded ? 'disabled' : '' ?>>
-                                        <?= htmlspecialchars($cat['name']) ?>        <?= $alreadyAdded ? ' (มีโบนัสแล้ว)' : '' ?>
+                                        <?= htmlspecialchars($cat['name']) ?>         <?= $alreadyAdded ? ' (มีโบนัสแล้ว)' : '' ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -463,42 +465,49 @@ $settingsTab = $_GET['settings_tab'] ?? 'rules';
                                         <span class="text-gray-500 text-sm">x</span>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <?php if ($index > 0): ?>
-                                        <button type="button"
-                                            class="delete-tier-btn px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                            title="ลบระดับนี้"><i class="fas fa-trash"></i></button>
-                                    <?php else: ?>
-                                        <span class="px-3 py-2 text-gray-400" title="ระดับแรกไม่สามารถลบได้"><i
-                                                class="fas fa-lock"></i></span>
-                                    <?php endif; ?>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">สีการ์ด</label>
+                                    <input type="color" name="tier_color[]"
+                                        value="<?= htmlspecialchars($tier['badge_color'] ?? '#6366F1') ?>"
+                                        class="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
+                                        title="เลือกสีสำหรับการ์ดสมาชิก">
+                                    <div class="flex items-center gap-2">
+                                        <?php if ($index > 0): ?>
+                                            <button type="button"
+                                                class="delete-tier-btn px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="ลบระดับนี้"><i class="fas fa-trash"></i></button>
+                                        <?php else: ?>
+                                            <span class="px-3 py-2 text-gray-400" title="ระดับแรกไม่สามารถลบได้"><i
+                                                    class="fas fa-lock"></i></span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
+                                <?php if ($index === 0): ?>
+                                    <p class="text-xs text-gray-500 mt-2"><i
+                                            class="fas fa-info-circle mr-1"></i>ระดับแรกคือระดับเริ่มต้นสำหรับสมาชิกใหม่
+                                        (คะแนนขั้นต่ำควรเป็น 0)</p><?php endif; ?>
                             </div>
-                            <?php if ($index === 0): ?>
-                                <p class="text-xs text-gray-500 mt-2"><i
-                                        class="fas fa-info-circle mr-1"></i>ระดับแรกคือระดับเริ่มต้นสำหรับสมาชิกใหม่
-                                    (คะแนนขั้นต่ำควรเป็น 0)</p><?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
-            </div>
-            <div class="bg-blue-50 rounded-lg p-4 mb-6">
-                <h4 class="text-sm font-medium text-blue-800 mb-2"><i class="fas fa-lightbulb mr-1"></i>คำแนะนำการตั้งค่า
-                </h4>
-                <ul class="text-xs text-blue-700 space-y-1">
-                    <li>• คะแนนขั้นต่ำต้องเรียงจากน้อยไปมาก (ระดับแรกควรเป็น 0)</li>
-                    <li>• ตัวคูณแต้มจะใช้คำนวณแต้มที่ได้รับเพิ่มเติม (เช่น 1.5x = ได้แต้มเพิ่ม 50%)</li>
-                    <li>• สมาชิกจะได้รับการอัพเกรดระดับอัตโนมัติเมื่อสะสมคะแนนถึงเกณฑ์</li>
-                </ul>
-            </div>
-            <div class="flex justify-end gap-3">
-                <button type="button" id="resetTiersBtn"
-                    class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"><i
-                        class="fas fa-undo mr-2"></i>รีเซ็ตเป็นค่าเริ่มต้น</button>
-                <button type="submit"
-                    class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"><i
-                        class="fas fa-save mr-2"></i>บันทึกการตั้งค่า</button>
-            </div>
+                <div class="bg-blue-50 rounded-lg p-4 mb-6">
+                    <h4 class="text-sm font-medium text-blue-800 mb-2"><i
+                            class="fas fa-lightbulb mr-1"></i>คำแนะนำการตั้งค่า
+                    </h4>
+                    <ul class="text-xs text-blue-700 space-y-1">
+                        <li>• คะแนนขั้นต่ำต้องเรียงจากน้อยไปมาก (ระดับแรกควรเป็น 0)</li>
+                        <li>• ตัวคูณแต้มจะใช้คำนวณแต้มที่ได้รับเพิ่มเติม (เช่น 1.5x = ได้แต้มเพิ่ม 50%)</li>
+                        <li>• สมาชิกจะได้รับการอัพเกรดระดับอัตโนมัติเมื่อสะสมคะแนนถึงเกณฑ์</li>
+                    </ul>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" id="resetTiersBtn"
+                        class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"><i
+                            class="fas fa-undo mr-2"></i>รีเซ็ตเป็นค่าเริ่มต้น</button>
+                    <button type="submit"
+                        class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"><i
+                            class="fas fa-save mr-2"></i>บันทึกการตั้งค่า</button>
+                </div>
         </form>
     </div>
 
@@ -522,11 +531,13 @@ $settingsTab = $_GET['settings_tab'] ?? 'rules';
                         <div class="font-bold text-lg" style="color: <?= $color ?>;"><?= htmlspecialchars($tier['name']) ?>
                         </div>
                         <div class="text-sm text-gray-600 mt-1">
-                            <?= $index === 0 ? 'เริ่มต้น' : number_format($tier['min_points']) . '+ คะแนน' ?></div>
+                            <?= $index === 0 ? 'เริ่มต้น' : number_format($tier['min_points']) . '+ คะแนน' ?>
+                        </div>
                         <div class="text-xs text-gray-500 mt-1">ตัวคูณ: <?= number_format($tier['multiplier'], 1) ?>x</div>
                         <?php if ($nextTier): ?>
                             <div class="mt-2 text-xs text-gray-400"><i class="fas fa-arrow-up mr-1"></i>อีก
-                                <?= number_format($nextTier['min_points'] - $tier['min_points']) ?> คะแนน</div>
+                                <?= number_format($nextTier['min_points'] - $tier['min_points']) ?> คะแนน
+                            </div>
                         <?php else: ?>
                             <div class="mt-2 text-xs text-green-600"><i class="fas fa-crown mr-1"></i>ระดับสูงสุด</div>
                         <?php endif; ?>
