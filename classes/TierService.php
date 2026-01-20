@@ -53,24 +53,30 @@ class TierService
         $tiers = [];
 
         try {
-            // Try member_tiers table first
+            // Try tier_settings table first (this is where settings page saves!)
             $stmt = $this->db->prepare("
-                SELECT tier_code, tier_name, min_points, color, icon, discount_percent, benefits
-                FROM member_tiers 
-                WHERE (line_account_id = ? OR line_account_id IS NULL) 
-                AND is_active = 1 
+                SELECT name as tier_name, LOWER(REPLACE(name, ' ', '_')) as tier_code, 
+                       min_points, badge_color as color, multiplier as discount_percent
+                FROM tier_settings 
+                WHERE (line_account_id = ? OR line_account_id IS NULL)
                 ORDER BY min_points ASC
             ");
             $stmt->execute([$this->lineAccountId]);
             $tiers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+            // Add default icons based on tier name
+            foreach ($tiers as &$tier) {
+                $tier['icon'] = $this->getIconForTier($tier['tier_name']);
+            }
+
         } catch (Exception $e) {
-            // Table might not exist - try points_tiers as fallback
+            // tier_settings table might not exist - try member_tiers as fallback
             try {
                 $stmt = $this->db->prepare("
-                    SELECT name as tier_name, name as tier_code, min_points, badge_color as color, icon
-                    FROM points_tiers 
-                    WHERE line_account_id = ? OR line_account_id IS NULL 
+                    SELECT tier_code, tier_name, min_points, color, icon, discount_percent, benefits
+                    FROM member_tiers 
+                    WHERE (line_account_id = ? OR line_account_id IS NULL) 
+                    AND is_active = 1 
                     ORDER BY min_points ASC
                 ");
                 $stmt->execute([$this->lineAccountId]);
@@ -215,6 +221,28 @@ class TierService
             // member_tier column might not exist
             return false;
         }
+    }
+
+    /**
+     * Get icon for tier name (internal helper)
+     * 
+     * @param string $tierName Tier name
+     * @return string Emoji icon
+     */
+    private function getIconForTier(string $tierName): string
+    {
+        $name = strtolower($tierName);
+        if (strpos($name, 'bronze') !== false || strpos($name, 'member') !== false)
+            return '🥉';
+        if (strpos($name, 'silver') !== false)
+            return '🥈';
+        if (strpos($name, 'gold') !== false)
+            return '🥇';
+        if (strpos($name, 'platinum') !== false || strpos($name, 'diamond') !== false)
+            return '💎';
+        if (strpos($name, 'vip') !== false || strpos($name, 'royal') !== false)
+            return '👑';
+        return '🏅';
     }
 
     /**
