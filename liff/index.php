@@ -155,8 +155,8 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- App Styles -->
-    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/liff-app.css?v=202601210637">
-    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/premium-effects.css?v=202601210637">
+    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/liff-app.css?v=202601210701">
+    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/premium-effects.css?v=202601210701">
 </head>
 
 <body>
@@ -300,7 +300,7 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <script src="<?= $baseUrl ?>/liff/assets/js/components/rewards-catalog.js?v=<?= $v ?>"
         onerror="window.debugLog('FAILED: rewards-catalog.js', 'error')"></script>
     <script>window.debugLog('rewards-catalog.js loaded', 'success');</script>
-    <script src="<?= $baseUrl ?>/liff/assets/js/liff-app.js?v=<?= $v ?>"
+    <script src="<?= $baseUrl ?>/liff/assets/js/liff-app.js?v=202601210701"
         onerror="window.debugLog('FAILED: liff-app.js', 'error')"></script>
     <script>window.debugLog('All scripts loaded!', 'success');</script>
 </body>
