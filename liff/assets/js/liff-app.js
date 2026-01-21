@@ -698,290 +698,289 @@ class LiffApp {
      * Check and show onboarding for visitors
      * Shows every time until user completes it by clicking "เริ่มใช้งาน"
      */
+    /**
+     * Check and start onboarding tour
+     */
     checkAndShowOnboarding() {
-        const onboardingKey = `liff_onboarding_completed_${this.config.ACCOUNT_ID || 0}`;
-        const hasCompletedOnboarding = localStorage.getItem(onboardingKey);
+        // Use a new key for the tour version
+        const tourKey = `liff_tour_completed_${this.config.ACCOUNT_ID || 0}_v2`;
+        const hasCompletedTour = localStorage.getItem(tourKey);
 
-        // Show onboarding if user hasn't completed it (clicked "เริ่มใช้งาน")
-        // Skipping won't save the preference - they'll see it again next time
-        if (!hasCompletedOnboarding) {
-            // Small delay to let the page render first
+        if (!hasCompletedTour) {
+            // Wait for home page to render completely (member card, etc.)
             setTimeout(() => {
-                this.showOnboarding();
-            }, 1000);
+                const memberCard = document.querySelector('.member-card') || document.querySelector('#member-card-flip');
+                if (memberCard) {
+                    this.startOnboardingTour();
+                } else {
+                    // Retry once more if checking too early
+                    setTimeout(() => {
+                        if (document.querySelector('.service-grid')) {
+                            this.startOnboardingTour();
+                        }
+                    }, 1000);
+                }
+            }, 1500);
         }
     }
 
-    /**
-     * Show onboarding slides for first-time visitors
-     */
-    showOnboarding() {
-        const onboardingKey = `liff_onboarding_completed_${this.config.ACCOUNT_ID || 0}`;
 
-        const slides = [
+    /**
+     * Start the Walkthrough Tour
+     */
+    startOnboardingTour() {
+        const tourKey = `liff_tour_completed_${this.config.ACCOUNT_ID || 0}_v2`;
+
+        // Define tour steps
+        const steps = [
             {
-                icon: '👋',
-                title: 'ยินดีต้อนรับ!',
-                description: 'ขอบคุณที่เลือกใช้บริการร้านยาของเรา<br>มาทำความรู้จักกับฟีเจอร์ต่างๆ กันเถอะ'
+                element: '.member-card',
+                title: 'บัตรสมาชิกของคุณ',
+                content: 'เช็คแต้ม ระดับสมาชิก และดูสิทธิพิเศษได้ที่นี่ กดที่บัตรเพื่อดูรายละเอียดเพิ่มเติม',
+                position: 'bottom'
             },
             {
-                icon: '💳',
-                title: 'บัตรสมาชิก',
-                description: 'สะสมพอยท์จากการซื้อสินค้า<br>แลกรับส่วนลดและของรางวัลพิเศษ'
+                element: '.service-grid',
+                title: 'บริการหลัก',
+                content: 'เมนูทางลัดสำหรับสั่งยา ปรึกษาเภสัชกร และดูแลสุขภาพแบบครบวงจร',
+                position: 'top'
             },
             {
-                icon: '💬',
-                title: 'ปรึกษาเภสัชกร',
-                description: 'พูดคุยกับเภสัชกรผู้เชี่ยวชาญ<br>ตอบทุกคำถามเรื่องสุขภาพและยา'
-            },
-            {
-                icon: '🛒',
-                title: 'สั่งซื้อสินค้า',
-                description: 'เลือกซื้อยาและผลิตภัณฑ์สุขภาพ<br>จัดส่งถึงบ้านอย่างสะดวก'
-            },
-            {
-                icon: '📋',
-                title: 'ข้อมูลสุขภาพ',
-                description: 'บันทึกประวัติการแพทย์และยาที่ใช้<br>เพื่อรับคำแนะนำที่เหมาะกับคุณ'
+                element: '#bottom-nav',
+                title: 'เมนูนำทาง',
+                content: 'เปลี่ยนหน้าไปร้านค้า ตะกร้าสินค้า หรือดูโปรไฟล์ของคุณได้จากแถบด้านล่างนี้',
+                position: 'top'
             }
         ];
 
-        let currentSlide = 0;
+        // Create UI Elements
+        const overlay = document.createElement('div');
+        overlay.id = 'tour-overlay';
 
-        const updateSlide = () => {
-            const slide = slides[currentSlide];
-            const dots = container.querySelectorAll('.onboarding-dot');
-            const slideContent = container.querySelector('.onboarding-slide-content');
+        const highlight = document.createElement('div');
+        highlight.id = 'tour-highlight';
 
-            // Update content with animation
-            slideContent.style.opacity = '0';
-            slideContent.style.transform = 'translateX(20px)';
+        const tooltip = document.createElement('div');
+        tooltip.id = 'tour-tooltip';
 
-            setTimeout(() => {
-                slideContent.innerHTML = `
-                    <div class="onboarding-icon">${slide.icon}</div>
-                    <h2 class="onboarding-title">${slide.title}</h2>
-                    <p class="onboarding-desc">${slide.description}</p>
-                `;
-                slideContent.style.opacity = '1';
-                slideContent.style.transform = 'translateX(0)';
-            }, 150);
+        document.body.appendChild(overlay);
+        document.body.appendChild(highlight);
+        document.body.appendChild(tooltip);
 
-            // Update dots
-            dots.forEach((dot, i) => {
-                dot.classList.toggle('active', i === currentSlide);
-            });
-
-            // Update button text
-            const nextBtn = container.querySelector('.onboarding-next');
-            if (currentSlide === slides.length - 1) {
-                nextBtn.innerHTML = '<span>เริ่มใช้งาน</span> <i class="fas fa-check"></i>';
-            } else {
-                nextBtn.innerHTML = '<span>ถัดไป</span> <i class="fas fa-arrow-right"></i>';
-            }
-        };
-
-        const container = document.createElement('div');
-        container.className = 'onboarding-overlay';
-        container.innerHTML = `
-            <div class="onboarding-modal">
-                <button class="onboarding-skip" onclick="this.closest('.onboarding-overlay').remove();">
-                    ข้าม (จะแสดงอีกครั้ง)
-                </button>
-                <div class="onboarding-slide-content">
-                    <div class="onboarding-icon">${slides[0].icon}</div>
-                    <h2 class="onboarding-title">${slides[0].title}</h2>
-                    <p class="onboarding-desc">${slides[0].description}</p>
-                </div>
-                <div class="onboarding-dots">
-                    ${slides.map((_, i) => `<div class="onboarding-dot ${i === 0 ? 'active' : ''}"></div>`).join('')}
-                </div>
-                <div class="onboarding-actions">
-                    <button class="onboarding-prev" style="visibility: hidden;">
-                        <i class="fas fa-arrow-left"></i>
-                    </button>
-                    <button class="onboarding-next">
-                        <span>ถัดไป</span> <i class="fas fa-arrow-right"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-
-        // Add styles
-        if (!document.getElementById('onboarding-styles')) {
+        // Inject Styles
+        if (!document.getElementById('tour-styles')) {
             const styles = document.createElement('style');
-            styles.id = 'onboarding-styles';
+            styles.id = 'tour-styles';
             styles.textContent = `
-                .onboarding-overlay {
+                #tour-overlay {
                     position: fixed;
                     top: 0;
                     left: 0;
                     right: 0;
                     bottom: 0;
-                    background: linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(6, 95, 70, 0.95));
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 10001;
-                    animation: fadeIn 0.4s ease;
-                }
-                .onboarding-modal {
-                    background: white;
-                    border-radius: 24px;
-                    padding: 40px 32px;
-                    text-align: center;
-                    max-width: 340px;
-                    width: 90%;
-                    position: relative;
-                    box-shadow: 0 25px 50px rgba(0,0,0,0.3);
-                    animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-                }
-                .onboarding-skip {
-                    position: absolute;
-                    top: 16px;
-                    right: 16px;
-                    background: transparent;
-                    border: none;
-                    color: #9CA3AF;
-                    font-size: 14px;
-                    cursor: pointer;
-                    padding: 8px 12px;
-                }
-                .onboarding-skip:hover {
-                    color: #6B7280;
-                }
-                .onboarding-slide-content {
+                    background: rgba(0, 0, 0, 0.75);
+                    z-index: 10000;
+                    opacity: 0;
                     transition: all 0.3s ease;
-                    min-height: 200px;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
+                    pointer-events: auto;
+                    backdrop-filter: blur(2px);
                 }
-                .onboarding-icon {
-                    font-size: 72px;
-                    margin-bottom: 20px;
-                    animation: bounceIn 0.6s ease;
+                #tour-highlight {
+                    position: absolute;
+                    z-index: 10001;
+                    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5), 0 0 0 9999px rgba(0, 0, 0, 0.75);
+                    border-radius: 12px;
+                    transition: all 0.4s cubic-bezier(0.25, 0.4, 0.25, 1);
+                    pointer-events: none;
                 }
-                .onboarding-title {
-                    font-size: 24px;
-                    font-weight: 700;
+                #tour-tooltip {
+                    position: absolute;
+                    z-index: 10002;
+                    background: white;
+                    padding: 24px;
+                    border-radius: 20px;
+                    width: 290px;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                    opacity: 0;
+                    transition: all 0.3s ease;
+                    text-align: center;
+                    animation: floatTooltip 3s ease-in-out infinite;
+                }
+                @keyframes floatTooltip {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-5px); }
+                }
+                #tour-tooltip h3 {
+                    margin: 0 0 10px 0;
+                    font-size: 19px;
                     color: #1F2937;
-                    margin: 0 0 12px 0;
-                }
-                .onboarding-desc {
-                    font-size: 15px;
-                    color: #6B7280;
-                    line-height: 1.6;
-                    margin: 0;
-                }
-                .onboarding-dots {
+                    font-weight: 700;
                     display: flex;
+                    align-items: center;
                     justify-content: center;
                     gap: 8px;
-                    margin: 32px 0 24px 0;
                 }
-                .onboarding-dot {
-                    width: 8px;
-                    height: 8px;
-                    border-radius: 50%;
-                    background: #E5E7EB;
-                    transition: all 0.3s ease;
+                #tour-tooltip h3 i {
+                    color: var(--primary, #10B981);
                 }
-                .onboarding-dot.active {
-                    width: 24px;
-                    border-radius: 4px;
-                    background: linear-gradient(135deg, #10B981, #059669);
+                #tour-tooltip p {
+                    margin: 0 0 20px 0;
+                    font-size: 15px;
+                    color: #4B5563;
+                    line-height: 1.6;
                 }
-                .onboarding-actions {
+                .tour-actions {
                     display: flex;
                     justify-content: space-between;
-                    align-items: center;
-                    gap: 16px;
+                    gap: 12px;
                 }
-                .onboarding-prev, .onboarding-next {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 8px;
-                    padding: 14px 24px;
-                    border-radius: 50px;
+                .tour-btn {
+                    padding: 12px 16px;
+                    border-radius: 14px;
                     font-size: 15px;
                     font-weight: 600;
                     cursor: pointer;
-                    transition: all 0.3s ease;
                     border: none;
+                    transition: all 0.2s;
                 }
-                .onboarding-prev {
+                .tour-btn-skip {
                     background: #F3F4F6;
                     color: #6B7280;
                 }
-                .onboarding-prev:hover {
+                .tour-btn-skip:active {
                     background: #E5E7EB;
                 }
-                .onboarding-next {
+                .tour-btn-next {
                     background: linear-gradient(135deg, #10B981, #059669);
                     color: white;
                     flex: 1;
-                    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+                    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
                 }
-                .onboarding-next:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
-                }
-                @keyframes bounceIn {
-                    0% { transform: scale(0.3); opacity: 0; }
-                    50% { transform: scale(1.05); }
-                    70% { transform: scale(0.9); }
-                    100% { transform: scale(1); opacity: 1; }
+                .tour-btn-next:active {
+                    transform: scale(0.96);
                 }
             `;
             document.head.appendChild(styles);
         }
 
-        // Event handlers
-        const handleNext = () => {
-            if (currentSlide < slides.length - 1) {
-                currentSlide++;
-                container.querySelector('.onboarding-prev').style.visibility = 'visible';
-                updateSlide();
-            } else {
-                // Complete onboarding
-                localStorage.setItem(onboardingKey, 'true');
-                container.style.animation = 'fadeOut 0.3s ease forwards';
-                setTimeout(() => container.remove(), 300);
-            }
-        };
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+        });
 
-        const handlePrev = () => {
-            if (currentSlide > 0) {
-                currentSlide--;
-                if (currentSlide === 0) {
-                    container.querySelector('.onboarding-prev').style.visibility = 'hidden';
+        // Function to render steps
+        const renderStep = (index) => {
+            const step = steps[index];
+            let target = document.querySelector(step.element);
+
+            // Fallback strategy
+            if (!target && step.element === '.member-card') {
+                target = document.querySelector('#member-card-flip');
+            }
+
+            if (!target) {
+                // Skip if not found but try continue
+                if (index < steps.length - 1) {
+                    renderStep(index + 1);
+                } else {
+                    this.finishTour(tourKey);
                 }
-                updateSlide();
+                return;
+            }
+
+            // Calculate position
+            const rect = target.getBoundingClientRect();
+            const scrollY = window.scrollY;
+
+            // Set Highlight
+            highlight.style.width = (rect.width + 12) + 'px';
+            highlight.style.height = (rect.height + 12) + 'px';
+            highlight.style.top = (rect.top + scrollY - 6) + 'px';
+            highlight.style.left = (rect.left - 6) + 'px';
+
+            // Scroll to element
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Set Tooltip Content
+            let btnText = index === steps.length - 1 ? 'เริ่มใช้งาน <i class="fas fa-check"></i>' : 'ถัดไป <i class="fas fa-arrow-right"></i>';
+            let icon = index === 0 ? '<i class="fas fa-id-card"></i>' : (index === 1 ? '<i class="fas fa-th-large"></i>' : '<i class="fas fa-compass"></i>');
+
+            tooltip.innerHTML = `
+                <h3>${icon} ${step.title}</h3>
+                <p>${step.content}</p>
+                <div class="tour-actions">
+                    <button class="tour-btn tour-btn-skip" onclick="window.liffApp.endTour()">ข้าม</button>
+                    <button class="tour-btn tour-btn-next" onclick="window.liffApp.nextTourStep()">${btnText}</button>
+                </div>
+            `;
+
+            // Position Tooltip
+            const tooltipHeight = 180;
+            let tooltipTop;
+
+            const spaceAbove = rect.top;
+            const spaceBelow = window.innerHeight - rect.bottom;
+
+            if (step.position === 'top' && spaceAbove > 220) {
+                tooltipTop = rect.top + scrollY - tooltipHeight - 30;
+            } else if (spaceBelow > 220) {
+                tooltipTop = rect.bottom + scrollY + 30;
+            } else {
+                // Fallback
+                if (spaceAbove > spaceBelow) {
+                    tooltipTop = rect.top + scrollY - tooltipHeight - 30;
+                } else {
+                    tooltipTop = rect.bottom + scrollY + 30;
+                }
+            }
+
+            tooltip.style.top = Math.max(10, tooltipTop) + 'px';
+            tooltip.style.left = '50%';
+            tooltip.style.transform = 'translateX(-50%)';
+            tooltip.style.opacity = '1';
+        };
+
+        // Bind control methods
+        this.tourSteps = steps;
+        this.currentTourStep = 0;
+
+        this.nextTourStep = () => {
+            if (this.currentTourStep < this.tourSteps.length - 1) {
+                this.currentTourStep++;
+                renderStep(this.currentTourStep);
+            } else {
+                this.finishTour(tourKey);
             }
         };
 
-        document.body.appendChild(container);
+        this.endTour = () => {
+            this.cleanupTourUI();
+        };
 
-        container.querySelector('.onboarding-next').addEventListener('click', handleNext);
-        container.querySelector('.onboarding-prev').addEventListener('click', handlePrev);
+        this.finishTour = (key) => {
+            localStorage.setItem(key, 'true');
+            this.cleanupTourUI();
+        };
 
-        // Swipe support for mobile
-        let touchStartX = 0;
-        container.addEventListener('touchstart', (e) => {
-            touchStartX = e.touches[0].clientX;
-        });
-        container.addEventListener('touchend', (e) => {
-            const touchEndX = e.changedTouches[0].clientX;
-            const diff = touchStartX - touchEndX;
-            if (Math.abs(diff) > 50) {
-                if (diff > 0) handleNext();
-                else handlePrev();
-            }
-        });
+        this.cleanupTourUI = () => {
+            const overlay = document.getElementById('tour-overlay');
+            const highlight = document.getElementById('tour-highlight');
+            const tooltip = document.getElementById('tour-tooltip');
+
+            if (overlay) overlay.style.opacity = '0';
+            if (tooltip) tooltip.style.opacity = '0';
+
+            setTimeout(() => {
+                if (overlay) overlay.remove();
+                if (highlight) highlight.remove();
+                if (tooltip) tooltip.remove();
+            }, 300);
+        };
+
+        // Start
+        setTimeout(() => renderStep(0), 500);
     }
+
+
 
     /**
      * Fetch with retry logic
