@@ -17,7 +17,7 @@ const InboxRealtime = (function () {
     // Configuration
     const config = {
         pollInterval: 5000,        // Poll every 5 seconds (optimized for performance)
-        apiEndpoint: 'api/inbox-realtime.php',
+        apiEndpoint: '/api/inbox-realtime.php',
         enableSound: true,
         enableDesktopNotification: true,
         maxRetries: 3
