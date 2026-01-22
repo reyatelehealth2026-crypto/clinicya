@@ -29,7 +29,7 @@ $liffId = '';
 $shopName = 'ร้านค้า';
 $shopLogo = '';
 $companyName = 'MedCare';
-$v = '202601210733'; // Global Cache Buster defined at top
+$v = '202601230652'; // Global Cache Buster defined at top
 
 // Build LIFF ID to Account mapping for JavaScript
 $liffToAccountMap = [];
