@@ -2530,7 +2530,13 @@ try {
                 // Mark each message as read on LINE (only need to mark the latest one)
                 // According to LINE API, marking one message marks all previous messages as read
                 $latestMessage = $messages[0];
+
+                // Debug logging
+                error_log("[mark_as_read_on_line] User ID: {$userId}, Token: " . substr($latestMessage['mark_as_read_token'] ?? 'NULL', 0, 20) . "...");
+
                 $result = $lineApi->markAsRead($latestMessage['mark_as_read_token']);
+
+                error_log("[mark_as_read_on_line] Result: " . json_encode($result));
 
                 if ($result['success']) {
                     // Update all messages as read on LINE

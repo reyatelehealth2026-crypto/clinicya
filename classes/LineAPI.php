@@ -1,14 +1,16 @@
-    <?php
+<?php
 /**
  * LINE Messaging API Class
  */
 
-class LineAPI {
+class LineAPI
+{
     private $channelAccessToken;
     private $channelSecret;
     private $apiEndpoint = 'https://api.line.me/v2/bot';
 
-    public function __construct($accessToken = null, $secret = null) {
+    public function __construct($accessToken = null, $secret = null)
+    {
         $this->channelAccessToken = $accessToken ?? (defined('LINE_CHANNEL_ACCESS_TOKEN') ? LINE_CHANNEL_ACCESS_TOKEN : '');
         $this->channelSecret = $secret ?? (defined('LINE_CHANNEL_SECRET') ? LINE_CHANNEL_SECRET : '');
     }
@@ -16,14 +18,16 @@ class LineAPI {
     /**
      * Get Access Token
      */
-    public function getAccessToken(): string {
+    public function getAccessToken(): string
+    {
         return $this->channelAccessToken;
     }
 
     /**
      * Get Bot Info
      */
-    public function getBotInfo() {
+    public function getBotInfo()
+    {
         $url = $this->apiEndpoint . '/info';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -41,7 +45,8 @@ class LineAPI {
     /**
      * Send request to LINE API
      */
-    private function sendRequest($endpoint, $data = null, $method = 'POST') {
+    private function sendRequest($endpoint, $data = null, $method = 'POST')
+    {
         $url = $this->apiEndpoint . $endpoint;
         $headers = [
             'Content-Type: application/json',
@@ -72,7 +77,8 @@ class LineAPI {
     /**
      * Reply to message
      */
-    public function replyMessage($replyToken, $messages) {
+    public function replyMessage($replyToken, $messages)
+    {
         if (!is_array($messages)) {
             $messages = [['type' => 'text', 'text' => $messages]];
         }
@@ -85,7 +91,8 @@ class LineAPI {
     /**
      * Push message to user
      */
-    public function pushMessage($userId, $messages) {
+    public function pushMessage($userId, $messages)
+    {
         if (!is_array($messages)) {
             $messages = [['type' => 'text', 'text' => $messages]];
         }
@@ -106,7 +113,8 @@ class LineAPI {
      * @param int|null $internalUserId Internal user ID สำหรับ clear token (optional)
      * @return array ['code' => int, 'body' => array, 'method' => 'reply'|'push']
      */
-    public function sendMessage($userId, $messages, $replyToken = null, $tokenExpires = null, $db = null, $internalUserId = null) {
+    public function sendMessage($userId, $messages, $replyToken = null, $tokenExpires = null, $db = null, $internalUserId = null)
+    {
         // Normalize messages
         if (!is_array($messages)) {
             $messages = [['type' => 'text', 'text' => $messages]];
@@ -114,7 +122,7 @@ class LineAPI {
             // Single message object, wrap in array
             $messages = [$messages];
         }
-        
+
         // Try reply token first (FREE!)
         if ($replyToken && !empty($replyToken)) {
             // Check if token is still valid (LINE reply tokens expire in ~30 seconds)
@@ -122,13 +130,13 @@ class LineAPI {
             if ($tokenExpires) {
                 $isValid = strtotime($tokenExpires) > time();
             }
-            
+
             if ($isValid) {
                 $result = $this->replyMessage($replyToken, $messages);
-                
+
                 // Clear token after use (success or fail - token is single-use)
                 $this->clearReplyToken($db, $internalUserId, $userId);
-                
+
                 if ($result['code'] === 200) {
                     $result['method'] = 'reply';
                     return $result;
@@ -140,19 +148,21 @@ class LineAPI {
                 $this->clearReplyToken($db, $internalUserId, $userId);
             }
         }
-        
+
         // Fallback to push message
         $result = $this->pushMessage($userId, $messages);
         $result['method'] = 'push';
         return $result;
     }
-    
+
     /**
      * Clear reply token from database (token is single-use)
      */
-    private function clearReplyToken($db, $internalUserId = null, $lineUserId = null) {
-        if (!$db) return;
-        
+    private function clearReplyToken($db, $internalUserId = null, $lineUserId = null)
+    {
+        if (!$db)
+            return;
+
         try {
             if ($internalUserId) {
                 $stmt = $db->prepare("UPDATE users SET reply_token = NULL, reply_token_expires = NULL WHERE id = ?");
@@ -174,16 +184,17 @@ class LineAPI {
      * @param mixed $messages ข้อความ
      * @return array
      */
-    public function sendMessageToUser($db, $userId, $messages) {
+    public function sendMessageToUser($db, $userId, $messages)
+    {
         // Get user info with reply token
         $stmt = $db->prepare("SELECT line_user_id, reply_token, reply_token_expires FROM users WHERE id = ?");
         $stmt->execute([$userId]);
         $user = $stmt->fetch(\PDO::FETCH_ASSOC);
-        
+
         if (!$user || !$user['line_user_id']) {
             return ['code' => 400, 'body' => ['message' => 'User not found'], 'method' => 'none'];
         }
-        
+
         // Pass $db and $userId to clear token after use
         return $this->sendMessage(
             $user['line_user_id'],
@@ -199,7 +210,8 @@ class LineAPI {
     /**
      * Broadcast message to all followers
      */
-    public function broadcastMessage($messages) {
+    public function broadcastMessage($messages)
+    {
         if (!is_array($messages)) {
             $messages = [['type' => 'text', 'text' => $messages]];
         }
@@ -209,7 +221,8 @@ class LineAPI {
     /**
      * Multicast message to multiple users
      */
-    public function multicastMessage($userIds, $messages) {
+    public function multicastMessage($userIds, $messages)
+    {
         if (!is_array($messages)) {
             $messages = [['type' => 'text', 'text' => $messages]];
         }
@@ -228,31 +241,32 @@ class LineAPI {
      * @param array|null $filter ตัวกรองเพิ่มเติม (demographic)
      * @return array ['code' => int, 'body' => array, 'requestId' => string]
      */
-    public function narrowcastMessage($messages, $maxLimit = null, $recipient = null, $filter = null) {
+    public function narrowcastMessage($messages, $maxLimit = null, $recipient = null, $filter = null)
+    {
         if (!is_array($messages)) {
             $messages = [['type' => 'text', 'text' => $messages]];
         }
-        
+
         $data = ['messages' => $messages];
-        
+
         // เพิ่ม recipient filter (audience หรือ redelivery)
         if ($recipient) {
             $data['recipient'] = $recipient;
         }
-        
+
         // เพิ่ม demographic filter
         if ($filter) {
             $data['filter'] = $filter;
         }
-        
+
         // เพิ่ม limit (จำกัดจำนวนผู้รับ)
         if ($maxLimit && $maxLimit > 0) {
             $data['limit'] = [
-                'max' => (int)$maxLimit,
+                'max' => (int) $maxLimit,
                 'upToRemainingQuota' => true // ส่งเท่าที่ quota เหลือถ้าไม่พอ
             ];
         }
-        
+
         // Narrowcast ใช้ endpoint ต่างจาก broadcast
         $url = $this->apiEndpoint . '/message/narrowcast';
         $headers = [
@@ -273,11 +287,11 @@ class LineAPI {
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         curl_close($ch);
-        
+
         // แยก header และ body
         $headerStr = substr($response, 0, $headerSize);
         $body = substr($response, $headerSize);
-        
+
         // ดึง X-Line-Request-Id จาก header
         $requestId = null;
         if (preg_match('/X-Line-Request-Id:\s*(.+)/i', $headerStr, $matches)) {
@@ -285,19 +299,20 @@ class LineAPI {
         }
 
         return [
-            'code' => $httpCode, 
+            'code' => $httpCode,
             'body' => json_decode($body, true),
             'requestId' => $requestId
         ];
     }
-    
+
     /**
      * Get Narrowcast progress - ตรวจสอบสถานะการส่ง Narrowcast
      * 
      * @param string $requestId Request ID จาก narrowcastMessage
      * @return array ['phase' => string, 'successCount' => int, 'failureCount' => int, ...]
      */
-    public function getNarrowcastProgress($requestId) {
+    public function getNarrowcastProgress($requestId)
+    {
         $url = $this->apiEndpoint . '/message/progress/narrowcast?requestId=' . urlencode($requestId);
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -312,24 +327,30 @@ class LineAPI {
 
         return ['code' => $httpCode, 'body' => json_decode($response, true)];
     }
-    
+
     /**
      * Generate unique retry key for narrowcast
      */
-    private function generateRetryKey() {
-        return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+    private function generateRetryKey()
+    {
+        return sprintf(
+            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
             mt_rand(0, 0xffff),
             mt_rand(0, 0x0fff) | 0x4000,
             mt_rand(0, 0x3fff) | 0x8000,
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff)
         );
     }
 
     /**
      * Get user profile
      */
-    public function getProfile($userId) {
+    public function getProfile($userId)
+    {
         $url = $this->apiEndpoint . '/profile/' . $userId;
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -347,7 +368,8 @@ class LineAPI {
     /**
      * Get followers count
      */
-    public function getFollowersCount() {
+    public function getFollowersCount()
+    {
         $url = 'https://api.line.me/v2/bot/insight/followers';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -365,7 +387,8 @@ class LineAPI {
     /**
      * Create Rich Menu
      */
-    public function createRichMenu($data) {
+    public function createRichMenu($data)
+    {
         return $this->sendRequest('/richmenu', $data);
     }
 
@@ -373,13 +396,14 @@ class LineAPI {
      * Upload Rich Menu Image
      * ส่งตรงไป LINE API โดยไม่ผ่าน proxy
      */
-    public function uploadRichMenuImage($richMenuId, $imagePath) {
+    public function uploadRichMenuImage($richMenuId, $imagePath)
+    {
         $url = 'https://api-data.line.me/v2/bot/richmenu/' . $richMenuId . '/content';
-        
+
         // อ่านไฟล์และบีบอัดถ้าจำเป็น
         $imageData = file_get_contents($imagePath);
         $fileSize = strlen($imageData);
-        
+
         // ถ้าไฟล์ใหญ่เกิน 500KB ให้บีบอัดใหม่
         if ($fileSize > 500000) {
             $imageInfo = getimagesize($imagePath);
@@ -394,7 +418,7 @@ class LineAPI {
                         $img = imagecreatefrompng($imagePath);
                         break;
                 }
-                
+
                 if ($img) {
                     // บีบอัดเป็น JPEG quality 70
                     ob_start();
@@ -420,7 +444,7 @@ class LineAPI {
                 $contentType = 'image/jpeg';
             }
         }
-        
+
         $headers = [
             'Authorization: Bearer ' . $this->channelAccessToken,
             'Content-Type: ' . $contentType,
@@ -458,7 +482,8 @@ class LineAPI {
     /**
      * Set default Rich Menu
      */
-    public function setDefaultRichMenu($richMenuId) {
+    public function setDefaultRichMenu($richMenuId)
+    {
         $url = $this->apiEndpoint . '/user/all/richmenu/' . $richMenuId;
         $headers = [
             'Authorization: Bearer ' . $this->channelAccessToken,
@@ -482,7 +507,8 @@ class LineAPI {
     /**
      * Delete Rich Menu
      */
-    public function deleteRichMenu($richMenuId) {
+    public function deleteRichMenu($richMenuId)
+    {
         $url = $this->apiEndpoint . '/richmenu/' . $richMenuId;
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -501,7 +527,8 @@ class LineAPI {
     /**
      * Link Rich Menu to User (Dynamic Rich Menu)
      */
-    public function linkRichMenuToUser($userId, $richMenuId) {
+    public function linkRichMenuToUser($userId, $richMenuId)
+    {
         $url = $this->apiEndpoint . '/user/' . $userId . '/richmenu/' . $richMenuId;
         $headers = [
             'Authorization: Bearer ' . $this->channelAccessToken,
@@ -525,7 +552,8 @@ class LineAPI {
     /**
      * Unlink Rich Menu from User
      */
-    public function unlinkRichMenuFromUser($userId) {
+    public function unlinkRichMenuFromUser($userId)
+    {
         $url = $this->apiEndpoint . '/user/' . $userId . '/richmenu';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -545,7 +573,8 @@ class LineAPI {
     /**
      * Get Rich Menu linked to User
      */
-    public function getRichMenuIdOfUser($userId) {
+    public function getRichMenuIdOfUser($userId)
+    {
         $url = $this->apiEndpoint . '/user/' . $userId . '/richmenu';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -564,7 +593,8 @@ class LineAPI {
     /**
      * Link Rich Menu to Multiple Users (Bulk)
      */
-    public function linkRichMenuToMultipleUsers($richMenuId, $userIds) {
+    public function linkRichMenuToMultipleUsers($richMenuId, $userIds)
+    {
         $url = $this->apiEndpoint . '/richmenu/' . $richMenuId . '/users';
         $headers = [
             'Content-Type: application/json',
@@ -588,7 +618,8 @@ class LineAPI {
     /**
      * Unlink Rich Menu from Multiple Users (Bulk)
      */
-    public function unlinkRichMenuFromMultipleUsers($userIds) {
+    public function unlinkRichMenuFromMultipleUsers($userIds)
+    {
         $url = $this->apiEndpoint . '/richmenu/bulk/unlink';
         $headers = [
             'Content-Type: application/json',
@@ -614,7 +645,8 @@ class LineAPI {
     /**
      * Create Rich Menu Alias
      */
-    public function createRichMenuAlias($richMenuId, $aliasId) {
+    public function createRichMenuAlias($richMenuId, $aliasId)
+    {
         $url = $this->apiEndpoint . '/richmenu/alias';
         $headers = [
             'Content-Type: application/json',
@@ -641,7 +673,8 @@ class LineAPI {
     /**
      * Update Rich Menu Alias
      */
-    public function updateRichMenuAlias($aliasId, $richMenuId) {
+    public function updateRichMenuAlias($aliasId, $richMenuId)
+    {
         $url = $this->apiEndpoint . '/richmenu/alias/' . $aliasId;
         $headers = [
             'Content-Type: application/json',
@@ -665,7 +698,8 @@ class LineAPI {
     /**
      * Delete Rich Menu Alias
      */
-    public function deleteRichMenuAlias($aliasId) {
+    public function deleteRichMenuAlias($aliasId)
+    {
         $url = $this->apiEndpoint . '/richmenu/alias/' . $aliasId;
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -685,7 +719,8 @@ class LineAPI {
     /**
      * Get Rich Menu Alias
      */
-    public function getRichMenuAlias($aliasId) {
+    public function getRichMenuAlias($aliasId)
+    {
         $url = $this->apiEndpoint . '/richmenu/alias/' . $aliasId;
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -704,7 +739,8 @@ class LineAPI {
     /**
      * Get All Rich Menu Aliases
      */
-    public function getRichMenuAliasList() {
+    public function getRichMenuAliasList()
+    {
         $url = $this->apiEndpoint . '/richmenu/alias/list';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -723,9 +759,11 @@ class LineAPI {
     /**
      * Get Rich Menu Image URL (download and return base64)
      */
-    public function getRichMenuImage($richMenuId) {
-        if (empty($richMenuId)) return null;
-        
+    public function getRichMenuImage($richMenuId)
+    {
+        if (empty($richMenuId))
+            return null;
+
         $url = 'https://api-data.line.me/v2/bot/richmenu/' . $richMenuId . '/content';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -749,7 +787,7 @@ class LineAPI {
             }
             return 'data:' . $contentType . ';base64,' . base64_encode($response);
         }
-        
+
         // Log error for debugging
         if ($httpCode !== 200) {
             error_log("getRichMenuImage failed: HTTP {$httpCode}, error: {$error}, richMenuId: {$richMenuId}");
@@ -760,9 +798,11 @@ class LineAPI {
     /**
      * Download Rich Menu Image (return raw binary data)
      */
-    public function downloadRichMenuImage($richMenuId) {
-        if (empty($richMenuId)) return null;
-        
+    public function downloadRichMenuImage($richMenuId)
+    {
+        if (empty($richMenuId))
+            return null;
+
         $url = 'https://api-data.line.me/v2/bot/richmenu/' . $richMenuId . '/content';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -780,14 +820,15 @@ class LineAPI {
         if ($httpCode === 200 && $response && strlen($response) > 100) {
             return $response;
         }
-        
+
         return null;
     }
 
     /**
      * Get all Rich Menus from LINE
      */
-    public function getRichMenuList() {
+    public function getRichMenuList()
+    {
         $url = $this->apiEndpoint . '/richmenu/list';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -806,7 +847,8 @@ class LineAPI {
     /**
      * Get default Rich Menu ID
      */
-    public function getDefaultRichMenu() {
+    public function getDefaultRichMenu()
+    {
         $url = $this->apiEndpoint . '/user/all/richmenu';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -825,7 +867,8 @@ class LineAPI {
     /**
      * Cancel default Rich Menu (remove default for all users)
      */
-    public function cancelDefaultRichMenu() {
+    public function cancelDefaultRichMenu()
+    {
         $url = $this->apiEndpoint . '/user/all/richmenu';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -845,7 +888,8 @@ class LineAPI {
     /**
      * Validate signature
      */
-    public function validateSignature($body, $signature) {
+    public function validateSignature($body, $signature)
+    {
         $hash = base64_encode(hash_hmac('sha256', $body, $this->channelSecret, true));
         return hash_equals($hash, $signature);
     }
@@ -853,7 +897,8 @@ class LineAPI {
     /**
      * Get message content (image, video, audio, file)
      */
-    public function getMessageContent($messageId) {
+    public function getMessageContent($messageId)
+    {
         $url = 'https://api-data.line.me/v2/bot/message/' . $messageId . '/content';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -880,11 +925,12 @@ class LineAPI {
         }
         return null;
     }
-    
+
     /**
      * Get group summary
      */
-    public function getGroupSummary($groupId) {
+    public function getGroupSummary($groupId)
+    {
         $url = $this->apiEndpoint . '/group/' . $groupId . '/summary';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -898,11 +944,12 @@ class LineAPI {
 
         return json_decode($response, true) ?: [];
     }
-    
+
     /**
      * Get group member profile
      */
-    public function getGroupMemberProfile($groupId, $userId) {
+    public function getGroupMemberProfile($groupId, $userId)
+    {
         $url = $this->apiEndpoint . '/group/' . $groupId . '/member/' . $userId;
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -916,11 +963,12 @@ class LineAPI {
 
         return json_decode($response, true) ?: [];
     }
-    
+
     /**
      * Get group members count
      */
-    public function getGroupMembersCount($groupId) {
+    public function getGroupMembersCount($groupId)
+    {
         $url = $this->apiEndpoint . '/group/' . $groupId . '/members/count';
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -934,11 +982,12 @@ class LineAPI {
 
         return json_decode($response, true) ?: [];
     }
-    
+
     /**
      * Leave group
      */
-    public function leaveGroup($groupId) {
+    public function leaveGroup($groupId)
+    {
         $url = $this->apiEndpoint . '/group/' . $groupId . '/leave';
         $headers = [
             'Authorization: Bearer ' . $this->channelAccessToken,
@@ -957,11 +1006,12 @@ class LineAPI {
 
         return $httpCode === 200;
     }
-    
+
     /**
      * Leave room
      */
-    public function leaveRoom($roomId) {
+    public function leaveRoom($roomId)
+    {
         $url = $this->apiEndpoint . '/room/' . $roomId . '/leave';
         $headers = [
             'Authorization: Bearer ' . $this->channelAccessToken,
@@ -980,11 +1030,12 @@ class LineAPI {
 
         return $httpCode === 200;
     }
-    
+
     /**
      * Get room member profile
      */
-    public function getRoomMemberProfile($roomId, $userId) {
+    public function getRoomMemberProfile($roomId, $userId)
+    {
         $url = $this->apiEndpoint . '/room/' . $roomId . '/member/' . $userId;
         $headers = ['Authorization: Bearer ' . $this->channelAccessToken];
 
@@ -998,7 +1049,7 @@ class LineAPI {
 
         return json_decode($response, true) ?: [];
     }
-    
+
     /**
      * Mark messages as read on LINE
      * Uses the markAsReadToken from webhook message event
@@ -1007,49 +1058,60 @@ class LineAPI {
      * @param string $markAsReadToken The token from webhook message event
      * @return array Response with success status
      */
-    public function markAsRead($markAsReadToken) {
+    public function markAsRead($markAsReadToken)
+    {
         if (empty($markAsReadToken)) {
+            error_log("[LineAPI::markAsRead] Error: markAsReadToken is empty or null");
             return ['success' => false, 'error' => 'markAsReadToken is required'];
         }
-        
+
+        error_log("[LineAPI::markAsRead] Calling LINE API with token: " . substr($markAsReadToken, 0, 20) . "...");
+
         $url = 'https://api.line.me/v2/bot/chat/markAsRead';
         $headers = [
             'Content-Type: application/json',
             'Authorization: Bearer ' . $this->channelAccessToken
         ];
-        
+
         $data = ['markAsReadToken' => $markAsReadToken];
-        
+
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
-        
+
+        // Log the response for debugging
+        error_log("[LineAPI::markAsRead] HTTP Code: {$httpCode}, Response: " . substr($response, 0, 200));
+
         if ($httpCode === 200) {
+            error_log("[LineAPI::markAsRead] Success - Message marked as read on LINE");
             return ['success' => true];
         }
-        
+
+        error_log("[LineAPI::markAsRead] Failed - HTTP {$httpCode}, Error: {$error}, Response: {$response}");
+
         return [
             'success' => false,
             'error' => $error ?: 'HTTP ' . $httpCode,
             'response' => json_decode($response, true)
         ];
     }
-    
+
     /**
      * Mark multiple messages as read
      * 
      * @param array $tokens Array of markAsReadTokens
      * @return array Results for each token
      */
-    public function markMultipleAsRead(array $tokens) {
+    public function markMultipleAsRead(array $tokens)
+    {
         $results = [];
         foreach ($tokens as $token) {
             $results[] = $this->markAsRead($token);
