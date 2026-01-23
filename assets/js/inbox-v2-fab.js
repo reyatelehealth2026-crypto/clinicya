@@ -1221,3 +1221,481 @@ window.insertSlashTemplate = function (id) {
     HUDMode.useTemplate(id);
     window.closeQuickReplyModal();
 };
+
+// ============================================
+// BATCH MESSAGE COMPOSER
+// Allows sending up to 5 messages at once
+// ============================================
+
+const BatchComposer = {
+    messages: [], // Array of objects {type, content, ...}
+    maxMessages: 5,
+    isOpen: false,
+    draggedItem: null,
+    uploadingIndex: -1,
+
+    init() {
+        // Create modal if it doesn't exist
+        if (!document.getElementById('batchMessageModal')) {
+            this.createModal(); // Will replace if exists in DOM but not in memory
+        }
+        // Add batch button to chat input area
+        this.addBatchButton();
+    },
+
+    createModal() {
+        // Remove existing if any (to update structure)
+        const existing = document.getElementById('batchMessageModal');
+        if (existing) existing.remove();
+
+        const modalHtml = `
+        <div id="batchMessageModal" class="batch-modal-overlay">
+            <div class="batch-modal">
+                <div class="batch-modal-header">
+                    <h3><i class="fas fa-layer-group"></i> ส่งข้อความเป็นชุด</h3>
+                    <button class="batch-modal-close" onclick="BatchComposer.close()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="batch-modal-body">
+                    <div id="batchMessageList" class="batch-message-list"></div>
+                    <button id="batchAddBtn" class="batch-add-message" onclick="BatchComposer.addMessage()">
+                        <i class="fas fa-plus"></i>
+                        <span>เพิ่มข้อความ</span>
+                        <span id="batchRemaining" class="batch-remaining"></span>
+                    </button>
+                    <!-- Hidden File Input -->
+                    <input type="file" id="batchFileInput" style="display: none" 
+                           accept="image/png,image/jpeg,image/gif,image/webp,application/pdf"
+                           onchange="BatchComposer.handleFileSelect(this)">
+                </div>
+                <div class="batch-modal-footer">
+                    <button class="batch-cancel-btn" onclick="BatchComposer.close()">ยกเลิก</button>
+                    <button id="batchSendBtn" class="batch-send-btn" onclick="BatchComposer.send()">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>ส่งทั้งหมด</span>
+                        <span id="batchCountBadge" class="batch-count-badge">0</span>
+                    </button>
+                </div>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    },
+
+    addBatchButton() {
+        // Logic to add the button near the send button
+        const addBtn = () => {
+            const sendBtn = document.querySelector('[onclick*="sendMessage"]') ||
+                document.querySelector('.send-button') ||
+                document.getElementById('sendBtn');
+            const existingBtn = document.getElementById('batchTriggerBtn');
+
+            if (sendBtn && !existingBtn) {
+                const btn = document.createElement('button');
+                btn.id = 'batchTriggerBtn';
+                btn.className = 'batch-trigger-btn';
+                btn.title = 'ส่งข้อความเป็นชุด (สูงสุด 5 ข้อความ)';
+                btn.innerHTML = '<i class="fas fa-layer-group"></i>';
+                btn.onclick = () => BatchComposer.open();
+
+                // Insert before send button
+                if (sendBtn.parentNode) {
+                    sendBtn.parentNode.insertBefore(btn, sendBtn);
+                }
+            }
+        };
+
+        const observer = new MutationObserver((mutations, obs) => {
+            addBtn();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        // Also try immediately and after a delay
+        addBtn();
+        setTimeout(addBtn, 1000);
+        setTimeout(addBtn, 3000);
+    },
+
+    open() {
+        this.messages = [{ type: 'text', content: '' }]; // Start with 1 empty text message
+        this.render();
+        const modal = document.getElementById('batchMessageModal');
+        if (modal) {
+            modal.classList.add('show');
+            this.isOpen = true;
+            // Focus first input
+            setTimeout(() => {
+                const firstInput = document.querySelector('.batch-message-textarea');
+                if (firstInput) firstInput.focus();
+            }, 100);
+        }
+    },
+
+    close() {
+        const modal = document.getElementById('batchMessageModal');
+        if (modal) {
+            modal.classList.remove('show');
+        }
+        this.isOpen = false;
+        this.messages = [];
+    },
+
+    addMessage() {
+        if (this.messages.length >= this.maxMessages) return;
+        this.messages.push({ type: 'text', content: '' });
+        this.render();
+        // Focus new input
+        setTimeout(() => {
+            const inputs = document.querySelectorAll('.batch-message-textarea');
+            inputs[inputs.length - 1]?.focus();
+        }, 50);
+    },
+
+    removeMessage(index) {
+        if (this.messages.length <= 1) return;
+        this.messages.splice(index, 1);
+        this.render();
+    },
+
+    updateMessage(index, value) {
+        if (this.messages[index] && this.messages[index].type === 'text') {
+            this.messages[index].content = value;
+        }
+        this.updateCountBadge();
+    },
+
+    triggerFileInput(index) {
+        this.uploadingIndex = index;
+        const fileInput = document.getElementById('batchFileInput');
+        if (fileInput) {
+            fileInput.value = ''; // Reset
+            fileInput.click();
+        }
+    },
+
+    async handleFileSelect(input) {
+        if (input.files && input.files[0] && this.uploadingIndex > -1) {
+            const file = input.files[0];
+            const index = this.uploadingIndex;
+
+            // Show loading state
+            this.messages[index] = { type: 'loading', content: 'กำลังอัปโหลด...' };
+            this.render();
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'upload_batch_file');
+                formData.append('file', file);
+
+                const response = await fetch('api/inbox-v2.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    this.messages[index] = {
+                        type: result.type, // 'image' or 'file'
+                        originalContentUrl: result.url,
+                        previewImageUrl: result.previewUrl,
+                        fileName: result.fileName
+                    };
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload Error:', error);
+                if (typeof showNotification === 'function') {
+                    showNotification('❌ อัปโหลดไม่สำเร็จ: ' + error.message, 'error');
+                }
+                // Revert to text on error
+                this.messages[index] = { type: 'text', content: '' };
+            }
+
+            this.render();
+            this.uploadingIndex = -1;
+        }
+    },
+
+    removeAttachment(index) {
+        this.messages[index] = { type: 'text', content: '' };
+        this.render();
+    },
+
+    render() {
+        const list = document.getElementById('batchMessageList');
+        if (!list) return;
+
+        list.innerHTML = this.messages.map((msg, index) => {
+            let contentHtml = '';
+
+            if (msg.type === 'loading') {
+                contentHtml = `
+                    <div class="batch-loading">
+                        <i class="fas fa-spinner fa-spin"></i> ${this.escapeHtml(msg.content)}
+                    </div>`;
+            } else if (msg.type === 'image') {
+                contentHtml = `
+                    <div class="batch-file-preview">
+                        <img src="${msg.previewImageUrl}" alt="Preview">
+                        <div class="batch-file-info">
+                            <div class="batch-file-name">รูปภาพแนบ</div>
+                            <div class="batch-file-type">IMAGE</div>
+                        </div>
+                        <button class="batch-file-remove" onclick="BatchComposer.removeAttachment(${index})" title="ลบรูปภาพ">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>`;
+            } else if (msg.type === 'file') {
+                contentHtml = `
+                    <div class="batch-file-preview">
+                        <div style="width: 40px; height: 40px; background: #fee2e2; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #dc2626;">
+                            <i class="fas fa-file-pdf"></i>
+                        </div>
+                        <div class="batch-file-info">
+                            <div class="batch-file-name">${this.escapeHtml(msg.fileName)}</div>
+                            <div class="batch-file-type">PDF Document</div>
+                        </div>
+                        <button class="batch-file-remove" onclick="BatchComposer.removeAttachment(${index})" title="ลบไฟล์">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>`;
+            } else {
+                // Text type
+                contentHtml = `
+                    <textarea class="batch-message-textarea" 
+                              placeholder="พิมพ์ข้อความ ${index + 1}..."
+                              oninput="BatchComposer.updateMessage(${index}, this.value)">${this.escapeHtml(msg.content || '')}</textarea>
+                    
+                    <div style="display: flex; flex-wrap: wrap;">
+                        <button class="batch-template-btn" onclick="BatchComposer.showTemplateDropdown(${index})">
+                            <i class="fas fa-file-alt"></i> เลือก Template
+                        </button>
+                        <button class="batch-attach-btn" onclick="BatchComposer.triggerFileInput(${index})">
+                            <i class="fas fa-paperclip"></i> แนบไฟล์
+                        </button>
+                    </div>
+                    <div id="batchTemplateDropdown${index}" class="batch-template-dropdown"></div>`;
+            }
+
+            return `
+            <div class="batch-message-item" draggable="true" 
+                 ondragstart="BatchComposer.onDragStart(event, ${index})"
+                 ondragend="BatchComposer.onDragEnd(event)"
+                 ondragover="BatchComposer.onDragOver(event)"
+                 ondrop="BatchComposer.onDrop(event, ${index})">
+                <div class="batch-message-header">
+                    <span class="batch-drag-handle"><i class="fas fa-grip-vertical"></i></span>
+                    <span class="batch-message-number">${index + 1}</span>
+                    <div class="batch-message-actions">
+                        ${this.messages.length > 1 ? `
+                            <button class="delete-btn" onclick="BatchComposer.removeMessage(${index})" title="ลบ">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+                ${contentHtml}
+            </div>
+            `;
+        }).join('');
+
+        this.updateAddButton();
+        this.updateCountBadge();
+    },
+
+    updateAddButton() {
+        const btn = document.getElementById('batchAddBtn');
+        const remaining = document.getElementById('batchRemaining');
+        if (!btn || !remaining) return;
+
+        const left = this.maxMessages - this.messages.length;
+        remaining.textContent = `(เหลืออีก ${left} ข้อความ)`;
+        btn.disabled = left <= 0;
+    },
+
+    updateCountBadge() {
+        const badge = document.getElementById('batchCountBadge');
+        const btn = document.getElementById('batchSendBtn');
+        if (!badge || !btn) return;
+
+        const validCount = this.messages.filter(m => {
+            if (m.type === 'text') return m.content && m.content.trim();
+            return m.type === 'image' || m.type === 'file';
+        }).length;
+
+        badge.textContent = validCount;
+        btn.disabled = validCount === 0;
+    },
+
+    showTemplateDropdown(index) {
+        const dropdown = document.getElementById(`batchTemplateDropdown${index}`);
+        if (!dropdown) return;
+
+        // Toggle visibility
+        if (dropdown.classList.contains('show')) {
+            dropdown.classList.remove('show');
+            return;
+        }
+
+        // Close other dropdowns
+        document.querySelectorAll('.batch-template-dropdown').forEach(d => d.classList.remove('show'));
+
+        // Load templates
+        const templates = window.HUDMode?.templates || [];
+        if (templates.length === 0) {
+            dropdown.innerHTML = '<div class="batch-template-option"><div class="batch-template-option-name">ไม่พบ Template</div></div>';
+        } else {
+            dropdown.innerHTML = templates.map(t => `
+                <div class="batch-template-option" onclick="BatchComposer.insertTemplate(${index}, ${t.id})">
+                    <div class="batch-template-option-name">${this.escapeHtml(t.name)}</div>
+                    <div class="batch-template-option-preview">${this.escapeHtml(t.content.substring(0, 60))}...</div>
+                </div>
+            `).join('');
+        }
+        dropdown.classList.add('show');
+
+        // Close on click outside
+        setTimeout(() => {
+            const close = (e) => {
+                if (!dropdown.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                    document.removeEventListener('click', close);
+                }
+            };
+            document.addEventListener('click', close);
+        }, 0);
+    },
+
+    insertTemplate(index, templateId) {
+        const template = (window.HUDMode?.templates || []).find(t => t.id === templateId);
+        if (!template) return;
+
+        // Fill placeholder
+        let content = template.content;
+        const userName = window.ghostDraftState?.userName || 'ลูกค้า';
+        content = content.replace(/\{name\}/g, userName);
+        content = content.replace(/\{ชื่อ\}/g, userName);
+
+        this.messages[index] = { type: 'text', content: content };
+        this.render();
+
+        // Close dropdown
+        document.querySelectorAll('.batch-template-dropdown').forEach(d => d.classList.remove('show'));
+    },
+
+    // Drag and drop handlers
+    onDragStart(e, index) {
+        this.draggedItem = index;
+        e.target.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    },
+
+    onDragEnd(e) {
+        e.target.classList.remove('dragging');
+        document.querySelectorAll('.batch-message-item').forEach(el => el.classList.remove('drag-over'));
+    },
+
+    onDragOver(e) {
+        e.preventDefault();
+        e.target.closest('.batch-message-item')?.classList.add('drag-over');
+    },
+
+    onDrop(e, dropIndex) {
+        e.preventDefault();
+        if (this.draggedItem === null || this.draggedItem === dropIndex) return;
+
+        const item = this.messages[this.draggedItem];
+        this.messages.splice(this.draggedItem, 1);
+        this.messages.splice(dropIndex, 0, item);
+        this.draggedItem = null;
+        this.render();
+    },
+
+    async send() {
+        const validMessages = this.messages.filter(m => {
+            if (m.type === 'text') return m.content && m.content.trim();
+            return m.type === 'image' || m.type === 'file';
+        });
+
+        if (validMessages.length === 0) {
+            if (typeof showNotification === 'function') {
+                showNotification('กรุณาพิมพ์ข้อความหรือแนบไฟล์อย่างน้อย 1 รายการ', 'error');
+            }
+            return;
+        }
+
+        const userId = window.ghostDraftState?.userId;
+        if (!userId) {
+            if (typeof showNotification === 'function') {
+                showNotification('กรุณาเลือกแชทก่อน', 'error');
+            }
+            return;
+        }
+
+        const sendBtn = document.getElementById('batchSendBtn');
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังส่ง...';
+        }
+
+        try {
+            const response = await fetch('api/inbox-v2.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    action: 'send_batch_messages',
+                    user_id: userId,
+                    messages: validMessages,
+                    line_account_id: window.currentBotId || 1
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                if (typeof showNotification === 'function') {
+                    showNotification(`✓ ส่ง ${result.count} รายการสำเร็จ`, 'success');
+                }
+                this.close();
+                // Refresh chat if function exists
+                if (typeof loadChatMessages === 'function') {
+                    loadChatMessages(userId);
+                } else if (typeof refreshChat === 'function') {
+                    refreshChat();
+                }
+            } else {
+                throw new Error(result.error || 'Failed to send messages');
+            }
+        } catch (error) {
+            console.error('Batch send error:', error);
+            if (typeof showNotification === 'function') {
+                showNotification('❌ ' + error.message, 'error');
+            }
+        } finally {
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> <span>ส่งทั้งหมด</span> <span id="batchCountBadge" class="batch-count-badge">' + validMessages.length + '</span>';
+            }
+        }
+    },
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+};
+
+// Initialize BatchComposer
+document.addEventListener('DOMContentLoaded', function () {
+    FAB.init();
+    HUDMode.init();
+    BatchComposer.init();
+});
+

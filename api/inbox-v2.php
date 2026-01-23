@@ -3044,10 +3044,197 @@ try {
             break;
 
         // ============================================
+        // POST /send_batch_messages - Send multiple messages at once
+        // LINE API supports up to 5 messages per push
+        // ============================================
+        case 'send_batch_messages':
+            if ($method !== 'POST') {
+                sendError('Method not allowed', 405);
+            }
+
+            $body = getJsonBody();
+            $userId = (int) ($_POST['user_id'] ?? $body['user_id'] ?? 0);
+            $messages = $_POST['messages'] ?? $body['messages'] ?? [];
+            $lineUserId = $_POST['line_user_id'] ?? $body['line_user_id'] ?? '';
+
+            if (!$userId) {
+                sendError('User ID is required');
+            }
+
+            // Parse messages if string
+            if (is_string($messages)) {
+                $messages = json_decode($messages, true) ?? [];
+            }
+
+            if (empty($messages)) {
+                sendError('Messages array is required');
+            }
+
+            // LINE API limit: max 5 messages per push
+            if (count($messages) > 5) {
+                sendError('Maximum 5 messages allowed per batch');
+            }
+
+            // Get line_user_id if not provided
+            if (empty($lineUserId)) {
+                $stmt = $db->prepare("SELECT line_user_id FROM users WHERE id = ? AND line_account_id = ?");
+                $stmt->execute([$userId, $lineAccountId]);
+                $lineUserId = $stmt->fetchColumn();
+            }
+
+            if (empty($lineUserId)) {
+                sendError('LINE User ID not found for user');
+            }
+
+            try {
+                // Load LineAPI
+                require_once __DIR__ . '/../classes/LineAPI.php';
+                $lineAPI = new LineAPI($db, $lineAccountId);
+
+                // Build LINE message array & Prepare DB records
+                $lineMessages = [];
+                $dbRecords = [];
+
+                foreach ($messages as $msg) {
+                    $type = $msg['type'] ?? 'text';
+                    $content = $msg['content'] ?? $msg['text'] ?? '';
+
+                    if ($type === 'text') {
+                        $content = trim($content);
+                        if (!empty($content)) {
+                            $lineMessages[] = ['type' => 'text', 'text' => $content];
+                            $dbRecords[] = ['type' => 'text', 'content' => $content];
+                        }
+                    } elseif ($type === 'image') {
+                        if (!empty($msg['originalContentUrl']) && !empty($msg['previewImageUrl'])) {
+                            $lineMessages[] = [
+                                'type' => 'image',
+                                'originalContentUrl' => $msg['originalContentUrl'],
+                                'previewImageUrl' => $msg['previewImageUrl']
+                            ];
+                            $dbRecords[] = ['type' => 'image', 'content' => $msg['originalContentUrl']];
+                        }
+                    } elseif ($type === 'file') {
+                        // LINE doesn't support file message type in Push API directly except as text link or Imagemap
+                        // But typically we send as text link for simple files
+                        if (!empty($msg['originalContentUrl'])) {
+                            $fileName = $msg['fileName'] ?? 'File';
+                            // Send as text message with link
+                            $text = "📄 {$fileName}\n🔗 {$msg['originalContentUrl']}";
+                            $lineMessages[] = ['type' => 'text', 'text' => $text];
+                            // Store as file in DB if we want, or text. Let's store as file type for history
+                            $fileContent = json_encode(['url' => $msg['originalContentUrl'], 'name' => $fileName], JSON_UNESCAPED_UNICODE);
+                            $dbRecords[] = ['type' => 'file', 'content' => $fileContent];
+                        }
+                    }
+                }
+
+                if (empty($lineMessages)) {
+                    sendError('No valid messages to send');
+                }
+
+                // Send batch via pushMessage (supports array of messages)
+                $result = $lineAPI->pushMessage($lineUserId, $lineMessages);
+
+                if ($result['code'] !== 200) {
+                    sendError('Failed to send messages via LINE: ' . ($result['body']['message'] ?? 'Unknown error'));
+                }
+
+                // Save all messages to database
+                $insertStmt = $db->prepare("
+                    INSERT INTO messages (user_id, line_account_id, direction, message_type, content, is_read, sent_by, created_at)
+                    VALUES (?, ?, 'outgoing', ?, ?, 1, ?, NOW())
+                ");
+
+                $savedCount = 0;
+                foreach ($dbRecords as $record) {
+                    $insertStmt->execute([
+                        $userId,
+                        $lineAccountId,
+                        $record['type'],
+                        $record['content'],
+                        $adminId
+                    ]);
+                    $savedCount++;
+                }
+
+                // Update user last_message_at
+                $updateStmt = $db->prepare("UPDATE users SET last_message_at = NOW() WHERE id = ?");
+                $updateStmt->execute([$userId]);
+
+                sendResponse([
+                    'success' => true,
+                    'message' => "Sent {$savedCount} messages successfully",
+                    'count' => $savedCount
+                ]);
+
+            } catch (Exception $e) {
+                sendError('Error sending batch messages: ' . $e->getMessage());
+            }
+            break;
+
+        case 'upload_batch_file':
+            if ($method !== 'POST') {
+                sendError('Method not allowed', 405);
+            }
+
+            if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+                sendError('No file uploaded or upload error');
+            }
+
+            $file = $_FILES['file'];
+            $maxSize = 10 * 1024 * 1024; // 10MB
+            if ($file['size'] > $maxSize) {
+                sendError('File too large (Max 10MB)');
+            }
+
+            $allowedTypes = [
+                'image/jpeg',
+                'image/png',
+                'image/webp',
+                'image/gif',
+                'application/pdf'
+            ];
+            if (!in_array($file['type'], $allowedTypes)) {
+                sendError('Invalid file type. Allowed: JPG, PNG, WEBP, GIF, PDF');
+            }
+
+            // Determine directory
+            $isImage = strpos($file['type'], 'image/') === 0;
+            $uploadDir = __DIR__ . '/../uploads/' . ($isImage ? 'chat_images' : 'chat_files') . '/';
+
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+            $filename = ($isImage ? 'img_' : 'file_') . time() . '_' . uniqid() . '.' . $ext;
+            $filepath = $uploadDir . $filename;
+
+            if (!move_uploaded_file($file['tmp_name'], $filepath)) {
+                sendError('Failed to save file');
+            }
+
+            // Construct URL
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+            $host = $_SERVER['HTTP_HOST'];
+            $baseUrl = $protocol . $host . '/uploads/' . ($isImage ? 'chat_images' : 'chat_files') . '/' . $filename;
+
+            sendResponse([
+                'success' => true,
+                'type' => $isImage ? 'image' : 'file',
+                'url' => $baseUrl,
+                'previewUrl' => $baseUrl, // For images, typically same. For videos/files, might differ.
+                'fileName' => $file['name']
+            ]);
+            break;
+
+        // ============================================
         // Default - Unknown action
         // ============================================
         default:
             sendError('Unknown action: ' . $action, 400);
+
     }
 
 } catch (Throwable $e) {
