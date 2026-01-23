@@ -17,14 +17,14 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Database
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'zrismpsz_cny2');
-define('DB_USER', 'zrismpsz_cny2');
-define('DB_PASS', 'zrismpsz_cny2');
+define('DB_NAME', 'zrismpsz_cny');
+define('DB_USER', 'zrismpsz_cny');
+define('DB_PASS', 'zrismpsz_cny');
 
 // Application
 define('APP_NAME', 'Agentic line');
-define('APP_URL', 'https://re-ya.com');
-define('BASE_URL', 'https://re-ya.com');
+define('APP_URL', 'https://cny.re-ya.com');
+define('BASE_URL', 'https://cny.re-ya.com');
 define('TIMEZONE', 'Asia/Bangkok');
 
 // LINE API (ตั้งค่าผ่านหน้า Admin)
