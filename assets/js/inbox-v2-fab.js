@@ -1235,10 +1235,9 @@ const BatchComposer = {
     uploadingIndex: -1,
 
     init() {
-        window.BatchComposer = this;
         // Create modal if it doesn't exist
         if (!document.getElementById('batchMessageModal')) {
-            this.createModal();
+            this.createModal(); // Will replace if exists in DOM but not in memory
         }
         // Add batch button to chat input area
         this.addBatchButton();
@@ -1699,11 +1698,4 @@ document.addEventListener('DOMContentLoaded', function () {
     HUDMode.init();
     BatchComposer.init();
 });
-
-// Fallback if already loaded (e.g. dynamic injection or cache)
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(() => {
-        if (typeof BatchComposer !== 'undefined') BatchComposer.init();
-    }, 100);
-}
 
