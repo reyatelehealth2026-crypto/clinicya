@@ -6879,174 +6879,189 @@ function formatThaiDateTime($datetime)
             const filterChatStatus = document.getElementById('filterChatStatus')?.value;
             const filterAssignee = document.getElementById('filterAssignee')?.value;
 
-            if (filterStatus) params.set('filterStatus', filterStatus);
-            if (filterTag) params.set('filterTag', filterTag);
-            if (filterChatStatus) params.set('filterChatStatus', filterChatStatus);
-            if (filterAssignee) params.set('filterAssignee', filterAssignee);
+            console.log('[buildUserLink] Current filter values:', {
+                    filterStatus, filterTag, filterChatStatus, filterAssignee
+                });
 
-            return '?' + params.toString();
-        }
+                if (filterStatus) params.set('filterStatus', filterStatus);
+                if (filterTag) params.set('filterTag', filterTag);
+                if (filterChatStatus) params.set('filterChatStatus', filterChatStatus);
+                if (filterAssignee) params.set('filterAssignee', filterAssignee);
 
-        /**
-         * Restore filter values from URL parameters on page load
-         */
-        function restoreFiltersFromURL() {
-            const params = new URLSearchParams(window.location.search);
+                const result = '?' + params.toString();
+                console.log('[buildUserLink] Generated URL:', result);
+                return result;
+            }
 
-            // Restore each filter if present in URL
-            ['filterStatus', 'filterTag', 'filterChatStatus', 'filterAssignee'].forEach(filterId => {
-                const value = params.get(filterId);
-                const element = document.getElementById(filterId);
-                if (value && element) {
-                    element.value = value;
+            /**
+             * Restore filter values from URL parameters on page load
+             */
+            function restoreFiltersFromURL() {
+                const params = new URLSearchParams(window.location.search);
+
+                console.log('[Filter Restore] URL params:', window.location.search);
+
+                // Restore each filter if present in URL
+                ['filterStatus', 'filterTag', 'filterChatStatus', 'filterAssignee'].forEach(filterId => {
+                    const value = params.get(filterId);
+                    const element = document.getElementById(filterId);
+                    if (value && element) {
+                        // Check if the option exists in the dropdown
+                        const optionExists = Array.from(element.options).some(opt => opt.value === value);
+                        if (optionExists) {
+                            element.value = value;
+                            console.log(`[Filter Restore] Set ${filterId} = ${value}`);
+                        } else {
+                            console.warn(`[Filter Restore] Option ${value} not found in ${filterId}`);
+                        }
+                    }
+                });
+
+                // Apply filters after restoring (only if any filter was set)
+                if (params.get('filterStatus') || params.get('filterTag') ||
+                    params.get('filterChatStatus') || params.get('filterAssignee')) {
+                    applyFilters();
+                }
+            }
+
+            /**
+             * Setup click handlers on chat items to preserve filters
+             */
+            function setupFilterPreservingLinks() {
+                document.querySelectorAll('.user-item[data-user-id]').forEach(item => {
+                    item.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        const userId = this.dataset.userId;
+                        window.location.href = buildUserLink(userId);
+                    });
+                });
+            }
+
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', function () {
+                // Restore filters from URL parameters first
+                restoreFiltersFromURL();
+
+                // Setup click handlers to preserve filters when clicking chat items
+                setupFilterPreservingLinks();
+                // Scroll to bottom of chat
+                scrollToBottom();
+
+                // Focus message input if user is selected
+                const messageInput = document.getElementById('messageInput');
+                if (messageInput) {
+                    messageInput.focus();
+                }
+
+                // Load quick actions if user is selected
+                if (ghostDraftState.userId) {
+                    loadQuickActions();
+
+                    // Initialize HUD with context from last customer message - Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
+                    const lastMessage = getLastCustomerMessage();
+                    initializeHUD(lastMessage || '');
                 }
             });
 
-            // Apply filters after restoring (only if any filter was set)
-            if (params.get('filterStatus') || params.get('filterTag') ||
-                params.get('filterChatStatus') || params.get('filterAssignee')) {
-                applyFilters();
-            }
-        }
+            /**
+             * Initialize HUD Dashboard with user data
+             * Loads health profile, drug info, and recommendations
+             */
+            async function initializeHUD(message = '') {
+                if (!ghostDraftState.userId) return;
 
-        /**
-         * Setup click handlers on chat items to preserve filters
-         */
-        function setupFilterPreservingLinks() {
-            document.querySelectorAll('.user-item[data-user-id]').forEach(item => {
-                item.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    const userId = this.dataset.userId;
-                    window.location.href = buildUserLink(userId);
-                });
-            });
-        }
+                try {
+                    // Load health profile
+                    const healthParams = new URLSearchParams({
+                        action: 'customer_health',
+                        user_id: ghostDraftState.userId,
+                        line_account_id: <?= $currentBotId ?>
+                    });
+                    const healthResponse = await fetch(`api/inbox-v2.php?${healthParams.toString()}`);
+                    const healthResult = await healthResponse.json();
 
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function () {
-            // Restore filters from URL parameters first
-            restoreFiltersFromURL();
+                    if (healthResult.success && healthResult.data) {
+                        updateHealthProfileWidget(healthResult.data);
+                    }
 
-            // Setup click handlers to preserve filters when clicking chat items
-            setupFilterPreservingLinks();
-            // Scroll to bottom of chat
-            scrollToBottom();
+                    // Load context widgets if we have a message
+                    if (message) {
+                        autoUpdateHUDWidgets(message);
+                    }
 
-            // Focus message input if user is selected
-            const messageInput = document.getElementById('messageInput');
-            if (messageInput) {
-                messageInput.focus();
-            }
+                    // Load drug recommendations based on recent conversation
+                    const recsParams = new URLSearchParams({
+                        action: 'recommendations',
+                        user_id: ghostDraftState.userId,
+                        type: 'context',
+                        line_account_id: <?= $currentBotId ?>
+                    });
 
-            // Load quick actions if user is selected
-            if (ghostDraftState.userId) {
-                loadQuickActions();
+                    // Add message if available for better drug matching
+                    if (message) {
+                        recsParams.append('message', message);
+                    }
 
-                // Initialize HUD with context from last customer message - Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
-                const lastMessage = getLastCustomerMessage();
-                initializeHUD(lastMessage || '');
-            }
-        });
+                    const recsResponse = await fetch(`api/inbox-v2.php?${recsParams.toString()}`);
+                    const recsResult = await recsResponse.json();
 
-        /**
-         * Initialize HUD Dashboard with user data
-         * Loads health profile, drug info, and recommendations
-         */
-        async function initializeHUD(message = '') {
-            if (!ghostDraftState.userId) return;
+                    if (recsResult.success && recsResult.data && recsResult.data.recommendations) {
+                        // Send recommendations to symptom widget (product detection)
+                        updateSymptomWidget(recsResult.data);
+                    }
 
-            try {
-                // Load health profile
-                const healthParams = new URLSearchParams({
-                    action: 'customer_health',
-                    user_id: ghostDraftState.userId,
-                    line_account_id: <?= $currentBotId ?>
-                });
-                const healthResponse = await fetch(`api/inbox-v2.php?${healthParams.toString()}`);
-                const healthResult = await healthResponse.json();
-
-                if (healthResult.success && healthResult.data) {
-                    updateHealthProfileWidget(healthResult.data);
+                } catch (error) {
+                    console.error('Initialize HUD error:', error);
                 }
-
-                // Load context widgets if we have a message
-                if (message) {
-                    autoUpdateHUDWidgets(message);
-                }
-
-                // Load drug recommendations based on recent conversation
-                const recsParams = new URLSearchParams({
-                    action: 'recommendations',
-                    user_id: ghostDraftState.userId,
-                    type: 'context',
-                    line_account_id: <?= $currentBotId ?>
-                });
-
-                // Add message if available for better drug matching
-                if (message) {
-                    recsParams.append('message', message);
-                }
-
-                const recsResponse = await fetch(`api/inbox-v2.php?${recsParams.toString()}`);
-                const recsResult = await recsResponse.json();
-
-                if (recsResult.success && recsResult.data && recsResult.data.recommendations) {
-                    // Send recommendations to symptom widget (product detection)
-                    updateSymptomWidget(recsResult.data);
-                }
-
-            } catch (error) {
-                console.error('Initialize HUD error:', error);
             }
-        }
 
-        /**
-         * Update health profile widget in HUD
-         */
-        function updateHealthProfileWidget(data) {
-            const container = document.querySelector('#hudDashboard [data-widget="health-profile"]');
-            if (!container) return;
+            /**
+             * Update health profile widget in HUD
+             */
+            function updateHealthProfileWidget(data) {
+                const container = document.querySelector('#hudDashboard [data-widget="health-profile"]');
+                if (!container) return;
 
-            const content = container.querySelector('.widget-content');
-            if (!content) return;
+                const content = container.querySelector('.widget-content');
+                if (!content) return;
 
-            const profile = data.profile || data;
-            const commType = profile.communication_type || 'A';
-            const confidence = profile.confidence || 100;
-            const emotion = profile.emotion || 'neutral';
+                const profile = data.profile || data;
+                const commType = profile.communication_type || 'A';
+                const confidence = profile.confidence || 100;
+                const emotion = profile.emotion || 'neutral';
 
-            // Communication type labels in Thai
-            const typeLabels = {
-                'A': '⚡ ตรงไปตรงมา',
-                'B': '� ใส่ใๆจรายละเอียด',
-                'C': '📊 สบายๆ ค่อยๆคุย'
-            };
+                // Communication type labels in Thai
+                const typeLabels = {
+                    'A': '⚡ ตรงไปตรงมา',
+                    'B': '� ใส่ใๆจรายละเอียด',
+                    'C': '📊 สบายๆ ค่อยๆคุย'
+                };
 
-            // Emotion labels in Thai
-            const emotionLabels = {
-                'angry': '😠 โมโห',
-                'frustrated': '😤 หงุดหงิด',
-                'happy': '😊 ปลาบปลื้ม',
-                'satisfied': '😌 พอใจ',
-                'neutral': '😐 ปกติ',
-                'confused': '😕 สับสน',
-                'worried': '😟 กังวล',
-                'urgent': '⚡ เร่งด่วน'
-            };
+                // Emotion labels in Thai
+                const emotionLabels = {
+                    'angry': '😠 โมโห',
+                    'frustrated': '😤 หงุดหงิด',
+                    'happy': '😊 ปลาบปลื้ม',
+                    'satisfied': '😌 พอใจ',
+                    'neutral': '😐 ปกติ',
+                    'confused': '😕 สับสน',
+                    'worried': '😟 กังวล',
+                    'urgent': '⚡ เร่งด่วน'
+                };
 
-            // Emotion background colors
-            const emotionBgClass = {
-                'angry': 'from-red-50 to-red-100 border-red-200',
-                'frustrated': 'from-orange-50 to-orange-100 border-orange-200',
-                'happy': 'from-green-50 to-green-100 border-green-200',
-                'satisfied': 'from-emerald-50 to-emerald-100 border-emerald-200',
-                'neutral': 'from-gray-50 to-gray-100 border-gray-200',
-                'confused': 'from-yellow-50 to-yellow-100 border-yellow-200',
-                'worried': 'from-amber-50 to-amber-100 border-amber-200',
-                'urgent': 'from-purple-50 to-purple-100 border-purple-200'
-            };
+                // Emotion background colors
+                const emotionBgClass = {
+                    'angry': 'from-red-50 to-red-100 border-red-200',
+                    'frustrated': 'from-orange-50 to-orange-100 border-orange-200',
+                    'happy': 'from-green-50 to-green-100 border-green-200',
+                    'satisfied': 'from-emerald-50 to-emerald-100 border-emerald-200',
+                    'neutral': 'from-gray-50 to-gray-100 border-gray-200',
+                    'confused': 'from-yellow-50 to-yellow-100 border-yellow-200',
+                    'worried': 'from-amber-50 to-amber-100 border-amber-200',
+                    'urgent': 'from-purple-50 to-purple-100 border-purple-200'
+                };
 
-            content.innerHTML = `
+                content.innerHTML = `
         <div class="space-y-2">
             <!-- Customer Emotion -->
             <div class="p-2 bg-gradient-to-r ${emotionBgClass[emotion] || emotionBgClass['neutral']} rounded-lg border">
@@ -7084,226 +7099,226 @@ function formatThaiDateTime($datetime)
             ` : ''}
         </div>
     `;
-        }
-
-        /**
-         * Detect customer emotion from message
-         * @param {string} message Customer message
-         * @returns {string} Detected emotion
-         */
-        function detectCustomerEmotion(message) {
-            if (!message) return 'neutral';
-
-            const msg = message.toLowerCase();
-
-            // Angry keywords
-            if (/โกรธ|โมโห|หัวร้อน|บ้า|เวร|ห่า|สัตว์|ไอ้|อี|แม่ง|เหี้ย|!{2,}/.test(msg)) {
-                return 'angry';
             }
 
-            // Frustrated keywords
-            if (/หงุดหงิด|รำคาญ|เบื่อ|ช้า|นาน|รอ|ทำไม|ไม่ได้|ไม่ดี|แย่/.test(msg)) {
-                return 'frustrated';
+            /**
+             * Detect customer emotion from message
+             * @param {string} message Customer message
+             * @returns {string} Detected emotion
+             */
+            function detectCustomerEmotion(message) {
+                if (!message) return 'neutral';
+
+                const msg = message.toLowerCase();
+
+                // Angry keywords
+                if (/โกรธ|โมโห|หัวร้อน|บ้า|เวร|ห่า|สัตว์|ไอ้|อี|แม่ง|เหี้ย|!{2,}/.test(msg)) {
+                    return 'angry';
+                }
+
+                // Frustrated keywords
+                if (/หงุดหงิด|รำคาญ|เบื่อ|ช้า|นาน|รอ|ทำไม|ไม่ได้|ไม่ดี|แย่/.test(msg)) {
+                    return 'frustrated';
+                }
+
+                // Happy keywords
+                if (/ขอบคุณ|ดีมาก|เยี่ยม|สุดยอด|ชอบ|รัก|ปลื้ม|ดีใจ|😊|😄|🥰|❤️|👍/.test(msg)) {
+                    return 'happy';
+                }
+
+                // Satisfied keywords
+                if (/โอเค|ได้|ดี|เข้าใจ|ตกลง|ok|okay/.test(msg)) {
+                    return 'satisfied';
+                }
+
+                // Confused keywords
+                if (/งง|ไม่เข้าใจ|อะไร|ยังไง|หมายความว่า|\?{2,}|สับสน/.test(msg)) {
+                    return 'confused';
+                }
+
+                // Worried keywords
+                if (/กังวล|กลัว|เป็นห่วง|ไม่แน่ใจ|อันตราย|ผลข้างเคียง/.test(msg)) {
+                    return 'worried';
+                }
+
+                // Urgent keywords
+                if (/ด่วน|เร่ง|รีบ|ตอนนี้|ทันที|asap|urgent/.test(msg)) {
+                    return 'urgent';
+                }
+
+                return 'neutral';
             }
 
-            // Happy keywords
-            if (/ขอบคุณ|ดีมาก|เยี่ยม|สุดยอด|ชอบ|รัก|ปลื้ม|ดีใจ|😊|😄|🥰|❤️|👍/.test(msg)) {
-                return 'happy';
-            }
+            /**
+             * Update customer emotion display
+             * @param {string} message Latest customer message
+             */
+            function updateCustomerEmotion(message) {
+                const emotion = detectCustomerEmotion(message);
+                const emotionEl = document.getElementById('customerEmotion');
 
-            // Satisfied keywords
-            if (/โอเค|ได้|ดี|เข้าใจ|ตกลง|ok|okay/.test(msg)) {
-                return 'satisfied';
-            }
-
-            // Confused keywords
-            if (/งง|ไม่เข้าใจ|อะไร|ยังไง|หมายความว่า|\?{2,}|สับสน/.test(msg)) {
-                return 'confused';
-            }
-
-            // Worried keywords
-            if (/กังวล|กลัว|เป็นห่วง|ไม่แน่ใจ|อันตราย|ผลข้างเคียง/.test(msg)) {
-                return 'worried';
-            }
-
-            // Urgent keywords
-            if (/ด่วน|เร่ง|รีบ|ตอนนี้|ทันที|asap|urgent/.test(msg)) {
-                return 'urgent';
-            }
-
-            return 'neutral';
-        }
-
-        /**
-         * Update customer emotion display
-         * @param {string} message Latest customer message
-         */
-        function updateCustomerEmotion(message) {
-            const emotion = detectCustomerEmotion(message);
-            const emotionEl = document.getElementById('customerEmotion');
-
-            if (emotionEl) {
-                const emotionLabels = {
-                    'angry': '😠 โมโห',
-                    'frustrated': '😤 หงุดหงิด',
-                    'happy': '😊 ปลาบปลื้ม',
-                    'satisfied': '😌 พอใจ',
-                    'neutral': '😐 ปกติ',
-                    'confused': '😕 สับสน',
-                    'worried': '😟 กังวล',
-                    'urgent': '⚡ เร่งด่วน'
-                };
-                emotionEl.textContent = emotionLabels[emotion] || '😐 ปกติ';
-
-                // Update background color
-                const emotionBox = emotionEl.closest('.bg-gradient-to-r');
-                if (emotionBox) {
-                    emotionBox.className = emotionBox.className.replace(/from-\w+-50 to-\w+-50 border-\w+-100/g, '');
-                    const bgClasses = {
-                        'angry': 'from-red-50 to-red-100 border-red-200',
-                        'frustrated': 'from-orange-50 to-orange-100 border-orange-200',
-                        'happy': 'from-green-50 to-green-100 border-green-200',
-                        'satisfied': 'from-emerald-50 to-emerald-100 border-emerald-200',
-                        'neutral': 'from-amber-50 to-orange-50 border-amber-100',
-                        'confused': 'from-yellow-50 to-yellow-100 border-yellow-200',
-                        'worried': 'from-amber-50 to-amber-100 border-amber-200',
-                        'urgent': 'from-purple-50 to-purple-100 border-purple-200'
+                if (emotionEl) {
+                    const emotionLabels = {
+                        'angry': '😠 โมโห',
+                        'frustrated': '😤 หงุดหงิด',
+                        'happy': '😊 ปลาบปลื้ม',
+                        'satisfied': '😌 พอใจ',
+                        'neutral': '😐 ปกติ',
+                        'confused': '😕 สับสน',
+                        'worried': '😟 กังวล',
+                        'urgent': '⚡ เร่งด่วน'
                     };
-                    emotionBox.classList.add(...(bgClasses[emotion] || bgClasses['neutral']).split(' '));
+                    emotionEl.textContent = emotionLabels[emotion] || '😐 ปกติ';
+
+                    // Update background color
+                    const emotionBox = emotionEl.closest('.bg-gradient-to-r');
+                    if (emotionBox) {
+                        emotionBox.className = emotionBox.className.replace(/from-\w+-50 to-\w+-50 border-\w+-100/g, '');
+                        const bgClasses = {
+                            'angry': 'from-red-50 to-red-100 border-red-200',
+                            'frustrated': 'from-orange-50 to-orange-100 border-orange-200',
+                            'happy': 'from-green-50 to-green-100 border-green-200',
+                            'satisfied': 'from-emerald-50 to-emerald-100 border-emerald-200',
+                            'neutral': 'from-amber-50 to-orange-50 border-amber-100',
+                            'confused': 'from-yellow-50 to-yellow-100 border-yellow-200',
+                            'worried': 'from-amber-50 to-amber-100 border-amber-200',
+                            'urgent': 'from-purple-50 to-purple-100 border-purple-200'
+                        };
+                        emotionBox.classList.add(...(bgClasses[emotion] || bgClasses['neutral']).split(' '));
+                    }
                 }
             }
-        }
 
-        /**
-         * Quick Actions State and Functions
-         * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
-         */
-        const quickActionsState = {
-            currentStage: null,
-            hasUrgentSymptoms: false,
-            actions: [],
-            isLoading: false,
-            lastRefresh: null
-        };
+            /**
+             * Quick Actions State and Functions
+             * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
+             */
+            const quickActionsState = {
+                currentStage: null,
+                hasUrgentSymptoms: false,
+                actions: [],
+                isLoading: false,
+                lastRefresh: null
+            };
 
-        /**
-         * Load quick actions from API based on consultation stage
-         * Requirements: 9.1, 9.2, 9.3
-         */
-        async function loadQuickActions() {
-            if (!ghostDraftState.userId || quickActionsState.isLoading) {
-                return;
-            }
-
-            quickActionsState.isLoading = true;
-            const container = document.getElementById('quickActionsContainer');
-            const refreshIcon = document.getElementById('quickActionsRefreshIcon');
-
-            // Show loading state
-            if (container) {
-                container.innerHTML = '<div class="text-xs text-gray-400 py-1"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...</div>';
-            }
-            if (refreshIcon) {
-                refreshIcon.classList.add('fa-spin');
-            }
-
-            try {
-                const params = new URLSearchParams({
-                    action: 'quick_actions',
-                    user_id: ghostDraftState.userId,
-                    line_account_id: <?= $currentBotId ?>
-                });
-
-                // Add stage if we already know it
-                if (quickActionsState.currentStage) {
-                    params.append('stage', quickActionsState.currentStage);
+            /**
+             * Load quick actions from API based on consultation stage
+             * Requirements: 9.1, 9.2, 9.3
+             */
+            async function loadQuickActions() {
+                if (!ghostDraftState.userId || quickActionsState.isLoading) {
+                    return;
                 }
 
-                const response = await fetch(`api/inbox-v2.php?${params.toString()}`);
-                const result = await response.json();
+                quickActionsState.isLoading = true;
+                const container = document.getElementById('quickActionsContainer');
+                const refreshIcon = document.getElementById('quickActionsRefreshIcon');
 
-                if (result.success && result.data) {
-                    quickActionsState.currentStage = result.data.stage;
-                    quickActionsState.hasUrgentSymptoms = result.data.hasUrgentSymptoms || false;
-                    quickActionsState.actions = result.data.actions || [];
-                    quickActionsState.lastRefresh = new Date();
-
-                    // Update stage label
-                    updateStageLabel(result.data.stageLabel || result.data.stage);
-
-                    // Render quick action buttons
-                    renderQuickActions();
-                } else {
-                    throw new Error(result.error || 'Failed to load quick actions');
-                }
-            } catch (error) {
-                console.error('Load quick actions error:', error);
+                // Show loading state
                 if (container) {
-                    container.innerHTML = '<div class="text-xs text-gray-400 py-1"><i class="fas fa-exclamation-circle mr-1"></i>ไม่สามารถโหลดได้</div>';
+                    container.innerHTML = '<div class="text-xs text-gray-400 py-1"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังโหลด...</div>';
                 }
-            } finally {
-                quickActionsState.isLoading = false;
                 if (refreshIcon) {
-                    refreshIcon.classList.remove('fa-spin');
+                    refreshIcon.classList.add('fa-spin');
+                }
+
+                try {
+                    const params = new URLSearchParams({
+                        action: 'quick_actions',
+                        user_id: ghostDraftState.userId,
+                        line_account_id: <?= $currentBotId ?>
+                    });
+
+                    // Add stage if we already know it
+                    if (quickActionsState.currentStage) {
+                        params.append('stage', quickActionsState.currentStage);
+                    }
+
+                    const response = await fetch(`api/inbox-v2.php?${params.toString()}`);
+                    const result = await response.json();
+
+                    if (result.success && result.data) {
+                        quickActionsState.currentStage = result.data.stage;
+                        quickActionsState.hasUrgentSymptoms = result.data.hasUrgentSymptoms || false;
+                        quickActionsState.actions = result.data.actions || [];
+                        quickActionsState.lastRefresh = new Date();
+
+                        // Update stage label
+                        updateStageLabel(result.data.stageLabel || result.data.stage);
+
+                        // Render quick action buttons
+                        renderQuickActions();
+                    } else {
+                        throw new Error(result.error || 'Failed to load quick actions');
+                    }
+                } catch (error) {
+                    console.error('Load quick actions error:', error);
+                    if (container) {
+                        container.innerHTML = '<div class="text-xs text-gray-400 py-1"><i class="fas fa-exclamation-circle mr-1"></i>ไม่สามารถโหลดได้</div>';
+                    }
+                } finally {
+                    quickActionsState.isLoading = false;
+                    if (refreshIcon) {
+                        refreshIcon.classList.remove('fa-spin');
+                    }
                 }
             }
-        }
 
-        /**
-         * Refresh quick actions
-         */
-        function refreshQuickActions() {
-            quickActionsState.currentStage = null; // Force re-detection
-            loadQuickActions();
-        }
+            /**
+             * Refresh quick actions
+             */
+            function refreshQuickActions() {
+                quickActionsState.currentStage = null; // Force re-detection
+                loadQuickActions();
+            }
 
-        /**
-         * Update stage label display
-         * @param {string} stageLabel
-         */
-        function updateStageLabel(stageLabel) {
-            const labelEl = document.getElementById('quickActionsStageLabel');
-            if (labelEl) {
-                // Determine stage class for badge styling
-                let stageClass = '';
-                const stage = quickActionsState.currentStage || '';
-                if (stage.includes('symptom')) stageClass = 'symptom';
-                else if (stage.includes('recommendation')) stageClass = 'recommendation';
-                else if (stage.includes('purchase')) stageClass = 'purchase';
-                else if (stage.includes('follow')) stageClass = 'followup';
+            /**
+             * Update stage label display
+             * @param {string} stageLabel
+             */
+            function updateStageLabel(stageLabel) {
+                const labelEl = document.getElementById('quickActionsStageLabel');
+                if (labelEl) {
+                    // Determine stage class for badge styling
+                    let stageClass = '';
+                    const stage = quickActionsState.currentStage || '';
+                    if (stage.includes('symptom')) stageClass = 'symptom';
+                    else if (stage.includes('recommendation')) stageClass = 'recommendation';
+                    else if (stage.includes('purchase')) stageClass = 'purchase';
+                    else if (stage.includes('follow')) stageClass = 'followup';
 
-                labelEl.innerHTML = `
+                    labelEl.innerHTML = `
             <span class="quick-actions-stage-badge ${stageClass}">
                 ${escapeHtml(stageLabel)}
             </span>
             ${quickActionsState.hasUrgentSymptoms ? '<span class="text-red-500 ml-1" title="ตรวจพบอาการฉุกเฉิน">🚨</span>' : ''}
         `;
-            }
-        }
-
-        /**
-         * Render quick action buttons
-         * Requirements: 9.1, 9.2, 9.3, 9.4
-         */
-        function renderQuickActions() {
-            const container = document.getElementById('quickActionsContainer');
-            if (!container) return;
-
-            if (quickActionsState.actions.length === 0) {
-                container.innerHTML = '<div class="text-xs text-gray-400 py-1">ไม่มี Quick Actions</div>';
-                return;
+                }
             }
 
-            // Build buttons HTML
-            const buttonsHtml = quickActionsState.actions.map((action, index) => {
-                const isUrgent = action.isUrgent || action.highlight;
-                const isPrimary = index === 0 && !isUrgent;
+            /**
+             * Render quick action buttons
+             * Requirements: 9.1, 9.2, 9.3, 9.4
+             */
+            function renderQuickActions() {
+                const container = document.getElementById('quickActionsContainer');
+                if (!container) return;
 
-                let btnClass = 'quick-action-btn';
-                if (isUrgent) btnClass += ' urgent';
-                else if (isPrimary) btnClass += ' primary';
+                if (quickActionsState.actions.length === 0) {
+                    container.innerHTML = '<div class="text-xs text-gray-400 py-1">ไม่มี Quick Actions</div>';
+                    return;
+                }
 
-                return `
+                // Build buttons HTML
+                const buttonsHtml = quickActionsState.actions.map((action, index) => {
+                    const isUrgent = action.isUrgent || action.highlight;
+                    const isPrimary = index === 0 && !isUrgent;
+
+                    let btnClass = 'quick-action-btn';
+                    if (isUrgent) btnClass += ' urgent';
+                    else if (isPrimary) btnClass += ' primary';
+
+                    return `
             <button type="button" 
                     class="${btnClass}" 
                     onclick="executeQuickAction('${escapeHtml(action.action)}', ${JSON.stringify(action).replace(/"/g, '&quot;')})"
@@ -7524,52 +7539,52 @@ function formatThaiDateTime($datetime)
 
         // Create modal HTML
         const modalHtml = `
-                                                                                    <div id="createOrderModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onclick="if(event.target===this)closeModal('createOrderModal')">
-                                                                                        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden">
-                                                                                            <div class="bg-gradient-to-r from-green-500 to-emerald-600 p-4 text-white">
-                                                                                                <div class="flex items-center justify-between">
-                                                                                                    <h3 class="font-bold text-lg flex items-center gap-2">
-                                                                                                        <i class="fas fa-cart-plus"></i>
-                                                                                                        สร้างออเดอร์
-                                                                                                    </h3>
-                                                                                                    <button onclick="closeModal('createOrderModal')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">
-                                                                                                        <i class="fas fa-times"></i>
-                                                                                                    </button>
+                                                                                            <div id="createOrderModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onclick="if(event.target===this)closeModal('createOrderModal')">
+                                                                                                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden">
+                                                                                                    <div class="bg-gradient-to-r from-green-500 to-emerald-600 p-4 text-white">
+                                                                                                        <div class="flex items-center justify-between">
+                                                                                                            <h3 class="font-bold text-lg flex items-center gap-2">
+                                                                                                                <i class="fas fa-cart-plus"></i>
+                                                                                                                สร้างออเดอร์
+                                                                                                            </h3>
+                                                                                                            <button onclick="closeModal('createOrderModal')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">
+                                                                                                                <i class="fas fa-times"></i>
+                                                                                                            </button>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div class="p-4 overflow-y-auto max-h-[60vh]">
+                                                                                                        <div id="orderItemsList" class="space-y-2 mb-4">
+                                                                                                            <p class="text-gray-500 text-sm text-center py-4">
+                                                                                                                <i class="fas fa-info-circle mr-1"></i>
+                                                                                                                เลือกยาจาก HUD Dashboard แล้วกด "เพิ่มในออเดอร์"
+                                                                                                            </p>
+                                                                                                        </div>
+                                                                                                        <div class="border-t pt-4">
+                                                                                                            <div class="flex justify-between text-sm mb-2">
+                                                                                                                <span class="text-gray-600">รวมสินค้า:</span>
+                                                                                                                <span id="orderSubtotal" class="font-medium">฿0</span>
+                                                                                                            </div>
+                                                                                                            <div class="flex justify-between text-sm mb-2">
+                                                                                                                <span class="text-gray-600">ส่วนลด:</span>
+                                                                                                                <span id="orderDiscount" class="font-medium text-red-500">-฿0</span>
+                                                                                                            </div>
+                                                                                                            <div class="flex justify-between text-lg font-bold border-t pt-2">
+                                                                                                                <span>รวมทั้งหมด:</span>
+                                                                                                                <span id="orderTotal" class="text-green-600">฿0</span>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div class="p-4 bg-gray-50 border-t flex gap-2">
+                                                                                                        <button onclick="closeModal('createOrderModal')" class="flex-1 py-2 px-4 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium">
+                                                                                                            ยกเลิก
+                                                                                                        </button>
+                                                                                                        <button onclick="confirmCreateOrder()" class="flex-1 py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium">
+                                                                                                            <i class="fas fa-check mr-1"></i>สร้างออเดอร์
+                                                                                                        </button>
+                                                                                                    </div>
                                                                                                 </div>
                                                                                             </div>
-                                                                                            <div class="p-4 overflow-y-auto max-h-[60vh]">
-                                                                                                <div id="orderItemsList" class="space-y-2 mb-4">
-                                                                                                    <p class="text-gray-500 text-sm text-center py-4">
-                                                                                                        <i class="fas fa-info-circle mr-1"></i>
-                                                                                                        เลือกยาจาก HUD Dashboard แล้วกด "เพิ่มในออเดอร์"
-                                                                                                    </p>
-                                                                                                </div>
-                                                                                                <div class="border-t pt-4">
-                                                                                                    <div class="flex justify-between text-sm mb-2">
-                                                                                                        <span class="text-gray-600">รวมสินค้า:</span>
-                                                                                                        <span id="orderSubtotal" class="font-medium">฿0</span>
-                                                                                                    </div>
-                                                                                                    <div class="flex justify-between text-sm mb-2">
-                                                                                                        <span class="text-gray-600">ส่วนลด:</span>
-                                                                                                        <span id="orderDiscount" class="font-medium text-red-500">-฿0</span>
-                                                                                                    </div>
-                                                                                                    <div class="flex justify-between text-lg font-bold border-t pt-2">
-                                                                                                        <span>รวมทั้งหมด:</span>
-                                                                                                        <span id="orderTotal" class="text-green-600">฿0</span>
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <div class="p-4 bg-gray-50 border-t flex gap-2">
-                                                                                                <button onclick="closeModal('createOrderModal')" class="flex-1 py-2 px-4 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium">
-                                                                                                    ยกเลิก
-                                                                                                </button>
-                                                                                                <button onclick="confirmCreateOrder()" class="flex-1 py-2 px-4 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium">
-                                                                                                    <i class="fas fa-check mr-1"></i>สร้างออเดอร์
-                                                                                                </button>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                `;
+                                                                                        `;
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
 
@@ -7618,48 +7633,48 @@ function formatThaiDateTime($datetime)
         const minDate = tomorrow.toISOString().split('T')[0];
 
         const modalHtml = `
-                                                                                    <div id="scheduleDeliveryModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onclick="if(event.target===this)closeModal('scheduleDeliveryModal')">
-                                                                                        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
-                                                                                            <div class="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 text-white">
-                                                                                                <div class="flex items-center justify-between">
-                                                                                                    <h3 class="font-bold text-lg flex items-center gap-2">
-                                                                                                        <i class="fas fa-truck"></i>
-                                                                                                        นัดส่งสินค้า
-                                                                                                    </h3>
-                                                                                                    <button onclick="closeModal('scheduleDeliveryModal')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">
-                                                                                                        <i class="fas fa-times"></i>
-                                                                                                    </button>
+                                                                                            <div id="scheduleDeliveryModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onclick="if(event.target===this)closeModal('scheduleDeliveryModal')">
+                                                                                                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+                                                                                                    <div class="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 text-white">
+                                                                                                        <div class="flex items-center justify-between">
+                                                                                                            <h3 class="font-bold text-lg flex items-center gap-2">
+                                                                                                                <i class="fas fa-truck"></i>
+                                                                                                                นัดส่งสินค้า
+                                                                                                            </h3>
+                                                                                                            <button onclick="closeModal('scheduleDeliveryModal')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">
+                                                                                                                <i class="fas fa-times"></i>
+                                                                                                            </button>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div class="p-4">
+                                                                                                        <div class="mb-4">
+                                                                                                            <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ส่ง</label>
+                                                                                                            <input type="date" id="deliveryDate" min="${minDate}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                                                                                                        </div>
+                                                                                                        <div class="mb-4">
+                                                                                                            <label class="block text-sm font-medium text-gray-700 mb-1">ช่วงเวลา</label>
+                                                                                                            <select id="deliveryTime" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                                                                                                                <option value="09:00-12:00">เช้า (09:00-12:00)</option>
+                                                                                                                <option value="13:00-17:00">บ่าย (13:00-17:00)</option>
+                                                                                                                <option value="17:00-20:00">เย็น (17:00-20:00)</option>
+                                                                                                            </select>
+                                                                                                        </div>
+                                                                                                        <div class="mb-4">
+                                                                                                            <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
+                                                                                                            <textarea id="deliveryNote" rows="2" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="เช่น โทรก่อนส่ง, ฝากไว้ที่รปภ."></textarea>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div class="p-4 bg-gray-50 border-t flex gap-2">
+                                                                                                        <button onclick="closeModal('scheduleDeliveryModal')" class="flex-1 py-2 px-4 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium">
+                                                                                                            ยกเลิก
+                                                                                                        </button>
+                                                                                                        <button onclick="confirmScheduleDelivery()" class="flex-1 py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium">
+                                                                                                            <i class="fas fa-check mr-1"></i>ยืนยัน
+                                                                                                        </button>
+                                                                                                    </div>
                                                                                                 </div>
                                                                                             </div>
-                                                                                            <div class="p-4">
-                                                                                                <div class="mb-4">
-                                                                                                    <label class="block text-sm font-medium text-gray-700 mb-1">วันที่ส่ง</label>
-                                                                                                    <input type="date" id="deliveryDate" min="${minDate}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                                                                                                </div>
-                                                                                                <div class="mb-4">
-                                                                                                    <label class="block text-sm font-medium text-gray-700 mb-1">ช่วงเวลา</label>
-                                                                                                    <select id="deliveryTime" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                                                                                                        <option value="09:00-12:00">เช้า (09:00-12:00)</option>
-                                                                                                        <option value="13:00-17:00">บ่าย (13:00-17:00)</option>
-                                                                                                        <option value="17:00-20:00">เย็น (17:00-20:00)</option>
-                                                                                                    </select>
-                                                                                                </div>
-                                                                                                <div class="mb-4">
-                                                                                                    <label class="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</label>
-                                                                                                    <textarea id="deliveryNote" rows="2" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="เช่น โทรก่อนส่ง, ฝากไว้ที่รปภ."></textarea>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <div class="p-4 bg-gray-50 border-t flex gap-2">
-                                                                                                <button onclick="closeModal('scheduleDeliveryModal')" class="flex-1 py-2 px-4 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium">
-                                                                                                    ยกเลิก
-                                                                                                </button>
-                                                                                                <button onclick="confirmScheduleDelivery()" class="flex-1 py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium">
-                                                                                                    <i class="fas fa-check mr-1"></i>ยืนยัน
-                                                                                                </button>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                `;
+                                                                                        `;
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
@@ -7711,50 +7726,50 @@ function formatThaiDateTime($datetime)
         }
 
         const modalHtml = `
-                                                                                    <div id="usePointsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onclick="if(event.target===this)closeModal('usePointsModal')">
-                                                                                        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
-                                                                                            <div class="bg-gradient-to-r from-yellow-500 to-orange-500 p-4 text-white">
-                                                                                                <div class="flex items-center justify-between">
-                                                                                                    <h3 class="font-bold text-lg flex items-center gap-2">
-                                                                                                        <i class="fas fa-star"></i>
-                                                                                                        ใช้แต้มสะสม
-                                                                                                    </h3>
-                                                                                                    <button onclick="closeModal('usePointsModal')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">
-                                                                                                        <i class="fas fa-times"></i>
-                                                                                                    </button>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <div class="p-4">
-                                                                                                <div class="text-center mb-4">
-                                                                                                    <div class="text-4xl font-bold text-yellow-500">${points.toLocaleString()}</div>
-                                                                                                    <div class="text-sm text-gray-500">แต้มสะสมปัจจุบัน</div>
-                                                                                                </div>
-                                                                                                <div class="bg-yellow-50 rounded-lg p-3 mb-4">
-                                                                                                    <div class="text-sm text-yellow-800">
-                                                                                                        <i class="fas fa-info-circle mr-1"></i>
-                                                                                                        อัตราแลก: 100 แต้ม = ส่วนลด ฿10
+                                                                                            <div id="usePointsModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]" onclick="if(event.target===this)closeModal('usePointsModal')">
+                                                                                                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+                                                                                                    <div class="bg-gradient-to-r from-yellow-500 to-orange-500 p-4 text-white">
+                                                                                                        <div class="flex items-center justify-between">
+                                                                                                            <h3 class="font-bold text-lg flex items-center gap-2">
+                                                                                                                <i class="fas fa-star"></i>
+                                                                                                                ใช้แต้มสะสม
+                                                                                                            </h3>
+                                                                                                            <button onclick="closeModal('usePointsModal')" class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">
+                                                                                                                <i class="fas fa-times"></i>
+                                                                                                            </button>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div class="p-4">
+                                                                                                        <div class="text-center mb-4">
+                                                                                                            <div class="text-4xl font-bold text-yellow-500">${points.toLocaleString()}</div>
+                                                                                                            <div class="text-sm text-gray-500">แต้มสะสมปัจจุบัน</div>
+                                                                                                        </div>
+                                                                                                        <div class="bg-yellow-50 rounded-lg p-3 mb-4">
+                                                                                                            <div class="text-sm text-yellow-800">
+                                                                                                                <i class="fas fa-info-circle mr-1"></i>
+                                                                                                                อัตราแลก: 100 แต้ม = ส่วนลด ฿10
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                        <div class="mb-4">
+                                                                                                            <label class="block text-sm font-medium text-gray-700 mb-1">จำนวนแต้มที่ต้องการใช้</label>
+                                                                                                            <input type="number" id="pointsToUse" min="0" max="${points}" step="100" value="0" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-500">
+                                                                                                        </div>
+                                                                                                        <div class="text-center">
+                                                                                                            <span class="text-sm text-gray-600">ส่วนลดที่ได้รับ: </span>
+                                                                                                            <span id="pointsDiscount" class="text-lg font-bold text-green-600">฿0</span>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div class="p-4 bg-gray-50 border-t flex gap-2">
+                                                                                                        <button onclick="closeModal('usePointsModal')" class="flex-1 py-2 px-4 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium">
+                                                                                                            ยกเลิก
+                                                                                                        </button>
+                                                                                                        <button onclick="confirmUsePoints()" class="flex-1 py-2 px-4 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-medium">
+                                                                                                            <i class="fas fa-check mr-1"></i>ใช้แต้ม
+                                                                                                        </button>
                                                                                                     </div>
                                                                                                 </div>
-                                                                                                <div class="mb-4">
-                                                                                                    <label class="block text-sm font-medium text-gray-700 mb-1">จำนวนแต้มที่ต้องการใช้</label>
-                                                                                                    <input type="number" id="pointsToUse" min="0" max="${points}" step="100" value="0" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-500">
-                                                                                                </div>
-                                                                                                <div class="text-center">
-                                                                                                    <span class="text-sm text-gray-600">ส่วนลดที่ได้รับ: </span>
-                                                                                                    <span id="pointsDiscount" class="text-lg font-bold text-green-600">฿0</span>
-                                                                                                </div>
                                                                                             </div>
-                                                                                            <div class="p-4 bg-gray-50 border-t flex gap-2">
-                                                                                                <button onclick="closeModal('usePointsModal')" class="flex-1 py-2 px-4 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium">
-                                                                                                    ยกเลิก
-                                                                                                </button>
-                                                                                                <button onclick="confirmUsePoints()" class="flex-1 py-2 px-4 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-medium">
-                                                                                                    <i class="fas fa-check mr-1"></i>ใช้แต้ม
-                                                                                                </button>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                `;
+                                                                                        `;
 
         document.body.insertAdjacentHTML('beforeend', modalHtml);
 
@@ -8009,35 +8024,35 @@ function formatThaiDateTime($datetime)
             menu.id = 'quickImageAnalysisMenu';
             menu.className = 'fixed bg-white rounded-xl shadow-2xl border border-gray-100 py-2 min-w-[200px] z-50';
             menu.innerHTML = `
-                                                                                        <div class="px-3 py-1 text-[10px] text-gray-400 font-medium uppercase tracking-wider">วิเคราะห์รูปภาพ AI</div>
-                                                                                        <button type="button" onclick="triggerSymptomAnalysis(); closeQuickImageMenu();" class="w-full px-3 py-2 text-left text-sm hover:bg-purple-50 flex items-center gap-2 text-gray-700">
-                                                                                            <span class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-red-500">
-                                                                                                <i class="fas fa-stethoscope"></i>
-                                                                                            </span>
-                                                                                            <div>
-                                                                                                <div class="font-medium">วิเคราะห์อาการ</div>
-                                                                                                <div class="text-[10px] text-gray-400">ผื่น, บาดแผล, อาการผิดปกติ</div>
-                                                                                            </div>
-                                                                                        </button>
-                                                                                        <button type="button" onclick="triggerDrugAnalysis(); closeQuickImageMenu();" class="w-full px-3 py-2 text-left text-sm hover:bg-purple-50 flex items-center gap-2 text-gray-700">
-                                                                                            <span class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-500">
-                                                                                                <i class="fas fa-pills"></i>
-                                                                                            </span>
-                                                                                            <div>
-                                                                                                <div class="font-medium">ระบุยาจากรูป</div>
-                                                                                                <div class="text-[10px] text-gray-400">ชื่อยา, สรรพคุณ, ข้อควรระวัง</div>
-                                                                                            </div>
-                                                                                        </button>
-                                                                                        <button type="button" onclick="triggerPrescriptionAnalysis(); closeQuickImageMenu();" class="w-full px-3 py-2 text-left text-sm hover:bg-purple-50 flex items-center gap-2 text-gray-700">
-                                                                                            <span class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-500">
-                                                                                                <i class="fas fa-file-prescription"></i>
-                                                                                            </span>
-                                                                                            <div>
-                                                                                                <div class="font-medium">อ่านใบสั่งยา</div>
-                                                                                                <div class="text-[10px] text-gray-400">OCR + ตรวจยาตีกัน</div>
-                                                                                            </div>
-                                                                                        </button>
-                                                                                    `;
+                                                                                                <div class="px-3 py-1 text-[10px] text-gray-400 font-medium uppercase tracking-wider">วิเคราะห์รูปภาพ AI</div>
+                                                                                                <button type="button" onclick="triggerSymptomAnalysis(); closeQuickImageMenu();" class="w-full px-3 py-2 text-left text-sm hover:bg-purple-50 flex items-center gap-2 text-gray-700">
+                                                                                                    <span class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-red-500">
+                                                                                                        <i class="fas fa-stethoscope"></i>
+                                                                                                    </span>
+                                                                                                    <div>
+                                                                                                        <div class="font-medium">วิเคราะห์อาการ</div>
+                                                                                                        <div class="text-[10px] text-gray-400">ผื่น, บาดแผล, อาการผิดปกติ</div>
+                                                                                                    </div>
+                                                                                                </button>
+                                                                                                <button type="button" onclick="triggerDrugAnalysis(); closeQuickImageMenu();" class="w-full px-3 py-2 text-left text-sm hover:bg-purple-50 flex items-center gap-2 text-gray-700">
+                                                                                                    <span class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-500">
+                                                                                                        <i class="fas fa-pills"></i>
+                                                                                                    </span>
+                                                                                                    <div>
+                                                                                                        <div class="font-medium">ระบุยาจากรูป</div>
+                                                                                                        <div class="text-[10px] text-gray-400">ชื่อยา, สรรพคุณ, ข้อควรระวัง</div>
+                                                                                                    </div>
+                                                                                                </button>
+                                                                                                <button type="button" onclick="triggerPrescriptionAnalysis(); closeQuickImageMenu();" class="w-full px-3 py-2 text-left text-sm hover:bg-purple-50 flex items-center gap-2 text-gray-700">
+                                                                                                    <span class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-500">
+                                                                                                        <i class="fas fa-file-prescription"></i>
+                                                                                                    </span>
+                                                                                                    <div>
+                                                                                                        <div class="font-medium">อ่านใบสั่งยา</div>
+                                                                                                        <div class="text-[10px] text-gray-400">OCR + ตรวจยาตีกัน</div>
+                                                                                                    </div>
+                                                                                                </button>
+                                                                                            `;
             document.body.appendChild(menu);
 
             // Close when clicking outside
@@ -8159,19 +8174,19 @@ function formatThaiDateTime($datetime)
         }
 
         modal.innerHTML = `
-                                                                                    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden">
-                                                                                        <div class="p-4 border-b border-gray-100 flex items-center justify-between">
-                                                                                            <div>
-                                                                                                <h3 class="font-semibold text-gray-800">เลือกรูปภาพเพื่อ${typeLabels[type]}</h3>
-                                                                                                <p class="text-xs text-gray-500 mt-1">คลิกที่รูปภาพที่ลูกค้าส่งมา</p>
-                                                                                            </div>
-                                                                                            <button onclick="closeCustomerImagePicker()" class="text-gray-400 hover:text-gray-600 p-2">
-                                                                                                <i class="fas fa-times text-lg"></i>
-                                                                                            </button>
-                                                                                        </div>
-                                                                                        <div class="p-4 overflow-y-auto max-h-[60vh]">
-                                                                                            <div class="grid grid-cols-3 gap-3">
-                                                                                                ${customerImages.map((img, idx) => `
+                                                                                            <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden">
+                                                                                                <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+                                                                                                    <div>
+                                                                                                        <h3 class="font-semibold text-gray-800">เลือกรูปภาพเพื่อ${typeLabels[type]}</h3>
+                                                                                                        <p class="text-xs text-gray-500 mt-1">คลิกที่รูปภาพที่ลูกค้าส่งมา</p>
+                                                                                                    </div>
+                                                                                                    <button onclick="closeCustomerImagePicker()" class="text-gray-400 hover:text-gray-600 p-2">
+                                                                                                        <i class="fas fa-times text-lg"></i>
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                                <div class="p-4 overflow-y-auto max-h-[60vh]">
+                                                                                                    <div class="grid grid-cols-3 gap-3">
+                                                                                                        ${customerImages.map((img, idx) => `
                         <div class="relative group cursor-pointer" onclick="selectCustomerImage('${img.src}', '${type}')">
                             <img src="${img.src}" class="w-full h-24 object-cover rounded-lg border-2 border-transparent group-hover:border-purple-500 transition-all">
                             <div class="absolute inset-0 bg-purple-500/0 group-hover:bg-purple-500/20 rounded-lg transition-all flex items-center justify-center">
@@ -8179,16 +8194,16 @@ function formatThaiDateTime($datetime)
                             </div>
                         </div>
                     `).join('')}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                <div class="p-4 border-t border-gray-100 bg-gray-50">
+                                                                                                    <p class="text-xs text-gray-500 text-center">
+                                                                                                        <i class="fas fa-info-circle mr-1"></i>
+                                                                                                        หรือ <button onclick="closeCustomerImagePicker(); document.getElementById('${type}ImageInput').click();" class="text-purple-600 hover:underline">อัพโหลดรูปใหม่</button>
+                                                                                                    </p>
+                                                                                                </div>
                                                                                             </div>
-                                                                                        </div>
-                                                                                        <div class="p-4 border-t border-gray-100 bg-gray-50">
-                                                                                            <p class="text-xs text-gray-500 text-center">
-                                                                                                <i class="fas fa-info-circle mr-1"></i>
-                                                                                                หรือ <button onclick="closeCustomerImagePicker(); document.getElementById('${type}ImageInput').click();" class="text-purple-600 hover:underline">อัพโหลดรูปใหม่</button>
-                                                                                            </p>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                `;
+                                                                                        `;
 
         modal.classList.remove('hidden');
     }
@@ -8365,16 +8380,16 @@ function formatThaiDateTime($datetime)
             };
 
             btnContainer.innerHTML = `
-                                                                                        <button type="button" onclick="analyzeImage('${type}')" 
-                                                                                                class="${typeColors[type]} text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-                                                                                            <i class="fas fa-magic"></i>
-                                                                                            ${typeLabels[type]}
-                                                                                        </button>
-                                                                                        <button type="button" onclick="sendImageWithoutAnalysis()" 
-                                                                                                class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm">
-                                                                                            <i class="fas fa-paper-plane"></i>
-                                                                                        </button>
-                                                                                    `;
+                                                                                                <button type="button" onclick="analyzeImage('${type}')" 
+                                                                                                        class="${typeColors[type]} text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                                                                                                    <i class="fas fa-magic"></i>
+                                                                                                    ${typeLabels[type]}
+                                                                                                </button>
+                                                                                                <button type="button" onclick="sendImageWithoutAnalysis()" 
+                                                                                                        class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm">
+                                                                                                    <i class="fas fa-paper-plane"></i>
+                                                                                                </button>
+                                                                                            `;
         }
     }
 
@@ -8596,24 +8611,24 @@ function formatThaiDateTime($datetime)
 
         if (isUrgent) {
             html += `
-                                                                                        <div class="bg-red-100 border-l-4 border-red-500 p-3 mb-3 rounded-r-lg">
-                                                                                            <div class="flex items-center gap-2 text-red-700 font-bold">
-                                                                                                <i class="fas fa-exclamation-triangle"></i>
-                                                                                                ⚠️ แนะนำพบแพทย์
-                                                                                            </div>
-                                                                                            <p class="text-red-600 text-xs mt-1">${escapeHtml(result.urgencyReason || result.recommendation || 'อาการรุนแรง ควรพบแพทย์')}</p>
-                                                                                        </div>
-                                                                                    `;
+                                                                                                <div class="bg-red-100 border-l-4 border-red-500 p-3 mb-3 rounded-r-lg">
+                                                                                                    <div class="flex items-center gap-2 text-red-700 font-bold">
+                                                                                                        <i class="fas fa-exclamation-triangle"></i>
+                                                                                                        ⚠️ แนะนำพบแพทย์
+                                                                                                    </div>
+                                                                                                    <p class="text-red-600 text-xs mt-1">${escapeHtml(result.urgencyReason || result.recommendation || 'อาการรุนแรง ควรพบแพทย์')}</p>
+                                                                                                </div>
+                                                                                            `;
         }
 
         html += `
-                                                                                    <div class="space-y-2">
-                                                                                        <div class="bg-purple-50 rounded-lg p-2">
-                                                                                            <div class="text-xs font-medium text-purple-700 mb-1">🔬 ผลการวิเคราะห์</div>
-                                                                                            <div class="text-sm text-gray-800">${escapeHtml(result.condition || result.analysis || 'ไม่สามารถระบุได้')}</div>
-                                                                                        </div>
+                                                                                            <div class="space-y-2">
+                                                                                                <div class="bg-purple-50 rounded-lg p-2">
+                                                                                                    <div class="text-xs font-medium text-purple-700 mb-1">🔬 ผลการวิเคราะห์</div>
+                                                                                                    <div class="text-sm text-gray-800">${escapeHtml(result.condition || result.analysis || 'ไม่สามารถระบุได้')}</div>
+                                                                                                </div>
             
-                                                                                        ${result.severity ? `
+                                                                                                ${result.severity ? `
             <div class="flex items-center gap-2">
                 <span class="text-xs text-gray-500">ความรุนแรง:</span>
                 <span class="text-xs px-2 py-0.5 rounded-full ${result.severity === 'severe' ? 'bg-red-100 text-red-700' :
@@ -8623,7 +8638,7 @@ function formatThaiDateTime($datetime)
             </div>
             ` : ''}
             
-                                                                                        ${result.recommendations && result.recommendations.length > 0 ? `
+                                                                                                ${result.recommendations && result.recommendations.length > 0 ? `
             <div class="mt-2">
                 <div class="text-xs font-medium text-gray-600 mb-1">💊 ยาแนะนำ</div>
                 ${result.recommendations.map(drug => `
@@ -8637,8 +8652,8 @@ function formatThaiDateTime($datetime)
                 `).join('')}
             </div>
             ` : ''}
-                                                                                    </div>
-                                                                                `;
+                                                                                            </div>
+                                                                                        `;
 
         content.innerHTML = html;
 
@@ -8667,27 +8682,27 @@ function formatThaiDateTime($datetime)
         const drug = result.drug || result;
 
         let html = `
-                                                                                    <div class="space-y-3">
-                                                                                        <div class="bg-emerald-50 rounded-lg p-2 mb-2">
-                                                                                            <div class="text-xs text-emerald-600 mb-1">📷 ระบุจากรูปภาพ</div>
-                                                                                        </div>
+                                                                                            <div class="space-y-3">
+                                                                                                <div class="bg-emerald-50 rounded-lg p-2 mb-2">
+                                                                                                    <div class="text-xs text-emerald-600 mb-1">📷 ระบุจากรูปภาพ</div>
+                                                                                                </div>
             
-                                                                                        <div class="flex justify-between items-start">
-                                                                                            <div>
-                                                                                                <div class="drug-name">${escapeHtml(drug.drugName || drug.name || 'ไม่ทราบชื่อยา')}</div>
-                                                                                                ${drug.genericName ? `<div class="text-xs text-gray-500">${escapeHtml(drug.genericName)}</div>` : ''}
-                                                                                                <div class="drug-dosage">${escapeHtml(drug.dosage || drug.description || '')}</div>
-                                                                                            </div>
-                                                                                        </div>
+                                                                                                <div class="flex justify-between items-start">
+                                                                                                    <div>
+                                                                                                        <div class="drug-name">${escapeHtml(drug.drugName || drug.name || 'ไม่ทราบชื่อยา')}</div>
+                                                                                                        ${drug.genericName ? `<div class="text-xs text-gray-500">${escapeHtml(drug.genericName)}</div>` : ''}
+                                                                                                        <div class="drug-dosage">${escapeHtml(drug.dosage || drug.description || '')}</div>
+                                                                                                    </div>
+                                                                                                </div>
             
-                                                                                        ${drug.usage ? `
+                                                                                                ${drug.usage ? `
             <div class="bg-blue-50 rounded-lg p-2 text-xs">
                 <p class="font-medium text-blue-700 mb-1">📋 วิธีใช้</p>
                 <p class="text-blue-600">${escapeHtml(drug.usage)}</p>
             </div>
             ` : ''}
             
-                                                                                        ${drug.contraindications && drug.contraindications.length > 0 ? `
+                                                                                                ${drug.contraindications && drug.contraindications.length > 0 ? `
             <div class="bg-yellow-50 rounded-lg p-2 text-xs">
                 <p class="font-medium text-yellow-700 mb-1">⚠️ ข้อควรระวัง</p>
                 <ul class="text-yellow-600 text-[11px] list-disc list-inside">
@@ -8696,7 +8711,7 @@ function formatThaiDateTime($datetime)
             </div>
             ` : ''}
             
-                                                                                        ${drug.matchedProductId ? `
+                                                                                                ${drug.matchedProductId ? `
             <div class="flex gap-2 mt-2">
                 <button onclick="selectDrugForInfo(${drug.matchedProductId}, '')" class="flex-1 text-xs py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg">
                     <i class="fas fa-info-circle mr-1"></i>ดูข้อมูลในระบบ
@@ -8706,8 +8721,8 @@ function formatThaiDateTime($datetime)
                 </button>
             </div>
             ` : ''}
-                                                                                    </div>
-                                                                                `;
+                                                                                            </div>
+                                                                                        `;
 
         content.innerHTML = html;
         showNotification('✓ ระบุยาจากรูปเสร็จสิ้น', 'success');
@@ -8724,14 +8739,14 @@ function formatThaiDateTime($datetime)
 
         if (!widget && hudWidgets) {
             const widgetHtml = `
-                                                                                        <div class="hud-widget" id="prescriptionWidget" style="background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%); border: 2px solid #60A5FA;">
-                                                                                            <div class="hud-widget-header" onclick="toggleWidget('prescriptionWidget')" style="background: #3B82F6; color: white; border-bottom: none;">
-                                                                                                <h4 style="color: white;"><i class="fas fa-file-prescription"></i> ใบสั่งยา OCR</h4>
-                                                                                                <i class="fas fa-chevron-down text-white/70 text-xs"></i>
-                                                                                            </div>
-                                                                                            <div class="hud-widget-body" id="prescriptionContent"></div>
-                                                                                        </div>
-                                                                                    `;
+                                                                                                <div class="hud-widget" id="prescriptionWidget" style="background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%); border: 2px solid #60A5FA;">
+                                                                                                    <div class="hud-widget-header" onclick="toggleWidget('prescriptionWidget')" style="background: #3B82F6; color: white; border-bottom: none;">
+                                                                                                        <h4 style="color: white;"><i class="fas fa-file-prescription"></i> ใบสั่งยา OCR</h4>
+                                                                                                        <i class="fas fa-chevron-down text-white/70 text-xs"></i>
+                                                                                                    </div>
+                                                                                                    <div class="hud-widget-body" id="prescriptionContent"></div>
+                                                                                                </div>
+                                                                                            `;
 
             // Insert at the top of HUD widgets
             hudWidgets.insertAdjacentHTML('afterbegin', widgetHtml);
@@ -8750,8 +8765,8 @@ function formatThaiDateTime($datetime)
         const hasInteractions = result.interactions && result.interactions.length > 0;
 
         let html = `
-                                                                                    <div class="space-y-2">
-                                                                                        ${result.doctorName || result.hospitalName ? `
+                                                                                            <div class="space-y-2">
+                                                                                                ${result.doctorName || result.hospitalName ? `
             <div class="bg-white rounded-lg p-2 text-xs">
                 ${result.doctorName ? `<div><span class="text-gray-500">แพทย์:</span> ${escapeHtml(result.doctorName)}</div>` : ''}
                 ${result.hospitalName ? `<div><span class="text-gray-500">โรงพยาบาล:</span> ${escapeHtml(result.hospitalName)}</div>` : ''}
@@ -8759,9 +8774,9 @@ function formatThaiDateTime($datetime)
             </div>
             ` : ''}
             
-                                                                                        <div class="text-xs font-medium text-blue-700 mt-2">📋 รายการยา (${drugs.length} รายการ)</div>
+                                                                                                <div class="text-xs font-medium text-blue-700 mt-2">📋 รายการยา (${drugs.length} รายการ)</div>
             
-                                                                                        ${drugs.map((drug, index) => `
+                                                                                                ${drugs.map((drug, index) => `
                 <div class="bg-white rounded-lg p-2 text-xs border-l-2 ${drug.hasInteraction ? 'border-red-400' : 'border-blue-400'}">
                     <div class="font-medium text-gray-800">${index + 1}. ${escapeHtml(drug.name || drug.drugName || drug)}</div>
                     ${drug.dosage ? `<div class="text-gray-500">${escapeHtml(drug.dosage)}</div>` : ''}
@@ -8770,7 +8785,7 @@ function formatThaiDateTime($datetime)
                 </div>
             `).join('')}
             
-                                                                                        ${hasInteractions ? `
+                                                                                                ${hasInteractions ? `
             <div class="bg-red-50 border-l-4 border-red-500 p-2 rounded-r-lg mt-2">
                 <div class="text-xs font-bold text-red-700 mb-1">⚠️ พบปฏิกิริยาระหว่างยา</div>
                 ${result.interactions.map(interaction => `
@@ -8787,13 +8802,13 @@ function formatThaiDateTime($datetime)
             </div>
             `}
             
-                                                                                        ${result.ocrConfidence ? `
+                                                                                                ${result.ocrConfidence ? `
             <div class="text-[10px] text-gray-400 mt-2 text-right">
                 ความแม่นยำ OCR: ${Math.round(result.ocrConfidence * 100)}%
             </div>
             ` : ''}
-                                                                                    </div>
-                                                                                `;
+                                                                                            </div>
+                                                                                        `;
 
         content.innerHTML = html;
 
@@ -9184,11 +9199,11 @@ function formatThaiDateTime($datetime)
         loadingOverlay.id = 'conversationLoadingOverlay';
         loadingOverlay.className = 'absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50';
         loadingOverlay.innerHTML = `
-                                                                                    <div class="text-center">
-                                                                                        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mb-3"></div>
-                                                                                        <p class="text-gray-600 text-sm">กำลังโหลดการสนทนา...</p>
-                                                                                    </div>
-                                                                                `;
+                                                                                            <div class="text-center">
+                                                                                                <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mb-3"></div>
+                                                                                                <p class="text-gray-600 text-sm">กำลังโหลดการสนทนา...</p>
+                                                                                            </div>
+                                                                                        `;
 
         const chatArea = document.getElementById('chatArea');
         if (chatArea) {
@@ -9223,17 +9238,17 @@ function formatThaiDateTime($datetime)
         errorOverlay.id = 'conversationErrorOverlay';
         errorOverlay.className = 'absolute inset-0 bg-white flex items-center justify-center z-50';
         errorOverlay.innerHTML = `
-                                                                                    <div class="text-center p-6">
-                                                                                        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                                                            <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
-                                                                                        </div>
-                                                                                        <h3 class="text-lg font-semibold text-gray-800 mb-2">เกิดข้อผิดพลาด</h3>
-                                                                                        <p class="text-gray-600 text-sm mb-4">${escapeHtml(errorMessage)}</p>
-                                                                                        <button onclick="retryLoadConversation()" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition">
-                                                                                            <i class="fas fa-redo mr-2"></i>ลองอีกครั้ง
-                                                                                        </button>
-                                                                                    </div>
-                                                                                `;
+                                                                                            <div class="text-center p-6">
+                                                                                                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                                                                    <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
+                                                                                                </div>
+                                                                                                <h3 class="text-lg font-semibold text-gray-800 mb-2">เกิดข้อผิดพลาด</h3>
+                                                                                                <p class="text-gray-600 text-sm mb-4">${escapeHtml(errorMessage)}</p>
+                                                                                                <button onclick="retryLoadConversation()" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition">
+                                                                                                    <i class="fas fa-redo mr-2"></i>ลองอีกครั้ง
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        `;
 
         const chatArea = document.getElementById('chatArea');
         if (chatArea) {
@@ -9274,15 +9289,15 @@ function formatThaiDateTime($datetime)
         warning.id = 'slowConnectionWarning';
         warning.className = 'fixed top-4 right-4 bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3';
         warning.innerHTML = `
-                                                                                    <i class="fas fa-exclamation-triangle text-amber-600"></i>
-                                                                                    <div>
-                                                                                        <p class="font-semibold text-sm">การเชื่อมต่อช้า</p>
-                                                                                        <p class="text-xs">กำลังพยายามเชื่อมต่อใหม่...</p>
-                                                                                    </div>
-                                                                                    <button onclick="this.parentElement.remove()" class="ml-2 text-amber-600 hover:text-amber-800">
-                                                                                        <i class="fas fa-times"></i>
-                                                                                    </button>
-                                                                                `;
+                                                                                            <i class="fas fa-exclamation-triangle text-amber-600"></i>
+                                                                                            <div>
+                                                                                                <p class="font-semibold text-sm">การเชื่อมต่อช้า</p>
+                                                                                                <p class="text-xs">กำลังพยายามเชื่อมต่อใหม่...</p>
+                                                                                            </div>
+                                                                                            <button onclick="this.parentElement.remove()" class="ml-2 text-amber-600 hover:text-amber-800">
+                                                                                                <i class="fas fa-times"></i>
+                                                                                            </button>
+                                                                                        `;
 
         document.body.appendChild(warning);
 
@@ -9385,12 +9400,12 @@ function formatThaiDateTime($datetime)
         indicator.id = 'offlineIndicator';
         indicator.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3';
         indicator.innerHTML = `
-                                                                                    <i class="fas fa-wifi-slash"></i>
-                                                                                    <div>
-                                                                                        <p class="font-semibold text-sm">ออฟไลน์</p>
-                                                                                        <p class="text-xs">ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้</p>
-                                                                                    </div>
-                                                                                `;
+                                                                                            <i class="fas fa-wifi-slash"></i>
+                                                                                            <div>
+                                                                                                <p class="font-semibold text-sm">ออฟไลน์</p>
+                                                                                                <p class="text-xs">ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้</p>
+                                                                                            </div>
+                                                                                        `;
 
         document.body.appendChild(indicator);
     }
@@ -9890,35 +9905,35 @@ function formatThaiDateTime($datetime)
                 : '';
 
             element.innerHTML = `
-                                                                                        <div class="flex items-center gap-3">
-                                                                                            <div class="relative flex-shrink-0">
-                                                                                                <img src="${pictureUrl}"
-                                                                                                     class="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
-                                                                                                     loading="lazy"
-                                                                                                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3Cpath d=%22M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E'">
-                                                                                                ${unreadCount > 0 ? `
+                                                                                                <div class="flex items-center gap-3">
+                                                                                                    <div class="relative flex-shrink-0">
+                                                                                                        <img src="${pictureUrl}"
+                                                                                                             class="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                                                                                                             loading="lazy"
+                                                                                                             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3Cpath d=%22M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E'">
+                                                                                                        ${unreadCount > 0 ? `
                     <div class="unread-badge absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold">
                         ${unreadCount > 9 ? '9+' : unreadCount}
                     </div>
                     ` : ''}
-                                                                                            </div>
-                                                                                            <div class="flex-1 min-w-0">
-                                                                                                <div class="flex justify-between items-baseline">
-                                                                                                    <h3 class="text-sm font-semibold text-gray-800 truncate">${this.escapeHtml(displayName)}</h3>
-                                                                                                    <span class="last-time text-[10px] text-gray-400">${lastTime}</span>
-                                                                                                </div>
-                                                                                                <p class="last-msg text-xs text-gray-500 truncate">${this.escapeHtml(lastMsg)}</p>
-                                                                                                <div class="flex items-center gap-1 mt-1 flex-wrap">
-                                                                                                    ${statusBadgeHtml}
-                                                                                                    ${assignees.length > 0 ? `
+                                                                                                    </div>
+                                                                                                    <div class="flex-1 min-w-0">
+                                                                                                        <div class="flex justify-between items-baseline">
+                                                                                                            <h3 class="text-sm font-semibold text-gray-800 truncate">${this.escapeHtml(displayName)}</h3>
+                                                                                                            <span class="last-time text-[10px] text-gray-400">${lastTime}</span>
+                                                                                                        </div>
+                                                                                                        <p class="last-msg text-xs text-gray-500 truncate">${this.escapeHtml(lastMsg)}</p>
+                                                                                                        <div class="flex items-center gap-1 mt-1 flex-wrap">
+                                                                                                            ${statusBadgeHtml}
+                                                                                                            ${assignees.length > 0 ? `
                             <span class="text-[9px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full">
                                 <i class="fas fa-user-check"></i> ${assignees.length === 1 ? 'มอบหมายแล้ว' : assignees.length + ' คน'}
                             </span>
                         ` : ''}
+                                                                                                        </div>
+                                                                                                    </div>
                                                                                                 </div>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    `;
+                                                                                            `;
 
             return element;
         }
@@ -10366,50 +10381,50 @@ function formatThaiDateTime($datetime)
     // Add CSS for keyboard navigation
     const ajaxStyles = document.createElement('style');
     ajaxStyles.textContent = `
-                                                                                /* Keyboard navigation styles - Task 18.1 */
-                                                                                .user-item.keyboard-selected {
-                                                                                    outline: 2px solid #0C665D;
-                                                                                    outline-offset: -2px;
-                                                                                    background-color: rgba(12, 102, 93, 0.05);
-                                                                                }
+                                                                                        /* Keyboard navigation styles - Task 18.1 */
+                                                                                        .user-item.keyboard-selected {
+                                                                                            outline: 2px solid #0C665D;
+                                                                                            outline-offset: -2px;
+                                                                                            background-color: rgba(12, 102, 93, 0.05);
+                                                                                        }
     
-                                                                                .user-item:focus {
-                                                                                    outline: 2px solid #0C665D;
-                                                                                    outline-offset: -2px;
-                                                                                }
+                                                                                        .user-item:focus {
+                                                                                            outline: 2px solid #0C665D;
+                                                                                            outline-offset: -2px;
+                                                                                        }
     
-                                                                                /* Remove default focus outline from userList container */
-                                                                                #userList:focus {
-                                                                                    outline: none;
-                                                                                }
+                                                                                        /* Remove default focus outline from userList container */
+                                                                                        #userList:focus {
+                                                                                            outline: none;
+                                                                                        }
     
-                                                                                /* Make user-item focusable and improve accessibility */
-                                                                                .user-item {
-                                                                                    cursor: pointer;
-                                                                                    transition: background-color 0.15s ease, outline 0.15s ease;
-                                                                                }
+                                                                                        /* Make user-item focusable and improve accessibility */
+                                                                                        .user-item {
+                                                                                            cursor: pointer;
+                                                                                            transition: background-color 0.15s ease, outline 0.15s ease;
+                                                                                        }
     
-                                                                                .user-item:hover {
-                                                                                    background-color: rgba(12, 102, 93, 0.03);
-                                                                                }
+                                                                                        .user-item:hover {
+                                                                                            background-color: rgba(12, 102, 93, 0.03);
+                                                                                        }
     
-                                                                                #conversationLoadingOverlay {
-                                                                                    animation: fadeIn 0.2s ease-out;
-                                                                                }
+                                                                                        #conversationLoadingOverlay {
+                                                                                            animation: fadeIn 0.2s ease-out;
+                                                                                        }
     
-                                                                                #conversationErrorOverlay {
-                                                                                    animation: fadeIn 0.3s ease-out;
-                                                                                }
+                                                                                        #conversationErrorOverlay {
+                                                                                            animation: fadeIn 0.3s ease-out;
+                                                                                        }
     
-                                                                                @keyframes fadeIn {
-                                                                                    from { opacity: 0; }
-                                                                                    to { opacity: 1; }
-                                                                                }
+                                                                                        @keyframes fadeIn {
+                                                                                            from { opacity: 0; }
+                                                                                            to { opacity: 1; }
+                                                                                        }
     
-                                                                                .conversation-bumping {
-                                                                                    background-color: rgba(16, 185, 129, 0.1);
-                                                                                }
-                                                                            `;
+                                                                                        .conversation-bumping {
+                                                                                            background-color: rgba(16, 185, 129, 0.1);
+                                                                                        }
+                                                                                    `;
     document.head.appendChild(ajaxStyles);
 
     console.log('[AJAX] Conversation switching script loaded');
@@ -11078,13 +11093,13 @@ function formatThaiDateTime($datetime)
             console.error('Error loading performance metrics:', error);
             // Show error in table
             document.getElementById('perfMetricsTable').innerHTML = `
-                                                                                        <tr>
-                                                                                            <td colspan="9" class="px-4 py-8 text-center text-red-500">
-                                                                                                <i class="fas fa-exclamation-triangle mr-2"></i>
-                                                                                                Error loading performance metrics: ${error.message}
-                                                                                            </td>
-                                                                                        </tr>
-                                                                                    `;
+                                                                                                <tr>
+                                                                                                    <td colspan="9" class="px-4 py-8 text-center text-red-500">
+                                                                                                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                                                                                                        Error loading performance metrics: ${error.message}
+                                                                                                    </td>
+                                                                                                </tr>
+                                                                                            `;
         }
     }
 
@@ -11125,12 +11140,12 @@ function formatThaiDateTime($datetime)
 
         if (!stats || Object.keys(stats).length === 0) {
             tbody.innerHTML = `
-                                                                                        <tr>
-                                                                                            <td colspan="9" class="px-4 py-8 text-center text-gray-500">
-                                                                                                No performance data available for this date range
-                                                                                            </td>
-                                                                                        </tr>
-                                                                                    `;
+                                                                                                <tr>
+                                                                                                    <td colspan="9" class="px-4 py-8 text-center text-gray-500">
+                                                                                                        No performance data available for this date range
+                                                                                                    </td>
+                                                                                                </tr>
+                                                                                            `;
             return;
         }
 
@@ -11147,11 +11162,11 @@ function formatThaiDateTime($datetime)
             const data = stats[metric.key];
             if (!data || data.count === 0) {
                 html += `
-                                                                                            <tr class="hover:bg-gray-50">
-                                                                                                <td class="px-4 py-3 font-medium text-gray-700">${metric.label}</td>
-                                                                                                <td colspan="8" class="px-4 py-3 text-center text-gray-400">No data</td>
-                                                                                            </tr>
-                                                                                        `;
+                                                                                                    <tr class="hover:bg-gray-50">
+                                                                                                        <td class="px-4 py-3 font-medium text-gray-700">${metric.label}</td>
+                                                                                                        <td colspan="8" class="px-4 py-3 text-center text-gray-400">No data</td>
+                                                                                                    </tr>
+                                                                                                `;
                 return;
             }
 
@@ -11163,18 +11178,18 @@ function formatThaiDateTime($datetime)
             const errorClass = errorRate > 10 ? 'text-red-600 font-semibold' : 'text-gray-600';
 
             html += `
-                                                                                        <tr class="hover:bg-gray-50">
-                                                                                            <td class="px-4 py-3 font-medium text-gray-700">${metric.label}</td>
-                                                                                            <td class="px-4 py-3 text-right text-gray-600">${formatNumber(data.count)}</td>
-                                                                                            <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.average)}ms</td>
-                                                                                            <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.min)}ms</td>
-                                                                                            <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.max)}ms</td>
-                                                                                            <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.p50)}ms</td>
-                                                                                            <td class="px-4 py-3 text-right font-semibold text-gray-700">${Math.round(data.p95)}ms</td>
-                                                                                            <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.p99)}ms</td>
-                                                                                            <td class="px-4 py-3 text-right ${errorClass}">${errorRate.toFixed(1)}%</td>
-                                                                                        </tr>
-                                                                                    `;
+                                                                                                <tr class="hover:bg-gray-50">
+                                                                                                    <td class="px-4 py-3 font-medium text-gray-700">${metric.label}</td>
+                                                                                                    <td class="px-4 py-3 text-right text-gray-600">${formatNumber(data.count)}</td>
+                                                                                                    <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.average)}ms</td>
+                                                                                                    <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.min)}ms</td>
+                                                                                                    <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.max)}ms</td>
+                                                                                                    <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.p50)}ms</td>
+                                                                                                    <td class="px-4 py-3 text-right font-semibold text-gray-700">${Math.round(data.p95)}ms</td>
+                                                                                                    <td class="px-4 py-3 text-right text-gray-600">${Math.round(data.p99)}ms</td>
+                                                                                                    <td class="px-4 py-3 text-right ${errorClass}">${errorRate.toFixed(1)}%</td>
+                                                                                                </tr>
+                                                                                            `;
         });
 
         tbody.innerHTML = html;
