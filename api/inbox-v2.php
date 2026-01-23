@@ -3135,8 +3135,9 @@ try {
                             $fileType = strtoupper(pathinfo($fileName, PATHINFO_EXTENSION)) . " File";
                             $expiryDate = date('d M Y H:i', strtotime('+7 days')); // Line files expire usually
 
-                            // 1:1 Hero Icon (Generic PDF/File Icon)
-                            $iconUrl = "https://cdn-icons-png.flaticon.com/512/337/337946.png"; // PDF Icon style
+                            // 1:1 Hero Icon (Custom CNY Logo)
+                            $iconUrl = "https://cny.re-ya.com/uploads/chat_images/chat_1769145030_697302c699ee0.png";
+                            $fileType = strtoupper(pathinfo($fileName, PATHINFO_EXTENSION)) . " Document";
 
                             $lineMessages[] = [
                                 'type' => 'flex',
@@ -3158,7 +3159,6 @@ try {
                                         'type' => 'box',
                                         'layout' => 'vertical',
                                         'contents' => [
-                                            // Line 1: Filename (Header)
                                             [
                                                 'type' => 'text',
                                                 'text' => $fileName,
@@ -3166,104 +3166,22 @@ try {
                                                 'size' => 'md',
                                                 'wrap' => true
                                             ],
-                                            // Line 2: File Type
                                             [
-                                                'type' => 'box',
-                                                'layout' => 'baseline',
-                                                'margin' => 'md',
-                                                'contents' => [
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => 'Type',
-                                                        'size' => 'xs',
-                                                        'color' => '#aaaaaa',
-                                                        'flex' => 2
-                                                    ],
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => $fileType,
-                                                        'size' => 'xs',
-                                                        'color' => '#666666',
-                                                        'flex' => 5,
-                                                        'wrap' => true
-                                                    ]
-                                                ]
+                                                'type' => 'text',
+                                                'text' => $fileType,
+                                                'size' => 'xs',
+                                                'color' => '#aaaaaa',
+                                                'margin' => 'sm'
                                             ],
-                                            // Line 3: Size
                                             [
-                                                'type' => 'box',
-                                                'layout' => 'baseline',
-                                                'spacing' => 'sm',
-                                                'contents' => [
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => 'Size',
-                                                        'size' => 'xs',
-                                                        'color' => '#aaaaaa',
-                                                        'flex' => 2
-                                                    ],
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => $fileSize,
-                                                        'size' => 'xs',
-                                                        'color' => '#666666',
-                                                        'flex' => 5,
-                                                        'wrap' => true
-                                                    ]
-                                                ]
-                                            ],
-                                            // Line 4: Expiry
-                                            [
-                                                'type' => 'box',
-                                                'layout' => 'baseline',
-                                                'spacing' => 'sm',
-                                                'contents' => [
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => 'Expires',
-                                                        'size' => 'xs',
-                                                        'color' => '#aaaaaa',
-                                                        'flex' => 2
-                                                    ],
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => $expiryDate,
-                                                        'size' => 'xs',
-                                                        'color' => '#666666',
-                                                        'flex' => 5,
-                                                        'wrap' => true
-                                                    ]
-                                                ]
-                                            ],
-                                            // Line 5: Status
-                                            [
-                                                'type' => 'box',
-                                                'layout' => 'baseline',
-                                                'spacing' => 'sm',
-                                                'contents' => [
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => 'Status',
-                                                        'size' => 'xs',
-                                                        'color' => '#aaaaaa',
-                                                        'flex' => 2
-                                                    ],
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => 'Ready to Download',
-                                                        'size' => 'xs',
-                                                        'color' => '#1DB446',
-                                                        'flex' => 5,
-                                                        'wrap' => true
-                                                    ]
-                                                ]
+                                                'type' => 'separator',
+                                                'margin' => 'lg'
                                             ]
                                         ]
                                     ],
                                     'footer' => [
                                         'type' => 'box',
                                         'layout' => 'vertical',
-                                        'spacing' => 'sm',
                                         'contents' => [
                                             [
                                                 'type' => 'button',
@@ -3272,12 +3190,11 @@ try {
                                                 'height' => 'sm',
                                                 'action' => [
                                                     'type' => 'uri',
-                                                    'label' => 'Download File/Open',
+                                                    'label' => 'Download File',
                                                     'uri' => $fileUrl
                                                 ]
                                             ]
-                                        ],
-                                        'flex' => 0
+                                        ]
                                     ]
                                 ]
                             ];
@@ -3286,6 +3203,109 @@ try {
                             $fileContent = json_encode(['url' => $fileUrl, 'name' => $fileName], JSON_UNESCAPED_UNICODE);
                             $dbRecords[] = ['type' => 'file', 'content' => $fileContent];
                         }
+                    } elseif ($type === 'payment') {
+                        // Payment Template
+                        $amount = number_format((float) ($msg['amount'] ?? 0), 2);
+                        $bankName = "KBANK (กสิกรไทย)";
+                        $accNumber = "068-3-84622-8";
+                        $accName = "บจก.ซี เอ็น วาย เฮลท์แคร์";
+
+                        $lineMessages[] = [
+                            'type' => 'flex',
+                            'altText' => "แจ้งยอดชำระ: {$amount} บาท",
+                            'contents' => [
+                                'type' => 'bubble',
+                                'size' => 'kilo',
+                                'body' => [
+                                    'type' => 'box',
+                                    'layout' => 'vertical',
+                                    'contents' => [
+                                        [
+                                            'type' => 'text',
+                                            'text' => 'PAYMENT DETAILS',
+                                            'weight' => 'bold',
+                                            'color' => '#1DB446',
+                                            'size' => 'xxs'
+                                        ],
+                                        [
+                                            'type' => 'text',
+                                            'text' => "{$amount} THB",
+                                            'weight' => 'bold',
+                                            'size' => 'xxl',
+                                            'margin' => 'md'
+                                        ],
+                                        [
+                                            'type' => 'separator',
+                                            'margin' => 'lg'
+                                        ],
+                                        [
+                                            'type' => 'box',
+                                            'layout' => 'vertical',
+                                            'margin' => 'lg',
+                                            'spacing' => 'sm',
+                                            'contents' => [
+                                                [
+                                                    'type' => 'text',
+                                                    'text' => $bankName,
+                                                    'size' => 'sm',
+                                                    'color' => '#555555'
+                                                ],
+                                                [
+                                                    'type' => 'text',
+                                                    'text' => $accNumber,
+                                                    'size' => 'xl',
+                                                    'weight' => 'bold',
+                                                    'color' => '#111111',
+                                                    'action' => [
+                                                        'type' => 'clipboard',
+                                                        'label' => 'Copy',
+                                                        'clipboardText' => str_replace('-', '', $accNumber)
+                                                    ]
+                                                ],
+                                                [
+                                                    'type' => 'text',
+                                                    'text' => $accName,
+                                                    'size' => 'xs',
+                                                    'color' => '#aaaaaa'
+                                                ]
+                                            ]
+                                        ],
+                                        [
+                                            'type' => 'separator',
+                                            'margin' => 'lg'
+                                        ],
+                                        [
+                                            'type' => 'text',
+                                            'text' => 'กรุณาส่งสลิปเพื่อยืนยันการโอนเงิน',
+                                            'size' => 'xxs',
+                                            'color' => '#aaaaaa',
+                                            'margin' => 'md',
+                                            'align' => 'center'
+                                        ]
+                                    ]
+                                ],
+                                'footer' => [
+                                    'type' => 'box',
+                                    'layout' => 'vertical',
+                                    'contents' => [
+                                        [
+                                            'type' => 'button',
+                                            'style' => 'secondary',
+                                            'height' => 'sm',
+                                            'action' => [
+                                                'type' => 'clipboard',
+                                                'label' => 'คัดลอกเลขบัญชี',
+                                                'clipboardText' => str_replace('-', '', $accNumber)
+                                            ]
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        ];
+
+                        // Save as text to DB
+                        $text = "💰 แจ้งยอดชำระ: {$amount} บาท\n{$bankName}\n{$accNumber}\n{$accName}";
+                        $dbRecords[] = ['type' => 'text', 'content' => $text];
                     }
                 }
 
