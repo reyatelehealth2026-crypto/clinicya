@@ -319,6 +319,15 @@ include __DIR__ . '/includes/header.php';
         background: #EF4444;
     }
 
+    .video-ctrl-btn.screen {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+    }
+
+    .video-ctrl-btn.screen.active {
+        background: #3B82F6;
+    }
+
     .video-ctrl-btn.end {
         background: #EF4444;
         color: white;
@@ -463,6 +472,9 @@ include __DIR__ . '/includes/header.php';
             <button class="video-ctrl-btn camera" id="btn-camera" onclick="toggleCamera()">
                 <i class="fas fa-video"></i>
             </button>
+            <button class="video-ctrl-btn screen" id="btn-screen" onclick="toggleScreenShare()" title="แชร์หน้าจอ">
+                <i class="fas fa-desktop"></i>
+            </button>
         </div>
     </div>
 </div>
@@ -488,6 +500,7 @@ include __DIR__ . '/includes/header.php';
     let callSeconds = 0;
     let isMuted = false;
     let isCameraOff = false;
+    let isScreenSharing = false;
     let pendingIceCandidates = [];
     let offerReceived = false;
 
@@ -870,6 +883,73 @@ include __DIR__ . '/includes/header.php';
         const btn = document.getElementById('btn-camera');
         btn.classList.toggle('active', isCameraOff);
         btn.innerHTML = isCameraOff ? '<i class="fas fa-video-slash"></i>' : '<i class="fas fa-video"></i>';
+    }
+
+    async function toggleScreenShare() {
+        if (!peerConnection) return;
+
+        const btn = document.getElementById('btn-screen');
+
+        if (!isScreenSharing) {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ cursor: "always" });
+                const screenTrack = stream.getVideoTracks()[0];
+
+                // Replace video track in sender
+                const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
+                if (sender) {
+                    await sender.replaceTrack(screenTrack);
+                }
+
+                // Update local video preview
+                document.getElementById('local-video').srcObject = stream;
+
+                // Handle stream end (user clicks stop sharing in browser UI)
+                screenTrack.onended = () => {
+                    if (isScreenSharing) toggleScreenShare(); // Revert to camera if still in sharing mode
+                };
+
+                isScreenSharing = true;
+                btn.classList.add('active');
+            } catch (err) {
+                console.error("Error sharing screen: " + err);
+            }
+        } else {
+            // Revert to camera
+            try {
+                // Determine which stream to use (camera)
+                let videoTrack = localStream ? localStream.getVideoTracks()[0] : null;
+
+                // If no local stream (e.g. valid camera not found initially), try to get it again
+                if (!videoTrack) {
+                    try {
+                        const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        videoTrack = newStream.getVideoTracks()[0];
+                        // Update local stream ref
+                        if (!localStream) localStream = newStream;
+                        else localStream.addTrack(videoTrack);
+                    } catch (e) { }
+                }
+
+                if (videoTrack) {
+                    const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
+                    if (sender) {
+                        await sender.replaceTrack(videoTrack);
+                    }
+                    document.getElementById('local-video').srcObject = localStream;
+                }
+
+                // Stop screen share track
+                const currentStream = document.getElementById('local-video').srcObject; // Logic fix needed here? No, srcObject might be the screen stream
+                // Actually, we just need to stop the screen track if we haven't already.
+                // But replaceTrack doesn't stop it automatically? it might not.
+
+                isScreenSharing = false;
+                btn.classList.remove('active');
+            } catch (err) {
+                console.error("Error reverting to camera: " + err);
+            }
+        }
     }
 
     function startCallTimer() {

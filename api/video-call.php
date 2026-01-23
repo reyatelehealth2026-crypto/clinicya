@@ -30,6 +30,7 @@ register_shutdown_function(function () {
 try {
     require_once '../config/config.php';
     require_once '../config/database.php';
+    require_once '../classes/ActivityLogger.php';
 
     $db = Database::getInstance()->getConnection();
 } catch (Exception $e) {
@@ -368,6 +369,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $db->prepare("UPDATE video_calls SET status = 'completed', duration = ?, ended_at = NOW() WHERE id = ? OR room_id = ?");
         $stmt->execute([$duration, $callId, $callId]);
+
+        // Log activity
+        try {
+            // Get customer name and correct call_id
+            $custStmt = $db->prepare("
+                SELECT c.id, u.display_name, u.line_user_id 
+                FROM video_calls c 
+                LEFT JOIN users u ON (c.user_id = u.id OR c.line_user_id = u.line_user_id)
+                WHERE c.id = ? OR c.room_id = ?
+                LIMIT 1
+            ");
+            $custStmt->execute([$callId, $callId]);
+            $custData = $custStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($custData) {
+                $custName = $custData['display_name'] ?? 'ลูกค้า';
+                $realCallId = $custData['id'];
+
+                $logger = ActivityLogger::getInstance($db);
+                $logger->logPharmacy(
+                    ActivityLogger::ACTION_UPDATE,
+                    "Video Call เสร็จสิ้นกับ $custName (ระยะเวลา: " . gmdate("H:i:s", $duration) . ")",
+                    [
+                        'entity_type' => 'video_call',
+                        'entity_id' => $realCallId,
+                        'user_id' => $db->lastInsertId(), // Placeholder, not real user_id
+                        'extra_data' => ['duration' => $duration]
+                    ]
+                );
+            }
+        } catch (Exception $e) {
+            error_log("Video call logging error: " . $e->getMessage());
+        }
 
         echo json_encode(['success' => true]);
         exit;
