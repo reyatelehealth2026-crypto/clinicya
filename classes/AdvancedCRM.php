@@ -28,9 +28,15 @@ class AdvancedCRM
             VALUES (?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE color = ?, description = ?, auto_assign_rules = ?");
         $stmt->execute([
-            $this->lineAccountId, $name, $color, $description, $type, 
+            $this->lineAccountId,
+            $name,
+            $color,
+            $description,
+            $type,
             $autoRules ? json_encode($autoRules) : null,
-            $color, $description, $autoRules ? json_encode($autoRules) : null
+            $color,
+            $description,
+            $autoRules ? json_encode($autoRules) : null
         ]);
         return $this->db->lastInsertId();
     }
@@ -85,12 +91,16 @@ class AdvancedCRM
             (line_account_id, name, description, segment_type, conditions) 
             VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([
-            $this->lineAccountId, $name, $description, $type, json_encode($conditions)
+            $this->lineAccountId,
+            $name,
+            $description,
+            $type,
+            json_encode($conditions)
         ]);
-        
+
         $segmentId = $this->db->lastInsertId();
         $this->calculateSegmentMembers($segmentId);
-        
+
         return $segmentId;
     }
 
@@ -100,22 +110,24 @@ class AdvancedCRM
         $stmt->execute([$segmentId]);
         $segment = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$segment) return 0;
+        if (!$segment)
+            return 0;
 
         $conditions = json_decode($segment['conditions'], true);
-        if (!$conditions) return 0;
+        if (!$conditions)
+            return 0;
 
         $query = $this->buildSegmentQuery($conditions);
-        
+
         $stmt = $this->db->prepare("DELETE FROM segment_members WHERE segment_id = ?");
         $stmt->execute([$segmentId]);
 
         $insertQuery = "INSERT INTO segment_members (segment_id, user_id, score)
             SELECT ?, u.id, 1 FROM users u
-            LEFT JOIN user_profiles_extended p ON u.id = p.user_id
+            LEFT JOIN loyalty_points lp ON u.id = lp.user_id
             WHERE (u.line_account_id = ? OR u.line_account_id IS NULL) AND u.is_blocked = 0
             {$query['where']}";
-        
+
         $stmt = $this->db->prepare($insertQuery);
         $params = array_merge([$segmentId, $this->lineAccountId], $query['params']);
         $stmt->execute($params);
@@ -140,19 +152,41 @@ class AdvancedCRM
                 foreach ($condition as $op => $value) {
                     switch ($field) {
                         case 'last_activity_days':
-                            $where[] = "DATEDIFF(NOW(), COALESCE((SELECT MAX(created_at) FROM user_behaviors WHERE user_id = u.id), u.created_at)) {$op} ?";
+                            // Inactive for X days (Recency)
+                            $where[] = "DATEDIFF(NOW(), COALESCE(u.last_message_at, u.last_order_at, u.created_at)) {$op} ?";
                             $params[] = $value;
                             break;
+
                         case 'created_days':
                             $where[] = "DATEDIFF(NOW(), u.created_at) {$op} ?";
                             $params[] = $value;
                             break;
-                        case 'lifetime_value':
-                            $where[] = "COALESCE(p.lifetime_value, 0) {$op} ?";
+
+                        case 'total_spent':
+                            // Monetary
+                            $where[] = "COALESCE(u.total_spent, 0) {$op} ?";
                             $params[] = $value;
                             break;
-                        case 'purchase_count':
-                            $where[] = "COALESCE(p.total_orders, 0) {$op} ?";
+
+                        case 'order_count':
+                            // Frequency
+                            $where[] = "COALESCE(u.total_orders, 0) {$op} ?";
+                            $params[] = $value;
+                            break;
+
+                        case 'tier':
+                            $where[] = "lp.tier = ?";
+                            $params[] = $value;
+                            break;
+
+                        case 'has_tag':
+                            // Subquery for tag check
+                            $where[] = "EXISTS (SELECT 1 FROM user_tag_assignments uta WHERE uta.user_id = u.id AND uta.tag_id = ?)";
+                            $params[] = $value;
+                            break;
+
+                        case 'province':
+                            $where[] = "u.province = ?";
                             $params[] = $value;
                             break;
                     }
