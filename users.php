@@ -310,16 +310,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="submit" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
                 <i class="fas fa-search mr-1"></i>ค้นหา
             </button>
-            <button type="button" onclick="toggleAdvancedFilters()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">
+            <button type="button" onclick="toggleAdvancedFilters()"
+                class="px-4 py-2 border rounded-lg hover:bg-gray-50">
                 <i class="fas fa-filter mr-1"></i>ตัวกรอง
-                <?php 
+                <?php
                 $activeFilters = array_filter([$tierFilter, $pointsFilter, $activityFilter, $purchaseFilter, $statusFilter, $tagFilter]);
                 if (count($activeFilters) > 0): ?>
-                <span class="ml-1 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full"><?= count($activeFilters) ?></span>
+                    <span
+                        class="ml-1 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full"><?= count($activeFilters) ?></span>
                 <?php endif; ?>
             </button>
         </div>
-        
+
         <!-- Advanced Filters (collapsible) -->
         <div id="advancedFilters" class="<?= count($activeFilters) > 0 ? '' : 'hidden' ?> pt-4 border-t">
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -334,7 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <option value="platinum" <?= $tierFilter === 'platinum' ? 'selected' : '' ?>>💎 Platinum</option>
                     </select>
                 </div>
-                
+
                 <!-- Points Filter -->
                 <div>
                     <label class="block text-sm font-medium mb-1">แต้มสะสม</label>
@@ -342,46 +344,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <option value="">ทั้งหมด</option>
                         <option value="0-100" <?= $pointsFilter === '0-100' ? 'selected' : '' ?>>0-100 แต้ม</option>
                         <option value="100-500" <?= $pointsFilter === '100-500' ? 'selected' : '' ?>>100-500 แต้ม</option>
-                        <option value="500-1000" <?= $pointsFilter === '500-1000' ? 'selected' : '' ?>>500-1,000 แต้ม</option>
+                        <option value="500-1000" <?= $pointsFilter === '500-1000' ? 'selected' : '' ?>>500-1,000 แต้ม
+                        </option>
                         <option value="1000+" <?= $pointsFilter === '1000+' ? 'selected' : '' ?>>1,000+ แต้ม</option>
                     </select>
                 </div>
-                
+
                 <!-- Activity Filter -->
                 <div>
                     <label class="block text-sm font-medium mb-1">กิจกรรมล่าสุด</label>
-                    <select name="activity" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
+                    <select name="activity"
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                         <option value="">ทั้งหมด</option>
                         <option value="today" <?= $activityFilter === 'today' ? 'selected' : '' ?>>วันนี้</option>
                         <option value="7days" <?= $activityFilter === '7days' ? 'selected' : '' ?>>7 วันที่ผ่านมา</option>
-                        <option value="30days" <?= $activityFilter === '30days' ? 'selected' : '' ?>>30 วันที่ผ่านมา</option>
-                        <option value="inactive" <?= $activityFilter === 'inactive' ? 'selected' : '' ?>>ไม่มีกิจกรรม (>30 วัน)</option>
+                        <option value="30days" <?= $activityFilter === '30days' ? 'selected' : '' ?>>30 วันที่ผ่านมา
+                        </option>
+                        <option value="inactive" <?= $activityFilter === 'inactive' ? 'selected' : '' ?>>ไม่มีกิจกรรม (>30
+                            วัน)</option>
                     </select>
                 </div>
-                
+
                 <!-- Purchase Filter -->
                 <div>
                     <label class="block text-sm font-medium mb-1">ประวัติซื้อ</label>
-                    <select name="purchase" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
+                    <select name="purchase"
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                         <option value="">ทั้งหมด</option>
-                        <option value="purchased" <?= $purchaseFilter === 'purchased' ? 'selected' : '' ?>>เคยซื้อแล้ว</option>
+                        <option value="purchased" <?= $purchaseFilter === 'purchased' ? 'selected' : '' ?>>เคยซื้อแล้ว
+                        </option>
                         <option value="never" <?= $purchaseFilter === 'never' ? 'selected' : '' ?>>ยังไม่เคยซื้อ</option>
                         <option value="1000+" <?= $purchaseFilter === '1000+' ? 'selected' : '' ?>>ซื้อ ≥ ฿1,000</option>
                         <option value="5000+" <?= $purchaseFilter === '5000+' ? 'selected' : '' ?>>ซื้อ ≥ ฿5,000</option>
                     </select>
                 </div>
-                
+
                 <!-- Tag Filter -->
                 <div>
                     <label class="block text-sm font-medium mb-1">Tags</label>
                     <select name="tag" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                         <option value="">ทั้งหมด</option>
                         <?php foreach ($allTags as $tag): ?>
-                        <option value="<?= $tag['id'] ?>" <?= $tagFilter == $tag['id'] ? 'selected' : '' ?>><?= htmlspecialchars($tag['name']) ?></option>
+                            <option value="<?= $tag['id'] ?>" <?= $tagFilter == $tag['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($tag['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                
+
                 <!-- Status Filter -->
                 <div>
                     <label class="block text-sm font-medium mb-1">สถานะ</label>
@@ -392,7 +401,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </select>
                 </div>
             </div>
-            
+
             <div class="flex gap-2 mt-4">
                 <button type="submit" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
                     <i class="fas fa-filter mr-1"></i>กรองข้อมูล
@@ -406,16 +415,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <script>
-function toggleAdvancedFilters() {
-    const filters = document.getElementById('advancedFilters');
-    filters.classList.toggle('hidden');
-}
+    function toggleAdvancedFilters() {
+        const filters = document.getElementById('advancedFilters');
+        filters.classList.toggle('hidden');
+    }
 </script>
+
+<!-- Bulk Actions Bar (hidden until selection) -->
+<div id="bulkActionsBar" class="hidden bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+    <div class="flex flex-wrap items-center gap-4">
+        <div class="flex items-center gap-2">
+            <span class="font-medium text-blue-700">
+                <i class="fas fa-check-square mr-1"></i>
+                เลือกแล้ว <span id="selectedCount">0</span> คน
+            </span>
+        </div>
+        <div class="flex-1 flex flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+                <select id="bulkTagSelect" class="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">-- เลือก Tag --</option>
+                    <?php foreach ($allTags as $tag): ?>
+                        <option value="<?= $tag['id'] ?>"><?= htmlspecialchars($tag['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="button" onclick="bulkAssignTag()"
+                    class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
+                    <i class="fas fa-plus mr-1"></i>เพิ่ม Tag
+                </button>
+                <button type="button" onclick="bulkRemoveTag()"
+                    class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm">
+                    <i class="fas fa-minus mr-1"></i>ลบ Tag
+                </button>
+            </div>
+        </div>
+        <button type="button" onclick="clearSelection()" class="px-3 py-2 border rounded-lg hover:bg-white text-sm">
+            <i class="fas fa-times mr-1"></i>ยกเลิก
+        </button>
+    </div>
+</div>
 
 <div class="bg-white rounded-xl shadow overflow-hidden">
     <table class="w-full">
         <thead class="bg-gray-50">
             <tr>
+                <th class="px-3 py-3 text-center">
+                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()"
+                        class="w-4 h-4 rounded border-gray-300 focus:ring-green-500">
+                </th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ผู้ใช้</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
                 <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">ข้อความ</th>
@@ -426,6 +472,10 @@ function toggleAdvancedFilters() {
         <tbody class="divide-y">
             <?php foreach ($users as $user): ?>
                 <tr class="hover:bg-gray-50">
+                    <td class="px-3 py-4 text-center">
+                        <input type="checkbox" class="user-checkbox w-4 h-4 rounded border-gray-300 focus:ring-green-500"
+                            data-user-id="<?= $user['id'] ?>" onchange="updateSelection()">
+                    </td>
                     <td class="px-6 py-4">
                         <div class="flex items-center">
                             <img src="<?php echo $user['picture_url'] ?: 'https://via.placeholder.com/40'; ?>"
@@ -479,7 +529,7 @@ function toggleAdvancedFilters() {
 
             <?php if (empty($users)): ?>
                 <tr>
-                    <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                    <td colspan="6" class="px-6 py-12 text-center text-gray-500">
                         <i class="fas fa-users text-4xl text-gray-300 mb-3 block"></i>
                         <p>ไม่พบผู้ใช้</p>
                     </td>
@@ -526,7 +576,8 @@ function toggleAdvancedFilters() {
                         <?php foreach ($allTags as $tag): ?>
                             <option value="<?php echo $tag['id']; ?>"
                                 data-color="<?php echo htmlspecialchars($tag['color'] ?? '#3B82F6'); ?>">
-                                <?php echo htmlspecialchars($tag['name']); ?></option>
+                                <?php echo htmlspecialchars($tag['name']); ?>
+                            </option>
                         <?php endforeach; ?>
                     </select>
                     <button type="button" onclick="assignTag()"
@@ -634,6 +685,119 @@ function toggleAdvancedFilters() {
 
             if (result.success) {
                 loadUserTags(currentUserId);
+            } else {
+                alert(result.error || 'เกิดข้อผิดพลาด');
+            }
+        } catch (e) {
+            alert('เกิดข้อผิดพลาด: ' + e.message);
+        }
+    }
+
+    // ==================== Bulk Actions ====================
+    function toggleSelectAll() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.user-checkbox');
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        updateSelection();
+    }
+
+    function updateSelection() {
+        const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+        const count = checkboxes.length;
+        document.getElementById('selectedCount').textContent = count;
+        
+        const bulkBar = document.getElementById('bulkActionsBar');
+        if (count > 0) {
+            bulkBar.classList.remove('hidden');
+        } else {
+            bulkBar.classList.add('hidden');
+        }
+        
+        // Update select all checkbox
+        const allCheckboxes = document.querySelectorAll('.user-checkbox');
+        const selectAll = document.getElementById('selectAll');
+        selectAll.checked = allCheckboxes.length > 0 && allCheckboxes.length === checkboxes.length;
+    }
+
+    function clearSelection() {
+        document.querySelectorAll('.user-checkbox').forEach(cb => cb.checked = false);
+        document.getElementById('selectAll').checked = false;
+        updateSelection();
+    }
+
+    function getSelectedUserIds() {
+        const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+        return Array.from(checkboxes).map(cb => cb.dataset.userId);
+    }
+
+    async function bulkAssignTag() {
+        const tagId = document.getElementById('bulkTagSelect').value;
+        if (!tagId) {
+            alert('กรุณาเลือก Tag');
+            return;
+        }
+        
+        const userIds = getSelectedUserIds();
+        if (userIds.length === 0) {
+            alert('กรุณาเลือกผู้ใช้');
+            return;
+        }
+        
+        if (!confirm(`ต้องการเพิ่ม Tag ให้ ${userIds.length} คน ใช่หรือไม่?`)) return;
+        
+        try {
+            const response = await fetch('api/ajax_handler.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'bulk_assign_tag',
+                    user_ids: userIds,
+                    tag_id: tagId
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert(`เพิ่ม Tag สำเร็จ ${result.count || userIds.length} คน`);
+                location.reload();
+            } else {
+                alert(result.error || 'เกิดข้อผิดพลาด');
+            }
+        } catch (e) {
+            alert('เกิดข้อผิดพลาด: ' + e.message);
+        }
+    }
+
+    async function bulkRemoveTag() {
+        const tagId = document.getElementById('bulkTagSelect').value;
+        if (!tagId) {
+            alert('กรุณาเลือก Tag');
+            return;
+        }
+        
+        const userIds = getSelectedUserIds();
+        if (userIds.length === 0) {
+            alert('กรุณาเลือกผู้ใช้');
+            return;
+        }
+        
+        if (!confirm(`ต้องการลบ Tag จาก ${userIds.length} คน ใช่หรือไม่?`)) return;
+        
+        try {
+            const response = await fetch('api/ajax_handler.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'bulk_remove_tag',
+                    user_ids: userIds,
+                    tag_id: tagId
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert(`ลบ Tag สำเร็จ ${result.count || userIds.length} คน`);
+                location.reload();
             } else {
                 alert(result.error || 'เกิดข้อผิดพลาด');
             }
