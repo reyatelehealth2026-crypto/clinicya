@@ -344,6 +344,9 @@ class LiffApp {
 
         // Register page - full implementation
         window.router.register('register', () => this.renderRegisterPage());
+
+        // Settings page - personal info editor
+        window.router.register('settings', () => this.renderSettingsPage());
     }
 
     /**
@@ -5914,6 +5917,11 @@ class LiffApp {
                         <span>การแจ้งเตือน</span>
                         <i class="fas fa-chevron-right"></i>
                     </div>
+                    <div class="profile-menu-item" onclick="window.router.navigate('/settings')">
+                        <i class="fas fa-user-edit text-secondary"></i>
+                        <span>แก้ไขข้อมูลส่วนตัว</span>
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
                     <div class="profile-menu-item" onclick="window.liffApp.logout()">
                         <i class="fas fa-sign-out-alt text-muted"></i>
                         <span>ออกจากระบบ</span>
@@ -5922,6 +5930,216 @@ class LiffApp {
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * Render settings page - Personal info editor
+     */
+    renderSettingsPage() {
+        const profile = window.store?.get('profile');
+
+        if (!profile) {
+            return `
+                <div class="settings-page p-4">
+                    <div class="text-center py-8">
+                        <p class="text-secondary mb-4">กรุณาเข้าสู่ระบบ</p>
+                        <button class="btn btn-primary" onclick="window.liffApp.login()">
+                            <i class="fab fa-line"></i> เข้าสู่ระบบ LINE
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Load user data after render
+        setTimeout(() => this.loadSettingsData(), 100);
+
+        return `
+            <div class="settings-page">
+                <div class="settings-header">
+                    <button class="back-btn" onclick="window.router.back()">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <h1 class="page-title">แก้ไขข้อมูลส่วนตัว</h1>
+                    <div class="header-spacer"></div>
+                </div>
+
+                <div id="settings-content" class="settings-content">
+                    <div class="settings-loading">
+                        <div class="loading-spinner"></div>
+                        <p>กำลังโหลดข้อมูล...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Load settings data from API
+     */
+    async loadSettingsData() {
+        const container = document.getElementById('settings-content');
+        if (!container) return;
+
+        const profile = window.store?.get('profile');
+        if (!profile?.userId) return;
+
+        try {
+            const response = await fetch(
+                `${this.config.BASE_URL}/api/user-profile.php?action=get_personal_info&line_user_id=${profile.userId}`
+            );
+            const result = await response.json();
+
+            if (result.success && result.data) {
+                container.innerHTML = this.renderSettingsForm(result.data);
+            } else {
+                container.innerHTML = this.renderSettingsForm({});
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            container.innerHTML = this.renderSettingsForm({});
+        }
+    }
+
+    /**
+     * Render settings form
+     */
+    renderSettingsForm(data) {
+        const provinces = [
+            'กรุงเทพมหานคร', 'กระบี่', 'กาญจนบุรี', 'กาฬสินธุ์', 'กำแพงเพชร', 'ขอนแก่น', 'จันทบุรี', 'ฉะเชิงเทรา', 'ชลบุรี', 'ชัยนาท',
+            'ชัยภูมิ', 'ชุมพร', 'เชียงราย', 'เชียงใหม่', 'ตรัง', 'ตราด', 'ตาก', 'นครนายก', 'นครปฐม', 'นครพนม', 'นครราชสีมา', 'นครศรีธรรมราช',
+            'นครสวรรค์', 'นนทบุรี', 'นราธิวาส', 'น่าน', 'บึงกาฬ', 'บุรีรัมย์', 'ปทุมธานี', 'ประจวบคีรีขันธ์', 'ปราจีนบุรี', 'ปัตตานี',
+            'พระนครศรีอยุธยา', 'พังงา', 'พัทลุง', 'พิจิตร', 'พิษณุโลก', 'เพชรบุรี', 'เพชรบูรณ์', 'แพร่', 'ภูเก็ต', 'มหาสารคาม', 'มุกดาหาร',
+            'แม่ฮ่องสอน', 'ยะลา', 'ยโสธร', 'ร้อยเอ็ด', 'ระนอง', 'ระยอง', 'ราชบุรี', 'ลพบุรี', 'ลำปาง', 'ลำพูน', 'เลย', 'ศรีสะเกษ', 'สกลนคร',
+            'สงขลา', 'สตูล', 'สมุทรปราการ', 'สมุทรสงคราม', 'สมุทรสาคร', 'สระแก้ว', 'สระบุรี', 'สิงห์บุรี', 'สุโขทัย', 'สุพรรณบุรี', 'สุราษฎร์ธานี',
+            'สุรินทร์', 'หนองคาย', 'หนองบัวลำภู', 'อ่างทอง', 'อำนาจเจริญ', 'อุดรธานี', 'อุตรดิตถ์', 'อุทัยธานี', 'อุบลราชธานี'
+        ];
+
+        return `
+            <form id="settings-form" class="settings-form" onsubmit="window.liffApp.saveSettings(event)">
+                <div class="settings-section">
+                    <h3 class="settings-section-title"><i class="fas fa-user"></i> ข้อมูลพื้นฐาน</h3>
+                    
+                    <div class="form-group">
+                        <label for="real_name">ชื่อ-นามสกุล</label>
+                        <input type="text" id="real_name" name="real_name" value="${data.real_name || ''}" placeholder="กรอกชื่อ-นามสกุล">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone">เบอร์โทรศัพท์</label>
+                        <input type="tel" id="phone" name="phone" value="${data.phone || ''}" placeholder="0812345678" pattern="0[0-9]{8,9}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">อีเมล</label>
+                        <input type="email" id="email" name="email" value="${data.email || ''}" placeholder="example@email.com">
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="birthday">วันเกิด</label>
+                            <input type="date" id="birthday" name="birthday" value="${data.birthday || ''}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="gender">เพศ</label>
+                            <select id="gender" name="gender">
+                                <option value="">-- เลือก --</option>
+                                <option value="male" ${data.gender === 'male' ? 'selected' : ''}>ชาย</option>
+                                <option value="female" ${data.gender === 'female' ? 'selected' : ''}>หญิง</option>
+                                <option value="other" ${data.gender === 'other' ? 'selected' : ''}>อื่นๆ</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3 class="settings-section-title"><i class="fas fa-map-marker-alt"></i> ที่อยู่จัดส่ง</h3>
+                    
+                    <div class="form-group">
+                        <label for="address">ที่อยู่</label>
+                        <textarea id="address" name="address" rows="3" placeholder="บ้านเลขที่ ซอย ถนน ตำบล อำเภอ">${data.address || ''}</textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="province">จังหวัด</label>
+                            <select id="province" name="province">
+                                <option value="">-- เลือกจังหวัด --</option>
+                                ${provinces.map(p => `<option value="${p}" ${data.province === p ? 'selected' : ''}>${p}</option>`).join('')}
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="postal_code">รหัสไปรษณีย์</label>
+                            <input type="text" id="postal_code" name="postal_code" value="${data.postal_code || ''}" placeholder="10110" maxlength="5" pattern="[0-9]{5}">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-actions">
+                    <button type="submit" class="btn btn-primary btn-block" id="save-settings-btn">
+                        <i class="fas fa-save"></i> บันทึกข้อมูล
+                    </button>
+                </div>
+            </form>
+        `;
+    }
+
+    /**
+     * Save settings to API
+     */
+    async saveSettings(event) {
+        event.preventDefault();
+
+        const profile = window.store?.get('profile');
+        if (!profile?.userId) {
+            this.showToast('กรุณาเข้าสู่ระบบ', 'error');
+            return;
+        }
+
+        const form = document.getElementById('settings-form');
+        const saveBtn = document.getElementById('save-settings-btn');
+
+        // Get form data
+        const formData = {
+            action: 'update_personal_info',
+            line_user_id: profile.userId,
+            real_name: form.real_name.value,
+            phone: form.phone.value,
+            email: form.email.value,
+            birthday: form.birthday.value,
+            gender: form.gender.value,
+            address: form.address.value,
+            province: form.province.value,
+            postal_code: form.postal_code.value
+        };
+
+        // Show loading state
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> กำลังบันทึก...';
+
+        try {
+            const response = await fetch(`${this.config.BASE_URL}/api/user-profile.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showToast('บันทึกข้อมูลเรียบร้อยแล้ว', 'success');
+            } else {
+                this.showToast(result.error || 'เกิดข้อผิดพลาด', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            this.showToast('ไม่สามารถบันทึกข้อมูลได้', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> บันทึกข้อมูล';
+        }
     }
 
     /**

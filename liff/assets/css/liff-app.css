@@ -12223,6 +12223,146 @@ body:has(.ai-chat-page) .bottom-nav {
     font-size: 0.875rem;
 }
 
+/* ==================== Settings Page ==================== */
+.settings-page {
+    padding-bottom: calc(80px + var(--safe-area-bottom));
+    min-height: 100vh;
+    background: var(--bg-light);
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--bg-white);
+    border-bottom: 1px solid var(--border-light);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.settings-header .page-title {
+    flex: 1;
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+    text-align: center;
+}
+
+.settings-header .header-spacer {
+    width: 40px;
+}
+
+.settings-content {
+    padding: var(--space-4);
+}
+
+.settings-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+    color: var(--text-muted);
+}
+
+.settings-loading .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-light);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: var(--space-3);
+}
+
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.settings-section {
+    background: var(--bg-white);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    box-shadow: var(--shadow-sm);
+}
+
+.settings-section-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.settings-section-title i {
+    color: var(--primary);
+}
+
+.settings-form .form-group {
+    margin-bottom: var(--space-4);
+}
+
+.settings-form .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.settings-form .form-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.settings-form .form-group input,
+.settings-form .form-group select,
+.settings-form .form-group textarea {
+    width: 100%;
+    padding: var(--space-3);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    color: var(--text-primary);
+    background: var(--bg-white);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.settings-form .form-group input:focus,
+.settings-form .form-group select:focus,
+.settings-form .form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.settings-form .form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.settings-form .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+}
+
+.settings-actions {
+    padding-top: var(--space-2);
+}
+
+.settings-actions .btn-block {
+    width: 100%;
+    padding: var(--space-4);
+    font-size: 1rem;
+    font-weight: 600;
+}
+
 /* ==================== Product Detail Page ==================== */
 .product-detail-page {
     padding-bottom: calc(80px + var(--safe-area-bottom));

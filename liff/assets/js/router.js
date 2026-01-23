@@ -12,7 +12,7 @@ class Router {
         this.previousRoute = null;
         this.contentEl = null;
         this.onRouteChange = null;
-        
+
         // Default routes configuration
         this.routeConfig = {
             '/': { page: 'home', title: 'หน้าหลัก' },
@@ -37,7 +37,8 @@ class Router {
             '/product/:id': { page: 'product-detail', title: 'รายละเอียดสินค้า' },
             '/ai-assistant': { page: 'ai-assistant', title: 'ผู้ช่วย AI' },
             '/symptom': { page: 'symptom', title: 'ประเมินอาการ' },
-            '/register': { page: 'register', title: 'สมัครสมาชิก' }
+            '/register': { page: 'register', title: 'สมัครสมาชิก' },
+            '/settings': { page: 'settings', title: 'ตั้งค่าบัญชี' }
         };
     }
 
@@ -47,13 +48,13 @@ class Router {
      */
     init(contentEl) {
         this.contentEl = contentEl;
-        
+
         // Listen for hash changes
         window.addEventListener('hashchange', () => this.handleRouteChange());
-        
+
         // Listen for popstate (back/forward)
         window.addEventListener('popstate', () => this.handleRouteChange());
-        
+
         // Handle initial route
         this.handleRouteChange();
     }
@@ -75,16 +76,16 @@ class Router {
      */
     navigate(path, params = {}, replace = false) {
         const hash = path.startsWith('#') ? path : `#${path}`;
-        
+
         // Store params in state
         const state = { path, params, timestamp: Date.now() };
-        
+
         if (replace) {
             history.replaceState(state, '', hash);
         } else {
             history.pushState(state, '', hash);
         }
-        
+
         this.handleRouteChange();
     }
 
@@ -101,16 +102,16 @@ class Router {
     async handleRouteChange() {
         const hash = window.location.hash || '#/';
         const path = hash.slice(1) || '/'; // Remove # prefix
-        
+
         // Parse path and extract params from URL
         const { route, params: urlParams } = this.matchRoute(path);
-        
+
         // Merge with params from history.state (passed via navigate())
         const stateParams = history.state?.params || {};
         const params = { ...urlParams, ...stateParams };
-        
+
         console.log('🔀 Route change:', { path, urlParams, stateParams, mergedParams: params });
-        
+
         if (!route) {
             console.warn(`Route not found: ${path}`);
             this.navigate('/', {}, true);
@@ -147,7 +148,7 @@ class Router {
         // Remove query string
         const [pathWithoutQuery] = path.split('?');
         const pathParts = pathWithoutQuery.split('/').filter(Boolean);
-        
+
         // Try exact match first
         if (this.routeConfig[pathWithoutQuery]) {
             return { route: this.routeConfig[pathWithoutQuery], params: {} };
@@ -156,12 +157,12 @@ class Router {
         // Try pattern matching for dynamic routes
         for (const [pattern, config] of Object.entries(this.routeConfig)) {
             const patternParts = pattern.split('/').filter(Boolean);
-            
+
             if (patternParts.length !== pathParts.length) continue;
-            
+
             const params = {};
             let match = true;
-            
+
             for (let i = 0; i < patternParts.length; i++) {
                 if (patternParts[i].startsWith(':')) {
                     // Dynamic segment
@@ -171,7 +172,7 @@ class Router {
                     break;
                 }
             }
-            
+
             if (match) {
                 return { route: config, params };
             }
@@ -192,7 +193,7 @@ class Router {
 
         // Get the handler for this route
         const handler = this.routes.get(route.page);
-        
+
         if (!handler) {
             console.warn(`No handler registered for page: ${route.page}`);
             this.contentEl.innerHTML = this.renderNotFound();
@@ -201,33 +202,33 @@ class Router {
 
         // Check for reduced motion preference
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        
+
         try {
             if (!prefersReducedMotion) {
                 // Add page exit transition class
                 this.contentEl.classList.add('page-exit');
-                
+
                 // Wait for exit animation
                 await this.wait(150);
             }
-            
+
             // Render the page
             const html = await handler(params);
             this.contentEl.innerHTML = html;
-            
+
             if (!prefersReducedMotion) {
                 // Remove exit class and add enter class
                 this.contentEl.classList.remove('page-exit');
                 this.contentEl.classList.add('page-enter');
-                
+
                 // Wait for enter animation to complete
                 await this.wait(250);
                 this.contentEl.classList.remove('page-enter');
             }
-            
+
             // Scroll to top smoothly
             window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
-            
+
         } catch (error) {
             console.error('Error rendering page:', error);
             this.contentEl.classList.remove('page-exit', 'page-enter');
