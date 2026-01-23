@@ -700,16 +700,17 @@ h6 {
 /* ==================== Modal ==================== */
 .modal-container {
     position: fixed;
-    inset: 0;
-    z-index: var(--z-modal-backdrop);
-    /* Changed from flex to block - the inner .modal-overlay handles positioning */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9998;
     display: block;
-    background: transparent;
-    /* Remove padding since modal-overlay handles this */
+    pointer-events: none;
 }
 
 .modal-container.hidden {
-    display: none;
+    display: none !important;
 }
 
 /* Global Modal Overlay Styles for #modal-container */
@@ -724,16 +725,19 @@ h6 {
     align-items: flex-end;
     justify-content: center;
     z-index: 9999;
+    pointer-events: auto;
     animation: fadeIn 0.2s ease;
 }
 
 #modal-container .modal-content {
     width: 100%;
     max-width: 500px;
-    max-height: 85vh;
-    background: #FFFFFF;
+    max-height: 90vh;
+    background-color: #FFFFFF !important;
     border-radius: 20px 20px 0 0;
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
     animation: slideUp 0.3s ease;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
 }
@@ -742,9 +746,11 @@ h6 {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-4);
+    padding: 16px 20px;
     border-bottom: 1px solid #E5E7EB;
-    background: #FFFFFF;
+    background-color: #FFFFFF !important;
+    flex-shrink: 0;
+    border-radius: 20px 20px 0 0;
 }
 
 #modal-container .modal-header h3 {
@@ -776,10 +782,11 @@ h6 {
 }
 
 #modal-container .modal-body {
-    padding: var(--space-4);
+    padding: 20px;
     overflow-y: auto;
-    max-height: calc(85vh - 140px);
-    background: #FFFFFF;
+    flex: 1;
+    max-height: calc(90vh - 140px);
+    background-color: #FFFFFF !important;
 }
 
 #modal-container .form-row {
