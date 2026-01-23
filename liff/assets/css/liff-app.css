@@ -726,6 +726,8 @@ h6 {
     justify-content: center;
     z-index: 9999;
     pointer-events: auto;
+    opacity: 1 !important;
+    /* Override global .modal-overlay { opacity: 0 } */
     animation: fadeIn 0.2s ease;
 }
 

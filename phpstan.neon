@@ -1,0 +1,9 @@
+parameters:
+    level: 0
+    paths:
+        - classes
+        - app
+    excludePaths:
+        - vendor
+        - tests
+    reportUnmatchedIgnoredErrors: false
