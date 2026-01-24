@@ -132,6 +132,34 @@ try {
     switch ($action) {
 
         // ============================================
+        // GET /poll - Poll for real-time updates
+        // Requirements: 4.3
+        // ============================================
+        case 'poll':
+            if ($method !== 'GET') {
+                sendError('Method not allowed', 405);
+            }
+
+            $since = (int) ($_GET['since'] ?? 0);
+
+            $inboxService = loadService('InboxService', $db, $lineAccountId);
+            if (!$inboxService) {
+                sendError('Inbox service not available', 503);
+            }
+
+            $updates = $inboxService->pollUpdates($lineAccountId, $since);
+
+            sendResponse([
+                'success' => true,
+                'data' => [
+                    'new_messages' => $updates['new_messages'],
+                    'conversation_updates' => $updates['updated_conversations']
+                ]
+            ]);
+            break;
+
+
+        // ============================================
         // POST /analyze-symptom - Analyze symptom images
         // Requirements: 1.1, 1.5
         // ============================================

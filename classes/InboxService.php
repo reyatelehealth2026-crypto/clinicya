@@ -563,7 +563,6 @@ class InboxService
             JOIN users u ON u.id = m.user_id
             WHERE u.line_account_id = ?
             AND m.created_at > FROM_UNIXTIME(?)
-            AND m.direction = 'incoming'
             ORDER BY m.created_at ASC
         ";
 
