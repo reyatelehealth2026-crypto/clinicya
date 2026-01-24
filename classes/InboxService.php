@@ -5,15 +5,17 @@
  * Requirements: 3.1, 3.3, 5.1, 5.2, 5.3, 5.4, 11.3
  */
 
-class InboxService {
+class InboxService
+{
     private $db;
     private $lineAccountId;
-    
-    public function __construct(PDO $db, ?int $lineAccountId = null) {
+
+    public function __construct(PDO $db, ?int $lineAccountId = null)
+    {
         $this->db = $db;
         $this->lineAccountId = $lineAccountId;
     }
-    
+
     /**
      * Get paginated conversations with filters
      * Requirements: 5.1, 5.2, 5.3, 5.4, 11.3
@@ -23,11 +25,12 @@ class InboxService {
      * @param int $limit Items per page (default 50)
      * @return array ['conversations' => [], 'total' => int, 'page' => int]
      */
-    public function getConversations(array $filters = [], int $page = 1, int $limit = 50): array {
+    public function getConversations(array $filters = [], int $page = 1, int $limit = 50): array
+    {
         $page = max(1, $page);
         $limit = max(1, min(100, $limit)); // Cap at 100
         $offset = ($page - 1) * $limit;
-        
+
         // Build base query with subquery for last message and assignees
         $sql = "
             SELECT 
@@ -69,13 +72,13 @@ class InboxService {
             WHERE u.line_account_id = ?
             AND lm.last_message_at IS NOT NULL
         ";
-        
+
         $params = [$this->lineAccountId, $this->lineAccountId];
         $countParams = [$this->lineAccountId, $this->lineAccountId];
-        
+
         // Apply filters
         $whereConditions = [];
-        
+
         // Status filter (unread, assigned, resolved)
         if (!empty($filters['status'])) {
             switch ($filters['status']) {
@@ -90,17 +93,17 @@ class InboxService {
                     break;
             }
         }
-        
+
         // Tag filter
         if (!empty($filters['tag_id'])) {
             $whereConditions[] = "EXISTS (
                 SELECT 1 FROM user_tag_assignments uta 
                 WHERE uta.user_id = u.id AND uta.tag_id = ?
             )";
-            $params[] = (int)$filters['tag_id'];
-            $countParams[] = (int)$filters['tag_id'];
+            $params[] = (int) $filters['tag_id'];
+            $countParams[] = (int) $filters['tag_id'];
         }
-        
+
         // Assigned to filter (supports multi-assignee)
         if (!empty($filters['assigned_to'])) {
             $whereConditions[] = "EXISTS (
@@ -109,23 +112,23 @@ class InboxService {
                 AND cma_filter.admin_id = ?
                 AND cma_filter.status = 'active'
             )";
-            $params[] = (int)$filters['assigned_to'];
-            $countParams[] = (int)$filters['assigned_to'];
+            $params[] = (int) $filters['assigned_to'];
+            $countParams[] = (int) $filters['assigned_to'];
         }
-        
+
         // Date range filter
         if (!empty($filters['date_from'])) {
             $whereConditions[] = "lm.last_message_at >= ?";
             $params[] = $filters['date_from'] . ' 00:00:00';
             $countParams[] = $filters['date_from'] . ' 00:00:00';
         }
-        
+
         if (!empty($filters['date_to'])) {
             $whereConditions[] = "lm.last_message_at <= ?";
             $params[] = $filters['date_to'] . ' 23:59:59';
             $countParams[] = $filters['date_to'] . ' 23:59:59';
         }
-        
+
         // Search filter (name, content)
         if (!empty($filters['search'])) {
             $searchTerm = '%' . $filters['search'] . '%';
@@ -145,12 +148,12 @@ class InboxService {
             $countParams[] = $searchTerm;
             $countParams[] = $searchTerm;
         }
-        
+
         // Add where conditions to SQL
         if (!empty($whereConditions)) {
             $sql .= " AND " . implode(" AND ", $whereConditions);
         }
-        
+
         // Count total
         $countSql = "
             SELECT COUNT(DISTINCT u.id)
@@ -169,28 +172,28 @@ class InboxService {
             WHERE u.line_account_id = ?
             AND lm.last_message_at IS NOT NULL
         ";
-        
+
         if (!empty($whereConditions)) {
             $countSql .= " AND " . implode(" AND ", $whereConditions);
         }
-        
+
         $countStmt = $this->db->prepare($countSql);
         $countStmt->execute($countParams);
-        $total = (int)$countStmt->fetchColumn();
-        
+        $total = (int) $countStmt->fetchColumn();
+
         // Add ordering and pagination
         $sql .= " ORDER BY lm.last_message_at DESC LIMIT ? OFFSET ?";
         $params[] = $limit;
         $params[] = $offset;
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Get tags and parse assignees for each conversation
         foreach ($conversations as &$conv) {
             $conv['tags'] = $this->getUserTags($conv['id']);
-            
+
             // Parse assignees_list into array
             $conv['assignees'] = [];
             if (!empty($conv['assignees_list'])) {
@@ -199,7 +202,7 @@ class InboxService {
                     if (strpos($part, ':') !== false) {
                         list($username, $adminId) = explode(':', $part, 2);
                         $conv['assignees'][] = [
-                            'admin_id' => (int)$adminId,
+                            'admin_id' => (int) $adminId,
                             'username' => $username
                         ];
                     }
@@ -207,7 +210,7 @@ class InboxService {
             }
             unset($conv['assignees_list']); // Remove raw data
         }
-        
+
         return [
             'conversations' => $conversations,
             'total' => $total,
@@ -217,7 +220,7 @@ class InboxService {
         ];
     }
 
-    
+
     /**
      * Get conversations with delta updates (only since timestamp)
      * Uses cursor-based pagination for better performance
@@ -312,7 +315,7 @@ class InboxService {
                 WHERE uta.user_id = u.id
                 AND uta.tag_id = ?
             )";
-            $params[] = (int)$filters['tagId'];
+            $params[] = (int) $filters['tagId'];
         }
 
         // Filter by assignee
@@ -330,7 +333,7 @@ class InboxService {
                     AND cma.admin_id = ?
                     AND cma.status = 'active'
                 )";
-                $params[] = (int)$filters['assigneeId'];
+                $params[] = (int) $filters['assigneeId'];
             }
         }
 
@@ -349,32 +352,32 @@ class InboxService {
         // Order by most recent message first and limit
         $sql .= " ORDER BY (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) DESC LIMIT ?";
         $params[] = $limit + 1; // Fetch one extra to check if there are more
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Check if there are more results
         $hasMore = count($conversations) > $limit;
         if ($hasMore) {
             array_pop($conversations); // Remove the extra item
         }
-        
+
         // Get next cursor (last_message_at of last item)
         $nextCursor = null;
         if ($hasMore && !empty($conversations)) {
             $lastConv = end($conversations);
             $nextCursor = $lastConv['last_message_at'];
         }
-        
+
         // Get tags for each conversation
         foreach ($conversations as &$conv) {
             $conv['tags'] = $this->getUserTags($conv['id']);
-            
+
             // Get all assignees (multi-assignee support)
             $conv['assignees'] = $this->getAssignedAdminIds($conv['id']);
         }
-        
+
         return [
             'conversations' => $conversations,
             'next_cursor' => $nextCursor,
@@ -382,14 +385,15 @@ class InboxService {
             'count' => count($conversations)
         ];
     }
-    
+
     /**
      * Get user tags
      * 
      * @param int $userId User ID
      * @return array Tags
      */
-    private function getUserTags(int $userId): array {
+    private function getUserTags(int $userId): array
+    {
         $sql = "
             SELECT ut.id, ut.name, ut.color
             FROM user_tags ut
@@ -401,7 +405,7 @@ class InboxService {
         $stmt->execute([$userId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
+
     /**
      * Get paginated messages for a conversation
      * Requirements: 11.3 - Load only 50 messages initially with pagination
@@ -411,17 +415,18 @@ class InboxService {
      * @param int $limit Messages per page (default 50)
      * @return array ['messages' => [], 'total' => int, 'has_more' => bool]
      */
-    public function getMessages(int $userId, int $page = 1, int $limit = 50): array {
+    public function getMessages(int $userId, int $page = 1, int $limit = 50): array
+    {
         $page = max(1, $page);
         $limit = max(1, min(100, $limit)); // Cap at 100
         $offset = ($page - 1) * $limit;
-        
+
         // Count total messages
         $countSql = "SELECT COUNT(*) FROM messages WHERE user_id = ? AND line_account_id = ?";
         $countStmt = $this->db->prepare($countSql);
         $countStmt->execute([$userId, $this->lineAccountId]);
-        $total = (int)$countStmt->fetchColumn();
-        
+        $total = (int) $countStmt->fetchColumn();
+
         // Get messages with pagination (newest first for display, but we'll reverse for chat order)
         $sql = "
             SELECT 
@@ -438,14 +443,14 @@ class InboxService {
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
         ";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$userId, $this->lineAccountId, $limit, $offset]);
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Reverse to show oldest first in the page (chat order)
         $messages = array_reverse($messages);
-        
+
         return [
             'messages' => $messages,
             'total' => $total,
@@ -454,7 +459,7 @@ class InboxService {
             'has_more' => ($offset + $limit) < $total
         ];
     }
-    
+
     /**
      * Get messages with cursor-based pagination (more efficient than offset)
      * Uses message ID as cursor instead of OFFSET for better performance on large datasets
@@ -466,12 +471,12 @@ class InboxService {
      * @return array ['messages' => [], 'next_cursor' => string|null, 'has_more' => bool]
      */
     public function getMessagesCursor(
-        int $userId, 
-        ?string $cursor = null, 
+        int $userId,
+        ?string $cursor = null,
         int $limit = 50
     ): array {
         $limit = max(1, min(100, $limit)); // Cap at 100
-        
+
         // Build query with cursor-based pagination
         // Cursor is the message ID - fetch messages with ID less than cursor (older messages)
         $sql = "
@@ -487,40 +492,40 @@ class InboxService {
             FROM messages
             WHERE user_id = ?
         ";
-        
+
         $params = [$userId];
-        
+
         // Add cursor condition if provided (for loading older messages)
         if ($cursor !== null) {
             $sql .= " AND id < ?";
-            $params[] = (int)$cursor;
+            $params[] = (int) $cursor;
         }
-        
+
         // Order by ID descending (newest first) and limit
         // Fetch one extra to check if there are more
         $sql .= " ORDER BY id DESC LIMIT ?";
         $params[] = $limit + 1;
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Check if there are more results
         $hasMore = count($messages) > $limit;
         if ($hasMore) {
             array_pop($messages); // Remove the extra item
         }
-        
+
         // Get next cursor (ID of last message)
         $nextCursor = null;
         if ($hasMore && !empty($messages)) {
             $lastMessage = end($messages);
-            $nextCursor = (string)$lastMessage['id'];
+            $nextCursor = (string) $lastMessage['id'];
         }
-        
+
         // Reverse to show oldest first (chat order)
         $messages = array_reverse($messages);
-        
+
         return [
             'messages' => $messages,
             'next_cursor' => $nextCursor,
@@ -528,7 +533,7 @@ class InboxService {
             'count' => count($messages)
         ];
     }
-    
+
     /**
      * Poll for new messages and conversation updates since timestamp
      * Efficient query to get only delta updates for real-time polling
@@ -538,7 +543,8 @@ class InboxService {
      * @param int $since Unix timestamp (only fetch messages after this time)
      * @return array ['new_messages' => [], 'updated_conversations' => []]
      */
-    public function pollUpdates(int $accountId, int $since): array {
+    public function pollUpdates(int $accountId, int $since): array
+    {
         // Efficient query to get only new incoming messages since last check
         // Include user info for conversation bumping
         $sql = "
@@ -560,23 +566,23 @@ class InboxService {
             AND m.direction = 'incoming'
             ORDER BY m.created_at ASC
         ";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$accountId, $since]);
         $newMessages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Get updated conversations (conversations with new messages)
         // Group by user_id to get conversation-level updates
         $updatedConversations = [];
         $seenUsers = [];
-        
+
         foreach ($newMessages as $message) {
             $userId = $message['user_id'];
-            
+
             // Only add each conversation once
             if (!in_array($userId, $seenUsers)) {
                 $seenUsers[] = $userId;
-                
+
                 // Get unread count for this conversation
                 $unreadSql = "
                     SELECT COUNT(*) 
@@ -587,8 +593,8 @@ class InboxService {
                 ";
                 $unreadStmt = $this->db->prepare($unreadSql);
                 $unreadStmt->execute([$userId]);
-                $unreadCount = (int)$unreadStmt->fetchColumn();
-                
+                $unreadCount = (int) $unreadStmt->fetchColumn();
+
                 $updatedConversations[] = [
                     'user_id' => $userId,
                     'display_name' => $message['display_name'],
@@ -599,14 +605,14 @@ class InboxService {
                 ];
             }
         }
-        
+
         return [
             'new_messages' => $newMessages,
             'updated_conversations' => $updatedConversations,
             'count' => count($newMessages)
         ];
     }
-    
+
     /**
      * Search messages across all conversations
      * Requirements: 5.1 - Search across customer name, message content, and tags
@@ -615,14 +621,15 @@ class InboxService {
      * @param int $limit Max results (default 50)
      * @return array Matching conversations with highlighted results
      */
-    public function searchMessages(string $query, int $limit = 50): array {
+    public function searchMessages(string $query, int $limit = 50): array
+    {
         if (empty(trim($query))) {
             return [];
         }
-        
+
         $searchTerm = '%' . trim($query) . '%';
         $limit = max(1, min(100, $limit));
-        
+
         // Search in messages content
         $sql = "
             SELECT DISTINCT
@@ -639,11 +646,11 @@ class InboxService {
             ORDER BY m.created_at DESC
             LIMIT ?
         ";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$this->lineAccountId, $searchTerm, $limit]);
         $messageResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Search in user names
         $sql = "
             SELECT DISTINCT
@@ -660,11 +667,11 @@ class InboxService {
             ORDER BY u.last_interaction DESC
             LIMIT ?
         ";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$this->lineAccountId, $searchTerm, $limit]);
         $nameResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Search in tags
         $sql = "
             SELECT DISTINCT
@@ -683,14 +690,14 @@ class InboxService {
             ORDER BY u.last_interaction DESC
             LIMIT ?
         ";
-        
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$this->lineAccountId, $searchTerm, $limit]);
         $tagResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Merge and deduplicate results
         $allResults = array_merge($messageResults, $nameResults, $tagResults);
-        
+
         // Group by user_id and keep the most relevant match
         $grouped = [];
         foreach ($allResults as $result) {
@@ -704,13 +711,13 @@ class InboxService {
                 'content' => $result['matched_content']
             ];
         }
-        
+
         // Convert to array and limit
         $results = array_values($grouped);
         return array_slice($results, 0, $limit);
     }
 
-    
+
     /**
      * Assign conversation to admin(s)
      * Requirements: 3.1 - Notify assigned admin, supports multiple assignees
@@ -720,12 +727,13 @@ class InboxService {
      * @param int|null $assignedBy Admin who assigned (null for self-assign)
      * @return bool Success
      */
-    public function assignConversation(int $userId, $adminIds, ?int $assignedBy = null): bool {
+    public function assignConversation(int $userId, $adminIds, ?int $assignedBy = null): bool
+    {
         // Convert single ID to array
         if (!is_array($adminIds)) {
             $adminIds = [$adminIds];
         }
-        
+
         // Check if user exists
         $checkSql = "SELECT id FROM users WHERE id = ? AND line_account_id = ?";
         $checkStmt = $this->db->prepare($checkSql);
@@ -733,7 +741,7 @@ class InboxService {
         if (!$checkStmt->fetch()) {
             return false;
         }
-        
+
         // Validate all admin IDs
         foreach ($adminIds as $adminId) {
             $checkAdminSql = "SELECT id FROM admin_users WHERE id = ?";
@@ -743,7 +751,7 @@ class InboxService {
                 return false;
             }
         }
-        
+
         // Insert assignments (multi-assignee support)
         $sql = "
             INSERT INTO conversation_multi_assignees 
@@ -754,15 +762,15 @@ class InboxService {
                 assigned_at = NOW(),
                 status = 'active'
         ";
-        
+
         $stmt = $this->db->prepare($sql);
-        
+
         foreach ($adminIds as $adminId) {
             if (!$stmt->execute([$userId, $adminId, $assignedBy ?? $adminId])) {
                 return false;
             }
         }
-        
+
         // Also update old table for backward compatibility (use first admin)
         $legacySql = "
             INSERT INTO conversation_assignments 
@@ -776,10 +784,10 @@ class InboxService {
         ";
         $legacyStmt = $this->db->prepare($legacySql);
         $legacyStmt->execute([$userId, $adminIds[0], $assignedBy ?? $adminIds[0]]);
-        
+
         return true;
     }
-    
+
     /**
      * Remove specific admin from conversation assignment
      * 
@@ -787,39 +795,42 @@ class InboxService {
      * @param int $adminId Admin user ID to remove
      * @return bool Success
      */
-    public function removeAssignee(int $userId, int $adminId): bool {
+    public function removeAssignee(int $userId, int $adminId): bool
+    {
         $sql = "DELETE FROM conversation_multi_assignees WHERE user_id = ? AND admin_id = ?";
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([$userId, $adminId]);
     }
-    
+
     /**
      * Unassign conversation (remove all assignees)
      * 
      * @param int $userId Customer user ID
      * @return bool Success
      */
-    public function unassignConversation(int $userId): bool {
+    public function unassignConversation(int $userId): bool
+    {
         // Remove from multi-assignees
         $sql = "DELETE FROM conversation_multi_assignees WHERE user_id = ?";
         $stmt = $this->db->prepare($sql);
         $result = $stmt->execute([$userId]);
-        
+
         // Also remove from legacy table
         $legacySql = "DELETE FROM conversation_assignments WHERE user_id = ?";
         $legacyStmt = $this->db->prepare($legacySql);
         $legacyStmt->execute([$userId]);
-        
+
         return $result;
     }
-    
+
     /**
      * Resolve conversation assignment
      * 
      * @param int $userId Customer user ID
      * @return bool Success
      */
-    public function resolveConversation(int $userId): bool {
+    public function resolveConversation(int $userId): bool
+    {
         $sql = "
             UPDATE conversation_assignments 
             SET status = 'resolved', resolved_at = NOW()
@@ -828,7 +839,7 @@ class InboxService {
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([$userId]);
     }
-    
+
     /**
      * Get conversations assigned to specific admin
      * Requirements: 3.3 - Filter to show only their assignments
@@ -838,17 +849,19 @@ class InboxService {
      * @param int $limit Items per page
      * @return array Assigned conversations
      */
-    public function getAssignedConversations(int $adminId, int $page = 1, int $limit = 50): array {
+    public function getAssignedConversations(int $adminId, int $page = 1, int $limit = 50): array
+    {
         return $this->getConversations(['assigned_to' => $adminId], $page, $limit);
     }
-    
+
     /**
      * Get assignment info for a user (supports multiple assignees)
      * 
      * @param int $userId User ID
      * @return array Assignment info with assignees array
      */
-    public function getAssignment(int $userId): array {
+    public function getAssignment(int $userId): array
+    {
         // Get all assignees for this conversation
         $sql = "
             SELECT 
@@ -867,7 +880,7 @@ class InboxService {
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$userId]);
         $assignees = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         if (empty($assignees)) {
             return [
                 'user_id' => $userId,
@@ -875,7 +888,7 @@ class InboxService {
                 'is_assigned' => false
             ];
         }
-        
+
         return [
             'user_id' => $userId,
             'assignees' => $assignees,
@@ -884,27 +897,29 @@ class InboxService {
             'assigned_at' => $assignees[0]['assigned_at'] ?? null
         ];
     }
-    
+
     /**
      * Get all admin IDs assigned to a conversation
      * 
      * @param int $userId User ID
      * @return array Array of admin IDs
      */
-    public function getAssignedAdminIds(int $userId): array {
+    public function getAssignedAdminIds(int $userId): array
+    {
         $sql = "SELECT admin_id FROM conversation_multi_assignees WHERE user_id = ? AND status = 'active'";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$userId]);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
-    
+
     /**
      * Mark messages as read
      * 
      * @param int $userId User ID
      * @return bool Success
      */
-    public function markAsRead(int $userId): bool {
+    public function markAsRead(int $userId): bool
+    {
         $sql = "
             UPDATE messages 
             SET is_read = 1 
@@ -916,13 +931,14 @@ class InboxService {
         $stmt = $this->db->prepare($sql);
         return $stmt->execute([$userId, $this->lineAccountId]);
     }
-    
+
     /**
      * Get unread count for account
      * 
      * @return int Unread message count
      */
-    public function getUnreadCount(): int {
+    public function getUnreadCount(): int
+    {
         $sql = "
             SELECT COUNT(*) 
             FROM messages 
@@ -932,15 +948,16 @@ class InboxService {
         ";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$this->lineAccountId]);
-        return (int)$stmt->fetchColumn();
+        return (int) $stmt->fetchColumn();
     }
-    
+
     /**
      * Get conversation count by status
      * 
      * @return array ['total' => int, 'unread' => int, 'assigned' => int, 'resolved' => int]
      */
-    public function getConversationCounts(): array {
+    public function getConversationCounts(): array
+    {
         // Total conversations with messages
         $totalSql = "
             SELECT COUNT(DISTINCT user_id) 
@@ -949,8 +966,8 @@ class InboxService {
         ";
         $totalStmt = $this->db->prepare($totalSql);
         $totalStmt->execute([$this->lineAccountId]);
-        $total = (int)$totalStmt->fetchColumn();
-        
+        $total = (int) $totalStmt->fetchColumn();
+
         // Unread conversations
         $unreadSql = "
             SELECT COUNT(DISTINCT user_id) 
@@ -961,8 +978,8 @@ class InboxService {
         ";
         $unreadStmt = $this->db->prepare($unreadSql);
         $unreadStmt->execute([$this->lineAccountId]);
-        $unread = (int)$unreadStmt->fetchColumn();
-        
+        $unread = (int) $unreadStmt->fetchColumn();
+
         // Assigned conversations
         $assignedSql = "
             SELECT COUNT(*) 
@@ -971,8 +988,8 @@ class InboxService {
         ";
         $assignedStmt = $this->db->prepare($assignedSql);
         $assignedStmt->execute();
-        $assigned = (int)$assignedStmt->fetchColumn();
-        
+        $assigned = (int) $assignedStmt->fetchColumn();
+
         // Resolved conversations
         $resolvedSql = "
             SELECT COUNT(*) 
@@ -981,13 +998,26 @@ class InboxService {
         ";
         $resolvedStmt = $this->db->prepare($resolvedSql);
         $resolvedStmt->execute();
-        $resolved = (int)$resolvedStmt->fetchColumn();
-        
+        $resolved = (int) $resolvedStmt->fetchColumn();
+
         return [
             'total' => $total,
             'unread' => $unread,
             'assigned' => $assigned,
             'resolved' => $resolved
         ];
+    }
+
+    /**
+     * Get chat templates
+     * 
+     * @return array List of templates
+     */
+    public function getTemplates(): array
+    {
+        $sql = "SELECT id, name, content, category FROM chat_templates WHERE is_active = 1 ORDER BY category, name";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
