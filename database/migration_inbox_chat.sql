@@ -67,3 +67,9 @@ CREATE TABLE IF NOT EXISTS message_analytics (
     INDEX idx_user (user_id),
     INDEX idx_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- Reply Support
+-- =====================================================
+ALTER TABLE messages ADD COLUMN reply_to_id INT NULL DEFAULT NULL;
+ALTER TABLE messages ADD INDEX idx_reply_to (reply_to_id);

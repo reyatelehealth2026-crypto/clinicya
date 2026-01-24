@@ -125,7 +125,6 @@ try {
                     SELECT COUNT(*) as cnt 
                     FROM messages 
                     WHERE user_id = ? 
-                    AND direction = 'incoming' 
                     AND created_at > ?
                 ");
                 $stmt->execute([$currentUserId, $lastCheck]);

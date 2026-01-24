@@ -7936,7 +7936,7 @@ class LiffApp {
                             <span class="pharmacist-duration">${duration} นาที</span>
                         </div>
                     </div>
-                    <button class="btn btn-primary btn-sm pharmacist-book-btn">
+                    <button class="btn btn-primary btn-sm pharmacist-book-btn" onclick="event.stopPropagation(); window.liffApp.selectPharmacistForAppointment(${p.id})">
                         นัดหมาย
                     </button>
                 </div>
@@ -7950,7 +7950,7 @@ class LiffApp {
     selectPharmacistForAppointment(pharmacistId) {
         if (!this.appointmentState) this.initAppointmentState();
 
-        const pharmacist = this.appointmentState.pharmacists.find(p => p.id === pharmacistId);
+        const pharmacist = this.appointmentState.pharmacists.find(p => p.id == pharmacistId);
         if (!pharmacist) return;
 
         this.appointmentState.selectedPharmacist = pharmacist;
