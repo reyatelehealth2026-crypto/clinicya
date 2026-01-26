@@ -3203,39 +3203,19 @@ function getOrCreateUser($db, $line, $userId, $lineAccountId = null, $groupId = 
 
     // ถ้ายังไม่มี ให้สร้างใหม่
     if (!$user) {
-        // ดึงข้อมูลโปรไฟล์จาก LINE
+        // ดึงข้อมูลโปรไฟล์จาก LINE - ใช้ getProfile() เสมอเพื่อให้ได้รูปโปรไฟล์ที่ถูกต้อง
         $profile = null;
         try {
-            if ($groupId) {
-                // ถ้ามาจากกลุ่ม ใช้ getGroupMemberProfile
-                $profile = $line->getGroupMemberProfile($groupId, $userId);
-                
-                // ถ้าดึงจากกลุ่มไม่สำเร็จ (ไม่มีรูป) ให้ fallback ไปดึงจาก profile ส่วนตัว
-                if (!$profile || empty($profile['pictureUrl'])) {
-                    error_log("getOrCreateUser: Group profile failed or no picture, trying personal profile for user: {$userId}");
-                    try {
-                        $personalProfile = $line->getProfile($userId);
-                        if ($personalProfile && !empty($personalProfile['pictureUrl'])) {
-                            $profile = $personalProfile;
-                            error_log("getOrCreateUser: Successfully got personal profile with picture");
-                        }
-                    } catch (Exception $e2) {
-                        error_log("getOrCreateUser: Personal profile fallback also failed: " . $e2->getMessage());
-                    }
-                }
+            // ใช้ getProfile() โดยตรง ไม่ว่าจะมาจากกลุ่มหรือแชทส่วนตัว
+            $profile = $line->getProfile($userId);
+            
+            if ($profile && !empty($profile['pictureUrl'])) {
+                error_log("getOrCreateUser: Successfully got profile with picture for user: {$userId}");
             } else {
-                // ถ้ามาจากแชทส่วนตัว ใช้ getProfile
-                $profile = $line->getProfile($userId);
+                error_log("getOrCreateUser: WARNING - Profile has no picture URL for user: {$userId}");
             }
         } catch (Exception $e) {
-            error_log("getOrCreateUser profile error: " . $e->getMessage());
-            // ลอง fallback ไปดึง personal profile
-            try {
-                $profile = $line->getProfile($userId);
-                error_log("getOrCreateUser: Fallback to personal profile successful");
-            } catch (Exception $e2) {
-                error_log("getOrCreateUser: Fallback profile also failed: " . $e2->getMessage());
-            }
+            error_log("getOrCreateUser profile error: " . $e->getMessage() . " for user: {$userId}");
         }
 
         // ตรวจสอบว่าได้ profile มาหรือไม่
