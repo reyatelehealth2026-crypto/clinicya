@@ -21,17 +21,49 @@ function getOrCreateUser($db, $line, $userId, $lineAccountId = null, $groupId = 
             if ($groupId) {
                 // ถ้ามาจากกลุ่ม ใช้ getGroupMemberProfile
                 $profile = $line->getGroupMemberProfile($groupId, $userId);
+                
+                // ถ้าดึงจากกลุ่มไม่สำเร็จ (ไม่มีรูป) ให้ fallback ไปดึงจาก profile ส่วนตัว
+                if (!$profile || empty($profile['pictureUrl'])) {
+                    error_log("getOrCreateUser: Group profile failed or no picture, trying personal profile for user: {$userId}");
+                    try {
+                        $personalProfile = $line->getProfile($userId);
+                        if ($personalProfile && !empty($personalProfile['pictureUrl'])) {
+                            $profile = $personalProfile;
+                            error_log("getOrCreateUser: Successfully got personal profile with picture");
+                        }
+                    } catch (Exception $e2) {
+                        error_log("getOrCreateUser: Personal profile fallback also failed: " . $e2->getMessage());
+                    }
+                }
             } else {
                 // ถ้ามาจากแชทส่วนตัว ใช้ getProfile
                 $profile = $line->getProfile($userId);
             }
         } catch (Exception $e) {
             error_log("getOrCreateUser profile error: " . $e->getMessage());
+            // ลอง fallback ไปดึง personal profile
+            try {
+                $profile = $line->getProfile($userId);
+                error_log("getOrCreateUser: Fallback to personal profile successful");
+            } catch (Exception $e2) {
+                error_log("getOrCreateUser: Fallback profile also failed: " . $e2->getMessage());
+            }
         }
-        
+
+        // ตรวจสอบว่าได้ profile มาหรือไม่
+        if (!$profile || !is_array($profile)) {
+            error_log("getOrCreateUser: WARNING - No profile data available for user: {$userId}");
+            $profile = [];
+        }
+
         $displayName = $profile['displayName'] ?? 'Unknown';
         $pictureUrl = $profile['pictureUrl'] ?? '';
         $statusMessage = $profile['statusMessage'] ?? '';
+        
+        // Log เมื่อไม่มีรูปโปรไฟล์
+        if (empty($pictureUrl)) {
+            error_log("getOrCreateUser: WARNING - No picture URL for user: {$userId}, displayName: {$displayName}");
+        }
         
         // บันทึกผู้ใช้ใหม่
         try {
