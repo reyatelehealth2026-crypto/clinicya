@@ -56,7 +56,7 @@ define('ODOO_STAGING_API_KEY', getenv('ODOO_STAGING_API_KEY') ?: '');
 define('ODOO_STAGING_WEBHOOK_SECRET', getenv('ODOO_STAGING_WEBHOOK_SECRET') ?: '');
 
 // Production Configuration
-define('ODOO_PRODUCTION_API_BASE_URL', 'https://erp.cnyrxapp.com');
+define('ODOO_PRODUCTION_API_BASE_URL', 'https://cny.cnyrxapp.com');
 define('ODOO_PRODUCTION_API_KEY', getenv('ODOO_PRODUCTION_API_KEY') ?: '5pG-doAH1EEqHXurM3t466WAgKRYemmK7FANAB74o5A');
 define('ODOO_PRODUCTION_WEBHOOK_SECRET', getenv('ODOO_PRODUCTION_WEBHOOK_SECRET') ?: 'cny_reya_webhook_3226e48c7c053b4af44011651f2d3cfb');
 

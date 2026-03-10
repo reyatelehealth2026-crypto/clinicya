@@ -981,6 +981,10 @@ function bsaClearPreview(){
     if(!_bsaSelectedSlipId) document.getElementById('bsaConfirmBtn').disabled=true;
 }
 
+function getBsaSelectedSlip(){
+    return _bsaSlips.find(function(s){ return (s.id || s.slip_id) === _bsaSelectedSlipId; }) || null;
+}
+
 async function bsaConfirmAttach(){
     if(!_bsaBdoData)return;
     const btn=document.getElementById('bsaConfirmBtn');
@@ -989,8 +993,17 @@ async function bsaConfirmAttach(){
         const amount=parseFloat(document.getElementById('bsaAmountInput').value)||null;
         const transferDate=document.getElementById('bsaDateInput').value||null;
         if(_bsaSelectedSlipId){
-            const r=await fetch('api/slip-match-orders.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'match_bdo',slip_id:_bsaSelectedSlipId,bdo_id:_bsaBdoData.bdo_id,amount:amount})});
-            const j=await r.json();if(!j.success) throw new Error(j.error||'จับคู่ไม่สำเร็จ');
+            const slip = getBsaSelectedSlip();
+            if(!slip) throw new Error('ไม่พบข้อมูลสลิปที่เลือก');
+            const j=await whApiCall({
+                action:'slip_match_bdo',
+                slip_inbox_id:slip.slip_inbox_id || slip.odoo_slip_id || slip.id || slip.slip_id,
+                line_user_id:slip.line_user_id || '',
+                matches:[{bdo_id:_bsaBdoData.bdo_id,amount:amount != null ? amount : parseFloat(_bsaBdoData.amount_total || _bsaBdoData.amount_net_to_pay || 0)}],
+                note:'Attach slip from customer detail modal',
+                local_slip_id:slip.id || slip.slip_id
+            });
+            if(!j.success) throw new Error(j.error||'จับคู่ไม่สำเร็จ');
         } else if(_bsaFileBase64){
             const r=await fetch('api/odoo-slip-upload.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({line_user_id:'_dashboard_upload_',image_base64:_bsaFileBase64.replace(/^data:image\/\w+;base64,/,''),bdo_id:_bsaBdoData.bdo_id,amount:amount,transfer_date:transferDate,uploaded_by:'dashboard',skip_line_notify:true})});
             const j=await r.json();if(!j.success) throw new Error(j.error||'อัพโหลดไม่สำเร็จ');
@@ -1008,8 +1021,15 @@ async function bsaConfirmAttach(){
 async function unmatchBdoSlip(slipId, bdoId){
     if(!confirm('ยกเลิกการจับคู่สลิปกับ BDO นี้ ใช่ไหม?'))return;
     try{
-        const r=await fetch('api/slip-match-orders.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'unmatch',slip_id:slipId,bdo_id:bdoId})});
-        const j=await r.json();
+        const slip = (_bsaSlips || []).find(function(item){ return (item.id || item.slip_id) == slipId; }) || null;
+        const j=await whApiCall({
+            action:'slip_unmatch',
+            slip_inbox_id:(slip && (slip.slip_inbox_id || slip.odoo_slip_id || slip.id || slip.slip_id)) || slipId,
+            line_user_id:(slip && slip.line_user_id) || '',
+            reason:'ยกเลิกจาก customer detail dashboard',
+            local_slip_id:(slip && (slip.id || slip.slip_id)) || slipId,
+            bdo_id:bdoId
+        });
         if(j.success){alert('✅ ยกเลิกการจับคู่เรียบร้อยแล้ว');_cacheClear(_CUST_CACHE_KEY);loadAll(true);}
         else{alert('❌ '+(j.error||'เกิดข้อผิดพลาด'));}
     }catch(e){alert('❌ Network error: '+e.message);}
