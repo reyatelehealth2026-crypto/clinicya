@@ -3740,7 +3740,7 @@ function bdoDetailProxy($db, $input)
  */
 function _callOdooApi($endpoint, $params)
 {
-    $odooUrl = defined('ODOO_API_BASE') ? ODOO_API_BASE : 'https://cny.cnyrxapp.com';
+    $odooUrl = defined('ODOO_API_BASE') ? ODOO_API_BASE : 'https://erp.cnyrxapp.com';
     $apiKey  = defined('ODOO_API_KEY') ? ODOO_API_KEY : '';
 
     if (!$apiKey) {
