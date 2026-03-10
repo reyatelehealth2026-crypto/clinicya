@@ -120,10 +120,28 @@ function showSection(id){
 async function whApiCall(data){
     const tried=[];
     const endpoints=[WH_API_ACTIVE,...WH_API_CANDIDATES.filter(u=>u!==WH_API_ACTIVE)];
+    const action=String(data&&data.action||'').trim();
+    const heavyActions=new Set([
+        'stats',
+        'list',
+        'customer_list',
+        'notification_log',
+        'daily_summary_preview',
+        'order_grouped_today',
+        'customer_detail',
+        'odoo_orders',
+        'odoo_invoices',
+        'odoo_slips',
+        'odoo_bdos',
+        'pending_bdo_orders',
+        'activity_log_list',
+        'customer_360'
+    ]);
+    const timeoutMs=heavyActions.has(action)?20000:8000;
     for(const apiUrl of endpoints){
         try{
             const ctrl=new AbortController();
-            const timer=setTimeout(()=>ctrl.abort(),8000);
+            const timer=setTimeout(()=>ctrl.abort(),timeoutMs);
             const r=await fetch(apiUrl+'?_t='+Date.now(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:ctrl.signal});
             clearTimeout(timer);
             const raw=await r.text();
@@ -135,7 +153,7 @@ async function whApiCall(data){
             }
             tried.push(apiUrl+' (non-json:'+r.status+')');
         }catch(e){
-            tried.push(apiUrl+' ('+(e.name==='AbortError'?'timeout 8s':e.message)+')');
+            tried.push(apiUrl+' ('+(e.name==='AbortError'?'timeout '+Math.round(timeoutMs/1000)+'s':e.message)+')');
         }
     }
     return{success:false,error:'API unreachable: '+tried.join(' | ')};
