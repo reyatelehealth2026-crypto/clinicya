@@ -813,27 +813,35 @@
                 </div>
             </div>
 
-            <!-- Split View -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;" id="matchingSplitView">
-                <!-- Left: Pending Slips -->
-                <div class="content-card" style="max-height:65vh;overflow-y:auto;">
-                    <div class="content-title">
-                        <i class="bi bi-image"></i> สลิปรอจับคู่
-                        <span id="matchSlipCount" style="font-size:0.8rem;color:var(--gray-500);margin-left:auto;"></span>
-                    </div>
-                    <div id="matchSlipList">
-                        <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
-                    </div>
+            <!-- Zone 1: Suggested Pairs -->
+            <div class="content-card" id="matchSuggestedSection" style="margin-bottom:0.75rem;">
+                <div class="content-title" style="margin-bottom:0.5rem;">
+                    <i class="bi bi-stars" style="color:#7c3aed;"></i> แนะนำจับคู่อัตโนมัติ
+                    <span id="matchSuggestedCount" style="font-size:0.8rem;color:var(--gray-500);margin-left:6px;"></span>
+                    <div style="margin-left:auto;font-size:0.75rem;color:var(--gray-400);">เลือกคู่ด้านล่างแล้วกด ยืนยัน หรือจับคู่เองด้วยช่องล่าง</div>
                 </div>
-                <!-- Right: Pending BDOs -->
-                <div class="content-card" style="max-height:65vh;overflow-y:auto;">
-                    <div class="content-title">
-                        <i class="bi bi-file-earmark-check"></i> BDO รอชำระ
-                        <span id="matchBdoCount" style="font-size:0.8rem;color:var(--gray-500);margin-left:auto;"></span>
+                <div id="matchSuggestedList">
+                    <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+                </div>
+            </div>
+
+            <!-- Zone 2+3: Unmatched items (compact 2-col) -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;" id="matchingSplitView">
+                <!-- Left: Unmatched Slips -->
+                <div class="content-card" style="max-height:45vh;overflow-y:auto;">
+                    <div class="content-title" style="font-size:0.85rem;padding-bottom:0.4rem;">
+                        <i class="bi bi-image"></i> สลิปยังไม่จับคู่
+                        <span id="matchSlipCount" style="font-size:0.78rem;color:var(--gray-500);margin-left:auto;"></span>
                     </div>
-                    <div id="matchBdoList">
-                        <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+                    <div id="matchSlipList"></div>
+                </div>
+                <!-- Right: Unmatched BDOs -->
+                <div class="content-card" style="max-height:45vh;overflow-y:auto;">
+                    <div class="content-title" style="font-size:0.85rem;padding-bottom:0.4rem;">
+                        <i class="bi bi-file-earmark-check"></i> BDO ยังไม่จับคู่
+                        <span id="matchBdoCount" style="font-size:0.78rem;color:var(--gray-500);margin-left:auto;"></span>
                     </div>
+                    <div id="matchBdoList"></div>
                 </div>
             </div>
 
