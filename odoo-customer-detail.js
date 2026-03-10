@@ -19,6 +19,27 @@ let _profileData=null, _creditData=null, _pointsData=null, _linkData=null;
 // ===== UTILS =====
 function escapeHtml(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
+// ===== SESSION CACHE (TTL-based, sessionStorage) =====
+const _CACHE_TTL=180000; // 3 minutes
+function _cacheSet(key,data,ttlMs){
+    try{sessionStorage.setItem('_c:'+key,JSON.stringify({t:Date.now(),ttl:ttlMs||_CACHE_TTL,d:data}));}catch(e){}
+}
+function _cacheGet(key){
+    try{
+        const raw=sessionStorage.getItem('_c:'+key);
+        if(!raw)return null;
+        const item=JSON.parse(raw);
+        if(Date.now()-item.t>(item.ttl||_CACHE_TTL)){sessionStorage.removeItem('_c:'+key);return null;}
+        return item.d;
+    }catch(e){return null;}
+}
+function _cacheClear(prefix){
+    try{
+        const p='_c:'+(prefix||'');
+        Object.keys(sessionStorage).filter(function(k){return k.startsWith(p);}).forEach(function(k){sessionStorage.removeItem(k);});
+    }catch(e){}
+}
+
 async function whApiCall(data){
     const endpoints=[WH_API_ACTIVE,...WH_API_CANDIDATES.filter(u=>u!==WH_API_ACTIVE)];
     for(const url of endpoints){
@@ -131,9 +152,22 @@ document.addEventListener('DOMContentLoaded',function(){
     loadAll();
 });
 
-async function loadAll(){
-    // Parallel fetch: detail + orders + invoices + slips + notes
+const _CUST_CACHE_KEY='cust_'+P_REF+'_'+P_PID;
+
+async function loadAll(forceRefresh){
     const pidParam=(P_PID&&P_PID!=='-')?P_PID:'';
+
+    // --- Cache check (skip on force refresh) ---
+    if(!forceRefresh){
+        const cached=_cacheGet(_CUST_CACHE_KEY);
+        if(cached){
+            _restoreFromCache(cached);
+            _showCustCacheIndicator(cached.cachedAt);
+            return;
+        }
+    }
+
+    // Parallel fetch: detail + orders + invoices + slips + notes
     const [detailRes,ordRes,invRes,slipRes,notesRes,bdoRes]=await Promise.all([
         whApiCall({action:'customer_detail',partner_id:pidParam,customer_ref:P_REF}),
         whApiCall({action:'odoo_orders',limit:100,offset:0,partner_id:pidParam,customer_ref:P_REF}),
@@ -221,6 +255,75 @@ async function loadAll(){
     // If matching tab is active, re-render with fresh data
     const matchPanel=document.getElementById('panel-matching');
     if(matchPanel&&matchPanel.classList.contains('active')) renderMatchingTab();
+
+    // --- Save to cache ---
+    _cacheSet(_CUST_CACHE_KEY,{
+        detailData: _profileData||_creditData||_pointsData||_linkData ? {profile:_profileData,credit:_creditData,points:_pointsData,link:_linkData} : null,
+        detailRaw: (detailRes&&detailRes.success&&detailRes.data)||null,
+        orders:    _allOrders,
+        invoices:  _allInvoices,
+        slips:     _allSlips,
+        bdos:      _allBdos,
+        notesMap:  _notesMap,
+        overridesMap: _overridesMap,
+        cachedAt:  Date.now()
+    });
+}
+
+// ===== CACHE RESTORE =====
+function _restoreFromCache(c){
+    _allOrders    = c.orders    || [];
+    _allInvoices  = c.invoices  || [];
+    _allSlips     = c.slips     || [];
+    _allBdos      = c.bdos      || [];
+    _notesMap     = c.notesMap  || {};
+    _overridesMap = c.overridesMap || {};
+    if(c.detailRaw){
+        const d=c.detailRaw;
+        _profileData=d.profile||null;_creditData=d.credit||null;_pointsData=d.points||null;_linkData=d.link||null;
+        renderProfileCard(d);renderSummaryCards(d,_allOrders,_allInvoices);renderProfileTab(d);
+    }
+    // Rebuild paid invoice maps for orders render
+    const paidInvByAmt=new Map(),paidInvByOrder=new Map();
+    _allInvoices.forEach(function(inv){
+        const isPaid=inv.is_paid||String(inv.invoice_state||'').toLowerCase()==='paid'||String(inv.latest_event||'')==='invoice.paid'||String(inv.payment_state||'').toLowerCase()==='paid';
+        if(!isPaid)return;
+        const a=parseFloat(inv.amount_total||0);
+        if(a>0&&!paidInvByAmt.has(a))paidInvByAmt.set(a,inv);
+        if(inv.order_name&&!paidInvByOrder.has(inv.order_name))paidInvByOrder.set(inv.order_name,inv);
+    });
+    renderOrders(_allOrders,paidInvByAmt,paidInvByOrder);
+    renderInvoices(_allInvoices);renderBdos(_allBdos);renderSlips(_allSlips);
+    document.getElementById('tabCountOrders').textContent='('+_allOrders.length+')';
+    document.getElementById('tabCountInvoices').textContent='('+_allInvoices.length+')';
+    document.getElementById('tabCountBdos').textContent='('+_allBdos.length+')';
+    document.getElementById('tabCountSlips').textContent='('+_allSlips.length+')';
+    const _pendingSlipsForBadge=_allSlips.filter(function(s){return s.status==='pending'||s.status==='new';});
+    const _pendingBdosForBadge=_allBdos.filter(function(b){const st=String(b.payment_status||b.state||'').toLowerCase();return st!=='done'&&st!=='cancelled'&&st!=='cancel'&&st!=='paid'&&st!=='fully_paid';});
+    const _mtcEl=document.getElementById('tabCountMatching');
+    if(_mtcEl){
+        if(_pendingSlipsForBadge.length>0||_pendingBdosForBadge.length>0){
+            _mtcEl.textContent='\uD83D\uDFE1 สลิปรอ '+_pendingSlipsForBadge.length+' / BDO รอ '+_pendingBdosForBadge.length;
+        } else { _mtcEl.textContent=''; }
+    }
+    const matchPanelC=document.getElementById('panel-matching');
+    if(matchPanelC&&matchPanelC.classList.contains('active')) renderMatchingTab();
+}
+
+function _showCustCacheIndicator(cachedAt){
+    if(!cachedAt) return;
+    const ageS=Math.round((Date.now()-cachedAt)/1000);
+    let ind=document.getElementById('_custCacheNote');
+    if(!ind){
+        ind=document.createElement('div');
+        ind.id='_custCacheNote';
+        ind.style.cssText='font-size:0.72rem;color:var(--gray-400);text-align:right;padding:2px 8px 0;margin-bottom:4px;';
+        const tabBar=document.getElementById('tabBar');
+        if(tabBar&&tabBar.parentNode) tabBar.parentNode.insertBefore(ind,tabBar);
+    }
+    ind.innerHTML='<i class="bi bi-lightning-charge"></i> จาก cache · '+ageS+'วิที่แล้ว &nbsp;'
+        +'<a href="javascript:void(0)" onclick="_cacheClear(\''+_CUST_CACHE_KEY+'\');loadAll(true)" '
+        +'style="color:var(--primary);text-decoration:none;">รีเฟรช</a>';
 }
 
 // ===== RENDER: Profile Card =====
@@ -765,8 +868,8 @@ async function submitOverride(){
     if(res&&res.success){
         closeModal('overrideModal');
         alert('บันทึกสำเร็จ');
-        // Refresh data
-        loadAll();
+        _cacheClear(_CUST_CACHE_KEY);
+        loadAll(true);
     } else {
         alert('เกิดข้อผิดพลาด: '+(res&&res.error||'Unknown'));
     }
@@ -805,7 +908,8 @@ async function submitNote(){
     if(res&&res.success){
         closeModal('noteModal');
         alert('เพิ่มโน้ตสำเร็จ');
-        loadAll();
+        _cacheClear(_CUST_CACHE_KEY);
+        loadAll(true);
     } else {
         alert('เกิดข้อผิดพลาด: '+(res&&res.error||'Unknown'));
     }
@@ -893,7 +997,8 @@ async function bsaConfirmAttach(){
         } else { throw new Error('กรุณาเลือกสลิปหรืออัพโหลดรูป'); }
         closeModal('bdoSlipAttachModal');
         alert('✅ แนบสลิปเรียบร้อยแล้ว');
-        loadAll();
+        _cacheClear(_CUST_CACHE_KEY);
+        loadAll(true);
     }catch(e){
         alert('❌ '+e.message);
         btn.disabled=false;btn.innerHTML='<i class="bi bi-check-lg"></i> แนบสลิป';
@@ -905,7 +1010,7 @@ async function unmatchBdoSlip(slipId, bdoId){
     try{
         const r=await fetch('api/slip-match-orders.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'unmatch',slip_id:slipId,bdo_id:bdoId})});
         const j=await r.json();
-        if(j.success){alert('✅ ยกเลิกการจับคู่เรียบร้อยแล้ว');loadAll();}
+        if(j.success){alert('✅ ยกเลิกการจับคู่เรียบร้อยแล้ว');_cacheClear(_CUST_CACHE_KEY);loadAll(true);}
         else{alert('❌ '+(j.error||'เกิดข้อผิดพลาด'));}
     }catch(e){alert('❌ Network error: '+e.message);}
 }

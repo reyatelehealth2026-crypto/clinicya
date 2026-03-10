@@ -8,6 +8,28 @@ const SKIP_REASON_LABELS={'disabled':'ปิดการแจ้งเตือ
 const EVENT_ICONS={'sale.order.confirmed':'🛒','sale.order.cancelled':'❌','sale.order.done':'✅','sale.order.created':'📝','delivery.validated':'📦','delivery.cancelled':'❌','delivery.back_order':'🔄','delivery.in_transit':'🚚','delivery.done':'✅','invoice.posted':'🧾','invoice.paid':'💰','invoice.cancelled':'❌','invoice.overdue':'⚠️','invoice.created':'📄','payment.received':'💳','payment.confirmed':'💳','order.validated':'✅','order.picker_assigned':'👤','order.picking':'📦','order.picked':'✅','order.packing':'📦','order.packed':'✅','order.reserved':'🔒','order.awaiting_payment':'💰','order.paid':'💳','order.to_delivery':'🚚','order.in_delivery':'🚚','order.delivered':'✅','order.cancelled':'❌'};
 
 function escapeHtml(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+// ===== SESSION CACHE (TTL-based, sessionStorage) =====
+const _CACHE_TTL = 180000; // 3 minutes
+function _cacheSet(key, data, ttlMs){
+    try{ sessionStorage.setItem('_c:'+key, JSON.stringify({t:Date.now(), ttl:ttlMs||_CACHE_TTL, d:data})); }catch(e){}
+}
+function _cacheGet(key){
+    try{
+        const raw=sessionStorage.getItem('_c:'+key);
+        if(!raw) return null;
+        const item=JSON.parse(raw);
+        if(Date.now()-item.t > (item.ttl||_CACHE_TTL)){ sessionStorage.removeItem('_c:'+key); return null; }
+        return item.d;
+    }catch(e){ return null; }
+}
+function _cacheClear(prefix){
+    try{
+        const p='_c:'+(prefix||'');
+        Object.keys(sessionStorage).filter(function(k){return k.startsWith(p);}).forEach(function(k){sessionStorage.removeItem(k);});
+    }catch(e){}
+}
+
 function webhookEventShortName(t){if(!t)return '-';const p=String(t).split('.');return p.length>1?p.slice(1).join('.'):t;}
 function generateOdooUrl(model,id){if(!model||id==null||id==='')return '';return ODOO_PROD_BASE+'/web#id='+encodeURIComponent(String(id))+'&model='+encodeURIComponent(String(model))+'&view_type=form';}
 function deliveryTypeBadge(deliveryType){const label=deliveryType==='company'?'สายส่ง':(deliveryType==='private'?'ขนส่งเอกชน':'-');const bg=deliveryType==='private'?'#fef3c7':'#e0f2fe';const clr=deliveryType==='private'?'#b45309':'#0369a1';return label==='-'?'<span style="color:var(--gray-300);font-size:0.75rem;">-</span>':'<span style="background:'+bg+';color:'+clr+';padding:2px 8px;border-radius:50px;font-size:0.72rem;font-weight:500;">'+escapeHtml(label)+'</span>';}
@@ -2525,8 +2547,23 @@ let _matchBdoCountByRef  = {};
 
 // ===== CUSTOMER GRID =====
 
-async function loadMatchingCustomerGrid(){
+async function loadMatchingCustomerGrid(forceRefresh){
     const gridEl = document.getElementById('matchCustomerGrid');
+
+    // --- Cache check ---
+    if(!forceRefresh){
+        const cached = _cacheGet('match_grid');
+        if(cached){
+            _matchAllCustomers   = cached.customers   || [];
+            _matchSlipCountByRef = cached.slipCounts  || {};
+            _matchBdoCountByRef  = cached.bdoCounts   || {};
+            _populateMatchSalespersonFilter(cached.salespersons || {});
+            renderMatchingCustomerGrid();
+            _showGridCacheIndicator(cached.cachedAt);
+            return;
+        }
+    }
+
     if(gridEl) gridEl.innerHTML = '<div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>';
 
     const [custRes, slipRes, bdoRes] = await Promise.all([
@@ -2557,23 +2594,53 @@ async function loadMatchingCustomerGrid(){
     });
 
     // Populate salesperson filter
+    const spSet = {};
+    _matchAllCustomers.forEach(function(c){
+        const sid = c.salesperson_id; const snm = c.salesperson_name;
+        if(sid && snm && !spSet[sid]){ spSet[sid] = snm; }
+    });
+    _populateMatchSalespersonFilter(spSet);
+
+    // Save to cache
+    _cacheSet('match_grid', {
+        customers:   _matchAllCustomers,
+        slipCounts:  _matchSlipCountByRef,
+        bdoCounts:   _matchBdoCountByRef,
+        salespersons: spSet,
+        cachedAt:    Date.now()
+    });
+
+    renderMatchingCustomerGrid();
+}
+
+function _populateMatchSalespersonFilter(spSet){
     const spSel = document.getElementById('matchSalespersonFilter');
-    if(spSel && spSel.options.length <= 1){
-        const spSet = {};
-        _matchAllCustomers.forEach(function(c){
-            const sid = c.salesperson_id;
-            const snm = c.salesperson_name;
-            if(sid && snm && !spSet[sid]){ spSet[sid] = snm; }
-        });
+    if(!spSel) return;
+    // Only repopulate if empty (keep user's current selection)
+    if(spSel.options.length <= 1){
         Object.keys(spSet).forEach(function(sid){
             const opt = document.createElement('option');
-            opt.value = sid;
-            opt.textContent = spSet[sid];
+            opt.value = sid; opt.textContent = spSet[sid];
             spSel.appendChild(opt);
         });
     }
+}
 
-    renderMatchingCustomerGrid();
+function _showGridCacheIndicator(cachedAt){
+    const gridEl = document.getElementById('matchCustomerGrid');
+    if(!gridEl || !cachedAt) return;
+    const ageS = Math.round((Date.now() - cachedAt) / 1000);
+    let indicator = document.getElementById('_matchGridCacheNote');
+    if(!indicator){
+        indicator = document.createElement('div');
+        indicator.id = '_matchGridCacheNote';
+        indicator.style.cssText = 'font-size:0.72rem;color:var(--gray-400);text-align:right;padding:2px 4px 0;';
+        gridEl.parentNode && gridEl.parentNode.insertBefore(indicator, gridEl);
+    }
+    indicator.innerHTML = '<i class="bi bi-lightning-charge"></i> จาก cache · '
+        + ageS + 'วิที่แล้ว &nbsp;'
+        + '<a href="javascript:void(0)" onclick="_cacheClear(\'match_grid\');loadMatchingCustomerGrid(true)" '
+        + 'style="color:var(--primary);text-decoration:none;">รีเฟรช</a>';
 }
 
 function renderMatchingCustomerGrid(){
