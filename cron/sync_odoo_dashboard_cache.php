@@ -4,10 +4,10 @@
  * Populates local cache tables from webhook log data
  * 
  * Run this via cron every 5 minutes:
- * */5 * * * * php /path/to/cron/sync_odoo_dashboard_cache.php
+ *   */5 * * * * php /path/to/cron/sync_odoo_dashboard_cache.php
  * 
  * Or run manually:
- * php sync_odoo_dashboard_cache.php [full|incremental|orders|customers|invoices|slips|stats]
+ *   php sync_odoo_dashboard_cache.php [full|incremental|orders|customers|invoices|slips|stats]
  * 
  * @version 1.0.0
  * @created 2026-03-11
