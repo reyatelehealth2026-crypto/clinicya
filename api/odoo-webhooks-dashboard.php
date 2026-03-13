@@ -744,6 +744,12 @@ function getCustomerList($db, $input)
     // Webhook fallback
     $processedAtColumn = resolveWebhookTimeColumn($db);
     $processedAtExpr = $processedAtColumn ?: 'NOW()';
+    $recentWindowWhere = webhookRecentWindowWhere(
+        $db,
+        $processedAtColumn,
+        ($invoiceFilter === 'unpaid' || $invoiceFilter === 'overdue') ? 365 : 180,
+        ($invoiceFilter === 'unpaid' || $invoiceFilter === 'overdue') ? 120000 : 80000
+    );
 
     $customerIdExpr    = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), '')";
     $customerPidExpr   = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.partner_id')), '')";
@@ -754,6 +760,10 @@ function getCustomerList($db, $input)
 
     $where = ["status = 'success'", "{$customerKeyExpr} IS NOT NULL"];
     $params = [];
+
+    if ($search === '' && $recentWindowWhere !== '') {
+        $where[] = $recentWindowWhere;
+    }
 
     if ($search !== '') {
         $where[] = "({$customerRefExpr} LIKE ? OR {$customerNameExpr} LIKE ?)";
@@ -816,7 +826,7 @@ function getCustomerList($db, $input)
             SELECT ckey, SUM(max_amt) as spend FROM (
                 SELECT {$customerKeyExpr} as ckey, {$orderKeyExpr} as okey, MAX({$amtExpr}) as max_amt
                 FROM odoo_webhooks_log
-                WHERE status = 'success' AND {$customerKeyExpr} IN ({$ph})
+                WHERE status = 'success' AND {$customerKeyExpr} IN ({$ph})" . ($search === '' && $recentWindowWhere !== '' ? " AND {$recentWindowWhere}" : "") . "
                 GROUP BY ckey, okey
             ) per_order GROUP BY ckey
         ");
@@ -2467,6 +2477,18 @@ function resolveWebhookTimeColumn($db)
     }
 
     return null;
+}
+
+function webhookRecentWindowWhere($db, $processedAtColumn, $days = 180, $maxRows = 80000)
+{
+    $days = max(1, (int) $days);
+    $maxRows = max(1000, (int) $maxRows);
+
+    if ($processedAtColumn) {
+        return "{$processedAtColumn} >= DATE_SUB(NOW(), INTERVAL {$days} DAY)";
+    }
+
+    return "id >= GREATEST((SELECT MAX(id) - {$maxRows} FROM odoo_webhooks_log), 0)";
 }
 
 /**
