@@ -49,46 +49,72 @@ if (!function_exists('hasWebhookColumn')) {
 
 /**
  * Batch-load all column names from odoo_webhooks_log in a single query.
- * Caches the result in APCu (30s TTL) and per-request static.
+ * Caches the result in file (5min TTL) and APCu (if available) across requests.
+ * Optimized for shared hosting without APCu/OPcache.
  */
 if (!function_exists('_loadWebhookColumns')) {
     function _loadWebhookColumns($db)
     {
-        $apcuKey = 'odoo_wh_cols_' . crc32(defined('DB_NAME') ? DB_NAME : '');
+        // Use file-based cache for shared hosting without APCu
+        $dbName = defined('DB_NAME') ? DB_NAME : 'default';
+        $cacheFile = sys_get_temp_dir() . '/odoo_wh_cols_' . md5($dbName) . '.cache';
+        $cacheTtl = 300; // 5 minutes
 
+        // Check file cache first
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheTtl) {
+            $cached = @json_decode(file_get_contents($cacheFile), true);
+            if (is_array($cached) && !empty($cached)) {
+                return $cached;
+            }
+        }
+
+        // Try APCu if available (faster than file)
+        $apcuKey = 'odoo_wh_cols_' . crc32($dbName);
         if (function_exists('apcu_fetch')) {
             $cached = apcu_fetch($apcuKey, $hit);
-            if ($hit && is_array($cached)) {
+            if ($hit && is_array($cached) && !empty($cached)) {
+                // Sync to file cache for next request
+                @file_put_contents($cacheFile, json_encode($cached), LOCK_EX);
                 return $cached;
             }
         }
 
         $columns = [];
 
+        // Optimized: Use SHOW COLUMNS first (faster than information_schema on shared hosting)
         try {
-            $stmt = $db->prepare("
-                SELECT COLUMN_NAME
-                FROM information_schema.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'odoo_webhooks_log'
-            ");
-            $stmt->execute();
-            while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
-                $columns[$row[0]] = true;
+            $stmt = $db->query("SHOW COLUMNS FROM `odoo_webhooks_log`");
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $columns[$row['Field']] = true;
             }
         } catch (Exception $e) {
+            // Fallback to information_schema
             try {
-                $stmt = $db->query("SHOW COLUMNS FROM `odoo_webhooks_log`");
-                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                    $columns[$row['Field']] = true;
+                $stmt = $db->prepare("
+                    SELECT COLUMN_NAME
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'odoo_webhooks_log'
+                ");
+                $stmt->execute();
+                while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
+                    $columns[$row[0]] = true;
                 }
             } catch (Exception $e2) {
-                // Table might not exist
+                // Table might not exist - return hardcoded defaults
+                $columns = [
+                    'id' => true, 'event_type' => true, 'payload' => true,
+                    'status' => true, 'created_at' => true, 'processed_at' => true
+                ];
             }
         }
 
-        if (function_exists('apcu_store') && !empty($columns)) {
-            apcu_store($apcuKey, $columns, 30);
+        // Save to both caches
+        if (!empty($columns)) {
+            @file_put_contents($cacheFile, json_encode($columns), LOCK_EX);
+            if (function_exists('apcu_store')) {
+                apcu_store($apcuKey, $columns, 30);
+            }
         }
 
         return $columns;
@@ -159,7 +185,8 @@ if (!function_exists('webhookCustomerSortExpr')) {
 }
 
 /**
- * Check if a MySQL table exists (with in-request caching + APCu).
+ * Check if a MySQL table exists (with in-request caching + file-based caching).
+ * Optimized for shared hosting without APCu.
  */
 if (!function_exists('tableExists')) {
     function tableExists($db, $table)
@@ -175,32 +202,53 @@ if (!function_exists('tableExists')) {
             return $cache[$table];
         }
 
-        // Try APCu for cross-request caching
-        $apcuKey = 'tbl_exists_' . crc32((defined('DB_NAME') ? DB_NAME : '') . $table);
-        if (function_exists('apcu_fetch')) {
-            $val = apcu_fetch($apcuKey, $hit);
-            if ($hit) {
-                $cache[$table] = (bool) $val;
+        // Try file-based cache (5 min TTL)
+        $dbName = defined('DB_NAME') ? DB_NAME : 'default';
+        $cacheFile = sys_get_temp_dir() . '/tbl_exists_' . md5($dbName . $table) . '.cache';
+        if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 300) {
+            $cached = @file_get_contents($cacheFile);
+            if ($cached !== false) {
+                $cache[$table] = (bool) $cached;
                 return $cache[$table];
             }
         }
 
-        try {
-            $stmt = $db->prepare("
-                SELECT 1
-                FROM information_schema.TABLES
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = ?
-                LIMIT 1
-            ");
-            $stmt->execute([$table]);
-            $cache[$table] = (bool) $stmt->fetchColumn();
-        } catch (Exception $e) {
-            $quoted = $db->quote($table);
-            $stmt = $db->query("SHOW TABLES LIKE {$quoted}");
-            $cache[$table] = $stmt ? ($stmt->rowCount() > 0) : false;
+        // Try APCu if available
+        $apcuKey = 'tbl_exists_' . crc32($dbName . $table);
+        if (function_exists('apcu_fetch')) {
+            $val = apcu_fetch($apcuKey, $hit);
+            if ($hit) {
+                $cache[$table] = (bool) $val;
+                @file_put_contents($cacheFile, $cache[$table] ? '1' : '', LOCK_EX);
+                return $cache[$table];
+            }
         }
 
+        // Query database - use SHOW TABLES (faster than information_schema)
+        try {
+            $quoted = $db->quote($table);
+            $stmt = $db->query("SHOW TABLES LIKE {$quoted}");
+            $exists = $stmt ? ($stmt->rowCount() > 0) : false;
+            
+            if (!$exists) {
+                // Fallback to information_schema
+                $stmt = $db->prepare("
+                    SELECT 1
+                    FROM information_schema.TABLES
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = ?
+                    LIMIT 1
+                ");
+                $stmt->execute([$table]);
+                $exists = (bool) $stmt->fetchColumn();
+            }
+            $cache[$table] = $exists;
+        } catch (Exception $e) {
+            $cache[$table] = false;
+        }
+
+        // Save to both caches
+        @file_put_contents($cacheFile, $cache[$table] ? '1' : '', LOCK_EX);
         if (function_exists('apcu_store')) {
             apcu_store($apcuKey, $cache[$table], 60);
         }
