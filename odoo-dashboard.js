@@ -1,3 +1,4 @@
+const WH_API_FAST='/api/odoo-dashboard-fast.php';
 const WH_API_CANDIDATES=[
     '/api/odoo-dashboard-api.php',
     '/api/odoo-webhooks-dashboard.php'
@@ -135,31 +136,41 @@ function showSection(id){
 // Last API response timing (for performance monitoring)
 let _lastApiDurationMs = null;
 
+// Actions supported by the lightweight fast endpoint
+const WH_FAST_ACTIONS=new Set(['health','overview_fast','circuit_breaker_status','circuit_breaker_reset']);
+
 async function whApiCall(data){
     const tried=[];
-    const endpoints=[WH_API_ACTIVE,...WH_API_CANDIDATES.filter(u=>u!==WH_API_ACTIVE)];
     const action=String(data&&data.action||'').trim();
     const heavyActions=new Set([
-        'stats',
-        'list',
-        'customer_list',
-        'notification_log',
-        'daily_summary_preview',
-        'order_grouped_today',
-        'overview_today',
-        'overview_combined',
-        'customer_detail',
-        'customer_full_detail',
-        'odoo_orders',
-        'odoo_invoices',
-        'odoo_slips',
-        'odoo_bdos',
-        'odoo_bdo_list_api',
-        'pending_bdo_orders',
-        'activity_log_list',
-        'customer_360'
+        'stats','list','customer_list','notification_log','daily_summary_preview',
+        'order_grouped_today','overview_today','overview_combined','customer_detail',
+        'customer_full_detail','odoo_orders','odoo_invoices','odoo_slips','odoo_bdos',
+        'odoo_bdo_list_api','pending_bdo_orders','activity_log_list','customer_360'
     ]);
     const timeoutMs=heavyActions.has(action)?15000:8000;
+
+    // Try fast endpoint first for supported actions (file is tiny, <100 lines)
+    if(WH_FAST_ACTIONS.has(action)){
+        try{
+            const ctrl=new AbortController();
+            const timer=setTimeout(()=>ctrl.abort(),5000);
+            const r=await fetch(WH_API_FAST+'?_t='+Date.now(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:ctrl.signal});
+            clearTimeout(timer);
+            const parsed=await r.json();
+            if(parsed&&parsed.success){
+                if(parsed._meta&&parsed._meta.duration_ms!=null) _lastApiDurationMs=parsed._meta.duration_ms;
+                return parsed;
+            }
+            if(parsed&&parsed.fallback){/* not supported by fast, try heavy */}
+            else tried.push(WH_API_FAST+' (err:'+(parsed&&parsed.error||r.status)+')');
+        }catch(e){
+            tried.push(WH_API_FAST+' ('+(e.name==='AbortError'?'timeout':e.message)+')');
+        }
+    }
+
+    // Try heavy endpoints (large file, slower to parse)
+    const endpoints=[WH_API_ACTIVE,...WH_API_CANDIDATES.filter(u=>u!==WH_API_ACTIVE)];
     for(const apiUrl of endpoints){
         try{
             const ctrl=new AbortController();
@@ -171,9 +182,7 @@ async function whApiCall(data){
             try{parsed=JSON.parse(raw);}catch(_e){parsed=null;}
             if(parsed&&typeof parsed==='object'&&Object.prototype.hasOwnProperty.call(parsed,'success')){
                 WH_API_ACTIVE=apiUrl;
-                if(parsed._meta && parsed._meta.duration_ms != null){
-                    _lastApiDurationMs = parsed._meta.duration_ms;
-                }
+                if(parsed._meta&&parsed._meta.duration_ms!=null) _lastApiDurationMs=parsed._meta.duration_ms;
                 return parsed;
             }
             tried.push(apiUrl+' (non-json:'+r.status+')');
