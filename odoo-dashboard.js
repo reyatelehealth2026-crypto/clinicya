@@ -132,6 +132,9 @@ function showSection(id){
     else if(id==='matching'){loadSalespersonDropdown();if(_sectionNeedsLoad('matching')){loadMatchingCustomerGrid();_sectionMarkLoaded('matching');}else{loadMatchingCustomerGrid();}}
 }
 
+// Last API response timing (for performance monitoring)
+let _lastApiDurationMs = null;
+
 async function whApiCall(data){
     const tried=[];
     const endpoints=[WH_API_ACTIVE,...WH_API_CANDIDATES.filter(u=>u!==WH_API_ACTIVE)];
@@ -144,16 +147,19 @@ async function whApiCall(data){
         'daily_summary_preview',
         'order_grouped_today',
         'overview_today',
+        'overview_combined',
         'customer_detail',
+        'customer_full_detail',
         'odoo_orders',
         'odoo_invoices',
         'odoo_slips',
         'odoo_bdos',
+        'odoo_bdo_list_api',
         'pending_bdo_orders',
         'activity_log_list',
         'customer_360'
     ]);
-    const timeoutMs=heavyActions.has(action)?12000:6000;
+    const timeoutMs=heavyActions.has(action)?15000:8000;
     for(const apiUrl of endpoints){
         try{
             const ctrl=new AbortController();
@@ -165,6 +171,9 @@ async function whApiCall(data){
             try{parsed=JSON.parse(raw);}catch(_e){parsed=null;}
             if(parsed&&typeof parsed==='object'&&Object.prototype.hasOwnProperty.call(parsed,'success')){
                 WH_API_ACTIVE=apiUrl;
+                if(parsed._meta && parsed._meta.duration_ms != null){
+                    _lastApiDurationMs = parsed._meta.duration_ms;
+                }
                 return parsed;
             }
             tried.push(apiUrl+' (non-json:'+r.status+')');
@@ -175,7 +184,25 @@ async function whApiCall(data){
     return{success:false,error:'API unreachable: '+tried.join(' | ')};
 }
 
-async function testConnection(){const el=document.getElementById('connectionStatus');try{const r=await whApiCall({action:'stats'});if(r&&r.success){el.className='status-badge online';el.innerHTML='<span class="status-dot"></span><span>เชื่อมต่อแล้ว</span>';}else{el.className='status-badge offline';el.innerHTML='<span class="status-dot"></span><span>ไม่สามารถเชื่อมต่อได้</span>';}}catch(e){el.className='status-badge offline';el.innerHTML='<span class="status-dot"></span><span>Error</span>';}}
+async function testConnection(){
+    const el=document.getElementById('connectionStatus');
+    try{
+        const r=await whApiCall({action:'health'});
+        if(r&&r.success){
+            el.className='status-badge online';
+            const ms=_lastApiDurationMs!=null?' · '+_lastApiDurationMs+'ms':'';
+            el.innerHTML='<span class="status-dot"></span><span>เชื่อมต่อแล้ว'+ms+'</span>';
+        }else{
+            el.className='status-badge offline';
+            const errMsg=(r&&r.error)?r.error:'ไม่สามารถเชื่อมต่อได้';
+            const isCircuitOpen=errMsg.indexOf('CIRCUIT_OPEN')!==-1;
+            el.innerHTML='<span class="status-dot"></span><span>'+(isCircuitOpen?'Odoo ไม่พร้อม (Circuit Open)':escapeHtml(errMsg).substring(0,40))+'</span>';
+        }
+    }catch(e){
+        el.className='status-badge offline';
+        el.innerHTML='<span class="status-dot"></span><span>Error</span>';
+    }
+}
 
 // ===== WEBHOOKS =====
 let whCurrentOffset=0;const whPageSize=30;
@@ -1540,6 +1567,39 @@ async function loadSystemHealth(){
         html+=scoreBar('LINE Messaging','chat-dots',d.line.score,d.line.status,d.line.details);
         html+=scoreBar('Odoo Webhooks','box-seam',d.odoo.score,d.odoo.status,d.odoo.details);
         html+=scoreBar('Scheduler & Broadcasts','clock-history',d.scheduler.score,d.scheduler.status,d.scheduler.details);
+
+        // Circuit Breaker Status (from new API)
+        try{
+            const cbRes=await whApiCall({action:'circuit_breaker_status'});
+            if(cbRes&&cbRes.success&&cbRes.data){
+                const cbData=cbRes.data;
+                html+='<div style="background:white;border:1px solid var(--gray-200);border-radius:10px;padding:1rem;margin-bottom:0.75rem;">';
+                html+='<div style="font-weight:600;font-size:0.95rem;margin-bottom:10px;"><i class="bi bi-shield-check"></i> Circuit Breakers</div>';
+                html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+                Object.entries(cbData).forEach(function([svc,cb]){
+                    const st=cb.status||'closed';
+                    const stColor=st==='closed'?'#16a34a':st==='open'?'#dc2626':'#d97706';
+                    const stLabel=st==='closed'?'ปกติ':st==='open'?'เปิด (ตัดวงจร)':'กำลังทดสอบ';
+                    const stIcon=st==='closed'?'🟢':st==='open'?'🔴':'🟡';
+                    html+='<div style="background:var(--gray-50);border-radius:8px;padding:10px 12px;">';
+                    html+='<div style="font-weight:600;font-size:0.85rem;">'+stIcon+' '+escapeHtml(svc)+'</div>';
+                    html+='<div style="font-size:0.78rem;color:'+stColor+';font-weight:500;margin-top:2px;">'+escapeHtml(stLabel)+'</div>';
+                    if(cb.consecutive_failures>0){
+                        html+='<div style="font-size:0.72rem;color:var(--gray-500);margin-top:2px;">ล้มเหลวติดต่อกัน: '+cb.consecutive_failures+'/'+cb.failure_threshold+'</div>';
+                    }
+                    if(cb.last_error){
+                        html+='<div style="font-size:0.72rem;color:#dc2626;margin-top:2px;">'+escapeHtml(cb.last_error.substring(0,80))+'</div>';
+                    }
+                    if(st==='open'&&cb.time_until_probe!=null){
+                        html+='<div style="font-size:0.72rem;color:var(--gray-500);margin-top:2px;">ทดสอบใหม่ใน: '+cb.time_until_probe+'วิ</div>';
+                        html+='<button onclick="resetCircuitBreaker(\''+escapeHtml(svc)+'\')" style="margin-top:6px;background:#dc2626;color:white;border:none;border-radius:6px;padding:3px 10px;font-size:0.72rem;cursor:pointer;">Reset</button>';
+                    }
+                    html+='</div>';
+                });
+                html+='</div></div>';
+            }
+        }catch(_cbErr){}
+
         html+='<div style="font-size:0.75rem;color:var(--gray-400);text-align:right;margin-top:0.5rem;">อัปเดต: '+new Date(d.timestamp).toLocaleString('th-TH')+'</div>';
         c.innerHTML=html;
         // Update header badge with overall score
@@ -1557,6 +1617,17 @@ async function loadSystemHealth(){
             else{clearInterval(healthRefreshTimer);healthRefreshTimer=null;}
         },60000);
     }catch(e){c.innerHTML='<p style="color:var(--gray-500);">Error: '+escapeHtml(e.message)+'</p>';}
+}
+
+async function resetCircuitBreaker(service){
+    if(!confirm('รีเซ็ต Circuit Breaker สำหรับ '+service+' ?'))return;
+    const res=await whApiCall({action:'circuit_breaker_reset',service:service});
+    if(res&&res.success){
+        alert('รีเซ็ตสำเร็จ');
+        loadSystemHealth();
+    }else{
+        alert('เกิดข้อผิดพลาด: '+(res&&res.error?res.error:'Unknown'));
+    }
 }
 
 // ===== ORDER GROUPED VIEW =====

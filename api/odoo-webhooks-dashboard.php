@@ -1,20 +1,15 @@
 <?php
 /**
- * Odoo Webhooks Dashboard API
+ * Odoo Webhooks Dashboard API (Secondary / Fallback)
  * 
  * Provides data for the webhook monitoring dashboard.
+ * This is the secondary endpoint — the primary is odoo-dashboard-api.php.
+ * The JS client failovers between them automatically.
  * 
- * Actions:
- * - list: Get recent webhook logs with filters
- * - stats: Get summary statistics
- * - detail: Get single webhook detail by ID
- * - order_timeline: Get all events for a specific order
- * - customer_list: Get paginated customer list (projection + webhook fallback)
- * - invoice_list: Get invoice events per customer from webhook log
- * - notification_log: Get notification audit log stats and records
- * 
- * @version 1.1.0
+ * @version 2.0.0
  * @created 2026-02-14
+ * @updated 2026-03-16 — Added circuit breaker endpoints, response timing,
+ *          improved cache TTL handling.
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -31,6 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+$_dashboardStartTime = microtime(true);
+
 try {
     $db = Database::getInstance()->getConnection();
 
@@ -43,23 +40,32 @@ try {
 
     $action = trim((string) ($input['action'] ?? ''));
     if ($action === '') {
-        // Keep bare endpoint calls fast so health/reachability checks don't time out.
         $action = 'health';
     }
 
     $cacheTtls = [
-        'stats' => 20,
-        'order_grouped_today' => 20,
-        'customer_list' => 20,
-        'notification_log' => 20,
+        'stats' => 30,
+        'order_grouped_today' => 30,
+        'customer_list' => 30,
+        'notification_log' => 30,
         'salesperson_list' => 180,
+        'odoo_orders' => 30,
+        'odoo_invoices' => 30,
+        'odoo_slips' => 30,
+        'customer_detail' => 45,
+        'pending_bdo_orders' => 60,
     ];
     $cacheKey = null;
     if (isset($cacheTtls[$action])) {
         $cacheKey = dashboardApiBuildCacheKey($action, $input);
         $cachedResult = dashboardApiCacheGet($cacheKey, (int) $cacheTtls[$action]);
         if ($cachedResult !== null) {
-            echo json_encode(['success' => true, 'data' => $cachedResult], JSON_UNESCAPED_UNICODE);
+            $durationMs = round((microtime(true) - $_dashboardStartTime) * 1000);
+            echo json_encode([
+                'success' => true,
+                'data' => $cachedResult,
+                '_meta' => ['duration_ms' => $durationMs, 'cached' => true, 'action' => $action],
+            ], JSON_UNESCAPED_UNICODE);
             exit;
         }
     }
@@ -69,8 +75,28 @@ try {
             $result = [
                 'status' => 'ok',
                 'service' => 'odoo-webhooks-dashboard',
-                'timestamp' => date('c')
+                'timestamp' => date('c'),
+                'version' => '2.0.0',
             ];
+            break;
+
+        case 'circuit_breaker_status':
+            require_once __DIR__ . '/../classes/OdooCircuitBreaker.php';
+            $result = [
+                'odoo_reya' => (new OdooCircuitBreaker('odoo_reya'))->getStatus(),
+                'odoo_cny' => (new OdooCircuitBreaker('odoo_cny'))->getStatus(),
+            ];
+            break;
+
+        case 'circuit_breaker_reset':
+            require_once __DIR__ . '/../classes/OdooCircuitBreaker.php';
+            $service = trim((string) ($input['service'] ?? ''));
+            if ($service === '') {
+                throw new Exception('Missing service parameter');
+            }
+            $cb = new OdooCircuitBreaker($service);
+            $cb->reset();
+            $result = ['reset' => true, 'status' => $cb->getStatus()];
             break;
         case 'stats':
             $result = getStats($db);
@@ -173,14 +199,25 @@ try {
     }
 
     if ($cacheKey !== null && dashboardApiShouldCache($action, $input, $result)) {
-        dashboardApiCacheSet($cacheKey, $result);
+        $ttl = $cacheTtls[$action] ?? 60;
+        dashboardApiCacheSet($cacheKey, $result, $ttl);
     }
 
-    echo json_encode(['success' => true, 'data' => $result], JSON_UNESCAPED_UNICODE);
+    $durationMs = round((microtime(true) - $_dashboardStartTime) * 1000);
+    echo json_encode([
+        'success' => true,
+        'data' => $result,
+        '_meta' => ['duration_ms' => $durationMs, 'cached' => false, 'action' => $action],
+    ], JSON_UNESCAPED_UNICODE);
 
 } catch (Exception $e) {
+    $durationMs = round((microtime(true) - $_dashboardStartTime) * 1000);
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    echo json_encode([
+        'success' => false,
+        'error' => $e->getMessage(),
+        '_meta' => ['duration_ms' => $durationMs, 'action' => $action ?? 'unknown'],
+    ], JSON_UNESCAPED_UNICODE);
 }
 
 /**
