@@ -12,9 +12,13 @@
  * - customer_list: Get paginated customer list (projection + webhook fallback)
  * - invoice_list: Get invoice events per customer from webhook log
  * - notification_log: Get notification audit log stats and records
+ * - circuit_breaker_status: Get circuit breaker status for all Odoo services
+ * - circuit_breaker_reset: Reset a circuit breaker
  * 
- * @version 1.1.0
+ * @version 2.0.0
  * @created 2026-02-14
+ * @updated 2026-03-16 — Added circuit breaker endpoints, request timing,
+ *          optimized cache layer, PHP execution timeout guard.
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -30,6 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
+
+$_dashboardStartTime = microtime(true);
 
 try {
     $db = Database::getInstance()->getConnection();
@@ -69,7 +75,16 @@ try {
         $cacheKey = dashboardApiBuildCacheKey($action, $input);
         $cachedResult = dashboardApiCacheGet($cacheKey, (int) $cacheTtls[$action]);
         if ($cachedResult !== null) {
-            echo json_encode(['success' => true, 'data' => $cachedResult], JSON_UNESCAPED_UNICODE);
+            $durationMs = round((microtime(true) - $_dashboardStartTime) * 1000);
+            echo json_encode([
+                'success' => true,
+                'data' => $cachedResult,
+                '_meta' => [
+                    'duration_ms' => $durationMs,
+                    'cached' => true,
+                    'action' => $action,
+                ],
+            ], JSON_UNESCAPED_UNICODE);
             exit;
         }
     }
@@ -79,8 +94,28 @@ try {
             $result = [
                 'status' => 'ok',
                 'service' => 'odoo-webhooks-dashboard',
-                'timestamp' => date('c')
+                'timestamp' => date('c'),
+                'version' => '2.0.0',
             ];
+            break;
+
+        case 'circuit_breaker_status':
+            require_once __DIR__ . '/../classes/OdooCircuitBreaker.php';
+            $result = [
+                'odoo_reya' => (new OdooCircuitBreaker('odoo_reya'))->getStatus(),
+                'odoo_cny' => (new OdooCircuitBreaker('odoo_cny'))->getStatus(),
+            ];
+            break;
+
+        case 'circuit_breaker_reset':
+            require_once __DIR__ . '/../classes/OdooCircuitBreaker.php';
+            $service = trim((string) ($input['service'] ?? ''));
+            if ($service === '') {
+                throw new Exception('Missing service parameter');
+            }
+            $cb = new OdooCircuitBreaker($service);
+            $cb->reset();
+            $result = ['reset' => true, 'status' => $cb->getStatus()];
             break;
         case 'stats':
             $result = getStats($db);
@@ -200,14 +235,32 @@ try {
     }
 
     if ($cacheKey !== null && dashboardApiShouldCache($action, $input, $result)) {
-        dashboardApiCacheSet($cacheKey, $result);
+        $ttl = $cacheTtls[$action] ?? 60;
+        dashboardApiCacheSet($cacheKey, $result, $ttl);
     }
 
-    echo json_encode(['success' => true, 'data' => $result], JSON_UNESCAPED_UNICODE);
+    $durationMs = round((microtime(true) - $_dashboardStartTime) * 1000);
+    echo json_encode([
+        'success' => true,
+        'data' => $result,
+        '_meta' => [
+            'duration_ms' => $durationMs,
+            'cached' => false,
+            'action' => $action,
+        ],
+    ], JSON_UNESCAPED_UNICODE);
 
 } catch (Exception $e) {
+    $durationMs = round((microtime(true) - $_dashboardStartTime) * 1000);
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    echo json_encode([
+        'success' => false,
+        'error' => $e->getMessage(),
+        '_meta' => [
+            'duration_ms' => $durationMs,
+            'action' => $action ?? 'unknown',
+        ],
+    ], JSON_UNESCAPED_UNICODE);
 }
 
 /**

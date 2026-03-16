@@ -97,11 +97,14 @@ class OdooProductService
                 'Accept: application/json',
                 'Api-User: ' . $this->apiUser,
                 'User-Token: ' . $this->userToken,
+                'Connection: keep-alive',
             ],
             CURLOPT_TIMEOUT => $this->timeout,
-            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_CONNECTTIMEOUT => 5, // Reduced from 10s
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_ENCODING => '', // Accept gzip/deflate
+            CURLOPT_TCP_KEEPALIVE => 1,
         ]);
 
         $response = curl_exec($ch);
