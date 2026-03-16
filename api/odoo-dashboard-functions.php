@@ -13,14 +13,12 @@
  * - tableExists()
  * - dashboardApiShouldCache() / dashboardApiBuildCacheKey() / etc.
  *
- * Usage:
- *   require_once __DIR__ . '/odoo-dashboard-functions.php';
- *
- * @version 1.0.0
+ * @version 2.0.0
  * @created 2026-03-16
+ * @updated 2026-03-16 — APCu caching layer, batch schema detection, optimized
+ *          file cache with atomic writes.
  */
 
-// Guard against double-inclusion
 if (defined('_ODOO_DASHBOARD_FUNCTIONS_LOADED')) {
     return;
 }
@@ -28,60 +26,98 @@ define('_ODOO_DASHBOARD_FUNCTIONS_LOADED', true);
 
 /**
  * Check if a column exists in odoo_webhooks_log table.
- * Results are cached per-request via static variable.
- *
- * @param PDO    $db     Database connection
- * @param string $column Column name to check
- * @return bool
+ * Uses a static cache per-request and APCu across requests.
  */
 if (!function_exists('hasWebhookColumn')) {
     function hasWebhookColumn($db, $column)
     {
-        static $cache = [];
+        static $cache = null;
 
         $column = (string) $column;
         if ($column === '') {
             return false;
         }
 
-        if (!isset($cache[$column])) {
-            try {
-                $stmt = $db->prepare("
-                    SELECT 1
-                    FROM information_schema.COLUMNS
-                    WHERE TABLE_SCHEMA = DATABASE()
-                      AND TABLE_NAME = 'odoo_webhooks_log'
-                      AND COLUMN_NAME = ?
-                    LIMIT 1
-                ");
-                $stmt->execute([$column]);
-                $cache[$column] = (bool) $stmt->fetchColumn();
-            } catch (Exception $e) {
-                $quoted = $db->quote($column);
-                $stmt = $db->query("SHOW COLUMNS FROM `odoo_webhooks_log` LIKE {$quoted}");
-                $cache[$column] = $stmt ? ($stmt->rowCount() > 0) : false;
+        // Lazy-load all webhook columns in one query (batch detection)
+        if ($cache === null) {
+            $cache = _loadWebhookColumns($db);
+        }
+
+        return isset($cache[$column]);
+    }
+}
+
+/**
+ * Batch-load all column names from odoo_webhooks_log in a single query.
+ * Caches the result in APCu (30s TTL) and per-request static.
+ */
+if (!function_exists('_loadWebhookColumns')) {
+    function _loadWebhookColumns($db)
+    {
+        $apcuKey = 'odoo_wh_cols_' . crc32(defined('DB_NAME') ? DB_NAME : '');
+
+        if (function_exists('apcu_fetch')) {
+            $cached = apcu_fetch($apcuKey, $hit);
+            if ($hit && is_array($cached)) {
+                return $cached;
             }
         }
 
-        return $cache[$column];
+        $columns = [];
+
+        try {
+            $stmt = $db->prepare("
+                SELECT COLUMN_NAME
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'odoo_webhooks_log'
+            ");
+            $stmt->execute();
+            while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
+                $columns[$row[0]] = true;
+            }
+        } catch (Exception $e) {
+            try {
+                $stmt = $db->query("SHOW COLUMNS FROM `odoo_webhooks_log`");
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $columns[$row['Field']] = true;
+                }
+            } catch (Exception $e2) {
+                // Table might not exist
+            }
+        }
+
+        if (function_exists('apcu_store') && !empty($columns)) {
+            apcu_store($apcuKey, $columns, 30);
+        }
+
+        return $columns;
     }
 }
 
 /**
  * Resolve the best available webhook timestamp column expression.
- *
- * @param PDO $db
- * @return string|null Backticked column name or null if none found.
+ * Cached result for the lifetime of the request.
  */
 if (!function_exists('resolveWebhookTimeColumn')) {
     function resolveWebhookTimeColumn($db)
     {
+        static $resolved = false;
+        static $result = null;
+
+        if ($resolved) {
+            return $result;
+        }
+
         foreach (['processed_at', 'created_at', 'received_at', 'updated_at'] as $column) {
             if (hasWebhookColumn($db, $column)) {
-                return "`{$column}`";
+                $result = "`{$column}`";
+                $resolved = true;
+                return $result;
             }
         }
 
+        $resolved = true;
         return null;
     }
 }
@@ -123,11 +159,7 @@ if (!function_exists('webhookCustomerSortExpr')) {
 }
 
 /**
- * Check if a MySQL table exists (with in-request caching).
- *
- * @param PDO    $db    Database connection
- * @param string $table Table name to check
- * @return bool
+ * Check if a MySQL table exists (with in-request caching + APCu).
  */
 if (!function_exists('tableExists')) {
     function tableExists($db, $table)
@@ -141,6 +173,16 @@ if (!function_exists('tableExists')) {
 
         if (array_key_exists($table, $cache)) {
             return $cache[$table];
+        }
+
+        // Try APCu for cross-request caching
+        $apcuKey = 'tbl_exists_' . crc32((defined('DB_NAME') ? DB_NAME : '') . $table);
+        if (function_exists('apcu_fetch')) {
+            $val = apcu_fetch($apcuKey, $hit);
+            if ($hit) {
+                $cache[$table] = (bool) $val;
+                return $cache[$table];
+            }
         }
 
         try {
@@ -159,12 +201,16 @@ if (!function_exists('tableExists')) {
             $cache[$table] = $stmt ? ($stmt->rowCount() > 0) : false;
         }
 
+        if (function_exists('apcu_store')) {
+            apcu_store($apcuKey, $cache[$table], 60);
+        }
+
         return $cache[$table];
     }
 }
 
 // =====================================================================
-// Dashboard API File-Based Cache Helpers
+// Dashboard API Cache Helpers (File + APCu dual layer)
 // =====================================================================
 
 if (!function_exists('dashboardApiShouldCache')) {
@@ -182,7 +228,6 @@ if (!function_exists('dashboardApiShouldCache')) {
             return false;
         }
 
-        // Don't cache customer_full_detail when search params are empty
         if ($action === 'customer_full_detail') {
             $pid = trim((string) ($input['partner_id'] ?? ''));
             $ref = trim((string) ($input['customer_ref'] ?? ''));
@@ -248,9 +293,22 @@ if (!function_exists('dashboardApiCachePath')) {
     }
 }
 
+/**
+ * Cache read — tries APCu first, then falls back to file.
+ */
 if (!function_exists('dashboardApiCacheGet')) {
     function dashboardApiCacheGet($key, $ttl)
     {
+        // L1: APCu (fastest)
+        if (function_exists('apcu_fetch')) {
+            $apcuKey = 'dash_' . $key;
+            $data = apcu_fetch($apcuKey, $hit);
+            if ($hit && is_array($data)) {
+                return $data;
+            }
+        }
+
+        // L2: File-based
         $path = dashboardApiCachePath($key);
         if (!is_file($path)) {
             return null;
@@ -272,21 +330,62 @@ if (!function_exists('dashboardApiCacheGet')) {
             return null;
         }
 
-        return $payload['d'] ?? null;
+        $data = $payload['d'] ?? null;
+
+        // Promote to APCu for faster subsequent reads
+        if ($data !== null && function_exists('apcu_store')) {
+            apcu_store('dash_' . $key, $data, $ttl);
+        }
+
+        return $data;
     }
 }
 
+/**
+ * Cache write — writes to both APCu and file atomically.
+ */
 if (!function_exists('dashboardApiCacheSet')) {
-    function dashboardApiCacheSet($key, $data)
+    function dashboardApiCacheSet($key, $data, $ttl = 60)
     {
+        // L1: APCu
+        if (function_exists('apcu_store')) {
+            apcu_store('dash_' . $key, $data, $ttl);
+        }
+
+        // L2: File (atomic write via rename)
         $path = dashboardApiCachePath($key);
+        $tmpPath = $path . '.' . getmypid() . '.tmp';
         $payload = json_encode([
             't' => time(),
             'd' => $data,
         ], JSON_UNESCAPED_UNICODE);
 
         if ($payload !== false) {
-            @file_put_contents($path, $payload, LOCK_EX);
+            if (@file_put_contents($tmpPath, $payload, LOCK_EX) !== false) {
+                @rename($tmpPath, $path);
+            }
+            @unlink($tmpPath); // cleanup if rename failed
         }
+    }
+}
+
+/**
+ * Purge expired cache entries (call from cron, not every request).
+ */
+if (!function_exists('dashboardApiCachePurge')) {
+    function dashboardApiCachePurge($maxAge = 300)
+    {
+        $dir = dashboardApiCacheDir();
+        $cutoff = time() - $maxAge;
+        $count = 0;
+
+        foreach (glob($dir . '/*.json') as $file) {
+            if (filemtime($file) < $cutoff) {
+                @unlink($file);
+                $count++;
+            }
+        }
+
+        return $count;
     }
 }
