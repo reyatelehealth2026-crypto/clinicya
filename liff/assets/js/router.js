@@ -45,7 +45,14 @@ class Router {
             '/odoo-order/:id': { page: 'odoo-order-detail', title: 'รายละเอียดออเดอร์ Odoo' },
             '/odoo-order-tracking/:id': { page: 'odoo-order-tracking', title: 'ติดตามออเดอร์ Odoo' },
             '/odoo-invoices': { page: 'odoo-invoices', title: 'ใบแจ้งหนี้ Odoo' },
-            '/odoo-credit-status': { page: 'odoo-credit-status', title: 'สถานะวงเงินเครดิต' }
+            '/odoo-credit-status': { page: 'odoo-credit-status', title: 'สถานะวงเงินเครดิต' },
+            // Retail B2C Routes
+            '/retail-shop': { page: 'retail-shop', title: 'ร้านค้าปลีก' },
+            '/retail-product/:id': { page: 'retail-product', title: 'รายละเอียดสินค้า' },
+            '/retail-cart': { page: 'retail-cart', title: 'ตะกร้าสินค้า' },
+            '/retail-checkout': { page: 'retail-checkout', title: 'ชำระเงิน' },
+            '/retail-orders': { page: 'retail-orders', title: 'คำสั่งซื้อ' },
+            '/retail-order/:id': { page: 'retail-order', title: 'รายละเอียดคำสั่งซื้อ' }
         };
     }
 

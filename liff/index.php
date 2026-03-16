@@ -162,6 +162,8 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <!-- App Styles -->
     <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/liff-app.css?v=<?= $v ?>">
     <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/premium-effects.css?v=<?= $v ?>">
+    <!-- Retail Shop Styles (for B2C mode) -->
+    <link rel="stylesheet" href="<?= $baseUrl ?>/liff/assets/css/retail-shop.css?v=<?= $v ?>">
 </head>
 
 <body>
@@ -306,6 +308,11 @@ $currentPage = $pages[$page] ?? $pages['home'];
     <script src="<?= $baseUrl ?>/liff/assets/js/components/rewards-catalog.js?v=<?= $v ?>"
         onerror="window.debugLog('FAILED: rewards-catalog.js', 'error')"></script>
     <script>window.debugLog('rewards-catalog.js loaded', 'success');</script>
+    
+    <!-- Retail Shop Module (for B2C mode) -->
+    <script src="<?= $baseUrl ?>/liff/assets/js/retail-shop.js?v=<?= $v ?>"
+        onerror="window.debugLog('FAILED: retail-shop.js', 'error')"></script>
+    
     <script src="<?= $baseUrl ?>/liff/assets/js/liff-app.js?v=<?= $v ?>"
         onerror="window.debugLog('FAILED: liff-app.js', 'error')"></script>
     <script>window.debugLog('All scripts loaded!', 'success');</script>

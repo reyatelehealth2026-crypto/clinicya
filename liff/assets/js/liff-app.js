@@ -79,6 +79,68 @@ class LiffApp {
     }
 
     /**
+     * Check if running in retail (B2C) mode
+     * - Check URL parameter ?mode=retail
+     * - Check LIFF context from retail LINE OA (after LIFF init)
+     */
+    isRetailMode() {
+        // Check URL parameter first (works before LIFF init)
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = urlParams.get('mode');
+        if (mode === 'retail') {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Check retail mode from LIFF context (call after LIFF init)
+     */
+    isRetailModeFromContext() {
+        try {
+            if (typeof liff !== 'undefined' && liff.isInClient && liff.isInClient()) {
+                const context = liff.getContext();
+                // Add your retail LIFF IDs here
+                const retailLiffIds = ['@your-retail-oa'];
+                if (context && retailLiffIds.includes(context.type)) {
+                    return true;
+                }
+            }
+        } catch (e) {
+            // LIFF not initialized or error
+        }
+        return false;
+    }
+
+    /**
+     * Initialize retail shop if in retail mode
+     */
+    checkAndInitRetailMode() {
+        const isRetail = this.isRetailMode() || this.isRetailModeFromContext();
+        
+        if (isRetail) {
+            console.log('🏪 Retail mode detected, initializing retail shop...');
+            
+            // Update config
+            this.config.IS_RETAIL_MODE = true;
+            
+            // Initialize retail shop module
+            if (window.initRetailShop) {
+                window.initRetailShop(this);
+            }
+            
+            // Redirect to retail shop if on home page
+            const hash = window.location.hash || '#/';
+            if (hash === '#/' || hash === '#/home') {
+                setTimeout(() => {
+                    window.router.navigate('/retail-shop', {}, true);
+                }, 100);
+            }
+        }
+    }
+
+    /**
      * Initialize LIFF SDK
      */
     async initLiff() {
@@ -276,6 +338,9 @@ class LiffApp {
 
         // Register page handlers
         this.registerPageHandlers();
+        
+        // Check if retail mode and initialize retail shop
+        this.checkAndInitRetailMode();
 
         // Set route change callback
         window.router.onRouteChange = (route, params) => {
