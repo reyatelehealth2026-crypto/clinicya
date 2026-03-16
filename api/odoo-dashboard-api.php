@@ -26,6 +26,11 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
+// PHP execution timeout guard for shared hosting (no OPcache)
+@ini_set('max_execution_time', '60');
+@set_time_limit(60);
+@ini_set('memory_limit', '256M');
+
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/odoo-dashboard-functions.php';
