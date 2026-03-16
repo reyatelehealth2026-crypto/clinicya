@@ -20,6 +20,130 @@ class CnyPharmacyAPI
         $this->db = $db;
         $this->lineAccountId = $lineAccountId;
     }
+
+    /**
+     * Determine if payload indicates more pages
+     */
+    private function payloadHasMore($payload, $currentPage, $limit, $count)
+    {
+        $containers = [];
+        if (is_array($payload)) {
+            $containers[] = $payload;
+            if (isset($payload['data']) && is_array($payload['data'])) {
+                $containers[] = $payload['data'];
+            }
+        }
+
+        foreach ($containers as $container) {
+            if (!is_array($container)) {
+                continue;
+            }
+
+            if (array_key_exists('has_more', $container)) {
+                return (bool)$container['has_more'];
+            }
+
+            foreach (['last_page', 'total_page', 'total_pages', 'totalPage', 'totalPages', 'max_page', 'maxPage'] as $key) {
+                if (isset($container[$key]) && is_numeric($container[$key])) {
+                    return $currentPage < (int)$container[$key];
+                }
+            }
+        }
+
+        if ($count < $limit) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Extract flat product rows from nested payloads
+     */
+    private function extractProductsFromPayload($payload)
+    {
+        if (!is_array($payload)) {
+            return [];
+        }
+
+        $products = [];
+        $queue = [$payload];
+
+        while (!empty($queue)) {
+            $current = array_shift($queue);
+            if (!is_array($current)) {
+                continue;
+            }
+
+            if ($this->looksLikeProductRow($current)) {
+                $products[] = $this->mapGroupedProductRow($current);
+                continue;
+            }
+
+            if ($this->isAssocArray($current)) {
+                foreach ($current as $value) {
+                    if (is_array($value)) {
+                        $queue[] = $value;
+                    }
+                }
+            } else {
+                foreach ($current as $value) {
+                    if (is_array($value)) {
+                        if ($this->looksLikeProductRow($value)) {
+                            $products[] = $this->mapGroupedProductRow($value);
+                        } else {
+                            $queue[] = $value;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $products;
+    }
+
+    private function looksLikeProductRow(array $row)
+    {
+        $keys = ['sku', 'SKU', 'product_code', 'productCode', 'product_id', 'productId', 'name', 'Name', 'product_name', 'productName'];
+        foreach ($keys as $key) {
+            if (!empty($row[$key])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function mapGroupedProductRow(array $row)
+    {
+        $sku = $row['sku'] ?? $row['SKU'] ?? $row['product_code'] ?? $row['productCode'] ?? $row['code'] ?? '';
+        $qty = $row['qty'] ?? $row['quantity'] ?? $row['stock'] ?? 0;
+        $qtyIncoming = $row['qty_incoming'] ?? $row['incoming_qty'] ?? 0;
+        $enable = $row['enable'] ?? ($row['active'] ?? 1);
+        $productPrice = $row['product_price'] ?? $row['productPrice'] ?? $row['prices'] ?? $row['price_list'] ?? null;
+
+        return [
+            'id' => $row['id'] ?? $row['product_id'] ?? $row['productId'] ?? null,
+            'sku' => (string)$sku,
+            'barcode' => $row['barcode'] ?? $row['Barcode'] ?? $row['bar_code'] ?? null,
+            'name' => $row['name'] ?? $row['Name'] ?? $row['product_name'] ?? $row['productName'] ?? '',
+            'name_en' => $row['name_en'] ?? $row['nameEn'] ?? $row['english_name'] ?? null,
+            'spec_name' => $row['spec_name'] ?? $row['specName'] ?? $row['spec'] ?? null,
+            'description' => $row['description'] ?? $row['detail'] ?? $row['Description'] ?? null,
+            'properties_other' => $row['properties_other'] ?? $row['propertiesOther'] ?? $row['properties'] ?? null,
+            'how_to_use' => $row['how_to_use'] ?? $row['howToUse'] ?? $row['usage'] ?? null,
+            'photo_path' => $row['photo_path'] ?? $row['photoPath'] ?? $row['image'] ?? $row['image_url'] ?? null,
+            'qty' => is_numeric($qty) ? $qty : 0,
+            'qty_incoming' => is_numeric($qtyIncoming) ? $qtyIncoming : 0,
+            'enable' => (string)($enable ? '1' : '0'),
+            'product_price' => $productPrice,
+            'properties_raw' => $row
+        ];
+    }
+
+    private function isAssocArray(array $array)
+    {
+        return array_keys($array) !== range(0, count($array) - 1);
+    }
     
     /**
      * Set custom API credentials
@@ -30,13 +154,33 @@ class CnyPharmacyAPI
         $this->token = $token;
         return $this;
     }
+
+    /**
+     * Build absolute URL allowing external endpoints
+     */
+    private function buildUrl($endpoint)
+    {
+        if (!$endpoint) {
+            return $this->baseUrl;
+        }
+
+        if (stripos($endpoint, 'http://') === 0 || stripos($endpoint, 'https://') === 0) {
+            return $endpoint;
+        }
+
+        if ($endpoint[0] !== '/') {
+            $endpoint = '/' . $endpoint;
+        }
+
+        return $this->baseUrl . $endpoint;
+    }
     
     /**
      * Make API request
      */
     private function request($method, $endpoint, $data = null)
     {
-        $url = $this->baseUrl . $endpoint;
+        $url = $this->buildUrl($endpoint);
         
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -91,7 +235,7 @@ class CnyPharmacyAPI
      */
     private function requestToFile($endpoint, $timeout = 300)
     {
-        $url = $this->baseUrl . $endpoint;
+        $url = $this->buildUrl($endpoint);
         $tempFile = sys_get_temp_dir() . '/cny_products_' . md5($url) . '.json';
         
         $fp = fopen($tempFile, 'w');
@@ -281,6 +425,77 @@ class CnyPharmacyAPI
     public function getAllProducts()
     {
         return $this->request('GET', '/get_product_all');
+    }
+
+    /**
+     * Fetch paginated grouped products from public API (page 1..N)
+     */
+    public function fetchGroupedProductsPage($page = 1, $limit = 50)
+    {
+        $page = max(1, (int)$page);
+        $limit = max(10, min(200, (int)$limit));
+        $endpoint = sprintf('https://www.cnypharmacy.com/api/getDataProductIsGroup?page=%d&limit=%d', $page, $limit);
+
+        $response = $this->request('GET', $endpoint);
+        if (!$response['success']) {
+            return $response;
+        }
+
+        $products = $this->extractProductsFromPayload($response['data']);
+
+        return [
+            'success' => true,
+            'products' => $products,
+            'page' => $page,
+            'limit' => $limit,
+            'count' => count($products),
+            'has_more' => $this->payloadHasMore($response['data'], $page, $limit, count($products)),
+            'raw' => $response['data']
+        ];
+    }
+
+    /**
+     * Fetch all grouped products across pages (up to max_pages)
+     */
+    public function fetchAllGroupedProducts($options = [])
+    {
+        $startPage = max(1, (int)($options['start_page'] ?? 1));
+        $limit = (int)($options['limit'] ?? 50);
+        $maxPages = (int)($options['max_pages'] ?? 200);
+
+        $allProducts = [];
+        $page = $startPage;
+        $pagesProcessed = 0;
+
+        while ($page <= $maxPages) {
+            $result = $this->fetchGroupedProductsPage($page, $limit);
+            if (!$result['success']) {
+                $result['products'] = $allProducts;
+                return $result;
+            }
+
+            $pagesProcessed++;
+
+            if ($result['count'] === 0) {
+                break;
+            }
+
+            $allProducts = array_merge($allProducts, $result['products']);
+
+            if (!$result['has_more']) {
+                break;
+            }
+
+            $page++;
+        }
+
+        return [
+            'success' => true,
+            'products' => $allProducts,
+            'count' => count($allProducts),
+            'pages_processed' => $pagesProcessed,
+            'limit' => $limit
+        ];
     }
     
     /**

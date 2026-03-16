@@ -8,45 +8,13 @@ set_time_limit(300); // 5 minutes
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../classes/CnyPharmacyAPI.php';
 
 $db = Database::getInstance()->getConnection();
 
-// CNY API Configuration
-define('CNY_API_BASE', 'https://manager.cnypharmacy.com/api/');
-define('CNY_API_TOKEN', '90xcKekelCqCAjmgkpI1saJF6N55eiNexcI4hdcYM2M');
+echo "Starting CNY product sync (grouped endpoint)...\n";
 
-echo "Starting CNY product sync...\n";
-
-// Fetch from API
-$url = CNY_API_BASE . 'get_product_all';
-
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $url);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Authorization: Bearer ' . CNY_API_TOKEN,
-    'Content-Type: application/json'
-]);
-
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-
-if ($httpCode !== 200) {
-    die("API Error: HTTP {$httpCode}\n");
-}
-
-echo "API response received, parsing...\n";
-
-$products = json_decode($response, true);
-
-if (!$products || !is_array($products)) {
-    die("Failed to parse JSON response\n");
-}
-
-echo "Found " . count($products) . " products\n";
-
-// Create table if not exists
+// Ensure table exists before processing
 $db->exec("
     CREATE TABLE IF NOT EXISTS cny_products (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -70,40 +38,68 @@ $db->exec("
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 ");
 
-echo "Table ready, inserting products...\n";
+echo "Table ready, fetching pages...\n";
 
+$cnyApi = new CnyPharmacyAPI($db);
+$page = 1;
+$limit = 50;
+$maxPages = 200;
 $inserted = 0;
 $updated = 0;
+$skipped = 0;
+$totalFetched = 0;
 
-foreach ($products as $product) {
-    try {
-        $stmt = $db->prepare("
-            INSERT INTO cny_products (
-                sku, barcode, name, name_en, spec_name, description,
-                properties_other, how_to_use, photo_path, qty, qty_incoming,
-                enable, product_price
-            ) VALUES (
-                :sku, :barcode, :name, :name_en, :spec_name, :description,
-                :properties_other, :how_to_use, :photo_path, :qty, :qty_incoming,
-                :enable, :product_price
-            )
-            ON DUPLICATE KEY UPDATE
-                barcode = VALUES(barcode),
-                name = VALUES(name),
-                name_en = VALUES(name_en),
-                spec_name = VALUES(spec_name),
-                description = VALUES(description),
-                properties_other = VALUES(properties_other),
-                how_to_use = VALUES(how_to_use),
-                photo_path = VALUES(photo_path),
-                qty = VALUES(qty),
-                qty_incoming = VALUES(qty_incoming),
-                enable = VALUES(enable),
-                product_price = VALUES(product_price)
-        ");
-        
-        $stmt->execute([
-            ':sku' => $product['sku'] ?? '',
+$insertStmt = $db->prepare("
+    INSERT INTO cny_products (
+        sku, barcode, name, name_en, spec_name, description,
+        properties_other, how_to_use, photo_path, qty, qty_incoming,
+        enable, product_price
+    ) VALUES (
+        :sku, :barcode, :name, :name_en, :spec_name, :description,
+        :properties_other, :how_to_use, :photo_path, :qty, :qty_incoming,
+        :enable, :product_price
+    )
+    ON DUPLICATE KEY UPDATE
+        barcode = VALUES(barcode),
+        name = VALUES(name),
+        name_en = VALUES(name_en),
+        spec_name = VALUES(spec_name),
+        description = VALUES(description),
+        properties_other = VALUES(properties_other),
+        how_to_use = VALUES(how_to_use),
+        photo_path = VALUES(photo_path),
+        qty = VALUES(qty),
+        qty_incoming = VALUES(qty_incoming),
+        enable = VALUES(enable),
+        product_price = VALUES(product_price)
+");
+
+while ($page <= $maxPages) {
+    echo "Fetching page {$page}...\n";
+    $result = $cnyApi->fetchGroupedProductsPage($page, $limit);
+    if (!$result['success']) {
+        $error = $result['error'] ?? 'Unknown API error';
+        die("API Error on page {$page}: {$error}\n");
+    }
+
+    $products = $result['products'] ?? [];
+    $count = count($products);
+    if ($count === 0) {
+        echo "No data returned for page {$page}, stopping.\n";
+        break;
+    }
+
+    $totalFetched += $count;
+
+    foreach ($products as $product) {
+        $sku = trim($product['sku'] ?? '');
+        if ($sku === '') {
+            $skipped++;
+            continue;
+        }
+
+        $insertStmt->execute([
+            ':sku' => $sku,
             ':barcode' => $product['barcode'] ?? '',
             ':name' => $product['name'] ?? '',
             ':name_en' => $product['name_en'] ?? '',
@@ -117,23 +113,30 @@ foreach ($products as $product) {
             ':enable' => $product['enable'] ?? '1',
             ':product_price' => json_encode($product['product_price'] ?? [])
         ]);
-        
-        if ($stmt->rowCount() > 0) {
+
+        if ($insertStmt->rowCount() === 1) {
             $inserted++;
         } else {
             $updated++;
         }
-        
-        if (($inserted + $updated) % 100 == 0) {
-            echo "Processed " . ($inserted + $updated) . " products...\n";
-        }
-        
-    } catch (Exception $e) {
-        echo "Error with SKU {$product['sku']}: " . $e->getMessage() . "\n";
     }
+
+    if ($totalFetched % 500 === 0) {
+        echo "Processed {$totalFetched} products so far...\n";
+    }
+
+    if (!$result['has_more']) {
+        echo "Reached last page ({$page}).\n";
+        break;
+    }
+
+    $page++;
 }
+
+echo "Downloaded {$totalFetched} products from {$page} page(s).\n";
 
 echo "\nSync complete!\n";
 echo "Inserted: $inserted\n";
 echo "Updated: $updated\n";
-echo "Total: " . ($inserted + $updated) . "\n";
+echo "Skipped (missing SKU): $skipped\n";
+echo "Total processed: " . ($inserted + $updated) . "\n";
