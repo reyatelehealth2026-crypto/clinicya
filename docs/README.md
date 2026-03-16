@@ -25,6 +25,7 @@
 - Order management
 - Payment verification
 - Inventory tracking
+- Odoo dashboard cache + BDO slip matching workflows
 
 ### 🎯 Loyalty Program
 - Points earning rules
@@ -201,10 +202,13 @@ Set up in Admin > AI Settings:
 ## 📖 Documentation
 
 - [Architecture](ARCHITECTURE.md)
-- [Project Flow](PROJECT_FLOW_DOCUMENTATION.md)
-- [CRM Workflow](CRM_WORKFLOW_COMPLETE.md)
-- [User Manual](USER_MANUAL.md)
-- [Setup Guide](SETUP_GUIDE_COMPLETE.md)
+- [Odoo Dashboard and BDO Matching Runbook](ODOO_DASHBOARD_BDO_RUNBOOK.md)
+- [BDO Matching Workflow Design](reya_bdo_matching_workflow.md)
+- [Production Integration Summary](CNY_ODOO_PRODUCTION_INTEGRATION_SUMMARY.md)
+- [API Testing Guide](CNY_ODOO_PRODUCTION_API_TESTING.md)
+- [Master User Manual](MASTER_USER_MANUAL.md)
+- [Admin User Guide](ADMIN_USER_GUIDE.md)
+- [Customer User Guide](CUSTOMER_USER_GUIDE.md)
 
 ---
 

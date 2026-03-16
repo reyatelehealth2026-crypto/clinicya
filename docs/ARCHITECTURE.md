@@ -172,6 +172,19 @@ All APIs return JSON and follow RESTful conventions:
 | `InboxService` | Chat inbox operations |
 | `NotificationService` | Push notifications |
 
+### 4. Odoo Dashboard and BDO Integration (2026-03)
+
+| Layer | Main Paths | Purpose |
+|-------|------------|---------|
+| **Normalized BDO API** | `api/bdo-inbox-api.php` | Single facade for BDO/slip read + write actions (Odoo-first writes) |
+| **Dashboard API** | `api/odoo-dashboard-api.php` | Backward-compatible dashboard actions, mixed live + cache reads |
+| **Local Read API** | `api/odoo-dashboard-local.php` | Cache-only dashboard queries (no external Odoo call) |
+| **Core Contracts** | `classes/BdoSlipContract.php` | Canonical statuses, endpoint constants, and validation rules |
+| **Context Storage** | `classes/BdoContextManager.php` | Multi-BDO-safe context per `(line_user_id, bdo_id)` |
+| **Odoo Client** | `classes/OdooAPIClient.php` | Retries, circuit breaker, keep-alive cURL, rate limiting |
+| **Parallel Calls** | `classes/OdooAPIPool.php` | `curl_multi` batching for dashboard fan-out calls |
+| **Cache Sync** | `cron/sync_odoo_dashboard_cache.php` | Builds local cache tables from webhook logs |
+
 ---
 
 ## Database Schema
@@ -269,6 +282,7 @@ User message → /api/ai-chat.php
 
 # Sync
 * * * * * php /path/to/cron/sync_worker.php
+*/5 * * * * php /path/to/cron/sync_odoo_dashboard_cache.php incremental
 ```
 
 ---
