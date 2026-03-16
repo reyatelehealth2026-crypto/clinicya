@@ -47,7 +47,7 @@ try {
 $pushStats = null;
 $pushLogs = [];
 try {
-    $cnyApi->ensurePushTablesExist();
+    $cnyApi->ensurePushTables();
     $pushStats = $cnyApi->getPushStats();
     $pushLogs = $cnyApi->getRecentPushLogs(8);
 } catch (Exception $e) {
