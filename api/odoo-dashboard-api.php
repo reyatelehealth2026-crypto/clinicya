@@ -24,6 +24,7 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/odoo-dashboard-functions.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -47,12 +48,21 @@ try {
     }
 
     $cacheTtls = [
-        'stats' => 20,
-        'order_grouped_today' => 20,
-        'customer_list' => 20,
-        'notification_log' => 20,
-        'salesperson_list' => 180,
+        'stats' => 60,
+        'order_grouped_today' => 60,
+        'customer_list' => 60,
+        'notification_log' => 60,
+        'salesperson_list' => 300,
         'overview_today' => 45,
+        'customer_full_detail' => 45,
+        'overview_combined' => 45,
+        'odoo_orders' => 30,
+        'odoo_invoices' => 30,
+        'odoo_slips' => 30,
+        'odoo_bdo_list_api' => 30,
+        'customer_detail' => 45,
+        'pending_bdo_orders' => 60,
+        'activity_log_list' => 30,
     ];
     $cacheKey = null;
     if (isset($cacheTtls[$action])) {
@@ -174,6 +184,12 @@ try {
         case 'slip_unmatch':
         case 'odoo_slip_unmatch_api':
             $result = slipUnmatch($db, $input);
+            break;
+        case 'customer_full_detail':
+            $result = getCustomerFullDetail($db, $input);
+            break;
+        case 'overview_combined':
+            $result = getOverviewCombined($db, $input);
             break;
         case 'statement_pdf':
         case 'odoo_bdo_statement_pdf':
@@ -4259,4 +4275,117 @@ function getDlqStats($db)
     } catch (Exception $e) {
         return ['available' => true, 'total' => 0, 'error' => $e->getMessage()];
     }
+}
+
+// ======================================================================== //
+// Batch Endpoints — reduce N API round-trips to 1                         //
+// ======================================================================== //
+
+/**
+ * Batch: Customer Full Detail
+ * 
+ * Combines customer_detail + odoo_orders + odoo_invoices + odoo_slips +
+ * odoo_bdo_list_api + activity_log_list into a single response.
+ * Reduces 6 parallel API calls from the dashboard modal to 1.
+ */
+function getCustomerFullDetail($db, $input)
+{
+    $partnerId   = trim((string) ($input['partner_id']   ?? ''));
+    $customerRef = trim((string) ($input['customer_ref'] ?? ''));
+
+    if ($partnerId === '' && $customerRef === '') {
+        throw new Exception('Missing partner_id or customer_ref');
+    }
+
+    // Build sub-inputs
+    $commonParams = [
+        'partner_id'   => $partnerId,
+        'customer_ref' => $customerRef,
+    ];
+    $orderParams   = array_merge($commonParams, ['limit' => (int) ($input['orders_limit'] ?? 100), 'offset' => 0]);
+    $invoiceParams = array_merge($commonParams, ['limit' => (int) ($input['invoices_limit'] ?? 100), 'offset' => 0]);
+    $slipParams    = ['partner_id' => $partnerId];
+    $bdoParams     = array_merge($commonParams, ['limit' => (int) ($input['bdo_limit'] ?? 100), 'offset' => 0]);
+    $activityParams = ['partner_id' => $partnerId, 'limit' => (int) ($input['activity_limit'] ?? 100)];
+
+    $result = [
+        'customer_detail' => null,
+        'orders'          => null,
+        'invoices'        => null,
+        'slips'           => null,
+        'bdos'            => null,
+        'activity_log'    => null,
+        'errors'          => [],
+    ];
+
+    // Execute all sub-queries (sequential but no HTTP overhead per call)
+    try { $result['customer_detail'] = getCustomerDetail($db, $commonParams); }
+    catch (Exception $e) { $result['errors'][] = 'customer_detail: ' . $e->getMessage(); }
+
+    try { $result['orders'] = getOdooOrders($db, $orderParams); }
+    catch (Exception $e) { $result['errors'][] = 'orders: ' . $e->getMessage(); }
+
+    try { $result['invoices'] = getOdooInvoices($db, $invoiceParams); }
+    catch (Exception $e) { $result['errors'][] = 'invoices: ' . $e->getMessage(); }
+
+    try { $result['slips'] = getOdooSlips($db, $slipParams); }
+    catch (Exception $e) { $result['errors'][] = 'slips: ' . $e->getMessage(); }
+
+    try { $result['bdos'] = getOdooBdos($db, $bdoParams); }
+    catch (Exception $e) { $result['errors'][] = 'bdos: ' . $e->getMessage(); }
+
+    try { $result['activity_log'] = activityLogList($db, $activityParams); }
+    catch (Exception $e) { $result['errors'][] = 'activity_log: ' . $e->getMessage(); }
+
+    return $result;
+}
+
+/**
+ * Batch: Overview Combined
+ * 
+ * Combines stats + order_grouped_today + pending_bdo_orders +
+ * customer_list(overdue) into a single response.
+ * Reduces the overview section from 6 API calls to 1 main call.
+ */
+function getOverviewCombined($db, $input)
+{
+    $result = [
+        'stats'              => null,
+        'orders_today'       => null,
+        'pending_bdos'       => null,
+        'overdue_customers'  => null,
+        'errors'             => [],
+    ];
+
+    // Stats (the heaviest single query — consolidated aggregation)
+    try { $result['stats'] = getStats($db); }
+    catch (Exception $e) { $result['errors'][] = 'stats: ' . $e->getMessage(); }
+
+    // Today's orders
+    try {
+        $result['orders_today'] = getOrderGroupedToday($db, [
+            'limit'  => (int) ($input['orders_limit'] ?? 5),
+            'offset' => 0,
+        ]);
+    } catch (Exception $e) { $result['errors'][] = 'orders_today: ' . $e->getMessage(); }
+
+    // Pending BDOs
+    try {
+        $result['pending_bdos'] = getPendingBdoOrdersApi($db, [
+            'limit'  => (int) ($input['bdo_limit'] ?? 20),
+            'offset' => 0,
+        ]);
+    } catch (Exception $e) { $result['errors'][] = 'pending_bdos: ' . $e->getMessage(); }
+
+    // Overdue customers
+    try {
+        $result['overdue_customers'] = getCustomerList($db, [
+            'invoice_filter' => 'overdue',
+            'limit'          => (int) ($input['overdue_limit'] ?? 5),
+            'offset'         => 0,
+            'sort_by'        => 'due_desc',
+        ]);
+    } catch (Exception $e) { $result['errors'][] = 'overdue_customers: ' . $e->getMessage(); }
+
+    return $result;
 }

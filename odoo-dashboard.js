@@ -13,7 +13,7 @@ const EVENT_ICONS={'sale.order.confirmed':'🛒','sale.order.cancelled':'❌','s
 function escapeHtml(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 // ===== SESSION CACHE (TTL-based, sessionStorage) =====
-const _CACHE_TTL = 180000; // 3 minutes
+const _CACHE_TTL = 300000; // 5 minutes (was 3 min)
 function _cacheSet(key, data, ttlMs){
     try{ sessionStorage.setItem('_c:'+key, JSON.stringify({t:Date.now(), ttl:ttlMs||_CACHE_TTL, d:data})); }catch(e){}
 }
@@ -98,6 +98,18 @@ function normalizeBdoPaymentStatus(bdo){
     return {key:'pending',label:'รอชำระ'};
 }
 
+// ===== SECTION-LOADED GUARDS — prevent redundant API calls on tab switch =====
+const _sectionLoadedAt = {};    // sectionId → timestamp
+const _SECTION_STALE_MS = 300000; // 5 minutes before re-fetching
+function _sectionNeedsLoad(id){
+    const loadedAt = _sectionLoadedAt[id];
+    if(!loadedAt) return true;
+    return (Date.now() - loadedAt) > _SECTION_STALE_MS;
+}
+function _sectionMarkLoaded(id){
+    _sectionLoadedAt[id] = Date.now();
+}
+
 function showSection(id){
     // 'webhooks-raw' maps to the same webhooks section but forces list mode
     let sectionId = id;
@@ -110,14 +122,14 @@ function showSection(id){
     const m=document.querySelector(`.menu-card[onclick="showSection('${id}')"]`);if(m)m.classList.add('active');
 
     if(id==='overview'){if(typeof loadTodayOverview==='function')loadTodayOverview();}
-    else if(id==='webhooks'){loadWebhookStats();if(whViewMode==='grouped'){if(!document.getElementById('webhookList').querySelector('div[style*="border-radius:10px"]'))loadOrdersGrouped();}else{if(!document.getElementById('webhookList').querySelector('table'))loadWebhooks();}}
-    else if(id==='webhooks-raw'){loadWebhookStats();if(forceListMode){setWhViewMode('list');}else{if(!document.getElementById('webhookList').querySelector('table'))loadWebhooks();}}
-    else if(id==='customers'){loadSalespersonDropdown();if(!document.getElementById('customerList').querySelector('table'))loadCustomers();}
-    else if(id==='notifications'){if(!document.getElementById('notifList').querySelector('table'))loadNotifications();}
+    else if(id==='webhooks'){if(_sectionNeedsLoad('webhooks')){loadWebhookStats();_sectionMarkLoaded('webhooks');}if(whViewMode==='grouped'){if(!document.getElementById('webhookList').querySelector('div[style*="border-radius:10px"]'))loadOrdersGrouped();}else{if(!document.getElementById('webhookList').querySelector('table'))loadWebhooks();}}
+    else if(id==='webhooks-raw'){if(_sectionNeedsLoad('webhooks')){loadWebhookStats();_sectionMarkLoaded('webhooks');}if(forceListMode){setWhViewMode('list');}else{if(!document.getElementById('webhookList').querySelector('table'))loadWebhooks();}}
+    else if(id==='customers'){loadSalespersonDropdown();if(_sectionNeedsLoad('customers')||!document.getElementById('customerList').querySelector('table')){loadCustomers();_sectionMarkLoaded('customers');}}
+    else if(id==='notifications'){if(_sectionNeedsLoad('notifications')||!document.getElementById('notifList').querySelector('table')){loadNotifications();_sectionMarkLoaded('notifications');}}
     else if(id==='daily-summary'){if(dailySummaryData.length===0)loadDailySummary();}
     else if(id==='health'){loadSystemHealth();}
-    else if(id==='slips'){if(!document.getElementById('slipList').querySelector('table'))loadSlips();}
-    else if(id==='matching'){loadSalespersonDropdown();loadMatchingCustomerGrid();}
+    else if(id==='slips'){if(_sectionNeedsLoad('slips')||!document.getElementById('slipList').querySelector('table')){loadSlips();_sectionMarkLoaded('slips');}}
+    else if(id==='matching'){loadSalespersonDropdown();if(_sectionNeedsLoad('matching')){loadMatchingCustomerGrid();_sectionMarkLoaded('matching');}else{loadMatchingCustomerGrid();}}
 }
 
 async function whApiCall(data){
@@ -440,23 +452,65 @@ async function showCustomerDetail(ref, partnerId, custName){
     content.innerHTML = '<div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>\u0e01\u0e33\u0e25\u0e31\u0e07\u0e42\u0e2b\u0e25\u0e14...</div></div>';
 
     const pidParam = partnerId && partnerId!=='-' ? partnerId : '';
-    const [ordRes, invRes, slipRes, bdoRes, detailRes, activityRes] = await Promise.all([
-        whApiCall({action:'odoo_orders',   limit:100, offset:0, partner_id:pidParam, customer_ref:ref}),
-        whApiCall({action:'odoo_invoices', limit:100, offset:0, partner_id:pidParam, customer_ref:ref}),
-        whApiCall({action:'odoo_slips',    partner_id:pidParam}),
-        whApiCall({action:'odoo_bdo_list_api', limit:100, offset:0, partner_id:pidParam, customer_ref:ref}),
-        whApiCall({action:'customer_detail', partner_id:pidParam, customer_ref:ref}),
-        whApiCall({action:'activity_log_list', partner_id:pidParam, limit:100})
-    ]);
 
-    const slips = (slipRes && slipRes.success && slipRes.data && slipRes.data.slips) || [];
-    const bdos = (bdoRes && bdoRes.success && bdoRes.data && bdoRes.data.bdos) || [];
-    const detailData = (detailRes && detailRes.success && detailRes.data) ? detailRes.data : {};
+    // ── Client-side cache (5 min TTL) — avoid re-fetching on repeat clicks ──
+    const _custCacheKey = 'cust_full:' + (pidParam||'_') + ':' + (ref||'_');
+    let batchData = _cacheGet(_custCacheKey);
+
+    if (!batchData) {
+        // ── Single batch API call replaces 6 parallel calls ──
+        const batchRes = await whApiCall({
+            action: 'customer_full_detail',
+            partner_id: pidParam,
+            customer_ref: ref,
+            orders_limit: 100,
+            invoices_limit: 100,
+            bdo_limit: 100,
+            activity_limit: 100
+        });
+
+        if (batchRes && batchRes.success && batchRes.data) {
+            batchData = batchRes.data;
+            _cacheSet(_custCacheKey, batchData, 300000); // 5 min cache
+        } else {
+            // Fallback: try individual calls if batch endpoint fails (e.g. older API)
+            const [ordRes, invRes, slipRes, bdoRes, detailRes, activityRes] = await Promise.all([
+                whApiCall({action:'odoo_orders',   limit:100, offset:0, partner_id:pidParam, customer_ref:ref}),
+                whApiCall({action:'odoo_invoices', limit:100, offset:0, partner_id:pidParam, customer_ref:ref}),
+                whApiCall({action:'odoo_slips',    partner_id:pidParam}),
+                whApiCall({action:'odoo_bdo_list_api', limit:100, offset:0, partner_id:pidParam, customer_ref:ref}),
+                whApiCall({action:'customer_detail', partner_id:pidParam, customer_ref:ref}),
+                whApiCall({action:'activity_log_list', partner_id:pidParam, limit:100})
+            ]);
+            batchData = {
+                customer_detail: (detailRes && detailRes.success) ? detailRes.data : null,
+                orders:          (ordRes && ordRes.success) ? ordRes.data : null,
+                invoices:        (invRes && invRes.success) ? invRes.data : null,
+                slips:           (slipRes && slipRes.success) ? slipRes.data : null,
+                bdos:            (bdoRes && bdoRes.success) ? bdoRes.data : null,
+                activity_log:    (activityRes && activityRes.success) ? activityRes.data : null,
+                errors: []
+            };
+            _cacheSet(_custCacheKey, batchData, 300000);
+        }
+    }
+
+    // ── Unpack batch response (same variable names as before) ──
+    const ordRes  = { success: true, data: batchData.orders || {} };
+    const invRes  = { success: true, data: batchData.invoices || {} };
+    const slipRes = { success: true, data: batchData.slips || {} };
+    const bdoRes  = { success: true, data: batchData.bdos || {} };
+    const detailRes = { success: true, data: batchData.customer_detail || {} };
+    const activityRes = { success: true, data: batchData.activity_log || {} };
+
+    const slips = (slipRes.data && slipRes.data.slips) || [];
+    const bdos = (bdoRes.data && bdoRes.data.bdos) || [];
+    const detailData = detailRes.data || {};
     const profileData = detailData.profile || {};
     const creditData = detailData.credit || {};
     const linkData = detailData.link || {};
     const pointsData = detailData.points || {};
-    const activityItems = (activityRes && activityRes.success && activityRes.data && activityRes.data.items) || [];
+    const activityItems = (activityRes.data && activityRes.data.items) || [];
     const slipByOrderId = new Map();
     const slipByInvoiceId = new Map();
     const slipByBdoId = new Map();
@@ -2513,7 +2567,6 @@ function restoreAdminMode(){
 
 // ===== TODAY OVERVIEW =====
 let _overviewLoaded=false;
-let _overviewSecondaryTimer=null;
 function _isSectionActive(id){
     const el=document.getElementById('section-'+id);
     return !!(el&&el.classList.contains('active'));
@@ -2536,68 +2589,6 @@ function _cacheOverviewState(cacheKey){
             overviewOverdueCustomers:document.getElementById('overviewOverdueCustomers')?.innerHTML||''
         }
     });
-}
-async function _loadTodayOverviewSecondary(cacheKey){
-    if(!_isSectionActive('overview'))return;
-    const kpiOverdue=document.getElementById('kpiOverdueCustomers');
-    const kpiBdo=document.getElementById('kpiBdosPending');
-    const kpiPaid=document.getElementById('kpiPaymentsToday');
-    const [overdueRes,pendingBdoRes,matchedTodayRes]=await Promise.all([
-        whApiCall({action:'customer_list', invoice_filter:'overdue', limit:5, offset:0, sort_by:'due_desc'}),
-        whApiCall({action:'pending_bdo_orders', limit:20, offset:0}),
-        fetch('api/slips-list.php?status=matched&limit=20&offset=0').then(r=>r.json()).catch(()=>({success:false}))
-    ]);
-    if(pendingBdoRes&&pendingBdoRes.success&&kpiBdo){
-        const bdos=pendingBdoRes.data?.orders||pendingBdoRes.data?.bdos||[];
-        const pendingTotal=bdos.reduce(function(sum,b){return sum+parseFloat(b.amount_total||b.amount_net_to_pay||0);},0);
-        kpiBdo.textContent=Number(bdos.length||0).toLocaleString();
-        const sub=kpiBdo.parentElement?.querySelector('.kpi-sub');
-        if(sub)sub.textContent='฿'+pendingTotal.toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:0});
-    }
-    if(matchedTodayRes&&matchedTodayRes.success&&kpiPaid){
-        const slips=matchedTodayRes.data?.slips||[];
-        const today=(new Date()).toISOString().slice(0,10);
-        const paidToday=slips.filter(function(s){return String(s.matched_at||s.uploaded_at||'').slice(0,10)===today;}).reduce(function(sum,s){return sum+parseFloat(s.amount||0);},0);
-        kpiPaid.textContent='฿'+paidToday.toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:0});
-    }
-    if(overdueRes&&overdueRes.success){
-        const customers=overdueRes.data?.customers||[];
-        const total=overdueRes.data?.total||0;
-        if(kpiOverdue)kpiOverdue.textContent=Number(total).toLocaleString();
-        const el=document.getElementById('overviewOverdueCustomers');
-        if(el){
-            if(!customers.length){
-                el.innerHTML='<div style="text-align:center;padding:1.5rem;color:var(--gray-400);"><i class="bi bi-check-circle" style="font-size:1.5rem;display:block;margin-bottom:0.3rem;color:#16a34a;"></i>ไม่มีลูกค้าค้างชำระ</div>';
-            }else{
-                let html='';
-                customers.forEach(cu=>{
-                    const nm=escapeHtml(cu.customer_name||cu.name||'-');
-                    const ref=escapeHtml(cu.customer_ref||cu.ref||'');
-                    const pid=String(cu.partner_id||cu.customer_id||cu.odoo_id||'');
-                    const rawDue=cu.total_due||cu.overdue_amount||0;
-                    const due=rawDue>0?'฿'+Number(rawDue).toLocaleString():'';
-                    const hasLine=!!(cu.line_user_id);
-                    const lineDot=hasLine?'<span style="color:#06c755;font-size:0.6rem;" title="LINE เชื่อมแล้ว">●</span>':'';
-                    const encRef=encodeURIComponent(cu.customer_ref||cu.ref||'');
-                    const encId=encodeURIComponent(pid);
-                    const encNm=encodeURIComponent(cu.customer_name||cu.name||'');
-                    html+='<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0;border-bottom:1px solid var(--gray-100);cursor:pointer;" onclick="showCustomerDetail(decodeURIComponent(\''+encRef+'\'),decodeURIComponent(\''+encId+'\'),decodeURIComponent(\''+encNm+'\'))">'
-                        +'<div style="flex:1;min-width:0;">'
-                        +'<div style="font-size:0.82rem;font-weight:500;">'+nm+' '+lineDot+'</div>'
-                        +'<div style="font-size:0.7rem;color:var(--gray-400);">'+ref+(ref?' · ':'')+escapeHtml(pid)+'</div>'
-                        +'</div>'
-                        +'<div style="font-weight:600;color:#dc2626;font-size:0.85rem;">'+due+'</div>'
-                        +'</div>';
-                });
-                el.innerHTML=html;
-            }
-        }
-    }else{
-        if(kpiOverdue)kpiOverdue.textContent='-';
-        const el=document.getElementById('overviewOverdueCustomers');
-        if(el)el.innerHTML='<div style="text-align:center;padding:1rem;color:var(--gray-400);font-size:0.82rem;">ไม่สามารถโหลดข้อมูลได้</div>';
-    }
-    _cacheOverviewState(cacheKey);
 }
 async function loadTodayOverview(){
     _overviewLoaded=true;
