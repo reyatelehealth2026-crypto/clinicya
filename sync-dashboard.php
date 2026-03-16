@@ -5,6 +5,9 @@
  * ใช้ระบบ sync เดียวกันกับ admin/setup-cny.php
  */
 
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 session_start();
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
@@ -42,6 +45,17 @@ try {
     $stmt = $db->query("SELECT MAX(last_updated) FROM cny_products");
     $lastSync = $stmt->fetchColumn();
 } catch (PDOException $e) {}
+
+// Get push stats if available
+$pushStats = null;
+$pushLogs = [];
+try {
+    $cnyApi->ensurePushTables();
+    $pushStats = $cnyApi->getPushStats();
+    $pushLogs = $cnyApi->getRecentPushLogs(8);
+} catch (Exception $e) {
+    // ignore
+}
 
 // Get categories count
 $categoriesCount = 0;
@@ -153,6 +167,91 @@ $pageTitle = 'CNY Sync Dashboard';
                 </div>
                 <div class="text-lg font-bold text-gray-800 mb-1">CNY API</div>
                 <div class="text-sm text-gray-500">manager.cnypharmacy.com</div>
+            </div>
+
+            <!-- Push Status -->
+            <div class="bg-white rounded-xl shadow p-6 card-hover transition">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-upload text-indigo-600 text-xl"></i>
+                    </div>
+                    <span class="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full">Push</span>
+                </div>
+                <div class="text-3xl font-bold text-gray-800 mb-1"><?= number_format($pushStats ? ($pushStats['tracked'] ?? 0) : 0) ?></div>
+                <div class="text-sm text-gray-500">Tracked (<?= number_format($pushStats ? ($pushStats['success'] ?? 0) : 0) ?> ok / <?= number_format($pushStats ? ($pushStats['failed'] ?? 0) : 0) ?> fail)</div>
+            </div>
+        </div>
+
+        <!-- Product Push Controls -->
+        <div class="bg-white rounded-xl shadow overflow-hidden mb-8">
+            <div class="bg-indigo-600 text-white px-6 py-4">
+                <h2 class="text-lg font-semibold">
+                    <i class="fas fa-upload mr-2"></i>Product Push (อัปเดทกลับไป CNY)
+                </h2>
+                <p class="text-sm text-white/80 mt-1">
+                    ส่งข้อมูลสินค้าจากระบบหลักกลับไปยัง CNY API (manager.cnypharmacy.com)
+                </p>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">SKU หรือ Product ID</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="pushSkuOrId" placeholder="SKU หรือ ID" 
+                                   class="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            <button onclick="pushSingleProduct()" 
+                                   class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+                                <i class="fas fa-upload mr-2"></i>Push
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">กรอก SKU หรือ Product ID เพื่อส่งข้อมูลสินค้านั้นไป CNY</p>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="refreshPushStats()" 
+                                class="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                            <i class="fas fa-sync-alt mr-2"></i>Refresh Stats
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Push Stats Panel -->
+                <div id="pushStatsPanel" class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-sm font-medium text-gray-700"><i class="fas fa-chart-bar mr-1"></i>Push Overview</span>
+                        <span id="pushStatsBadge" class="px-2 py-1 bg-indigo-500 text-white text-xs rounded-full">Loaded</span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-3 mb-3">
+                        <div class="text-center p-2 bg-white rounded">
+                            <div class="text-lg font-bold text-gray-800" id="pushStatTracked"><?= number_format($pushStats ? ($pushStats['tracked'] ?? 0) : 0) ?></div>
+                            <div class="text-xs text-gray-500">Tracked</div>
+                        </div>
+                        <div class="text-center p-2 bg-white rounded">
+                            <div class="text-lg font-bold text-green-600" id="pushStatSuccess"><?= number_format($pushStats ? ($pushStats['success'] ?? 0) : 0) ?></div>
+                            <div class="text-xs text-gray-500">Success</div>
+                        </div>
+                        <div class="text-center p-2 bg-white rounded">
+                            <div class="text-lg font-bold text-red-600" id="pushStatFailed"><?= number_format($pushStats ? ($pushStats['failed'] ?? 0) : 0) ?></div>
+                            <div class="text-xs text-gray-500">Failed</div>
+                        </div>
+                        <div class="text-center p-2 bg-white rounded">
+                            <div class="text-lg font-bold text-blue-600" id="pushStatNeedsPush"><?= number_format($pushStats ? ($pushStats['needs_push'] ?? 0) : 0) ?></div>
+                            <div class="text-xs text-gray-500">Needs Push</div>
+                        </div>
+                    </div>
+                    <div id="pushLog" class="log-container bg-gray-900 text-gray-300 p-3 rounded text-xs max-h-32 overflow-y-auto">
+                        <?php if (!empty($pushLogs)): ?>
+                            <?php foreach ($pushLogs as $log): ?>
+                                <div class="<?= $log['success'] ? 'log-success' : 'log-error' ?>">
+                                    [<?= date('H:i:s', strtotime($log['created_at'])) ?>] 
+                                    <?= htmlspecialchars($log['sku'] ?? $log['product_id'] ?? '?') ?>: 
+                                    <?= htmlspecialchars($log['message'] ?? ($log['success'] ? 'OK' : 'Failed')) ?>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="text-gray-500">ยังไม่มีประวัติการ push</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -867,6 +966,77 @@ $pageTitle = 'CNY Sync Dashboard';
     
     // Legacy — kept for backward compatibility
     function syncFromAPI() { syncFromAPIAjax(false); }
+
+    // ===================== PRODUCT PUSH =====================
+    async function pushSingleProduct() {
+        const input = document.getElementById('pushSkuOrId').value.trim();
+        if (!input) {
+            alert('กรุณาระบุ SKU หรือ Product ID');
+            return;
+        }
+
+        const isNumeric = /^\d+$/.test(input);
+        const payload = isNumeric ? { product_id: parseInt(input) } : { sku: input };
+
+        try {
+            const response = await fetch('api/cny-sync.php?action=push_product', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Push failed');
+            }
+
+            addPushLog(`✅ ${payload.sku || 'ID '+payload.product_id}: Push สำเร็จ`, 'success');
+            document.getElementById('pushSkuOrId').value = '';
+            setTimeout(() => refreshPushStats(), 300);
+        } catch (e) {
+            addPushLog(`❌ ${payload.sku || 'ID '+payload.product_id}: ${e.message}`, 'error');
+        }
+    }
+
+    async function refreshPushStats() {
+        try {
+            const response = await fetch('api/cny-sync.php?action=push_stats');
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Fetch failed');
+
+            const stats = data.stats || {};
+            document.getElementById('pushStatTracked').textContent = stats.tracked ?? 0;
+            document.getElementById('pushStatSuccess').textContent = stats.success ?? 0;
+            document.getElementById('pushStatFailed').textContent = stats.failed ?? 0;
+            document.getElementById('pushStatNeedsPush').textContent = stats.needs_push ?? 0;
+
+            const logs = data.logs || [];
+            const logDiv = document.getElementById('pushLog');
+            logDiv.innerHTML = logs.length ? logs.map(log => {
+                const time = new Date(log.created_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+                const cls = log.success ? 'log-success' : 'log-error';
+                const label = log.sku || `ID ${log.product_id}` || '?';
+                const msg = log.message || (log.success ? 'OK' : 'Failed');
+                return `<div class="${cls}">[${time}] ${label}: ${msg}</div>`;
+            }).join('') : '<div class="text-gray-500">ยังไม่มีประวัติการ push</div>';
+
+            document.getElementById('pushStatsBadge').textContent = 'Updated';
+        } catch (e) {
+            addPushLog(`❌ Refresh stats failed: ${e.message}`, 'error');
+        }
+    }
+
+    function addPushLog(message, type = 'info') {
+        const logDiv = document.getElementById('pushLog');
+        const time = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        const colorClass = { success: 'log-success', error: 'log-error', warning: 'log-warning', info: 'log-info' }[type] || 'log-info';
+        const entry = `<div class="${colorClass}">[${time}] ${message}</div>`;
+        logDiv.insertAdjacentHTML('afterbegin', entry);
+        while (logDiv.children.length > 50) logDiv.removeChild(logDiv.lastChild);
+    }
+
+    // Auto-refresh push stats every 30 seconds
+    setInterval(refreshPushStats, 30000);
     </script>
 </body>
 </html>

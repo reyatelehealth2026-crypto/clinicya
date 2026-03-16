@@ -29,12 +29,37 @@ try {
             echo json_encode(['success' => true, 'stats' => $stats], JSON_UNESCAPED_UNICODE);
             break;
             
-        case 'update_categories':
-            // Update all product categories from CNY data
-            $result = $cnyApi->updateAllProductCategories();
-            echo json_encode($result, JSON_UNESCAPED_UNICODE);
+        case 'push_stats':
+            $cnyApi->ensurePushTablesExist();
+            $stats = $cnyApi->getPushStats() ?? [];
+            $logs = $cnyApi->getRecentPushLogs(12);
+            echo json_encode([
+                'success' => true,
+                'stats' => $stats,
+                'logs' => $logs
+            ], JSON_UNESCAPED_UNICODE);
             break;
-            
+
+        case 'push_product':
+            $sku = trim($_POST['sku'] ?? '');
+            $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
+
+            if ($sku === '' && $productId <= 0) {
+                throw new Exception('กรุณาระบุ SKU หรือ Product ID อย่างน้อยหนึ่งค่า');
+            }
+
+            if ($sku !== '') {
+                $result = $cnyApi->pushProductUpdateBySku($sku);
+            } else {
+                $result = $cnyApi->pushProductUpdateById($productId);
+            }
+
+            echo json_encode([
+                'success' => true,
+                'result' => $result
+            ], JSON_UNESCAPED_UNICODE);
+            break;
+
         case 'get_categories':
             // Get CNY categories
             $categories = $cnyApi->getCnyCategories();
