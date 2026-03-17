@@ -131,9 +131,13 @@ try {
             s.uploaded_at,
             s.matched_at,
             u.display_name AS customer_name,
-            u.picture_url  AS customer_avatar
+            u.picture_url  AS customer_avatar,
+            COALESCE(olu.customer_ref, ob.customer_ref) AS customer_ref,
+            COALESCE(olu.odoo_partner_id, ob.partner_id) AS partner_id
         FROM odoo_slip_uploads s
         LEFT JOIN users u ON u.line_user_id = s.line_user_id
+        LEFT JOIN odoo_line_users olu ON olu.line_user_id = s.line_user_id
+        LEFT JOIN odoo_bdos ob ON ob.line_user_id = s.line_user_id AND ob.customer_ref IS NOT NULL
         $whereClause
         ORDER BY s.uploaded_at DESC
         LIMIT ? OFFSET ?
@@ -151,6 +155,7 @@ try {
         $slip['slip_inbox_id'] = $slip['slip_inbox_id'] !== null ? (int) $slip['slip_inbox_id'] : null;
         $slip['bdo_id'] = $slip['bdo_id'] !== null ? (int) $slip['bdo_id'] : null;
         $slip['bdo_amount'] = $slip['bdo_amount'] !== null ? (float) $slip['bdo_amount'] : null;
+        $slip['partner_id'] = $slip['partner_id'] !== null ? (int) $slip['partner_id'] : null;
 
         if ($slip['image_path']) {
             $slip['image_full_url'] = $baseUrl . '/' . ltrim($slip['image_path'], '/');
