@@ -53,14 +53,17 @@ class BdoSlipContract
     const CONFIDENCE_UNMATCHED      = 'unmatched';
 
     // ── Slip status values ───────────────────────────────────────────────────
+    const SLIP_STATUS_PENDING_LEGACY  = 'pending';
     const SLIP_STATUS_NEW             = 'new';
     const SLIP_STATUS_MATCHED         = 'matched';
     const SLIP_STATUS_PAYMENT_CREATED = 'payment_created';
     const SLIP_STATUS_POSTED          = 'posted';
     const SLIP_STATUS_DONE            = 'done';
+    const SLIP_STATUS_FAILED          = 'failed';
 
     // Statuses where unmatch is blocked
     const SLIP_UNMATCH_BLOCKED = [self::SLIP_STATUS_POSTED, self::SLIP_STATUS_DONE];
+    const SLIP_OPEN_STATUSES = [self::SLIP_STATUS_NEW, self::SLIP_STATUS_PENDING_LEGACY];
 
     // ── BDO state values ─────────────────────────────────────────────────────
     const BDO_STATE_DRAFT   = 'draft';
@@ -172,6 +175,26 @@ class BdoSlipContract
         return ['valid' => true, 'error' => null];
     }
 
+    public static function normalizeSlipStatus(?string $status): string
+    {
+        $status = trim((string) ($status ?? ''));
+        if ($status === '' || $status === self::SLIP_STATUS_PENDING_LEGACY) {
+            return self::SLIP_STATUS_NEW;
+        }
+
+        return $status;
+    }
+
+    public static function isOpenSlipStatus(?string $status): bool
+    {
+        return in_array(self::normalizeSlipStatus($status), [self::SLIP_STATUS_NEW], true);
+    }
+
+    public static function getOpenSlipStatuses(): array
+    {
+        return self::SLIP_OPEN_STATUSES;
+    }
+
     /**
      * Normalize a slip record from Odoo API response into a consistent shape
      * for use by inboxreya and dashboard.
@@ -189,7 +212,7 @@ class BdoSlipContract
             'partner_name'     => $raw['partner_name'] ?? null,
             'amount'           => isset($raw['amount']) ? (float) $raw['amount'] : null,
             'transfer_date'    => $raw['transfer_date'] ?? null,
-            'status'           => $raw['status'] ?? self::SLIP_STATUS_NEW,
+            'status'           => self::normalizeSlipStatus($raw['status'] ?? self::SLIP_STATUS_NEW),
             'match_confidence' => $raw['match_confidence'] ?? self::CONFIDENCE_UNMATCHED,
             'bdo_id'           => isset($raw['bdo_id']) ? (int) $raw['bdo_id'] : null,
             'bdo_name'         => $raw['bdo_name'] ?? null,

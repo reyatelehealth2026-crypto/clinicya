@@ -220,7 +220,7 @@ try {
     // ========================================================================
     // Save record to odoo_slip_uploads table (local — not sent to Odoo yet)
     // ========================================================================
-    $status = 'pending';
+    $status = BdoSlipContract::SLIP_STATUS_NEW;
     $uploadedBy = $input['uploaded_by'] ?? null;
     $inputMessageId = $input['message_id_ref'] ?? null; // message table ID
 

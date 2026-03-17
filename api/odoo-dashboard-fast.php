@@ -123,7 +123,7 @@ if ($action === 'overview_fast') {
 
     // Pending slips
     try {
-        $r['slips_pending'] = (int) $db->query("SELECT COUNT(*) FROM odoo_slip_uploads WHERE status='pending'")->fetchColumn();
+        $r['slips_pending'] = (int) $db->query("SELECT COUNT(*) FROM odoo_slip_uploads WHERE status IN ('new','pending')")->fetchColumn();
         $m = $db->query("SELECT COALESCE(SUM(amount),0) FROM odoo_slip_uploads WHERE status='matched' AND DATE(COALESCE(matched_at,uploaded_at))=CURDATE()")->fetchColumn();
         $r['payments_today'] = (float) $m;
     } catch (Exception $e) { /* table may not exist */ }

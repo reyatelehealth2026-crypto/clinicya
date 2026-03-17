@@ -34,7 +34,7 @@ try {
     // 1. Fetch pending slips (optionally filtered by IDs)
     // ------------------------------------------------------------------ //
     $allowRetry = !empty($input['retry']); // if true, also retry failed slips
-    $statusFilter = $allowRetry ? "s.status IN ('pending','failed')" : "s.status = 'pending'";
+    $statusFilter = $allowRetry ? "s.status IN ('new','pending','failed')" : "s.status IN ('new','pending')";
     $where  = "$statusFilter AND s.image_path IS NOT NULL";
     $params = [];
 

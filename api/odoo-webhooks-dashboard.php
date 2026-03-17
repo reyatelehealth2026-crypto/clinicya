@@ -25,6 +25,7 @@ header('Access-Control-Allow-Headers: Content-Type');
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/odoo-dashboard-functions.php';
+require_once __DIR__ . '/../classes/BdoSlipContract.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -3776,7 +3777,7 @@ function unmatchSlipAction($db, $input)
         // Reset slip status
         $db->prepare("
             UPDATE odoo_slip_uploads
-            SET status = 'pending', match_reason = ?, matched_at = NULL,
+            SET status = ?, match_reason = ?, matched_at = NULL,
                 odoo_slip_id = NULL, order_id = NULL, invoice_id = NULL,
                 match_confidence = NULL, bdo_name = NULL, slip_inbox_id = NULL
             WHERE id = ?

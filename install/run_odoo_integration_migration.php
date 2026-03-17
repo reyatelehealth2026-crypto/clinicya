@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS odoo_slip_uploads (
   order_id INT COMMENT 'Order ID (if matched)',
   amount DECIMAL(10,2) COMMENT 'Payment amount from slip',
   transfer_date DATE COMMENT 'Transfer date from slip',
-  status ENUM('pending', 'matched', 'failed') DEFAULT 'pending' COMMENT 'Matching status',
+  status ENUM('new', 'pending', 'matched', 'payment_created', 'posted', 'done', 'failed') DEFAULT 'new' COMMENT 'Matching status',
   match_reason TEXT COMMENT 'Reason for match/fail',
   uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT 'When slip was uploaded',
   matched_at DATETIME COMMENT 'When slip was matched',

@@ -300,8 +300,16 @@ function actionSlipList(PDO $db, array $input): array
     $params = [$lineUserId];
 
     if ($statusFilter !== '') {
-        $where[]  = 's.status = ?';
-        $params[] = $statusFilter;
+        $normalizedStatusFilter = BdoSlipContract::normalizeSlipStatus($statusFilter);
+        if ($normalizedStatusFilter === BdoSlipContract::SLIP_STATUS_NEW) {
+            $openStatuses = BdoSlipContract::getOpenSlipStatuses();
+            $placeholders = implode(', ', array_fill(0, count($openStatuses), '?'));
+            $where[] = "s.status IN ({$placeholders})";
+            array_push($params, ...$openStatuses);
+        } else {
+            $where[]  = 's.status = ?';
+            $params[] = $normalizedStatusFilter;
+        }
     }
 
     $whereClause = 'WHERE ' . implode(' AND ', $where);
@@ -361,6 +369,7 @@ function actionSlipList(PDO $db, array $input): array
             $row['image_full_url'] = $row['image_path']
                 ? $baseUrl . '/' . ltrim($row['image_path'], '/')
                 : ($row['image_url'] ?: null);
+            $row['status'] = BdoSlipContract::normalizeSlipStatus($row['status'] ?? null);
             return $row;
         }, $rows);
 
@@ -425,7 +434,8 @@ function actionMatchingWorkspace(PDO $db, array $input): array
     ]));
 
     $pendingSlips = array_filter($slipResult['slips'] ?? [], function ($s) {
-        return in_array($s['status'] ?? 'new', ['new', 'unmatched', 'manual'], true);
+        return BdoSlipContract::isOpenSlipStatus($s['status'] ?? null)
+            || in_array($s['status'] ?? BdoSlipContract::SLIP_STATUS_NEW, ['unmatched', 'manual'], true);
     });
 
     // Fetch open BDOs
@@ -854,7 +864,7 @@ function updateLocalSlipFromOdooResponse(PDO $db, string $lineUserId, array $sli
     try {
         $slipInboxId  = (int) ($slip['slip_inbox_id'] ?? 0);
         $confidence   = $slip['match_confidence'] ?? null;
-        $status       = $slip['status'] ?? null;
+        $status       = BdoSlipContract::normalizeSlipStatus($slip['status'] ?? null);
         $bdoId        = isset($slip['bdo_id']) ? (int) $slip['bdo_id'] : null;
         $bdoName      = $slip['bdo_name'] ?? null;
         $deliveryType = $slip['delivery_type'] ?? null;

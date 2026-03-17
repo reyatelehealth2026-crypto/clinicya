@@ -637,7 +637,7 @@ try {
                 UPDATE odoo_slip_uploads
                 SET bdo_id = ?, status = 'matched', match_reason = 'Manual BDO match from dashboard',
                     matched_at = NOW()
-                WHERE id = ? AND status = 'pending'
+                WHERE id = ? AND status IN ('new', 'pending')
             ")->execute([$bdoId, $slipId]);
 
             // Update odoo_bdo_orders.payment_status
