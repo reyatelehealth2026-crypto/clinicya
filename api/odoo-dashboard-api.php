@@ -160,6 +160,9 @@ try {
             case 'slip_center_bdo_overview':
                 $result = getSlipCenterBdoOverview($db, $input);
                 break;
+            case 'slip_center_bdo_global':
+                $result = getSlipCenterBdoGlobal($db, $input);
+                break;
             case 'activity_log_list':
                 $result = activityLogList($db, $input);
                 break;
@@ -4093,9 +4096,76 @@ function getSlipCenterBdoOverview($db, $input)
         }
         unset($r);
 
+        // Fallback to webhook log if table is empty
+        if (empty($rows)) {
+            return getSlipCenterBdoGlobal($db, $input);
+        }
+
         return ['bdos' => $rows, 'total' => count($rows), 'source' => 'local'];
     } catch (Exception $e) {
-        return ['bdos' => [], 'total' => 0, 'source' => 'local', 'error' => $e->getMessage()];
+        // Fallback to webhook log on error
+        return getSlipCenterBdoGlobal($db, $input);
+    }
+}
+
+/**
+ * Global BDO overview for Slip Center — extracts from webhook log when sync tables empty.
+ * Returns all pending/partial BDOs across all customers.
+ */
+function getSlipCenterBdoGlobal($db, $input)
+{
+    $limit = min((int) ($input['limit'] ?? 200), 500);
+
+    try {
+        // Extract BDOs from webhook log
+        $bdoIdExpr = "CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.bdo_id')), '') AS UNSIGNED)";
+        $bdoNameExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.bdo_name')), '')";
+        $orderIdExpr = "CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_id')), '') AS UNSIGNED)";
+        $orderNameExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')), '')";
+        $partnerIdExpr = "CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), '') AS UNSIGNED)";
+        $customerRefExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.ref')), '')";
+        $lineUserIdExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.line_user_id')), '')";
+        $amountExpr = "CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.amount_total')), '') AS DECIMAL(10,2))";
+        $stateExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.state')), '')";
+        $paymentStatusExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.payment_status')), '')";
+        $bdoDateExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.bdo_date')), '')";
+
+        $stmt = $db->prepare("
+            SELECT
+                {$bdoIdExpr} AS bdo_id,
+                {$bdoNameExpr} AS bdo_name,
+                {$orderIdExpr} AS order_id,
+                {$orderNameExpr} AS order_name,
+                {$partnerIdExpr} AS partner_id,
+                {$customerRefExpr} AS customer_ref,
+                {$lineUserIdExpr} AS line_user_id,
+                {$amountExpr} AS amount_total,
+                {$stateExpr} AS state,
+                {$paymentStatusExpr} AS payment_status,
+                {$bdoDateExpr} AS bdo_date,
+                MAX(processed_at) AS updated_at
+            FROM odoo_webhooks_log
+            WHERE event_type LIKE 'bdo.%'
+              AND {$bdoIdExpr} > 0
+              AND {$paymentStatusExpr} IN ('pending', 'partial')
+            GROUP BY {$bdoIdExpr}
+            ORDER BY MAX(processed_at) DESC
+            LIMIT ?
+        ");
+        $stmt->execute([$limit]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($rows as &$r) {
+            $r['bdo_id']       = (int) $r['bdo_id'];
+            $r['order_id']     = $r['order_id']     ? (int) $r['order_id']     : null;
+            $r['partner_id']   = $r['partner_id']   ? (int) $r['partner_id']   : null;
+            $r['amount_total'] = $r['amount_total'] ? (float) $r['amount_total'] : null;
+        }
+        unset($r);
+
+        return ['bdos' => $rows, 'total' => count($rows), 'source' => 'webhook_log'];
+    } catch (Exception $e) {
+        return ['bdos' => [], 'total' => 0, 'source' => 'webhook_log', 'error' => $e->getMessage()];
     }
 }
 
@@ -4210,17 +4280,27 @@ function getSlipCenterCustomerDetail($db, $input)
     // Step 3: Fetch slips for this customer (all statuses, recent 90 days)
     if ($lineUserId !== '') {
         try {
-            $baseUrl = rtrim(defined('SITE_URL') ? SITE_URL : 'https://cny.re-ya.com', '/');
+            // Check if users table exists before joining
+            $usersTableExists = tableExists($db, 'users');
+            $baseUrl = rtrim(defined('SITE_URL') ? SITE_URL : (defined('APP_URL') ? APP_URL : 'https://cny.re-ya.com'), '/');
+            
+            $customerJoin = $usersTableExists
+                ? "LEFT JOIN users u ON u.line_user_id = s.line_user_id"
+                : "";
+            $customerSelect = $usersTableExists
+                ? ", u.display_name AS customer_name, u.picture_url AS customer_avatar"
+                : ", NULL AS customer_name, NULL AS customer_avatar";
+            
             $stmt = $db->prepare("
                 SELECT
                     s.id, s.line_user_id, s.line_account_id, s.odoo_slip_id, s.slip_inbox_id,
                     s.slip_inbox_name, s.bdo_id, s.bdo_name, s.invoice_id, s.order_id,
                     s.amount, s.transfer_date, s.image_path, s.image_url, s.uploaded_by,
                     s.status, s.match_confidence, s.delivery_type, s.bdo_amount,
-                    s.match_reason, s.uploaded_at, s.matched_at,
-                    u.display_name AS customer_name, u.picture_url AS customer_avatar
+                    s.match_reason, s.uploaded_at, s.matched_at
+                    {$customerSelect}
                 FROM odoo_slip_uploads s
-                LEFT JOIN users u ON u.line_user_id = s.line_user_id
+                {$customerJoin}
                 WHERE s.line_user_id = ?
                   AND s.uploaded_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
                 ORDER BY s.uploaded_at DESC
@@ -4247,13 +4327,13 @@ function getSlipCenterCustomerDetail($db, $input)
         }
     }
 
-    $pendingSlips  = array_values(array_filter($allSlips, fn($s) => ($s['status'] ?? '') === 'pending'));
+    $pendingSlips  = array_values(array_filter($allSlips, function($s) { return ($s['status'] ?? '') === 'pending'; }));
     $today         = date('Y-m-d');
-    $matchedToday  = array_values(array_filter($allSlips, fn($s) =>
-        ($s['status'] ?? '') === 'matched' &&
-        !empty($s['matched_at']) &&
-        substr($s['matched_at'], 0, 10) === $today
-    ));
+    $matchedToday  = array_values(array_filter($allSlips, function($s) use ($today) {
+        return ($s['status'] ?? '') === 'matched' &&
+            !empty($s['matched_at']) &&
+            substr($s['matched_at'], 0, 10) === $today;
+    }));
 
     return [
         'bdo_orders'    => $bdoOrders,
