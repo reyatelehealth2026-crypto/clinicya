@@ -55,10 +55,17 @@ ALTER TABLE odoo_line_users
     ADD INDEX IF NOT EXISTS idx_line_users_customer_code (odoo_customer_code);
 
 -- ── odoo_slip_uploads ─────────────────────────────────────────────────────
+-- Actual columns (from api/odoo-slip-upload.php INSERT):
+--   line_account_id, line_user_id, odoo_partner_id, bdo_id, invoice_id,
+--   order_id, amount, transfer_date, image_path, image_url, uploaded_by,
+--   message_id, slip_verified, slip_verify_ref, slip_verify_amount,
+--   slip_verify_data, slip_verified_at, status, match_reason, uploaded_at
+-- NOTE: matched_order_id ไม่มี — ชื่อจริงคือ order_id และ bdo_id
 ALTER TABLE odoo_slip_uploads
     ADD INDEX IF NOT EXISTS idx_slips_status_uploaded (status, uploaded_at),
     ADD INDEX IF NOT EXISTS idx_slips_line_user       (line_user_id, uploaded_at),
-    ADD INDEX IF NOT EXISTS idx_slips_matched_order   (matched_order_id);
+    ADD INDEX IF NOT EXISTS idx_slips_order_id        (order_id),
+    ADD INDEX IF NOT EXISTS idx_slips_bdo_id          (bdo_id);
 
 -- ── odoo_orders_summary (cache table) ────────────────────────────────────
 ALTER TABLE odoo_orders_summary
