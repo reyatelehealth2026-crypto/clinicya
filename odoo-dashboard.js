@@ -146,7 +146,7 @@ function showSection(id){
 let _lastApiDurationMs = null;
 
 // Actions supported by the lightweight fast endpoint
-const WH_FAST_ACTIONS=new Set(['health','overview_fast','circuit_breaker_status','circuit_breaker_reset']);
+const WH_FAST_ACTIONS=new Set(['health','overview_fast','orders_today_fast','customers_fast','circuit_breaker_status','circuit_breaker_reset']);
 
 async function whApiCall(data){
     const tried=[];
@@ -3997,8 +3997,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     }
     if(document.getElementById('autoSendSettingsContent'))loadAutoSendSettings();
 
-    // Re-check connection every 60s
-    setInterval(testConnection, 60000);
+    // Re-check connection every 60s — skip when tab is hidden
+    setInterval(()=>{ if(!document.hidden) testConnection(); }, 60000);
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) testConnection(); });
     
     // Log page load performance
     window.addEventListener('load', () => {
