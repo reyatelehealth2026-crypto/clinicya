@@ -29,7 +29,8 @@ ALTER TABLE odoo_webhook_dlq
     ADD COLUMN IF NOT EXISTS `status`         VARCHAR(32)  NOT NULL DEFAULT 'pending',
     ADD COLUMN IF NOT EXISTS `webhook_log_id` INT          DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS `last_retry_at`  DATETIME     DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS `resolved_at`    DATETIME     DEFAULT NULL;
+    ADD COLUMN IF NOT EXISTS `resolved_at`    DATETIME     DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- ── 2. เพิ่ม index หลังเพิ่ม column ─────────────────────────────────────
 
