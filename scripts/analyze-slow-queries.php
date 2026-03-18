@@ -67,19 +67,43 @@ foreach ($tables as $table) {
 }
 
 // ── 2. Critical Query Timing ───────────────────────────────────────────────
+
+// Detect actual timestamp column in odoo_webhooks_log (schema varies across deployments)
+$webhookTimeCol = null;
+foreach (['processed_at', 'created_at', 'received_at', 'updated_at'] as $candidate) {
+    $chk = $db->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='odoo_webhooks_log' AND COLUMN_NAME='{$candidate}' LIMIT 1");
+    if ($chk->fetchColumn()) { $webhookTimeCol = $candidate; break; }
+}
+
+// Detect if odoo_bdos has payment_state column yet
+$bdosHasPaymentState = (bool) $db->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='odoo_bdos' AND COLUMN_NAME='payment_state' LIMIT 1")->fetchColumn();
+
 $queries = [
-    'webhooks_today_range'   => "SELECT COUNT(*) FROM odoo_webhooks_log WHERE created_at >= CURDATE() AND created_at < CURDATE() + INTERVAL 1 DAY",
+    'webhooks_today_range' => $webhookTimeCol
+        ? "SELECT COUNT(*) FROM odoo_webhooks_log WHERE `{$webhookTimeCol}` >= CURDATE() AND `{$webhookTimeCol}` < CURDATE() + INTERVAL 1 DAY"
+        : null,
     'notification_today_range' => "SELECT COUNT(*) FROM odoo_notification_log WHERE sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY",
-    'bdo_context_group_by'   => "SELECT bdo_id, MAX(id) as max_id FROM odoo_bdo_context GROUP BY bdo_id LIMIT 10",
-    'slips_pending'          => "SELECT COUNT(*) FROM odoo_slip_uploads WHERE status IN ('new','pending')",
-    'bdos_unpaid'            => "SELECT COUNT(*) FROM odoo_bdos WHERE payment_state NOT IN ('paid','reversed','in_payment') AND state != 'cancel'",
-    'orders_today'           => "SELECT COUNT(*) FROM odoo_orders WHERE date_order >= CURDATE()",
-    'line_users_lookup'      => "SELECT COUNT(*) FROM odoo_line_users WHERE odoo_partner_id IS NOT NULL",
-    'customer_projection'    => "SELECT COUNT(*) FROM odoo_customer_projection WHERE overdue_amount > 0",
+    'bdo_context_group_by'     => "SELECT bdo_id, MAX(id) as max_id FROM odoo_bdo_context GROUP BY bdo_id LIMIT 10",
+    'slips_pending'            => "SELECT COUNT(*) FROM odoo_slip_uploads WHERE status IN ('new','pending')",
+    'bdos_unpaid' => $bdosHasPaymentState
+        ? "SELECT COUNT(*) FROM odoo_bdos WHERE payment_state NOT IN ('paid','reversed','in_payment') AND state != 'cancel'"
+        : "SELECT COUNT(*) FROM odoo_bdos WHERE state != 'cancel'",
+    'orders_today'             => "SELECT COUNT(*) FROM odoo_orders WHERE date_order >= CURDATE()",
+    'line_users_lookup'        => "SELECT COUNT(*) FROM odoo_line_users WHERE odoo_partner_id IS NOT NULL",
+    'customer_projection'      => "SELECT COUNT(*) FROM odoo_customer_projection WHERE overdue_amount > 0",
 ];
 
+// Diagnostics: report detected columns
 $queryTimes = [];
+if (!$webhookTimeCol) {
+    $queryTimes['webhooks_today_range'] = ['ms' => null, 'status' => 'skip', 'note' => 'No known timestamp column in odoo_webhooks_log'];
+}
+if (!$bdosHasPaymentState) {
+    $queryTimes['bdos_unpaid'] = ['ms' => null, 'status' => 'skip', 'note' => 'payment_state column missing — run migration_bdos_schema_fix.sql'];
+}
+
 foreach ($queries as $name => $sql) {
+    if ($sql === null || isset($queryTimes[$name])) continue;
     $start = microtime(true);
     try {
         $db->query($sql)->fetchAll();
@@ -130,14 +154,16 @@ echo str_pad("Query", 35) . str_pad("Time (ms)", 12) . "Status\n";
 echo str_repeat("-", 60) . "\n";
 
 foreach ($queryTimes as $name => $result) {
-    $ms = isset($result['ms']) ? $result['ms'] . "ms" : "ERROR";
+    $ms   = isset($result['ms']) ? $result['ms'] . "ms" : ($result['status'] === 'skip' ? 'SKIP' : 'ERROR');
     $icon = match($result['status']) {
         'ok'       => '✅',
         'slow'     => '⚠️ ',
         'critical' => '🔴',
+        'skip'     => '⏭ ',
         default    => '❌',
     };
-    echo str_pad($name, 35) . str_pad($ms, 12) . $icon . "\n";
+    $note = isset($result['note']) ? ' ← ' . $result['note'] : (isset($result['error']) ? ' ← ' . $result['error'] : '');
+    echo str_pad($name, 35) . str_pad($ms, 12) . $icon . $note . "\n";
 }
 
 echo "\nLegend: ✅ <100ms  ⚠️  100-500ms  🔴 >500ms\n\n";
