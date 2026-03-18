@@ -4851,23 +4851,32 @@ function getCustomerFullDetail($db, $input)
     ];
 
     // Execute all sub-queries (sequential but no HTTP overhead per call)
+    // Skip sub-query when caller passes limit=0 to allow fast partial fetches
     try { $result['customer_detail'] = getCustomerDetail($db, $commonParams); }
     catch (Exception $e) { $result['errors'][] = 'customer_detail: ' . $e->getMessage(); }
 
-    try { $result['orders'] = getOdooOrders($db, $orderParams); }
-    catch (Exception $e) { $result['errors'][] = 'orders: ' . $e->getMessage(); }
+    if ((int)($input['orders_limit'] ?? 100) > 0) {
+        try { $result['orders'] = getOdooOrders($db, $orderParams); }
+        catch (Exception $e) { $result['errors'][] = 'orders: ' . $e->getMessage(); }
+    }
 
-    try { $result['invoices'] = getOdooInvoices($db, $invoiceParams); }
-    catch (Exception $e) { $result['errors'][] = 'invoices: ' . $e->getMessage(); }
+    if ((int)($input['invoices_limit'] ?? 100) > 0) {
+        try { $result['invoices'] = getOdooInvoices($db, $invoiceParams); }
+        catch (Exception $e) { $result['errors'][] = 'invoices: ' . $e->getMessage(); }
+    }
 
     try { $result['slips'] = getOdooSlips($db, $slipParams); }
     catch (Exception $e) { $result['errors'][] = 'slips: ' . $e->getMessage(); }
 
-    try { $result['bdos'] = getOdooBdos($db, $bdoParams); }
-    catch (Exception $e) { $result['errors'][] = 'bdos: ' . $e->getMessage(); }
+    if ((int)($input['bdo_limit'] ?? 100) > 0) {
+        try { $result['bdos'] = getOdooBdos($db, $bdoParams); }
+        catch (Exception $e) { $result['errors'][] = 'bdos: ' . $e->getMessage(); }
+    }
 
-    try { $result['activity_log'] = activityLogList($db, $activityParams); }
-    catch (Exception $e) { $result['errors'][] = 'activity_log: ' . $e->getMessage(); }
+    if ((int)($input['activity_limit'] ?? 100) > 0) {
+        try { $result['activity_log'] = activityLogList($db, $activityParams); }
+        catch (Exception $e) { $result['errors'][] = 'activity_log: ' . $e->getMessage(); }
+    }
 
     return $result;
 }
