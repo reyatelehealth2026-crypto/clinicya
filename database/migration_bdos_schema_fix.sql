@@ -1,25 +1,35 @@
 -- ============================================================================
--- Migration: เพิ่ม columns ที่ขาดใน odoo_bdos และแก้ไข odoo_webhooks_log
--- Created: 2026-03-18
+-- Migration: เพิ่ม columns ที่ขาดใน odoo_bdos และ odoo_webhook_dlq
+-- Created: 2026-03-18  Updated: 2026-03-18
 --
--- ปัญหา:
---   1. odoo_bdos มีข้อมูล 1,668 rows แต่ขาด payment_state, amount_net_to_pay, due_date
---      ทำให้ dashboard query และ index migration ล้มเหลว
---   2. migration_odoo_api_performance.sql พยายาม index payment_state ที่ไม่มีอยู่
+-- ปัญหาที่พบจากการรัน migration จริง:
+--   1. odoo_bdos ขาด payment_state, amount_net_to_pay, due_date
+--   2. odoo_webhook_dlq ขาด status, webhook_log_id, last_retry_at, resolved_at
+--      (INSERT ใน OdooWebhookHandler.php ไม่ได้ set columns เหล่านี้ → ต้องมี DEFAULT)
 --
--- MariaDB support: ADD COLUMN IF NOT EXISTS (10.0.2+)
--- MySQL 8.0.31+: ไม่รองรับ IF NOT EXISTS สำหรับ ADD COLUMN → ใช้ stored procedure แทน
+-- รันก่อน migration_missing_indexes.sql เสมอ
+-- MariaDB 10.0.2+: รองรับ ADD COLUMN IF NOT EXISTS
 -- ============================================================================
 
 -- ── 1. เพิ่ม columns ที่ขาดใน odoo_bdos ─────────────────────────────────
 
 ALTER TABLE odoo_bdos
-    ADD COLUMN IF NOT EXISTS `payment_state` VARCHAR(64) DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS `payment_state`    VARCHAR(64)    DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS `amount_net_to_pay` DECIMAL(14,2) DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS `due_date` DATE DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS `payment_method` VARCHAR(100) DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS `payment_reference` VARCHAR(255) DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS `qr_data` TEXT DEFAULT NULL;
+    ADD COLUMN IF NOT EXISTS `due_date`         DATE           DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS `payment_method`   VARCHAR(100)   DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS `payment_reference` VARCHAR(255)  DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS `qr_data`          TEXT           DEFAULT NULL;
+
+-- ── 2. เพิ่ม columns ที่ขาดใน odoo_webhook_dlq ───────────────────────────
+-- dashboard API ใช้ status, webhook_log_id, last_retry_at, resolved_at
+-- แต่ OdooWebhookHandler.php INSERT ไม่ได้ include columns เหล่านี้
+
+ALTER TABLE odoo_webhook_dlq
+    ADD COLUMN IF NOT EXISTS `status`         VARCHAR(32)  NOT NULL DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS `webhook_log_id` INT          DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS `last_retry_at`  DATETIME     DEFAULT NULL,
+    ADD COLUMN IF NOT EXISTS `resolved_at`    DATETIME     DEFAULT NULL;
 
 -- ── 2. เพิ่ม index หลังเพิ่ม column ─────────────────────────────────────
 

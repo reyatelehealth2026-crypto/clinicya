@@ -37,10 +37,17 @@ ALTER TABLE odoo_bdo_orders
     ADD INDEX IF NOT EXISTS idx_bdo_orders_payment_method (payment_method);
 
 -- ── odoo_webhook_dlq ──────────────────────────────────────────────────────
--- retry queue: ดึง rows ที่ next_retry_at ถึงกำหนดแล้ว
+-- Actual columns (from OdooWebhookHandler.php INSERT + dashboard SELECT):
+--   id, delivery_id, webhook_log_id, event_type, payload, error_code,
+--   error_message, retry_count, failed_at, created_at, last_retry_at,
+--   resolved_at, status (added via migration_bdos_schema_fix.sql)
+-- NOTE: next_retry_at ไม่มีอยู่จริง — ชื่อจริงคือ last_retry_at
+-- NOTE: status ต้องรัน migration_bdos_schema_fix.sql ก่อน
 ALTER TABLE odoo_webhook_dlq
-    ADD INDEX IF NOT EXISTS idx_dlq_status_next (status, next_retry_at),
-    ADD INDEX IF NOT EXISTS idx_dlq_created     (created_at);
+    ADD INDEX IF NOT EXISTS idx_dlq_status_created  (status, created_at DESC),
+    ADD INDEX IF NOT EXISTS idx_dlq_created         (created_at DESC),
+    ADD INDEX IF NOT EXISTS idx_dlq_last_retry      (last_retry_at),
+    ADD INDEX IF NOT EXISTS idx_dlq_webhook_log_id  (webhook_log_id);
 
 -- ── odoo_line_users ───────────────────────────────────────────────────────
 -- JOIN กับ odoo_webhooks_log เพื่อหา line_user_id จาก partner_id
