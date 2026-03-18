@@ -9,8 +9,8 @@
  * ตารางที่ตรวจสอบ: ทุกตารางที่ใช้จริงใน odoo-dashboard-api.php
  * (ไม่รวม odoo_customer_projection ซึ่งใช้น้อยกว่าที่แผนเดิมประเมินไว้)
  */
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
-
 $jsonMode = in_array('--json', $argv ?? []);
 $db = Database::getInstance()->getConnection();
 
