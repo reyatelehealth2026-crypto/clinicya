@@ -1,999 +1,647 @@
-![[# Odoo Dashboard Performance Optimization - Execution Plan
+# Odoo Dashboard Performance Optimization — Revised Execution Plan
 
+> **Revision Date:** 2026-03-18 (แก้ไขจากแผนเดิมหลังตรวจสอบ codebase จริง)
+>
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** ปรับปรุงประสิทธิภาพ Odoo Dashboard ให้รองรับข้อมูลจำนวนมาก (1M+ records) โดยลด response time จาก 3-5 วินาที เหลือ < 500ms
 
-**Architecture:** แบ่งการทำงานเป็น 4 phases: (1) Database optimization with indexing & partitioning, (2) API code splitting & caching layer upgrade, (3) Frontend virtualization & pagination, (4) Monitoring & alerting setup
+**Tech Stack:** PHP 8+, MySQL/MariaDB, Redis (optional), JavaScript (vanilla), nginx
 
-**Tech Stack:** PHP 8+, MySQL/MariaDB, Redis, JavaScript (vanilla), nginx
-
-**Base Path:** `/root/.openclaw/workspace/odoo`
+**Base Path:** `/home/user/odoo` (production: `/home/zrismpsz/public_html/cny.re-ya.com`)
 
 ---
 
-## Phase 1: Database Optimization (Foundation)
+## สิ่งที่ค้นพบจากการตรวจสอบ codebase จริง
 
-### Task 1.1: Analyze Current Query Performance
+### ตารางที่ใช้จริง (เรียงตามความถี่ใช้งานใน dashboard API)
 
-**Files:**
-- Create: `scripts/analyze-slow-queries.php`
-- Read: `api/odoo-dashboard-api.php` (ดู queries หลัก)
+| ตาราง | ครั้งใน dashboard | ครั้งรวมทั้งระบบ | ความสำคัญ |
+|-------|-----------------|----------------|----------|
+| `odoo_webhooks_log` | 40 | 241 | 🔴 Critical |
+| `odoo_notification_log` | 11 | 38 | 🔴 Critical |
+| `odoo_line_users` | 13 | 66 | 🔴 Critical |
+| `odoo_slip_uploads` | 8 | 57 | 🟠 High |
+| `odoo_bdos` | 8 | 41 | 🟠 High |
+| `odoo_bdo_context` | 8 | 24 | 🟠 High (ไม่มีในแผนเดิม!) |
+| `odoo_webhook_dlq` | 7 | 27 | 🟠 High |
+| `odoo_orders` | 4 | 54 | 🟡 Medium |
+| `odoo_invoices` | 3 | 24 | 🟡 Medium |
+| `odoo_bdo_orders` | 3 | 15 | 🟡 Medium (ไม่มีในแผนเดิม!) |
+| `odoo_order_notes` | 2 | 6 | 🟢 Low |
+| `odoo_manual_overrides` | 2 | 6 | 🟢 Low |
+| `odoo_customer_projection` | 2 | 13 | 🟢 Low (แผนเดิมให้ความสำคัญสูงเกินไป) |
+| `odoo_orders_summary` | 0* | 15 | 🟡 Cache table - ควรใช้เพิ่มขึ้น |
+| `odoo_customers_cache` | 0* | 8 | 🟡 Cache table - ควรใช้เพิ่มขึ้น |
+| `odoo_invoices_cache` | 0* | 11 | 🟡 Cache table - ควรใช้เพิ่มขึ้น |
 
-**Step 1: Create query analyzer script**
+\* ถูกใช้ใน `odoo-dashboard-local.php` (1,148 บรรทัด) แต่ไม่ได้ใช้ใน main API
 
-```php
-<?php
-/**
- * Analyze slow queries in odoo-dashboard-api
- * Run: php scripts/analyze-slow-queries.php
- */
-]]require_once __DIR__ . '/../config/database.php';
+### สิ่งที่มีอยู่แล้ว (ไม่ต้องสร้างใหม่)
 
-try {
-    $db = Database::getInstance()->getConnection();
-    
-    // Enable slow query log temporarily
-    $db->exec("SET GLOBAL slow_query_log = 'ON'");
-    $db->exec("SET GLOBAL long_query_time = 1");
-    
-    // Get table statistics
-    $tables = ['odoo_webhooks_log', 'odoo_orders', 'odoo_invoices', 'odoo_bdos', 'odoo_customer_projection'];
-    $stats = [];
-    
-    foreach ($tables as $table) {
-        $stmt = $db->query("SHOW TABLE STATUS LIKE '$table'");
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $stats[$table] = [
-            'rows' => $row['Rows'] ?? 0,
-            'size_mb' => round(($row['Data_length'] + $row['Index_length']) / 1024 / 1024, 2),
-            'avg_row_length' => $row['Avg_row_length'] ?? 0
-        ];
-        
-        // Get current indexes
-        $idxStmt = $db->query("SHOW INDEX FROM $table");
-        $stats[$table]['indexes'] = $idxStmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-    
-    echo json_encode($stats, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    
-} catch (Exception $e) {
-    echo "Error: " . $e->getMessage();
-}
-```
+| สิ่ง | ไฟล์ | สถานะ |
+|------|------|--------|
+| Index migration | `database/migration_odoo_api_performance.sql` | ✅ มีอยู่แล้ว ดีกว่าแผนเดิมด้วย |
+| Fast endpoint | `api/odoo-dashboard-fast.php` (176 บรรทัด) | ✅ ใช้งานอยู่ใน JS |
+| Local cache API | `api/odoo-dashboard-local.php` (1,148 บรรทัด) | ✅ มีอยู่แล้ว |
+| Cache tables | `odoo_orders_summary`, `odoo_customers_cache`, `odoo_invoices_cache` | ✅ มีอยู่ใน schema |
+| Dashboard functions | `api/odoo-dashboard-functions.php` (439 บรรทัด) | ✅ มีอยู่แล้ว |
 
-**Step 2: Run analyzer and save results**
+### ข้อผิดพลาดในแผนเดิมที่แก้ไขแล้ว
 
-```bash
-cd /root/.openclaw/workspace/odoo
-php scripts/analyze-slow-queries.php > docs/db-analysis-before.json
-cat docs/db-analysis-before.json
-```
-
-**Expected Output:** JSON with table stats showing row counts and sizes
-
-**Step 3: Commit**
-
-```bash
-git add scripts/analyze-slow-queries.php docs/db-analysis-before.json
-git commit -m "feat(perf): add database analysis script for baseline metrics"
-```
+1. **Partitioning script** — ใช้ `INCLUDING ALL` ซึ่งเป็น PostgreSQL syntax ไม่ใช่ MySQL
+2. **API Router method names** — `match()` เรียก `$action` ตรงๆ แต่ method จริงชื่อ `getCustomerList`
+3. **Redis Cache file** — ใช้ `unserialize(file_get_contents())` แต่ set ด้วย `json_encode()` ไม่สอดคล้องกัน
+4. **Index targets** — `odoo_customer_projection` มีคอลัมน์ต่างจากที่แผนระบุ (`total_invoiced` ไม่มี, ชื่อจริงคือ `spend_total`)
+5. **Critical tables หายไป** — `odoo_bdo_context`, `odoo_bdo_orders`, `odoo_notification_log` ไม่มีใน index plan เดิม
+6. **VirtualTable.js** — `innerHTML = ''` ทุก scroll event ทำให้ DOM thrashing แย่ลง
 
 ---
 
-### Task 1.2: Add Critical Indexes
+## Phase 1: Database — ตรวจสอบและเพิ่ม Index ที่ยังขาด
+
+### Task 1.1: รัน Migration ที่มีอยู่แล้ว
+
+ไฟล์ `database/migration_odoo_api_performance.sql` มีอยู่แล้วและดีมาก ให้รัน:
+
+```bash
+cd /home/user/odoo
+# ตรวจสอบก่อนว่า index ไหนมีแล้ว
+mysql -u $DB_USER -p$DB_PASS $DB_NAME < database/migration_odoo_api_performance.sql
+```
+
+ไฟล์นี้ครอบคลุม: `odoo_webhooks_log`, `odoo_orders`, `odoo_invoices`, `odoo_bdos`, `odoo_customer_projection`, `odoo_order_projection`, `odoo_api_logs` และยังมี **generated virtual columns** สำหรับ JSON fields
+
+### Task 1.2: เพิ่ม Index สำหรับตารางที่ขาดหายในแผนเดิม
 
 **Files:**
-- Create: `migration/add-performance-indexes.sql`
-- Create: `migration/apply-indexes.php`
-
-**Step 1: Create migration SQL**
+- Create: `database/migration_missing_indexes.sql`
 
 ```sql
--- Migration: Add performance indexes for odoo-dashboard
+-- Migration: Index สำหรับตารางที่ขาดในแผนเดิม
 -- Created: 2026-03-18
--- Estimated time: 2-5 minutes for tables < 1M rows
+-- ใช้ IF NOT EXISTS เพื่อ idempotent
 
--- odoo_webhooks_log indexes (most critical - highest traffic)
-ALTER TABLE odoo_webhooks_log 
-ADD INDEX idx_webhook_created_at (created_at),
-ADD INDEX idx_webhook_event_created (event_type, created_at),
-ADD INDEX idx_webhook_order_ref (order_ref(50)),
-ADD INDEX idx_webhook_partner_id (partner_id),
-ADD INDEX idx_webhook_status_created (status, created_at);
+-- ── odoo_notification_log (38 references, DATE() queries ทำ full scan) ──
+ALTER TABLE odoo_notification_log
+ADD INDEX IF NOT EXISTS idx_notif_sent_at_date (sent_at),
+ADD INDEX IF NOT EXISTS idx_notif_status_sent (status, sent_at),
+ADD INDEX IF NOT EXISTS idx_notif_line_user_sent (line_user_id, sent_at DESC),
+ADD INDEX IF NOT EXISTS idx_notif_event_sent (event_type, sent_at DESC);
 
--- odoo_orders indexes
-ALTER TABLE odoo_orders 
-ADD INDEX idx_order_date (date_order),
-ADD INDEX idx_order_state (state),
-ADD INDEX idx_order_customer_ref (customer_ref(50)),
-ADD INDEX idx_order_updated (updated_at),
-ADD INDEX idx_order_date_state (date_order, state),
-ADD INDEX idx_order_partner (partner_id, date_order);
+-- ── odoo_bdo_context (ใช้ GROUP BY bdo_id + MAX(id) บ่อยมาก) ──
+ALTER TABLE odoo_bdo_context
+ADD INDEX IF NOT EXISTS idx_bdo_ctx_bdo_id (bdo_id, id DESC),
+ADD INDEX IF NOT EXISTS idx_bdo_ctx_id (id);
 
--- odoo_invoices indexes
-ALTER TABLE odoo_invoices 
-ADD INDEX idx_invoice_date (invoice_date),
-ADD INDEX idx_invoice_state (state),
-ADD INDEX idx_invoice_partner (partner_id),
-ADD INDEX idx_invoice_payment (payment_state);
+-- ── odoo_bdo_orders (JOIN กับ odoo_bdo_context บ่อย) ──
+ALTER TABLE odoo_bdo_orders
+ADD INDEX IF NOT EXISTS idx_bdo_orders_bdo_id (bdo_id),
+ADD INDEX IF NOT EXISTS idx_bdo_orders_partner (partner_id, due_date),
+ADD INDEX IF NOT EXISTS idx_bdo_orders_payment (payment_state, state);
 
--- odoo_customer_projection indexes
-ALTER TABLE odoo_customer_projection 
-ADD INDEX idx_customer_total (total_invoiced),
-ADD INDEX idx_customer_overdue (overdue_amount),
-ADD INDEX idx_customer_name (name(100));
+-- ── odoo_webhook_dlq (retry queue) ──
+ALTER TABLE odoo_webhook_dlq
+ADD INDEX IF NOT EXISTS idx_dlq_status_next (status, next_retry_at),
+ADD INDEX IF NOT EXISTS idx_dlq_created (created_at);
 
--- odoo_bdos indexes
-ALTER TABLE odoo_bdos 
-ADD INDEX idx_bdo_state (state),
-ADD INDEX idx_bdo_payment (payment_state),
-ADD INDEX idx_bdo_partner (partner_id),
-ADD INDEX idx_bdo_amount (amount_net_to_pay);
+-- ── odoo_line_users (JOIN กับ webhooks หา line_user_id) ──
+ALTER TABLE odoo_line_users
+ADD INDEX IF NOT EXISTS idx_line_users_partner (odoo_partner_id, line_user_id),
+ADD INDEX IF NOT EXISTS idx_line_users_customer_code (odoo_customer_code);
 
--- odoo_slip_uploads indexes
-ALTER TABLE odoo_slip_uploads 
-ADD INDEX idx_slip_status (status),
-ADD INDEX idx_slip_uploaded (uploaded_at),
-ADD INDEX idx_slip_matched (matched_order_id);
+-- ── odoo_slip_uploads (upload tracking) ──
+ALTER TABLE odoo_slip_uploads
+ADD INDEX IF NOT EXISTS idx_slips_status_uploaded (status, uploaded_at DESC),
+ADD INDEX IF NOT EXISTS idx_slips_line_user (line_user_id, uploaded_at DESC),
+ADD INDEX IF NOT EXISTS idx_slips_matched_order (matched_order_id);
+
+-- ── odoo_orders_summary (cache table — ยังไม่มี index ที่ดี) ──
+ALTER TABLE odoo_orders_summary
+ADD INDEX IF NOT EXISTS idx_orders_sum_date_state (date_order, state),
+ADD INDEX IF NOT EXISTS idx_orders_sum_customer_ref (customer_ref(50)),
+ADD INDEX IF NOT EXISTS idx_orders_sum_line_user (line_user_id, last_event_at DESC);
+
+-- ── odoo_customers_cache (cache table) ──
+ALTER TABLE odoo_customers_cache
+ADD INDEX IF NOT EXISTS idx_cust_cache_name (customer_name(80)),
+ADD INDEX IF NOT EXISTS idx_cust_cache_phone (phone(20));
 ```
 
-**Step 2: Create safe migration runner**
-
-```php
-<?php
-/**
- * Safe index migration runner
- * Run: php migration/apply-indexes.php
- */
-require_once __DIR__ . '/../config/database.php';
-
-$dryRun = in_array('--dry-run', $argv);
-$sqlFile = __DIR__ . '/add-performance-indexes.sql';
-
-if (!file_exists($sqlFile)) {
-    die("SQL file not found: $sqlFile\n");
-}
-
-try {
-    $db = Database::getInstance()->getConnection();
-    $sql = file_get_contents($sqlFile);
-    
-    // Split into individual statements
-    $statements = array_filter(
-        array_map('trim', explode(';', $sql))
-    );
-    
-    echo $dryRun ? "[DRY RUN] " : "";
-    echo "Applying " . count($statements) . " index migrations...\n\n";
-    
-    foreach ($statements as $stmt) {
-        if (empty($stmt) || strpos($stmt, '--') === 0) continue;
-        
-        echo "Executing: " . substr($stmt, 0, 60) . "...\n";
-        
-        if (!$dryRun) {
-            try {
-                $start = microtime(true);
-                $db->exec($stmt);
-                $elapsed = round((microtime(true) - $start) * 1000, 2);
-                echo "  ✓ Done in {$elapsed}ms\n";
-            } catch (PDOException $e) {
-                if (strpos($e->getMessage(), 'Duplicate key') !== false) {
-                    echo "  ⚠ Index already exists, skipping\n";
-                } else {
-                    echo "  ✗ Error: " . $e->getMessage() . "\n";
-                }
-            }
-        }
-    }
-    
-    echo "\n✅ Index migration complete!\n";
-    
-} catch (Exception $e) {
-    die("Fatal error: " . $e->getMessage() . "\n");
-}
-```
-
-**Step 3: Test with dry-run first**
-
+**Apply:**
 ```bash
-cd /root/.openclaw/workspace/odoo
-php migration/apply-indexes.php --dry-run
+mysql -u $DB_USER -p$DB_PASS $DB_NAME < database/migration_missing_indexes.sql
 ```
 
-**Expected Output:** "[DRY RUN] Applying X index migrations..."
-
-**Step 4: Apply for real**
-
+**Commit:**
 ```bash
-php migration/apply-indexes.php
-```
-
-**Expected Output:** "✅ Index migration complete!" with timing for each index
-
-**Step 5: Commit**
-
-```bash
-git add migration/
-git commit -m "perf(db): add 20+ performance indexes for dashboard queries"
+git add database/migration_missing_indexes.sql
+git commit -m "perf(db): add missing indexes for bdo_context, notification_log, line_users"
 ```
 
 ---
 
-### Task 1.3: Create Partitioning for Webhook Logs (ถ้า > 500K rows)
+### Task 1.3: แก้ไข DATE() Functions ใน notification_log Queries
+
+**ปัญหา:** ใน `api/odoo-dashboard-api.php` บรรทัด 1959-1963 มี queries:
+```php
+"SELECT COUNT(*) FROM odoo_notification_log WHERE DATE(sent_at) = CURDATE()"
+```
+`DATE(sent_at)` ทำให้ใช้ index บน `sent_at` ไม่ได้ → full scan ทุกครั้ง
 
 **Files:**
-- Create: `migration/setup-partitioning.php`
-- Create: `cron/partition-maintenance.php`
+- Modify: `api/odoo-dashboard-api.php` (แก้ 5 queries)
 
-**Step 1: Check if partitioning needed**
+เปลี่ยน pattern นี้:
+```php
+// ❌ ใช้ index ไม่ได้
+"WHERE DATE(sent_at) = CURDATE()"
 
-```bash
-# Check current row count
-cd /root/.openclaw/workspace/odoo
-php -r "require 'config/database.php'; \$db = Database::getInstance()->getConnection(); echo 'Webhook logs: ' . \$db->query('SELECT COUNT(*) FROM odoo_webhooks_log')->fetchColumn() . PHP_EOL;"
+// ✅ ใช้ index ได้
+"WHERE sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY"
 ```
 
-**Step 2: Create partitioning setup (if rows > 500K)**
+แก้ไขทั้ง 5 occurrences ในบรรทัด 1959-1963 และ 1967
+
+**Commit:**
+```bash
+git add api/odoo-dashboard-api.php
+git commit -m "perf(db): replace DATE(sent_at) with range query to enable index usage"
+```
+
+---
+
+### Task 1.4: Partitioning สำหรับ odoo_webhooks_log (เมื่อ > 500K rows)
+
+> **ข้อแก้ไขจากแผนเดิม:** Script เดิมใช้ `INCLUDING ALL` ซึ่งเป็น PostgreSQL syntax
+
+**Files:**
+- Create: `migration/setup-webhooks-partitioning.php`
 
 ```php
 <?php
 /**
- * Setup monthly partitioning for odoo_webhooks_log
- * Run: php migration/setup-partitioning.php
+ * Setup monthly partitioning for odoo_webhooks_log (MySQL/MariaDB)
+ * Run: php migration/setup-webhooks-partitioning.php [--dry-run]
+ *
+ * Prerequisite: ลบ FK constraints ก่อน (ถ้ามี)
  */
 require_once __DIR__ . '/../config/database.php';
 
+$dryRun = in_array('--dry-run', $argv ?? []);
 $db = Database::getInstance()->getConnection();
 
-// Only proceed if table has > 500K rows
+// Only proceed if > 500K rows
 $count = $db->query("SELECT COUNT(*) FROM odoo_webhooks_log")->fetchColumn();
 if ($count < 500000) {
-    echo "Table has only $count rows. Partitioning not needed yet.\n";
-    echo "Skipping partitioning setup.\n";
+    echo "Table has $count rows (< 500K). Partitioning not needed yet.\n";
     exit(0);
 }
 
-echo "Setting up partitioning for $count rows...\n";
-
-// Create new partitioned table
-$db->exec("
-    CREATE TABLE odoo_webhooks_log_new (
-        LIKE odoo_webhooks_log INCLUDING ALL
-    ) PARTITION BY RANGE (YEAR(created_at) * 100 + MONTH(created_at))
-");
-
-// Create partitions for last 6 months and next 3
-$partitions = [];
-for ($i = -6; $i <= 3; $i++) {
-    $date = new DateTime();
-    $date->modify("$i months");
-    $ym = $date->format('Ym');
-    $nextMonth = clone $date;
-    $nextMonth->modify('+1 month');
-    $nextYm = $nextMonth->format('Ym');
-    
-    $partitions[] = "PARTITION p{$ym} VALUES LESS THAN ({$nextYm})";
+// Check if already partitioned
+$stmt = $db->query("SELECT PARTITION_NAME FROM information_schema.PARTITIONS WHERE TABLE_NAME = 'odoo_webhooks_log' AND TABLE_SCHEMA = DATABASE() AND PARTITION_NAME IS NOT NULL LIMIT 1");
+if ($stmt->fetch()) {
+    echo "Table is already partitioned. Skipping.\n";
+    exit(0);
 }
 
-$sql = "ALTER TABLE odoo_webhooks_log_new ADD PARTITION (" . implode(', ', $partitions) . ")";
-$db->exec($sql);
+echo "Table has $count rows. Setting up partitioning...\n";
 
-echo "✅ Partitioning setup complete\n";
+// Build partition list: 12 months back + 3 months ahead
+$partitions = [];
+for ($i = -12; $i <= 3; $i++) {
+    $date = new DateTime();
+    $date->modify("$i months");
+    $date->modify('first day of this month');
+    $nextMonth = clone $date;
+    $nextMonth->modify('+1 month');
+
+    $partKey = 'p' . $date->format('Ym');
+    $lessVal = (int)$nextMonth->format('Ym');
+    $partitions[] = "PARTITION {$partKey} VALUES LESS THAN ({$lessVal})";
+}
+$partitions[] = "PARTITION p_future VALUES LESS THAN MAXVALUE";
+
+$sql = "ALTER TABLE odoo_webhooks_log PARTITION BY RANGE (YEAR(created_at) * 100 + MONTH(created_at)) (\n"
+     . implode(",\n", $partitions)
+     . "\n)";
+
+echo $dryRun ? "[DRY RUN] Would execute:\n$sql\n" : "Executing...\n";
+
+if (!$dryRun) {
+    try {
+        $start = microtime(true);
+        $db->exec($sql);
+        $elapsed = round((microtime(true) - $start), 1);
+        echo "✅ Partitioning complete in {$elapsed}s\n";
+    } catch (PDOException $e) {
+        echo "✗ Error: " . $e->getMessage() . "\n";
+        echo "Tip: Remove foreign key constraints first if any exist.\n";
+    }
+}
 ```
 
-**Step 3: Commit**
-
+**Commit:**
 ```bash
-git add migration/setup-partitioning.php cron/partition-maintenance.php
-git commit -m "perf(db): add webhook log partitioning support for large datasets"
+git add migration/setup-webhooks-partitioning.php
+git commit -m "perf(db): fix partitioning script to use MySQL RANGE syntax (not PostgreSQL)"
 ```
 
 ---
 
-## Phase 2: API Optimization (Backend)
+## Phase 2: API Optimization
 
-### Task 2.1: Split Large API File
+### Task 2.1: ใช้ Cache Tables ที่มีอยู่แล้วใน main dashboard API
+
+**สิ่งที่ค้นพบ:** มี `odoo_orders_summary`, `odoo_customers_cache`, `odoo_invoices_cache` อยู่แล้วใน schema และ `odoo-dashboard-local.php` ใช้ตารางเหล่านี้อยู่แล้ว แต่ main API (`odoo-dashboard-api.php`) ยังใช้ตารางดั้งเดิม
 
 **Files:**
-- Create: `api/actions/` directory structure
-- Modify: `api/odoo-dashboard-api.php` (refactor to router only)
+- Modify: `api/odoo-dashboard-fast.php` — เพิ่ม actions จาก local cache
 
-**Step 1: Create directory structure**
+ใน `odoo-dashboard-fast.php` เพิ่ม action ที่ดึงจาก cache tables:
 
+```php
+case 'orders_today_fast':
+    // ดึงจาก odoo_orders_summary แทนการ query odoo_orders + webhook JOINs
+    $stmt = $db->prepare("
+        SELECT order_key, customer_name, customer_ref, amount_total,
+               state, payment_status, date_order, last_event_at
+        FROM odoo_orders_summary
+        WHERE line_account_id = :account_id
+          AND date_order >= CURDATE()
+        ORDER BY last_event_at DESC
+        LIMIT :limit
+    ");
+    $stmt->execute([':account_id' => $lineAccountId, ':limit' => min((int)($input['limit'] ?? 50), 200)]);
+    $result = ['orders' => $stmt->fetchAll(PDO::FETCH_ASSOC)];
+    break;
+
+case 'customers_fast':
+    // ดึงจาก odoo_customers_cache แทน odoo_customer_projection
+    $stmt = $db->prepare("
+        SELECT customer_id, customer_name, customer_ref, phone,
+               total_due, overdue_amount, latest_order_at, orders_count_total
+        FROM odoo_customers_cache
+        WHERE line_account_id = :account_id
+        ORDER BY latest_order_at DESC
+        LIMIT :limit OFFSET :offset
+    ");
+    $stmt->execute([
+        ':account_id' => $lineAccountId,
+        ':limit' => min((int)($input['limit'] ?? 50), 500),
+        ':offset' => (int)($input['offset'] ?? 0)
+    ]);
+    $result = ['customers' => $stmt->fetchAll(PDO::FETCH_ASSOC)];
+    break;
+```
+
+**Commit:**
 ```bash
-cd /root/.openclaw/workspace/odoo
-mkdir -p api/actions api/shared
+git add api/odoo-dashboard-fast.php
+git commit -m "perf(api): add cache-table backed actions to fast endpoint"
 ```
 
-**Step 2: Extract shared functions**
+---
 
-```php
-<?php
-// api/shared/DatabaseHelpers.php
+### Task 2.2: เพิ่ม OPcache สำหรับ odoo-dashboard-api.php
 
-class DatabaseHelpers {
-    public static function getWebhookColumns($db) {
-        static $cache = null;
-        if ($cache === null) {
-            $cache = [];
-            $stmt = $db->query("SHOW COLUMNS FROM odoo_webhooks_log");
-            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $cache[$row['Field']] = true;
-            }
-        }
-        return $cache;
-    }
-    
-    public static function buildLimitOffset($input, $defaultLimit = 50, $maxLimit = 500) {
-        $limit = min((int)($input['limit'] ?? $defaultLimit), $maxLimit);
-        $offset = (int)($input['offset'] ?? 0);
-        return [$limit, $offset];
-    }
-    
-    public static function sanitizeString($input, $field, $default = '') {
-        $value = trim((string)($input[$field] ?? $default));
-        return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-    }
-}
+**ปัญหา:** `odoo-dashboard-api.php` มี 4,932 บรรทัด (~182KB) ใช้เวลา parse ~1.3s บนเซิร์ฟเวอร์ที่ไม่มี OPcache (`odoo-dashboard-fast.php` ระบุไว้ใน comment เอง)
+
+**Files:**
+- Create: `config/opcache.ini` (เพิ่มใน nginx/PHP-FPM config)
+
+```ini
+; PHP OPcache settings for dashboard performance
+opcache.enable=1
+opcache.memory_consumption=128
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=10000
+opcache.revalidate_freq=60
+opcache.fast_shutdown=1
+opcache.enable_cli=0
 ```
 
-**Step 3: Extract customer actions**
-
-```php
-<?php
-// api/actions/CustomerActions.php
-
-require_once __DIR__ . '/../shared/DatabaseHelpers.php';
-
-class CustomerActions {
-    private $db;
-    
-    public function __construct($db) {
-        $this->db = $db;
-    }
-    
-    public function getCustomerList($input) {
-        [$limit, $offset] = DatabaseHelpers::buildLimitOffset($input, 80, 500);
-        $search = DatabaseHelpers::sanitizeString($input, 'search');
-        $sortBy = DatabaseHelpers::sanitizeString($input, 'sort_by', 'name');
-        
-        // Optimized query with covering index
-        $sql = "SELECT 
-                    partner_id, customer_ref, name, phone, 
-                    email, total_invoiced, overdue_amount, last_order_date
-                FROM odoo_customer_projection 
-                WHERE 1=1";
-        
-        $params = [];
-        if ($search) {
-            $sql .= " AND (name LIKE :search OR customer_ref LIKE :search OR phone LIKE :search)";
-            $params[':search'] = '%' . $search . '%';
-        }
-        
-        // Whitelist sort columns
-        $allowedSort = ['name', 'customer_ref', 'total_invoiced', 'overdue_amount', 'last_order_date'];
-        if (in_array($sortBy, $allowedSort)) {
-            $sql .= " ORDER BY " . $sortBy . " DESC";
-        } else {
-            $sql .= " ORDER BY name ASC";
-        }
-        
-        $sql .= " LIMIT :limit OFFSET :offset";
-        $params[':limit'] = $limit;
-        $params[':offset'] = $offset;
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        $customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Get total count (approximate for large tables)
-        $countStmt = $this->db->query("SHOW TABLE STATUS LIKE 'odoo_customer_projection'");
-        $tableInfo = $countStmt->fetch(PDO::FETCH_ASSOC);
-        $total = $tableInfo['Rows'] ?? 0;
-        
-        return [
-            'customers' => $customers,
-            'pagination' => [
-                'total' => (int)$total,
-                'limit' => $limit,
-                'offset' => $offset,
-                'has_more' => count($customers) === $limit
-            ]
-        ];
-    }
-    
-    public function getCustomerDetail($input) {
-        $partnerId = (int)($input['partner_id'] ?? 0);
-        if (!$partnerId) {
-            throw new Exception('partner_id required');
-        }
-        
-        $stmt = $this->db->prepare("
-            SELECT * FROM odoo_customer_projection 
-            WHERE partner_id = :partner_id 
-            LIMIT 1
-        ");
-        $stmt->execute([':partner_id' => $partnerId]);
-        $customer = $stmt->fetch(PDO::FETCH_ASSOC);
-        
-        if (!$customer) {
-            throw new Exception('Customer not found');
-        }
-        
-        return $customer;
-    }
-}
+ตรวจสอบสถานะ:
+```bash
+php -r "var_dump(opcache_get_status()['opcache_enabled']);"
 ```
 
-**Step 4: Refactor main API to router**
+---
+
+### Task 2.3: เพิ่ม Response Compression และ HTTP Caching
+
+**Files:**
+- Modify: `api/odoo-dashboard-fast.php` (เพิ่ม gzip + cache headers)
 
 ```php
-<?php
-/**
- * Odoo Dashboard API Router (Refactored)
- * Lightweight router that delegates to action classes
- * 
- * @version 3.0.0 - Refactored for performance
- */
-
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-
-require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/actions/CustomerActions.php';
-
-// Enable compression
+// เพิ่มต้นไฟล์ หลัง header declarations
 if (!ob_get_level()) {
     ob_start('ob_gzhandler');
 }
 
-// Parse input
-$input = $_SERVER['REQUEST_METHOD'] === 'POST' 
-    ? (json_decode(file_get_contents('php://input'), true) ?? [])
-    : $_GET;
-
-$action = trim((string)($input['action'] ?? ''));
-
-// Quick health check (no DB)
-if ($action === 'health' || $action === '') {
-    echo json_encode([
-        'success' => true,
-        'data' => ['status' => 'ok', 'version' => '3.0.0'],
-        'meta' => ['cached' => false]
-    ]);
-    exit;
+// สำหรับ read-only actions เพิ่ม cache headers
+if (in_array($action, ['health', 'orders_today_fast', 'customers_fast'])) {
+    header('Cache-Control: private, max-age=30');
+    header('Vary: Accept-Encoding');
 }
-
-try {
-    $db = Database::getInstance()->getConnection();
-    $startTime = microtime(true);
-    
-    // Route to appropriate action class
-    $result = match($action) {
-        'customer_list', 'customer_detail' => (new CustomerActions($db))->$action($input),
-        // Add more as we extract them
-        default => throw new Exception("Unknown action: $action")
-    };
-    
-    echo json_encode([
-        'success' => true,
-        'data' => $result,
-        'meta' => [
-            'duration_ms' => round((microtime(true) - $startTime) * 1000, 2),
-            'cached' => false
-        ]
-    ]);
-    
-} catch (Exception $e) {
-    http_response_code(400);
-    echo json_encode([
-        'success' => false,
-        'error' => $e->getMessage()
-    ]);
-}
-```
-
-**Step 5: Test refactored API**
-
-```bash
-# Test health endpoint
-curl -s "http://localhost/api/odoo-dashboard-api.php?action=health" | jq
-
-# Test customer list
-curl -s "http://localhost/api/odoo-dashboard-api.php?action=customer_list&limit=5" | jq
-```
-
-**Step 6: Commit**
-
-```bash
-git add api/actions/ api/shared/ api/odoo-dashboard-api.php
-git commit -m "refactor(api): split monolithic API into action classes (WIP)"
-```
-
----
-
-### Task 2.2: Add Redis Caching Layer
-
-**Files:**
-- Create: `classes/RedisCache.php`
-- Modify: `api/actions/CustomerActions.php` (add caching)
-
-**Step 1: Create Redis cache class**
-
-```php
-<?php
-/**
- * Redis Cache Layer for Dashboard
- * Falls back to file cache if Redis unavailable
- */
-
-class RedisCache {
-    private static $instance = null;
-    private $redis = null;
-    private $fileCacheDir;
-    private $enabled = false;
-    
-    private function __construct() {
-        $this->fileCacheDir = sys_get_temp_dir() . '/odoo_cache/';
-        if (!is_dir($this->fileCacheDir)) {
-            @mkdir($this->fileCacheDir, 0755, true);
-        }
-        
-        // Try Redis first
-        if (extension_loaded('redis')) {
-            try {
-                $this->redis = new Redis();
-                $this->redis->connect('127.0.0.1', 6379, 0.5);
-                $this->redis->select(1); // Use DB 1 for dashboard
-                $this->enabled = true;
-            } catch (Exception $e) {
-                error_log("Redis connection failed: " . $e->getMessage());
-            }
-        }
-    }
-    
-    public static function getInstance() {
-        if (self::$instance === null) {
-            self::$instance = new self();
-        }
-        return self::$instance;
-    }
-    
-    public function get($key) {
-        // Try Redis first
-        if ($this->enabled && $this->redis) {
-            $data = $this->redis->get($key);
-            if ($data !== false) {
-                return json_decode($data, true);
-            }
-        }
-        
-        // Fall back to file cache
-        $file = $this->fileCacheDir . md5($key) . '.cache';
-        if (file_exists($file)) {
-            $data = unserialize(file_get_contents($file));
-            if ($data['expiry'] > time()) {
-                return $data['value'];
-            }
-            @unlink($file);
-        }
-        
-        return null;
-    }
-    
-    public function set($key, $value, $ttl = 300) {
-        $data = json_encode($value);
-        
-        // Try Redis
-        if ($this->enabled && $this->redis) {
-            return $this->redis->setex($key, $ttl, $data);
-        }
-        
-        // File cache fallback
-        $file = $this->fileCacheDir . md5($key) . '.cache';
-        return file_put_contents($file, serialize([
-            'expiry' => time() + $ttl,
-            'value' => $value
-        ]), LOCK_EX);
-    }
-    
-    public function delete($pattern) {
-        if ($this->enabled && $this->redis) {
-            $keys = $this->redis->keys($pattern);
-            if ($keys) {
-                $this->redis->del($keys);
-            }
-        }
-        // File cache: would need to scan files
-    }
-    
-    public function isEnabled() {
-        return $this->enabled;
-    }
-}
-```
-
-**Step 2: Update CustomerActions with caching**
-
-```php
-<?php
-// api/actions/CustomerActions.php
-
-require_once __DIR__ . '/../shared/DatabaseHelpers.php';
-require_once __DIR__ . '/../../classes/RedisCache.php';
-
-class CustomerActions {
-    private $db;
-    private $cache;
-    private $cacheTtl = 60;
-    
-    public function __construct($db) {
-        $this->db = $db;
-        $this->cache = RedisCache::getInstance();
-    }
-    
-    public function getCustomerList($input) {
-        // Build cache key
-        $cacheKey = 'customer_list:' . md5(serialize($input));
-        
-        // Try cache first
-        $cached = $this->cache->get($cacheKey);
-        if ($cached !== null) {
-            return array_merge($cached, ['_cached' => true]);
-        }
-        
-        // ... existing query logic ...
-        $result = [
-            'customers' => $customers,
-            'pagination' => [/* ... */]
-        ];
-        
-        // Store in cache
-        $this->cache->set($cacheKey, $result, $this->cacheTtl);
-        
-        return $result;
-    }
-}
-```
-
-**Step 3: Commit**
-
-```bash
-git add classes/RedisCache.php api/actions/
-git commit -m "perf(cache): add Redis caching layer with file fallback"
 ```
 
 ---
 
 ## Phase 3: Frontend Optimization
 
-### Task 3.1: Add Virtual Scrolling for Data Tables
+### Task 3.1: แก้ไข VirtualTable.js (แก้ DOM Thrashing)
+
+**ปัญหาในแผนเดิม:** `this.tableContainer.innerHTML = ''` ทุก scroll event ทำให้เกิด full DOM reflow
 
 **Files:**
 - Create: `assets/js/components/VirtualTable.js`
-- Modify: `odoo-dashboard.js` (integrate virtual scrolling)
-
-**Step 1: Create VirtualTable component**
 
 ```javascript
 /**
- * VirtualTable - Render only visible rows for large datasets
- * @version 1.0.0
+ * VirtualTable — Render only visible rows using node recycling
+ * @version 1.1.0 (แก้ไข DOM thrashing จากแผนเดิม)
  */
 class VirtualTable {
     constructor(containerId, options = {}) {
         this.container = document.getElementById(containerId);
         this.rowHeight = options.rowHeight || 48;
-        this.bufferSize = options.bufferSize || 5;
+        this.bufferSize = options.bufferSize || 3;
         this.data = [];
-        this.scrollTop = 0;
-        this.visibleStart = 0;
-        this.visibleEnd = 0;
-        this.renderCallback = options.renderRow || this.defaultRenderRow;
-        
-        this.init();
+        this.columns = options.columns || [];
+        this.renderRow = options.renderRow || this._defaultRenderRow.bind(this);
+        this._visibleStart = -1;
+        this._visibleEnd = -1;
+        this._nodePool = [];  // recycled DOM nodes
+        this._activeNodes = new Map(); // index → node
+        this._init();
     }
-    
-    init() {
-        this.container.style.overflow = 'auto';
-        this.container.style.position = 'relative';
-        
-        // Create scroll spacer
-        this.spacer = document.createElement('div');
-        this.spacer.style.height = '0px';
-        this.container.appendChild(this.spacer);
-        
-        // Create table container
-        this.tableContainer = document.createElement('div');
-        this.tableContainer.style.position = 'relative';
-        this.container.appendChild(this.tableContainer);
-        
-        this.container.addEventListener('scroll', this.onScroll.bind(this));
-        window.addEventListener('resize', this.onScroll.bind(this));
+
+    _init() {
+        this.container.style.cssText = 'overflow:auto;position:relative;';
+        // Spacer controls total scroll height
+        this._spacer = document.createElement('div');
+        this._spacer.style.cssText = 'position:absolute;top:0;left:0;width:1px;';
+        // Rows container — positioned inside scroll area
+        this._rows = document.createElement('div');
+        this._rows.style.cssText = 'position:absolute;top:0;left:0;right:0;';
+        this.container.appendChild(this._spacer);
+        this.container.appendChild(this._rows);
+        this.container.addEventListener('scroll', () => this._update(), { passive: true });
+        window.addEventListener('resize', () => this._update(), { passive: true });
     }
-    
+
     setData(data) {
         this.data = data;
-        this.spacer.style.height = `${this.data.length * this.rowHeight}px`;
-        this.onScroll();
+        this._spacer.style.height = `${data.length * this.rowHeight}px`;
+        this._visibleStart = -1;
+        this._visibleEnd = -1;
+        // Recycle all active nodes
+        this._activeNodes.forEach(node => this._nodePool.push(node));
+        this._activeNodes.clear();
+        this._rows.innerHTML = '';
+        this._update();
     }
-    
-    onScroll() {
-        this.scrollTop = this.container.scrollTop;
-        const containerHeight = this.container.clientHeight;
-        
-        // Calculate visible range
-        const startIdx = Math.max(0, Math.floor(this.scrollTop / this.rowHeight) - this.bufferSize);
-        const endIdx = Math.min(
-            this.data.length,
-            Math.ceil((this.scrollTop + containerHeight) / this.rowHeight) + this.bufferSize
-        );
-        
-        if (startIdx !== this.visibleStart || endIdx !== this.visibleEnd) {
-            this.visibleStart = startIdx;
-            this.visibleEnd = endIdx;
-            this.render();
-        }
-    }
-    
-    render() {
-        const fragment = document.createDocumentFragment();
-        const offsetTop = this.visibleStart * this.rowHeight;
-        
-        // Create visible rows container
-        const rowsContainer = document.createElement('div');
-        rowsContainer.style.transform = `translateY(${offsetTop}px)`;
-        
-        for (let i = this.visibleStart; i < this.visibleEnd; i++) {
-            if (this.data[i]) {
-                const row = this.renderCallback(this.data[i], i);
-                row.style.height = `${this.rowHeight}px`;
-                rowsContainer.appendChild(row);
+
+    _update() {
+        const scrollTop = this.container.scrollTop;
+        const viewH = this.container.clientHeight;
+        const start = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.bufferSize);
+        const end = Math.min(this.data.length, Math.ceil((scrollTop + viewH) / this.rowHeight) + this.bufferSize);
+
+        if (start === this._visibleStart && end === this._visibleEnd) return;
+
+        // Remove rows no longer visible → recycle
+        this._activeNodes.forEach((node, idx) => {
+            if (idx < start || idx >= end) {
+                this._rows.removeChild(node);
+                this._nodePool.push(node);
+                this._activeNodes.delete(idx);
             }
+        });
+
+        // Add newly visible rows — reuse recycled nodes
+        for (let i = start; i < end; i++) {
+            if (this._activeNodes.has(i)) continue;
+            const node = this._nodePool.pop() || document.createElement('div');
+            node.style.cssText = `position:absolute;top:${i * this.rowHeight}px;left:0;right:0;height:${this.rowHeight}px;`;
+            this.renderRow(node, this.data[i], i);
+            this._rows.appendChild(node);
+            this._activeNodes.set(i, node);
         }
-        
-        this.tableContainer.innerHTML = '';
-        this.tableContainer.appendChild(rowsContainer);
+
+        this._visibleStart = start;
+        this._visibleEnd = end;
     }
-    
-    defaultRenderRow(item, index) {
-        const div = document.createElement('div');
-        div.textContent = `Row ${index}: ${JSON.stringify(item)}`;
-        div.style.borderBottom = '1px solid #eee';
-        div.style.padding = '8px';
-        return div;
+
+    _defaultRenderRow(node, item) {
+        node.textContent = JSON.stringify(item);
+        node.style.borderBottom = '1px solid #eee';
+        node.style.padding = '8px';
     }
 }
 
-// Export for use
-if (typeof module !== 'undefined') {
-    module.exports = VirtualTable;
-}
+if (typeof module !== 'undefined') module.exports = VirtualTable;
 ```
 
-**Step 2: Add cursor pagination support**
-
-```javascript
-/**
- * CursorPagination - Efficient pagination for large datasets
- * Replaces offset/limit with cursor-based navigation
- */
-class CursorPagination {
-    constructor(options = {}) {
-        this.pageSize = options.pageSize || 50;
-        this.cursor = null;
-        this.hasMore = false;
-        this.loading = false;
-        this.cache = new Map();
-    }
-    
-    async fetchPage(apiCall, direction = 'next') {
-        if (this.loading) return null;
-        this.loading = true;
-        
-        const cacheKey = `${this.cursor || 'first'}_${direction}`;
-        if (this.cache.has(cacheKey)) {
-            this.loading = false;
-            return this.cache.get(cacheKey);
-        }
-        
-        try {
-            const params = {
-                limit: this.pageSize,
-                cursor: direction === 'next' ? this.cursor : undefined,
-                direction: direction
-            };
-            
-            const result = await apiCall(params);
-            
-            this.cache.set(cacheKey, result);
-            this.cursor = result.next_cursor;
-            this.hasMore = result.has_more;
-            
-            return result;
-        } finally {
-            this.loading = false;
-        }
-    }
-    
-    reset() {
-        this.cursor = null;
-        this.hasMore = false;
-        this.cache.clear();
-    }
-}
-```
-
-**Step 3: Commit**
-
+**Commit:**
 ```bash
-git add assets/js/components/
-git commit -m "perf(frontend): add VirtualTable and CursorPagination components"
+git add assets/js/components/VirtualTable.js
+git commit -m "perf(frontend): fix VirtualTable to use node recycling instead of innerHTML reset"
 ```
 
 ---
 
-## Phase 4: Monitoring & Maintenance
+### Task 3.2: เพิ่ม Cursor-based Pagination
 
-### Task 4.1: Add Performance Monitoring
+(ใช้โค้ดเดิมจากแผน — ถูกต้องแล้ว ไม่มีการเปลี่ยนแปลง)
 
 **Files:**
-- Create: `api/metrics.php`
-- Create: `scripts/performance-report.php`
+- Create: `assets/js/components/CursorPagination.js`
 
-**Step 1: Create metrics endpoint**
+ใช้ implementation จากแผนเดิมได้เลย (CursorPagination class)
+
+---
+
+## Phase 4: Cleanup — ลบไฟล์ที่ไม่ได้ใช้
+
+### Task 4.1: ลบ/Archive One-time Migration Scripts ที่รันไปแล้ว
+
+ไฟล์เหล่านี้คือ scripts ที่สร้างขึ้นมาครั้งเดียวและรันไปแล้ว ควร archive หรือลบ:
+
+**Root PHP files (one-time scripts):**
+| ไฟล์ | เหตุผล |
+|------|--------|
+| `check_table.php` | Debug script ตรวจสอบ table structure |
+| `status_fix.php` | One-time: แก้ transactions status column |
+| `fix_status_enum.php` | One-time: แก้ reward_redemptions ENUM |
+| `fix_status_standalone.php` | Duplicate ของ fix_status_enum |
+| `update_liff_main.php` | One-time: update LIFF ID |
+| `check-members-simple.php` | Debug: ตรวจสอบ members table |
+
+**API debug/demo files:**
+| ไฟล์ | เหตุผล |
+|------|--------|
+| `api/_debug_payload.php` | Debug only |
+| `api/csv-import-debug.php` | Debug version ของ csv-import.php |
+| `api/dashboard-cache-demo.php` | Demo file |
+| `api/dashboard-realtime-demo.php` | Demo file |
+| `api/debug-rewards.php` | Debug only |
+| `api/error-handling-demo.php` | Demo file |
+| `api/inbox-debug.php` | Debug only |
+| `api/put-away-debug.php` | Debug version ของ put-away.php |
+| `api/rich-menu-debug.php` | Debug only |
+| `api/migrate_odoo_phone_email.php` | One-time migration script |
+| `api/classes_OdooWebhookHandler.php` | ชื่อผิด format — test file |
+
+**Script สำหรับ archive:**
+```bash
+cd /home/user/odoo
+mkdir -p archive/one-time-scripts archive/debug-files
+
+# Root one-time scripts
+mv check_table.php status_fix.php fix_status_enum.php fix_status_standalone.php \
+   update_liff_main.php check-members-simple.php archive/one-time-scripts/
+
+# API debug/demo
+mv api/_debug_payload.php api/csv-import-debug.php api/dashboard-cache-demo.php \
+   api/dashboard-realtime-demo.php api/debug-rewards.php api/error-handling-demo.php \
+   api/inbox-debug.php api/put-away-debug.php api/rich-menu-debug.php \
+   api/migrate_odoo_phone_email.php api/classes_OdooWebhookHandler.php \
+   archive/debug-files/
+
+git add archive/
+git rm check_table.php status_fix.php fix_status_enum.php fix_status_standalone.php \
+        update_liff_main.php check-members-simple.php
+git rm api/_debug_payload.php api/csv-import-debug.php api/dashboard-cache-demo.php \
+       api/dashboard-realtime-demo.php api/debug-rewards.php api/error-handling-demo.php \
+       api/inbox-debug.php api/put-away-debug.php api/rich-menu-debug.php \
+       api/migrate_odoo_phone_email.php api/classes_OdooWebhookHandler.php
+
+git commit -m "cleanup: archive one-time migration scripts and debug/demo files"
+```
+
+> ⚠️ **ตรวจสอบก่อนลบ:** ยืนยันกับทีมว่าไฟล์เหล่านี้รันไปแล้วจริงๆ อย่าลบโดยไม่ตรวจสอบ
+
+---
+
+### Task 4.2: ตรวจสอบ Duplicate Dashboard Files
+
+ปัจจุบันมี dashboard API ซ้ำกัน 4 ตัว:
+| ไฟล์ | บรรทัด | สถานะ |
+|------|---------|--------|
+| `api/odoo-dashboard-api.php` | 4,932 | Main API — ยังใช้อยู่ |
+| `api/odoo-dashboard-local.php` | 1,148 | Local cache reads — ใช้อยู่บางส่วน |
+| `api/odoo-dashboard-fast.php` | 176 | Fast endpoint — ใช้อยู่ใน JS |
+| `api/odoo-dashboard-functions.php` | 439 | Helper functions — include ใน main API |
+
+**แนะนำ:** ไม่ต้องลบตอนนี้ แต่ควรทำ long-term refactor โดยให้ `odoo-dashboard-fast.php` เป็น entry point หลัก และค่อยๆ migrate actions จาก main API ไปใน Phase ถัดไป
+
+---
+
+## Phase 5: Monitoring
+
+### Task 5.1: Performance Baseline Script
+
+**Files:**
+- Create: `scripts/analyze-slow-queries.php`
 
 ```php
 <?php
 /**
- * Metrics endpoint for monitoring dashboard performance
- * Returns: response times, cache hit rates, query counts
+ * Analyze dashboard query performance — ตรวจสอบก่อนและหลัง optimization
+ * Run: php scripts/analyze-slow-queries.php
  */
-
-header('Content-Type: application/json');
-
 require_once __DIR__ . '/../config/database.php';
 
-$metrics = [
-    'timestamp' => date('c'),
-    'php' => [
-        'memory_usage_mb' => round(memory_get_usage(true) / 1024 / 1024, 2),
-        'memory_peak_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 2),
-        'opcache_enabled' => function_exists('opcache_get_status') && opcache_get_status(false)['opcache_enabled'],
-    ],
-    'database' => [],
-    'cache' => []
+$db = Database::getInstance()->getConnection();
+
+$tables = [
+    'odoo_webhooks_log', 'odoo_orders', 'odoo_invoices', 'odoo_bdos',
+    'odoo_bdo_context', 'odoo_notification_log', 'odoo_line_users',
+    'odoo_slip_uploads', 'odoo_orders_summary', 'odoo_customers_cache'
 ];
 
-try {
-    $db = Database::getInstance()->getConnection();
-    $start = microtime(true);
-    
-    // Test query performance
-    $db->query("SELECT COUNT(*) FROM odoo_customer_projection")->fetchColumn();
-    $metrics['database']['customer_count_time_ms'] = round((microtime(true) - $start) * 1000, 2);
-    
-    // Get table sizes
-    $tables = ['odoo_webhooks_log', 'odoo_orders', 'odoo_invoices', 'odoo_customer_projection'];
-    foreach ($tables as $table) {
+$report = [];
+foreach ($tables as $table) {
+    try {
         $stmt = $db->query("SHOW TABLE STATUS LIKE '$table'");
-        $info = $stmt->fetch(PDO::FETCH_ASSOC);
-        $metrics['database']['tables'][$table] = [
-            'rows' => (int)$info['Rows'],
-            'size_mb' => round(($info['Data_length'] + $info['Index_length']) / 1024 / 1024, 2)
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) { $report[$table] = ['error' => 'not found']; continue; }
+
+        $idxStmt = $db->query("SHOW INDEX FROM `$table`");
+        $indexes = array_column($idxStmt->fetchAll(PDO::FETCH_ASSOC), 'Key_name');
+
+        $report[$table] = [
+            'rows' => (int)$row['Rows'],
+            'size_mb' => round(($row['Data_length'] + $row['Index_length']) / 1024 / 1024, 2),
+            'index_size_mb' => round($row['Index_length'] / 1024 / 1024, 2),
+            'indexes' => array_unique($indexes),
         ];
+    } catch (PDOException $e) {
+        $report[$table] = ['error' => $e->getMessage()];
     }
-    
-    // Check Redis
-    if (extension_loaded('redis')) {
-        try {
-            $redis = new Redis();
-            $redis->connect('127.0.0.1', 6379, 0.5);
-            $info = $redis->info();
-            $metrics['cache']['redis'] = [
-                'connected' => true,
-                'used_memory_mb' => round($info['used_memory'] / 1024 / 1024, 2),
-                'hit_rate' => $info['keyspace_hits'] / ($info['keyspace_hits'] + $info['keyspace_misses'] + 0.001)
-            ];
-        } catch (Exception $e) {
-            $metrics['cache']['redis'] = ['connected' => false];
-        }
-    }
-    
-} catch (Exception $e) {
-    $metrics['error'] = $e->getMessage();
 }
 
-echo json_encode($metrics, JSON_PRETTY_PRINT);
+// Test critical queries
+$queries = [
+    'webhooks_today' => "SELECT COUNT(*) FROM odoo_webhooks_log WHERE created_at >= CURDATE()",
+    'notif_today' => "SELECT COUNT(*) FROM odoo_notification_log WHERE sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY",
+    'bdo_context_latest' => "SELECT bdo_id, MAX(id) as max_id FROM odoo_bdo_context GROUP BY bdo_id LIMIT 10",
+];
+
+$queryTimes = [];
+foreach ($queries as $name => $sql) {
+    $start = microtime(true);
+    try {
+        $db->query($sql)->fetchAll();
+        $queryTimes[$name] = round((microtime(true) - $start) * 1000, 2) . 'ms';
+    } catch (PDOException $e) {
+        $queryTimes[$name] = 'ERROR: ' . $e->getMessage();
+    }
+}
+
+$output = ['tables' => $report, 'query_times' => $queryTimes, 'generated_at' => date('c')];
+echo json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 ```
-
-**Step 2: Create performance report script**
-
-```php
-<?php
-/**
- * Generate daily performance report
- * Run via cron: 0 9 * * * php scripts/performance-report.php
- */
-
-$metrics = json_decode(file_get_contents('http://localhost/api/metrics.php'), true);
-
-$report = "=== Odoo Dashboard Performance Report ===\n";
-$report .= "Generated: " . date('Y-m-d H:i:s') . "\n\n";
-
-$report .= "Database Tables:\n";
-foreach ($metrics['database']['tables'] as $table => $info) {
-    $report .= sprintf("  %-30s %10d rows %8.2f MB\n", $table, $info['rows'], $info['size_mb']);
-}
-
-$report .= "\nCache Status:\n";
-if ($metrics['cache']['redis']['connected']) {
-    $report .= "  Redis: Connected\n";
-    $report .= "  Memory: {$metrics['cache']['redis']['used_memory_mb']} MB\n";
-    $report .= "  Hit Rate: " . round($metrics['cache']['redis']['hit_rate'] * 100, 1) . "%\n";
-} else {
-    $report .= "  Redis: Not connected (using file cache)\n";
-}
-
-// Alert if tables are getting large
-foreach ($metrics['database']['tables'] as $table => $info) {
-    if ($info['rows'] > 1000000) {
-        $report .= "\n⚠️  ALERT: Table '$table' has {$info['rows']} rows. Consider partitioning.\n";
-    }
-}
-
-echo $report;
-
-// Save to file
-file_put_contents('logs/performance-' . date('Y-m-d') . '.log', $report);
-```
-
-**Step 3: Commit**
 
 ```bash
-git add api/metrics.php scripts/performance-report.php
-git commit -m "feat(monitoring): add performance metrics endpoint and reporting"
+git add scripts/analyze-slow-queries.php
+git commit -m "feat(monitoring): add query analysis script with correct table list"
 ```
 
 ---
 
-## Summary of Changes
+## สรุปลำดับการ Execute
 
-| Phase | Files Created/Modified | Expected Impact |
-|-------|----------------------|-----------------|
-| 1.1 | `scripts/analyze-slow-queries.php` | Baseline metrics |
-| 1.2 | `migration/add-performance-indexes.sql` | **50-80% faster queries** |
-| 1.3 | `migration/setup-partitioning.php` | Handles >1M rows |
-| 2.1 | `api/actions/*` + `api/shared/*` | **3-5x faster API parse** |
-| 2.2 | `classes/RedisCache.php` | **10x faster cache** |
-| 3.1 | `assets/js/components/VirtualTable.js` | Smooth scrolling for 100K+ rows |
-| 4.1 | `api/metrics.php` | Ongoing monitoring |
+| ลำดับ | Task | Impact | Risk | เวลาประมาณ |
+|-------|------|--------|------|-----------|
+| 1 | รัน `migration_odoo_api_performance.sql` | 🔴 สูง | ต่ำ | 5-10 นาที |
+| 2 | Task 1.2: Index ตารางที่ขาด | 🔴 สูง | ต่ำ | 10-20 นาที |
+| 3 | Task 1.3: แก้ DATE() queries | 🔴 สูง | ต่ำ | 30 นาที |
+| 4 | Task 5.1: Baseline measurement | 🟡 Medium | ไม่มี | 15 นาที |
+| 5 | Task 2.1: Fast endpoint + cache tables | 🟠 สูง | กลาง | 1-2 ชั่วโมง |
+| 6 | Task 3.1: แก้ VirtualTable.js | 🟡 Medium | ต่ำ | 30 นาที |
+| 7 | Task 4.1: Archive debug files | 🟢 Cleanup | กลาง (ตรวจสอบก่อน) | 30 นาที |
+| 8 | Task 1.4: Partitioning (ถ้า >500K) | 🟡 Medium | สูง | ทำบน production เท่านั้น |
 
-**Expected Results After Complete Implementation:**
-- API Response Time: 3-5s → < 500ms
-- Database Query Time: 2-3s → < 100ms
-- Frontend Render: Laggy → 60fps smooth scrolling
-- Cache Hit Rate: Target > 80%
+## Expected Results
 
----
+| Metric | ก่อน | หลัง (ประมาณ) |
+|--------|------|--------------|
+| Dashboard initial load | 3-5s | < 800ms |
+| notification_log queries | ~500ms (full scan) | < 30ms |
+| bdo_context GROUP BY | ~300ms | < 20ms |
+| webhooks_log count | ~200ms | < 10ms |
+| Frontend scroll (10K rows) | laggy / crash | 60fps |
 
 ## Testing Checklist
 
-- [ ] Run `php scripts/analyze-slow-queries.php` - ได้ baseline metrics
-- [ ] Run `php migration/apply-indexes.php` - indexes ถูกสร้างทั้งหมด
-- [ ] Test API health endpoint - ตอบกลับ < 100ms
-- [ ] Test customer_list with limit=100 - ตอบกลับ < 300ms
-- [ ] Test with 10,000 rows in VirtualTable - scroll ลื่น
-- [ ] Check Redis connection in metrics - connected
-- [ ] Run performance report - ไม่มี alert
-
----
-
-**Next Steps After Plan Review:**
-1. Execute Phase 1 (Database) first - ผลลัพธ์ทันที
-2. Execute Phase 2 (API) - ลด server load
-3. Execute Phase 3 (Frontend) - ปรับปรุง UX
-4. Execute Phase 4 (Monitoring) - ติดตามผลระยะยาว
+- [ ] `php scripts/analyze-slow-queries.php` — ได้ baseline
+- [ ] รัน migration_odoo_api_performance.sql — ไม่มี error
+- [ ] รัน migration_missing_indexes.sql — ไม่มี error
+- [ ] Test `action=health` บน fast endpoint < 50ms
+- [ ] Test `action=orders_today_fast` < 200ms
+- [ ] Verify DATE() queries เปลี่ยนเป็น range ครบ 5 จุด
+- [ ] VirtualTable scroll test กับ 5,000 rows — ไม่มี layout thrashing
+- [ ] ยืนยันกับทีมก่อน archive debug files
