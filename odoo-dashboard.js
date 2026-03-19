@@ -139,7 +139,7 @@ function showSection(id){
     else if(id==='daily-summary'){if(dailySummaryData.length===0)loadDailySummary();}
     else if(id==='health'){loadSystemHealth();}
     else if(id==='slips'){if(_sectionNeedsLoad('slips')||!document.getElementById('slipList').querySelector('table')){loadSlips();_sectionMarkLoaded('slips');}}
-    else if(id==='matching'){loadSalespersonDropdown();if(_sectionNeedsLoad('matching')){loadMatchingCustomerGrid();_sectionMarkLoaded('matching');}else{loadMatchingCustomerGrid();}}
+    else if(id==='matching'){sessionStorage.setItem('_visited_matching','1');loadSalespersonDropdown();if(_sectionNeedsLoad('matching')){loadMatchingCustomerGrid();_sectionMarkLoaded('matching');}else{loadMatchingCustomerGrid();}}
 }
 
 // Last API response timing (for performance monitoring)
@@ -1343,21 +1343,6 @@ async function autoSendApiCall(data) {
         return await r.json();
     } catch(e) {
         return {success: false, error: e.message};
-    }
-
-    if(pendingBdoRes&&pendingBdoRes.success&&kpiBdo){
-        const bdos=pendingBdoRes.data?.orders||pendingBdoRes.data?.bdos||[];
-        const pendingTotal=bdos.reduce(function(sum,b){return sum+parseFloat(b.amount_total||b.amount_net_to_pay||0);},0);
-        kpiBdo.textContent=Number(bdos.length||0).toLocaleString();
-        const sub=kpiBdo.parentElement?.querySelector('.kpi-sub');
-        if(sub)sub.textContent='฿'+pendingTotal.toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:0});
-    }
-
-    if(matchedTodayRes&&matchedTodayRes.success&&kpiPaid){
-        const slips=matchedTodayRes.data?.slips||[];
-        const today=(new Date()).toISOString().slice(0,10);
-        const paidToday=slips.filter(function(s){return String(s.matched_at||s.uploaded_at||'').slice(0,10)===today;}).reduce(function(sum,s){return sum+parseFloat(s.amount||0);},0);
-        kpiPaid.textContent='฿'+paidToday.toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:0});
     }
 }
 
@@ -2690,17 +2675,21 @@ function restoreAdminMode(){
 // ===== CACHE WARMING =====
 async function warmCriticalCaches(){
     console.log('[Cache] Warming critical caches...');
-    
-    // Warm overview cache if not present
-    if(typeof _cacheGet === 'function' && typeof _dashCacheKey === 'function'){
+
+    // Warm overview only if it hasn't already been kicked off by the DOMContentLoaded
+    // 250 ms timer (prevents two simultaneous overview_fast requests on cold cache).
+    if(!_overviewLoaded && typeof _cacheGet === 'function' && typeof _dashCacheKey === 'function'){
         if(!_cacheGet(_dashCacheKey('overview', 'today'))){
             console.log('[Cache] Warming overview cache...');
             if(typeof loadTodayOverview === 'function') loadTodayOverview();
         }
     }
-    
-    // Warm matching grid cache if not present
-    if(typeof _cacheGet === 'function' && !_cacheGet('match_grid')){
+
+    // Matching-grid cache is only warmed if the user has previously visited the
+    // matching section (flag stored in sessionStorage). Unconditionally fetching
+    // slip_center_bdo_overview on every cold page load adds ~500 ms of unnecessary
+    // network + DB load for users who never use that section.
+    if(typeof _cacheGet === 'function' && sessionStorage.getItem('_visited_matching') && !_cacheGet('match_grid')){
         console.log('[Cache] Warming matching grid cache...');
         if(typeof loadMatchingCustomerGrid === 'function') loadMatchingCustomerGrid();
     }

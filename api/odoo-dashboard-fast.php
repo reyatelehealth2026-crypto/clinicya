@@ -91,6 +91,7 @@ if ($action === 'circuit_breaker_status' || $action === 'circuit_breaker_reset')
 if ($action === 'overview_fast') {
     require_once __DIR__ . '/../config/config.php';
     require_once __DIR__ . '/../config/database.php';
+    require_once __DIR__ . '/odoo-dashboard-functions.php';
 
     try {
         $db = Database::getInstance()->getConnection();
@@ -113,13 +114,13 @@ if ($action === 'overview_fast') {
         'webhook_success_rate' => 0,
     ];
 
-    // Orders today
+    // Orders today — range predicates so MySQL can use index on date_order/updated_at
     try {
-        $row = $db->query("SELECT COUNT(*) as c, COALESCE(SUM(amount_total),0) as s FROM odoo_orders WHERE DATE(COALESCE(date_order,updated_at))=CURDATE()")->fetch(PDO::FETCH_ASSOC);
+        $row = $db->query("SELECT COUNT(*) as c, COALESCE(SUM(amount_total),0) as s FROM odoo_orders WHERE COALESCE(date_order,updated_at) >= CURDATE() AND COALESCE(date_order,updated_at) < CURDATE()+INTERVAL 1 DAY")->fetch(PDO::FETCH_ASSOC);
         $r['orders_today'] = (int) ($row['c'] ?? 0);
         $r['sales_today'] = (float) ($row['s'] ?? 0);
 
-        $stmt = $db->query("SELECT order_id, order_name, customer_ref, state, state_display, amount_total, date_order, updated_at, latest_event, salesperson_name, line_user_id FROM odoo_orders WHERE DATE(COALESCE(date_order,updated_at))=CURDATE() ORDER BY updated_at DESC LIMIT 5");
+        $stmt = $db->query("SELECT order_id, order_name, customer_ref, state, state_display, amount_total, date_order, updated_at, latest_event, salesperson_name, line_user_id FROM odoo_orders WHERE COALESCE(date_order,updated_at) >= CURDATE() AND COALESCE(date_order,updated_at) < CURDATE()+INTERVAL 1 DAY ORDER BY updated_at DESC LIMIT 5");
         $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($orders as &$o) { $o['amount_total'] = (float) ($o['amount_total'] ?? 0); }
         unset($o);
@@ -129,7 +130,8 @@ if ($action === 'overview_fast') {
     // Pending slips
     try {
         $r['slips_pending'] = (int) $db->query("SELECT COUNT(*) FROM odoo_slip_uploads WHERE status IN ('new','pending')")->fetchColumn();
-        $m = $db->query("SELECT COALESCE(SUM(amount),0) FROM odoo_slip_uploads WHERE status='matched' AND DATE(COALESCE(matched_at,uploaded_at))=CURDATE()")->fetchColumn();
+        // Range predicate instead of DATE() wrapper — allows index on matched_at/uploaded_at
+        $m = $db->query("SELECT COALESCE(SUM(amount),0) FROM odoo_slip_uploads WHERE status='matched' AND COALESCE(matched_at,uploaded_at) >= CURDATE() AND COALESCE(matched_at,uploaded_at) < CURDATE()+INTERVAL 1 DAY")->fetchColumn();
         $r['payments_today'] = (float) $m;
     } catch (Exception $e) { /* table may not exist */ }
 
@@ -140,20 +142,17 @@ if ($action === 'overview_fast') {
         $r['bdos_pending_amount'] = (float) ($row['s'] ?? 0);
     } catch (Exception $e) { /* table may not exist */ }
 
-    // Overdue customers
+    // Overdue customers — direct comparison avoids COALESCE function per row
     try {
-        $r['overdue_customers'] = (int) $db->query("SELECT COUNT(*) FROM odoo_customer_projection WHERE COALESCE(overdue_amount,0)>0")->fetchColumn();
+        $r['overdue_customers'] = (int) $db->query("SELECT COUNT(*) FROM odoo_customer_projection WHERE overdue_amount > 0")->fetchColumn();
     } catch (Exception $e) { /* table may not exist */ }
 
-    // Lightweight webhook stats (today only, range scan)
+    // Lightweight webhook stats — use cached resolveWebhookTimeColumn() (single SHOW COLUMNS,
+    // result cached in file+APCu) instead of 3 information_schema.COLUMNS probes per request.
     try {
-        $col = null;
-        foreach (['processed_at', 'created_at', 'received_at'] as $c) {
-            $chk = $db->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='odoo_webhooks_log' AND COLUMN_NAME='{$c}' LIMIT 1");
-            if ($chk->fetchColumn()) { $col = $c; break; }
-        }
+        $col = resolveWebhookTimeColumn($db);
         if ($col) {
-            $row = $db->query("SELECT COUNT(*) as c, SUM(IF(status='success',1,0)) as ok, MAX(`{$col}`) as lw FROM odoo_webhooks_log WHERE `{$col}`>=CURDATE() AND `{$col}`<CURDATE()+INTERVAL 1 DAY")->fetch(PDO::FETCH_ASSOC);
+            $row = $db->query("SELECT COUNT(*) as c, SUM(IF(status='success',1,0)) as ok, MAX({$col}) as lw FROM odoo_webhooks_log WHERE {$col}>=CURDATE() AND {$col}<CURDATE()+INTERVAL 1 DAY")->fetch(PDO::FETCH_ASSOC);
             $r['webhook_total_today'] = (int) ($row['c'] ?? 0);
             $r['last_webhook'] = $row['lw'] ?? null;
             $cnt = (int) ($row['c'] ?? 0);

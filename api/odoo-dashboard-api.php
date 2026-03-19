@@ -261,7 +261,8 @@ function getStats($db)
     $hasLatency = hasWebhookColumn($db, 'process_latency_ms');
     $hasRetryCount = hasWebhookColumn($db, 'retry_count');
 
-    // Consolidated single-pass aggregation (replaces ~12 separate COUNT queries)
+    // All-time counts: full-table scan but no per-row DATE() overhead.
+    // "today" metrics are fetched separately with a range predicate (see below).
     $latencySelect = $hasLatency
         ? "ROUND(AVG(CASE WHEN process_latency_ms IS NOT NULL THEN process_latency_ms END), 2) as avg_latency_ms,"
         : "NULL as avg_latency_ms,";
@@ -272,7 +273,6 @@ function getStats($db)
     $agg = $db->query("
         SELECT
             COUNT(*) as total,
-            SUM(IF(DATE({$processedAtExpr}) = CURDATE(), 1, 0)) as today,
             SUM(IF(status = 'success', 1, 0)) as success,
             SUM(IF(status = 'failed', 1, 0)) as failed,
             SUM(IF(status = 'received', 1, 0)) as received,
@@ -282,14 +282,30 @@ function getStats($db)
             SUM(IF(status = 'duplicate', 1, 0)) as duplicate,
             {$latencySelect}
             {$retriedSelect}
-            COUNT(DISTINCT CASE WHEN DATE({$processedAtExpr}) = CURDATE() THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')), ''), CAST(order_id AS CHAR)) END) as unique_orders_today,
-            SUM(IF(DATE({$processedAtExpr}) = CURDATE() AND line_user_id IS NOT NULL, 1, 0)) as notified_today,
             MAX({$processedAtExpr}) as last_webhook
         FROM odoo_webhooks_log
     ")->fetch(PDO::FETCH_ASSOC);
 
+    // Today metrics: scoped range scan — allows MySQL to use index on the timestamp column.
+    $today        = 0;
+    $uniqueOrders = 0;
+    $notified     = 0;
+    if ($processedAtColumn) {
+        $todayRow = $db->query("
+            SELECT
+                COUNT(*) as today,
+                COUNT(DISTINCT COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')), ''), CAST(order_id AS CHAR))) as unique_orders_today,
+                SUM(IF(line_user_id IS NOT NULL, 1, 0)) as notified_today
+            FROM odoo_webhooks_log
+            WHERE {$processedAtColumn} >= CURDATE()
+              AND {$processedAtColumn} < CURDATE() + INTERVAL 1 DAY
+        ")->fetch(PDO::FETCH_ASSOC);
+        $today        = (int) ($todayRow['today'] ?? 0);
+        $uniqueOrders = (int) ($todayRow['unique_orders_today'] ?? 0);
+        $notified     = (int) ($todayRow['notified_today'] ?? 0);
+    }
+
     $total      = (int) ($agg['total'] ?? 0);
-    $today      = (int) ($agg['today'] ?? 0);
     $success    = (int) ($agg['success'] ?? 0);
     $failed     = (int) ($agg['failed'] ?? 0);
     $received   = (int) ($agg['received'] ?? 0);
@@ -299,29 +315,34 @@ function getStats($db)
     $duplicate  = (int) ($agg['duplicate'] ?? 0);
     $avgLatencyMs  = $agg['avg_latency_ms'] !== null ? (float) $agg['avg_latency_ms'] : null;
     $retriedTotal  = (int) ($agg['retried_total'] ?? 0);
-    $uniqueOrders  = (int) ($agg['unique_orders_today'] ?? 0);
-    $notified      = (int) ($agg['notified_today'] ?? 0);
     $lastWebhook   = $agg['last_webhook'] ?? null;
 
     $dlqTotal = tableExists($db, 'odoo_webhook_dlq')
         ? $db->query("SELECT COUNT(*) FROM odoo_webhook_dlq")->fetchColumn()
         : 0;
 
-    $topFailedEvents = $db->query(" 
-        SELECT event_type, COUNT(*) as count 
-        FROM odoo_webhooks_log 
-        WHERE status IN ('failed', 'retry', 'dead_letter')
-        GROUP BY event_type 
-        ORDER BY count DESC 
+    // Scope failed-events to last 90 days to avoid full historical scan
+    $failedWindow = $processedAtColumn
+        ? "AND {$processedAtColumn} >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)"
+        : "";
+    $topFailedEvents = $db->query("
+        SELECT event_type, COUNT(*) as count
+        FROM odoo_webhooks_log
+        WHERE status IN ('failed', 'retry', 'dead_letter') {$failedWindow}
+        GROUP BY event_type
+        ORDER BY count DESC
         LIMIT 5
     ")->fetchAll(PDO::FETCH_ASSOC);
 
-    // Events by type (today)
+    // Events by type (today) — range predicate, index-friendly
+    $todayWhere = $processedAtColumn
+        ? "WHERE {$processedAtColumn} >= CURDATE() AND {$processedAtColumn} < CURDATE() + INTERVAL 1 DAY"
+        : "WHERE 1=0";
     $stmt = $db->query("
-        SELECT event_type, COUNT(*) as count 
-        FROM odoo_webhooks_log 
-        WHERE DATE({$processedAtExpr}) = CURDATE()
-        GROUP BY event_type 
+        SELECT event_type, COUNT(*) as count
+        FROM odoo_webhooks_log
+        {$todayWhere}
+        GROUP BY event_type
         ORDER BY count DESC
     ");
     $eventsByType = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1943,7 +1964,7 @@ function getNotificationLog($db, $input)
         ];
     }
 
-    // Stats
+    // Stats — single-pass aggregate replaces 5 separate COUNT queries
     $stats = [];
     try {
         $statsRows = $db->query("
@@ -1954,13 +1975,23 @@ function getNotificationLog($db, $input)
         foreach ($statsRows as $row) {
             $stats[$row['status']] = (int) $row['count'];
         }
-
         $stats['total'] = array_sum($stats);
-        $stats['today_sent'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE status = 'sent' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
-        $stats['today_failed'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE status = 'failed' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
-        $stats['today_total'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
-        $stats['unique_users'] = (int) $db->query("SELECT COUNT(DISTINCT line_user_id) FROM odoo_notification_log WHERE status = 'sent'")->fetchColumn();
-        $stats['unique_users_today'] = (int) $db->query("SELECT COUNT(DISTINCT line_user_id) FROM odoo_notification_log WHERE status = 'sent' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
+
+        // One aggregation query replaces the previous 5 individual COUNT queries
+        $aggRow = $db->query("
+            SELECT
+                SUM(IF(status = 'sent'   AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY, 1, 0)) as today_sent,
+                SUM(IF(status = 'failed' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY, 1, 0)) as today_failed,
+                SUM(IF(sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY, 1, 0)) as today_total,
+                COUNT(DISTINCT CASE WHEN status = 'sent' THEN line_user_id END) as unique_users,
+                COUNT(DISTINCT CASE WHEN status = 'sent' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY THEN line_user_id END) as unique_users_today
+            FROM odoo_notification_log
+        ")->fetch(PDO::FETCH_ASSOC);
+        $stats['today_sent']        = (int) ($aggRow['today_sent'] ?? 0);
+        $stats['today_failed']      = (int) ($aggRow['today_failed'] ?? 0);
+        $stats['today_total']       = (int) ($aggRow['today_total'] ?? 0);
+        $stats['unique_users']      = (int) ($aggRow['unique_users'] ?? 0);
+        $stats['unique_users_today'] = (int) ($aggRow['unique_users_today'] ?? 0);
 
         $eventRows = $db->query("
             SELECT event_type, COUNT(*) as count
@@ -2005,9 +2036,17 @@ function getNotificationLog($db, $input)
     $total = (int) $countStmt->fetchColumn();
 
     $hasWhLog = tableExists($db, 'odoo_webhooks_log');
-    $whJoin = $hasWhLog
-        ? "LEFT JOIN (SELECT delivery_id, MAX(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name'))) as order_name, MAX(order_id) as order_id FROM odoo_webhooks_log GROUP BY delivery_id) wh ON wh.delivery_id = n.delivery_id"
-        : "";
+    // Scope the derived-table join to the last 30 days to avoid materialising
+    // the entire odoo_webhooks_log table on every Notifications tab load.
+    if ($hasWhLog) {
+        $whTimeCol = resolveWebhookTimeColumn($db);
+        $whWindow  = $whTimeCol
+            ? "AND {$whTimeCol} >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+            : "";
+        $whJoin = "LEFT JOIN (SELECT delivery_id, MAX(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name'))) as order_name, MAX(order_id) as order_id FROM odoo_webhooks_log WHERE delivery_id IS NOT NULL {$whWindow} GROUP BY delivery_id) wh ON wh.delivery_id = n.delivery_id";
+    } else {
+        $whJoin = "";
+    }
     $whSelect = $hasWhLog ? ", wh.order_name, wh.order_id" : ", NULL as order_name, NULL as order_id";
 
     $stmt = $db->prepare("
