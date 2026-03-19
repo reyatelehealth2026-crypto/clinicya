@@ -148,6 +148,9 @@ let _lastApiDurationMs = null;
 // Actions supported by the lightweight fast endpoint
 const WH_FAST_ACTIONS=new Set(['health','overview_fast','orders_today_fast','customers_fast','circuit_breaker_status','circuit_breaker_reset']);
 
+// Read-only actions that benefit from Nginx fastcgi_cache (no _t cache buster)
+const WH_CACHEABLE_ACTIONS=new Set(['health','overview_fast','orders_today_fast','customers_fast']);
+
 async function whApiCall(data){
     const tried=[];
     const action=String(data&&data.action||'').trim();
@@ -158,13 +161,15 @@ async function whApiCall(data){
         'odoo_bdo_list_api','pending_bdo_orders','activity_log_list','customer_360'
     ]);
     const timeoutMs=heavyActions.has(action)?30000:8000;
+    // Skip cache buster for cacheable read-only actions — lets Nginx fastcgi_cache work
+    const cacheBuster=WH_CACHEABLE_ACTIONS.has(action)?'':'?_t='+Date.now();
 
     // Try fast endpoint first for supported actions (file is tiny, <100 lines)
     if(WH_FAST_ACTIONS.has(action)){
         try{
             const ctrl=new AbortController();
             const timer=setTimeout(()=>ctrl.abort(),5000);
-            const r=await fetch(WH_API_FAST+'?_t='+Date.now(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:ctrl.signal});
+            const r=await fetch(WH_API_FAST+cacheBuster,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:ctrl.signal});
             clearTimeout(timer);
             const parsed=await r.json();
             if(parsed&&parsed.success){
@@ -184,7 +189,7 @@ async function whApiCall(data){
         try{
             const ctrl=new AbortController();
             const timer=setTimeout(()=>ctrl.abort(),timeoutMs);
-            const r=await fetch(apiUrl+'?_t='+Date.now(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:ctrl.signal});
+            const r=await fetch(apiUrl+(cacheBuster||('?_t='+Date.now())),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:ctrl.signal});
             clearTimeout(timer);
             const raw=await r.text();
             let parsed=null;
@@ -214,7 +219,12 @@ async function testConnection(){
         if(r&&r.success){
             el.className='status-badge online';
             const ms=_lastApiDurationMs!=null?' · '+_lastApiDurationMs+'ms':'';
-            el.innerHTML='<span class="status-dot"></span><span>เชื่อมต่อแล้ว'+ms+'</span>';
+            // Show OPcache + Redis status indicators
+            const d=r.data||{};
+            const opcIcon=d.opcache&&d.opcache.enabled?'⚡':'';
+            const redisIcon=d.redis&&d.redis.connected?'🔴':'';
+            const perfTags=(opcIcon||redisIcon)?' '+[opcIcon,redisIcon].filter(Boolean).join(''):'';
+            el.innerHTML='<span class="status-dot"></span><span>เชื่อมต่อแล้ว'+ms+perfTags+'</span>';
         }else{
             el.className='status-badge offline';
             const errMsg=(r&&r.error)?r.error:'ไม่สามารถเชื่อมต่อได้';

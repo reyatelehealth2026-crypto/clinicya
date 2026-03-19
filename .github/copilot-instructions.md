@@ -1,3 +1,4 @@
+
 # GitHub Copilot Instructions — LINE Telepharmacy CRM Platform
 
 ## Project Overview
@@ -97,3 +98,4 @@ Server path: `/home/zrismpsz/public_html/cny.re-ya.com`
 - **`dev_logs` table** — Fatal errors in `webhook.php` are written here. Use `INSERT INTO dev_logs (log_type, source, message, data, created_at)` for debug logging in webhook context.
 - **Clean URLs** — `.htaccess` strips `.php` extensions. Use `cleanUrl()` helper from `includes/header.php` when building admin nav links.
 - **Cron** — Reminder/broadcast cron jobs live in `cron/`. Register new jobs as separate files; don't add to `scheduled.php` (admin-triggered only).
+

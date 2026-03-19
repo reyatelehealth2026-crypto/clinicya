@@ -22,6 +22,9 @@ header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
+// Allow Nginx fastcgi_cache and browser cache for read-only actions
+header('Cache-Control: private, max-age=15, stale-while-revalidate=30');
+header('Vary: Accept-Encoding');
 
 // Enable gzip compression for all responses
 if (!ob_get_level()) {
@@ -45,13 +48,46 @@ $action = trim((string) ($input['action'] ?? ''));
 
 // ── health: instant, no DB ──────────────────────────────────────────────
 if ($action === '' || $action === 'health') {
+    // Include Redis status in health check
+    $redisStatus = ['connected' => false];
+    $redisCacheFile = __DIR__ . '/../classes/RedisCache.php';
+    if (file_exists($redisCacheFile)) {
+        require_once $redisCacheFile;
+        try {
+            $redis = RedisCache::getInstance();
+            $redisStatus = $redis->getInfo();
+        } catch (Exception $e) {
+            $redisStatus = ['connected' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    // OPcache status
+    $opcacheEnabled = function_exists('opcache_get_status') && (opcache_get_status(false)['opcache_enabled'] ?? false);
+    $opcacheStats = [];
+    if ($opcacheEnabled) {
+        $ocs = opcache_get_status(false);
+        $opcacheStats = [
+            'enabled' => true,
+            'memory_used_mb' => round(($ocs['memory_usage']['used_memory'] ?? 0) / 1048576, 1),
+            'memory_free_mb' => round(($ocs['memory_usage']['free_memory'] ?? 0) / 1048576, 1),
+            'cached_scripts' => $ocs['opcache_statistics']['num_cached_scripts'] ?? 0,
+            'hit_rate' => round($ocs['opcache_statistics']['opcache_hit_rate'] ?? 0, 1),
+            'jit_enabled' => !empty($ocs['jit']['enabled']),
+        ];
+    } else {
+        $opcacheStats = ['enabled' => false];
+    }
+
     echo json_encode([
         'success' => true,
         'data' => [
             'status' => 'ok',
             'service' => 'odoo-dashboard-fast',
             'timestamp' => date('c'),
-            'version' => '2.0.0',
+            'version' => '2.1.0',
+            'php_version' => PHP_VERSION,
+            'opcache' => $opcacheStats,
+            'redis' => $redisStatus,
         ],
         '_meta' => ['duration_ms' => round((microtime(true) - $_startTime) * 1000), 'cached' => false, 'action' => 'health'],
     ]);

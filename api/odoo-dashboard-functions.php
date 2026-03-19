@@ -258,8 +258,14 @@ if (!function_exists('tableExists')) {
 }
 
 // =====================================================================
-// Dashboard API Cache Helpers (File + APCu dual layer)
+// Dashboard API Cache Helpers (Redis L0 + APCu L1 + File L2 — triple layer)
+// Redis ลด latency จาก ~50ms (file) → <1ms, shared across PHP-FPM workers
 // =====================================================================
+
+// Load Redis adapter if available
+if (!class_exists('RedisCache') && file_exists(__DIR__ . '/../classes/RedisCache.php')) {
+    require_once __DIR__ . '/../classes/RedisCache.php';
+}
 
 if (!function_exists('dashboardApiShouldCache')) {
     function dashboardApiShouldCache($action, $input, $result)
@@ -342,21 +348,40 @@ if (!function_exists('dashboardApiCachePath')) {
 }
 
 /**
- * Cache read — tries APCu first, then falls back to file.
+ * Cache read — tries Redis (L0) → APCu (L1) → File (L2).
+ * Promotes data upward on miss for faster subsequent reads.
  */
 if (!function_exists('dashboardApiCacheGet')) {
     function dashboardApiCacheGet($key, $ttl)
     {
-        // L1: APCu (fastest)
+        // L0: Redis (shared across all PHP-FPM workers, <1ms)
+        if (class_exists('RedisCache')) {
+            $redis = RedisCache::getInstance();
+            if ($redis->isConnected()) {
+                $data = $redis->get($key);
+                if ($data !== null && is_array($data)) {
+                    return $data;
+                }
+            }
+        }
+
+        // L1: APCu (per-worker, ~0.1ms)
         if (function_exists('apcu_fetch')) {
             $apcuKey = 'dash_' . $key;
             $data = apcu_fetch($apcuKey, $hit);
             if ($hit && is_array($data)) {
+                // Promote to Redis
+                if (class_exists('RedisCache')) {
+                    $redis = RedisCache::getInstance();
+                    if ($redis->isConnected()) {
+                        $redis->set($key, $data, $ttl);
+                    }
+                }
                 return $data;
             }
         }
 
-        // L2: File-based
+        // L2: File-based (disk I/O, ~5-50ms)
         $path = dashboardApiCachePath($key);
         if (!is_file($path)) {
             return null;
@@ -380,9 +405,17 @@ if (!function_exists('dashboardApiCacheGet')) {
 
         $data = $payload['d'] ?? null;
 
-        // Promote to APCu for faster subsequent reads
-        if ($data !== null && function_exists('apcu_store')) {
-            apcu_store('dash_' . $key, $data, $ttl);
+        // Promote to L0 + L1 for faster subsequent reads
+        if ($data !== null) {
+            if (function_exists('apcu_store')) {
+                apcu_store('dash_' . $key, $data, $ttl);
+            }
+            if (class_exists('RedisCache')) {
+                $redis = RedisCache::getInstance();
+                if ($redis->isConnected()) {
+                    $redis->set($key, $data, $ttl);
+                }
+            }
         }
 
         return $data;
@@ -390,17 +423,25 @@ if (!function_exists('dashboardApiCacheGet')) {
 }
 
 /**
- * Cache write — writes to both APCu and file atomically.
+ * Cache write — writes to Redis (L0) + APCu (L1) + File (L2) atomically.
  */
 if (!function_exists('dashboardApiCacheSet')) {
     function dashboardApiCacheSet($key, $data, $ttl = 60)
     {
-        // L1: APCu
+        // L0: Redis (primary, shared)
+        if (class_exists('RedisCache')) {
+            $redis = RedisCache::getInstance();
+            if ($redis->isConnected()) {
+                $redis->set($key, $data, $ttl);
+            }
+        }
+
+        // L1: APCu (per-worker)
         if (function_exists('apcu_store')) {
             apcu_store('dash_' . $key, $data, $ttl);
         }
 
-        // L2: File (atomic write via rename)
+        // L2: File (atomic write via rename — fallback if Redis dies)
         $path = dashboardApiCachePath($key);
         $tmpPath = $path . '.' . getmypid() . '.tmp';
         $payload = json_encode([

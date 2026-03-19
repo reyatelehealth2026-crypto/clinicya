@@ -11,9 +11,11 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="dns-prefetch" href="https://fonts.googleapis.com">
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"></noscript>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"></noscript>
     <style>
         :root {
             --white: #ffffff;
@@ -1191,6 +1193,18 @@
         </div>
     </div>
 
-    <script src="odoo-dashboard.js?v=<?= filemtime(__DIR__ . '/odoo-dashboard.js') ?>"></script>
+    <?php
+    // Load minified JS if available, fallback to source
+    $jsMin = __DIR__ . '/odoo-dashboard.min.js';
+    $jsSrc = __DIR__ . '/odoo-dashboard.js';
+    if (file_exists($jsMin)) {
+        $jsFile = 'odoo-dashboard.min.js';
+        $jsVer  = filemtime($jsMin);
+    } else {
+        $jsFile = 'odoo-dashboard.js';
+        $jsVer  = filemtime($jsSrc);
+    }
+    ?>
+    <script src="<?= $jsFile ?>?v=<?= $jsVer ?>" defer></script>
 </body>
 </html>
