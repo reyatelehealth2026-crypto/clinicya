@@ -1649,6 +1649,7 @@ async function loadSystemHealth(){
         // Auto-refresh every 60s while health section is visible
         if(healthRefreshTimer)clearInterval(healthRefreshTimer);
         healthRefreshTimer=setInterval(()=>{
+            if(document.hidden)return; // Performance: skip API calls when tab not visible
             const panel=document.getElementById('section-health');
             if(panel&&panel.classList.contains('active'))loadSystemHealth();
             else{clearInterval(healthRefreshTimer);healthRefreshTimer=null;}
