@@ -103,3 +103,51 @@ Role hierarchy: `super_admin` → `admin` → `pharmacist` / `marketing` / `tech
 - **Tests** — Property-based; each test generates 100+ random cases per property. Bootstrap: `tests/bootstrap.php`.
 - **Database schema** — 223 tables. Main migration: `database/install_complete_latest.sql`. Incremental changes go in `database/migration_*.sql`.
 - **Server path** — `/home/zrismpsz/public_html/cny.re-ya.com` on production.
+
+## Odoo Dashboard (`odoo-dashboard.php`)
+
+### Frontend Architecture — Three-Tier Caching
+
+```
+sessionStorage (JS) → fast endpoint (<500ms) → heavy endpoint (cached, 30–60s TTL)
+```
+
+| Tier | File | TTL | หมายเหตุ |
+|------|------|-----|---------|
+| Client cache | `sessionStorage` via `_cacheGet/_cacheSet` | 5 min | instant, ไม่มี network |
+| Fast endpoint | `api/odoo-dashboard-fast.php` | — | query เฉพาะ cache tables ที่มี index |
+| Heavy endpoint | `api/odoo-dashboard-api.php` | 20–300s ต่อ action | PHP in-memory cache, fallback เต็ม |
+
+### Fast Endpoint Actions (`WH_FAST_ACTIONS` ใน `odoo-dashboard.js`)
+
+Actions ใน Set นี้จะถูก route ไป lightweight endpoint ก่อนเสมอ:
+```javascript
+const WH_FAST_ACTIONS = new Set([
+    'health', 'overview_fast', 'orders_today_fast', 'customers_fast',
+    'circuit_breaker_status', 'circuit_breaker_reset'
+]);
+```
+**กฎ:** ถ้า `api/odoo-dashboard-fast.php` รองรับ action ใหม่ → ต้องเพิ่มใน `WH_FAST_ACTIONS` ด้วยเสมอ
+
+### Performance Rules
+
+- **CDN preconnect** — `odoo-dashboard.php` ต้องมี `<link rel="preconnect">` สำหรับ `fonts.googleapis.com`, `fonts.gstatic.com`, `cdn.jsdelivr.net` ก่อน `<link rel="stylesheet">` ทุกครั้ง
+- **ห้าม query Odoo API โดยตรงใน dashboard** — ใช้ cache tables (`odoo_orders`, `odoo_invoices`, `odoo_bdos`, `odoo_customer_projection`) เท่านั้น
+- **ห้าม query `odoo_webhooks_log` แบบ full scan** — ใช้ aggregate query ที่มี WHERE บน indexed column เท่านั้น
+- **polling guard** — `setInterval` ที่เรียก API ต้องตรวจ `document.hidden` ก่อนทุกครั้ง
+
+### JS Files ใน Dashboard
+
+| ไฟล์ | สถานะ | หมายเหตุ |
+|------|--------|---------|
+| `odoo-dashboard.js` | active (~267KB) | ไฟล์หลัก โหลดโดย PHP |
+| `odoo-dashboard-fast.php` | active | lightweight API endpoint |
+| `odoo-dashboard-api.php` | active (~182KB) | heavy endpoint, PHP parse ~1.3s ถ้าไม่มี OPcache |
+| `odoo-dashboard-optimized.js` | stub | สำรองสำหรับ optimization patches อนาคต |
+| `odoo-dashboard-fixes.js` | stub | สำรองสำหรับ bug fix patches อนาคต |
+
+### `whApiCall(data)` — ลำดับการ fallback
+
+1. ถ้า action อยู่ใน `WH_FAST_ACTIONS` → ลอง `odoo-dashboard-fast.php` (timeout 5s)
+2. ถ้า fast endpoint ตอบ `fallback: true` หรือ timeout → ต่อไปที่ heavy endpoint
+3. Heavy endpoint: ลอง `WH_API_ACTIVE` ก่อน → fallback ไปทุก URL ใน `WH_API_CANDIDATES`

@@ -103,3 +103,10 @@ database/*.sql
 !database/schema_complete.sql
 !database/install_thai.sql
 !database/migration_odoo_dashboard_cache.sql
+!database/migration_missing_indexes.sql
+!database/migration_bdos_schema_fix.sql
+!database/migration_additional_indexes.sql
+!database/migration_fix_indexes.sql
+*.png
+DB_CONNECTION.md
+*.md

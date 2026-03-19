@@ -146,7 +146,7 @@ function showSection(id){
 let _lastApiDurationMs = null;
 
 // Actions supported by the lightweight fast endpoint
-const WH_FAST_ACTIONS=new Set(['health','overview_fast','circuit_breaker_status','circuit_breaker_reset']);
+const WH_FAST_ACTIONS=new Set(['health','overview_fast','orders_today_fast','customers_fast','circuit_breaker_status','circuit_breaker_reset']);
 
 async function whApiCall(data){
     const tried=[];
@@ -1649,6 +1649,7 @@ async function loadSystemHealth(){
         // Auto-refresh every 60s while health section is visible
         if(healthRefreshTimer)clearInterval(healthRefreshTimer);
         healthRefreshTimer=setInterval(()=>{
+            if(document.hidden)return; // Performance: skip API calls when tab not visible
             const panel=document.getElementById('section-health');
             if(panel&&panel.classList.contains('active'))loadSystemHealth();
             else{clearInterval(healthRefreshTimer);healthRefreshTimer=null;}
@@ -3997,8 +3998,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     }
     if(document.getElementById('autoSendSettingsContent'))loadAutoSendSettings();
 
-    // Re-check connection every 60s
-    setInterval(testConnection, 60000);
+    // Re-check connection every 60s — skip when tab is hidden
+    setInterval(()=>{ if(!document.hidden) testConnection(); }, 60000);
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) testConnection(); });
     
     // Log page load performance
     window.addEventListener('load', () => {

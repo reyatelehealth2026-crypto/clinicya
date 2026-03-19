@@ -23,6 +23,11 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
+// Enable gzip compression for all responses
+if (!ob_get_level()) {
+    ob_start('ob_gzhandler');
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
@@ -162,6 +167,90 @@ if ($action === 'overview_fast') {
         'data' => $r,
         '_meta' => ['duration_ms' => round((microtime(true) - $_startTime) * 1000), 'cached' => false, 'action' => 'overview_fast'],
     ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// ── orders_today_fast: ดึงจาก odoo_orders_summary (cache table) ─────────
+if ($action === 'orders_today_fast') {
+    require_once __DIR__ . '/../config/config.php';
+    require_once __DIR__ . '/../config/database.php';
+
+    try {
+        $db = Database::getInstance()->getConnection();
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
+        exit;
+    }
+
+    header('Cache-Control: private, max-age=30');
+    header('Vary: Accept-Encoding');
+
+    try {
+        $limit = min((int) ($input['limit'] ?? 50), 200);
+        $stmt = $db->prepare("
+            SELECT order_key, customer_name, customer_ref, amount_total,
+                   state, payment_status, date_order, last_event_at
+            FROM odoo_orders_summary
+            WHERE date_order >= CURDATE()
+            ORDER BY last_event_at DESC
+            LIMIT :lim
+        ");
+        $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'data' => ['orders' => $orders],
+            '_meta' => ['duration_ms' => round((microtime(true) - $_startTime) * 1000), 'cached' => true, 'action' => 'orders_today_fast'],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage(), 'fallback' => true]);
+    }
+    exit;
+}
+
+// ── customers_fast: ดึงจาก odoo_customers_cache (cache table) ───────────
+if ($action === 'customers_fast') {
+    require_once __DIR__ . '/../config/config.php';
+    require_once __DIR__ . '/../config/database.php';
+
+    try {
+        $db = Database::getInstance()->getConnection();
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => 'Database connection failed: ' . $e->getMessage()]);
+        exit;
+    }
+
+    header('Cache-Control: private, max-age=30');
+    header('Vary: Accept-Encoding');
+
+    try {
+        $limit  = min((int) ($input['limit'] ?? 50), 500);
+        $offset = max((int) ($input['offset'] ?? 0), 0);
+        $stmt = $db->prepare("
+            SELECT customer_id, customer_name, customer_ref, phone,
+                   total_due, overdue_amount, latest_order_at, orders_count_total
+            FROM odoo_customers_cache
+            ORDER BY latest_order_at DESC
+            LIMIT :lim OFFSET :off
+        ");
+        $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':off', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        $customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'customers'  => $customers,
+                'pagination' => ['limit' => $limit, 'offset' => $offset, 'has_more' => count($customers) === $limit],
+            ],
+            '_meta' => ['duration_ms' => round((microtime(true) - $_startTime) * 1000), 'cached' => true, 'action' => 'customers_fast'],
+        ], JSON_UNESCAPED_UNICODE);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage(), 'fallback' => true]);
+    }
     exit;
 }
 

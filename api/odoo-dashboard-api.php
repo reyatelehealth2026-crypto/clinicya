@@ -1633,7 +1633,7 @@ function getDailySummaryPreview($db)
         FROM odoo_notification_log 
         WHERE event_type = 'daily.summary' 
         AND status = 'sent' 
-        AND DATE(sent_at) = CURDATE()
+        AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY
     ";
     $sentUsers = $db->query($sentTodaySql)->fetchAll(PDO::FETCH_COLUMN) ?: [];
     
@@ -1956,16 +1956,16 @@ function getNotificationLog($db, $input)
         }
 
         $stats['total'] = array_sum($stats);
-        $stats['today_sent'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE status = 'sent' AND DATE(sent_at) = CURDATE()")->fetchColumn();
-        $stats['today_failed'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE status = 'failed' AND DATE(sent_at) = CURDATE()")->fetchColumn();
-        $stats['today_total'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE DATE(sent_at) = CURDATE()")->fetchColumn();
+        $stats['today_sent'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE status = 'sent' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
+        $stats['today_failed'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE status = 'failed' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
+        $stats['today_total'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
         $stats['unique_users'] = (int) $db->query("SELECT COUNT(DISTINCT line_user_id) FROM odoo_notification_log WHERE status = 'sent'")->fetchColumn();
-        $stats['unique_users_today'] = (int) $db->query("SELECT COUNT(DISTINCT line_user_id) FROM odoo_notification_log WHERE status = 'sent' AND DATE(sent_at) = CURDATE()")->fetchColumn();
+        $stats['unique_users_today'] = (int) $db->query("SELECT COUNT(DISTINCT line_user_id) FROM odoo_notification_log WHERE status = 'sent' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
 
         $eventRows = $db->query("
             SELECT event_type, COUNT(*) as count
             FROM odoo_notification_log
-            WHERE status = 'sent' AND DATE(sent_at) = CURDATE()
+            WHERE status = 'sent' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY
             GROUP BY event_type
             ORDER BY count DESC
         ")->fetchAll(PDO::FETCH_ASSOC);
