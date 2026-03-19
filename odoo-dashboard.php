@@ -433,6 +433,59 @@
         }
         .overview-section-title .view-all:hover { text-decoration: underline; }
 
+        /* ── Customer Card Grid ── */
+        .cust-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+            gap: 0.75rem;
+        }
+        @media (max-width: 600px) {
+            .cust-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+        }
+        .cust-card {
+            background: var(--white);
+            border: 1.5px solid var(--gray-200);
+            border-radius: var(--radius-md);
+            padding: 0.9rem 1rem;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+            position: relative;
+            overflow: hidden;
+        }
+        .cust-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            border-color: var(--primary);
+        }
+        .cust-card.has-overdue { border-left: 3px solid var(--danger); }
+        .cust-card.has-unpaid  { border-left: 3px solid var(--warning); }
+        .cust-card.has-bdo     { border-left: 3px solid var(--violet); }
+        .cust-name { font-weight: 600; font-size: 0.9rem; color: var(--gray-800); margin-bottom: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cust-ref  { font-size: 0.75rem; color: var(--gray-400); margin-bottom: 0.5rem; }
+        .cust-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+        .cust-badge {
+            display: inline-flex; align-items: center; gap: 0.25rem;
+            padding: 2px 7px; border-radius: 50px;
+            font-size: 0.7rem; font-weight: 600; white-space: nowrap;
+        }
+        .cust-badge-bdo    { background: var(--violet-light); color: #6d28d9; }
+        .cust-badge-overdue{ background: var(--danger-light);  color: #b91c1c; }
+        .cust-badge-unpaid { background: var(--warning-light); color: #b45309; }
+        .cust-badge-line   { background: #dcfce7; color: #15803d; }
+        .cust-badge-no-line{ background: var(--gray-100); color: var(--gray-400); }
+        /* ── Filter bar ── */
+        .filter-bar {
+            display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--white);
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius-md);
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow-sm);
+        }
+        .filter-bar .form-control {
+            font-size: 0.82rem; padding: 0.4rem 0.75rem;
+        }
         .overview-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -451,18 +504,14 @@
         <div class="d-flex justify-content-between align-items-center">
             <div>
                 <div class="header-title">
-                    <i class="bi bi-box-seam me-1" style="color:var(--primary);"></i>CNY ERP
+                    <i class="bi bi-people me-1" style="color:var(--primary);"></i>CNY ERP — ลูกค้า
                 </div>
-                <div class="header-subtitle">ระบบจัดการคำสั่งซื้อ</div>
+                <div class="header-subtitle">รายการลูกค้าทั้งหมด · คลิกการ์ดเพื่อดูรายละเอียด</div>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <div id="connectionStatus" class="status-badge offline">
                     <span class="status-dot"></span>
                     <span>กำลังเชื่อมต่อ...</span>
-                </div>
-                <div class="admin-toggle" id="adminToggle" onclick="toggleAdminMode()" title="เปิด/ปิดโหมดผู้ดูแลระบบ">
-                    <i class="bi bi-gear"></i>
-                    <span id="adminToggleLabel">Admin</span>
                 </div>
             </div>
         </div>
@@ -470,69 +519,40 @@
 
     <!-- Main Container -->
     <div class="main-container">
-        <!-- Menu Grid -->
-        <div class="menu-grid" id="menuGrid">
-            <!-- Sales Mode menus (always visible) -->
-            <div class="menu-card active" onclick="showSection('overview')">
-                <div class="menu-icon"><i class="bi bi-speedometer2"></i></div>
-                <div class="menu-title">ภาพรวมวันนี้</div>
-                <div class="menu-desc">สรุปออเดอร์และสิ่งที่ต้องทำ</div>
-            </div>
-            <div class="menu-card" onclick="showSection('webhooks')">
-                <div class="menu-icon"><i class="bi bi-box-seam"></i></div>
-                <div class="menu-title">ออเดอร์</div>
-                <div class="menu-desc">ติดตามสถานะออเดอร์</div>
-            </div>
-            <div class="menu-card" onclick="showSection('customers')">
-                <div class="menu-icon"><i class="bi bi-people"></i></div>
-                <div class="menu-title">ลูกค้า</div>
-                <div class="menu-desc">รายการลูกค้าและใบแจ้งหนี้</div>
-            </div>
-            <div class="menu-card" onclick="showSection('slips')">
-                <div class="menu-icon"><i class="bi bi-receipt"></i></div>
-                <div class="menu-title">อัพสลิป</div>
-                <div class="menu-desc">บันทึกสลิปจาก LINE Inbox</div>
-            </div>
-            <div class="menu-card" onclick="showSection('matching')">
-                <div class="menu-icon"><i class="bi bi-link-45deg"></i></div>
-                <div class="menu-title">จับคู่สลิป</div>
-                <div class="menu-desc">จับคู่สลิป ↔ BDO</div>
-            </div>
-            <div class="menu-card" onclick="showSection('daily-summary')">
-                <div class="menu-icon"><i class="bi bi-calendar-check"></i></div>
-                <div class="menu-title">สรุปประจำวัน</div>
-                <div class="menu-desc">ตรวจสอบและส่งสรุปออเดอร์</div>
-            </div>
-            <div class="menu-card" onclick="window.location.href='dashboard.php'">
-                <div class="menu-icon"><i class="bi bi-graph-up-arrow"></i></div>
-                <div class="menu-title">Executive</div>
-                <div class="menu-desc">ภาพรวมธุรกิจและ KPI</div>
-            </div>
-            <!-- Admin Mode menus (hidden by default) -->
-            <div class="menu-card admin-only" onclick="showSection('webhooks-raw')">
-                <div class="menu-icon"><i class="bi bi-broadcast"></i></div>
-                <div class="menu-title">Webhooks Log</div>
-                <div class="menu-desc">Raw webhook data</div>
-            </div>
-            <div class="menu-card admin-only" onclick="showSection('notifications')">
-                <div class="menu-icon"><i class="bi bi-bell"></i></div>
-                <div class="menu-title">Log แจ้งเตือน</div>
-                <div class="menu-desc">ประวัติการแจ้งเตือน LINE</div>
-            </div>
-            <div class="menu-card admin-only" onclick="showSection('health')">
-                <div class="menu-icon"><i class="bi bi-heart-pulse"></i></div>
-                <div class="menu-title">System Health</div>
-                <div class="menu-desc">สุขภาพระบบรวม</div>
-            </div>
+
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <input type="text" class="form-control" id="custSearch" placeholder="ค้นหาชื่อ / รหัสลูกค้า..." style="max-width:220px;" oninput="debouncedLoadCustomerCards()">
+            <select class="form-control" id="custInvoiceFilter" onchange="custCardOffset=0;loadCustomerCards()" style="max-width:160px;">
+                <option value="">ทุกสถานะ</option>
+                <option value="unpaid">มีค้างชำระ</option>
+                <option value="overdue">เกินกำหนด</option>
+            </select>
+            <select class="form-control" id="custSalesperson" onchange="custCardOffset=0;loadCustomerCards()" style="max-width:200px;">
+                <option value="">พนักงานขาย: ทั้งหมด</option>
+            </select>
+            <select class="form-control" id="custSortBy" onchange="custCardOffset=0;loadCustomerCards()" style="max-width:180px;">
+                <option value="">เรียงตาม: ล่าสุด</option>
+                <option value="spend_desc">ยอดซื้อ: มาก→น้อย</option>
+                <option value="due_desc">ค้างชำระ: มาก→น้อย</option>
+                <option value="orders_desc">ออเดอร์: มาก→น้อย</option>
+                <option value="name_asc">ชื่อ: ก→ฮ</option>
+            </select>
+            <button class="btn-primary" onclick="custCardOffset=0;loadCustomerCards()"><i class="bi bi-search"></i> ค้นหา</button>
+            <button class="chip" onclick="resetCardFilter()"><i class="bi bi-x-circle"></i> ล้าง</button>
+            <button class="chip" onclick="custCardOffset=0;loadCustomerCards()"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+            <span id="custTotalCount" style="font-size:0.8rem;color:var(--gray-400);margin-left:auto;"></span>
+        </div><!-- /.filter-bar -->
+
+        <!-- Customer Card Grid -->
+        <div id="customerCardGrid">
+            <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
         </div>
 
-        <!-- ═══════════════════════ Overview Section (Sales Default) ═══════════════════════ -->
-        <div id="section-overview" class="section-panel active">
-            <div id="overviewKPI" class="kpi-grid">
-                <div class="kpi-card" onclick="showSection('webhooks')">
-                    <div class="kpi-label">ออเดอร์วันนี้</div>
-                    <div class="kpi-value" id="kpiOrdersToday" style="color:var(--primary);">-</div>
-                </div>
+        <!-- Pagination -->
+        <div id="customerCardPagination" class="d-flex justify-content-center gap-2 mt-3" style="display:none !important;"></div>
+
+    </div><!-- /.main-container -->
                 <div class="kpi-card" onclick="showSection('webhooks')">
                     <div class="kpi-label">ยอดขายวันนี้</div>
                     <div class="kpi-value" id="kpiSalesToday" style="color:#059669;">-</div>
@@ -1018,7 +1038,6 @@
                 <div id="notifPagination" class="d-flex justify-content-center gap-2 mt-3" style="display:none !important;"></div>
             </div>
         </div>
-    </div>
 
     <!-- ═══════════════════════ ORDER TIMELINE MODAL ═══════════════════════ -->
     <div id="orderTimelineModal" class="modal-backdrop-custom" onclick="if(event.target===this){this.classList.remove('active');}">

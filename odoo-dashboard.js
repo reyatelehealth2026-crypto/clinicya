@@ -401,6 +401,101 @@ async function loadSalespersonDropdown(){
     try{return await _salespersonDropdownPromise;}finally{_salespersonDropdownPromise=null;}
 }
 function custGoPage(p){custCurrentOffset=p*custPageSize;loadCustomers();}
+
+// ===== CUSTOMER CARD GRID =====
+let custCardOffset=0;
+const custCardPageSize=48;
+let _debouncedLoadCustomerCardsTimer=null;
+function debouncedLoadCustomerCards(){
+    if(_debouncedLoadCustomerCardsTimer)clearTimeout(_debouncedLoadCustomerCardsTimer);
+    _debouncedLoadCustomerCardsTimer=setTimeout(function(){custCardOffset=0;loadCustomerCards();},400);
+}
+function resetCardFilter(){
+    const f=document.getElementById('custSearch');if(f)f.value='';
+    const fi=document.getElementById('custInvoiceFilter');if(fi)fi.value='';
+    const sb=document.getElementById('custSortBy');if(sb)sb.value='';
+    const sp=document.getElementById('custSalesperson');if(sp)sp.value='';
+    custCardOffset=0;loadCustomerCards();
+}
+async function loadCustomerCards(){
+    const grid=document.getElementById('customerCardGrid');
+    if(!grid)return;
+    grid.innerHTML='<div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>\u0e01\u0e33\u0e25\u0e31\u0e07\u0e42\u0e2b\u0e25\u0e14...</div></div>';
+    const search=document.getElementById('custSearch')?.value||'';
+    const invoiceFilter=document.getElementById('custInvoiceFilter')?.value||'';
+    const sortBy=document.getElementById('custSortBy')?.value||'';
+    const salespersonId=document.getElementById('custSalesperson')?.value||'';
+    const fast=(!search&&!invoiceFilter&&!sortBy&&!salespersonId)?1:0;
+    const res=await whApiCall({action:'customer_list',limit:custCardPageSize,offset:custCardOffset,search,invoice_filter:invoiceFilter,sort_by:sortBy,salesperson_id:salespersonId,fast});
+    if(!res||!res.success){
+        grid.innerHTML='<div style="text-align:center;padding:2rem;color:var(--gray-500);">'+escapeHtml((res&&res.error)||'\u0e44\u0e21\u0e48\u0e2a\u0e32\u0e21\u0e32\u0e23\u0e16\u0e42\u0e2b\u0e25\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e44\u0e14\u0e49')+'</div>';
+        return;
+    }
+    const customers=res.data.customers||[];
+    const total=res.data.total||0;
+    const tc=document.getElementById('custTotalCount');if(tc)tc.textContent=Number(total).toLocaleString()+'\u00a0\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23';
+    if(!customers.length){
+        grid.innerHTML='<div style="text-align:center;padding:3rem;color:var(--gray-400);"><i class="bi bi-people" style="font-size:2.5rem;display:block;margin-bottom:0.5rem;"></i>\u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32</div>';
+        renderCardPagination(total);return;
+    }
+    renderCustomerCards(customers);
+    renderCardPagination(total);
+}
+function renderCustomerCards(customers){
+    const grid=document.getElementById('customerCardGrid');
+    if(!grid)return;
+    let html='<div class="cust-grid">';
+    customers.forEach(function(cu){
+        const name=escapeHtml(cu.customer_name||cu.name||'-');
+        const ref=escapeHtml(cu.customer_ref||cu.ref||'-');
+        const pid=String(cu.partner_id||cu.customer_id||'');
+        const custRef=cu.customer_ref||cu.ref||'';
+        const hasLine=!!(cu.line_user_id);
+        const overdue=parseFloat(cu.overdue_amount||0);
+        const totalDue=parseFloat(cu.total_due||0);
+        const bdoCount=parseInt(cu.waiting_bdo_count||0);
+        let cardClass='cust-card';
+        if(overdue>0)cardClass+=' has-overdue';
+        else if(totalDue>0)cardClass+=' has-unpaid';
+        else if(bdoCount>0)cardClass+=' has-bdo';
+        const encRef=encodeURIComponent(custRef);
+        const encId=encodeURIComponent(pid);
+        const encNm=encodeURIComponent(cu.customer_name||cu.name||'');
+        html+='<div class="'+cardClass+'" onclick="showCustomerDetail(decodeURIComponent(\''+encRef+'\'),\''+escapeHtml(pid)+'\',decodeURIComponent(\''+encNm+'\'))">';
+        html+='<div class="cust-name" title="'+name+'">'+name+'</div>';
+        html+='<div class="cust-ref">'+ref+(pid&&pid!==ref?' \u00b7 '+escapeHtml(pid):'')+'</div>';
+        html+='<div class="cust-badges">';
+        if(overdue>0){
+            html+='<span class="cust-badge cust-badge-overdue"><i class="bi bi-exclamation-circle"></i> \u0e40\u0e01\u0e34\u0e19 \u0e3f'+Number(overdue).toLocaleString()+'</span>';
+        }else if(totalDue>0){
+            html+='<span class="cust-badge cust-badge-unpaid"><i class="bi bi-clock"></i> \u0e04\u0e49\u0e32\u0e07 \u0e3f'+Number(totalDue).toLocaleString()+'</span>';
+        }
+        if(bdoCount>0){
+            html+='<span class="cust-badge cust-badge-bdo"><i class="bi bi-file-earmark-check"></i> BDO '+bdoCount+'</span>';
+        }
+        if(hasLine){
+            html+='<span class="cust-badge cust-badge-line"><i class="bi bi-check-circle"></i> LINE</span>';
+        }else{
+            html+='<span class="cust-badge cust-badge-no-line">\u0e44\u0e21\u0e48\u0e21\u0e35 LINE</span>';
+        }
+        html+='</div></div>';
+    });
+    html+='</div>';
+    grid.innerHTML=html;
+}
+function renderCardPagination(total){
+    const pag=document.getElementById('customerCardPagination');
+    if(!pag)return;
+    if(total<=custCardPageSize){pag.style.cssText='display:none !important;';return;}
+    const totalPages=Math.ceil(total/custCardPageSize);
+    const currentPage=Math.floor(custCardOffset/custCardPageSize)+1;
+    pag.style.cssText='display:flex !important;justify-content:center;gap:0.5rem;margin-top:1rem;';
+    let ph=currentPage>1?'<button class="chip" onclick="custCardGoPage('+(currentPage-2)+')" ><i class="bi bi-chevron-left"></i></button>':'';
+    ph+='<span style="padding:0.5rem 1rem;font-size:0.85rem;">\u0e2b\u0e19\u0e49\u0e32 '+currentPage+' / '+totalPages+'</span>';
+    if(currentPage<totalPages)ph+='<button class="chip" onclick="custCardGoPage('+currentPage+')"><i class="bi bi-chevron-right"></i></button>';
+    pag.innerHTML=ph;
+}
+function custCardGoPage(p){custCardOffset=p*custCardPageSize;loadCustomerCards();}
 function closeCustomerInvoiceModal(){const m=document.getElementById('customerInvoiceModal');if(m)m.classList.remove('active');}
 
 async function loadCustomers(){
@@ -568,7 +663,11 @@ async function showCustomerDetail(ref, partnerId, custName){
     const activityRes = { success: true, data: batchData.activity_log || {} };
 
     const slips = (slipRes.data && slipRes.data.slips) || [];
-    const bdos = (bdoRes.data && bdoRes.data.bdos) || [];
+    const bdosAll = (bdoRes.data && bdoRes.data.bdos) || [];
+    const bdos = bdosAll.filter(function(b){
+        const s = String(b.state || b.payment_status || '').toLowerCase();
+        return s !== 'paid' && s !== 'done' && s !== 'reconciled' && s !== 'fully_paid';
+    });
     const detailData = detailRes.data || {};
     const profileData = detailData.profile || {};
     const creditData = detailData.credit || {};
@@ -3973,43 +4072,12 @@ async function unmatchBdoSlip(slipId, slipInboxId){
 }
 
 // ===== INIT =====
-document.addEventListener('DOMContentLoaded',()=>{
-    restoreAdminMode();
+document.addEventListener('DOMContentLoaded', () => {
+    testConnection();
+    loadSalespersonDropdown();
+    loadCustomerCards();
 
-    // Test API connectivity immediately (uses fast 'health' action, no DB query)
-    testConnection().then(() => {
-        // Warm critical caches after connection established
-        setTimeout(warmCriticalCaches, 500);
-    });
-
-    const params = new URLSearchParams(window.location.search);
-    const initialTab = (params.get('tab') || '').trim();
-    // Pre-set date filter to today for flat list view
-    const dfEl=document.getElementById('whFilterDateFrom');
-    if(dfEl&&!dfEl.value)dfEl.value=new Date().toISOString().slice(0,10);
-    // Pre-set grouped view date to today
-    const gdEl=document.getElementById('grpDateInput');
-    if(gdEl&&!gdEl.value)gdEl.value=new Date().toISOString().slice(0,10);
-    if(initialTab){
-        showSection(initialTab);
-    }else{
-        setTimeout(function(){ if(_isSectionActive('overview')) loadTodayOverview(); }, 250);
-    }
-    if(document.getElementById('autoSendSettingsContent'))loadAutoSendSettings();
-
-    // Re-check connection every 60s — skip when tab is hidden
-    setInterval(()=>{ if(!document.hidden) testConnection(); }, 60000);
-    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) testConnection(); });
-    
-    // Log page load performance
-    window.addEventListener('load', () => {
-        const perfData = performance.getEntriesByType('navigation')[0];
-        if(perfData){
-            console.log('[Perf] Page load:', {
-                domContentLoaded: Math.round(perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart) + 'ms',
-                loadComplete: Math.round(perfData.loadEventEnd - perfData.loadEventStart) + 'ms',
-                total: Math.round(perfData.loadEventEnd - perfData.fetchStart) + 'ms'
-            });
-        }
-    });
+    // Re-check connection every 60s
+    setInterval(() => { if(!document.hidden) testConnection(); }, 60000);
+    document.addEventListener('visibilitychange', () => { if(!document.hidden) testConnection(); });
 });

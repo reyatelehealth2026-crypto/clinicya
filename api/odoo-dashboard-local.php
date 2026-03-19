@@ -467,17 +467,23 @@ function getCustomersList($db, $input, $lineAccountId = null) {
     $orderBy = $sortMap[$sortBy] ?? $sortMap['latest_order'];
     
     // Data
+    $bdoJoin = tableExists($db, 'odoo_bdos')
+        ? "LEFT JOIN (SELECT partner_id, COUNT(*) AS waiting_bdo_count FROM odoo_bdos WHERE state='waiting' GROUP BY partner_id) bdo_cnt ON bdo_cnt.partner_id = COALESCE(c.partner_id, c.customer_id)"
+        : '';
+
     $sql = "SELECT 
-        customer_id, partner_id, customer_name, customer_ref,
-        salesperson_id,
-        phone, email, city, state,
-        line_user_id, line_display_name,
-        salesperson_name,
-        credit_limit, total_due, overdue_amount, trust_level,
-        orders_count_total, orders_count_30d, spend_total, spend_30d,
-        first_order_at, latest_order_at, last_invoice_at, last_payment_at,
-        synced_at
-    FROM odoo_customers_cache
+        c.customer_id, c.partner_id, c.customer_name, c.customer_ref,
+        c.salesperson_id,
+        c.phone, c.email, c.city, c.state,
+        c.line_user_id, c.line_display_name,
+        c.salesperson_name,
+        c.credit_limit, c.total_due, c.overdue_amount, c.trust_level,
+        c.orders_count_total, c.orders_count_30d, c.spend_total, c.spend_30d,
+        c.first_order_at, c.latest_order_at, c.last_invoice_at, c.last_payment_at,
+        c.synced_at,
+        COALESCE(bdo_cnt.waiting_bdo_count, 0) as waiting_bdo_count
+    FROM odoo_customers_cache c
+    {$bdoJoin}
     {$whereClause}
     ORDER BY {$orderBy}
     LIMIT {$limit} OFFSET {$offset}";

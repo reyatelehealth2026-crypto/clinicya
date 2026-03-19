@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../classes/Database.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
+require_once __DIR__ . '/../classes/BdoSlipContract.php';
 // OdooAPIClient not needed — saving locally first
 
 use Modules\Core\Database;

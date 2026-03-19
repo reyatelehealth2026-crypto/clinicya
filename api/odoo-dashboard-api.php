@@ -754,23 +754,29 @@ function getCustomerList($db, $input)
                 $orderBy = 'ORDER BY latest_order_at DESC';
             }
 
+            $bdoJoin = tableExists($db, 'odoo_bdos')
+                ? "LEFT JOIN (SELECT partner_id, COUNT(*) AS waiting_bdo_count FROM odoo_bdos WHERE state='waiting' GROUP BY partner_id) bdo_cnt ON bdo_cnt.partner_id = COALESCE(cp.odoo_partner_id, cp.customer_id)"
+                : '';
+
             $stmt = $db->prepare("
                 SELECT
-                    COALESCE(partner_name, customer_name, '') as customer_name,
-                    COALESCE(partner_code, customer_ref, '') as customer_ref,
-                    COALESCE(odoo_partner_id, customer_id) as customer_id,
-                    COALESCE(odoo_partner_id, customer_id) as partner_id,
-                    COALESCE(orders_count_30d, 0) as orders_30d,
-                    COALESCE(orders_count_total, 0) as orders_total,
-                    COALESCE(spend_30d, 0) as spend_30d,
-                    COALESCE(total_due, 0) as total_due,
-                    COALESCE(overdue_amount, 0) as overdue_amount,
-                    COALESCE(credit_limit, 0) as credit_limit,
-                    COALESCE(credit_used, 0) as credit_used,
-                    COALESCE(credit_remaining, 0) as credit_remaining,
-                    latest_order_at,
-                    line_user_id
-                FROM odoo_customer_projection
+                    COALESCE(cp.partner_name, cp.customer_name, '') as customer_name,
+                    COALESCE(cp.partner_code, cp.customer_ref, '') as customer_ref,
+                    COALESCE(cp.odoo_partner_id, cp.customer_id) as customer_id,
+                    COALESCE(cp.odoo_partner_id, cp.customer_id) as partner_id,
+                    COALESCE(cp.orders_count_30d, 0) as orders_30d,
+                    COALESCE(cp.orders_count_total, 0) as orders_total,
+                    COALESCE(cp.spend_30d, 0) as spend_30d,
+                    COALESCE(cp.total_due, 0) as total_due,
+                    COALESCE(cp.overdue_amount, 0) as overdue_amount,
+                    COALESCE(cp.credit_limit, 0) as credit_limit,
+                    COALESCE(cp.credit_used, 0) as credit_used,
+                    COALESCE(cp.credit_remaining, 0) as credit_remaining,
+                    cp.latest_order_at,
+                    cp.line_user_id,
+                    COALESCE(bdo_cnt.waiting_bdo_count, 0) as waiting_bdo_count
+                FROM odoo_customer_projection cp
+                {$bdoJoin}
                 {$whereClause}
                 {$orderBy}
                 LIMIT {$limit} OFFSET {$offset}
