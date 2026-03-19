@@ -106,3 +106,4 @@ database/*.sql
 !database/migration_missing_indexes.sql
 !database/migration_bdos_schema_fix.sql
 !database/migration_additional_indexes.sql
+*.png
