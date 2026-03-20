@@ -52,12 +52,28 @@ $pageTitles = [
 ];
 $pageTitle = $pageTitles[$activeTab] ?? 'Dashboard';
 
+// Include custom glassmorphism styles
+$extraStyles = '
+<link rel="stylesheet" href="assets/css/design-tokens.css">
+<link rel="stylesheet" href="assets/css/glassmorphism.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<style>
+.dashboard-glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+</style>
+';
+
 require_once 'includes/header.php';
 ?>
 
 <div class="space-y-6">
     <!-- Tab Content -->
-    <div class="bg-white rounded-xl shadow-sm">
+    <div class="dashboard-glass">
         <?php
         switch ($activeTab) {
             case 'crm':

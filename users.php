@@ -18,6 +18,179 @@ $pageTitle = 'Users';
 
 require_once 'includes/header.php';
 
+// Add glassmorphism styles
+?>
+<link rel="stylesheet" href="assets/css/design-tokens.css">
+<link rel="stylesheet" href="assets/css/glassmorphism.css">
+<link rel="stylesheet" href="assets/css/components.css">
+<style>
+.users-page {
+    background: radial-gradient(at 40% 20%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+                radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+                linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    min-height: 100vh;
+    padding: 24px;
+}
+.users-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+.users-title {
+    color: white;
+    font-size: 24px;
+    font-weight: 700;
+}
+.users-subtitle {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+}
+.tab-btn-glass {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.tab-btn-glass.active {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border-color: transparent;
+}
+.tab-btn-glass:not(.active) {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+}
+.tab-btn-glass:not(.active):hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+.stat-card-glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 20px;
+}
+.stat-card-glass .stat-label {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+.stat-card-glass .stat-value {
+    color: white;
+    font-size: 24px;
+    font-weight: 700;
+}
+.stat-card-glass .stat-sub {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+    margin-top: 4px;
+}
+.table-glass {
+    width: 100%;
+    border-collapse: collapse;
+}
+.table-glass thead {
+    background: rgba(255, 255, 255, 0.05);
+}
+.table-glass th {
+    padding: 16px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.4);
+}
+.table-glass td {
+    padding: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.8);
+}
+.table-glass tr:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+.btn-glass-primary {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.btn-glass-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+}
+.input-glass {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: white;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+.input-glass:focus {
+    outline: none;
+    border-color: #6366f1;
+    background: rgba(255, 255, 255, 0.08);
+}
+.input-glass::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+.select-glass {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: white;
+    cursor: pointer;
+}
+.pagination-glass a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+.pagination-glass a:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+.pagination-glass span.current {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 12px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: 10px;
+    color: white;
+}
+</style>
+<?php
+
 // Get filter parameters
 $tagFilter = isset($_GET['tag']) ? (int) $_GET['tag'] : null;
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
@@ -565,58 +738,56 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
 
 <div class="flex justify-between items-center mb-6">
     <div>
-        <h2 class="text-2xl font-bold">👥 Customers</h2>
+        <h2 class="users-title">👥 Customers</h2>
         <?php if ($activeTab === 'odoo'): ?>
-            <p class="text-gray-600">ลูกค้า Odoo ที่เชื่อมแล้ว <?php echo number_format($odooSummary['linked_total'] ?? 0); ?> ราย</p>
+            <p class="users-subtitle">ลูกค้า Odoo ที่เชื่อมแล้ว <?php echo number_format($odooSummary['linked_total'] ?? 0); ?> ราย</p>
         <?php else: ?>
-            <p class="text-gray-600">ทั้งหมด <?php echo number_format($totalUsers); ?> คน</p>
+            <p class="users-subtitle">ทั้งหมด <?php echo number_format($totalUsers); ?> คน</p>
         <?php endif; ?>
     </div>
     <div class="flex items-center gap-2">
-        <a href="odoo-dashboard.php" class="px-3 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-black">
+        <a href="odoo-dashboard.php" class="btn-glass-primary">
             <i class="fas fa-chart-line mr-1"></i>Odoo Dashboard
         </a>
     </div>
 </div>
 
 <div class="flex flex-wrap gap-2 mb-6">
-    <a href="<?= $lineTabUrl ?>"
-        class="px-4 py-2 rounded-lg text-sm font-medium <?= $activeTab === 'line' ? 'bg-green-500 text-white' : 'bg-white border hover:bg-gray-50' ?>">
+    <a href="<?= $lineTabUrl ?>" class="tab-btn-glass <?= $activeTab === 'line' ? 'active' : '' ?>">
         <i class="fab fa-line mr-1"></i>LINE Users
     </a>
-    <a href="<?= $odooTabUrl ?>"
-        class="px-4 py-2 rounded-lg text-sm font-medium <?= $activeTab === 'odoo' ? 'bg-indigo-600 text-white' : 'bg-white border hover:bg-gray-50' ?>">
+    <a href="<?= $odooTabUrl ?>" class="tab-btn-glass <?= $activeTab === 'odoo' ? 'active' : '' ?>">
         <i class="fas fa-link mr-1"></i>Odoo Customers
     </a>
 </div>
 
 <?php if ($activeTab === 'odoo'): ?>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white rounded-xl shadow p-4">
-            <p class="text-sm text-gray-500">ออเดอร์ 30 วัน</p>
-            <p class="text-2xl font-bold text-indigo-600"><?php echo number_format((int) ($odooSummary['orders_30d'] ?? 0)); ?></p>
-            <p class="text-xs text-gray-400 mt-1">ยอดขาย ฿<?php echo number_format((float) ($odooSummary['spend_30d'] ?? 0), 2); ?></p>
+        <div class="stat-card-glass">
+            <p class="stat-label">ออเดอร์ 30 วัน</p>
+            <p class="stat-value text-indigo-400"><?php echo number_format((int) ($odooSummary['orders_30d'] ?? 0)); ?></p>
+            <p class="stat-sub">ยอดขาย ฿<?php echo number_format((float) ($odooSummary['spend_30d'] ?? 0), 2); ?></p>
         </div>
-        <div class="bg-white rounded-xl shadow p-4">
-            <p class="text-sm text-gray-500">ยอดค้างชำระ</p>
-            <p class="text-2xl font-bold text-red-600">฿<?php echo number_format((float) ($odooSummary['total_due'] ?? 0), 2); ?></p>
-            <p class="text-xs text-gray-400 mt-1">เกินกำหนด ฿<?php echo number_format((float) ($odooSummary['overdue_amount'] ?? 0), 2); ?></p>
+        <div class="stat-card-glass">
+            <p class="stat-label">ยอดค้างชำระ</p>
+            <p class="stat-value text-rose-400">฿<?php echo number_format((float) ($odooSummary['total_due'] ?? 0), 2); ?></p>
+            <p class="stat-sub">เกินกำหนด ฿<?php echo number_format((float) ($odooSummary['overdue_amount'] ?? 0), 2); ?></p>
         </div>
-        <div class="bg-white rounded-xl shadow p-4">
-            <p class="text-sm text-gray-500">วงเงินเครดิต</p>
-            <p class="text-2xl font-bold text-blue-600">฿<?php echo number_format((float) ($odooSummary['credit_limit'] ?? 0), 2); ?></p>
-            <p class="text-xs text-gray-400 mt-1">ใช้ไป ฿<?php echo number_format((float) ($odooSummary['credit_used'] ?? 0), 2); ?></p>
+        <div class="stat-card-glass">
+            <p class="stat-label">วงเงินเครดิต</p>
+            <p class="stat-value text-blue-400">฿<?php echo number_format((float) ($odooSummary['credit_limit'] ?? 0), 2); ?></p>
+            <p class="stat-sub">ใช้ไป ฿<?php echo number_format((float) ($odooSummary['credit_used'] ?? 0), 2); ?></p>
         </div>
-        <div class="bg-white rounded-xl shadow p-4">
-            <p class="text-sm text-gray-500">เครดิตคงเหลือ</p>
-            <p class="text-2xl font-bold text-emerald-600">฿<?php echo number_format((float) ($odooSummary['credit_remaining'] ?? 0), 2); ?></p>
-            <p class="text-xs text-gray-400 mt-1">
+        <div class="stat-card-glass">
+            <p class="stat-label">เครดิตคงเหลือ</p>
+            <p class="stat-value text-emerald-400">฿<?php echo number_format((float) ($odooSummary['credit_remaining'] ?? 0), 2); ?></p>
+            <p class="stat-sub">
                 อัปเดตล่าสุด <?php echo !empty($odooSummary['latest_order_at']) ? date('d/m/Y H:i', strtotime($odooSummary['latest_order_at'])) : '-'; ?>
             </p>
         </div>
     </div>
 
-    <div class="bg-white rounded-xl shadow p-4 mb-6">
+    <div class="users-card">
         <form method="GET" class="flex flex-wrap gap-4 items-end">
             <input type="hidden" name="tab" value="odoo">
             <div class="flex-1 min-w-[220px]">
@@ -636,18 +807,18 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
         </div>
     </div>
 
-    <div class="bg-white rounded-xl shadow overflow-hidden">
-        <table class="w-full">
-            <thead class="bg-gray-50">
+    <div class="users-card overflow-hidden" style="padding: 0;">
+        <table class="table-glass">
+            <thead>
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ลูกค้า Odoo</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">การติดต่อ</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ออเดอร์</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">เครดิต/หนี้</th>
-                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th>ลูกค้า Odoo</th>
+                    <th>การติดต่อ</th>
+                    <th>ออเดอร์</th>
+                    <th>เครดิต/หนี้</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
-            <tbody class="divide-y">
+            <tbody>
                 <?php foreach ($odooCustomers as $customer): ?>
                     <tr class="hover:bg-gray-50">
                         <td class="px-6 py-4">
@@ -751,21 +922,24 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
     </div>
 
     <?php if ($odooTotalPages > 1): ?>
-        <div class="mt-4 flex justify-center gap-2">
+        <div class="pagination-glass">
             <?php for ($i = 1; $i <= $odooTotalPages; $i++): ?>
-                <a href="?<?php echo http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_page' => $i])); ?>"
-                    class="px-3 py-1 rounded <?php echo $i == $odooPage ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-gray-100'; ?>">
-                    <?php echo $i; ?>
-                </a>
+                <?php if ($i == $odooPage): ?>
+                    <span class="current"><?php echo $i; ?></span>
+                <?php else: ?>
+                    <a href="?<?php echo http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_page' => $i])); ?>">
+                        <?php echo $i; ?>
+                    </a>
+                <?php endif; ?>
             <?php endfor; ?>
         </div>
     <?php endif; ?>
 
-    <div class="mt-8 bg-white rounded-xl shadow overflow-hidden">
-        <div class="p-4 border-b flex items-center justify-between">
+    <div class="mt-8 users-card overflow-hidden" style="padding: 0;">
+        <div class="p-4 border-b flex items-center justify-between" style="border-color: rgba(255,255,255,0.1);">
             <div>
-                <h3 class="font-semibold text-gray-800">ลูกค้า Odoo (ยังไม่เชื่อม LINE)</h3>
-                <p class="text-xs text-gray-500">ดึงจากออเดอร์ Odoo ที่มีรหัสลูกค้า</p>
+                <h3 class="font-semibold text-white">ลูกค้า Odoo (ยังไม่เชื่อม LINE)</h3>
+                <p class="text-xs" style="color: rgba(255,255,255,0.5);">ดึงจากออเดอร์ Odoo ที่มีรหัสลูกค้า</p>
             </div>
             <span class="text-xs text-gray-400">ทั้งหมด <?= number_format((int) $odooUnlinkedTotal) ?> ราย</span>
         </div>
@@ -1126,28 +1300,28 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
         }
     </script>
 <?php else: ?>
-    <div class="bg-white rounded-xl shadow p-4 mb-6">
+    <div class="users-card">
         <form method="GET" id="filterForm">
             <input type="hidden" name="tab" value="line">
             <!-- Basic Search Row -->
             <div class="flex flex-wrap gap-4 items-end mb-4">
                 <div class="flex-1 min-w-[200px]">
-                    <label class="block text-sm font-medium mb-1">ค้นหา</label>
+                    <label class="block text-sm font-medium mb-1" style="color: rgba(255,255,255,0.6);">ค้นหา</label>
                     <input type="text" name="search" value="<?php echo htmlspecialchars($search); ?>"
                         placeholder="ชื่อ, เบอร์โทร, LINE ID..."
-                        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
+                        class="input-glass">
                 </div>
-                <button type="submit" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
+                <button type="submit" class="btn-glass-primary">
                     <i class="fas fa-search mr-1"></i>ค้นหา
                 </button>
                 <button type="button" onclick="toggleAdvancedFilters()"
-                    class="px-4 py-2 border rounded-lg hover:bg-gray-50">
+                    class="chip-glass">
                     <i class="fas fa-filter mr-1"></i>ตัวกรอง
                     <?php
                     $activeFilters = array_filter([$tierFilter, $pointsFilter, $activityFilter, $purchaseFilter, $statusFilter, $tagFilter]);
                     if (count($activeFilters) > 0): ?>
                         <span
-                            class="ml-1 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full"><?= count($activeFilters) ?></span>
+                            class="ml-1 px-2 py-0.5 bg-indigo-500 text-white text-xs rounded-full"><?= count($activeFilters) ?></span>
                     <?php endif; ?>
                 </button>
             </div>
@@ -1279,22 +1453,22 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
                     </button>
                 </div>
             </div>
-            <button type="button" onclick="clearSelection()" class="px-3 py-2 border rounded-lg hover:bg-white text-sm">
+            <button type="button" onclick="clearSelection()" class="chip-glass">
                 <i class="fas fa-times mr-1"></i>ยกเลิก
             </button>
         </div>
     </div>
 
-    <div class="bg-white rounded-xl shadow overflow-hidden">
-        <table class="w-full">
-            <thead class="bg-gray-50">
+    <div class="users-card overflow-hidden" style="padding: 0;">
+        <table class="table-glass">
+            <thead>
                 <tr>
-                    <th class="px-3 py-3 text-center">
+                    <th class="text-center">
                         <input type="checkbox" id="selectAll" onchange="toggleSelectAll()"
                             class="w-4 h-4 rounded border-gray-300 focus:ring-green-500">
                     </th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ผู้ใช้</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tags</th>
+                    <th>ผู้ใช้</th>
+                    <th>Tags</th>
                     <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">ข้อความ</th>
                     <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">สถานะ</th>
                     <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -1360,8 +1534,8 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
 
                 <?php if (empty($users)): ?>
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-                            <i class="fas fa-users text-4xl text-gray-300 mb-3 block"></i>
+                        <td colspan="6" class="px-6 py-12 text-center" style="color: rgba(255,255,255,0.4);">
+                            <i class="fas fa-users text-4xl mb-3 block" style="color: rgba(255,255,255,0.2);"></i>
                             <p>ไม่พบผู้ใช้</p>
                         </td>
                     </tr>
@@ -1371,12 +1545,15 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
     </div>
 
     <?php if ($totalPages > 1): ?>
-        <div class="mt-4 flex justify-center gap-2">
+        <div class="pagination-glass">
             <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $i])); ?>"
-                    class="px-3 py-1 rounded <?php echo $i == $page ? 'bg-green-500 text-white' : 'bg-white hover:bg-gray-100'; ?>">
-                    <?php echo $i; ?>
-                </a>
+                <?php if ($i == $page): ?>
+                    <span class="current"><?php echo $i; ?></span>
+                <?php else: ?>
+                    <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $i])); ?>">
+                        <?php echo $i; ?>
+                    </a>
+                <?php endif; ?>
             <?php endfor; ?>
         </div>
     <?php endif; ?>
@@ -1384,28 +1561,28 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
 
 <?php if ($activeTab === 'line'): ?>
     <!-- Tag Modal -->
-    <div id="tagModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center">
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div class="p-6 border-b flex justify-between items-center">
+    <div id="tagModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center">
+        <div class="modal-glass w-full max-w-md mx-4">
+            <div class="p-6 border-b flex justify-between items-center" style="border-color: rgba(255,255,255,0.1);">
                 <div>
-                    <h3 class="text-xl font-semibold">🏷️ จัดการ Tags</h3>
-                    <p class="text-gray-600 text-sm" id="tagModalUserName"></p>
+                    <h3 class="text-xl font-semibold text-white">🏷️ จัดการ Tags</h3>
+                    <p class="text-sm" style="color: rgba(255,255,255,0.5);" id="tagModalUserName"></p>
                 </div>
-                <button onclick="closeTagModal()" class="text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times text-xl"></i>
+                <button onclick="closeTagModal()" class="modal-close-glass">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="p-6">
                 <div class="mb-4">
-                    <label class="block text-sm font-medium mb-2">Tags ปัจจุบัน</label>
-                    <div id="currentTags" class="flex flex-wrap gap-2 min-h-[32px] p-2 bg-gray-50 rounded-lg">
-                        <span class="text-gray-400 text-sm">กำลังโหลด...</span>
+                    <label class="block text-sm font-medium mb-2" style="color: rgba(255,255,255,0.6);">Tags ปัจจุบัน</label>
+                    <div id="currentTags" class="flex flex-wrap gap-2 min-h-[32px] p-2 rounded-lg" style="background: rgba(255,255,255,0.05);">
+                        <span class="text-sm" style="color: rgba(255,255,255,0.4);">กำลังโหลด...</span>
                     </div>
                 </div>
                 <div class="mb-4">
-                    <label class="block text-sm font-medium mb-2">เพิ่ม Tag</label>
+                    <label class="block text-sm font-medium mb-2" style="color: rgba(255,255,255,0.6);">เพิ่ม Tag</label>
                     <div class="flex gap-2">
-                        <select id="tagSelect" class="flex-1 px-4 py-2 border rounded-lg">
+                        <select id="tagSelect" class="input-glass flex-1">
                             <?php foreach ($allTags as $tag): ?>
                                 <option value="<?php echo $tag['id']; ?>"
                                     data-color="<?php echo htmlspecialchars($tag['color'] ?? '#3B82F6'); ?>">
@@ -1414,14 +1591,14 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
                             <?php endforeach; ?>
                         </select>
                         <button type="button" onclick="assignTag()"
-                            class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
+                            class="btn-glass-success btn-glass-sm">
                             <i class="fas fa-plus"></i>
                         </button>
                     </div>
                 </div>
-                <div class="mt-4 pt-4 border-t">
+                <div class="mt-4 pt-4 border-t" style="border-color: rgba(255,255,255,0.1);">
                     <button type="button" onclick="closeTagModal()"
-                        class="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">ปิด</button>
+                        class="w-full btn-glass-secondary btn-glass-sm">ปิด</button>
                 </div>
             </div>
         </div>
@@ -1640,5 +1817,7 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
         }
     </script>
 <?php endif; ?>
+
+</div> <!-- Close users-page -->
 
 <?php require_once 'includes/footer.php'; ?>

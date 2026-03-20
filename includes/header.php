@@ -479,6 +479,9 @@ $menuGroups = [
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/assets/css/design-tokens.css">
+    <link rel="stylesheet" href="/assets/css/glassmorphism.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
 
     <style>
         :root {
@@ -497,9 +500,10 @@ $menuGroups = [
         
         body { 
             font-family: 'Inter', 'Noto Sans Thai', sans-serif; 
-            background: #f1f5f9;
+            background: #0f172a;
             margin: 0;
             padding: 0;
+            color: white;
         }
         
         /* App Layout - Main Container */
@@ -936,15 +940,58 @@ $menuGroups = [
         }
         
         .top-header {
-            background: white;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
             padding: 12px 24px;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             display: flex;
             align-items: center;
             justify-content: space-between;
             position: sticky;
             top: 0;
             z-index: 30;
+        }
+
+        .page-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .header-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+            transition: all 0.15s;
+            cursor: pointer;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+        }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px 6px 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .user-menu:hover {
+            background: rgba(255, 255, 255, 0.12);
         }
         
         .page-title {
@@ -1005,7 +1052,7 @@ $menuGroups = [
             width: 32px;
             height: 32px;
             border-radius: 8px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
             display: flex;
             align-items: center;
             justify-content: center;

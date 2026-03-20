@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin Login Page - Modern Split Screen Design
+ * Admin Login Page - Glassmorphism Design
  */
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -47,11 +47,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/css/design-tokens.css">
+    <link rel="stylesheet" href="../assets/css/glassmorphism.css">
+    <link rel="stylesheet" href="../assets/css/components.css">
     <style>
         * { font-family: 'Inter', 'Sarabun', sans-serif; }
         
+        body {
+            background: 
+                radial-gradient(at 40% 20%, rgba(99, 102, 241, 0.2) 0px, transparent 50%),
+                radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 0% 50%, rgba(236, 72, 153, 0.1) 0px, transparent 50%),
+                linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            min-height: 100vh;
+        }
+        
+        .login-container {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(40px) saturate(180%);
+            -webkit-backdrop-filter: blur(40px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 32px;
+            box-shadow: 
+                0 40px 80px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+        
         .login-bg {
-            background: linear-gradient(135deg, #00B900 0%, #047857 100%);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.3) 50%, rgba(236, 72, 153, 0.2) 100%);
             position: relative;
             overflow: hidden;
         }
@@ -64,104 +88,128 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             right: 0;
             bottom: 0;
             background: 
-                linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0.05) 60%, transparent 60%),
-                linear-gradient(225deg, transparent 40%, rgba(255, 255, 255, 0.05) 40%, rgba(255, 255, 255, 0.05) 60%, transparent 60%);
-            background-size: 100px 100px;
+                radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.4) 0%, transparent 40%),
+                radial-gradient(circle at 70% 70%, rgba(236, 72, 153, 0.3) 0%, transparent 40%);
             pointer-events: none;
-            opacity: 0.5;
-        }
-        
-        .divider-line {
-            width: 1px;
-            height: 70%;
-            background: rgba(226, 232, 240, 0.8);
-            margin: 0 20px;
-        }
-        
-        .input-field {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 14px 16px;
-            padding-left: 44px;
-            width: 100%;
-            font-size: 15px;
-            transition: all 0.2s;
-            color: #1e293b;
-        }
-        
-        .input-field:focus {
-            outline: none;
-            border-color: #00B900;
-            background: white;
-            box-shadow: 0 0 0 4px rgba(0, 185, 0, 0.1);
-        }
-        
-        .input-field::placeholder {
-            color: #94a3b8;
-        }
-        
-        .input-icon {
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #94a3b8;
-            transition: color 0.2s;
-            font-size: 16px;
-        }
-
-        .input-field:focus + .input-icon {
-            color: #00B900;
-        }
-        
-        .login-btn {
-            background: #00B900;
-            color: white;
-            font-weight: 600;
-            padding: 14px 32px;
-            border-radius: 12px;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(0, 185, 0, 0.2);
-            font-size: 16px;
-        }
-        
-        .login-btn:hover {
-            background: #00A000;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0, 185, 0, 0.3);
         }
         
         .logo-box {
             width: 88px;
             height: 88px;
-            background: white;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             border-radius: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
             position: relative;
             z-index: 10;
         }
         
         .logo-box i {
             font-size: 40px;
-            background: linear-gradient(135deg, #00B900, #047857);
+            background: linear-gradient(135deg, #a5b4fc, #c7d2fe);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+        
+        .input-field {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 14px;
+            padding: 16px 18px;
+            padding-left: 48px;
+            width: 100%;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            color: white;
+        }
+        
+        .input-field::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .input-field:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(99, 102, 241, 0.6);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+        }
+        
+        .input-icon {
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            transition: color 0.3s ease;
+            font-size: 16px;
+        }
 
+        .input-field:focus + .input-icon {
+            color: #a5b4fc;
+        }
+        
+        .login-btn {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            font-weight: 600;
+            padding: 16px 32px;
+            border-radius: 14px;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.3);
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(99, 102, 241, 0.4);
+        }
+        
+        .login-btn:active {
+            transform: translateY(0);
+        }
+        
         .icon-container {
             width: 48px;
             height: 48px;
-            background: rgba(0, 185, 0, 0.1);
+            background: rgba(99, 102, 241, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(99, 102, 241, 0.3);
             border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #00B900;
+            color: #a5b4fc;
             margin-bottom: 20px;
+        }
+        
+        .error-box {
+            background: rgba(244, 63, 94, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(244, 63, 94, 0.2);
+            color: #fda4af;
+            border-radius: 14px;
+        }
+        
+        .checkbox-custom {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .checkbox-custom:checked {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border-color: transparent;
         }
 
         .split-card {
@@ -174,12 +222,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flex-direction: row;
             }
         }
+        
+        .text-gradient {
+            background: linear-gradient(135deg, #a5b4fc 0%, #c7d2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
+<body class="min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-5xl">
         <!-- Main Card -->
-        <div class="bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] overflow-hidden border border-slate-100">
+        <div class="login-container">
             <div class="split-card min-h-[560px]">
                 
                 <!-- Left Side - Branding -->
@@ -189,14 +244,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <i class="fas fa-clinic-medical"></i>
                     </div>
                     
-                    <h2 class="text-white text-2xl font-bold tracking-wide mb-3">LINE Telepharmacy</h2>
-                    <h3 class="text-green-100 text-lg font-medium mb-6">Unified Management System</h3>
+                    <h2 class="text-white text-2xl font-bold tracking-wide mb-3 relative z-10">LINE Telepharmacy</h2>
+                    <h3 class="text-indigo-200 text-lg font-medium mb-6 relative z-10">Unified Management System</h3>
                     
-                    <p class="text-green-50/80 text-sm max-w-sm leading-relaxed">
+                    <p class="text-white/70 text-sm max-w-sm leading-relaxed relative z-10">
                         ระบบจัดการร้านขายยาและคลินิกออนไลน์ครบวงจร เชื่อมต่อข้อมูลลูกค้า แชท และคลังสินค้าไว้ในที่เดียว
                     </p>
 
-                    <div class="mt-12 flex gap-4 text-green-100/60">
+                    <div class="mt-12 flex gap-4 text-white/50 relative z-10">
                         <i class="fas fa-shield-alt text-xl" title="Secure"></i>
                         <i class="fas fa-sync text-xl" title="Real-time"></i>
                         <i class="fas fa-mobile-alt text-xl" title="Mobile Ready"></i>
@@ -204,16 +259,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 
                 <!-- Right Side - Login Form -->
-                <div class="flex-1 flex flex-col justify-center p-8 md:p-14 bg-white relative">
+                <div class="flex-1 flex flex-col justify-center p-8 md:p-14 relative">
                     
                     <div class="max-w-sm w-full mx-auto">
                         <!-- Mobile Header (Hidden on Desktop) -->
                         <div class="md:hidden flex flex-col items-center text-center mb-8">
-                            <div class="w-16 h-16 bg-green-50 border border-green-100 rounded-2xl flex items-center justify-center mb-4 text-green-600 text-2xl shadow-sm">
+                            <div class="logo-box mb-4">
                                 <i class="fas fa-clinic-medical"></i>
                             </div>
-                            <h2 class="text-xl font-bold text-slate-800">Telepharmacy System</h2>
-                            <p class="text-sm text-slate-500 mt-1">Please sign in to continue</p>
+                            <h2 class="text-xl font-bold text-white">Telepharmacy System</h2>
+                            <p class="text-sm text-white/60 mt-1">Please sign in to continue</p>
                         </div>
 
                         <!-- Desktop Header -->
@@ -221,13 +276,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <div class="icon-container">
                                 <i class="fas fa-sign-in-alt text-xl"></i>
                             </div>
-                            <h3 class="text-2xl font-bold text-slate-800 tracking-tight">Welcome Back</h3>
-                            <p class="text-slate-500 mt-2 text-sm">Sign in to access your dashboard</p>
+                            <h3 class="text-2xl font-bold text-white tracking-tight">Welcome Back</h3>
+                            <p class="text-white/60 mt-2 text-sm">Sign in to access your dashboard</p>
                         </div>
                         
                         <!-- Error Message -->
                         <?php if ($error): ?>
-                        <div class="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl text-sm flex items-start gap-3 shadow-sm">
+                        <div class="error-box mb-6 p-4 text-sm flex items-start gap-3">
                             <i class="fas fa-exclamation-circle mt-0.5"></i>
                             <span><?= htmlspecialchars($error) ?></span>
                         </div>
@@ -236,7 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <!-- Login Form -->
                         <form method="POST" class="space-y-5">
                             <div class="space-y-1">
-                                <label class="text-sm font-medium text-slate-700 ml-1">Username / Email</label>
+                                <label class="text-sm font-medium text-white/70 ml-1">Username / Email</label>
                                 <div class="relative">
                                     <input type="text" name="username" required autofocus
                                            class="input-field"
@@ -248,7 +303,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             <div class="space-y-1">
                                 <div class="flex items-center justify-between ml-1">
-                                    <label class="text-sm font-medium text-slate-700">Password</label>
+                                    <label class="text-sm font-medium text-white/70">Password</label>
                                 </div>
                                 <div class="relative">
                                     <input type="password" name="password" required
@@ -261,8 +316,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <!-- Remember Me -->
                             <div class="flex items-center pt-2">
                                 <input type="checkbox" id="remember" name="remember" 
-                                       class="w-4 h-4 rounded border-slate-300 text-green-600 focus:ring-green-500">
-                                <label for="remember" class="ml-2 text-sm text-slate-500 select-none cursor-pointer">Keep me signed in</label>
+                                       class="checkbox-custom">
+                                <label for="remember" class="ml-2 text-sm text-white/60 select-none cursor-pointer">Keep me signed in</label>
                             </div>
                             
                             <!-- Login Button -->
@@ -279,7 +334,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
         
         <!-- Footer -->
-        <p class="text-center text-slate-400 text-sm mt-8">
+        <p class="text-center text-white/40 text-sm mt-8">
             &copy; <?= date('Y') ?> LINE Telepharmacy Platform. All rights reserved.
         </p>
     </div>
