@@ -18,6 +18,7 @@ class OdooFlexTemplates
         $accountName = $data['bank_account']['account_name'] ?? 'บริษัท ซีเอ็นวาย จำกัด';
 
         $invoiceUrl = $data['invoice']['pdf_url'] ?? '#';
+        $liffUrl = $data['liff_url'] ?? '';
 
         return [
             'type' => 'bubble',
@@ -137,31 +138,46 @@ class OdooFlexTemplates
                     ]
                 ]
             ],
-            'footer' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    [
-                        'type' => 'button',
-                        'action' => [
-                            'type' => 'uri',
-                            'label' => 'ดูใบแจ้งหนี้',
-                            'uri' => $invoiceUrl
-                        ],
-                        'style' => 'primary'
-                    ],
-                    [
-                        'type' => 'button',
-                        'action' => [
-                            'type' => 'uri',
-                            'label' => 'อัพโหลดสลิป',
-                            'uri' => 'https://liff.line.me/YOUR_LIFF_ID'
-                        ],
-                        'style' => 'secondary',
-                        'margin' => 'sm'
-                    ]
-                ]
-            ]
+            'footer' => self::buildFooterButtons($invoiceUrl, $liffUrl)
+        ];
+    }
+
+    /**
+     * Build footer buttons for Flex message.
+     * If liffUrl is provided, show both "ดูใบแจ้งหนี้" and "อัพโหลดสลิป" buttons.
+     * Otherwise show only the invoice button.
+     */
+    private static function buildFooterButtons($invoiceUrl, $liffUrl)
+    {
+        $buttons = [
+            [
+                'type' => 'button',
+                'action' => [
+                    'type' => 'uri',
+                    'label' => 'ดูใบแจ้งหนี้',
+                    'uri' => $invoiceUrl ?: 'https://cny.re-ya.com',
+                ],
+                'style' => 'primary',
+            ],
+        ];
+
+        if (!empty($liffUrl)) {
+            $buttons[] = [
+                'type' => 'button',
+                'action' => [
+                    'type' => 'uri',
+                    'label' => 'อัพโหลดสลิป',
+                    'uri' => $liffUrl,
+                ],
+                'style' => 'secondary',
+                'margin' => 'sm',
+            ];
+        }
+
+        return [
+            'type' => 'box',
+            'layout' => 'vertical',
+            'contents' => $buttons,
         ];
     }
 

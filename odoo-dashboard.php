@@ -1465,15 +1465,18 @@
     </div>
 
     <?php
+    // Manual version bump — update on every code change to bust cache
+    $JS_VERSION = '20260320.2';
+
     // Load minified JS if available, fallback to source
     $jsMin = __DIR__ . '/odoo-dashboard.min.js';
     $jsSrc = __DIR__ . '/odoo-dashboard.js';
     if (file_exists($jsMin)) {
         $jsFile = 'odoo-dashboard.min.js';
-        $jsVer  = filemtime($jsMin);
+        $jsVer  = $JS_VERSION . '.' . filemtime($jsMin);
     } else {
         $jsFile = 'odoo-dashboard.js';
-        $jsVer  = filemtime($jsSrc);
+        $jsVer  = $JS_VERSION . '.' . filemtime($jsSrc);
     }
     ?>
     <script src="<?= $jsFile ?>?v=<?= $jsVer ?>" defer></script>
