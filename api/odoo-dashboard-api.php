@@ -212,6 +212,9 @@ try {
             case 'customer_full_detail':
                 $result = getCustomerFullDetail($db, $input);
                 break;
+            case 'send_bdo_payment_notification':
+                $result = sendBdoPaymentNotification($db, $input);
+                break;
             case 'overview_combined':
                 $result = getOverviewCombined($db, $input);
                 break;
@@ -1938,6 +1941,233 @@ function sendDailySummary($db, $userIds)
     return [
         'success_count' => $successCount,
         'failed_count' => $failedCount
+    ];
+}
+
+/**
+ * Send BDO payment notification to customer via LINE Flex Message.
+ *
+ * Requires: bdo_id, partner_id (optional: line_user_id)
+ * Reads data from local DB (odoo_bdo_context + odoo_bdos).
+ * Generates QR from EMVCo payload if available.
+ * Uses OdooFlexTemplates::bdoPaymentRequest() for Flex bubble.
+ */
+function sendBdoPaymentNotification($db, $input)
+{
+    $bdoId     = (int) ($input['bdo_id'] ?? 0);
+    $partnerId = (int) ($input['partner_id'] ?? 0);
+
+    if ($bdoId <= 0) {
+        throw new Exception('กรุณาระบุ BDO ID');
+    }
+
+    // ── 1. Resolve LINE user ────────────────────────────────────────────
+    $lineUserId = trim((string) ($input['line_user_id'] ?? ''));
+    if ($lineUserId === '' && $partnerId > 0) {
+        $lineUserId = resolveLineUserIdFromPartner($db, $partnerId);
+    }
+    if ($lineUserId === '') {
+        throw new Exception('ลูกค้ายังไม่ได้เชื่อมต่อ LINE — ไม่สามารถส่งแจ้งเตือนได้');
+    }
+
+    // ── 2. Throttle check (5 min cooldown per BDO) ──────────────────────
+    try {
+        $throttleStmt = $db->prepare("
+            SELECT sent_at FROM odoo_notification_log 
+            WHERE event_type = 'bdo.payment_request' AND delivery_id LIKE ?
+            AND status = 'sent' AND sent_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+            ORDER BY sent_at DESC LIMIT 1
+        ");
+        $throttleStmt->execute(['bdo_pay_' . $bdoId . '_%']);
+        if ($throttleStmt->fetch()) {
+            throw new Exception('เพิ่งส่งแจ้งเตือน BDO นี้ไปไม่นาน กรุณารอ 5 นาที');
+        }
+    } catch (Exception $e) {
+        if (strpos($e->getMessage(), 'กรุณารอ') !== false) throw $e;
+        // Ignore throttle check errors
+    }
+
+    // ── 3. Load BDO data from local DB ──────────────────────────────────
+    $stmt = $db->prepare("
+        SELECT b.bdo_id, b.bdo_name, b.order_name, b.amount_total, b.bdo_date, b.state,
+               b.delivery_type, b.customer_ref, b.partner_id,
+               c.qr_payload, c.statement_pdf_path, c.financial_summary_json, c.amount AS ctx_amount
+        FROM odoo_bdos b
+        LEFT JOIN odoo_bdo_context c ON c.bdo_id = b.bdo_id
+        WHERE b.bdo_id = ?
+        ORDER BY c.updated_at DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$bdoId]);
+    $bdo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$bdo) {
+        // Try context table alone
+        $stmt = $db->prepare("SELECT * FROM odoo_bdo_context WHERE bdo_id = ? ORDER BY updated_at DESC LIMIT 1");
+        $stmt->execute([$bdoId]);
+        $bdo = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    if (!$bdo) {
+        throw new Exception('ไม่พบข้อมูล BDO #' . $bdoId);
+    }
+
+    // ── 4. Resolve LINE account for access token ────────────────────────
+    $lineAccountId = resolveLineAccountId($db, $lineUserId);
+    if ($lineAccountId <= 0) {
+        throw new Exception('ไม่สามารถระบุ LINE Account ได้');
+    }
+
+    // Get access token
+    require_once __DIR__ . '/../classes/OdooWebhookHandler.php';
+    $handler = new OdooWebhookHandler($db, null);
+    $user = $handler->findLineUserAcrossAccounts(null, $lineUserId);
+    if (!$user || empty($user['channel_access_token'])) {
+        throw new Exception('ไม่พบ LINE access token สำหรับลูกค้านี้');
+    }
+    $accessToken = $user['channel_access_token'];
+
+    // ── 5. Build data for Flex template ─────────────────────────────────
+    $amountTotal = (float) ($bdo['amount_total'] ?? $bdo['ctx_amount'] ?? 0);
+
+    // Parse net-to-pay from financial summary if available
+    $netToPay = $amountTotal;
+    if (!empty($bdo['financial_summary_json'])) {
+        $fs = json_decode($bdo['financial_summary_json'], true);
+        if (is_array($fs) && isset($fs['net_to_pay'])) {
+            $netToPay = (float) $fs['net_to_pay'];
+        } elseif (is_array($fs) && isset($fs['amount_net_to_pay'])) {
+            $netToPay = (float) $fs['amount_net_to_pay'];
+        }
+    }
+
+    $bdoRef   = $bdo['bdo_name'] ?? ('BDO-' . $bdoId);
+    $orderRef = $bdo['order_name'] ?? '-';
+    $dueDate  = $bdo['bdo_date'] ?? date('Y-m-d');
+
+    // Statement PDF URL
+    $baseUrl = defined('BASE_URL') ? BASE_URL : 'https://cny.re-ya.com';
+    $invoicePdfUrl = !empty($bdo['statement_pdf_path'])
+        ? $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId)
+        : $baseUrl;
+
+    $flexData = [
+        'amount_total' => $netToPay > 0 ? $netToPay : $amountTotal,
+        'bdo_ref'      => $bdoRef,
+        'order_ref'    => $orderRef,
+        'due_date'     => $dueDate,
+        'bank_account' => [
+            'bank_name'      => 'ธนาคารกสิกรไทย',
+            'account_number' => '027-8-40955-4',
+            'account_name'   => 'บริษัท ซีเอ็นวาย จำกัด',
+        ],
+        'invoice' => [
+            'pdf_url' => $invoicePdfUrl,
+        ],
+    ];
+
+    // ── 6. Generate QR code from EMVCo payload ──────────────────────────
+    $qrCodeUrl = '';
+    if (!empty($bdo['qr_payload'])) {
+        require_once __DIR__ . '/../classes/QRCodeGenerator.php';
+        $qrGen = new QRCodeGenerator();
+        $qrResult = $qrGen->generatePromptPayQR($bdo['qr_payload'], $bdoRef);
+        if ($qrResult['success'] && !empty($qrResult['url'])) {
+            $qrCodeUrl = $baseUrl . $qrResult['url'];
+        }
+    }
+
+    // Use a placeholder QR if generation failed — still send the notification
+    if (empty($qrCodeUrl)) {
+        // Use a simple PromptPay placeholder image
+        $qrCodeUrl = $baseUrl . '/assets/img/promptpay-placeholder.png';
+    }
+
+    // ── 7. Build Flex Message ───────────────────────────────────────────
+    require_once __DIR__ . '/../classes/OdooFlexTemplates.php';
+    $flexBubble = OdooFlexTemplates::bdoPaymentRequest($flexData, $qrCodeUrl);
+
+    // ── 8. Send via LINE Push API ───────────────────────────────────────
+    $altText = '💰 แจ้งชำระเงิน ' . $bdoRef . ' ยอด ฿' . number_format($flexData['amount_total'], 2);
+
+    $body = json_encode([
+        'to'       => $lineUserId,
+        'messages' => [[
+            'type'     => 'flex',
+            'altText'  => $altText,
+            'contents' => $flexBubble,
+        ]]
+    ], JSON_UNESCAPED_UNICODE);
+
+    $sent = false;
+    $apiError = null;
+    $apiStatus = null;
+    $startTime = microtime(true);
+
+    try {
+        $ch = curl_init('https://api.line.me/v2/bot/message/push');
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $body,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $accessToken,
+            ],
+            CURLOPT_TIMEOUT => 10,
+        ]);
+        $response  = curl_exec($ch);
+        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $apiStatus = $httpCode;
+        $sent      = ($httpCode >= 200 && $httpCode < 300);
+        if (!$sent) {
+            $apiError = $response;
+            error_log("[sendBdoPaymentNotification] LINE push failed [{$httpCode}]: {$response}");
+        }
+    } catch (Exception $e) {
+        $apiError = $e->getMessage();
+        error_log('[sendBdoPaymentNotification] exception: ' . $e->getMessage());
+    }
+
+    $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+
+    // ── 9. Log to notification log ──────────────────────────────────────
+    try {
+        $deliveryId = 'bdo_pay_' . $bdoId . '_' . date('Ymd_His') . '_' . substr(md5($lineUserId), 0, 8);
+        $status = $sent ? 'sent' : 'failed';
+
+        $logStmt = $db->prepare("
+            INSERT INTO odoo_notification_log
+            (delivery_id, event_type, recipient_type, line_user_id,
+             notification_method, status, line_api_status, line_api_response,
+             error_message, latency_ms, sent_at)
+            VALUES (?, 'bdo.payment_request', 'customer', ?, 'flex', ?, ?, ?, ?, ?, NOW())
+        ");
+        $logStmt->execute([
+            $deliveryId,
+            $lineUserId,
+            $status,
+            $apiStatus,
+            $sent ? null : json_encode(['error' => $apiError]),
+            $sent ? null : $apiError,
+            $latencyMs,
+        ]);
+    } catch (Exception $e) {
+        error_log('[sendBdoPaymentNotification] log error: ' . $e->getMessage());
+    }
+
+    if (!$sent) {
+        throw new Exception('ส่งแจ้งเตือนไม่สำเร็จ: ' . ($apiError ?: 'Unknown error'));
+    }
+
+    return [
+        'sent'       => true,
+        'bdo_id'     => $bdoId,
+        'bdo_ref'    => $bdoRef,
+        'amount'     => $flexData['amount_total'],
+        'has_qr'     => !empty($bdo['qr_payload']),
+        'latency_ms' => $latencyMs,
     ];
 }
 
@@ -3747,23 +3977,200 @@ function getBdoDetailLive($db, $input)
         $lineUserId = resolveLineUserIdFromPartner($db, $partnerId);
     }
 
-    if ($lineUserId === '') {
-        throw new Exception('Missing line_user_id');
+    // ── Try Odoo live API first ─────────────────────────────────────────
+    $odooResult = null;
+    if ($lineUserId !== '') {
+        if ($lineAccountId <= 0) {
+            $lineAccountId = resolveLineAccountId($db, $lineUserId);
+        }
+        if ($lineAccountId > 0) {
+            try {
+                require_once __DIR__ . '/../classes/OdooAPIClient.php';
+                $odoo       = new OdooAPIClient($db, $lineAccountId);
+                $odooResult = $odoo->getBdoDetail($lineUserId, $bdoId);
+                $odooResult = $odooResult['data'] ?? $odooResult;
+                if (!empty($odooResult)) {
+                    return $odooResult;
+                }
+            } catch (Exception $e) {
+                error_log('[getBdoDetailLive] Odoo API failed, falling back to local DB: ' . $e->getMessage());
+            }
+        }
     }
 
-    if ($lineAccountId <= 0) {
-        $lineAccountId = resolveLineAccountId($db, $lineUserId);
+    // ── Fallback: build detail from local DB (odoo_bdos + odoo_bdo_context) ──
+    return getBdoDetailFromLocalDb($db, $bdoId, $partnerId);
+}
+
+/**
+ * Build BDO detail from local database tables when Odoo live API is unavailable.
+ * Uses odoo_bdos (synced table) + odoo_bdo_context (webhook-saved context).
+ */
+function getBdoDetailFromLocalDb($db, $bdoId, $partnerId = 0)
+{
+    // 1. Get basic BDO info from sync table
+    $stmt = $db->prepare("
+        SELECT b.*, c.qr_payload, c.statement_pdf_path, c.financial_summary_json,
+               c.selected_invoices_json, c.selected_credit_notes_json, c.amount AS ctx_amount,
+               c.delivery_type AS ctx_delivery_type, c.line_user_id AS ctx_line_user_id
+        FROM odoo_bdos b
+        LEFT JOIN odoo_bdo_context c ON c.bdo_id = b.bdo_id
+        WHERE b.bdo_id = ?
+        ORDER BY c.updated_at DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$bdoId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$row) {
+        // Try just from context table
+        $stmt = $db->prepare("SELECT * FROM odoo_bdo_context WHERE bdo_id = ? ORDER BY updated_at DESC LIMIT 1");
+        $stmt->execute([$bdoId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            throw new Exception('BDO not found in local database');
+        }
     }
 
-    if ($lineAccountId <= 0) {
-        throw new Exception('Cannot resolve line_account_id for this user');
+    // 2. Build BDO object
+    $bdo = [
+        'name'             => $row['bdo_name'] ?? ('BDO-' . $bdoId),
+        'bdo_name'         => $row['bdo_name'] ?? ('BDO-' . $bdoId),
+        'bdo_id'           => (int) $bdoId,
+        'state'            => $row['state'] ?? 'done',
+        'doc_date'         => $row['bdo_date'] ?? $row['updated_at'] ?? null,
+        'delivery_type'    => $row['delivery_type'] ?? $row['ctx_delivery_type'] ?? null,
+        'amount_total'     => (float) ($row['amount_total'] ?? $row['ctx_amount'] ?? 0),
+        'amount_net_to_pay' => null,
+        'partner_id'       => (int) ($row['partner_id'] ?? $partnerId),
+    ];
+
+    // 3. Parse financial summary from context
+    $summary = null;
+    $saleOrders = [];
+    $outstandingInvoices = [];
+    $creditNotes = [];
+    $deposits = [];
+
+    if (!empty($row['financial_summary_json'])) {
+        $fs = json_decode($row['financial_summary_json'], true);
+        if (is_array($fs)) {
+            $summary = [
+                'so_amount'          => $fs['so_amount'] ?? $fs['total_so_amount'] ?? null,
+                'outstanding_amount' => $fs['outstanding_amount'] ?? $fs['total_outstanding'] ?? null,
+                'credit_note_amount' => $fs['credit_note_amount'] ?? $fs['total_credit_notes'] ?? null,
+                'deposit_amount'     => $fs['deposit_amount'] ?? $fs['total_deposits'] ?? null,
+                'net_to_pay'         => $fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $bdo['amount_total'],
+            ];
+            $bdo['amount_net_to_pay'] = $summary['net_to_pay'];
+        }
     }
 
-    require_once __DIR__ . '/../classes/OdooAPIClient.php';
-    $odoo   = new OdooAPIClient($db, $lineAccountId);
-    $result = $odoo->getBdoDetail($lineUserId, $bdoId);
+    if (!empty($row['selected_invoices_json'])) {
+        $invs = json_decode($row['selected_invoices_json'], true);
+        if (is_array($invs)) {
+            $outstandingInvoices = array_map(function ($inv) {
+                return [
+                    'number'       => $inv['number'] ?? $inv['name'] ?? '-',
+                    'name'         => $inv['name'] ?? $inv['number'] ?? '-',
+                    'residual'     => $inv['residual'] ?? $inv['amount_residual'] ?? $inv['amount_total'] ?? 0,
+                    'amount_total' => $inv['amount_total'] ?? 0,
+                    'date'         => $inv['date'] ?? $inv['invoice_date'] ?? null,
+                    'origin'       => $inv['origin'] ?? '',
+                ];
+            }, $invs);
+        }
+    }
 
-    return $result['data'] ?? $result;
+    if (!empty($row['selected_credit_notes_json'])) {
+        $cns = json_decode($row['selected_credit_notes_json'], true);
+        if (is_array($cns)) {
+            $creditNotes = array_map(function ($cn) {
+                return [
+                    'number'       => $cn['number'] ?? $cn['name'] ?? '-',
+                    'name'         => $cn['name'] ?? $cn['number'] ?? '-',
+                    'residual'     => $cn['residual'] ?? $cn['amount_total'] ?? 0,
+                    'amount_total' => $cn['amount_total'] ?? 0,
+                ];
+            }, $cns);
+        }
+    }
+
+    // 4. QR payment data
+    if (!empty($row['qr_payload'])) {
+        $bdo['qr_payment_data'] = [
+            'raw_payload' => $row['qr_payload'],
+        ];
+    }
+
+    // 5. Statement PDF
+    $statementPdfUrl = null;
+    if (!empty($row['statement_pdf_path'])) {
+        $statementPdfUrl = 'api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId);
+    }
+
+    // 6. Matched slips from local DB
+    $slips = [];
+    try {
+        $slipStmt = $db->prepare("
+            SELECT id, slip_inbox_id, amount, transfer_date, image_path, created_at
+            FROM odoo_slip_uploads
+            WHERE bdo_id = ? AND status IN ('matched','confirmed','sent')
+            ORDER BY created_at DESC
+        ");
+        $slipStmt->execute([$bdoId]);
+        $slips = $slipStmt->fetchAll(PDO::FETCH_ASSOC);
+        $slips = array_map(function ($s) {
+            return [
+                'slip_inbox_name' => 'Slip #' . ($s['slip_inbox_id'] ?? $s['id']),
+                'name'            => 'Slip #' . ($s['slip_inbox_id'] ?? $s['id']),
+                'amount'          => (float) ($s['amount'] ?? 0),
+                'transfer_date'   => $s['transfer_date'] ?? $s['created_at'],
+                'created_at'      => $s['created_at'],
+            ];
+        }, $slips);
+    } catch (Exception $e) {
+        error_log('[getBdoDetailFromLocalDb] slips query: ' . $e->getMessage());
+    }
+
+    // 7. Get related sale orders from odoo_orders
+    try {
+        $soStmt = $db->prepare("
+            SELECT order_id, order_name, amount_total, state, order_date
+            FROM odoo_orders
+            WHERE partner_id = ? AND order_name IN (
+                SELECT order_name FROM odoo_bdos WHERE bdo_id = ?
+            )
+            ORDER BY order_date DESC LIMIT 10
+        ");
+        $soStmt->execute([$bdo['partner_id'] ?: $partnerId, $bdoId]);
+        $soRows = $soStmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($soRows as $so) {
+            $saleOrders[] = [
+                'name'         => $so['order_name'] ?? '-',
+                'amount_total' => (float) ($so['amount_total'] ?? 0),
+                'lines'        => [], // not available locally
+            ];
+        }
+    } catch (Exception $e) {
+        // Silently ignore — sale_orders is optional
+    }
+
+    // 8. Build Odoo URL
+    $odooUrl = 'https://erp.cnyrxapp.com/web#id=' . $bdoId . '&model=cny.bill.invoice.before.delivery&view_type=form';
+
+    return [
+        'bdo'                  => $bdo,
+        'summary'              => $summary,
+        'sale_orders'          => $saleOrders,
+        'outstanding_invoices' => $outstandingInvoices,
+        'credit_notes'         => $creditNotes,
+        'deposits'             => $deposits,
+        'slips'                => $slips,
+        'statement_pdf_url'    => $statementPdfUrl,
+        'odoo_url'             => $odooUrl,
+        'source'               => 'local_db',
+    ];
 }
 
 /**

@@ -930,6 +930,7 @@ async function showCustomerDetail(ref, partnerId, custName){
                 html += '<span style="font-weight:700;font-size:1rem;color:var(--gray-800);">'+amt+'</span>';
                 html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
                 if(isPending){
+                    html += '<button id="btnNotifyBdo'+escapeHtml(String(_bdoId))+'" onclick="sendBdoPaymentNotify(\''+escapeHtml(String(_bdoId))+'\',\''+escapeHtml(String(pidParam||partnerId||''))+'\',\''+escapeHtml(bdoName)+'\')" style="background:#06C755;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:0.78rem;cursor:pointer;font-weight:500;font-family:inherit;" title="ส่งแจ้งยอดชำระให้ลูกค้าทาง LINE"><i class="bi bi-send"></i> ส่งแจ้งยอด</button>';
                     html += '<button onclick=\'openBdoSlipAttach('+escapeHtml(JSON.stringify(bdo))+','+escapeHtml(JSON.stringify(slips.filter(function(s){return s.status==="pending";})))+')\' style="background:#059669;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:0.78rem;cursor:pointer;font-weight:500;font-family:inherit;"><i class="bi bi-paperclip"></i> \u0e41\u0e19\u0e1a\u0e2a\u0e25\u0e34\u0e1b</button>';
                 }
                 if(isPaid){
@@ -2401,6 +2402,37 @@ async function openInvoiceDetail(invoiceId, invoiceName){
     content.innerHTML=html;
 }
 
+// ===== SEND BDO PAYMENT NOTIFICATION =====
+async function sendBdoPaymentNotify(bdoId, partnerId, bdoName){
+    if(!bdoId){alert('ไม่พบ BDO ID');return;}
+    const displayName = bdoName || ('BDO-'+bdoId);
+    if(!confirm('ส่งแจ้งยอดชำระ '+displayName+' ให้ลูกค้าทาง LINE?\n\nระบบจะส่ง Flex Message สรุปยอด พร้อม QR พร้อมเพย์ (ถ้ามี)')){
+        return;
+    }
+    // Find and disable the button
+    const btn = document.getElementById('btnNotifyBdo'+bdoId);
+    const origHtml = btn ? btn.innerHTML : '';
+    if(btn){btn.disabled=true;btn.innerHTML='<i class="bi bi-hourglass-split spin"></i> กำลังส่ง...';}
+    try{
+        const res = await whApiCall({
+            action:'send_bdo_payment_notification',
+            bdo_id: bdoId,
+            partner_id: partnerId||''
+        });
+        if(!res || !res.success){
+            throw new Error(res?.error || 'ส่งแจ้งเตือนไม่สำเร็จ');
+        }
+        const d = res.data || {};
+        const amtStr = d.amount ? '฿'+Number(d.amount).toLocaleString('th-TH',{minimumFractionDigits:2}) : '';
+        const qrNote = d.has_qr ? ' (พร้อม QR พร้อมเพย์)' : ' (ไม่มี QR)';
+        alert('✅ ส่งแจ้งยอดชำระ '+displayName+' สำเร็จ\n'+amtStr+qrNote);
+        if(btn){btn.innerHTML='<i class="bi bi-check-lg"></i> ส่งแล้ว';btn.style.background='#dcfce7';btn.style.color='#16a34a';btn.style.borderColor='#bbf7d0';}
+    }catch(e){
+        alert('❌ '+e.message);
+        if(btn){btn.disabled=false;btn.innerHTML=origHtml;}
+    }
+}
+
 // ===== BDO DETAIL MODAL =====
 async function openBdoDetail(bdoId, bdoName, rawBdo){
     const modal=document.getElementById('bdoDetailModal');
@@ -2455,13 +2487,19 @@ async function openBdoDetail(bdoId, bdoName, rawBdo){
     html+='<div class="info-box"><div class="info-label">ยอดสุทธิ</div><div class="info-value" style="color:#059669;">'+_fmtMoney(bdo.amount_net_to_pay||bdo.amount_total||rawBdoData?.amount_total)+'</div></div>';
     html+='</div>';
 
-    if(statementUrl || detail?.odoo_url){
+    if(statementUrl || detail?.odoo_url || partnerId){
         html+='<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">';
         if(statementUrl){
             html+='<button class="chip" onclick="openPdfViewer(\''+escapeHtml(statementUrl)+'\',\'Statement PDF - '+escapeHtml(String(bdo.name||bdo.bdo_name||bdoId))+'\')"><i class="bi bi-file-earmark-pdf"></i> ดู Statement PDF</button>';
         }
         if(detail?.odoo_url){
             html+='<a class="chip" href="'+escapeHtml(detail.odoo_url)+'" target="_blank" rel="noopener noreferrer" style="text-decoration:none;"><i class="bi bi-box-arrow-up-right"></i> เปิดใน Odoo</a>';
+        }
+        // Send payment notification button
+        const bdoState = String(bdo.state||rawBdoData?.state||'').toLowerCase();
+        const isPaidBdo = bdoState==='paid'||bdoState==='cancelled';
+        if(!isPaidBdo){
+            html+='<button id="btnNotifyBdo'+escapeHtml(String(bdoId))+'" class="chip" onclick="sendBdoPaymentNotify(\''+escapeHtml(String(bdoId))+'\',\''+escapeHtml(String(partnerId))+'\',\''+escapeHtml(String(bdo.name||bdo.bdo_name||bdoId))+'\')" style="background:#06C755;color:#fff;border-color:#06C755;"><i class="bi bi-send"></i> ส่งแจ้งยอดผ่าน LINE</button>';
         }
         html+='</div>';
     }
@@ -2552,11 +2590,17 @@ async function openBdoDetail(bdoId, bdoName, rawBdo){
     }
 
     if(detail?.bdo?.qr_payment_data?.raw_payload){
-        html+=sectionTitle('qr-code','#7c3aed','QR Payment');
+        html+=sectionTitle('qr-code','#7c3aed','QR Payment (พร้อมเพย์)');
         html+='<div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:10px;padding:0.8rem;">';
-        html+='<div style="font-size:0.75rem;color:var(--gray-500);margin-bottom:0.3rem;">Payload</div>';
-        html+='<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;word-break:break-all;">'+escapeHtml(detail.bdo.qr_payment_data.raw_payload)+'</div>';
+        html+='<div style="font-size:0.75rem;color:var(--gray-500);margin-bottom:0.3rem;">EMVCo Payload</div>';
+        html+='<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;word-break:break-all;margin-bottom:0.5rem;">'+escapeHtml(detail.bdo.qr_payment_data.raw_payload)+'</div>';
+        html+='<div style="font-size:0.72rem;color:#7c3aed;"><i class="bi bi-info-circle"></i> QR นี้จะถูกส่งพร้อม Flex Message เมื่อกดปุ่ม "ส่งแจ้งยอดผ่าน LINE"</div>';
         html+='</div>';
+    }
+
+    // Data source indicator
+    if(detail?.source === 'local_db'){
+        html+='<div style="margin-top:0.75rem;padding:0.5rem 0.75rem;background:#fef9c3;border:1px solid #fde68a;border-radius:8px;font-size:0.75rem;color:#92400e;"><i class="bi bi-database"></i> ข้อมูลจาก Local DB (Odoo API ไม่สามารถเชื่อมต่อได้ — ข้อมูลบางส่วนอาจไม่ครบ)</div>';
     }
 
     html+='<div style="margin-top:1rem;"><button class="chip" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'"><i class="bi bi-code-slash"></i> ดูข้อมูลดิบ</button>';
@@ -3803,7 +3847,7 @@ async function unmatchFromDashboard(slipInboxId){
 // ===== BDO SLIP ATTACH MODAL =====
 let _bsaBdoData=null, _bsaSlips=[], _bsaSelectedSlipId=null, _bsaFileBase64=null;
 
-function openBdoSlipAttach(bdoData, pendingSlips){
+async function openBdoSlipAttach(bdoData, pendingSlips){
     const paymentState = normalizeBdoPaymentStatus(bdoData || {});
     if(paymentState.key === 'paid'){
         alert('BDO นี้ชำระแล้ว จึงปิดการแนบสลิป');
@@ -3821,27 +3865,57 @@ function openBdoSlipAttach(bdoData, pendingSlips){
     document.getElementById('bsaPreview').style.display='none';
     document.getElementById('bsaFileInput').value='';
     document.getElementById('bsaConfirmBtn').disabled=true;
+
+    // If no pending slips passed, try to fetch customer's uploaded slips from API
+    if(!_bsaSlips.length && (bdoData.partner_id || bdoData.customer_ref || bdoData.line_user_id)){
+        const grid=document.getElementById('bsaUnmatchedSlips');
+        grid.innerHTML='<span style="color:var(--gray-400);font-size:0.8rem;grid-column:1/-1;text-align:center;padding:1rem;"><i class="bi bi-arrow-repeat spin"></i> กำลังค้นหาสลิปที่ลูกค้าอัพโหลด...</span>';
+        document.getElementById('bdoSlipAttachModal').classList.add('active');
+        try{
+            const slipRes = await whApiCall({
+                action:'odoo_slips',
+                partner_id: bdoData.partner_id||'',
+                customer_ref: bdoData.customer_ref||'',
+                status:'pending',
+                limit:50
+            });
+            if(slipRes && slipRes.success && slipRes.data && slipRes.data.slips){
+                _bsaSlips = slipRes.data.slips.filter(function(s){return s.status==='pending';});
+            }
+        }catch(e){
+            // Silently ignore — grid will show empty state
+        }
+        _renderBsaSlipGrid();
+        return; // modal already shown above
+    }
+
     // Render unmatched slips grid
+    _renderBsaSlipGrid();
+    document.getElementById('bdoSlipAttachModal').classList.add('active');
+}
+
+function _renderBsaSlipGrid(){
     const grid=document.getElementById('bsaUnmatchedSlips');
+    if(!grid)return;
     if(!_bsaSlips.length){
-        grid.innerHTML='<span style="color:var(--gray-400);font-size:0.8rem;grid-column:1/-1;text-align:center;padding:1rem;">\u0e44\u0e21\u0e48\u0e21\u0e35\u0e2a\u0e25\u0e34\u0e1b\u0e17\u0e35\u0e48\u0e23\u0e2d\u0e08\u0e31\u0e1a\u0e04\u0e39\u0e48</span>';
+        grid.innerHTML='<span style="color:var(--gray-400);font-size:0.8rem;grid-column:1/-1;text-align:center;padding:1rem;">ไม่มีสลิปที่รอจับคู่ — สามารถอัพโหลดรูปสลิปใหม่ได้ด้านล่าง</span>';
     } else {
-        let gh='';
+        let gh='<div style="grid-column:1/-1;font-size:0.75rem;color:var(--gray-500);margin-bottom:4px;">พบ '+_bsaSlips.length+' สลิปที่รอจับคู่ — เลือกสลิปด้านล่างเพื่อแนบกับ BDO</div>';
         _bsaSlips.forEach(function(s){
             const thumb=s.image_full_url||'';
             const amt=s.amount!=null?'\u0e3f'+Number(s.amount).toLocaleString():'';
+            const dateStr=s.transfer_date?s.transfer_date.slice(0,10):'';
             gh+='<div id="bsaSlip'+s.id+'" onclick="bsaSelectSlip('+s.id+')" style="cursor:pointer;border:2px solid var(--gray-200);border-radius:8px;overflow:hidden;transition:all 0.15s;text-align:center;">';
             if(thumb){
                 gh+='<img src="'+escapeHtml(thumb)+'" style="width:100%;height:70px;object-fit:cover;" onerror="this.style.display=\'none\'">';
             } else {
                 gh+='<div style="width:100%;height:70px;background:var(--gray-100);border-radius:8px;display:flex;align-items:center;justify-content:center;"><i class="bi bi-image" style="color:var(--gray-400);font-size:1.2rem;"></i></div>';
             }
-            gh+='<div style="font-size:0.7rem;padding:3px;color:var(--gray-600);">'+amt+'</div>';
+            gh+='<div style="font-size:0.7rem;padding:3px;color:var(--gray-600);">'+amt+(dateStr?' · '+dateStr:'')+'</div>';
             gh+='</div>';
         });
         grid.innerHTML=gh;
     }
-    document.getElementById('bdoSlipAttachModal').classList.add('active');
 }
 
 function closeBdoSlipAttach(){
