@@ -4206,7 +4206,7 @@ function getBdoDetailFromLocalDb($db, $bdoId, $partnerId = 0)
     }
 
     // 8. Build Odoo URL
-    $odooUrl = 'https://cny.cnyrxapp.com/web#id=' . $bdoId . '&model=cny.bill.invoice.before.delivery&view_type=form';
+    $odooUrl = 'https://erp.cnyrxapp.com/web#id=' . $bdoId . '&model=cny.bill.invoice.before.delivery&view_type=form';
 
     return [
         'bdo'                  => $bdo,
