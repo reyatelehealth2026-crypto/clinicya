@@ -2107,12 +2107,14 @@ function sendBdoPaymentNotification($db, $input)
         'liff_url' => '',
     ];
 
-    // ── 6. Generate QR code from EMVCo payload ──────────────────────────
+    // ── 6. Resolve QR payload (local DB → Odoo live API fallback) ──────
+    $qrPayload = resolveQrPayload($db, $bdoId, $bdo['qr_payload'] ?? '', $lineUserId, $partnerId);
+
     $qrCodeUrl = '';
-    if (!empty($bdo['qr_payload'])) {
+    if (!empty($qrPayload)) {
         require_once __DIR__ . '/../classes/QRCodeGenerator.php';
         $qrGen = new QRCodeGenerator();
-        $qrResult = $qrGen->generatePromptPayQR($bdo['qr_payload'], $bdoRef);
+        $qrResult = $qrGen->generatePromptPayQR($qrPayload, $bdoRef);
         if ($qrResult['success'] && !empty($qrResult['url'])) {
             $qrCodeUrl = $baseUrl . $qrResult['url'];
         }
@@ -2120,7 +2122,6 @@ function sendBdoPaymentNotification($db, $input)
 
     // Use a placeholder QR if generation failed — still send the notification
     if (empty($qrCodeUrl)) {
-        // Use a simple PromptPay placeholder image
         $qrCodeUrl = $baseUrl . '/assets/img/promptpay-placeholder.png';
     }
 
@@ -2208,7 +2209,7 @@ function sendBdoPaymentNotification($db, $input)
         'bdo_id'     => $bdoId,
         'bdo_ref'    => $bdoRef,
         'amount'     => $flexData['amount_total'],
-        'has_qr'     => !empty($bdo['qr_payload']),
+        'has_qr'     => !empty($qrPayload),
         'latency_ms' => $latencyMs,
     ];
 }
@@ -2335,12 +2336,14 @@ function previewBdoPaymentNotification($db, $input)
         'liff_url' => '',
     ];
 
-    // ── 3. Generate QR code ─────────────────────────────────────────────
+    // ── 3. Resolve QR payload (local DB → Odoo live API fallback) ──────
+    $qrPayload = resolveQrPayload($db, $bdoId, $bdo['qr_payload'] ?? '', $lineUserId, $partnerId);
+
     $qrCodeUrl = '';
-    if (!empty($bdo['qr_payload'])) {
+    if (!empty($qrPayload)) {
         require_once __DIR__ . '/../classes/QRCodeGenerator.php';
         $qrGen = new QRCodeGenerator();
-        $qrResult = $qrGen->generatePromptPayQR($bdo['qr_payload'], $bdoRef);
+        $qrResult = $qrGen->generatePromptPayQR($qrPayload, $bdoRef);
         if ($qrResult['success'] && !empty($qrResult['url'])) {
             $qrCodeUrl = $baseUrl . $qrResult['url'];
         }
@@ -2359,7 +2362,7 @@ function previewBdoPaymentNotification($db, $input)
         'bdo_id'   => $bdoId,
         'bdo_ref'  => $bdoRef,
         'amount'   => $flexData['amount_total'],
-        'has_qr'   => !empty($bdo['qr_payload']),
+        'has_qr'   => !empty($qrPayload),
         'alt_text' => $altText,
         'flex_message' => [
             'type'     => 'flex',
@@ -5115,6 +5118,58 @@ function ensureOdooSlipInboxId($db, $odoo, array $localSlip, $lineUserId)
     ]);
 
     return $slipInboxId;
+}
+
+/**
+ * Helper: Resolve QR payload for a BDO.
+ * 1. Return local qr_payload if available
+ * 2. Fallback: fetch from Odoo live API via getBdoDetail
+ * 3. If found from Odoo, cache back to odoo_bdo_context
+ */
+function resolveQrPayload($db, $bdoId, $localQrPayload, $lineUserId, $partnerId = 0)
+{
+    if (!empty($localQrPayload)) {
+        return $localQrPayload;
+    }
+
+    // Try Odoo live API
+    try {
+        if ($lineUserId === '' && $partnerId > 0) {
+            $lineUserId = resolveLineUserIdFromPartner($db, $partnerId);
+        }
+        if ($lineUserId === '') {
+            return '';
+        }
+
+        $lineAccountId = resolveLineAccountId($db, $lineUserId);
+        if ($lineAccountId <= 0) {
+            return '';
+        }
+
+        require_once __DIR__ . '/../classes/OdooAPIClient.php';
+        $odoo = new OdooAPIClient($db, $lineAccountId);
+        $detail = $odoo->getBdoDetail($lineUserId, $bdoId);
+        $detailData = $detail['data'] ?? $detail;
+
+        $rawPayload = $detailData['bdo']['qr_payment_data']['raw_payload']
+            ?? $detailData['qr_payment_data']['raw_payload']
+            ?? '';
+
+        if (!empty($rawPayload)) {
+            // Cache to odoo_bdo_context for next time
+            try {
+                $upd = $db->prepare("UPDATE odoo_bdo_context SET qr_payload = ? WHERE bdo_id = ? AND (qr_payload IS NULL OR qr_payload = '')");
+                $upd->execute([$rawPayload, $bdoId]);
+            } catch (Exception $e) {
+                error_log('[resolveQrPayload] cache update failed: ' . $e->getMessage());
+            }
+            return $rawPayload;
+        }
+    } catch (Exception $e) {
+        error_log('[resolveQrPayload] Odoo API fallback failed for BDO #' . $bdoId . ': ' . $e->getMessage());
+    }
+
+    return '';
 }
 
 /**
