@@ -215,6 +215,9 @@ try {
             case 'send_bdo_payment_notification':
                 $result = sendBdoPaymentNotification($db, $input);
                 break;
+            case 'preview_bdo_payment_notification':
+                $result = previewBdoPaymentNotification($db, $input);
+                break;
             case 'overview_combined':
                 $result = getOverviewCombined($db, $input);
                 break;
@@ -2207,6 +2210,162 @@ function sendBdoPaymentNotification($db, $input)
         'amount'     => $flexData['amount_total'],
         'has_qr'     => !empty($bdo['qr_payload']),
         'latency_ms' => $latencyMs,
+    ];
+}
+
+/**
+ * Preview BDO payment notification — returns the Flex JSON without sending.
+ * Same data-building logic as sendBdoPaymentNotification() steps 1-7.
+ *
+ * Requires: bdo_id, partner_id (optional)
+ */
+function previewBdoPaymentNotification($db, $input)
+{
+    $bdoId     = (int) ($input['bdo_id'] ?? 0);
+    $partnerId = (int) ($input['partner_id'] ?? 0);
+
+    if ($bdoId <= 0) {
+        throw new Exception('กรุณาระบุ BDO ID');
+    }
+
+    // ── 1. Load BDO data from local DB ──────────────────────────────────
+    $stmt = $db->prepare("
+        SELECT b.bdo_id, b.bdo_name, b.order_name, b.amount_total, b.bdo_date, b.state,
+               b.customer_ref, b.partner_id,
+               c.qr_payload, c.statement_pdf_path, c.financial_summary_json,
+               c.selected_invoices_json, c.selected_credit_notes_json,
+               c.amount AS ctx_amount, c.delivery_type
+        FROM odoo_bdos b
+        LEFT JOIN odoo_bdo_context c ON c.bdo_id = b.bdo_id
+        WHERE b.bdo_id = ?
+        ORDER BY c.updated_at DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$bdoId]);
+    $bdo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$bdo) {
+        $stmt = $db->prepare("SELECT * FROM odoo_bdo_context WHERE bdo_id = ? ORDER BY updated_at DESC LIMIT 1");
+        $stmt->execute([$bdoId]);
+        $bdo = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    if (!$bdo) {
+        throw new Exception('ไม่พบข้อมูล BDO #' . $bdoId);
+    }
+
+    // ── 2. Build financial data ─────────────────────────────────────────
+    $amountTotal = (float) ($bdo['amount_total'] ?? $bdo['ctx_amount'] ?? 0);
+    $netToPay = $amountTotal;
+    $financialSummary = [];
+    if (!empty($bdo['financial_summary_json'])) {
+        $fs = json_decode($bdo['financial_summary_json'], true);
+        if (is_array($fs)) {
+            $netToPay = (float) ($fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $amountTotal);
+            $financialSummary = [
+                'so_amount'          => $fs['so_amount']          ?? $fs['total_so_amount']   ?? null,
+                'outstanding_amount' => $fs['outstanding_amount'] ?? $fs['total_outstanding'] ?? null,
+                'credit_note_amount' => $fs['credit_note_amount'] ?? $fs['total_credit_notes'] ?? null,
+                'deposit_amount'     => $fs['deposit_amount']     ?? $fs['total_deposits']     ?? null,
+                'net_to_pay'         => $netToPay,
+            ];
+        }
+    }
+
+    $invoices = [];
+    if (!empty($bdo['selected_invoices_json'])) {
+        $invs = json_decode($bdo['selected_invoices_json'], true);
+        if (is_array($invs)) {
+            foreach ($invs as $inv) {
+                $invoices[] = [
+                    'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                    'residual' => (float) ($inv['residual'] ?? $inv['amount_residual'] ?? $inv['amount_total'] ?? 0),
+                    'date'     => $inv['date'] ?? $inv['invoice_date'] ?? '',
+                    'origin'   => $inv['origin'] ?? '',
+                ];
+            }
+        }
+    }
+
+    $creditNotes = [];
+    if (!empty($bdo['selected_credit_notes_json'])) {
+        $cns = json_decode($bdo['selected_credit_notes_json'], true);
+        if (is_array($cns)) {
+            foreach ($cns as $cn) {
+                $creditNotes[] = [
+                    'number'   => $cn['number'] ?? $cn['name'] ?? '-',
+                    'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
+                ];
+            }
+        }
+    }
+
+    $bdoRef   = $bdo['bdo_name'] ?? ('BDO-' . $bdoId);
+    $orderRef = $bdo['order_name'] ?? '-';
+    $dueDate  = $bdo['bdo_date'] ?? date('Y-m-d');
+
+    $baseUrl = defined('BASE_URL') ? BASE_URL : 'https://cny.re-ya.com';
+
+    // Resolve line_account_id for PDF URL
+    $lineAccountId = 0;
+    $lineUserId = trim((string) ($input['line_user_id'] ?? ''));
+    if ($lineUserId === '' && $partnerId > 0) {
+        try { $lineUserId = resolveLineUserIdFromPartner($db, $partnerId); } catch (Exception $e) { /* ignore */ }
+    }
+    if ($lineUserId !== '') {
+        try { $lineAccountId = resolveLineAccountId($db, $lineUserId); } catch (Exception $e) { /* ignore */ }
+    }
+
+    $invoicePdfUrl = $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId)
+        . ($lineAccountId > 0 ? '&line_account_id=' . $lineAccountId : '');
+
+    $flexData = [
+        'amount_total'      => $netToPay > 0 ? $netToPay : $amountTotal,
+        'bdo_ref'           => $bdoRef,
+        'order_ref'         => $orderRef,
+        'due_date'          => $dueDate,
+        'financial_summary' => $financialSummary,
+        'invoices'          => $invoices,
+        'credit_notes'      => $creditNotes,
+        'bank_account' => [
+            'bank_name'      => 'ธนาคารกสิกรไทย',
+            'account_number' => '027-8-40955-4',
+            'account_name'   => 'บริษัท ซีเอ็นวาย จำกัด',
+        ],
+        'invoice'  => ['pdf_url' => $invoicePdfUrl],
+        'liff_url' => '',
+    ];
+
+    // ── 3. Generate QR code ─────────────────────────────────────────────
+    $qrCodeUrl = '';
+    if (!empty($bdo['qr_payload'])) {
+        require_once __DIR__ . '/../classes/QRCodeGenerator.php';
+        $qrGen = new QRCodeGenerator();
+        $qrResult = $qrGen->generatePromptPayQR($bdo['qr_payload'], $bdoRef);
+        if ($qrResult['success'] && !empty($qrResult['url'])) {
+            $qrCodeUrl = $baseUrl . $qrResult['url'];
+        }
+    }
+    if (empty($qrCodeUrl)) {
+        $qrCodeUrl = $baseUrl . '/assets/img/promptpay-placeholder.png';
+    }
+
+    // ── 4. Build Flex Message (without sending) ─────────────────────────
+    require_once __DIR__ . '/../classes/OdooFlexTemplates.php';
+    $flexBubble = OdooFlexTemplates::bdoPaymentRequest($flexData, $qrCodeUrl);
+
+    $altText = '💰 แจ้งชำระเงิน ' . $bdoRef . ' ยอด ฿' . number_format($flexData['amount_total'], 2);
+
+    return [
+        'bdo_id'   => $bdoId,
+        'bdo_ref'  => $bdoRef,
+        'amount'   => $flexData['amount_total'],
+        'has_qr'   => !empty($bdo['qr_payload']),
+        'alt_text' => $altText,
+        'flex_message' => [
+            'type'     => 'flex',
+            'altText'  => $altText,
+            'contents' => $flexBubble,
+        ],
     ];
 }
 
