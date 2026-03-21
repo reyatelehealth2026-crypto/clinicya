@@ -2359,11 +2359,12 @@ function previewBdoPaymentNotification($db, $input)
     $altText = '💰 แจ้งชำระเงิน ' . $bdoRef . ' ยอด ฿' . number_format($flexData['amount_total'], 2);
 
     return [
-        'bdo_id'   => $bdoId,
-        'bdo_ref'  => $bdoRef,
-        'amount'   => $flexData['amount_total'],
-        'has_qr'   => !empty($qrPayload),
-        'alt_text' => $altText,
+        'bdo_id'       => $bdoId,
+        'bdo_ref'      => $bdoRef,
+        'amount'       => $flexData['amount_total'],
+        'has_qr'       => !empty($qrPayload),
+        'qr_code_url'  => !empty($qrCodeUrl) ? $qrCodeUrl : null,
+        'alt_text'     => $altText,
         'flex_message' => [
             'type'     => 'flex',
             'altText'  => $altText,
