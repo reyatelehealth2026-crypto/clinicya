@@ -1990,9 +1990,10 @@ function sendBdoPaymentNotification($db, $input)
     // ── 3. Load BDO data from local DB ──────────────────────────────────
     $stmt = $db->prepare("
         SELECT b.bdo_id, b.bdo_name, b.order_name, b.amount_total, b.bdo_date, b.state,
-               b.delivery_type, b.customer_ref, b.partner_id,
+               b.customer_ref, b.partner_id,
                c.qr_payload, c.statement_pdf_path, c.financial_summary_json,
-               c.selected_invoices_json, c.selected_credit_notes_json, c.amount AS ctx_amount
+               c.selected_invoices_json, c.selected_credit_notes_json,
+               c.amount AS ctx_amount, c.delivery_type
         FROM odoo_bdos b
         LEFT JOIN odoo_bdo_context c ON c.bdo_id = b.bdo_id
         WHERE b.bdo_id = ?
