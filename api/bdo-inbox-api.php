@@ -34,6 +34,12 @@
  * @version 1.0.0 (March 2026 — cny_reya_connector v11.0.1.3.0)
  */
 
+// Error suppression and output buffering MUST be at TOP before includes
+error_reporting(0);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ob_start();
+
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
@@ -48,10 +54,6 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/BdoSlipContract.php';
 require_once __DIR__ . '/../classes/BdoContextManager.php';
-
-// ── Performance: track start time for latency logging ────────────────────────
-$_apiStartTime = microtime(true);
-
 // ── Auth check ───────────────────────────────────────────────────────────────
 $internalSecret = defined('INTERNAL_API_SECRET') ? INTERNAL_API_SECRET : '';
 $requestSecret  = $_SERVER['HTTP_X_INTERNAL_SECRET'] ?? ($_GET['secret'] ?? '');
