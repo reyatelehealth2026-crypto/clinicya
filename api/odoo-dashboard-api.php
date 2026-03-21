@@ -2083,7 +2083,8 @@ function sendBdoPaymentNotification($db, $input)
 
     // Statement PDF URL — always generate, not conditional on statement_pdf_path
     $baseUrl = defined('BASE_URL') ? BASE_URL : 'https://cny.re-ya.com';
-    $invoicePdfUrl = $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId);
+    $invoicePdfUrl = $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId)
+        . ($lineAccountId > 0 ? '&line_account_id=' . $lineAccountId : '');
 
     $flexData = [
         'amount_total'      => $netToPay > 0 ? $netToPay : $amountTotal,
