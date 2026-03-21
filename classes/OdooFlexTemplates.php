@@ -205,19 +205,21 @@ class OdooFlexTemplates
         $qrSection = [];
         if (!empty($qrCodeUrl)) {
             $qrCaption = [];
-            $qrCaption[] = ['type' => 'text', 'text' => 'สแกน QR PromptPay', 'size' => 'xxs', 'color' => '#e2e8f0', 'align' => 'center', 'margin' => 'xs'];
-            $qrCaption[] = ['type' => 'text', 'text' => 'ยอด ' . $fmt($netAmt) . ' บาท', 'size' => 'xxs', 'color' => '#e2e8f0', 'align' => 'center'];
-            $qrCaption[] = ['type' => 'text', 'text' => 'Ref: ' . $bdoRef, 'size' => 'xxs', 'color' => '#cbd5e1', 'align' => 'center'];
+            $qrCaption[] = ['type' => 'text', 'text' => 'สแกน QR PromptPay', 'size' => 'xxs', 'color' => '#6b7280', 'align' => 'center', 'margin' => 'xs'];
+            $qrCaption[] = ['type' => 'text', 'text' => 'ยอด ' . $fmt($netAmt) . ' บาท', 'size' => 'xxs', 'color' => '#374151', 'weight' => 'bold', 'align' => 'center'];
+            $qrCaption[] = ['type' => 'text', 'text' => 'Ref: ' . $bdoRef, 'size' => 'xxs', 'color' => '#9ca3af', 'align' => 'center'];
 
             $qrSection[] = ['type' => 'separator', 'margin' => 'lg'];
             $qrSection[] = [
                 'type'            => 'box',
                 'layout'          => 'horizontal',
                 'margin'          => 'lg',
-                'backgroundColor' => '#1e3a5f',
+                'backgroundColor' => '#ffffff',
                 'cornerRadius'    => '10px',
                 'paddingAll'      => '14px',
                 'spacing'         => 'lg',
+                'borderWidth'     => '1px',
+                'borderColor'     => '#e5e7eb',
                 'contents' => [
                     [
                         'type'   => 'box',
@@ -230,7 +232,6 @@ class OdooFlexTemplates
                                 'size'          => '100px',
                                 'aspectMode'    => 'cover',
                                 'aspectRatio'   => '1:1',
-                                'backgroundColor' => '#ffffff',
                             ]],
                             $qrCaption
                         ),
@@ -242,15 +243,28 @@ class OdooFlexTemplates
                         'spacing' => 'sm',
                         'justifyContent' => 'center',
                         'contents' => [
-                            ['type' => 'text', 'text' => 'กรุณาชำระเงินที่', 'size' => 'sm', 'weight' => 'bold', 'color' => '#ffffff', 'align' => 'center'],
-                            ['type' => 'text', 'text' => 'เลขบัญชี ' . $bankAccNo, 'size' => 'md', 'weight' => 'bold', 'color' => '#ffffff', 'align' => 'center', 'margin' => 'sm'],
-                            ['type' => 'text', 'text' => $bankName, 'size' => 'xs', 'color' => '#cbd5e1', 'align' => 'center', 'margin' => 'xs'],
-                            ['type' => 'text', 'text' => 'ชื่อบัญชี ' . $bankAccName, 'size' => 'xs', 'color' => '#cbd5e1', 'align' => 'center', 'wrap' => true, 'margin' => 'xs'],
-                            ['type' => 'separator', 'margin' => 'md', 'color' => '#334155'],
-                            ['type' => 'text', 'text' => 'หลังโอนเงิน กรุณาส่งหลักฐานการโอนมาที่ LINE', 'size' => 'xxs', 'color' => '#94a3b8', 'align' => 'center', 'wrap' => true, 'margin' => 'sm'],
+                            ['type' => 'text', 'text' => 'กรุณาชำระเงินที่', 'size' => 'sm', 'weight' => 'bold', 'color' => '#1f2937', 'align' => 'center'],
+                            ['type' => 'text', 'text' => 'เลขบัญชี ' . $bankAccNo, 'size' => 'md', 'weight' => 'bold', 'color' => '#111827', 'align' => 'center', 'margin' => 'sm'],
+                            ['type' => 'text', 'text' => $bankName, 'size' => 'xs', 'color' => '#6b7280', 'align' => 'center', 'margin' => 'xs'],
+                            ['type' => 'text', 'text' => 'ชื่อบัญชี ' . $bankAccName, 'size' => 'xs', 'color' => '#6b7280', 'align' => 'center', 'wrap' => true, 'margin' => 'xs'],
+                            ['type' => 'separator', 'margin' => 'md', 'color' => '#e5e7eb'],
+                            ['type' => 'text', 'text' => 'หลังโอนเงิน กรุณาส่งหลักฐานการโอนมาที่ LINE', 'size' => 'xxs', 'color' => '#9ca3af', 'align' => 'center', 'wrap' => true, 'margin' => 'sm'],
                         ],
                     ],
                 ],
+            ];
+
+            // "บันทึก QR" button — opens the QR image URL so customer can save it
+            $qrSection[] = [
+                'type'   => 'button',
+                'action' => [
+                    'type'  => 'uri',
+                    'label' => 'บันทึก QR',
+                    'uri'   => $qrCodeUrl,
+                ],
+                'style'  => 'secondary',
+                'height' => 'sm',
+                'margin' => 'md',
             ];
         }
 
