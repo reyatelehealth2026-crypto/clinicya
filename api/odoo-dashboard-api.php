@@ -1991,7 +1991,8 @@ function sendBdoPaymentNotification($db, $input)
     $stmt = $db->prepare("
         SELECT b.bdo_id, b.bdo_name, b.order_name, b.amount_total, b.bdo_date, b.state,
                b.delivery_type, b.customer_ref, b.partner_id,
-               c.qr_payload, c.statement_pdf_path, c.financial_summary_json, c.amount AS ctx_amount
+               c.qr_payload, c.statement_pdf_path, c.financial_summary_json,
+               c.selected_invoices_json, c.selected_credit_notes_json, c.amount AS ctx_amount
         FROM odoo_bdos b
         LEFT JOIN odoo_bdo_context c ON c.bdo_id = b.bdo_id
         WHERE b.bdo_id = ?
@@ -2029,14 +2030,50 @@ function sendBdoPaymentNotification($db, $input)
     // ── 5. Build data for Flex template ─────────────────────────────────
     $amountTotal = (float) ($bdo['amount_total'] ?? $bdo['ctx_amount'] ?? 0);
 
-    // Parse net-to-pay from financial summary if available
+    // Parse net-to-pay and financial summary
     $netToPay = $amountTotal;
+    $financialSummary = [];
     if (!empty($bdo['financial_summary_json'])) {
         $fs = json_decode($bdo['financial_summary_json'], true);
-        if (is_array($fs) && isset($fs['net_to_pay'])) {
-            $netToPay = (float) $fs['net_to_pay'];
-        } elseif (is_array($fs) && isset($fs['amount_net_to_pay'])) {
-            $netToPay = (float) $fs['amount_net_to_pay'];
+        if (is_array($fs)) {
+            $netToPay = (float) ($fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $amountTotal);
+            $financialSummary = [
+                'so_amount'          => $fs['so_amount']          ?? $fs['total_so_amount']   ?? null,
+                'outstanding_amount' => $fs['outstanding_amount'] ?? $fs['total_outstanding'] ?? null,
+                'credit_note_amount' => $fs['credit_note_amount'] ?? $fs['total_credit_notes'] ?? null,
+                'deposit_amount'     => $fs['deposit_amount']     ?? $fs['total_deposits']     ?? null,
+                'net_to_pay'         => $netToPay,
+            ];
+        }
+    }
+
+    // Parse invoice rows
+    $invoices = [];
+    if (!empty($bdo['selected_invoices_json'])) {
+        $invs = json_decode($bdo['selected_invoices_json'], true);
+        if (is_array($invs)) {
+            foreach ($invs as $inv) {
+                $invoices[] = [
+                    'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                    'residual' => (float) ($inv['residual'] ?? $inv['amount_residual'] ?? $inv['amount_total'] ?? 0),
+                    'date'     => $inv['date'] ?? $inv['invoice_date'] ?? '',
+                    'origin'   => $inv['origin'] ?? '',
+                ];
+            }
+        }
+    }
+
+    // Parse credit note rows
+    $creditNotes = [];
+    if (!empty($bdo['selected_credit_notes_json'])) {
+        $cns = json_decode($bdo['selected_credit_notes_json'], true);
+        if (is_array($cns)) {
+            foreach ($cns as $cn) {
+                $creditNotes[] = [
+                    'number'   => $cn['number'] ?? $cn['name'] ?? '-',
+                    'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
+                ];
+            }
         }
     }
 
@@ -2044,37 +2081,25 @@ function sendBdoPaymentNotification($db, $input)
     $orderRef = $bdo['order_name'] ?? '-';
     $dueDate  = $bdo['bdo_date'] ?? date('Y-m-d');
 
-    // Statement PDF URL
+    // Statement PDF URL — always generate, not conditional on statement_pdf_path
     $baseUrl = defined('BASE_URL') ? BASE_URL : 'https://cny.re-ya.com';
-    $invoicePdfUrl = !empty($bdo['statement_pdf_path'])
-        ? $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId)
-        : $baseUrl;
-
-    // Resolve LIFF ID from line_accounts table for upload slip link
-    $liffUrl = '';
-    try {
-        $liffStmt = $db->prepare("SELECT liff_id FROM line_accounts WHERE id = ? LIMIT 1");
-        $liffStmt->execute([$lineAccountId]);
-        $liffRow = $liffStmt->fetch(PDO::FETCH_ASSOC);
-        if ($liffRow && !empty($liffRow['liff_id'])) {
-            $liffUrl = 'https://liff.line.me/' . $liffRow['liff_id'] . '?page=slip-upload&bdo_id=' . urlencode($bdoId);
-        }
-    } catch (Exception $e) { /* ignore */ }
+    $invoicePdfUrl = $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId);
 
     $flexData = [
-        'amount_total' => $netToPay > 0 ? $netToPay : $amountTotal,
-        'bdo_ref'      => $bdoRef,
-        'order_ref'    => $orderRef,
-        'due_date'     => $dueDate,
+        'amount_total'      => $netToPay > 0 ? $netToPay : $amountTotal,
+        'bdo_ref'           => $bdoRef,
+        'order_ref'         => $orderRef,
+        'due_date'          => $dueDate,
+        'financial_summary' => $financialSummary,
+        'invoices'          => $invoices,
+        'credit_notes'      => $creditNotes,
         'bank_account' => [
             'bank_name'      => 'ธนาคารกสิกรไทย',
             'account_number' => '027-8-40955-4',
             'account_name'   => 'บริษัท ซีเอ็นวาย จำกัด',
         ],
-        'invoice' => [
-            'pdf_url' => $invoicePdfUrl,
-        ],
-        'liff_url' => $liffUrl,
+        'invoice'  => ['pdf_url' => $invoicePdfUrl],
+        'liff_url' => '',
     ];
 
     // ── 6. Generate QR code from EMVCo payload ──────────────────────────
