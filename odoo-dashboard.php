@@ -17,7 +17,6 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css"></noscript>
     <link rel="stylesheet" href="assets/css/design-tokens.css">
-    <link rel="stylesheet" href="assets/css/glassmorphism.css">
     <link rel="stylesheet" href="assets/css/components.css">
     <style>
         :root {

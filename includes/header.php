@@ -480,7 +480,6 @@ $menuGroups = [
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/assets/css/design-tokens.css">
-    <link rel="stylesheet" href="/assets/css/glassmorphism.css">
     <link rel="stylesheet" href="/assets/css/components.css">
 
     <style>

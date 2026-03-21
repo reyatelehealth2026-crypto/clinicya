@@ -2101,8 +2101,9 @@ try {
                 sendError('Method not allowed', 405);
             }
 
-            $userId = (int) ($_POST['user_id'] ?? 0);
-            $tagId = (int) ($_POST['tag_id'] ?? 0);
+            $body = getJsonBody();
+            $userId = (int) ($_POST['user_id'] ?? $body['user_id'] ?? 0);
+            $tagId = (int) ($_POST['tag_id'] ?? $body['tag_id'] ?? 0);
 
             if (!$userId || !$tagId) {
                 sendError('User ID and tag ID are required');
@@ -2130,8 +2131,9 @@ try {
                 sendError('Method not allowed', 405);
             }
 
-            $userId = (int) ($_POST['user_id'] ?? 0);
-            $tagId = (int) ($_POST['tag_id'] ?? 0);
+            $body = getJsonBody();
+            $userId = (int) ($_POST['user_id'] ?? $body['user_id'] ?? 0);
+            $tagId = (int) ($_POST['tag_id'] ?? $body['tag_id'] ?? 0);
 
             if (!$userId || !$tagId) {
                 sendError('User ID and tag ID are required');
@@ -2159,12 +2161,13 @@ try {
                 sendError('Method not allowed', 405);
             }
 
-            $userId = (int) ($_POST['user_id'] ?? 0);
-            $field = $_POST['field'] ?? '';
-            $value = trim($_POST['value'] ?? '');
+            $body = getJsonBody();
+            $userId = (int) ($_POST['user_id'] ?? $body['user_id'] ?? 0);
+            $field = $_POST['field'] ?? $body['field'] ?? '';
+            $value = trim($_POST['value'] ?? $body['value'] ?? '');
 
             // Whitelist allowed fields
-            $allowedFields = ['display_name', 'phone', 'address', 'email', 'real_name', 'birthday', 'province', 'postal_code'];
+            $allowedFields = ['display_name', 'phone', 'address', 'email', 'real_name', 'birthday', 'province', 'postal_code', 'district', 'gender', 'note', 'member_id'];
 
             if (!$userId || !in_array($field, $allowedFields)) {
                 sendError('Invalid user ID or field');

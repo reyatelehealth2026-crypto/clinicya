@@ -1,5 +1,5 @@
 /**
- * Design Tokens - CSS Variables for Glassmorphism Design System
+ * Design Tokens - CSS Variables for Dashboard Design System
  * Odoo Dashboard Modern UI
  */
 
@@ -64,22 +64,22 @@
   --color-dark-500: #64748b;
   
   /* ========================================
-     GLASSMORPHISM TOKENS
+     SURFACE TOKENS
      ======================================== */
   
-  /* Glass Backgrounds */
-  --glass-bg: rgba(255, 255, 255, 0.08);
-  --glass-bg-light: rgba(255, 255, 255, 0.12);
-  --glass-bg-medium: rgba(255, 255, 255, 0.18);
-  --glass-bg-strong: rgba(255, 255, 255, 0.25);
-  --glass-bg-dark: rgba(15, 23, 42, 0.6);
-  --glass-bg-darker: rgba(15, 23, 42, 0.85);
+  /* Surface Backgrounds */
+  --surface-bg: rgba(255, 255, 255, 0.08);
+  --surface-bg-light: rgba(255, 255, 255, 0.12);
+  --surface-bg-medium: rgba(255, 255, 255, 0.18);
+  --surface-bg-strong: rgba(255, 255, 255, 0.25);
+  --surface-bg-dark: rgba(15, 23, 42, 0.6);
+  --surface-bg-darker: rgba(15, 23, 42, 0.85);
   
-  /* Glass Borders */
-  --glass-border: rgba(255, 255, 255, 0.15);
-  --glass-border-medium: rgba(255, 255, 255, 0.25);
-  --glass-border-strong: rgba(255, 255, 255, 0.4);
-  --glass-border-glow: rgba(99, 102, 241, 0.3);
+  /* Surface Borders */
+  --surface-border: rgba(255, 255, 255, 0.15);
+  --surface-border-medium: rgba(255, 255, 255, 0.25);
+  --surface-border-strong: rgba(255, 255, 255, 0.4);
+  --surface-border-glow: rgba(99, 102, 241, 0.3);
   
   /* Blur Amounts */
   --blur-sm: blur(8px);
@@ -99,11 +99,11 @@
      SHADOWS
      ======================================== */
   
-  /* Glass Shadows */
-  --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.15);
-  --shadow-glass-md: 0 8px 32px rgba(0, 0, 0, 0.2);
-  --shadow-glass-lg: 0 16px 48px rgba(0, 0, 0, 0.25);
-  --shadow-glass-xl: 0 24px 64px rgba(0, 0, 0, 0.3);
+  /* Surface Shadows */
+  --shadow-surface: 0 4px 24px rgba(0, 0, 0, 0.15);
+  --shadow-surface-md: 0 8px 32px rgba(0, 0, 0, 0.2);
+  --shadow-surface-lg: 0 16px 48px rgba(0, 0, 0, 0.25);
+  --shadow-surface-xl: 0 24px 64px rgba(0, 0, 0, 0.3);
   
   /* Glow Shadows */
   --shadow-glow-primary: 0 0 30px rgba(99, 102, 241, 0.4);

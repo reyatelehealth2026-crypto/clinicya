@@ -1,18 +1,7 @@
-/**
- * Components CSS - Reusable Glassmorphism Components
- * Odoo Dashboard Modern UI
- */
-
 @import url('design-tokens.css');
-@import url('glassmorphism.css');
-
-/* ========================================
-   STAT CARDS
-   ======================================== */
 
 .stat-card {
   background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.03) 100%);
-  backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
   padding: 24px;
@@ -101,280 +90,6 @@
   color: #fda4af;
 }
 
-/* ========================================
-   MENU CARDS
-   ======================================== */
-
-.menu-card-glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 20px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.menu-card-glass::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, transparent, rgba(99, 102, 241, 0.1));
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.menu-card-glass:hover {
-  transform: translateY(-4px);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(99, 102, 241, 0.3);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-}
-
-.menu-card-glass:hover::before {
-  opacity: 1;
-}
-
-.menu-card-glass.active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
-  border-color: rgba(99, 102, 241, 0.5);
-  box-shadow: 0 0 30px rgba(99, 102, 241, 0.2);
-}
-
-.menu-card-glass i {
-  font-size: 28px;
-  margin-bottom: 12px;
-  display: block;
-  color: #a5b4fc;
-}
-
-.menu-card-glass.active i {
-  color: #c7d2fe;
-}
-
-.menu-card-glass span {
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-/* ========================================
-   CONTENT CARDS
-   ======================================== */
-
-.content-card-glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 24px;
-  margin-bottom: 20px;
-}
-
-.content-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.content-card-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: white;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.content-card-title i {
-  color: #6366f1;
-}
-
-/* ========================================
-   FORM ELEMENTS
-   ======================================== */
-
-.form-group-glass {
-  margin-bottom: 20px;
-}
-
-.form-label-glass {
-  display: block;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 8px;
-}
-
-.form-select-glass {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  padding: 12px 16px;
-  color: white;
-  font-size: 14px;
-  width: 100%;
-  cursor: pointer;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' fill-opacity='0.5' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 16px center;
-}
-
-.form-select-glass:focus {
-  outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-}
-
-.form-select-glass option {
-  background: #1e293b;
-  color: white;
-}
-
-/* ========================================
-   BUTTON COMPONENTS
-   ======================================== */
-
-.btn-glass {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 24px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-}
-
-.btn-glass-primary {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
-}
-
-.btn-glass-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
-}
-
-.btn-glass-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.btn-glass-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.btn-glass-success {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-}
-
-.btn-glass-success:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
-}
-
-.btn-glass-danger {
-  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(244, 63, 94, 0.3);
-}
-
-.btn-glass-sm {
-  padding: 8px 16px;
-  font-size: 13px;
-  border-radius: 10px;
-}
-
-/* Chip/Badge */
-.chip-glass {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 50px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.chip-glass:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.chip-glass.active {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  border-color: transparent;
-  color: white;
-}
-
-/* ========================================
-   TABLE COMPONENTS
-   ======================================== */
-
-.table-container-glass {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  overflow: hidden;
-}
-
-.table-glass {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.table-glass thead {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.table-glass th {
-  padding: 16px 20px;
-  text-align: left;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: rgba(255, 255, 255, 0.4);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.table-glass td {
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 14px;
-}
-
-.table-glass tbody tr:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.table-glass tbody tr:last-child td {
-  border-bottom: none;
-}
-
-/* Avatar in table */
 .table-avatar {
   width: 40px;
   height: 40px;
@@ -388,7 +103,6 @@
   font-size: 14px;
 }
 
-/* Status badge in table */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -433,251 +147,38 @@
   background: #f59e0b;
 }
 
-/* ========================================
-   PAGINATION
-   ======================================== */
-
-.pagination-glass {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 24px;
-}
-
-.pagination-glass a,
-.pagination-glass span {
-  min-width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.pagination-glass a {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.7);
-  text-decoration: none;
-}
-
-.pagination-glass a:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-.pagination-glass span.current {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
-}
-
-/* ========================================
-   MODAL COMPONENTS
-   ======================================== */
-
-.modal-overlay-glass {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.modal-glass {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
-  backdrop-filter: blur(40px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 24px;
-  width: 100%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow: hidden;
-  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.4);
-}
-
-.modal-header-glass {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.modal-title-glass {
-  font-size: 20px;
-  font-weight: 600;
-  color: white;
-}
-
-.modal-close-glass {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.modal-close-glass:hover {
-  background: rgba(244, 63, 94, 0.2);
-  border-color: rgba(244, 63, 94, 0.3);
-  color: #f43f5e;
-}
-
-.modal-body-glass {
-  padding: 24px;
-  overflow-y: auto;
-  max-height: calc(90vh - 140px);
-}
-
-.modal-footer-glass {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-/* ========================================
-   LOADING & SKELETON
-   ======================================== */
-
-.skeleton-glass {
-  background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 8px;
-}
-
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
 
-/* ========================================
-   ALERTS & NOTIFICATIONS
-   ======================================== */
-
-.alert-glass {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  border-radius: 12px;
-  margin-bottom: 20px;
+.text-gradient {
+  background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.alert-glass-error {
-  background: rgba(244, 63, 94, 0.1);
-  border: 1px solid rgba(244, 63, 94, 0.2);
-  color: #fda4af;
+.text-gradient-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.alert-glass-success {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  color: #6ee7b7;
-}
-
-.alert-glass-warning {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
-}
-
-.alert-glass-info {
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  color: #a5b4fc;
-}
-
-/* ========================================
-   TABS
-   ======================================== */
-
-.tabs-glass {
-  display: flex;
-  gap: 8px;
-  padding: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  width: fit-content;
-}
-
-.tab-glass {
-  padding: 10px 20px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  background: transparent;
-}
-
-.tab-glass:hover {
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.tab-glass.active {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
-}
-
-/* ========================================
-   SEARCH INPUT
-   ======================================== */
-
-.search-glass {
+.border-glow {
   position: relative;
-  width: 100%;
 }
 
-.search-glass input {
-  width: 100%;
-  padding: 14px 20px 14px 48px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  color: white;
-  font-size: 15px;
-  transition: all 0.2s ease;
-}
-
-.search-glass input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.search-glass input:focus {
-  outline: none;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(99, 102, 241, 0.5);
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
-}
-
-.search-glass i {
+.border-glow::before {
+  content: '';
   position: absolute;
-  left: 18px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 16px;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #6366f1, #ec4899);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
 }

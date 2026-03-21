@@ -18,10 +18,9 @@ $pageTitle = 'Users';
 
 require_once 'includes/header.php';
 
-// Add glassmorphism styles
+// Add page styles
 ?>
 <link rel="stylesheet" href="assets/css/design-tokens.css">
-<link rel="stylesheet" href="assets/css/glassmorphism.css">
 <link rel="stylesheet" href="assets/css/components.css">
 <style>
 .users-page {
@@ -48,7 +47,7 @@ require_once 'includes/header.php';
     color: rgba(255, 255, 255, 0.5);
     font-size: 14px;
 }
-.tab-btn-glass {
+.tab-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -59,48 +58,48 @@ require_once 'includes/header.php';
     text-decoration: none;
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
-.tab-btn-glass.active {
+.tab-btn.active {
     background: linear-gradient(135deg, #6366f1, #8b5cf6);
     color: white;
     border-color: transparent;
 }
-.tab-btn-glass:not(.active) {
+.tab-btn:not(.active) {
     background: rgba(255, 255, 255, 0.05);
     color: rgba(255, 255, 255, 0.7);
 }
-.tab-btn-glass:not(.active):hover {
+.tab-btn:not(.active):hover {
     background: rgba(255, 255, 255, 0.1);
 }
-.stat-card-glass {
+.stats-card {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     padding: 20px;
 }
-.stat-card-glass .stat-label {
+.stats-card .stat-label {
     color: rgba(255, 255, 255, 0.5);
     font-size: 13px;
     margin-bottom: 8px;
 }
-.stat-card-glass .stat-value {
+.stats-card .stat-value {
     color: white;
     font-size: 24px;
     font-weight: 700;
 }
-.stat-card-glass .stat-sub {
+.stats-card .stat-sub {
     color: rgba(255, 255, 255, 0.4);
     font-size: 12px;
     margin-top: 4px;
 }
-.table-glass {
+.users-table {
     width: 100%;
     border-collapse: collapse;
 }
-.table-glass thead {
+.users-table thead {
     background: rgba(255, 255, 255, 0.05);
 }
-.table-glass th {
+.users-table th {
     padding: 16px;
     text-align: left;
     font-size: 12px;
@@ -109,15 +108,15 @@ require_once 'includes/header.php';
     letter-spacing: 0.5px;
     color: rgba(255, 255, 255, 0.4);
 }
-.table-glass td {
+.users-table td {
     padding: 16px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
     color: rgba(255, 255, 255, 0.8);
 }
-.table-glass tr:hover {
+.users-table tr:hover {
     background: rgba(255, 255, 255, 0.03);
 }
-.btn-glass-primary {
+.primary-action-btn {
     background: linear-gradient(135deg, #6366f1, #8b5cf6);
     color: white;
     padding: 10px 20px;
@@ -131,11 +130,11 @@ require_once 'includes/header.php';
     cursor: pointer;
     transition: all 0.2s ease;
 }
-.btn-glass-primary:hover {
+.primary-action-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
 }
-.input-glass {
+.search-input {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
@@ -144,15 +143,15 @@ require_once 'includes/header.php';
     width: 100%;
     transition: all 0.2s ease;
 }
-.input-glass:focus {
+.search-input:focus {
     outline: none;
     border-color: #6366f1;
     background: rgba(255, 255, 255, 0.08);
 }
-.input-glass::placeholder {
+.search-input::placeholder {
     color: rgba(255, 255, 255, 0.3);
 }
-.select-glass {
+.filter-select {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
@@ -160,7 +159,25 @@ require_once 'includes/header.php';
     color: white;
     cursor: pointer;
 }
-.pagination-glass a {
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 9999px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.filter-chip:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+.users-pagination a {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -174,10 +191,10 @@ require_once 'includes/header.php';
     text-decoration: none;
     transition: all 0.2s ease;
 }
-.pagination-glass a:hover {
+.users-pagination a:hover {
     background: rgba(255, 255, 255, 0.1);
 }
-.pagination-glass span.current {
+.users-pagination span.current {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -187,6 +204,46 @@ require_once 'includes/header.php';
     background: linear-gradient(135deg, #6366f1, #8b5cf6);
     border-radius: 10px;
     color: white;
+}
+.tag-modal {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+    backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.4);
+}
+.tag-modal-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.tag-modal-close:hover {
+    background: rgba(244, 63, 94, 0.2);
+    border-color: rgba(244, 63, 94, 0.3);
+    color: #f43f5e;
+}
+.tag-btn-sm {
+    padding: 8px 16px;
+    font-size: 13px;
+    border-radius: 10px;
+}
+.tag-add-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+}
+.tag-close-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 </style>
 <?php
@@ -746,39 +803,39 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
         <?php endif; ?>
     </div>
     <div class="flex items-center gap-2">
-        <a href="odoo-dashboard.php" class="btn-glass-primary">
+        <a href="odoo-dashboard.php" class="primary-action-btn">
             <i class="fas fa-chart-line mr-1"></i>Odoo Dashboard
         </a>
     </div>
 </div>
 
 <div class="flex flex-wrap gap-2 mb-6">
-    <a href="<?= $lineTabUrl ?>" class="tab-btn-glass <?= $activeTab === 'line' ? 'active' : '' ?>">
+    <a href="<?= $lineTabUrl ?>" class="tab-btn <?= $activeTab === 'line' ? 'active' : '' ?>">
         <i class="fab fa-line mr-1"></i>LINE Users
     </a>
-    <a href="<?= $odooTabUrl ?>" class="tab-btn-glass <?= $activeTab === 'odoo' ? 'active' : '' ?>">
+    <a href="<?= $odooTabUrl ?>" class="tab-btn <?= $activeTab === 'odoo' ? 'active' : '' ?>">
         <i class="fas fa-link mr-1"></i>Odoo Customers
     </a>
 </div>
 
 <?php if ($activeTab === 'odoo'): ?>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <div class="stat-card-glass">
+        <div class="stats-card">
             <p class="stat-label">ออเดอร์ 30 วัน</p>
             <p class="stat-value text-indigo-400"><?php echo number_format((int) ($odooSummary['orders_30d'] ?? 0)); ?></p>
             <p class="stat-sub">ยอดขาย ฿<?php echo number_format((float) ($odooSummary['spend_30d'] ?? 0), 2); ?></p>
         </div>
-        <div class="stat-card-glass">
+        <div class="stats-card">
             <p class="stat-label">ยอดค้างชำระ</p>
             <p class="stat-value text-rose-400">฿<?php echo number_format((float) ($odooSummary['total_due'] ?? 0), 2); ?></p>
             <p class="stat-sub">เกินกำหนด ฿<?php echo number_format((float) ($odooSummary['overdue_amount'] ?? 0), 2); ?></p>
         </div>
-        <div class="stat-card-glass">
+        <div class="stats-card">
             <p class="stat-label">วงเงินเครดิต</p>
             <p class="stat-value text-blue-400">฿<?php echo number_format((float) ($odooSummary['credit_limit'] ?? 0), 2); ?></p>
             <p class="stat-sub">ใช้ไป ฿<?php echo number_format((float) ($odooSummary['credit_used'] ?? 0), 2); ?></p>
         </div>
-        <div class="stat-card-glass">
+        <div class="stats-card">
             <p class="stat-label">เครดิตคงเหลือ</p>
             <p class="stat-value text-emerald-400">฿<?php echo number_format((float) ($odooSummary['credit_remaining'] ?? 0), 2); ?></p>
             <p class="stat-sub">
@@ -808,7 +865,7 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
     </div>
 
     <div class="users-card overflow-hidden" style="padding: 0;">
-        <table class="table-glass">
+        <table class="users-table">
             <thead>
                 <tr>
                     <th>ลูกค้า Odoo</th>
@@ -922,7 +979,7 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
     </div>
 
     <?php if ($odooTotalPages > 1): ?>
-        <div class="pagination-glass">
+        <div class="users-pagination">
             <?php for ($i = 1; $i <= $odooTotalPages; $i++): ?>
                 <?php if ($i == $odooPage): ?>
                     <span class="current"><?php echo $i; ?></span>
@@ -1299,7 +1356,6 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
             modal.classList.remove('flex');
         }
     </script>
-<?php else: ?>
     <div class="users-card">
         <form method="GET" id="filterForm">
             <input type="hidden" name="tab" value="line">
@@ -1309,13 +1365,13 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
                     <label class="block text-sm font-medium mb-1" style="color: rgba(255,255,255,0.6);">ค้นหา</label>
                     <input type="text" name="search" value="<?php echo htmlspecialchars($search); ?>"
                         placeholder="ชื่อ, เบอร์โทร, LINE ID..."
-                        class="input-glass">
+                        class="search-input">
                 </div>
-                <button type="submit" class="btn-glass-primary">
+                <button type="submit" class="primary-action-btn">
                     <i class="fas fa-search mr-1"></i>ค้นหา
                 </button>
                 <button type="button" onclick="toggleAdvancedFilters()"
-                    class="chip-glass">
+                    class="filter-chip">
                     <i class="fas fa-filter mr-1"></i>ตัวกรอง
                     <?php
                     $activeFilters = array_filter([$tierFilter, $pointsFilter, $activityFilter, $purchaseFilter, $statusFilter, $tagFilter]);
@@ -1453,14 +1509,14 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
                     </button>
                 </div>
             </div>
-            <button type="button" onclick="clearSelection()" class="chip-glass">
+            <button type="button" onclick="clearSelection()" class="filter-chip">
                 <i class="fas fa-times mr-1"></i>ยกเลิก
             </button>
         </div>
     </div>
 
     <div class="users-card overflow-hidden" style="padding: 0;">
-        <table class="table-glass">
+        <table class="users-table">
             <thead>
                 <tr>
                     <th class="text-center">
@@ -1545,7 +1601,7 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
     </div>
 
     <?php if ($totalPages > 1): ?>
-        <div class="pagination-glass">
+        <div class="users-pagination">
             <?php for ($i = 1; $i <= $totalPages; $i++): ?>
                 <?php if ($i == $page): ?>
                     <span class="current"><?php echo $i; ?></span>
@@ -1562,13 +1618,13 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
 <?php if ($activeTab === 'line'): ?>
     <!-- Tag Modal -->
     <div id="tagModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center">
-        <div class="modal-glass w-full max-w-md mx-4">
+        <div class="tag-modal w-full max-w-md mx-4">
             <div class="p-6 border-b flex justify-between items-center" style="border-color: rgba(255,255,255,0.1);">
                 <div>
                     <h3 class="text-xl font-semibold text-white">🏷️ จัดการ Tags</h3>
                     <p class="text-sm" style="color: rgba(255,255,255,0.5);" id="tagModalUserName"></p>
                 </div>
-                <button onclick="closeTagModal()" class="modal-close-glass">
+                <button onclick="closeTagModal()" class="tag-modal-close">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -1582,7 +1638,7 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
                 <div class="mb-4">
                     <label class="block text-sm font-medium mb-2" style="color: rgba(255,255,255,0.6);">เพิ่ม Tag</label>
                     <div class="flex gap-2">
-                        <select id="tagSelect" class="input-glass flex-1">
+                        <select id="tagSelect" class="search-input flex-1">
                             <?php foreach ($allTags as $tag): ?>
                                 <option value="<?php echo $tag['id']; ?>"
                                     data-color="<?php echo htmlspecialchars($tag['color'] ?? '#3B82F6'); ?>">
@@ -1591,14 +1647,14 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
                             <?php endforeach; ?>
                         </select>
                         <button type="button" onclick="assignTag()"
-                            class="btn-glass-success btn-glass-sm">
+                            class="tag-add-btn tag-btn-sm">
                             <i class="fas fa-plus"></i>
                         </button>
                     </div>
                 </div>
                 <div class="mt-4 pt-4 border-t" style="border-color: rgba(255,255,255,0.1);">
                     <button type="button" onclick="closeTagModal()"
-                        class="w-full btn-glass-secondary btn-glass-sm">ปิด</button>
+                        class="w-full tag-close-btn tag-btn-sm">ปิด</button>
                 </div>
             </div>
         </div>

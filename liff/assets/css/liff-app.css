@@ -13697,7 +13697,7 @@ body:has(.ai-chat-page) .bottom-nav {
 
 
 /* ==================== Enhanced Member Card & Profile Styles ==================== */
-/* Premium glassmorphism design with 3D flip animation */
+/* Premium member card design with 3D flip animation */
 
 /* Emerald Gradient Theme */
 .bg-emerald-gradient {
@@ -13708,7 +13708,7 @@ body:has(.ai-chat-page) .bottom-nav {
     background: linear-gradient(135deg, #d4af37 0%, #f3e5ab 50%, #c5a028 100%);
 }
 
-/* Enhanced Member Card with Glassmorphism */
+/* Enhanced Member Card */
 .member-card-premium {
     position: relative;
     border-radius: var(--radius-xl);
@@ -13743,14 +13743,14 @@ body:has(.ai-chat-page) .bottom-nav {
     background: linear-gradient(135deg, #9ca3af 0%, #d1d5db 50%, #6b7280 100%);
 }
 
-/* Glassmorphism Decorative Circles */
-.member-card-decor-circle {
+/* Decorative Circles */
+.member-card-accent-circle {
     position: absolute;
     border-radius: 50%;
     pointer-events: none;
 }
 
-.member-card-decor-circle.top-right {
+.member-card-accent-circle.top-right {
     top: -40px;
     right: -40px;
     width: 160px;
@@ -13759,7 +13759,7 @@ body:has(.ai-chat-page) .bottom-nav {
     filter: blur(40px);
 }
 
-.member-card-decor-circle.bottom-left {
+.member-card-accent-circle.bottom-left {
     bottom: -20px;
     left: -40px;
     width: 100px;
