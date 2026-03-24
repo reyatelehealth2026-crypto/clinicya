@@ -89,6 +89,18 @@ define('UPLOAD_PATH', __DIR__ . '/../uploads/');
 define('ALLOWED_EXTENSIONS', ['jpg', 'jpeg', 'png', 'gif', 'pdf']);
 
 // ============================================
+// REDIS CACHE (Optional - แนะนำสำหรับ Production)
+// ติดตั้ง: aaPanel → App Store → Redis → Install
+// ใช้ phpredis extension (เร็วกว่า) หรือ predis library (fallback)
+// ============================================
+define('REDIS_HOST',     getenv('REDIS_HOST')     ?: '127.0.0.1');
+define('REDIS_PORT',     getenv('REDIS_PORT')     ?: 6379);
+define('REDIS_PASSWORD', getenv('REDIS_PASSWORD') ?: null);  // null = ไม่ใช้ password
+define('REDIS_DB',       getenv('REDIS_DB')       ?: 0);     // DB index (0–15)
+define('REDIS_TIMEOUT',  2.0);                               // วินาที
+define('REDIS_PREFIX',   'cny:');                            // prefix สำหรับทุก key
+
+// ============================================
 // DEBUG MODE (ปิดใน Production)
 // ============================================
 define('DEBUG_MODE', false);

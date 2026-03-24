@@ -152,4 +152,16 @@ define('ODOO_WEBHOOK_URL', APP_URL . '/api/webhook/odoo.php');
 // 'shared' = ค้นหา user จากทุก line_account_id ในระบบ
 define('ODOO_LINE_ACCOUNT_MODE', 'shared');
 
+// ============================================================================
+// Redis Cache Configuration — Redis Cloud (shared ทั้ง odoo + inboxreya)
+// Host: redis-13718.fcrce172.us-east-1-1.ec2.cloud.redislabs.com:13718
+// ============================================================================
+define('REDIS_HOST',     getenv('REDIS_HOST')     ?: 'redis-13718.fcrce172.us-east-1-1.ec2.cloud.redislabs.com');
+define('REDIS_PORT',     getenv('REDIS_PORT')     ?: 13718);
+define('REDIS_USERNAME', getenv('REDIS_USERNAME') ?: 'default');
+define('REDIS_PASSWORD', getenv('REDIS_PASSWORD') ?: '8aOsi5ZlcevxIxkXOFn4b4qshhMTHKC5');
+define('REDIS_DB',       getenv('REDIS_DB')       ?: 0);     // DB index (0–15)
+define('REDIS_TIMEOUT',  3.0);                               // วินาที (cloud ต้องการนานกว่า local)
+define('REDIS_PREFIX',   'cny:');                            // prefix สำหรับทุก key
+
 date_default_timezone_set(TIMEZONE);

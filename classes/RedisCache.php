@@ -52,6 +52,7 @@ class RedisCache
         $host    = defined('REDIS_HOST') ? REDIS_HOST : self::DEFAULT_HOST;
         $port    = defined('REDIS_PORT') ? (int) REDIS_PORT : self::DEFAULT_PORT;
         $timeout = defined('REDIS_TIMEOUT') ? (float) REDIS_TIMEOUT : self::DEFAULT_TIMEOUT;
+        $user    = defined('REDIS_USERNAME') ? REDIS_USERNAME : null;
         $pass    = defined('REDIS_PASSWORD') ? REDIS_PASSWORD : null;
         $db      = defined('REDIS_DB') ? (int) REDIS_DB : 0;
 
@@ -60,7 +61,10 @@ class RedisCache
             try {
                 $r = new \Redis();
                 $r->connect($host, $port, $timeout);
-                if ($pass) {
+                if ($user && $pass) {
+                    // Redis 6+ ACL auth (username + password)
+                    $r->auth([$user, $pass]);
+                } elseif ($pass) {
                     $r->auth($pass);
                 }
                 if ($db > 0) {
@@ -86,6 +90,9 @@ class RedisCache
                     'port'    => $port,
                     'timeout' => $timeout,
                 ];
+                if ($user) {
+                    $params['username'] = $user;
+                }
                 if ($pass) {
                     $params['password'] = $pass;
                 }
