@@ -4314,3 +4314,253 @@ function getOverviewCombined($db, $input)
 
     return $result;
 }
+
+// ============================================================================ //
+// Slip Match / Unmatch — restored after accidental deletion in refactor        //
+// ============================================================================ //
+
+/**
+ * Match a slip to one or more BDOs via Odoo + update local DB.
+ *
+ * Required: line_user_id, matches (array of {bdo_id, amount?})
+ * Optional: line_account_id, local_slip_id (= slip_id), slip_inbox_id, note
+ */
+function slipMatchBdo($db, $input)
+{
+    $lineUserId    = trim((string) ($input['line_user_id']    ?? ''));
+    $slipInboxId   = (int) ($input['slip_inbox_id']  ?? 0);
+    $lineAccountId = (int) ($input['line_account_id'] ?? 0);
+    $localSlipId   = (int) ($input['local_slip_id']  ?? ($input['slip_id'] ?? 0));
+    $matches       = $input['matches'] ?? [];
+    $note          = trim((string) ($input['note'] ?? ''));
+
+    $localSlip = null;
+    if ($localSlipId > 0) {
+        $stmt = $db->prepare("
+            SELECT id, line_user_id, line_account_id, slip_inbox_id, odoo_slip_id, amount, transfer_date, image_path
+            FROM odoo_slip_uploads WHERE id = ? LIMIT 1
+        ");
+        $stmt->execute([$localSlipId]);
+        $localSlip = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    if ($lineUserId === '' && $localSlip)   { $lineUserId    = trim((string) ($localSlip['line_user_id']    ?? '')); }
+    if ($slipInboxId <= 0 && $localSlip)    { $slipInboxId   = (int) ($localSlip['slip_inbox_id'] ?? $localSlip['odoo_slip_id'] ?? 0); }
+    if ($lineAccountId <= 0 && $localSlip)  { $lineAccountId = (int) ($localSlip['line_account_id'] ?? 0); }
+
+    if ($lineUserId === '') { throw new Exception('Missing line_user_id'); }
+    if (empty($matches))   { throw new Exception('Missing matches'); }
+
+    $normalizedMatches = [];
+    foreach ($matches as $match) {
+        $matchBdoId = (int) ($match['bdo_id'] ?? 0);
+        if ($matchBdoId <= 0) continue;
+        $matchAmount = isset($match['amount']) ? (float) $match['amount'] : null;
+        if ($matchAmount === null || $matchAmount <= 0) {
+            $matchAmount = resolveBdoAmount($db, $matchBdoId);
+        }
+        $normalizedMatches[] = ['bdo_id' => $matchBdoId, 'amount' => $matchAmount];
+    }
+    if (empty($normalizedMatches)) { throw new Exception('No valid BDO matches'); }
+
+    if ($lineAccountId <= 0) { $lineAccountId = resolveLineAccountId($db, $lineUserId); }
+    if ($lineAccountId <= 0) { throw new Exception('Cannot resolve line_account_id for this user'); }
+
+    require_once __DIR__ . '/../classes/OdooAPIClient.php';
+    $odoo = new OdooAPIClient($db, $lineAccountId);
+
+    if ($slipInboxId <= 0 && $localSlip) {
+        $slipInboxId = ensureOdooSlipInboxId($db, $odoo, $localSlip, $lineUserId);
+    }
+    if ($slipInboxId <= 0) { throw new Exception('Missing slip_inbox_id'); }
+
+    $odooResult = $odoo->matchSlipBdo($lineUserId, $slipInboxId, $normalizedMatches, $note);
+
+    if ($localSlipId > 0) {
+        $matchedBdos   = $odooResult['data']['matched_bdos']    ?? $odooResult['matched_bdos']    ?? [];
+        $confidence    = $odooResult['data']['match_confidence'] ?? $odooResult['match_confidence'] ?? 'manual';
+        $firstBdoName  = !empty($matchedBdos) ? ($matchedBdos[0]['bdo_name'] ?? null) : null;
+        $firstBdoId    = !empty($matchedBdos)
+            ? (int) ($matchedBdos[0]['bdo_id'] ?? ($normalizedMatches[0]['bdo_id'] ?? 0))
+            : (int) ($normalizedMatches[0]['bdo_id'] ?? 0);
+        $slipInboxName = $odooResult['data']['slip_inbox_name'] ?? $odooResult['slip_inbox_name'] ?? null;
+        $deliveryType  = !empty($matchedBdos) ? ($matchedBdos[0]['delivery_type'] ?? null) : null;
+        $totalMatched  = $odooResult['data']['total_matched']   ?? $odooResult['total_matched']   ?? null;
+
+        $db->prepare("
+            UPDATE odoo_slip_uploads
+            SET status = ?,
+                match_reason = ?,
+                matched_at = NOW(),
+                slip_inbox_id = ?,
+                slip_inbox_name = ?,
+                match_confidence = ?,
+                bdo_id = ?,
+                bdo_name = ?,
+                delivery_type = ?,
+                bdo_amount = ?
+            WHERE id = ?
+        ")->execute([
+            'matched',
+            'BDO match via dashboard: ' . json_encode(array_column($normalizedMatches, 'bdo_id')),
+            $slipInboxId,
+            $slipInboxName,
+            $confidence,
+            $firstBdoId > 0 ? $firstBdoId : null,
+            $firstBdoName,
+            $deliveryType,
+            $totalMatched !== null ? (float) $totalMatched : null,
+            $localSlipId,
+        ]);
+    }
+
+    return [
+        'odoo_result'   => $odooResult,
+        'local_updated' => $localSlipId > 0,
+        'line_user_id'  => $lineUserId,
+        'slip_inbox_id' => $slipInboxId,
+    ];
+}
+
+/**
+ * Unmatch a slip via Odoo + reset local DB.
+ *
+ * Required: line_user_id, slip_inbox_id
+ * Optional: line_account_id, reason, local_slip_id
+ */
+function slipUnmatch($db, $input)
+{
+    $lineUserId    = trim((string) ($input['line_user_id']    ?? ''));
+    $slipInboxId   = (int) ($input['slip_inbox_id']  ?? 0);
+    $reason        = trim((string) ($input['reason']  ?? 'Unmatched via dashboard'));
+    $lineAccountId = (int) ($input['line_account_id'] ?? 0);
+    $localSlipId   = (int) ($input['local_slip_id']   ?? ($input['slip_id'] ?? 0));
+
+    $localSlip = null;
+    if ($localSlipId > 0) {
+        $stmt = $db->prepare("
+            SELECT id, line_user_id, line_account_id, slip_inbox_id, odoo_slip_id
+            FROM odoo_slip_uploads WHERE id = ? LIMIT 1
+        ");
+        $stmt->execute([$localSlipId]);
+        $localSlip = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    if ($lineUserId === '' && $localSlip)  { $lineUserId    = trim((string) ($localSlip['line_user_id']    ?? '')); }
+    if ($slipInboxId <= 0 && $localSlip)   { $slipInboxId   = (int) ($localSlip['slip_inbox_id'] ?? $localSlip['odoo_slip_id'] ?? 0); }
+    if ($lineAccountId <= 0 && $localSlip) { $lineAccountId = (int) ($localSlip['line_account_id'] ?? 0); }
+
+    if ($lineUserId === '' || $slipInboxId <= 0) {
+        throw new Exception('Missing line_user_id or slip_inbox_id');
+    }
+
+    if ($lineAccountId <= 0) { $lineAccountId = resolveLineAccountId($db, $lineUserId); }
+    if ($lineAccountId <= 0) { throw new Exception('Cannot resolve line_account_id for this user'); }
+
+    require_once __DIR__ . '/../classes/OdooAPIClient.php';
+    $odoo       = new OdooAPIClient($db, $lineAccountId);
+    $odooResult = $odoo->unmatchSlip($lineUserId, $slipInboxId, $reason);
+
+    if ($localSlipId > 0) {
+        $db->prepare("
+            UPDATE odoo_slip_uploads
+            SET status = ?,
+                match_reason = ?,
+                matched_at = NULL,
+                match_confidence = NULL,
+                bdo_name = NULL,
+                slip_inbox_id = NULL,
+                slip_inbox_name = NULL,
+                bdo_id = NULL,
+                delivery_type = NULL,
+                bdo_amount = NULL
+            WHERE id = ?
+        ")->execute(['new', 'Unmatched: ' . $reason, $localSlipId]);
+    }
+
+    return [
+        'odoo_result' => $odooResult,
+        'local_reset' => $localSlipId > 0,
+    ];
+}
+
+/**
+ * Resolve line_account_id for a given line_user_id.
+ */
+function resolveLineAccountId($db, $lineUserId)
+{
+    try {
+        $stmt = $db->prepare("SELECT line_account_id FROM users WHERE line_user_id = ? LIMIT 1");
+        $stmt->execute([$lineUserId]);
+        $row = $stmt->fetchColumn();
+        if ($row) return (int) $row;
+    } catch (Exception $e) {}
+
+    try {
+        $stmt = $db->prepare("SELECT id FROM line_accounts ORDER BY id ASC LIMIT 1");
+        $stmt->execute();
+        $row = $stmt->fetchColumn();
+        if ($row) return (int) $row;
+    } catch (Exception $e) {}
+
+    return 0;
+}
+
+/**
+ * Resolve amount_total for a BDO from local tables.
+ */
+function resolveBdoAmount($db, $bdoId)
+{
+    try {
+        $stmt = $db->prepare("SELECT amount_total FROM odoo_bdo_orders WHERE bdo_id = ? LIMIT 1");
+        $stmt->execute([$bdoId]);
+        $val = $stmt->fetchColumn();
+        if ($val !== false && $val > 0) return (float) $val;
+    } catch (Exception $e) {}
+
+    try {
+        $stmt = $db->prepare("SELECT amount_total FROM odoo_bdos WHERE bdo_id = ? LIMIT 1");
+        $stmt->execute([$bdoId]);
+        $val = $stmt->fetchColumn();
+        if ($val !== false && $val > 0) return (float) $val;
+    } catch (Exception $e) {}
+
+    return null;
+}
+
+/**
+ * Ensure a slip has a slip_inbox_id in Odoo (upload if needed).
+ */
+function ensureOdooSlipInboxId($db, $odoo, array $localSlip, $lineUserId)
+{
+    $existing = (int) ($localSlip['slip_inbox_id'] ?? $localSlip['odoo_slip_id'] ?? 0);
+    if ($existing > 0) return $existing;
+
+    $imagePath = $localSlip['image_path'] ?? null;
+    if (!$imagePath) return 0;
+
+    $fullPath = __DIR__ . '/../' . ltrim($imagePath, '/');
+    if (!file_exists($fullPath)) return 0;
+
+    $imageData = file_get_contents($fullPath);
+    if (!$imageData || strlen($imageData) < 100) return 0;
+
+    $base64 = base64_encode($imageData);
+    $opts   = ['amount' => (float) ($localSlip['amount'] ?? 0)];
+    if (!empty($localSlip['transfer_date'])) {
+        $opts['transfer_date'] = $localSlip['transfer_date'];
+    }
+
+    try {
+        $uploadResult = $odoo->uploadSlip($lineUserId, $base64, $opts);
+        $slipInboxId  = (int) ($uploadResult['slip_inbox_id'] ?? $uploadResult['data']['slip']['slip_inbox_id'] ?? 0);
+        if ($slipInboxId > 0) {
+            $db->prepare("UPDATE odoo_slip_uploads SET slip_inbox_id = ? WHERE id = ?")
+               ->execute([$slipInboxId, $localSlip['id']]);
+        }
+        return $slipInboxId;
+    } catch (Exception $e) {
+        error_log('[ensureOdooSlipInboxId] upload failed: ' . $e->getMessage());
+        return 0;
+    }
+}
