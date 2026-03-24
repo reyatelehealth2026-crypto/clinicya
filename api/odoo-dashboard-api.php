@@ -728,7 +728,7 @@ function getInvoiceLookup($db, $input)
  */
 function getCustomerList($db, $input)
 {
-    $limit = min((int) ($input['limit'] ?? 30), 200);
+    $limit = min((int) ($input['limit'] ?? 30), 9999);
     $offset = max((int) ($input['offset'] ?? 0), 0);
     $search = trim((string) ($input['search'] ?? ''));
     $invoiceFilter = trim((string) ($input['invoice_filter'] ?? ''));
