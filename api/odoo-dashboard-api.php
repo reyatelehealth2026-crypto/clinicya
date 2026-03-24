@@ -4524,14 +4524,15 @@ function slipMatchBdo($db, $input)
                 match_reason = ?,
                 matched_at = NOW(),
                 slip_inbox_id = ?,
-                slip_inbox_name = COALESCE(?, slip_inbox_name),
+                slip_inbox_name = ?,
                 match_confidence = ?,
-                bdo_id = COALESCE(?, bdo_id),
-                bdo_name = COALESCE(?, bdo_name),
-                delivery_type = COALESCE(?, delivery_type),
-                bdo_amount = COALESCE(?, bdo_amount)
+                bdo_id = ?,
+                bdo_name = ?,
+                delivery_type = ?,
+                bdo_amount = ?
             WHERE id = ?
         ")->execute([
+            'matched',
             'BDO match via dashboard: ' . json_encode(array_column($normalizedMatches, 'bdo_id')),
             $slipInboxId,
             $slipInboxName,
@@ -4618,7 +4619,7 @@ function slipUnmatch($db, $input)
                 delivery_type = NULL,
                 bdo_amount = NULL
             WHERE id = ?
-        ")->execute(['Unmatched: ' . $reason, $localSlipId]);
+        ")->execute(['new', 'Unmatched: ' . $reason, $localSlipId]);
     }
 
     return [
