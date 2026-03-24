@@ -35,6 +35,59 @@ echo "  OdooRedisCache Full System Test\n";
 echo "  " . date('Y-m-d H:i:s T') . "\n";
 echo "═══════════════════════════════════════════════════════\n";
 
+// ──────────────────────────────────────────────────────────
+section('0. Redis Diagnostics');
+// ──────────────────────────────────────────────────────────
+
+$phpRedisExt = extension_loaded('redis');
+$predisClass = class_exists('Predis\\Client');
+echo "   php-redis extension : " . ($phpRedisExt ? 'Loaded ✅' : 'NOT loaded ❌') . "\n";
+echo "   Predis\\Client class : " . ($predisClass ? 'Available ✅' : 'NOT available ❌') . "\n";
+echo "   REDIS_HOST          : " . (defined('REDIS_HOST') ? REDIS_HOST : '(not defined)') . "\n";
+echo "   REDIS_PORT          : " . (defined('REDIS_PORT') ? REDIS_PORT : '(not defined)') . "\n";
+
+// Try local Redis connection directly
+if ($phpRedisExt) {
+    try {
+        $r = new Redis();
+        $ok = @$r->connect('127.0.0.1', 6379, 1);
+        echo "   Local Redis 127.0.0.1:6379 connect : " . ($ok ? 'OK ✅' : 'FAILED ❌') . "\n";
+        if ($ok) {
+            echo "   Local Redis ping : " . ($r->ping() ? 'PONG ✅' : 'no response ❌') . "\n";
+        }
+    } catch (Exception $e) {
+        echo "   Local Redis error : " . $e->getMessage() . "\n";
+    }
+
+    // Try Redis Cloud
+    if (defined('REDIS_HOST') && REDIS_HOST !== '127.0.0.1') {
+        try {
+            $r2 = new Redis();
+            $ok2 = @$r2->connect(REDIS_HOST, (int)REDIS_PORT, 3.0);
+            echo "   Redis Cloud connect : " . ($ok2 ? 'OK ✅' : 'FAILED ❌') . "\n";
+            if ($ok2) {
+                $r2->auth([REDIS_USERNAME, REDIS_PASSWORD]);
+                echo "   Redis Cloud ping : " . ($r2->ping() ? 'PONG ✅' : 'no response ❌') . "\n";
+            }
+        } catch (Exception $e) {
+            echo "   Redis Cloud error : " . $e->getMessage() . "\n";
+        }
+    }
+} elseif ($predisClass) {
+    try {
+        $pc = new Predis\Client(['host' => '127.0.0.1', 'port' => 6379, 'timeout' => 1.0]);
+        $pc->ping();
+        echo "   Predis local ping : OK ✅\n";
+    } catch (Exception $e) {
+        echo "   Predis local error : " . $e->getMessage() . "\n";
+    }
+}
+
+if (!$phpRedisExt && !$predisClass) {
+    echo "\n   ⚠️  ไม่มีทั้ง phpredis และ Predis — ติดตั้ง phpredis:\n";
+    echo "      aaPanel → PHP 8.x → Extensions → redis → Install\n";
+}
+
 $cache = OdooRedisCache::getInstance();
 $type  = $cache->getType();
 

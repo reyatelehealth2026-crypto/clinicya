@@ -288,7 +288,7 @@ class OdooRedisCache {
                     }
                     return $deleted;
                 case 'file':
-                    return 0;
+                    return $this->cache->deletePattern($pattern);
                 default:
                     return 0;
             }
