@@ -209,6 +209,9 @@ try {
             case 'odoo_slip_unmatch_api':
                 $result = slipUnmatch($db, $input);
                 break;
+            case 'slip_update_local':
+                $result = slipUpdateLocal($db, $input);
+                break;
             case 'customer_full_detail':
                 $result = getCustomerFullDetail($db, $input);
                 break;
@@ -4621,6 +4624,75 @@ function slipUnmatch($db, $input)
     return [
         'odoo_result' => $odooResult,
         'local_reset' => $localSlipId > 0,
+    ];
+}
+
+/**
+ * Update local slip fields (amount, transfer_date, note).
+ * Only allowed when slip status = 'pending'.
+ *
+ * Required: slip_id
+ * Optional: amount, transfer_date (YYYY-MM-DD), note
+ */
+function slipUpdateLocal($db, $input)
+{
+    $slipId       = (int) ($input['slip_id'] ?? 0);
+    $amount       = isset($input['amount']) ? (float) $input['amount'] : null;
+    $transferDate = isset($input['transfer_date']) ? trim((string) $input['transfer_date']) : null;
+    $note         = isset($input['note']) ? trim((string) $input['note']) : null;
+
+    if ($slipId <= 0) {
+        throw new Exception('slip_id is required');
+    }
+
+    $stmt = $db->prepare("SELECT id, status FROM odoo_slip_uploads WHERE id = ? LIMIT 1");
+    $stmt->execute([$slipId]);
+    $slip = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$slip) {
+        throw new Exception('Slip not found');
+    }
+
+    if (!in_array($slip['status'], ['pending', 'new', 'failed'])) {
+        throw new Exception('Cannot edit slip with status: ' . $slip['status']);
+    }
+
+    $setClauses = [];
+    $params     = [];
+
+    if ($amount !== null) {
+        $setClauses[] = 'amount = ?';
+        $params[]     = $amount;
+    }
+    if ($transferDate !== null && $transferDate !== '') {
+        $setClauses[] = 'transfer_date = ?';
+        $params[]     = $transferDate;
+    }
+    if ($note !== null && $note !== '') {
+        $setClauses[] = 'match_reason = ?';
+        $params[]     = $note;
+    }
+
+    if (empty($setClauses)) {
+        return ['id' => $slipId, 'updated' => false, 'message' => 'No fields to update'];
+    }
+
+    $setClauses[] = 'updated_at = NOW()';
+    $params[]     = $slipId;
+
+    $db->prepare("UPDATE odoo_slip_uploads SET " . implode(', ', $setClauses) . " WHERE id = ?")
+       ->execute($params);
+
+    $stmt2 = $db->prepare("SELECT id, amount, transfer_date, status FROM odoo_slip_uploads WHERE id = ? LIMIT 1");
+    $stmt2->execute([$slipId]);
+    $updated = $stmt2->fetch(PDO::FETCH_ASSOC);
+
+    return [
+        'id'            => $slipId,
+        'updated'       => true,
+        'amount'        => $updated['amount'] ?? null,
+        'transfer_date' => $updated['transfer_date'] ?? null,
+        'status'        => $updated['status'] ?? null,
     ];
 }
 
