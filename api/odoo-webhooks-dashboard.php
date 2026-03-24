@@ -3790,7 +3790,7 @@ function unmatchSlipAction($db, $input)
                 if ($tblChk->rowCount() > 0) {
                     $db->prepare("
                         UPDATE odoo_bdo_orders
-                        SET payment_status = 'pending', slip_upload_id = NULL, updated_at = NOW()
+                        SET payment_status = 'pending', slip_upload_id = NULL
                         WHERE bdo_id = ? AND slip_upload_id = ?
                     ")->execute([$bdoId, $slipId]);
                 }
@@ -4082,7 +4082,7 @@ function _updateLocalSlipMatch($db, $slipInboxId, $matches, $note)
                 if ($tblChk->rowCount() > 0) {
                     $db->prepare("
                         UPDATE odoo_bdo_orders
-                        SET payment_status = 'matched', slip_upload_id = ?, updated_at = NOW()
+                        SET payment_status = 'matched', slip_upload_id = ?
                         WHERE bdo_id = ?
                     ")->execute([$slipInboxId, $bdoId]);
                 }

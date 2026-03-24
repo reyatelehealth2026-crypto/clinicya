@@ -607,7 +607,7 @@ try {
                 try {
                     $tblChk = $db->query("SHOW TABLES LIKE 'odoo_bdo_orders'");
                     if ($tblChk->rowCount() > 0) {
-                        $db->prepare("UPDATE odoo_bdo_orders SET payment_status = 'pending', slip_upload_id = NULL, updated_at = NOW() WHERE bdo_id = ? AND slip_upload_id = ?")->execute([$unmatchBdoId, $slipId]);
+                        $db->prepare("UPDATE odoo_bdo_orders SET payment_status = 'pending', slip_upload_id = NULL WHERE bdo_id = ? AND slip_upload_id = ?")->execute([$unmatchBdoId, $slipId]);
                     }
                 } catch (Exception $e2) {
                     error_log("[slip-match-orders] bdo_orders reset failed: " . $e2->getMessage());
@@ -645,7 +645,7 @@ try {
                 if ($tblChk->rowCount() > 0) {
                     $db->prepare("
                         UPDATE odoo_bdo_orders
-                        SET payment_status = 'slip_uploaded', slip_upload_id = ?, updated_at = NOW()
+                        SET payment_status = 'slip_uploaded', slip_upload_id = ?
                         WHERE bdo_id = ? AND payment_status = 'pending'
                     ")->execute([$slipId, $bdoId]);
                 }
