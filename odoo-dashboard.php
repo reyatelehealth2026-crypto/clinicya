@@ -882,9 +882,19 @@
                     </div>
                 </div>
 
+                <!-- LINE chat images (recent) -->
+                <div class="content-card" style="margin-top:0.75rem;">
+                    <div class="content-title" style="margin-bottom:0.5rem;">
+                        <i class="bi bi-chat-dots"></i> รูปภาพจากแชท (ย้อนหลัง 10 วัน · สูงสุด 10 รายการ)
+                        <span style="font-size:0.75rem;color:var(--gray-400);font-weight:400;margin-left:6px;">แตะรูปเพื่อแนบเป็นสลิป · ซ่อนรูปที่ไม่ใช่สลิป</span>
+                    </div>
+                    <div id="matchChatImageGallery" style="min-height:40px;font-size:0.82rem;color:var(--gray-500);">—</div>
+                </div>
+
                 <!-- Match Summary Bar -->
                 <div class="content-card" id="matchSummaryBar" style="margin-top:1rem;display:none;">
                     <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+                        <div id="matchSummaryText" style="flex:1;min-width:220px;font-size:0.85rem;color:var(--gray-700);"></div>
                         <div style="flex:1;min-width:200px;">
                             <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
                                 <div>
@@ -1159,9 +1169,41 @@
         </div>
     </div>
 
+    <!-- Matching: create slip from LINE chat image -->
+    <div id="matchImageSlipModal" style="display:none;position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,0.45);padding:16px;align-items:center;justify-content:center;" class="match-image-slip-modal-wrap">
+        <div style="background:var(--surface);border-radius:var(--radius-lg);max-width:420px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.2);overflow:hidden;">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--gray-200);font-weight:600;color:var(--gray-800);">
+                <i class="bi bi-receipt-cutoff"></i> แนบสลิปจากรูปแชท
+            </div>
+            <div style="padding:16px 20px;">
+                <div style="text-align:center;margin-bottom:12px;">
+                    <img id="matchImageSlipPreview" alt="" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--gray-200);object-fit:contain;background:var(--gray-50);">
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label class="form-label">จำนวนเงิน (บาท) <span style="color:#dc2626">*</span></label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="matchImageSlipAmount" placeholder="0.00" style="font-size:0.88rem;">
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label class="form-label">วันที่โอน</label>
+                    <input type="date" class="form-control" id="matchImageSlipDate" style="font-size:0.88rem;">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">BDO <span style="color:#dc2626">*</span></label>
+                    <select class="form-control" id="matchImageSlipBdoId" style="font-size:0.88rem;">
+                        <option value="">— เลือก BDO —</option>
+                    </select>
+                </div>
+            </div>
+            <div style="padding:14px 20px;border-top:1px solid var(--gray-200);display:flex;gap:10px;justify-content:flex-end;background:var(--gray-50);">
+                <button type="button" onclick="closeMatchImageSlipModal()" class="chip">ยกเลิก</button>
+                <button type="button" id="matchImageSlipSubmitBtn" onclick="submitImageAsSlip()" class="btn-primary" style="background:linear-gradient(135deg,#16a34a,#059669);font-size:0.85rem;"><i class="bi bi-check2-circle"></i> บันทึกสลิป</button>
+            </div>
+        </div>
+    </div>
+
     <?php
     // Manual version bump — update on every code change to bust cache
-    $JS_VERSION = '20260320.2';
+    $JS_VERSION = '20260325.1';
 
     // Load minified JS if available, fallback to source
     $jsMin = __DIR__ . '/odoo-dashboard.min.js';

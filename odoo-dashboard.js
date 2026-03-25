@@ -79,7 +79,7 @@ function matchConfidenceBadge(confidence){const map={exact_bdo:['#dcfce7','#1665
 function slipBdoInfo(s){if(!(s.bdo_name||s.bdo_id))return '<span style="color:var(--gray-300);font-size:0.75rem;">-</span>';const bdoId=s.bdo_id||'';const bdoName=s.bdo_name||('BDO-'+bdoId);const raw=encodeURIComponent(JSON.stringify({bdo_id:bdoId,bdo_name:bdoName,amount_total:s.bdo_amount,delivery_type:s.delivery_type,customer_name:s.customer_name,odoo_id:s.bdo_odoo_id||s.bdo_id}));return '<a href="javascript:void(0)" onclick="openBdoDetail(\''+escapeHtml(String(bdoId))+'\',\''+escapeHtml(String(bdoName))+'\',decodeURIComponent(\''+raw+'\'))" class="ref-link">'+escapeHtml(String(bdoName))+'</a>';}
 
 function normalizeBdoPaymentStatus(bdo){
-    const rawStatus=String(bdo?.payment_status||bdo?.status||'').toLowerCase().trim();
+    const rawStatus=String(bdo?.payment_status||bdo?.payment_state||bdo?.status||'').toLowerCase().trim();
     const paidAmount=parseFloat(bdo?.paid_amount_total ?? bdo?.paid_amount ?? bdo?.matched_amount_total ?? bdo?.matched_total ?? 0) || 0;
     const totalAmount=parseFloat(bdo?.amount_total ?? bdo?.amount_net_to_pay ?? 0) || 0;
     const linkedSlipCount=Array.isArray(bdo?.linked_slips)?bdo.linked_slips.length:(Array.isArray(bdo?.slips)?bdo.slips.length:0);
@@ -2989,6 +2989,8 @@ let _matchActiveCustomer = null; // null=grid, {ref,name,partnerId,salespersonId
 let _matchAllCustomers   = [];
 let _matchSlipCountByRef = {};
 let _matchBdoCountByRef  = {};
+let _matchRecentChatImages = [];
+let _matchImageSlipContext = null;
 
 // ===== CUSTOMER GRID =====
 
@@ -3014,7 +3016,7 @@ async function loadMatchingCustomerGrid(forceRefresh){
     const [custRes, slipRes, bdoRes] = await Promise.all([
         whApiCall({action:'customer_list', limit:80, offset:0, fast:1}),
         fetch('api/slips-list.php?status=pending&limit=60&offset=0').then(r=>r.json()).catch(()=>({success:false})),
-        whApiCall({action:'odoo_bdo_list_api', limit:80, offset:0})
+        whApiCall({action:'odoo_bdo_list_api', limit:80, offset:0, payment_filter:'unpaid'})
     ]);
 
     _matchAllCustomers = (custRes && custRes.success && custRes.data && custRes.data.customers) ? custRes.data.customers : [];
@@ -3032,7 +3034,7 @@ async function loadMatchingCustomerGrid(forceRefresh){
     const allBdos = (bdoRes && bdoRes.success && bdoRes.data && bdoRes.data.bdos) ? bdoRes.data.bdos : [];
     allBdos.forEach(function(b){
         const ps = normalizeBdoPaymentStatus(b);
-        if(ps.key === 'pending' || ps.key === 'partial'){
+        if(ps.key === 'pending'){
             const ref = normalizeMatchCustomerRef(getBdoCustomerRef(b));
             if(ref) _matchBdoCountByRef[ref] = (_matchBdoCountByRef[ref] || 0) + 1;
         }
@@ -3177,7 +3179,8 @@ function openMatchingForCustomer(ref, name, partnerId, salespersonName){
         ref: ref,
         name: name,
         partnerId: partnerId,
-        salespersonName: salespersonName
+        salespersonName: salespersonName,
+        lineUserId: ''
     };
     
     // Toggle zones
@@ -3210,16 +3213,215 @@ function openMatchingForCustomer(ref, name, partnerId, salespersonName){
         `;
     }
     
-    // Load matching data for this customer
-    loadMatchingDashboard();
+    // Load matching data first, then resolve LINE user + chat images (needs line_user_id for slip upload)
+    void loadMatchingDashboard().then(function(){
+        loadCustomerRecentImages();
+    });
 }
 
 function closeMatchingCustomer(){
     _matchActiveCustomer = null;
+    _matchRecentChatImages = [];
+    const gal = document.getElementById('matchChatImageGallery');
+    if(gal) gal.innerHTML = '—';
     const gridZone   = document.getElementById('matchCustomerGridZone');
     const detailZone = document.getElementById('matchCustomerDetailZone');
     if(detailZone) detailZone.style.display = 'none';
     if(gridZone)   gridZone.style.display   = '';
+}
+
+function _matchGalleryHiddenKey(){
+    const id = _matchActiveCustomer && _matchActiveCustomer.lineUserId ? String(_matchActiveCustomer.lineUserId) : 'x';
+    return 'match_gallery_hidden_' + id;
+}
+
+function _absoluteUrlForSlipUpload(u){
+    if(!u) return '';
+    const s = String(u).trim();
+    if(/^https?:\/\//i.test(s)) return s;
+    const base = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+    return base + '/' + s.replace(/^\//, '');
+}
+
+async function loadCustomerRecentImages(){
+    const el = document.getElementById('matchChatImageGallery');
+    if(!el || !_matchActiveCustomer) return;
+    el.innerHTML = '<div class="loading" style="padding:0.5rem;"><i class="bi bi-arrow-repeat spin"></i> กำลังโหลดรูปจากแชท...</div>';
+    const ref = _matchActiveCustomer.ref || '';
+    const pid = _matchActiveCustomer.partnerId || '';
+    let url = 'api/customer-recent-images.php?';
+    if(ref) url += 'customer_ref=' + encodeURIComponent(ref) + '&';
+    if(pid) url += 'partner_id=' + encodeURIComponent(String(pid)) + '&';
+    try{
+        const res = await fetch(url).then(function(r){ return r.json(); });
+        if(res && res.success && res.data){
+            if(res.data.line_user_id && _matchActiveCustomer){
+                _matchActiveCustomer.lineUserId = res.data.line_user_id;
+            }
+            _matchRecentChatImages = res.data.images || [];
+            renderRecentImageGallery(_matchRecentChatImages);
+        } else {
+            el.innerHTML = '<span style="color:var(--gray-400);">' + escapeHtml((res && res.error) || 'โหลดรูปไม่สำเร็จ') + '</span>';
+        }
+    } catch(e){
+        el.innerHTML = '<span style="color:#dc2626;">โหลดรูปจากแชทไม่สำเร็จ</span>';
+    }
+}
+
+function renderRecentImageGallery(images){
+    const el = document.getElementById('matchChatImageGallery');
+    if(!el) return;
+    let hidden = [];
+    try{
+        hidden = JSON.parse(sessionStorage.getItem(_matchGalleryHiddenKey()) || '[]');
+    } catch(e){ hidden = []; }
+    const hiddenSet = new Set(hidden.map(function(x){ return parseInt(x, 10); }));
+    const visible = (images || []).filter(function(img){ return !hiddenSet.has(img.id); });
+    if(!visible.length){
+        el.innerHTML = '<span style="color:var(--gray-400);">ไม่มีรูปภาพจากแชทในช่วง 10 วัน หรือซ่อนหมดแล้ว</span>';
+        return;
+    }
+    let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;">';
+    visible.forEach(function(img){
+        const thumb = img.thumb_url || img.image_url;
+        const dt = img.created_at ? fmtThDate(img.created_at) : '';
+        const src = thumb ? escapeHtml(_absoluteUrlForSlipUpload(thumb)) : '';
+        html += '<div style="position:relative;width:72px;">';
+        if(src){
+            html += '<img src="' + src + '" alt="" style="width:72px;height:88px;object-fit:cover;border-radius:8px;border:1px solid var(--gray-200);cursor:pointer;background:var(--gray-100);" onclick="selectImageForSlipById(' + img.id + ')">';
+        } else {
+            html += '<div style="width:72px;height:88px;border-radius:8px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:0.65rem;color:var(--gray-400);text-align:center;padding:4px;">ไม่มีตัวอย่าง</div>';
+        }
+        html += '<div style="font-size:0.62rem;color:var(--gray-500);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(dt) + '</div>';
+        html += '<button type="button" onclick="event.stopPropagation();hideRecentImage(' + img.id + ')" style="position:absolute;top:-4px;right:-4px;width:22px;height:22px;border-radius:50%;border:none;background:var(--gray-800);color:#fff;font-size:0.65rem;cursor:pointer;line-height:1;" title="ซ่อนรูปนี้">×</button>';
+        html += '</div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+}
+
+function hideRecentImage(messageDbId){
+    let hidden = [];
+    try{
+        hidden = JSON.parse(sessionStorage.getItem(_matchGalleryHiddenKey()) || '[]');
+    } catch(e){ hidden = []; }
+    hidden.push(messageDbId);
+    sessionStorage.setItem(_matchGalleryHiddenKey(), JSON.stringify(hidden));
+    renderRecentImageGallery(_matchRecentChatImages);
+}
+
+function selectImageForSlipById(messageDbId){
+    const item = (_matchRecentChatImages || []).find(function(x){ return x.id === messageDbId; });
+    if(item) selectImageForSlip(item);
+}
+
+function selectImageForSlip(item){
+    _matchImageSlipContext = item || null;
+    const prev = document.getElementById('matchImageSlipPreview');
+    const src = item && (item.thumb_url || item.image_url) ? _absoluteUrlForSlipUpload(item.thumb_url || item.image_url) : '';
+    if(prev) prev.src = src || '';
+    const amt = document.getElementById('matchImageSlipAmount');
+    const dt = document.getElementById('matchImageSlipDate');
+    if(amt) amt.value = '';
+    if(dt && item && item.created_at){
+        dt.value = String(item.created_at).slice(0, 10);
+    } else if(dt){
+        dt.value = '';
+    }
+    fillMatchImageSlipBdoSelect();
+    const modal = document.getElementById('matchImageSlipModal');
+    if(modal){
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+    }
+}
+
+function fillMatchImageSlipBdoSelect(){
+    const sel = document.getElementById('matchImageSlipBdoId');
+    if(!sel) return;
+    sel.innerHTML = '<option value="">— เลือก BDO —</option>';
+    (_matchBdos || []).forEach(function(b){
+        const ps = normalizeBdoPaymentStatus(b);
+        if(ps.key !== 'pending') return;
+        const id = b.bdo_id || b.id;
+        const amt = b.amount_total != null ? Number(b.amount_total) : (b.amount_net_to_pay != null ? Number(b.amount_net_to_pay) : 0);
+        const label = (b.bdo_name || ('BDO-' + id)) + ' · ฿' + amt.toLocaleString('th-TH', {minimumFractionDigits: 0});
+        const opt = document.createElement('option');
+        opt.value = String(id);
+        opt.textContent = label;
+        sel.appendChild(opt);
+    });
+}
+
+function closeMatchImageSlipModal(){
+    const modal = document.getElementById('matchImageSlipModal');
+    if(modal){
+        modal.style.display = 'none';
+    }
+    _matchImageSlipContext = null;
+}
+
+async function submitImageAsSlip(){
+    const ctx = _matchImageSlipContext;
+    if(!ctx || !_matchActiveCustomer || !_matchActiveCustomer.lineUserId){
+        alert('ไม่พบข้อมูลลูกค้า LINE — รีเฟรชแล้วลองใหม่');
+        return;
+    }
+    const amtEl = document.getElementById('matchImageSlipAmount');
+    const dtEl = document.getElementById('matchImageSlipDate');
+    const bdoSel = document.getElementById('matchImageSlipBdoId');
+    const amount = amtEl ? parseFloat(amtEl.value) : NaN;
+    const transferDate = dtEl && dtEl.value ? dtEl.value : null;
+    const bdoId = bdoSel && bdoSel.value ? parseInt(bdoSel.value, 10) : 0;
+    if(!amount || amount <= 0){
+        alert('กรุณากรอกจำนวนเงิน');
+        return;
+    }
+    if(!bdoId){
+        alert('กรุณาเลือก BDO');
+        return;
+    }
+    const imageUrl = ctx.image_url ? _absoluteUrlForSlipUpload(ctx.image_url) : '';
+    if(!imageUrl && !ctx.line_message_id){
+        alert('ไม่พบไฟล์รูปสำหรับแนบ');
+        return;
+    }
+    const btn = document.getElementById('matchImageSlipSubmitBtn');
+    if(btn){
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> กำลังบันทึก...';
+    }
+    const payload = {
+        line_user_id: _matchActiveCustomer.lineUserId,
+        image_url: imageUrl || undefined,
+        message_id: ctx.line_message_id || undefined,
+        amount: amount,
+        transfer_date: transferDate,
+        bdo_id: bdoId,
+        skip_line_notify: true
+    };
+    try{
+        const res = await fetch('api/odoo-slip-upload.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json; charset=utf-8'},
+            body: JSON.stringify(payload)
+        }).then(function(r){ return r.json(); });
+        if(res && res.success){
+            closeMatchImageSlipModal();
+            await loadMatchingDashboard();
+            await loadCustomerRecentImages();
+        } else {
+            throw new Error((res && res.error) || 'บันทึกไม่สำเร็จ');
+        }
+    } catch(e){
+        alert('❌ ' + (e.message || e));
+    } finally {
+        if(btn){
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check2-circle"></i> บันทึกสลิป';
+        }
+    }
 }
 
 async function loadMatchingDashboard(){
@@ -3246,6 +3448,7 @@ async function loadMatchingDashboard(){
     const bdoParams = {action:'odoo_bdo_list_api', limit:200, offset:0, search: search};
     if(custRef) bdoParams.customer_ref = custRef;
     if(custPid) bdoParams.partner_id   = custPid;
+    if(filterMode !== 'matched') bdoParams.payment_filter = 'unpaid';
 
     const [slipRes, bdoRes] = await Promise.all([
         fetch(slipUrl).then(r=>r.json()).catch(()=>({success:false})),
@@ -3268,7 +3471,7 @@ async function loadMatchingDashboard(){
     const pendingSlips = _matchSlips.filter(function(s){ return s.status === 'pending' || s.status === 'new'; });
     const pendingBdos = _matchBdos.filter(function(b){
         const paymentState = normalizeBdoPaymentStatus(b);
-        return paymentState.key === 'pending' || paymentState.key === 'partial';
+        return paymentState.key === 'pending';
     });
     const problemSlips = _matchSlips.filter(function(s){ return s.status === 'failed'; });
 
@@ -3485,7 +3688,7 @@ function toggleMatchBdo(bdoId){
             ? true
             : (function(){
                 const paymentState = normalizeBdoPaymentStatus(b);
-                return (paymentState.key === 'pending' || paymentState.key === 'partial') && !_getSuggestionForBdo(b.bdo_id || b.id);
+                return paymentState.key === 'pending' && !_getSuggestionForBdo(b.bdo_id || b.id);
             })();
     }));
     updateMatchSummaryBar();
@@ -3576,7 +3779,7 @@ function computeSmartMatches(slips, bdos){
     const pendingSlips = slips.filter(function(s){ return s.status === 'pending' || s.status === 'new'; });
     const pendingBdos = bdos.filter(function(b){
         const paymentState = normalizeBdoPaymentStatus(b);
-        return paymentState.key === 'pending' || paymentState.key === 'partial';
+        return paymentState.key === 'pending';
     });
 
     // Priority 1: bdo_id direct match
