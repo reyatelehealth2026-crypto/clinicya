@@ -1,4 +1,5 @@
 <?php
+ob_start();
 /**
  * Odoo Webhooks Dashboard API
  * 
@@ -16,6 +17,10 @@
  * @version 1.1.0
  * @created 2026-02-14
  */
+
+// Discard any stray output (notices, warnings) emitted during boot
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -253,9 +258,11 @@ try {
         dashboardApiCacheSet($cacheKey, $result);
     }
 
+    ob_clean();
     echo json_encode(['success' => true, 'data' => $result], JSON_UNESCAPED_UNICODE);
 
 } catch (Exception $e) {
+    ob_clean();
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
