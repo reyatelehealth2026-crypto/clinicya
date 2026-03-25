@@ -2827,87 +2827,69 @@ function getCustomerDetail($db, $input)
         }
     }
 
-    // Fallback: compute credit/totals from webhook order+invoice data
+    // Fallback: compute credit/totals from sync tables (odoo_orders + odoo_bdos)
+    // Replaced: old JSON_EXTRACT subqueries on odoo_webhooks_log (O(n) per row, 5-30s)
+    // New: indexed queries on sync tables (<20ms)
     if (!$detail['credit'] && ($partnerId !== '' || $customerRef !== '')) {
         try {
-            $pidExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.partner_id')), '')";
-            $cidExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), '')";
-            $refExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.ref')), '')";
-            $amtExpr  = "CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.amount_total')), ''), '0') AS DECIMAL(14,2))";
-            $resExpr  = "CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.amount_residual')), ''), '0') AS DECIMAL(14,2))";
-            $orderNameExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.name')), ''))";
-
-            $wh = [];
-            $wp = [];
+            $where  = [];
+            $params = [];
             if ($partnerId !== '' && $partnerId !== '-') {
-                $wh[] = "({$pidExpr} = ? OR {$cidExpr} = ?)";
-                $wp[] = $partnerId;
-                $wp[] = $partnerId;
+                $where[]  = 'partner_id = ?';
+                $params[] = (int) $partnerId;
             } elseif ($customerRef !== '') {
-                $wh[] = "{$refExpr} = ?";
-                $wp[] = $customerRef;
+                $where[]  = 'customer_ref = ?';
+                $params[] = $customerRef;
             }
 
-            if (!empty($wh)) {
-                $whereStr = implode(' AND ', $wh);
+            if (!empty($where)) {
+                // Total spend + count from odoo_orders (indexed on partner_id / customer_ref)
+                $s = $db->prepare("SELECT COALESCE(SUM(amount_total),0) as total_spend, COUNT(*) as order_count FROM odoo_orders WHERE " . implode(' AND ', $where));
+                $s->execute($params);
+                $ordRow = $s->fetch(PDO::FETCH_ASSOC);
 
-                // Total spend from orders (sum unique order amounts)
-                $stmtOrders = $db->prepare("
-                    SELECT
-                        COALESCE(SUM(t.amt), 0) as total_spend,
-                        COUNT(*) as order_count
-                    FROM (
-                        SELECT {$orderNameExpr} as oname, MAX({$amtExpr}) as amt
-                        FROM odoo_webhooks_log
-                        WHERE {$whereStr}
-                          AND ({$orderNameExpr}) IS NOT NULL
-                        GROUP BY oname
-                    ) t
-                ");
-                $stmtOrders->execute($wp);
-                $ordRow = $stmtOrders->fetch(PDO::FETCH_ASSOC);
+                // Resolve customer_ref for BDO lookup if only partner_id was given
+                $refForBdo = $customerRef;
+                if ($refForBdo === '' && $partnerId !== '' && $partnerId !== '-') {
+                    try {
+                        $rs = $db->prepare("SELECT customer_ref FROM odoo_orders WHERE partner_id = ? AND customer_ref IS NOT NULL LIMIT 1");
+                        $rs->execute([(int) $partnerId]);
+                        $refForBdo = (string) ($rs->fetchColumn() ?: '');
+                    } catch (Exception $e) {}
+                }
 
-                // Outstanding due from unpaid invoices
-                $invExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.invoice_number')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.invoice.name')), ''))";
-                $stmtDue = $db->prepare("
-                    SELECT COALESCE(SUM(t.residual), 0) as total_due
-                    FROM (
-                        SELECT {$invExpr} as inv_num, MAX({$resExpr}) as residual
-                        FROM odoo_webhooks_log
-                        WHERE {$whereStr}
-                          AND event_type LIKE 'invoice.%'
-                          AND event_type NOT IN ('invoice.paid', 'invoice.cancelled')
-                          AND ({$invExpr}) IS NOT NULL
-                        GROUP BY inv_num
-                    ) t
-                ");
-                $stmtDue->execute($wp);
-                $dueRow = $stmtDue->fetch(PDO::FETCH_ASSOC);
-
-                // Check if any paid invoices exist (exclude those from due)
-                $stmtPaid = $db->prepare("
-                    SELECT {$invExpr} as inv_num
-                    FROM odoo_webhooks_log
-                    WHERE {$whereStr}
-                      AND event_type = 'invoice.paid'
-                      AND ({$invExpr}) IS NOT NULL
-                    GROUP BY inv_num
-                ");
-                $stmtPaid->execute($wp);
-                $paidInvs = $stmtPaid->fetchAll(PDO::FETCH_COLUMN);
+                // Outstanding + overdue from odoo_bdos (indexed on customer_ref + payment_state)
+                $totalDue  = 0.0;
+                $overduAmt = 0.0;
+                if ($refForBdo !== '') {
+                    $bs = $db->prepare("
+                        SELECT
+                            COALESCE(SUM(amount_net_to_pay), 0) as total_due,
+                            COALESCE(SUM(CASE WHEN due_date < CURDATE() THEN amount_net_to_pay ELSE 0 END), 0) as overdue
+                        FROM odoo_bdos
+                        WHERE customer_ref = ?
+                          AND payment_state NOT IN ('paid','reversed','in_payment')
+                          AND state != 'cancel'
+                    ");
+                    $bs->execute([$refForBdo]);
+                    $brow      = $bs->fetch(PDO::FETCH_ASSOC);
+                    $totalDue  = (float) ($brow['total_due'] ?? 0);
+                    $overduAmt = (float) ($brow['overdue']   ?? 0);
+                }
 
                 $detail['credit'] = [
                     'total_spend'      => (float) ($ordRow['total_spend'] ?? 0),
                     'credit_used'      => (float) ($ordRow['total_spend'] ?? 0),
-                    'total_due'        => (float) ($dueRow['total_due'] ?? 0),
+                    'total_due'        => $totalDue,
+                    'overdue_amount'   => $overduAmt,
                     'credit_remaining' => null,
                     'credit_limit'     => null,
                     'order_count'      => (int) ($ordRow['order_count'] ?? 0),
                 ];
-                $detail['warnings'][] = 'credit_source: webhook_computed';
+                $detail['warnings'][] = 'credit_source: sync_tables';
             }
         } catch (Exception $e) {
-            $detail['warnings'][] = 'credit_webhook: ' . $e->getMessage();
+            $detail['warnings'][] = 'credit_sync: ' . $e->getMessage();
         }
     }
 

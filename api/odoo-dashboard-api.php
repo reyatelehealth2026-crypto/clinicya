@@ -4581,3 +4581,189 @@ function slipUnmatch($db, $input)
     ];
 }
 
+/**
+ * Get customer detail — DB-only (no live Odoo API).
+ * Sources: odoo_orders (profile+spend), odoo_bdos (due), odoo_line_users (LINE link).
+ * Prevents 500 / fallback to odoo-webhooks-dashboard.php which uses slow JSON_EXTRACT.
+ */
+if (!function_exists('getCustomerDetail')) {
+function getCustomerDetail($db, $input)
+{
+    $partnerId   = trim((string) ($input['partner_id']   ?? ''));
+    $customerRef = trim((string) ($input['customer_ref'] ?? ''));
+
+    if ($partnerId === '' && $customerRef === '') {
+        throw new Exception('Missing partner_id or customer_ref');
+    }
+
+    $detail = [
+        'partner_id'   => $partnerId,
+        'customer_ref' => $customerRef,
+        'profile'      => null,
+        'credit'       => null,
+        'link'         => null,
+        'points'       => null,
+        'warnings'     => [],
+    ];
+
+    // ── LINE link ──────────────────────────────────────────────────────────
+    $link = null;
+    if ($partnerId !== '' && $partnerId !== '-') {
+        try {
+            $s = $db->prepare("SELECT * FROM odoo_line_users WHERE odoo_partner_id = ? LIMIT 1");
+            $s->execute([(int) $partnerId]);
+            $link = $s->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Exception $e) {}
+    }
+    if (!$link && $customerRef !== '') {
+        try {
+            $s = $db->prepare("SELECT * FROM odoo_line_users WHERE odoo_customer_code = ? LIMIT 1");
+            $s->execute([$customerRef]);
+            $link = $s->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Exception $e) {}
+    }
+    if ($link) $detail['link'] = $link;
+
+    // ── Profile from odoo_orders (indexed, <10ms) ──────────────────────────
+    try {
+        $where  = [];
+        $params = [];
+        if ($partnerId !== '' && $partnerId !== '-') {
+            $where[]  = 'partner_id = ?';
+            $params[] = (int) $partnerId;
+        } elseif ($customerRef !== '') {
+            $where[]  = 'customer_ref = ?';
+            $params[] = $customerRef;
+        }
+        if ($where) {
+            $s = $db->prepare("
+                SELECT customer_ref, salesperson_name, line_user_id, partner_id
+                FROM odoo_orders
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY updated_at DESC LIMIT 1
+            ");
+            $s->execute($params);
+            $row = $s->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                $detail['profile'] = [
+                    'name'             => $row['customer_ref'] ?? '',
+                    'customer_name'    => $row['customer_ref'] ?? '',
+                    'ref'              => $row['customer_ref'] ?? '',
+                    'customer_ref'     => $row['customer_ref'] ?? '',
+                    'partner_id'       => $row['partner_id'],
+                    'phone'            => '',
+                    'email'            => '',
+                    'salesperson_name' => $row['salesperson_name'] ?? '',
+                ];
+                $detail['warnings'][] = 'profile_source: odoo_orders';
+                // Ensure customer_ref is resolved for BDO lookup below
+                if ($customerRef === '') $customerRef = $row['customer_ref'] ?? '';
+            }
+        }
+    } catch (Exception $e) {
+        $detail['warnings'][] = 'profile_error: ' . $e->getMessage();
+    }
+
+    // ── Credit/spend from odoo_orders + odoo_bdos (both indexed, <20ms) ───
+    try {
+        $where  = [];
+        $params = [];
+        if ($partnerId !== '' && $partnerId !== '-') {
+            $where[]  = 'partner_id = ?';
+            $params[] = (int) $partnerId;
+        } elseif ($customerRef !== '') {
+            $where[]  = 'customer_ref = ?';
+            $params[] = $customerRef;
+        }
+        if ($where) {
+            $s = $db->prepare("
+                SELECT COALESCE(SUM(amount_total),0) as total_spend, COUNT(*) as order_count
+                FROM odoo_orders WHERE " . implode(' AND ', $where)
+            );
+            $s->execute($params);
+            $spend = $s->fetch(PDO::FETCH_ASSOC);
+
+            // Due from odoo_bdos (by customer_ref)
+            $totalDue  = 0.0;
+            $overduAmt = 0.0;
+            if ($customerRef !== '') {
+                $bs = $db->prepare("
+                    SELECT
+                        COALESCE(SUM(amount_net_to_pay), 0) as total_due,
+                        COALESCE(SUM(CASE WHEN due_date < CURDATE() THEN amount_net_to_pay ELSE 0 END), 0) as overdue
+                    FROM odoo_bdos
+                    WHERE customer_ref = ?
+                      AND payment_state NOT IN ('paid','reversed','in_payment')
+                      AND state != 'cancel'
+                ");
+                $bs->execute([$customerRef]);
+                $brow      = $bs->fetch(PDO::FETCH_ASSOC);
+                $totalDue  = (float) ($brow['total_due'] ?? 0);
+                $overduAmt = (float) ($brow['overdue']   ?? 0);
+            }
+
+            $detail['credit'] = [
+                'total_spend'      => (float) ($spend['total_spend'] ?? 0),
+                'credit_used'      => (float) ($spend['total_spend'] ?? 0),
+                'total_due'        => $totalDue,
+                'overdue_amount'   => $overduAmt,
+                'credit_remaining' => null,
+                'credit_limit'     => null,
+                'order_count'      => (int) ($spend['order_count'] ?? 0),
+            ];
+            $detail['warnings'][] = 'credit_source: sync_tables';
+        }
+    } catch (Exception $e) {
+        $detail['warnings'][] = 'credit_error: ' . $e->getMessage();
+    }
+
+    return $detail;
+}
+}
+
+/**
+ * Get activity log (manual overrides + order notes) for a customer.
+ * Defined here to prevent 500 fallback to odoo-webhooks-dashboard.php.
+ */
+if (!function_exists('activityLogList')) {
+function activityLogList($db, $input)
+{
+    $partnerId = trim((string) ($input['partner_id'] ?? ''));
+    $entityRef = trim((string) ($input['entity_ref'] ?? ''));
+    $limit     = min((int) ($input['limit']  ?? 50), 200);
+    $offset    = max((int) ($input['offset'] ?? 0),  0);
+
+    $items = [];
+
+    // Manual overrides
+    try {
+        $where  = ['1=1'];
+        $params = [];
+        if ($partnerId !== '' && $partnerId !== '-') { $where[] = 'partner_id = ?'; $params[] = (int) $partnerId; }
+        if ($entityRef !== '') { $where[] = 'entity_ref = ?'; $params[] = $entityRef; }
+        $s = $db->prepare("SELECT id,'override' as log_kind,entity_type,entity_ref,old_status,new_status,reason as description,admin_name,created_at FROM odoo_manual_overrides WHERE " . implode(' AND ', $where) . " ORDER BY created_at DESC LIMIT 100");
+        $s->execute($params);
+        $items = array_merge($items, $s->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Exception $e) {}
+
+    // Order notes
+    try {
+        $where  = ['1=1'];
+        $params = [];
+        if ($partnerId !== '' && $partnerId !== '-') { $where[] = 'partner_id = ?'; $params[] = (int) $partnerId; }
+        if ($entityRef !== '') { $where[] = 'entity_ref = ?'; $params[] = $entityRef; }
+        $s = $db->prepare("SELECT id,'note' as log_kind,entity_type,entity_ref,NULL as old_status,NULL as new_status,note as description,admin_name,created_at FROM odoo_order_notes WHERE " . implode(' AND ', $where) . " ORDER BY created_at DESC LIMIT 100");
+        $s->execute($params);
+        $items = array_merge($items, $s->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Exception $e) {}
+
+    usort($items, function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $total = count($items);
+    $items = array_slice($items, $offset, $limit);
+
+    return ['items' => $items, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
+}
+}
+
