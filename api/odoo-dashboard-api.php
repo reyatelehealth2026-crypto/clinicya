@@ -2050,45 +2050,78 @@ function sendBdoPaymentNotification($db, $input)
     }
     $accessToken = $user['channel_access_token'];
 
-    // ── 5. Build data for Flex template ─────────────────────────────────
+    // ── 5. Build data for Flex template — use getBdoDetailLive for fresh Odoo data ──
     $amountTotal = (float) ($bdo['amount_total'] ?? $bdo['ctx_amount'] ?? 0);
-
-    // Parse net-to-pay and financial summary
     $netToPay = $amountTotal;
     $financialSummary = [];
-    if (!empty($bdo['financial_summary_json'])) {
-        $fs = json_decode($bdo['financial_summary_json'], true);
-        if (is_array($fs)) {
-            $netToPay = (float) ($fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $amountTotal);
+    $invoices = [];
+
+    try {
+        $liveDetail = getBdoDetailLive($db, [
+            'bdo_id'       => $bdoId,
+            'line_user_id' => $lineUserId,
+            'partner_id'   => $partnerId,
+        ]);
+        $liveSum = $liveDetail['summary'] ?? [];
+        if (!empty($liveSum) && isset($liveSum['net_to_pay']) && (float)$liveSum['net_to_pay'] >= 0) {
+            $netToPay = (float) $liveSum['net_to_pay'];
             $financialSummary = [
-                'so_amount'          => $fs['so_amount']          ?? $fs['total_so_amount']   ?? null,
-                'outstanding_amount' => $fs['outstanding_amount'] ?? $fs['total_outstanding'] ?? null,
-                'credit_note_amount' => $fs['credit_note_amount'] ?? $fs['total_credit_notes'] ?? null,
-                'deposit_amount'     => $fs['deposit_amount']     ?? $fs['total_deposits']     ?? null,
+                'so_amount'          => $liveSum['so_amount']          ?? null,
+                'outstanding_amount' => $liveSum['outstanding_amount'] ?? null,
+                'credit_note_amount' => $liveSum['credit_note_amount'] ?? null,
+                'deposit_amount'     => $liveSum['deposit_amount']     ?? null,
                 'net_to_pay'         => $netToPay,
             ];
         }
-    }
-
-    // Parse invoice rows
-    $invoices = [];
-    if (!empty($bdo['selected_invoices_json'])) {
-        $invs = json_decode($bdo['selected_invoices_json'], true);
-        if (is_array($invs)) {
-            foreach ($invs as $inv) {
-                $invoices[] = [
-                    'number'   => $inv['number'] ?? $inv['name'] ?? '-',
-                    'residual' => (float) ($inv['residual'] ?? $inv['amount_residual'] ?? $inv['amount_total'] ?? 0),
-                    'date'     => $inv['date'] ?? $inv['invoice_date'] ?? '',
-                    'origin'   => $inv['origin'] ?? '',
+        foreach ($liveDetail['outstanding_invoices'] ?? [] as $inv) {
+            $invoices[] = [
+                'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                'residual' => (float) ($inv['residual'] ?? $inv['amount_total'] ?? 0),
+                'date'     => $inv['date'] ?? '',
+                'origin'   => $inv['origin'] ?? '',
+            ];
+        }
+    } catch (Exception $e) {
+        error_log('[sendBdoPaymentNotification] getBdoDetailLive failed: ' . $e->getMessage());
+        if (!empty($bdo['financial_summary_json'])) {
+            $fs = json_decode($bdo['financial_summary_json'], true);
+            if (is_array($fs)) {
+                $netToPay = (float) ($fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $amountTotal);
+                $financialSummary = [
+                    'so_amount'          => $fs['so_amount']          ?? null,
+                    'outstanding_amount' => $fs['outstanding_amount'] ?? null,
+                    'credit_note_amount' => $fs['credit_note_amount'] ?? null,
+                    'deposit_amount'     => $fs['deposit_amount']     ?? null,
+                    'net_to_pay'         => $netToPay,
                 ];
+            }
+        }
+        if (!empty($bdo['selected_invoices_json'])) {
+            $invs = json_decode($bdo['selected_invoices_json'], true);
+            if (is_array($invs)) {
+                foreach ($invs as $inv) {
+                    $invoices[] = [
+                        'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                        'residual' => (float) ($inv['residual'] ?? $inv['amount_residual'] ?? $inv['amount_total'] ?? 0),
+                        'date'     => $inv['date'] ?? $inv['invoice_date'] ?? '',
+                        'origin'   => $inv['origin'] ?? '',
+                    ];
+                }
             }
         }
     }
 
-    // Parse credit note rows
+    // credit_notes already populated from getBdoDetailLive above (or fallback in catch)
+    // (liveDetail['credit_notes'] was not mapped into $creditNotes — add it here)
     $creditNotes = [];
-    if (!empty($bdo['selected_credit_notes_json'])) {
+    if (isset($liveDetail)) {
+        foreach ($liveDetail['credit_notes'] ?? [] as $cn) {
+            $creditNotes[] = [
+                'number'   => $cn['number'] ?? $cn['name'] ?? '-',
+                'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
+            ];
+        }
+    } elseif (!empty($bdo['selected_credit_notes_json'])) {
         $cns = json_decode($bdo['selected_credit_notes_json'], true);
         if (is_array($cns)) {
             foreach ($cns as $cn) {
@@ -2350,48 +2383,92 @@ function previewBdoPaymentNotification($db, $input)
         throw new Exception('ไม่พบข้อมูล BDO #' . $bdoId);
     }
 
-    // ── 2. Build financial data ─────────────────────────────────────────
+    // ── 2. Resolve LINE user & account ─────────────────────────────────
+    $lineUserId = trim((string) ($input['line_user_id'] ?? ''));
+    if ($lineUserId === '' && $partnerId > 0) {
+        try { $lineUserId = resolveLineUserIdFromPartner($db, $partnerId); } catch (Exception $e) { /* ignore */ }
+    }
+    $lineAccountId = 0;
+    if ($lineUserId !== '') {
+        try { $lineAccountId = resolveLineAccountId($db, $lineUserId); } catch (Exception $e) { /* ignore */ }
+    }
+
+    // ── 3. Build financial data — call getBdoDetailLive for fresh Odoo data ──
     $amountTotal = (float) ($bdo['amount_total'] ?? $bdo['ctx_amount'] ?? 0);
     $netToPay = $amountTotal;
     $financialSummary = [];
-    if (!empty($bdo['financial_summary_json'])) {
-        $fs = json_decode($bdo['financial_summary_json'], true);
-        if (is_array($fs)) {
-            $netToPay = (float) ($fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $amountTotal);
+    $invoices = [];
+    $creditNotes = [];
+
+    try {
+        $liveDetail = getBdoDetailLive($db, [
+            'bdo_id'       => $bdoId,
+            'line_user_id' => $lineUserId,
+            'partner_id'   => $partnerId,
+        ]);
+        $liveSum = $liveDetail['summary'] ?? [];
+        if (!empty($liveSum) && isset($liveSum['net_to_pay']) && (float)$liveSum['net_to_pay'] >= 0) {
+            $netToPay = (float) $liveSum['net_to_pay'];
             $financialSummary = [
-                'so_amount'          => $fs['so_amount']          ?? $fs['total_so_amount']   ?? null,
-                'outstanding_amount' => $fs['outstanding_amount'] ?? $fs['total_outstanding'] ?? null,
-                'credit_note_amount' => $fs['credit_note_amount'] ?? $fs['total_credit_notes'] ?? null,
-                'deposit_amount'     => $fs['deposit_amount']     ?? $fs['total_deposits']     ?? null,
+                'so_amount'          => $liveSum['so_amount']          ?? null,
+                'outstanding_amount' => $liveSum['outstanding_amount'] ?? null,
+                'credit_note_amount' => $liveSum['credit_note_amount'] ?? null,
+                'deposit_amount'     => $liveSum['deposit_amount']     ?? null,
                 'net_to_pay'         => $netToPay,
             ];
         }
-    }
-
-    $invoices = [];
-    if (!empty($bdo['selected_invoices_json'])) {
-        $invs = json_decode($bdo['selected_invoices_json'], true);
-        if (is_array($invs)) {
-            foreach ($invs as $inv) {
-                $invoices[] = [
-                    'number'   => $inv['number'] ?? $inv['name'] ?? '-',
-                    'residual' => (float) ($inv['residual'] ?? $inv['amount_residual'] ?? $inv['amount_total'] ?? 0),
-                    'date'     => $inv['date'] ?? $inv['invoice_date'] ?? '',
-                    'origin'   => $inv['origin'] ?? '',
+        foreach ($liveDetail['outstanding_invoices'] ?? [] as $inv) {
+            $invoices[] = [
+                'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                'residual' => (float) ($inv['residual'] ?? $inv['amount_total'] ?? 0),
+                'date'     => $inv['date'] ?? '',
+                'origin'   => $inv['origin'] ?? '',
+            ];
+        }
+        foreach ($liveDetail['credit_notes'] ?? [] as $cn) {
+            $creditNotes[] = [
+                'number'   => $cn['number'] ?? $cn['name'] ?? '-',
+                'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
+            ];
+        }
+    } catch (Exception $e) {
+        // Fallback to local DB financial_summary_json
+        error_log('[previewBdoPaymentNotification] getBdoDetailLive failed: ' . $e->getMessage());
+        if (!empty($bdo['financial_summary_json'])) {
+            $fs = json_decode($bdo['financial_summary_json'], true);
+            if (is_array($fs)) {
+                $netToPay = (float) ($fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $amountTotal);
+                $financialSummary = [
+                    'so_amount'          => $fs['so_amount']          ?? null,
+                    'outstanding_amount' => $fs['outstanding_amount'] ?? null,
+                    'credit_note_amount' => $fs['credit_note_amount'] ?? null,
+                    'deposit_amount'     => $fs['deposit_amount']     ?? null,
+                    'net_to_pay'         => $netToPay,
                 ];
             }
         }
-    }
-
-    $creditNotes = [];
-    if (!empty($bdo['selected_credit_notes_json'])) {
-        $cns = json_decode($bdo['selected_credit_notes_json'], true);
-        if (is_array($cns)) {
-            foreach ($cns as $cn) {
-                $creditNotes[] = [
-                    'number'   => $cn['number'] ?? $cn['name'] ?? '-',
-                    'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
-                ];
+        if (!empty($bdo['selected_invoices_json'])) {
+            $invs = json_decode($bdo['selected_invoices_json'], true);
+            if (is_array($invs)) {
+                foreach ($invs as $inv) {
+                    $invoices[] = [
+                        'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                        'residual' => (float) ($inv['residual'] ?? $inv['amount_residual'] ?? $inv['amount_total'] ?? 0),
+                        'date'     => $inv['date'] ?? $inv['invoice_date'] ?? '',
+                        'origin'   => $inv['origin'] ?? '',
+                    ];
+                }
+            }
+        }
+        if (!empty($bdo['selected_credit_notes_json'])) {
+            $cns = json_decode($bdo['selected_credit_notes_json'], true);
+            if (is_array($cns)) {
+                foreach ($cns as $cn) {
+                    $creditNotes[] = [
+                        'number'   => $cn['number'] ?? $cn['name'] ?? '-',
+                        'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
+                    ];
+                }
             }
         }
     }
@@ -2401,16 +2478,6 @@ function previewBdoPaymentNotification($db, $input)
     $dueDate  = $bdo['bdo_date'] ?? date('Y-m-d');
 
     $baseUrl = defined('BASE_URL') ? BASE_URL : 'https://cny.re-ya.com';
-
-    // Resolve line_account_id for PDF URL
-    $lineAccountId = 0;
-    $lineUserId = trim((string) ($input['line_user_id'] ?? ''));
-    if ($lineUserId === '' && $partnerId > 0) {
-        try { $lineUserId = resolveLineUserIdFromPartner($db, $partnerId); } catch (Exception $e) { /* ignore */ }
-    }
-    if ($lineUserId !== '') {
-        try { $lineAccountId = resolveLineAccountId($db, $lineUserId); } catch (Exception $e) { /* ignore */ }
-    }
 
     $invoicePdfUrl = $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId)
         . ($lineAccountId > 0 ? '&line_account_id=' . $lineAccountId : '');
