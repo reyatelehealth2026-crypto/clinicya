@@ -4586,7 +4586,6 @@ function slipUnmatch($db, $input)
  * Sources: odoo_orders (profile+spend), odoo_bdos (due), odoo_line_users (LINE link).
  * Prevents 500 / fallback to odoo-webhooks-dashboard.php which uses slow JSON_EXTRACT.
  */
-if (!function_exists('getCustomerDetail')) {
 function getCustomerDetail($db, $input)
 {
     $partnerId   = trim((string) ($input['partner_id']   ?? ''));
@@ -4719,13 +4718,11 @@ function getCustomerDetail($db, $input)
 
     return $detail;
 }
-}
 
 /**
  * Get activity log (manual overrides + order notes) for a customer.
  * Defined here to prevent 500 fallback to odoo-webhooks-dashboard.php.
  */
-if (!function_exists('activityLogList')) {
 function activityLogList($db, $input)
 {
     $partnerId = trim((string) ($input['partner_id'] ?? ''));
@@ -4765,5 +4762,3 @@ function activityLogList($db, $input)
 
     return ['items' => $items, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
 }
-}
-
