@@ -537,10 +537,11 @@ if (!function_exists('getOdooBdos')) {
             }
 
             if ($paymentFilterUnpaid) {
+                // ใช้ payment_state เป็นหลัก — BDO state = done อาจหมายถึงส่งของแล้ว แต่ลูกค้ายังค้างจ่าย
                 if ($hasPaymentStateCol) {
-                    $where[] = '(payment_state IS NULL OR LOWER(TRIM(payment_state)) NOT IN (\'paid\',\'done\',\'invoiced\'))';
+                    $where[] = "(payment_state IS NULL OR LOWER(TRIM(payment_state)) NOT IN ('paid','reversed'))";
                 }
-                $where[] = '(state IS NULL OR LOWER(TRIM(state)) NOT IN (\'cancel\',\'done\'))';
+                $where[] = "(state IS NULL OR LOWER(TRIM(state)) NOT IN ('cancel','cancelled'))";
             }
 
             $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
@@ -693,7 +694,7 @@ if (!function_exists('getOdooBdos')) {
                 $bdos = array_values(array_filter($bdos, function ($b) {
                     $st = strtolower((string) ($b['state'] ?? ''));
 
-                    return !in_array($st, ['cancel', 'done', 'validated'], true);
+                    return !in_array($st, ['cancel', 'cancelled'], true);
                 }));
             }
 
@@ -711,5 +712,411 @@ if (!function_exists('getBdoListLive')) {
     function getBdoListLive($db, $input)
     {
         return getOdooBdos($db, $input);
+    }
+}
+
+/**
+ * BDO detail for dashboard modal — ดึงจาก Odoo `/reya/bdo/detail` ก่อน แล้ว fallback DB ในเครือข่ายล่ม
+ *
+ * @return array โครงสร้างให้ตรงกับ odoo-dashboard.js openBdoDetail()
+ */
+if (!function_exists('getBdoDetailLive')) {
+    function getBdoDetailLive($db, array $input)
+    {
+        $bdoId = (int) ($input['bdo_id'] ?? 0);
+        $lineUserId = trim((string) ($input['line_user_id'] ?? ''));
+        $partnerId = (int) ($input['partner_id'] ?? 0);
+
+        if ($bdoId <= 0) {
+            throw new Exception('กรุณาระบุ bdo_id');
+        }
+
+        if ($lineUserId === '' && $partnerId > 0) {
+            $lineUserId = dashboardResolveLineUserIdFromPartnerId($db, $partnerId);
+        }
+        if ($lineUserId === '') {
+            try {
+                $st = $db->prepare('SELECT line_user_id FROM odoo_bdos WHERE bdo_id = ? AND line_user_id IS NOT NULL AND line_user_id != \'\' LIMIT 1');
+                $st->execute([$bdoId]);
+                $v = $st->fetchColumn();
+                if ($v !== false && $v !== null && $v !== '') {
+                    $lineUserId = trim((string) $v);
+                }
+            } catch (Exception $e) { /* ignore */
+            }
+        }
+
+        $lineAccountId = ($lineUserId !== '') ? dashboardResolveLineAccountIdForBdo($db, $lineUserId) : 0;
+
+        if ($lineUserId !== '' && $lineAccountId > 0) {
+            try {
+                require_once __DIR__ . '/../classes/OdooAPIClient.php';
+                $odoo = new OdooAPIClient($db, $lineAccountId);
+                $raw = $odoo->getBdoDetail($lineUserId, $bdoId);
+                $mapped = dashboardMapOdooBdoDetailResponse($raw, $bdoId, $lineAccountId);
+                if ($mapped !== null && !empty($mapped['bdo'])) {
+                    $mapped['source'] = 'odoo';
+
+                    return dashboardBdoDetailAttachPdfUrl($mapped, $bdoId, $lineAccountId);
+                }
+            } catch (Exception $e) {
+                error_log('[getBdoDetailLive] Odoo API: ' . $e->getMessage());
+            }
+        }
+
+        $local = dashboardBdoDetailFromLocalDb($db, $bdoId, $lineAccountId);
+        if ($local !== null) {
+            $local['source'] = 'local_db';
+
+            return dashboardBdoDetailAttachPdfUrl($local, $bdoId, $lineAccountId);
+        }
+
+        throw new Exception('ไม่พบข้อมูล BDO #' . $bdoId . ' (ต้องมี line_user_id หรือข้อมูลในระบบ)');
+    }
+}
+
+if (!function_exists('dashboardResolveLineAccountIdForBdo')) {
+    function dashboardResolveLineAccountIdForBdo($db, $lineUserId)
+    {
+        if ($lineUserId === '') {
+            return 0;
+        }
+        try {
+            $stmt = $db->prepare('SELECT line_account_id FROM odoo_line_users WHERE line_user_id = ? LIMIT 1');
+            $stmt->execute([$lineUserId]);
+            $val = $stmt->fetchColumn();
+            if ($val !== false && $val !== null) {
+                return (int) $val;
+            }
+            $stmt = $db->prepare('SELECT line_account_id FROM users WHERE line_user_id = ? LIMIT 1');
+            $stmt->execute([$lineUserId]);
+            $val = $stmt->fetchColumn();
+
+            return ($val !== false && $val !== null) ? (int) $val : 0;
+        } catch (Exception $e) {
+            return 0;
+        }
+    }
+}
+
+if (!function_exists('dashboardResolveLineUserIdFromPartnerId')) {
+    function dashboardResolveLineUserIdFromPartnerId($db, $partnerId)
+    {
+        if ((int) $partnerId <= 0) {
+            return '';
+        }
+        try {
+            $stmt = $db->prepare('SELECT line_user_id FROM odoo_line_users WHERE odoo_partner_id = ? AND line_user_id IS NOT NULL LIMIT 1');
+            $stmt->execute([(int) $partnerId]);
+            $val = $stmt->fetchColumn();
+            if ($val !== false && $val !== null) {
+                return trim((string) $val);
+            }
+        } catch (Exception $e) { /* ignore */
+        }
+        try {
+            $stmt = $db->prepare('SELECT line_user_id FROM odoo_bdo_context WHERE bdo_id IN (SELECT bdo_id FROM odoo_bdos WHERE partner_id = ? ORDER BY updated_at DESC LIMIT 5) AND line_user_id IS NOT NULL ORDER BY updated_at DESC LIMIT 1');
+            $stmt->execute([(int) $partnerId]);
+            $val = $stmt->fetchColumn();
+
+            return ($val !== false && $val !== null) ? trim((string) $val) : '';
+        } catch (Exception $e) {
+            return '';
+        }
+    }
+}
+
+if (!function_exists('dashboardUnwrapNestedData')) {
+    function dashboardUnwrapNestedData($raw)
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $p = $raw;
+        for ($i = 0; $i < 4; $i++) {
+            if (isset($p['data']) && is_array($p['data'])) {
+                $p = $p['data'];
+                continue;
+            }
+            if (isset($p['result']) && is_array($p['result'])) {
+                $p = $p['result'];
+                continue;
+            }
+            break;
+        }
+
+        return is_array($p) ? $p : [];
+    }
+}
+
+if (!function_exists('dashboardMapOdooBdoDetailResponse')) {
+    /**
+     * @param mixed $raw
+     */
+    function dashboardMapOdooBdoDetailResponse($raw, $bdoId, $lineAccountId)
+    {
+        $payload = dashboardUnwrapNestedData($raw);
+        if ($payload === []) {
+            return null;
+        }
+        if (isset($payload['success']) && $payload['success'] === false) {
+            return null;
+        }
+
+        $bdo = $payload['bdo'] ?? [];
+        if ($bdo === [] && isset($payload['bdo_id'])) {
+            $bdo = $payload;
+        }
+        if ($bdo === []) {
+            return null;
+        }
+
+        $fs = [];
+        if (isset($bdo['financial_summary']) && is_array($bdo['financial_summary'])) {
+            $fs = $bdo['financial_summary'];
+        } elseif (isset($payload['financial_summary']) && is_array($payload['financial_summary'])) {
+            $fs = $payload['financial_summary'];
+        }
+
+        $netToPay = $fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $bdo['amount_net_to_pay'] ?? null;
+        $summary = [
+            'so_amount'          => $fs['amount_so_this_round'] ?? $fs['so_amount'] ?? $fs['total_so_amount'] ?? null,
+            'outstanding_amount' => $fs['amount_outstanding_invoice'] ?? $fs['outstanding_amount'] ?? $fs['total_outstanding'] ?? null,
+            'credit_note_amount' => isset($fs['amount_credit_note']) ? (float) $fs['amount_credit_note'] : ($fs['credit_note_amount'] ?? $fs['total_credit_notes'] ?? null),
+            'deposit_amount'     => isset($fs['amount_deposit']) ? (float) $fs['amount_deposit'] : ($fs['deposit_amount'] ?? $fs['total_deposits'] ?? null),
+            'net_to_pay'         => $netToPay !== null ? (float) $netToPay : null,
+        ];
+
+        $saleOrders = $payload['sale_orders'] ?? $bdo['sale_orders'] ?? [];
+        if (!is_array($saleOrders)) {
+            $saleOrders = [];
+        }
+
+        $outInv = $payload['outstanding_invoices'] ?? $payload['open_invoices'] ?? $fs['selected_invoices'] ?? $bdo['selected_invoices'] ?? [];
+        if (!is_array($outInv)) {
+            $outInv = [];
+        }
+
+        $creditNotes = $payload['credit_notes'] ?? $fs['selected_credit_notes'] ?? $bdo['selected_credit_notes'] ?? [];
+        if (!is_array($creditNotes)) {
+            $creditNotes = [];
+        }
+
+        $deposits = $payload['deposits'] ?? $fs['selected_deposits'] ?? $fs['deposits'] ?? [];
+        if (!is_array($deposits)) {
+            $deposits = [];
+        }
+
+        $slips = $payload['matched_slips'] ?? $bdo['matched_slips'] ?? $payload['slips'] ?? [];
+        if (!is_array($slips)) {
+            $slips = [];
+        }
+
+        if (!isset($bdo['qr_payment_data']) || !is_array($bdo['qr_payment_data'])) {
+            $qrTop = $payload['qr_payment_data'] ?? null;
+            if (is_array($qrTop)) {
+                $bdo['qr_payment_data'] = $qrTop;
+            }
+        }
+
+        return [
+            'bdo'                    => $bdo,
+            'summary'                => $summary,
+            'sale_orders'            => $saleOrders,
+            'outstanding_invoices'   => dashboardNormalizeInvoiceRows($outInv),
+            'credit_notes'           => dashboardNormalizeCreditNoteRows($creditNotes),
+            'deposits'               => dashboardNormalizeDepositRows($deposits),
+            'slips'                  => $slips,
+            'statement_pdf_url'      => $bdo['statement_pdf_url'] ?? null,
+            'odoo_url'               => $bdo['odoo_url'] ?? null,
+            'line_account_id_hint'   => $lineAccountId,
+        ];
+    }
+}
+
+if (!function_exists('dashboardNormalizeInvoiceRows')) {
+    function dashboardNormalizeInvoiceRows(array $rows)
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $out[] = [
+                'number'   => $row['number'] ?? $row['name'] ?? '-',
+                'name'     => $row['name'] ?? null,
+                'residual' => isset($row['residual']) ? (float) $row['residual'] : (isset($row['amount_residual']) ? (float) $row['amount_residual'] : (isset($row['amount_total']) ? (float) $row['amount_total'] : null)),
+                'amount_total' => isset($row['amount_total']) ? (float) $row['amount_total'] : null,
+                'date'     => $row['date'] ?? $row['invoice_date'] ?? null,
+                'origin'   => $row['origin'] ?? null,
+            ];
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('dashboardNormalizeCreditNoteRows')) {
+    function dashboardNormalizeCreditNoteRows(array $rows)
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $out[] = [
+                'number'   => $row['number'] ?? $row['name'] ?? '-',
+                'residual' => isset($row['residual']) ? (float) $row['residual'] : (isset($row['amount_total']) ? (float) $row['amount_total'] : null),
+                'amount_total' => isset($row['amount_total']) ? (float) $row['amount_total'] : null,
+            ];
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('dashboardNormalizeDepositRows')) {
+    function dashboardNormalizeDepositRows(array $rows)
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $out[] = [
+                'name'   => $row['name'] ?? $row['number'] ?? '-',
+                'amount' => isset($row['amount']) ? (float) $row['amount'] : (isset($row['amount_total']) ? (float) $row['amount_total'] : null),
+            ];
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('dashboardBdoDetailAttachPdfUrl')) {
+    function dashboardBdoDetailAttachPdfUrl(array $detail, $bdoId, $lineAccountId)
+    {
+        if (!empty($detail['statement_pdf_url'])) {
+            return $detail;
+        }
+        $baseUrl = defined('BASE_URL') ? BASE_URL : '';
+        $detail['statement_pdf_url'] = $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode((string) $bdoId)
+            . ($lineAccountId > 0 ? '&line_account_id=' . (int) $lineAccountId : '');
+
+        return $detail;
+    }
+}
+
+if (!function_exists('dashboardBdoDetailFromLocalDb')) {
+    function dashboardBdoDetailFromLocalDb($db, $bdoId, $lineAccountId)
+    {
+        try {
+            $stmt = $db->prepare("
+                SELECT b.bdo_id, b.bdo_name, b.order_name, b.amount_total, b.bdo_date, b.state,
+                       b.partner_id, b.customer_ref, b.line_user_id,
+                       c.delivery_type,
+                       c.qr_payload, c.statement_pdf_path, c.financial_summary_json,
+                       c.selected_invoices_json, c.selected_credit_notes_json,
+                       c.amount AS ctx_amount
+                FROM odoo_bdos b
+                LEFT JOIN odoo_bdo_context c ON c.bdo_id = b.bdo_id
+                WHERE b.bdo_id = ?
+                ORDER BY c.updated_at DESC
+                LIMIT 1
+            ");
+            $stmt->execute([$bdoId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                $stmt = $db->prepare('SELECT * FROM odoo_bdo_context WHERE bdo_id = ? ORDER BY updated_at DESC LIMIT 1');
+                $stmt->execute([$bdoId]);
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            }
+            if (!$row) {
+                return null;
+            }
+
+            $amountTotal = (float) ($row['amount_total'] ?? $row['ctx_amount'] ?? 0);
+            $netToPay = $amountTotal;
+            $summary = [
+                'so_amount'          => null,
+                'outstanding_amount' => null,
+                'credit_note_amount' => null,
+                'deposit_amount'     => null,
+                'net_to_pay'         => $netToPay,
+            ];
+            if (!empty($row['financial_summary_json'])) {
+                $fs = json_decode($row['financial_summary_json'], true);
+                if (is_array($fs)) {
+                    $netToPay = (float) ($fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $netToPay);
+                    $summary = [
+                        'so_amount'          => $fs['so_amount'] ?? $fs['total_so_amount'] ?? null,
+                        'outstanding_amount' => $fs['outstanding_amount'] ?? $fs['total_outstanding'] ?? null,
+                        'credit_note_amount' => $fs['credit_note_amount'] ?? $fs['total_credit_notes'] ?? null,
+                        'deposit_amount'     => $fs['deposit_amount'] ?? $fs['total_deposits'] ?? null,
+                        'net_to_pay'         => $netToPay,
+                    ];
+                }
+            }
+
+            $outInv = [];
+            if (!empty($row['selected_invoices_json'])) {
+                $invs = json_decode($row['selected_invoices_json'], true);
+                if (is_array($invs)) {
+                    $outInv = dashboardNormalizeInvoiceRows($invs);
+                }
+            }
+            $creditNotes = [];
+            if (!empty($row['selected_credit_notes_json'])) {
+                $cns = json_decode($row['selected_credit_notes_json'], true);
+                if (is_array($cns)) {
+                    $creditNotes = dashboardNormalizeCreditNoteRows($cns);
+                }
+            }
+            $deposits = [];
+            if (!empty($row['financial_summary_json'])) {
+                $fsRaw = json_decode($row['financial_summary_json'], true);
+                $depsRaw = $fsRaw['selected_deposits'] ?? $fsRaw['deposits'] ?? [];
+                if (is_array($depsRaw)) {
+                    $deposits = dashboardNormalizeDepositRows($depsRaw);
+                }
+            }
+
+            $bdo = [
+                'bdo_id'            => (int) ($row['bdo_id'] ?? $bdoId),
+                'name'              => $row['bdo_name'] ?? null,
+                'bdo_name'          => $row['bdo_name'] ?? null,
+                'state'             => $row['state'] ?? null,
+                'doc_date'          => $row['bdo_date'] ?? null,
+                'bdo_date'          => $row['bdo_date'] ?? null,
+                'amount_total'      => isset($row['amount_total']) ? (float) $row['amount_total'] : null,
+                'amount_net_to_pay' => $summary['net_to_pay'],
+                'delivery_type'     => $row['delivery_type'] ?? null,
+                'partner_id'        => isset($row['partner_id']) ? (int) $row['partner_id'] : null,
+                'line_user_id'      => $row['line_user_id'] ?? null,
+            ];
+            if (!empty($row['qr_payload'])) {
+                $bdo['qr_payment_data'] = ['raw_payload' => $row['qr_payload']];
+                $bdo['qr_payload'] = $row['qr_payload'];
+            }
+
+            $saleOrders = [];
+
+            return [
+                'bdo'                  => $bdo,
+                'summary'              => $summary,
+                'sale_orders'          => $saleOrders,
+                'outstanding_invoices' => $outInv,
+                'credit_notes'         => $creditNotes,
+                'deposits'             => $deposits,
+                'slips'                => [],
+                'statement_pdf_url'    => null,
+                'odoo_url'             => null,
+                'line_account_id_hint' => $lineAccountId,
+            ];
+        } catch (Exception $e) {
+            error_log('[dashboardBdoDetailFromLocalDb] ' . $e->getMessage());
+
+            return null;
+        }
     }
 }

@@ -52,12 +52,13 @@ try {
     $cacheTtls = [
         'stats' => 30,
         'order_grouped_today' => 30,
-        'customer_list' => 30,
+        'customer_list' => 60,
         'notification_log' => 30,
         'salesperson_list' => 180,
         'odoo_orders' => 30,
         'odoo_invoices' => 30,
         'odoo_slips' => 30,
+        'odoo_bdo_list_api' => 45,
         'customer_detail' => 45,
         'pending_bdo_orders' => 60,
     ];
@@ -66,11 +67,13 @@ try {
         $cacheKey = dashboardApiBuildCacheKey($action, $input);
         $cachedResult = dashboardApiCacheGet($cacheKey, (int) $cacheTtls[$action]);
         if ($cachedResult !== null) {
+            header('X-Dashboard-Cache: HIT');
+            header('X-Cache-Layer: redis');
             $durationMs = round((microtime(true) - $_dashboardStartTime) * 1000);
             echo json_encode([
                 'success' => true,
                 'data' => $cachedResult,
-                '_meta' => ['duration_ms' => $durationMs, 'cached' => true, 'action' => $action],
+                '_meta' => ['duration_ms' => $durationMs, 'cached' => true, 'cache' => 'hit', 'action' => $action],
             ], JSON_UNESCAPED_UNICODE);
             exit;
         }

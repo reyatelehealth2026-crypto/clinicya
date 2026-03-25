@@ -56,7 +56,7 @@ try {
     $cacheTtls = [
         'stats' => 60,
         'order_grouped_today' => 60,
-        'customer_list' => 60,
+        'customer_list' => 90,
         'invoice_list' => 60,
         'order_list' => 60,
         'notification_log' => 60,
@@ -67,7 +67,7 @@ try {
         'odoo_orders' => 30,
         'odoo_invoices' => 30,
         'odoo_slips' => 30,
-        'odoo_bdo_list_api' => 30,
+        'odoo_bdo_list_api' => 45,
         'customer_detail' => 45,
         'customer_360' => 30,
         'pending_bdo_orders' => 60,
@@ -84,6 +84,8 @@ try {
         $cacheKey = dashboardApiBuildCacheKey($action, $input);
         $cachedResult = dashboardApiCacheGet($cacheKey, $cacheTtl);
         if ($cachedResult !== null) {
+            header('X-Dashboard-Cache: HIT');
+            header('X-Cache-Layer: redis');
             ob_clean();
             echo json_encode([
                 'success' => true,

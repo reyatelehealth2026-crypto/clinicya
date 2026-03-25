@@ -23,6 +23,24 @@ error_reporting(E_ALL);
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../api/odoo-dashboard-functions.php';
+
+// Redis + APCu + file — แชร์ระหว่างผู้ใช้/ worker (dashboard matching โหลดสลิป pending บ่อย)
+$slipsCacheTtl = 30;
+$slipsCacheInput = $_GET;
+if (is_array($slipsCacheInput)) {
+    unset($slipsCacheInput['_t']);
+    dashboardApiNormalizeCacheInput($slipsCacheInput);
+}
+$slipsCacheKey = 'slips_list_' . sha1(json_encode($slipsCacheInput, JSON_UNESCAPED_UNICODE));
+$cachedPayload = dashboardApiCacheGet($slipsCacheKey, $slipsCacheTtl);
+if ($cachedPayload !== null && is_array($cachedPayload) && !empty($cachedPayload['success'])) {
+    header('X-Dashboard-Cache: HIT');
+    header('X-Cache-Layer: redis');
+    echo json_encode($cachedPayload, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 require_once __DIR__ . '/../classes/Database.php';
 
 use Modules\Core\Database;
@@ -165,7 +183,7 @@ try {
     }
     unset($slip);
 
-    echo json_encode([
+    $payload = [
         'success' => true,
         'data'    => [
             'slips'  => $slips,
@@ -173,7 +191,9 @@ try {
             'limit'  => $limit,
             'offset' => $offset,
         ],
-    ], JSON_UNESCAPED_UNICODE);
+    ];
+    dashboardApiCacheSet($slipsCacheKey, $payload, $slipsCacheTtl);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
 
 } catch (Exception $e) {
     http_response_code(400);

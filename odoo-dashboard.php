@@ -820,9 +820,9 @@
                 <!-- KPI Cards -->
                 <div class="kpi-grid" id="matchingKPI">
                     <div class="kpi-card" style="border-left:4px solid #d97706;">
-                        <div class="kpi-label">รอจับคู่</div>
+                        <div class="kpi-label">รอดำเนินการ</div>
                         <div class="kpi-value" id="matchKpiPending" style="color:#d97706;">-</div>
-                        <div class="kpi-sub">สลิป + BDO ที่ยังไม่จับคู่</div>
+                        <div class="kpi-sub">สลิปรอจับคู่ + BDO ที่ยังค้างชำระ</div>
                     </div>
                     <div class="kpi-card" style="border-left:4px solid var(--primary);">
                         <div class="kpi-label">แนะนำจับคู่</div>
@@ -883,7 +883,7 @@
                     <!-- Right: Unmatched BDOs -->
                     <div class="content-card" style="max-height:45vh;overflow-y:auto;">
                         <div class="content-title" style="font-size:0.85rem;padding-bottom:0.4rem;">
-                            <i class="bi bi-file-earmark-check"></i> BDO ยังไม่จับคู่
+                            <i class="bi bi-file-earmark-check"></i> BDO ค้างชำระ (คลิกชื่อเพื่อดูรายละเอียด)
                             <span id="matchBdoCount" style="font-size:0.78rem;color:var(--gray-500);margin-left:auto;"></span>
                         </div>
                         <div id="matchBdoList"></div>

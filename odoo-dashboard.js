@@ -79,33 +79,49 @@ function matchConfidenceBadge(confidence){const map={exact_bdo:['#dcfce7','#1665
 function slipBdoInfo(s){if(!(s.bdo_name||s.bdo_id))return '<span style="color:var(--gray-300);font-size:0.75rem;">-</span>';const bdoId=s.bdo_id||'';const bdoName=s.bdo_name||('BDO-'+bdoId);const raw=encodeURIComponent(JSON.stringify({bdo_id:bdoId,bdo_name:bdoName,amount_total:s.bdo_amount,delivery_type:s.delivery_type,customer_name:s.customer_name,odoo_id:s.bdo_odoo_id||s.bdo_id}));return '<a href="javascript:void(0)" onclick="openBdoDetail(\''+escapeHtml(String(bdoId))+'\',\''+escapeHtml(String(bdoName))+'\',decodeURIComponent(\''+raw+'\'))" class="ref-link">'+escapeHtml(String(bdoName))+'</a>';}
 
 function normalizeBdoPaymentStatus(bdo){
-    const rawStatus=String(bdo?.payment_status||bdo?.payment_state||bdo?.status||'').toLowerCase().trim();
+    const payState=String(bdo?.payment_state||bdo?.payment_status||'').toLowerCase().trim();
+    const wfState=String(bdo?.state||'').toLowerCase().trim();
     const paidAmount=parseFloat(bdo?.paid_amount_total ?? bdo?.paid_amount ?? bdo?.matched_amount_total ?? bdo?.matched_total ?? 0) || 0;
-    const totalAmount=parseFloat(bdo?.amount_total ?? bdo?.amount_net_to_pay ?? 0) || 0;
+    const totalAmount=parseFloat(bdo?.amount_total ?? 0) || 0;
+    const netRaw=bdo?.amount_net_to_pay;
+    const hasNet=netRaw!=null&&netRaw!=='';
+    const netToPay=hasNet?parseFloat(netRaw):null;
     const linkedSlipCount=Array.isArray(bdo?.linked_slips)?bdo.linked_slips.length:(Array.isArray(bdo?.slips)?bdo.slips.length:0);
 
-    if(rawStatus==='paid' || rawStatus==='fully_paid' || rawStatus==='done'){
+    if(wfState==='cancel'||wfState==='cancelled'){
+        return {key:'cancelled',label:'ยกเลิก'};
+    }
+    if(payState==='paid'||payState==='fully_paid'||payState==='reversed'){
         return {key:'paid',label:'ชำระแล้ว'};
     }
-    if(rawStatus==='matched' || rawStatus==='reconciled'){
-        return {key:'matched',label:'จับคู่แล้ว'};
-    }
-    if(rawStatus==='partial' || rawStatus==='partially_paid'){
+    if(payState==='partial'||payState==='partially_paid'||payState==='in_payment'){
         return {key:'partial',label:'ชำระบางส่วน'};
     }
-    if(rawStatus==='slip_uploaded' || rawStatus==='uploaded'){
+    if(payState==='matched'||payState==='reconciled'){
+        return {key:'matched',label:'จับคู่แล้ว'};
+    }
+    if(payState==='slip_uploaded'||payState==='uploaded'){
         return {key:'slip_uploaded',label:'แนบสลิปแล้ว'};
     }
-    if(totalAmount>0 && paidAmount>=totalAmount){
+    if(hasNet&&!isNaN(netToPay)&&netToPay<=0.009){
         return {key:'paid',label:'ชำระแล้ว'};
     }
-    if(paidAmount>0 && totalAmount>0 && paidAmount<totalAmount){
+    if(totalAmount>0&&paidAmount>=totalAmount){
+        return {key:'paid',label:'ชำระแล้ว'};
+    }
+    if(paidAmount>0&&totalAmount>0&&paidAmount<totalAmount){
         return {key:'partial',label:'ชำระบางส่วน'};
     }
     if(linkedSlipCount>0){
         return {key:'slip_uploaded',label:'แนบสลิปแล้ว'};
     }
     return {key:'pending',label:'รอชำระ'};
+}
+
+/** BDO ที่ยังไม่ปิดยอดชำระ (ใช้ในการจับคู่สลิป — ไม่รวม paid / ยกเลิก) */
+function isBdoOutstandingPayment(b){
+    const ps = normalizeBdoPaymentStatus(b);
+    return ps.key !== 'paid' && ps.key !== 'cancelled';
 }
 
 // ===== SECTION-LOADED GUARDS — prevent redundant API calls on tab switch =====
@@ -158,7 +174,7 @@ async function whApiCall(data){
         'stats','list','customer_list','notification_log','daily_summary_preview',
         'order_grouped_today','overview_today','overview_fast','overview_combined','customer_detail',
         'customer_full_detail','odoo_orders','odoo_invoices','odoo_slips','odoo_bdos',
-        'odoo_bdo_list_api','pending_bdo_orders','activity_log_list','customer_360'
+        'odoo_bdo_list_api','odoo_bdo_detail_api','bdo_detail','bdo_detail_live','pending_bdo_orders','activity_log_list','customer_360'
     ]);
     const timeoutMs=heavyActions.has(action)?30000:8000;
     // Skip cache buster for cacheable read-only actions — lets Nginx fastcgi_cache work
@@ -2589,11 +2605,12 @@ async function openBdoDetail(bdoId, bdoName, rawBdo){
         html+='</div>';
     }
 
-    if(detail?.bdo?.qr_payment_data?.raw_payload){
+    const qrPayloadRaw=detail?.bdo?.qr_payment_data?.raw_payload||detail?.bdo?.qr_payload||detail?.qr_payload||'';
+    if(qrPayloadRaw){
         html+=sectionTitle('qr-code','#7c3aed','QR Payment (พร้อมเพย์)');
         html+='<div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:10px;padding:0.8rem;">';
-        html+='<div style="font-size:0.75rem;color:var(--gray-500);margin-bottom:0.3rem;">EMVCo Payload</div>';
-        html+='<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;word-break:break-all;margin-bottom:0.5rem;">'+escapeHtml(detail.bdo.qr_payment_data.raw_payload)+'</div>';
+        html+='<div style="font-size:0.75rem;color:var(--gray-500);margin-bottom:0.3rem;">Payload</div>';
+        html+='<div style="font-family:JetBrains Mono,monospace;font-size:0.78rem;word-break:break-all;margin-bottom:0.5rem;">'+escapeHtml(String(qrPayloadRaw))+'</div>';
         html+='<div style="font-size:0.72rem;color:#7c3aed;"><i class="bi bi-info-circle"></i> QR นี้จะถูกส่งพร้อม Flex Message เมื่อกดปุ่ม "ส่งแจ้งยอดผ่าน LINE"</div>';
         html+='</div>';
     }
@@ -3077,8 +3094,8 @@ function _matchBuildCustomerCardHtml(cu){
         ? '<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:50px;font-size:0.72rem;font-weight:600;"><i class="bi bi-clock-fill" style="font-size:0.65rem;"></i> สลิปรอจับคู่ ' + slipCnt + '</span>'
         : '';
     const bdoBadge = bdoCnt > 0
-        ? '<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:50px;font-size:0.72rem;font-weight:500;">BDO รอ ' + bdoCnt + '</span>'
-        : '<span style="font-size:0.72rem;color:var(--gray-300);">BDO รอ 0</span>';
+        ? '<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:50px;font-size:0.72rem;font-weight:500;">BDO ค้างชำระ ' + bdoCnt + '</span>'
+        : '<span style="font-size:0.72rem;color:var(--gray-300);">BDO ค้างชำระ 0</span>';
 
     const encRef = encodeURIComponent(ref);
     const encName = encodeURIComponent(name);
@@ -3160,8 +3177,7 @@ async function loadMatchingCustomerGrid(forceRefresh){
             _matchBdoCountByRef = {};
             const allBdos = (bdoRes && bdoRes.success && bdoRes.data && bdoRes.data.bdos) ? bdoRes.data.bdos : [];
             allBdos.forEach(function(b){
-                const ps = normalizeBdoPaymentStatus(b);
-                if(ps.key === 'pending'){
+                if(isBdoOutstandingPayment(b)){
                     const ref = normalizeMatchCustomerRef(getBdoCustomerRef(b));
                     if(ref) _matchBdoCountByRef[ref] = (_matchBdoCountByRef[ref] || 0) + 1;
                 }
@@ -3393,8 +3409,7 @@ function fillMatchImageSlipBdoSelect(){
     if(!sel) return;
     sel.innerHTML = '<option value="">— เลือก BDO —</option>';
     (_matchBdos || []).forEach(function(b){
-        const ps = normalizeBdoPaymentStatus(b);
-        if(ps.key !== 'pending') return;
+        if(!isBdoOutstandingPayment(b)) return;
         const id = b.bdo_id || b.id;
         const amt = b.amount_total != null ? Number(b.amount_total) : (b.amount_net_to_pay != null ? Number(b.amount_net_to_pay) : 0);
         const label = (b.bdo_name || ('BDO-' + id)) + ' · ฿' + amt.toLocaleString('th-TH', {minimumFractionDigits: 0});
@@ -3521,8 +3536,7 @@ async function loadMatchingDashboard(){
     // KPI
     const pendingSlips = _matchSlips.filter(function(s){ return s.status === 'pending' || s.status === 'new'; });
     const pendingBdos = _matchBdos.filter(function(b){
-        const paymentState = normalizeBdoPaymentStatus(b);
-        return paymentState.key === 'pending';
+        return isBdoOutstandingPayment(b);
     });
     const problemSlips = _matchSlips.filter(function(s){ return s.status === 'failed'; });
 
@@ -3662,7 +3676,7 @@ function renderMatchBdoList(bdos){
     const el = document.getElementById('matchBdoList');
     if(!el) return;
     if(!bdos.length){
-        el.innerHTML = '<div style="text-align:center;padding:1.25rem;color:var(--gray-400);font-size:0.82rem;"><i class="bi bi-file-earmark-text" style="font-size:1.5rem;display:block;margin-bottom:0.3rem;"></i>ไม่มี BDO รอจับคู่</div>';
+        el.innerHTML = '<div style="text-align:center;padding:1.25rem;color:var(--gray-400);font-size:0.82rem;"><i class="bi bi-file-earmark-text" style="font-size:1.5rem;display:block;margin-bottom:0.3rem;"></i>ไม่มี BDO ที่รอชำระ</div>';
         return;
     }
     el.innerHTML = bdos.map(function(bdo){ return _renderMatchBdoCard(bdo); }).join('');
@@ -3680,11 +3694,12 @@ function _renderMatchBdoCard(bdo){
     const bgColor = selected ? '#fff7ed' : (suggestion ? '#eff6ff' : 'white');
     const badge = suggestion ? '<span style="background:#dbeafe;color:#1d4ed8;font-size:0.65rem;font-weight:600;padding:2px 7px;border-radius:999px;">แนะนำ</span>' : '';
 
+    const rawBdoEnc = encodeURIComponent(JSON.stringify(bdo));
     return '<div onclick="toggleMatchBdo(' + bdoId + ')" style="display:flex;align-items:flex-start;gap:0.6rem;padding:0.7rem;border:1.5px solid ' + borderColor + ';background:' + bgColor + ';border-radius:12px;cursor:pointer;margin-bottom:0.55rem;">'
         + '<input type="checkbox" ' + (selected ? 'checked' : '') + ' onclick="event.stopPropagation();toggleMatchBdo(' + bdoId + ')" style="margin-top:0.2rem;">'
         + '<div style="flex:1;min-width:0;">'
         + '<div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">'
-        + '<div style="font-weight:700;font-size:0.88rem;color:var(--gray-800);">' + escapeHtml(bdoName) + '</div>'
+        + '<a href="javascript:void(0)" onclick="event.stopPropagation();openBdoDetail(\'' + escapeHtml(String(bdoId)) + '\',\'' + escapeHtml(String(bdoName)) + '\',decodeURIComponent(\'' + rawBdoEnc + '\'))" class="ref-link" style="font-weight:700;font-size:0.88rem;">' + escapeHtml(bdoName) + '</a>'
         + badge
         + '</div>'
         + '<div style="font-weight:700;font-size:0.95rem;color:#d97706;">' + amount + '</div>'
@@ -3738,8 +3753,7 @@ function toggleMatchBdo(bdoId){
         return document.getElementById('matchFilterMode')?.value === 'matched'
             ? true
             : (function(){
-                const paymentState = normalizeBdoPaymentStatus(b);
-                return paymentState.key === 'pending' && !_getSuggestionForBdo(b.bdo_id || b.id);
+                return isBdoOutstandingPayment(b) && !_getSuggestionForBdo(b.bdo_id || b.id);
             })();
     }));
     updateMatchSummaryBar();
