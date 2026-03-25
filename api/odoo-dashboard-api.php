@@ -61,6 +61,7 @@ try {
         'order_list' => 60,
         'notification_log' => 60,
         'salesperson_list' => 300,
+        'overview_fast' => 30,
         'overview_today' => 45,
         'customer_full_detail' => 45,
         'overview_combined' => 45,
@@ -155,6 +156,9 @@ try {
                 break;
             case 'customer_360':
                 $result = getCustomer360($db, $input);
+                break;
+            case 'overview_fast':
+                $result = getOverviewFast($db);
                 break;
             case 'overview_today':
                 $result = getOverviewToday($db);

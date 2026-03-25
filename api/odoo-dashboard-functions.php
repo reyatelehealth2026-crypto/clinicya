@@ -1144,3 +1144,166 @@ if (!function_exists('dashboardBdoDetailFromLocalDb')) {
         }
     }
 }
+
+// ── Functions required by odoo-dashboard-api.php (not in webhooks file) ──────
+
+if (!function_exists('getOverviewFast')) {
+    /**
+     * Fast overview KPIs using indexed sync tables only.
+     * Fallback when odoo-dashboard-fast.php is unavailable.
+     */
+    function getOverviewFast($db)
+    {
+        $r = [
+            'orders_today'        => 0,
+            'sales_today'         => 0.0,
+            'orders'              => [],
+            'slips_pending'       => 0,
+            'bdos_pending'        => 0,
+            'bdos_pending_amount' => 0.0,
+            'overdue_customers'   => 0,
+            'payments_today'      => 0.0,
+            'last_webhook'        => null,
+            'webhook_total_today' => 0,
+            'webhook_success_rate'=> 0,
+        ];
+        try {
+            $row = $db->query("SELECT COUNT(*) as c, COALESCE(SUM(amount_total),0) as s FROM odoo_orders WHERE COALESCE(date_order,updated_at) >= CURDATE() AND COALESCE(date_order,updated_at) < CURDATE()+INTERVAL 1 DAY")->fetch(PDO::FETCH_ASSOC);
+            $r['orders_today'] = (int) ($row['c'] ?? 0);
+            $r['sales_today']  = (float) ($row['s'] ?? 0);
+            $stmt = $db->query("SELECT order_id, order_name, customer_ref, state, state_display, amount_total, date_order, updated_at, latest_event, salesperson_name, line_user_id FROM odoo_orders WHERE COALESCE(date_order,updated_at) >= CURDATE() AND COALESCE(date_order,updated_at) < CURDATE()+INTERVAL 1 DAY ORDER BY updated_at DESC LIMIT 5");
+            $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($orders as &$o) { $o['amount_total'] = (float) ($o['amount_total'] ?? 0); }
+            unset($o);
+            $r['orders'] = $orders;
+        } catch (Exception $e) {}
+        try {
+            $r['slips_pending'] = (int) $db->query("SELECT COUNT(*) FROM odoo_slip_uploads WHERE status IN ('new','pending')")->fetchColumn();
+            $r['payments_today'] = (float) $db->query("SELECT COALESCE(SUM(amount),0) FROM odoo_slip_uploads WHERE status='matched' AND COALESCE(matched_at,uploaded_at) >= CURDATE() AND COALESCE(matched_at,uploaded_at) < CURDATE()+INTERVAL 1 DAY")->fetchColumn();
+        } catch (Exception $e) {}
+        try {
+            $row = $db->query("SELECT COUNT(*) as c, COALESCE(SUM(amount_net_to_pay),0) as s FROM odoo_bdos WHERE payment_state NOT IN ('paid','reversed','in_payment') AND state!='cancel'")->fetch(PDO::FETCH_ASSOC);
+            $r['bdos_pending']        = (int) ($row['c'] ?? 0);
+            $r['bdos_pending_amount'] = (float) ($row['s'] ?? 0);
+        } catch (Exception $e) {}
+        try {
+            $r['overdue_customers'] = (int) $db->query("SELECT COUNT(*) FROM odoo_customer_projection WHERE overdue_amount > 0")->fetchColumn();
+        } catch (Exception $e) {}
+        try {
+            $col = resolveWebhookTimeColumn($db);
+            if ($col) {
+                $row = $db->query("SELECT COUNT(*) as c, SUM(IF(status='success',1,0)) as ok, MAX({$col}) as lw FROM odoo_webhooks_log WHERE {$col}>=CURDATE() AND {$col}<CURDATE()+INTERVAL 1 DAY")->fetch(PDO::FETCH_ASSOC);
+                $r['webhook_total_today']  = (int) ($row['c'] ?? 0);
+                $r['last_webhook']         = $row['lw'] ?? null;
+                $cnt = (int) ($row['c'] ?? 0);
+                $ok  = (int) ($row['ok'] ?? 0);
+                $r['webhook_success_rate'] = $cnt > 0 ? round(($ok / $cnt) * 100) : 0;
+            }
+        } catch (Exception $e) {}
+        return $r;
+    }
+}
+
+if (!function_exists('getSalespersonList')) {
+    /**
+     * Salesperson list — from indexed odoo_orders (fast, avoids JSON_EXTRACT on webhook log).
+     */
+    function getSalespersonList($db)
+    {
+        try {
+            $stmt = $db->query("
+                SELECT salesperson_name AS name, MIN(salesperson_id) AS id,
+                       COUNT(DISTINCT partner_id) AS customer_count
+                FROM odoo_orders
+                WHERE salesperson_name IS NOT NULL AND salesperson_name != ''
+                GROUP BY salesperson_name
+                ORDER BY salesperson_name ASC
+            ");
+            return ['salespersons' => $stmt->fetchAll(PDO::FETCH_ASSOC)];
+        } catch (Exception $e) {
+            return ['salespersons' => [], 'error' => $e->getMessage()];
+        }
+    }
+}
+
+if (!function_exists('orderStatusOverride')) {
+    function orderStatusOverride($db, $input)
+    {
+        $entityType = trim((string) ($input['entity_type'] ?? ''));
+        $entityRef  = trim((string) ($input['entity_ref']  ?? ''));
+        $oldStatus  = trim((string) ($input['old_status']  ?? ''));
+        $newStatus  = trim((string) ($input['new_status']  ?? ''));
+        $reason     = trim((string) ($input['reason']      ?? ''));
+        $adminName  = trim((string) ($input['admin_name']  ?? ''));
+        $partnerId  = isset($input['partner_id']) ? (int) $input['partner_id'] : null;
+        if (!in_array($entityType, ['order', 'invoice'], true)) throw new Exception('entity_type must be order or invoice');
+        if ($entityRef  === '') throw new Exception('Missing entity_ref');
+        if ($newStatus  === '') throw new Exception('Missing new_status');
+        if ($reason     === '') throw new Exception('Missing reason');
+        if ($adminName  === '') throw new Exception('Missing admin_name');
+        $db->exec("CREATE TABLE IF NOT EXISTS odoo_manual_overrides (id INT AUTO_INCREMENT PRIMARY KEY, entity_type ENUM('order','invoice') NOT NULL, entity_ref VARCHAR(100) NOT NULL, partner_id INT NULL, old_status VARCHAR(50) NULL, new_status VARCHAR(50) NOT NULL, reason TEXT NOT NULL, admin_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_entity (entity_type, entity_ref), INDEX idx_partner (partner_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $stmt = $db->prepare("INSERT INTO odoo_manual_overrides (entity_type, entity_ref, partner_id, old_status, new_status, reason, admin_name) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$entityType, $entityRef, $partnerId, $oldStatus, $newStatus, $reason, $adminName]);
+        $overrideId = (int) $db->lastInsertId();
+        try {
+            require_once __DIR__ . '/../classes/ActivityLogger.php';
+            $logger = ActivityLogger::getInstance($db);
+            $logger->log(ActivityLogger::TYPE_ADMIN, ActivityLogger::ACTION_UPDATE, "Override {$entityType} status: {$entityRef} [{$oldStatus}] → [{$newStatus}]", ['admin_name' => $adminName, 'entity_type' => 'odoo_' . $entityType, 'entity_id' => $overrideId, 'old_value' => ['status' => $oldStatus], 'new_value' => ['status' => $newStatus, 'reason' => $reason], 'extra_data' => ['partner_id' => $partnerId]]);
+        } catch (Exception $e) { error_log('ActivityLogger error: ' . $e->getMessage()); }
+        return ['override_id' => $overrideId, 'entity_type' => $entityType, 'entity_ref' => $entityRef, 'new_status' => $newStatus];
+    }
+}
+
+if (!function_exists('orderNoteAdd')) {
+    function orderNoteAdd($db, $input)
+    {
+        $entityType = trim((string) ($input['entity_type'] ?? ''));
+        $entityRef  = trim((string) ($input['entity_ref']  ?? ''));
+        $note       = trim((string) ($input['note']        ?? ''));
+        $adminName  = trim((string) ($input['admin_name']  ?? ''));
+        $partnerId  = isset($input['partner_id']) ? (int) $input['partner_id'] : null;
+        if (!in_array($entityType, ['order', 'invoice'], true)) throw new Exception('entity_type must be order or invoice');
+        if ($entityRef === '') throw new Exception('Missing entity_ref');
+        if ($note      === '') throw new Exception('Missing note');
+        if ($adminName === '') throw new Exception('Missing admin_name');
+        $db->exec("CREATE TABLE IF NOT EXISTS odoo_order_notes (id INT AUTO_INCREMENT PRIMARY KEY, entity_type ENUM('order','invoice') NOT NULL, entity_ref VARCHAR(100) NOT NULL, partner_id INT NULL, note TEXT NOT NULL, admin_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_entity (entity_type, entity_ref), INDEX idx_partner (partner_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        $stmt = $db->prepare("INSERT INTO odoo_order_notes (entity_type, entity_ref, partner_id, note, admin_name) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$entityType, $entityRef, $partnerId, $note, $adminName]);
+        $noteId = (int) $db->lastInsertId();
+        try {
+            require_once __DIR__ . '/../classes/ActivityLogger.php';
+            $logger = ActivityLogger::getInstance($db);
+            $logger->log(ActivityLogger::TYPE_ADMIN, ActivityLogger::ACTION_CREATE, "Add note to {$entityType}: {$entityRef} — {$note}", ['admin_name' => $adminName, 'entity_type' => 'odoo_' . $entityType . '_note', 'entity_id' => $noteId, 'new_value' => ['note' => $note, 'entity_ref' => $entityRef], 'extra_data' => ['partner_id' => $partnerId]]);
+        } catch (Exception $e) { error_log('ActivityLogger error: ' . $e->getMessage()); }
+        return ['note_id' => $noteId, 'entity_type' => $entityType, 'entity_ref' => $entityRef];
+    }
+}
+
+if (!function_exists('orderNotesList')) {
+    function orderNotesList($db, $input)
+    {
+        $entityType = trim((string) ($input['entity_type'] ?? ''));
+        $entityRef  = trim((string) ($input['entity_ref']  ?? ''));
+        $partnerId  = trim((string) ($input['partner_id']  ?? ''));
+        $notes = []; $overrides = [];
+        try {
+            $where = ['1=1']; $params = [];
+            if ($entityType !== '')  { $where[] = 'entity_type = ?'; $params[] = $entityType; }
+            if ($entityRef  !== '')  { $where[] = 'entity_ref = ?';  $params[] = $entityRef; }
+            if ($partnerId  !== '' && $partnerId !== '-') { $where[] = 'partner_id = ?'; $params[] = (int) $partnerId; }
+            $stmt = $db->prepare("SELECT * FROM odoo_order_notes WHERE " . implode(' AND ', $where) . " ORDER BY created_at DESC LIMIT 200");
+            $stmt->execute($params);
+            $notes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {}
+        try {
+            $where2 = ['1=1']; $params2 = [];
+            if ($entityType !== '')  { $where2[] = 'entity_type = ?'; $params2[] = $entityType; }
+            if ($entityRef  !== '')  { $where2[] = 'entity_ref = ?';  $params2[] = $entityRef; }
+            if ($partnerId  !== '' && $partnerId !== '-') { $where2[] = 'partner_id = ?'; $params2[] = (int) $partnerId; }
+            $stmt2 = $db->prepare("SELECT * FROM odoo_manual_overrides WHERE " . implode(' AND ', $where2) . " ORDER BY created_at DESC LIMIT 200");
+            $stmt2->execute($params2);
+            $overrides = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {}
+        return ['notes' => $notes, 'overrides' => $overrides];
+    }
+}
