@@ -3357,6 +3357,8 @@ function getSlipCenterBdoOverview($db, $input)
             LEFT JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id
             {$contextJoin}
             WHERE bo.payment_status IN ('pending', 'partial')
+              AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
+              AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
             ORDER BY bo.created_at DESC
             LIMIT ?
         ");
@@ -3538,6 +3540,8 @@ function getSlipCenterCustomerDetail($db, $input)
                     {$contextJoin}
                     WHERE bo.partner_id = ?
                       AND bo.payment_status IN ('pending', 'partial')
+                      AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
+                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
                     ORDER BY bo.created_at DESC
                     LIMIT ?
                 ");
@@ -3567,6 +3571,8 @@ function getSlipCenterCustomerDetail($db, $input)
                     INNER JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id AND b.customer_ref = ?
                     {$contextJoin}
                     WHERE bo.payment_status IN ('pending', 'partial')
+                      AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
+                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
                     ORDER BY bo.created_at DESC
                     LIMIT ?
                 ");
@@ -3597,6 +3603,8 @@ function getSlipCenterCustomerDetail($db, $input)
                     {$contextJoin}
                     WHERE bo.line_user_id = ?
                       AND bo.payment_status IN ('pending', 'partial')
+                      AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
+                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
                     ORDER BY bo.created_at DESC
                     LIMIT ?
                 ");
