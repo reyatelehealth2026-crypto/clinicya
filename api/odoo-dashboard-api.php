@@ -2880,7 +2880,7 @@ function getOverviewToday($db)
     $ordersDate  = date('Y-m-d');
     try {
         if (tableExists($db, 'odoo_orders')) {
-            $countStmt = $db->query("SELECT COUNT(*) FROM odoo_orders WHERE DATE(date_order) = CURDATE() OR DATE(updated_at) = CURDATE()");
+            $countStmt = $db->query("SELECT COUNT(*) FROM odoo_orders WHERE (date_order >= CURDATE() AND date_order < CURDATE()+INTERVAL 1 DAY) OR (updated_at >= CURDATE() AND updated_at < CURDATE()+INTERVAL 1 DAY)");
             $ordersTotal = (int) $countStmt->fetchColumn();
 
             $stmt = $db->query("
@@ -2903,7 +2903,7 @@ function getOverviewToday($db)
                         END
                     ) as progress
                 FROM odoo_orders o
-                WHERE DATE(date_order) = CURDATE() OR DATE(updated_at) = CURDATE()
+                WHERE (date_order >= CURDATE() AND date_order < CURDATE()+INTERVAL 1 DAY) OR (updated_at >= CURDATE() AND updated_at < CURDATE()+INTERVAL 1 DAY)
                 ORDER BY updated_at DESC
                 LIMIT 5
             ");

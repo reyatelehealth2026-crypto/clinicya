@@ -184,7 +184,7 @@ async function whApiCall(data){
     if(WH_FAST_ACTIONS.has(action)){
         try{
             const ctrl=new AbortController();
-            const timer=setTimeout(()=>ctrl.abort(),5000);
+            const timer=setTimeout(()=>ctrl.abort(),12000);
             const r=await fetch(WH_API_FAST+cacheBuster,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data),signal:ctrl.signal});
             clearTimeout(timer);
             const parsed=await r.json();
@@ -4470,7 +4470,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(initialTab){
         showSection(initialTab);
     }else{
-        setTimeout(function(){ if(_isSectionActive('overview')) loadTodayOverview(); }, 250);
+        setTimeout(function(){ if(!_overviewLoaded && _isSectionActive('overview')) loadTodayOverview(); }, 250);
     }
     // Re-check connection every 60s — skip when tab is hidden
     setInterval(()=>{ if(!document.hidden) testConnection(); }, 60000);
