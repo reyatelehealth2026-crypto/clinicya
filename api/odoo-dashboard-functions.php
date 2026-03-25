@@ -514,11 +514,14 @@ if (!function_exists('getOdooBdos')) {
         try {
             $hasPaymentStateCol = false;
             $hasAmountNetCol    = false;
+            $hasContextTable    = false;
             try {
                 $chk = $db->query("SHOW COLUMNS FROM odoo_bdos LIKE 'payment_state'");
                 $hasPaymentStateCol = $chk && $chk->rowCount() > 0;
                 $chk2 = $db->query("SHOW COLUMNS FROM odoo_bdos LIKE 'amount_net_to_pay'");
                 $hasAmountNetCol = $chk2 && $chk2->rowCount() > 0;
+                $chk3 = $db->query("SHOW TABLES LIKE 'odoo_bdo_context'");
+                $hasContextTable = $chk3 && $chk3->rowCount() > 0;
             } catch (Exception $e) { /* ignore */
             }
 
@@ -526,50 +529,64 @@ if (!function_exists('getOdooBdos')) {
             $params = [];
 
             if ($partnerId !== '' && $partnerId !== '-') {
-                $where[] = 'partner_id = ?';
+                $where[] = 'b.partner_id = ?';
                 $params[] = (int) $partnerId;
             } elseif ($lineUserId !== '') {
-                $where[] = 'line_user_id = ?';
+                $where[] = 'b.line_user_id = ?';
                 $params[] = $lineUserId;
             } elseif ($customerRef !== '') {
-                $where[] = 'customer_ref = ?';
+                $where[] = 'b.customer_ref = ?';
                 $params[] = $customerRef;
             }
 
             if ($paymentFilterUnpaid) {
                 // ใช้ payment_state เป็นหลัก — BDO state = done อาจหมายถึงส่งของแล้ว แต่ลูกค้ายังค้างจ่าย
                 if ($hasPaymentStateCol) {
-                    $where[] = "(payment_state IS NULL OR LOWER(TRIM(payment_state)) NOT IN ('paid','reversed'))";
+                    $where[] = "(b.payment_state IS NULL OR LOWER(TRIM(b.payment_state)) NOT IN ('paid','reversed'))";
                 }
-                $where[] = "(state IS NULL OR LOWER(TRIM(state)) NOT IN ('cancel','cancelled'))";
+                $where[] = "(b.state IS NULL OR LOWER(TRIM(b.state)) NOT IN ('cancel','cancelled'))";
             }
 
             $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
-            $totalStmt = $db->prepare("SELECT COUNT(*) FROM odoo_bdos {$whereClause}");
+            $totalStmt = $db->prepare("SELECT COUNT(*) FROM odoo_bdos b {$whereClause}");
             $totalStmt->execute($params);
             $total = (int) $totalStmt->fetchColumn();
 
             if ($total > 0 || $whereClause !== '') {
                 $extraCols = '';
                 if ($hasPaymentStateCol) {
-                    $extraCols .= ', payment_state';
+                    $extraCols .= ', b.payment_state';
                 }
                 if ($hasAmountNetCol) {
-                    $extraCols .= ', amount_net_to_pay';
+                    $extraCols .= ', b.amount_net_to_pay';
                 }
+
+                $contextSelect = $hasContextTable ? ', ctx.financial_summary_json' : '';
+                $contextJoin = $hasContextTable ? "
+                LEFT JOIN (
+                    SELECT c1.bdo_id, c1.financial_summary_json
+                    FROM odoo_bdo_context c1
+                    INNER JOIN (
+                        SELECT bdo_id, MAX(id) AS max_id
+                        FROM odoo_bdo_context
+                        GROUP BY bdo_id
+                    ) latest_ctx ON latest_ctx.max_id = c1.id
+                ) ctx ON b.bdo_id = ctx.bdo_id" : '';
+
                 $sql = "
                 SELECT
-                    id, bdo_id, bdo_name,
-                    order_id, order_name,
-                    partner_id, customer_ref, line_user_id,
-                    salesperson_id, salesperson_name,
-                    state, amount_total, currency,
-                    bdo_date, expected_delivery{$extraCols},
-                    latest_event, synced_at, updated_at
-                FROM odoo_bdos
+                    b.id, b.bdo_id, b.bdo_name,
+                    b.order_id, b.order_name,
+                    b.partner_id, b.customer_ref, b.line_user_id,
+                    b.salesperson_id, b.salesperson_name,
+                    b.state, b.amount_total, b.currency,
+                    b.bdo_date, b.expected_delivery{$extraCols},
+                    b.latest_event, b.synced_at, b.updated_at{$contextSelect}
+                FROM odoo_bdos b
+                {$contextJoin}
                 {$whereClause}
-                ORDER BY updated_at DESC
+                ORDER BY b.updated_at DESC
                 LIMIT ? OFFSET ?
             ";
                 $params[] = $limit;
@@ -588,6 +605,13 @@ if (!function_exists('getOdooBdos')) {
                     if ($hasAmountNetCol) {
                         $b['amount_net_to_pay'] = isset($b['amount_net_to_pay']) && $b['amount_net_to_pay'] !== null ? (float) $b['amount_net_to_pay'] : null;
                     }
+                    if (isset($b['financial_summary_json']) && !empty($b['financial_summary_json'])) {
+                        $fin = json_decode($b['financial_summary_json'], true);
+                        if (isset($fin['amount_net_to_pay'])) {
+                            $b['amount_net_to_pay'] = (float) $fin['amount_net_to_pay'];
+                        }
+                    }
+                    unset($b['financial_summary_json']);
                 }
                 unset($b);
 

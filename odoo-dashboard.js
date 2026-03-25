@@ -890,7 +890,8 @@ async function showCustomerDetail(ref, partnerId, custName){
                 const orderName = bdo.order_name || '-';
                 const orderId = bdo.order_id || '';
                 const dt = _fmtDt(bdo.bdo_date || bdo.updated_at || bdo.synced_at || bdo.processed_at);
-                const amt = bdo.amount_total != null ? '\u0e3f'+Number(bdo.amount_total).toLocaleString() : '-';
+                const amtNum = bdo.amount_net_to_pay != null ? bdo.amount_net_to_pay : bdo.amount_total;
+                const amt = amtNum != null ? '\u0e3f'+Number(amtNum).toLocaleString() : '-';
                 const paymentState = normalizeBdoPaymentStatus(bdo);
                 const payStatus = paymentState.key;
                 const ps = BDO_PAY_STATUS[payStatus] || BDO_PAY_STATUS.pending;
@@ -3410,7 +3411,8 @@ function fillMatchImageSlipBdoSelect(){
     (_matchBdos || []).forEach(function(b){
         if(!isBdoOutstandingPayment(b)) return;
         const id = b.bdo_id || b.id;
-        const amt = b.amount_total != null ? Number(b.amount_total) : (b.amount_net_to_pay != null ? Number(b.amount_net_to_pay) : 0);
+        const amtNum = b.amount_net_to_pay != null ? Number(b.amount_net_to_pay) : (b.amount_total != null ? Number(b.amount_total) : 0);
+        const amt = amtNum;
         const label = (b.bdo_name || ('BDO-' + id)) + ' · ฿' + amt.toLocaleString('th-TH', {minimumFractionDigits: 0});
         const opt = document.createElement('option');
         opt.value = String(id);
@@ -3685,7 +3687,8 @@ function _renderMatchBdoCard(bdo){
     const bdoId = bdo.bdo_id || bdo.id;
     const selected = _matchSelectedBdos.has(bdoId);
     const suggestion = _getSuggestionForBdo(bdoId);
-    const amount = bdo.amount_total != null ? '฿' + Number(bdo.amount_total).toLocaleString() : (bdo.amount_net_to_pay != null ? '฿' + Number(bdo.amount_net_to_pay).toLocaleString() : '-');
+    const amountNum = bdo.amount_net_to_pay != null ? bdo.amount_net_to_pay : bdo.amount_total;
+    const amount = amountNum != null ? '฿' + Number(amountNum).toLocaleString() : '-';
     const customer = getCustomerDisplayLabel(getBdoCustomerName(bdo), getBdoCustomerRef(bdo));
     const bdoName = bdo.bdo_name || ('BDO-' + bdoId);
     const bdoDate = fmtThDate(bdo.bdo_date || bdo.updated_at || bdo.synced_at);
@@ -3814,7 +3817,7 @@ async function confirmSuggestion(slipId, bdoId, btnEl){
             local_slip_id: match.slip.id || match.slip.slip_id,
             slip_inbox_id: match.slip.slip_inbox_id || match.slip.odoo_slip_id || 0,
             line_user_id: match.slip.line_user_id || '',
-            matches: [{bdo_id: match.bdo.bdo_id || match.bdo.id, amount: parseFloat(match.bdo.amount_total || match.bdo.amount_net_to_pay || 0)}],
+            matches: [{bdo_id: match.bdo.bdo_id || match.bdo.id, amount: parseFloat(match.bdo.amount_net_to_pay || match.bdo.amount_total || 0)}],
             note: 'Suggestion confirm: ' + match.confidence
         });
         if(result && result.success){
@@ -3859,7 +3862,7 @@ function computeSmartMatches(slips, bdos){
             const bdoId = bdo.bdo_id || bdo.id;
             if(String(slip.bdo_id) === String(bdoId)){
                 const slipAmt = parseFloat(slip.amount || 0);
-                const bdoAmt = parseFloat(bdo.amount_total || bdo.amount_net_to_pay || 0);
+                const bdoAmt = parseFloat(bdo.amount_net_to_pay || bdo.amount_total || 0);
                 const isExact = Math.abs(slipAmt - bdoAmt) <= 1;
                 suggestions.push({
                     slip: slip, slipIdx: si, bdo: bdo, bdoIdx: bi,
@@ -3931,7 +3934,8 @@ function renderMatchSuggestions(suggestions){
         const sid = s.id || s.slip_id;
         const bid = b.bdo_id || b.id;
         const slipAmt = s.amount != null ? '฿' + parseFloat(s.amount).toLocaleString('th-TH',{minimumFractionDigits:0}) : '-';
-        const bdoAmt  = b.amount_total != null ? '฿' + Number(b.amount_total).toLocaleString() : '-';
+        const bdoAmtNum = b.amount_net_to_pay != null ? b.amount_net_to_pay : b.amount_total;
+        const bdoAmt = bdoAmtNum != null ? '฿' + Number(bdoAmtNum).toLocaleString() : '-';
         const slipCust = getCustomerDisplayLabel(getSlipCustomerName(s), getSlipCustomerRef(s));
         const bdoCust = getCustomerDisplayLabel(getBdoCustomerName(b), getBdoCustomerRef(b));
         const slipDt = fmtThDate(s.transfer_date || s.uploaded_at);
@@ -4002,7 +4006,7 @@ async function confirmManualMatch(){
     let successCount = 0, failCount = 0;
     for(const slip of selectedSlips){
         const matches = selectedBdos.map(function(bdo){
-            return {bdo_id: bdo.bdo_id || bdo.id, amount: parseFloat(bdo.amount_total || bdo.amount_net_to_pay || 0)};
+            return {bdo_id: bdo.bdo_id || bdo.id, amount: parseFloat(bdo.amount_net_to_pay || bdo.amount_total || 0)};
         });
         try {
             const result = await whApiCall({
@@ -4054,7 +4058,7 @@ async function batchConfirmMatches(){
                 local_slip_id: m.slip.id || m.slip.slip_id,
                 slip_inbox_id: m.slip.slip_inbox_id || m.slip.odoo_slip_id || 0,
                 line_user_id: m.slip.line_user_id || '',
-                matches: [{bdo_id: m.bdo.bdo_id || m.bdo.id, amount: parseFloat(m.bdo.amount_total || 0)}],
+                matches: [{bdo_id: m.bdo.bdo_id || m.bdo.id, amount: parseFloat(m.bdo.amount_net_to_pay || m.bdo.amount_total || 0)}],
                 note: 'Batch match: ' + m.confidence
             });
             if(result && result.success) successCount++;
@@ -4076,7 +4080,7 @@ async function autoConfirmExactMatches(exactList){
                 local_slip_id: m.slip.id || m.slip.slip_id,
                 slip_inbox_id: m.slip.slip_inbox_id || m.slip.odoo_slip_id || 0,
                 line_user_id: m.slip.line_user_id || '',
-                matches: [{bdo_id: m.bdo.bdo_id || m.bdo.id, amount: parseFloat(m.bdo.amount_total || 0)}],
+                matches: [{bdo_id: m.bdo.bdo_id || m.bdo.id, amount: parseFloat(m.bdo.amount_net_to_pay || m.bdo.amount_total || 0)}],
                 note: 'Auto-confirm: bdo_id + exact amount'
             });
             if(result && result.success) count++;
@@ -4126,8 +4130,9 @@ async function openBdoSlipAttach(bdoData, pendingSlips){
     _bsaFileBase64=null;
     document.getElementById('bsaBdoName').textContent=bdoData.bdo_name||('BDO-'+bdoData.bdo_id);
     document.getElementById('bsaOrderName').textContent=bdoData.order_name||'-';
-    document.getElementById('bsaAmount').textContent=bdoData.amount_total!=null?'\u0e3f'+Number(bdoData.amount_total).toLocaleString():'-';
-    document.getElementById('bsaAmountInput').value=bdoData.amount_total||'';
+    const finalAmt = bdoData.amount_net_to_pay != null ? bdoData.amount_net_to_pay : bdoData.amount_total;
+    document.getElementById('bsaAmount').textContent=finalAmt!=null?'\u0e3f'+Number(finalAmt).toLocaleString():'-';
+    document.getElementById('bsaAmountInput').value=finalAmt||'';
     document.getElementById('bsaDateInput').value=new Date().toISOString().slice(0,10);
     document.getElementById('bsaPreview').style.display='none';
     document.getElementById('bsaFileInput').value='';
@@ -4251,7 +4256,7 @@ async function bsaConfirmAttach(){
                 local_slip_id:_bsaSelectedSlipId,
                 slip_inbox_id: slip ? (slip.slip_inbox_id || slip.odoo_slip_id || 0) : 0,
                 line_user_id: slip ? (slip.line_user_id || _bsaBdoData.line_user_id || '') : (_bsaBdoData.line_user_id || ''),
-                matches:[{bdo_id:_bsaBdoData.bdo_id,amount:amount || parseFloat(_bsaBdoData.amount_total || _bsaBdoData.amount_net_to_pay || 0)}],
+                matches:[{bdo_id:_bsaBdoData.bdo_id,amount:amount || parseFloat(_bsaBdoData.amount_net_to_pay || _bsaBdoData.amount_total || 0)}],
                 note:'Attach slip from BDO modal'
             });
             if(!j.success) throw new Error(j.error||'\u0e08\u0e31\u0e1a\u0e04\u0e39\u0e48\u0e44\u0e21\u0e48\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');
@@ -4273,7 +4278,7 @@ async function bsaConfirmAttach(){
                 action:'odoo_slip_match_api',
                 local_slip_id: localSlipId,
                 line_user_id: j.data?.line_user_id || _bsaBdoData.line_user_id || '',
-                matches:[{bdo_id:_bsaBdoData.bdo_id,amount:amount || parseFloat(_bsaBdoData.amount_total || _bsaBdoData.amount_net_to_pay || 0)}],
+                matches:[{bdo_id:_bsaBdoData.bdo_id,amount:amount || parseFloat(_bsaBdoData.amount_net_to_pay || _bsaBdoData.amount_total || 0)}],
                 note:'Upload and attach from BDO modal'
             });
             if(!matchResult.success) throw new Error(matchResult.error||'\u0e08\u0e31\u0e1a\u0e04\u0e39\u0e48\u0e44\u0e21\u0e48\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');
