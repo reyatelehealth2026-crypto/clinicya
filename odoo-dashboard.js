@@ -2992,185 +2992,236 @@ let _matchBdoCountByRef  = {};
 let _matchRecentChatImages = [];
 let _matchImageSlipContext = null;
 
-// ===== CUSTOMER GRID =====
+var MATCH_CUSTOMER_PAGE = 50;
+var _matchCustomerOffset = 0;
+var _matchCustomerTotal = 0;
+var _matchCustomerLoading = false;
+var _matchGridObserver = null;
+var _matchCustomerSearchTimer = null;
 
-async function loadMatchingCustomerGrid(forceRefresh){
-    const gridEl = document.getElementById('matchCustomerGrid');
+// ===== CUSTOMER GRID (full list + server sort + lazy load) =====
 
-    // --- Cache check ---
-    if(!forceRefresh){
-        const cached = _cacheGet('match_grid');
-        if(cached){
-            _matchAllCustomers   = cached.customers   || [];
-            _matchSlipCountByRef = cached.slipCounts  || {};
-            _matchBdoCountByRef  = cached.bdoCounts   || {};
-            _populateMatchSalespersonFilter(cached.salespersons || {});
-            renderMatchingCustomerGrid();
-            _showGridCacheIndicator(cached.cachedAt);
-            return;
-        }
-    }
-
-    if(gridEl) gridEl.innerHTML = '<div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>';
-
-    const [custRes, slipRes, bdoRes] = await Promise.all([
-        whApiCall({action:'customer_list', limit:80, offset:0, fast:1}),
-        fetch('api/slips-list.php?status=pending&limit=60&offset=0').then(r=>r.json()).catch(()=>({success:false})),
-        whApiCall({action:'odoo_bdo_list_api', limit:80, offset:0, payment_filter:'unpaid'})
-    ]);
-
-    _matchAllCustomers = (custRes && custRes.success && custRes.data && custRes.data.customers) ? custRes.data.customers : [];
-
-    // Build pending slip count by customer_ref
-    _matchSlipCountByRef = {};
-    const pendingSlips = (slipRes && slipRes.success && slipRes.data && slipRes.data.slips) ? slipRes.data.slips : [];
-    pendingSlips.forEach(function(s){
-        const ref = normalizeMatchCustomerRef(getSlipCustomerRef(s));
-        if(ref) _matchSlipCountByRef[ref] = (_matchSlipCountByRef[ref] || 0) + 1;
-    });
-
-    // Build pending BDO count by customer_ref
-    _matchBdoCountByRef = {};
-    const allBdos = (bdoRes && bdoRes.success && bdoRes.data && bdoRes.data.bdos) ? bdoRes.data.bdos : [];
-    allBdos.forEach(function(b){
-        const ps = normalizeBdoPaymentStatus(b);
-        if(ps.key === 'pending'){
-            const ref = normalizeMatchCustomerRef(getBdoCustomerRef(b));
-            if(ref) _matchBdoCountByRef[ref] = (_matchBdoCountByRef[ref] || 0) + 1;
-        }
-    });
-
-    // Populate salesperson filter
-    const spSet = {};
-    _matchAllCustomers.forEach(function(c){
-        const sid = c.salesperson_id; const snm = c.salesperson_name;
-        if(sid && snm && !spSet[sid]){ spSet[sid] = snm; }
-    });
-    _populateMatchSalespersonFilter(spSet);
-
-    // Save to cache
-    _cacheSet('match_grid', {
-        customers:   _matchAllCustomers,
-        slipCounts:  _matchSlipCountByRef,
-        bdoCounts:   _matchBdoCountByRef,
-        salespersons: spSet,
-        cachedAt:    Date.now()
-    });
-
-    renderMatchingCustomerGrid();
+function matchCustomerSearchDebounced(){
+    clearTimeout(_matchCustomerSearchTimer);
+    _matchCustomerSearchTimer = setTimeout(function(){ loadMatchingCustomerGrid(true); }, 400);
 }
 
-function _populateMatchSalespersonFilter(spSet){
+function _matchGridDisconnectObserver(){
+    if(_matchGridObserver){
+        try{ _matchGridObserver.disconnect(); }catch(e){}
+        _matchGridObserver = null;
+    }
+}
+
+function _matchMergeSalespersonOptions(customers){
     const spSel = document.getElementById('matchSalespersonFilter');
     if(!spSel) return;
-    // Only repopulate if empty (keep user's current selection)
-    if(spSel.options.length <= 1){
-        Object.keys(spSet).forEach(function(sid){
-            const opt = document.createElement('option');
-            opt.value = sid; opt.textContent = spSet[sid];
-            spSel.appendChild(opt);
-        });
+    const existing = new Set();
+    for(let i = 0; i < spSel.options.length; i++){
+        existing.add(String(spSel.options[i].value));
     }
+    (customers || []).forEach(function(c){
+        const sid = c.salesperson_id;
+        const snm = c.salesperson_name;
+        if(sid && snm && !existing.has(String(sid))){
+            const opt = document.createElement('option');
+            opt.value = String(sid);
+            opt.textContent = snm;
+            spSel.appendChild(opt);
+            existing.add(String(sid));
+        }
+    });
 }
 
-function _showGridCacheIndicator(cachedAt){
-    const gridEl = document.getElementById('matchCustomerGrid');
-    if(!gridEl || !cachedAt) return;
-    const ageS = Math.round((Date.now() - cachedAt) / 1000);
-    let indicator = document.getElementById('_matchGridCacheNote');
-    if(!indicator){
-        indicator = document.createElement('div');
-        indicator.id = '_matchGridCacheNote';
-        indicator.style.cssText = 'font-size:0.72rem;color:var(--gray-400);text-align:right;padding:2px 4px 0;';
-        gridEl.parentNode && gridEl.parentNode.insertBefore(indicator, gridEl);
+function _matchUpdateGridMeta(){
+    const el = document.getElementById('matchCustomerGridMeta');
+    if(!el) return;
+    const n = _matchAllCustomers.length;
+    const t = _matchCustomerTotal || 0;
+    const sortSel = document.getElementById('matchCustomerSort');
+    const sortLabel = sortSel && sortSel.options[sortSel.selectedIndex] ? sortSel.options[sortSel.selectedIndex].textContent : '';
+    el.textContent = 'แสดง ' + n + (t ? (' / ' + t) : '') + ' รายการ · ' + sortLabel;
+}
+
+function _setupMatchGridObserver(){
+    _matchGridDisconnectObserver();
+    if(_matchCustomerTotal > 0 && _matchAllCustomers.length >= _matchCustomerTotal) return;
+    const sen = document.getElementById('matchCustomerGridSentinel');
+    if(!sen) return;
+    _matchGridObserver = new IntersectionObserver(function(entries){
+        if(!entries[0] || !entries[0].isIntersecting) return;
+        if(_matchCustomerLoading) return;
+        if(_matchCustomerTotal > 0 && _matchAllCustomers.length >= _matchCustomerTotal) return;
+        loadMatchingCustomerGrid(false);
+    }, { root: null, rootMargin: '120px', threshold: 0 });
+    _matchGridObserver.observe(sen);
+}
+
+function _matchBuildCustomerCardHtml(cu){
+    const ref    = normalizeMatchCustomerRef(cu.customer_ref || cu.ref || '');
+    const name   = cu.customer_name || cu.name || '-';
+    const pid    = String(cu.partner_id || cu.customer_id || cu.odoo_id || '');
+    const spName = cu.salesperson_name || '';
+    const slipCnt = _matchSlipCountByRef[ref] || 0;
+    const bdoCnt  = _matchBdoCountByRef[ref]  || 0;
+    const hasPending = slipCnt > 0;
+
+    const ordN = (cu.orders_total != null && cu.orders_total !== '') ? cu.orders_total : ((cu.orders_30d != null && cu.orders_30d !== '') ? cu.orders_30d : '—');
+    const lastAt = cu.latest_order_at ? fmtThDate(cu.latest_order_at) : '—';
+
+    const cardBg     = hasPending ? '#fffbeb' : '#ffffff';
+    const cardBorder = hasPending ? '#fde68a' : 'var(--gray-200)';
+    const cardShadow = hasPending ? '0 2px 8px rgba(251,191,36,0.18)' : '0 1px 3px rgba(0,0,0,0.06)';
+
+    const slipBadge = hasPending
+        ? '<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:50px;font-size:0.72rem;font-weight:600;"><i class="bi bi-clock-fill" style="font-size:0.65rem;"></i> สลิปรอจับคู่ ' + slipCnt + '</span>'
+        : '';
+    const bdoBadge = bdoCnt > 0
+        ? '<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:50px;font-size:0.72rem;font-weight:500;">BDO รอ ' + bdoCnt + '</span>'
+        : '<span style="font-size:0.72rem;color:var(--gray-300);">BDO รอ 0</span>';
+
+    const encRef = encodeURIComponent(ref);
+    const encName = encodeURIComponent(name);
+    const encSp = encodeURIComponent(spName);
+
+    let html = '';
+    html += '<div onclick="openMatchingForCustomer(decodeURIComponent(\'' + encRef + '\'),decodeURIComponent(\'' + encName + '\'),\'' + escapeHtml(pid) + '\',decodeURIComponent(\'' + encSp + '\'))" '
+        + 'style="background:' + cardBg + ';border:1.5px solid ' + cardBorder + ';border-radius:14px;padding:0.9rem 1rem;cursor:pointer;box-shadow:' + cardShadow + ';transition:box-shadow 0.15s,border-color 0.15s;" '
+        + 'onmouseover="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.12)\';this.style.borderColor=\'' + (hasPending ? '#f59e0b' : '#94a3b8') + '\'" '
+        + 'onmouseout="this.style.boxShadow=\'' + cardShadow + '\';this.style.borderColor=\'' + cardBorder + '\'">';
+    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.4rem;margin-bottom:0.35rem;">';
+    html += '<div style="font-weight:700;font-size:0.95rem;color:var(--gray-800);">' + escapeHtml(ref || '-') + '</div>';
+    if(hasPending) html += '<i class="bi bi-exclamation-circle-fill" style="color:#f59e0b;font-size:0.95rem;flex-shrink:0;"></i>';
+    html += '</div>';
+    html += '<div style="font-size:0.82rem;color:var(--gray-600);margin-bottom:0.35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</div>';
+    html += '<div style="font-size:0.68rem;color:var(--gray-400);margin-bottom:0.45rem;">Order ' + escapeHtml(String(ordN)) + ' · ล่าสุด ' + escapeHtml(String(lastAt)) + '</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:0.5rem;">' + slipBadge + bdoBadge + '</div>';
+    if(spName){
+        html += '<div style="font-size:0.7rem;color:var(--gray-400);"><i class="bi bi-person-badge" style="font-size:0.65rem;"></i> ' + escapeHtml(spName) + '</div>';
     }
-    indicator.innerHTML = '<i class="bi bi-lightning-charge"></i> จาก cache · '
-        + ageS + 'วิที่แล้ว &nbsp;'
-        + '<a href="javascript:void(0)" onclick="_cacheClear(\'match_grid\');loadMatchingCustomerGrid(true)" '
-        + 'style="color:var(--primary);text-decoration:none;">รีเฟรช</a>';
+    html += '<div style="margin-top:0.55rem;text-align:right;">';
+    html += '<span style="font-size:0.75rem;color:' + (hasPending ? '#d97706' : 'var(--gray-400)') + ';font-weight:500;">เปิดจับคู่ <i class="bi bi-arrow-right-short"></i></span>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+}
+
+async function loadMatchingCustomerGrid(forceRefresh){
+    const cardsEl = document.getElementById('matchCustomerGridCards');
+    const loaderEl = document.getElementById('matchCustomerGridLoader');
+
+    if(forceRefresh){
+        _matchCustomerOffset = 0;
+        _matchAllCustomers = [];
+        _matchCustomerTotal = 0;
+        _matchGridDisconnectObserver();
+        if(cardsEl){
+            cardsEl.innerHTML = '<div class="loading" style="text-align:center;padding:2rem;"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>';
+        }
+        if(loaderEl) loaderEl.style.display = 'none';
+    }
+    if(!forceRefresh){
+        if(_matchCustomerTotal > 0 && _matchAllCustomers.length >= _matchCustomerTotal) return;
+    }
+    if(_matchCustomerLoading) return;
+    _matchCustomerLoading = true;
+
+    const isFirstPage = _matchCustomerOffset === 0;
+    if(!isFirstPage && loaderEl) loaderEl.style.display = 'block';
+
+    const search = (document.getElementById('matchCustomerSearch')?.value || '').trim();
+    const sp = document.getElementById('matchSalespersonFilter')?.value || '';
+    const sortBy = document.getElementById('matchCustomerSort')?.value || '';
+
+    const fast = (!search && !sp && sortBy === '') ? 1 : 0;
+    const custParams = { action: 'customer_list', limit: MATCH_CUSTOMER_PAGE, offset: _matchCustomerOffset, fast: fast };
+    if(sortBy) custParams.sort_by = sortBy;
+    if(search) custParams.search = search;
+    if(sp) custParams.salesperson_id = sp;
+
+    try{
+        let custRes;
+        if(isFirstPage){
+            const pr = await Promise.all([
+                whApiCall(custParams),
+                fetch('api/slips-list.php?status=pending&limit=4000&offset=0').then(function(r){ return r.json(); }).catch(function(){ return {success:false}; }),
+                whApiCall({ action: 'odoo_bdo_list_api', limit: 3000, offset: 0, payment_filter: 'unpaid' })
+            ]);
+            custRes = pr[0];
+            const slipRes = pr[1];
+            const bdoRes = pr[2];
+
+            _matchSlipCountByRef = {};
+            const pendingSlips = (slipRes && slipRes.success && slipRes.data && slipRes.data.slips) ? slipRes.data.slips : [];
+            pendingSlips.forEach(function(s){
+                const ref = normalizeMatchCustomerRef(getSlipCustomerRef(s));
+                if(ref) _matchSlipCountByRef[ref] = (_matchSlipCountByRef[ref] || 0) + 1;
+            });
+            _matchBdoCountByRef = {};
+            const allBdos = (bdoRes && bdoRes.success && bdoRes.data && bdoRes.data.bdos) ? bdoRes.data.bdos : [];
+            allBdos.forEach(function(b){
+                const ps = normalizeBdoPaymentStatus(b);
+                if(ps.key === 'pending'){
+                    const ref = normalizeMatchCustomerRef(getBdoCustomerRef(b));
+                    if(ref) _matchBdoCountByRef[ref] = (_matchBdoCountByRef[ref] || 0) + 1;
+                }
+            });
+        } else {
+            custRes = await whApiCall(custParams);
+        }
+
+        if(!custRes || !custRes.success || !custRes.data){
+            if(isFirstPage && cardsEl){
+                cardsEl.innerHTML = '<div style="text-align:center;padding:2.5rem;color:var(--gray-400);">โหลดรายการลูกค้าไม่สำเร็จ</div>';
+            }
+            if(loaderEl) loaderEl.style.display = 'none';
+            _matchCustomerLoading = false;
+            return;
+        }
+
+        const batch = custRes.data.customers || [];
+        _matchCustomerTotal = parseInt(custRes.data.total, 10) || _matchCustomerTotal || 0;
+        _matchAllCustomers = _matchAllCustomers.concat(batch);
+        _matchCustomerOffset += batch.length;
+
+        if(batch.length === 0){
+            if(isFirstPage && cardsEl){
+                cardsEl.innerHTML = '<div style="text-align:center;padding:2.5rem;color:var(--gray-400);"><i class="bi bi-people" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>ไม่พบลูกค้า</div>';
+            }
+            _matchCustomerTotal = _matchAllCustomers.length;
+            _matchUpdateGridMeta();
+            if(loaderEl) loaderEl.style.display = 'none';
+            _matchCustomerLoading = false;
+            return;
+        }
+
+        _matchMergeSalespersonOptions(batch);
+
+        if(isFirstPage && cardsEl){
+            cardsEl.innerHTML = '';
+            cardsEl.style.display = 'grid';
+            cardsEl.style.gridTemplateColumns = 'repeat(3, 1fr)';
+            cardsEl.style.gap = '0.75rem';
+        }
+        let html = '';
+        batch.forEach(function(cu){ html += _matchBuildCustomerCardHtml(cu); });
+        if(cardsEl) cardsEl.insertAdjacentHTML('beforeend', html);
+
+        _matchUpdateGridMeta();
+        if(loaderEl) loaderEl.style.display = 'none';
+        _matchCustomerLoading = false;
+        _setupMatchGridObserver();
+    } catch(e){
+        if(loaderEl) loaderEl.style.display = 'none';
+        _matchCustomerLoading = false;
+        if(isFirstPage && cardsEl){
+            cardsEl.innerHTML = '<div style="text-align:center;padding:2rem;color:#dc2626;">เกิดข้อผิดพลาดในการโหลด</div>';
+        }
+    }
 }
 
 function renderMatchingCustomerGrid(){
-    const gridEl = document.getElementById('matchCustomerGrid');
-    if(!gridEl) return;
-
-    const spFilter = document.getElementById('matchSalespersonFilter')?.value || '';
-    const search = (document.getElementById('matchCustomerSearch')?.value || '').toLowerCase().trim();
-
-    let customers = _matchAllCustomers.slice();
-
-    if(spFilter){
-        customers = customers.filter(function(c){ return String(c.salesperson_id || '') === spFilter; });
-    }
-    if(search){
-        customers = customers.filter(function(c){
-            const ref = String(c.customer_ref || c.ref || '').toLowerCase();
-            const nm  = String(c.customer_name || c.name || '').toLowerCase();
-            return ref.includes(search) || nm.includes(search);
-        });
-    }
-
-    // Sort: customers with pending slips first
-    customers.sort(function(a, b){
-        const aRef = normalizeMatchCustomerRef(a.customer_ref || a.ref || '');
-        const bRef = normalizeMatchCustomerRef(b.customer_ref || b.ref || '');
-        const aHas = (_matchSlipCountByRef[aRef] || 0) > 0 ? 0 : 1;
-        const bHas = (_matchSlipCountByRef[bRef] || 0) > 0 ? 0 : 1;
-        return aHas - bHas;
-    });
-
-    if(!customers.length){
-        gridEl.innerHTML = '<div style="text-align:center;padding:2.5rem;color:var(--gray-400);"><i class="bi bi-people" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>ไม่พบลูกค้า</div>';
-        return;
-    }
-
-    let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-bottom:1rem;">';
-    customers.forEach(function(cu){
-        const ref    = normalizeMatchCustomerRef(cu.customer_ref || cu.ref || '');
-        const name   = cu.customer_name || cu.name || '-';
-        const pid    = String(cu.partner_id || cu.customer_id || cu.odoo_id || '');
-        const spName = cu.salesperson_name || '';
-        const slipCnt = _matchSlipCountByRef[ref] || 0;
-        const bdoCnt  = _matchBdoCountByRef[ref]  || 0;
-        const hasPending = slipCnt > 0;
-
-        const cardBg     = hasPending ? '#fffbeb' : '#ffffff';
-        const cardBorder = hasPending ? '#fde68a' : 'var(--gray-200)';
-        const cardShadow = hasPending ? '0 2px 8px rgba(251,191,36,0.18)' : '0 1px 3px rgba(0,0,0,0.06)';
-
-        const slipBadge = hasPending
-            ? '<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:50px;font-size:0.72rem;font-weight:600;"><i class="bi bi-clock-fill" style="font-size:0.65rem;"></i> สลิปรอจับคู่ ' + slipCnt + '</span>'
-            : '';
-        const bdoBadge = bdoCnt > 0
-            ? '<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:50px;font-size:0.72rem;font-weight:500;">BDO รอ ' + bdoCnt + '</span>'
-            : '<span style="font-size:0.72rem;color:var(--gray-300);">BDO รอ 0</span>';
-
-        const encRef = encodeURIComponent(ref);
-        const encName = encodeURIComponent(name);
-        const encPid = encodeURIComponent(pid);
-        const encSp = encodeURIComponent(spName);
-
-        html += '<div onclick="openMatchingForCustomer(decodeURIComponent(\'' + encRef + '\'),decodeURIComponent(\'' + encName + '\'),\'' + escapeHtml(pid) + '\',decodeURIComponent(\'' + encSp + '\'))" '
-            + 'style="background:' + cardBg + ';border:1.5px solid ' + cardBorder + ';border-radius:14px;padding:0.9rem 1rem;cursor:pointer;box-shadow:' + cardShadow + ';transition:box-shadow 0.15s,border-color 0.15s;" '
-            + 'onmouseover="this.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.12)\';this.style.borderColor=\'' + (hasPending ? '#f59e0b' : '#94a3b8') + '\'" '
-            + 'onmouseout="this.style.boxShadow=\'' + cardShadow + '\';this.style.borderColor=\'' + cardBorder + '\'">';
-        html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.4rem;margin-bottom:0.45rem;">';
-        html += '<div style="font-weight:700;font-size:0.95rem;color:var(--gray-800);">' + escapeHtml(ref || '-') + '</div>';
-        if(hasPending) html += '<i class="bi bi-exclamation-circle-fill" style="color:#f59e0b;font-size:0.95rem;flex-shrink:0;"></i>';
-        html += '</div>';
-        html += '<div style="font-size:0.82rem;color:var(--gray-600);margin-bottom:0.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</div>';
-        html += '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:0.5rem;">' + slipBadge + bdoBadge + '</div>';
-        if(spName){
-            html += '<div style="font-size:0.7rem;color:var(--gray-400);"><i class="bi bi-person-badge" style="font-size:0.65rem;"></i> ' + escapeHtml(spName) + '</div>';
-        }
-        html += '<div style="margin-top:0.55rem;text-align:right;">';
-        html += '<span style="font-size:0.75rem;color:' + (hasPending ? '#d97706' : 'var(--gray-400)') + ';font-weight:500;">เปิดจับคู่ <i class="bi bi-arrow-right-short"></i></span>';
-        html += '</div>';
-        html += '</div>';
-    });
-    html += '</div>';
-
-    gridEl.innerHTML = html;
+    loadMatchingCustomerGrid(true);
 }
 
 function openMatchingForCustomer(ref, name, partnerId, salespersonName){

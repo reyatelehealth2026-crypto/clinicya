@@ -778,6 +778,7 @@ function getCustomerList($db, $input)
 
             // Sort logic
             $sortMap = [
+                'activity_desc' => 'ORDER BY latest_order_at DESC',
                 'spend_desc'  => 'ORDER BY COALESCE(spend_30d,0) DESC, latest_order_at DESC',
                 'spend_asc'   => 'ORDER BY COALESCE(spend_30d,0) ASC, latest_order_at DESC',
                 'orders_desc' => 'ORDER BY COALESCE(orders_count_total,0) DESC, latest_order_at DESC',

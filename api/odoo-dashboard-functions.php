@@ -172,6 +172,7 @@ if (!function_exists('webhookCustomerSortExpr')) {
     function webhookCustomerSortExpr($sortBy)
     {
         $map = [
+            'activity_desc' => 'latest_order_at DESC',
             'spend_desc'  => 'spend_30d DESC, latest_order_at DESC',
             'spend_asc'   => 'spend_30d ASC, latest_order_at DESC',
             'orders_desc' => 'orders_total DESC, latest_order_at DESC',

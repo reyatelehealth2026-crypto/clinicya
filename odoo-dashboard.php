@@ -790,17 +790,25 @@
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
                         <div class="content-title mb-0"><i class="bi bi-people"></i> เลือกลูกค้าเพื่อจับคู่</div>
                         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-                            <select class="form-control" id="matchSalespersonFilter" onchange="renderMatchingCustomerGrid()" style="max-width:200px;font-size:0.82rem;padding:4px 8px;">
+                            <select class="form-control" id="matchCustomerSort" onchange="loadMatchingCustomerGrid(true)" style="max-width:220px;font-size:0.82rem;padding:4px 8px;" title="เรียงลำดับ">
+                                <option value="">กิจกรรมล่าสุด (event)</option>
+                                <option value="orders_desc">จำนวน order (มาก → น้อย)</option>
+                                <option value="orders_asc">จำนวน order (น้อย → มาก)</option>
+                            </select>
+                            <select class="form-control" id="matchSalespersonFilter" onchange="loadMatchingCustomerGrid(true)" style="max-width:200px;font-size:0.82rem;padding:4px 8px;">
                                 <option value="">พนักงานขาย: ทั้งหมด</option>
                             </select>
-                            <input type="text" class="form-control" id="matchCustomerSearch" placeholder="ค้นหารหัส / ชื่อลูกค้า..." style="max-width:200px;font-size:0.82rem;padding:4px 8px;" oninput="renderMatchingCustomerGrid()">
-                            <button class="chip" onclick="loadMatchingCustomerGrid()" style="font-size:0.8rem;"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+                            <input type="text" class="form-control" id="matchCustomerSearch" placeholder="ค้นหารหัส / ชื่อลูกค้า..." style="max-width:200px;font-size:0.82rem;padding:4px 8px;" oninput="matchCustomerSearchDebounced()">
+                            <button class="chip" onclick="loadMatchingCustomerGrid(true)" style="font-size:0.8rem;"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
                         </div>
                     </div>
                 </div>
-                <!-- Customer Cards Grid -->
+                <!-- Customer Cards Grid (lazy load) -->
                 <div id="matchCustomerGrid">
-                    <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+                    <div id="matchCustomerGridMeta" style="font-size:0.75rem;color:var(--gray-500);margin-bottom:0.5rem;"></div>
+                    <div id="matchCustomerGridCards"></div>
+                    <div id="matchCustomerGridLoader" style="display:none;text-align:center;padding:0.75rem;color:var(--gray-500);font-size:0.82rem;"><i class="bi bi-arrow-repeat spin"></i> กำลังโหลดเพิ่ม...</div>
+                    <div id="matchCustomerGridSentinel" style="height:24px;width:100%;" aria-hidden="true"></div>
                 </div>
             </div>
 
@@ -1203,7 +1211,7 @@
 
     <?php
     // Manual version bump — update on every code change to bust cache
-    $JS_VERSION = '20260325.1';
+    $JS_VERSION = '20260325.2';
 
     // Load minified JS if available, fallback to source
     $jsMin = __DIR__ . '/odoo-dashboard.min.js';

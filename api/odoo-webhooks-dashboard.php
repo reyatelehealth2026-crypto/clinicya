@@ -676,7 +676,7 @@ function getInvoiceLookup($db, $input)
  */
 function getCustomerList($db, $input)
 {
-    $limit = min((int) ($input['limit'] ?? 30), 200);
+    $limit = min((int) ($input['limit'] ?? 30), 9999);
     $offset = max((int) ($input['offset'] ?? 0), 0);
     $search = trim((string) ($input['search'] ?? ''));
     $invoiceFilter = trim((string) ($input['invoice_filter'] ?? ''));
@@ -717,6 +717,7 @@ function getCustomerList($db, $input)
 
             // Sort logic
             $sortMap = [
+                'activity_desc' => 'ORDER BY latest_order_at DESC',
                 'spend_desc'  => 'ORDER BY COALESCE(spend_30d,0) DESC, latest_order_at DESC',
                 'spend_asc'   => 'ORDER BY COALESCE(spend_30d,0) ASC, latest_order_at DESC',
                 'orders_desc' => 'ORDER BY COALESCE(orders_count_total,0) DESC, latest_order_at DESC',
