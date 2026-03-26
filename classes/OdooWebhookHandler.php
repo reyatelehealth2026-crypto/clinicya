@@ -348,14 +348,18 @@ class OdooWebhookHandler
                 $payloadHash = hash('sha256', is_string($payload) ? $payload : json_encode($payload));
                 if ($orderName && $orderName !== '' && $orderName !== 'null') {
                     try {
+                        // payload stores the full webhook body; order_name lives under $.data.order_name
                         $dupSql = "SELECT delivery_id FROM odoo_webhooks_log
                             WHERE event_type = ? AND status = 'success'
-                              AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')) = ?
+                              AND (
+                                JSON_UNQUOTE(JSON_EXTRACT(payload, '$.data.order_name')) = ?
+                                OR JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')) = ?
+                              )
                               AND processed_at >= DATE_SUB(NOW(), INTERVAL 120 SECOND)
                               AND delivery_id != ?
                             LIMIT 1";
                         $dupStmt = $this->db->prepare($dupSql);
-                        $dupStmt->execute([$eventType, $orderName, $deliveryId]);
+                        $dupStmt->execute([$eventType, $orderName, $orderName, $deliveryId]);
                         if ($dupStmt->fetch()) {
                             // Content duplicate — log and mark as duplicate
                             error_log("Content-duplicate: event={$eventType} order={$orderName} delivery_id={$deliveryId}");
@@ -469,7 +473,8 @@ class OdooWebhookHandler
 
             $params[] = $deliveryId;
 
-            $sql = 'UPDATE odoo_webhooks_log SET ' . implode(', ', $setClauses) . ' WHERE delivery_id = ?';
+            // Never overwrite a terminal 'success' — Odoo retries must not corrupt completed records
+            $sql = 'UPDATE odoo_webhooks_log SET ' . implode(', ', $setClauses) . " WHERE delivery_id = ? AND status NOT IN ('success')";
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
         } catch (Exception $e) {
