@@ -202,11 +202,12 @@ class OdooFlexTemplates
         $bankAccNo   = $bank['account_number'] ?? '';
         $bankAccName = $bank['account_name']   ?? '';
 
-        // Clipboard copy action (LINE Flex clipboard type — iOS/Android 13.3+)
+        // clipboard action — LINE spec: type=clipboard, clipboardText=<text>
+        // action อยู่ได้เฉพาะที่ box/button ระดับเดียว ห้าม nested
         $copyAction = [
-            'type'  => 'clipboard',
-            'label' => 'คัดลอกเลขบัญชี',
-            'data'  => $bankAccNo,
+            'type'          => 'clipboard',
+            'label'         => 'คัดลอกเลขบัญชี',
+            'clipboardText' => $bankAccNo,
         ];
 
         $bankSection = [];
@@ -223,9 +224,9 @@ class OdooFlexTemplates
             'contents' => [
                 // ── Header: KBank logo + label ──
                 [
-                    'type'    => 'box',
-                    'layout'  => 'horizontal',
-                    'spacing' => 'sm',
+                    'type'       => 'box',
+                    'layout'     => 'horizontal',
+                    'spacing'    => 'sm',
                     'alignItems' => 'center',
                     'contents' => [
                         [
@@ -258,7 +259,7 @@ class OdooFlexTemplates
                     ],
                 ],
                 ['type' => 'separator', 'margin' => 'sm', 'color' => '#bbf7d0'],
-                // ── Account number row (tappable → copy) ──
+                // ── Account number row — action อยู่ที่ outer box เดียว ──
                 [
                     'type'            => 'box',
                     'layout'          => 'horizontal',
@@ -269,6 +270,7 @@ class OdooFlexTemplates
                     'alignItems'      => 'center',
                     'action'          => $copyAction,
                     'contents' => [
+                        // Account details (no action — inherits from parent box)
                         [
                             'type'   => 'box',
                             'layout' => 'vertical',
@@ -297,7 +299,7 @@ class OdooFlexTemplates
                                 ],
                             ],
                         ],
-                        // Copy pill button
+                        // Copy badge — visual only, no action (parent handles it)
                         [
                             'type'            => 'box',
                             'layout'          => 'vertical',
@@ -310,7 +312,6 @@ class OdooFlexTemplates
                             'paddingBottom'   => '6px',
                             'alignItems'      => 'center',
                             'justifyContent'  => 'center',
-                            'action'          => $copyAction,
                             'contents' => [
                                 [
                                     'type'   => 'text',
