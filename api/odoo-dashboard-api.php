@@ -2550,7 +2550,7 @@ function previewBdoPaymentNotification($db, $input)
         'bank_account' => [
             'bank_name'      => 'ธนาคารกสิกรไทย',
             'account_number' => '027-8-40955-4',
-            'account_name'   => 'บริษัท ซีเอ็นวาย จำกัด',
+            'account_name'   => 'บริษัท ซี เอ็น วาย เฮลท์แคร์ จำกัด',
         ],
         'invoice'  => ['pdf_url' => $invoicePdfUrl],
         'liff_url' => '',
