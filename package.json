@@ -7,6 +7,9 @@
     "start": "node websocket-server.js",
     "dev": "nodemon websocket-server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "build:js": "terser odoo-dashboard.js -o odoo-dashboard.min.js --compress passes=2,dead_code,drop_console --mangle --source-map \"filename='odoo-dashboard.min.js.map',url='odoo-dashboard.min.js.map'\"",
+    "build:css": "node scripts/extract-css.js 2>/dev/null || echo 'CSS build script not found, skipping'",
+    "build": "npm run build:js",
     "pm2:start": "pm2 start websocket-server.js --name telepharmacy-ws",
     "pm2:stop": "pm2 stop telepharmacy-ws",
     "pm2:restart": "pm2 restart telepharmacy-ws",
@@ -31,7 +34,8 @@
   },
   "devDependencies": {
     "mysql2": "^3.20.0",
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "terser": "^5.31.0"
   },
   "engines": {
     "node": ">=14.0.0",

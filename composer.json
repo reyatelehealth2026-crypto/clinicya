@@ -3,7 +3,8 @@
     "description": "LINE Telepharmacy Platform",
     "type": "project",
     "require": {
-        "php": ">=8.0"
+        "php": ">=8.0",
+        "predis/predis": "^2.2"
     },
     "require-dev": {
         "phpunit/phpunit": "^9.6",

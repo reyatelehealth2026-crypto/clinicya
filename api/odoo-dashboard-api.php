@@ -1,4 +1,22 @@
 <?php
+ob_start();
+
+// Catch PHP fatal errors (memory exhaustion, uncaught Throwable) that bypass try/catch
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        if (ob_get_level() > 0) ob_clean();
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(500);
+        }
+        echo json_encode([
+            'success' => false,
+            'error'   => 'PHP fatal: ' . $err['message'],
+        ]);
+    }
+});
+
 /**
  * Odoo Webhooks Dashboard API
  * 
@@ -16,6 +34,10 @@
  * @version 1.1.0
  * @created 2026-02-14
  */
+
+// Discard any stray output (notices, warnings) emitted during boot
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -51,18 +73,19 @@ try {
     $cacheTtls = [
         'stats' => 60,
         'order_grouped_today' => 60,
-        'customer_list' => 60,
+        'customer_list' => 90,
         'invoice_list' => 60,
         'order_list' => 60,
         'notification_log' => 60,
         'salesperson_list' => 300,
+        'overview_fast' => 30,
         'overview_today' => 45,
         'customer_full_detail' => 45,
         'overview_combined' => 45,
         'odoo_orders' => 30,
         'odoo_invoices' => 30,
         'odoo_slips' => 30,
-        'odoo_bdo_list_api' => 30,
+        'odoo_bdo_list_api' => 45,
         'customer_detail' => 45,
         'customer_360' => 30,
         'pending_bdo_orders' => 60,
@@ -79,6 +102,9 @@ try {
         $cacheKey = dashboardApiBuildCacheKey($action, $input);
         $cachedResult = dashboardApiCacheGet($cacheKey, $cacheTtl);
         if ($cachedResult !== null) {
+            header('X-Dashboard-Cache: HIT');
+            header('X-Cache-Layer: redis');
+            ob_clean();
             echo json_encode([
                 'success' => true,
                 'data' => $cachedResult,
@@ -148,6 +174,9 @@ try {
             case 'customer_360':
                 $result = getCustomer360($db, $input);
                 break;
+            case 'overview_fast':
+                $result = getOverviewFast($db);
+                break;
             case 'overview_today':
                 $result = getOverviewToday($db);
                 break;
@@ -209,8 +238,17 @@ try {
             case 'odoo_slip_unmatch_api':
                 $result = slipUnmatch($db, $input);
                 break;
+            case 'slip_update_local':
+                $result = slipUpdateLocal($db, $input);
+                break;
             case 'customer_full_detail':
                 $result = getCustomerFullDetail($db, $input);
+                break;
+            case 'send_bdo_payment_notification':
+                $result = sendBdoPaymentNotification($db, $input);
+                break;
+            case 'preview_bdo_payment_notification':
+                $result = previewBdoPaymentNotification($db, $input);
                 break;
             case 'overview_combined':
                 $result = getOverviewCombined($db, $input);
@@ -226,6 +264,7 @@ try {
         if ($cacheKey !== null) {
             $staleResult = dashboardApiCacheGetStale($cacheKey, defined('ODOO_DASHBOARD_STALE_TTL') ? (int) ODOO_DASHBOARD_STALE_TTL : 300);
             if ($staleResult !== null) {
+                ob_clean();
                 echo json_encode([
                     'success' => true,
                     'data' => $staleResult,
@@ -244,9 +283,24 @@ try {
         dashboardApiCacheSet($cacheKey, $result);
     }
 
-    echo json_encode(['success' => true, 'data' => $result], JSON_UNESCAPED_UNICODE);
+    ob_clean();
+    $encoded = json_encode(['success' => true, 'data' => $result], JSON_UNESCAPED_UNICODE);
+    if ($encoded === false) {
+        // Retry with UTF-8 sanitisation in case of invalid byte sequences
+        $encoded = json_encode(
+            ['success' => true, 'data' => $result],
+            JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE
+        );
+    }
+    if ($encoded === false) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'json_encode failed: ' . json_last_error_msg()]);
+    } else {
+        echo $encoded;
+    }
 
 } catch (Exception $e) {
+    ob_clean();
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
@@ -261,7 +315,8 @@ function getStats($db)
     $hasLatency = hasWebhookColumn($db, 'process_latency_ms');
     $hasRetryCount = hasWebhookColumn($db, 'retry_count');
 
-    // Consolidated single-pass aggregation (replaces ~12 separate COUNT queries)
+    // All-time counts: full-table scan but no per-row DATE() overhead.
+    // "today" metrics are fetched separately with a range predicate (see below).
     $latencySelect = $hasLatency
         ? "ROUND(AVG(CASE WHEN process_latency_ms IS NOT NULL THEN process_latency_ms END), 2) as avg_latency_ms,"
         : "NULL as avg_latency_ms,";
@@ -272,7 +327,6 @@ function getStats($db)
     $agg = $db->query("
         SELECT
             COUNT(*) as total,
-            SUM(IF(DATE({$processedAtExpr}) = CURDATE(), 1, 0)) as today,
             SUM(IF(status = 'success', 1, 0)) as success,
             SUM(IF(status = 'failed', 1, 0)) as failed,
             SUM(IF(status = 'received', 1, 0)) as received,
@@ -282,14 +336,30 @@ function getStats($db)
             SUM(IF(status = 'duplicate', 1, 0)) as duplicate,
             {$latencySelect}
             {$retriedSelect}
-            COUNT(DISTINCT CASE WHEN DATE({$processedAtExpr}) = CURDATE() THEN COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')), ''), CAST(order_id AS CHAR)) END) as unique_orders_today,
-            SUM(IF(DATE({$processedAtExpr}) = CURDATE() AND line_user_id IS NOT NULL, 1, 0)) as notified_today,
             MAX({$processedAtExpr}) as last_webhook
         FROM odoo_webhooks_log
     ")->fetch(PDO::FETCH_ASSOC);
 
+    // Today metrics: scoped range scan — allows MySQL to use index on the timestamp column.
+    $today        = 0;
+    $uniqueOrders = 0;
+    $notified     = 0;
+    if ($processedAtColumn) {
+        $todayRow = $db->query("
+            SELECT
+                COUNT(*) as today,
+                COUNT(DISTINCT COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')), ''), CAST(order_id AS CHAR))) as unique_orders_today,
+                SUM(IF(line_user_id IS NOT NULL, 1, 0)) as notified_today
+            FROM odoo_webhooks_log
+            WHERE {$processedAtColumn} >= CURDATE()
+              AND {$processedAtColumn} < CURDATE() + INTERVAL 1 DAY
+        ")->fetch(PDO::FETCH_ASSOC);
+        $today        = (int) ($todayRow['today'] ?? 0);
+        $uniqueOrders = (int) ($todayRow['unique_orders_today'] ?? 0);
+        $notified     = (int) ($todayRow['notified_today'] ?? 0);
+    }
+
     $total      = (int) ($agg['total'] ?? 0);
-    $today      = (int) ($agg['today'] ?? 0);
     $success    = (int) ($agg['success'] ?? 0);
     $failed     = (int) ($agg['failed'] ?? 0);
     $received   = (int) ($agg['received'] ?? 0);
@@ -299,29 +369,34 @@ function getStats($db)
     $duplicate  = (int) ($agg['duplicate'] ?? 0);
     $avgLatencyMs  = $agg['avg_latency_ms'] !== null ? (float) $agg['avg_latency_ms'] : null;
     $retriedTotal  = (int) ($agg['retried_total'] ?? 0);
-    $uniqueOrders  = (int) ($agg['unique_orders_today'] ?? 0);
-    $notified      = (int) ($agg['notified_today'] ?? 0);
     $lastWebhook   = $agg['last_webhook'] ?? null;
 
     $dlqTotal = tableExists($db, 'odoo_webhook_dlq')
         ? $db->query("SELECT COUNT(*) FROM odoo_webhook_dlq")->fetchColumn()
         : 0;
 
-    $topFailedEvents = $db->query(" 
-        SELECT event_type, COUNT(*) as count 
-        FROM odoo_webhooks_log 
-        WHERE status IN ('failed', 'retry', 'dead_letter')
-        GROUP BY event_type 
-        ORDER BY count DESC 
+    // Scope failed-events to last 90 days to avoid full historical scan
+    $failedWindow = $processedAtColumn
+        ? "AND {$processedAtColumn} >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)"
+        : "";
+    $topFailedEvents = $db->query("
+        SELECT event_type, COUNT(*) as count
+        FROM odoo_webhooks_log
+        WHERE status IN ('failed', 'retry', 'dead_letter') {$failedWindow}
+        GROUP BY event_type
+        ORDER BY count DESC
         LIMIT 5
     ")->fetchAll(PDO::FETCH_ASSOC);
 
-    // Events by type (today)
+    // Events by type (today) — range predicate, index-friendly
+    $todayWhere = $processedAtColumn
+        ? "WHERE {$processedAtColumn} >= CURDATE() AND {$processedAtColumn} < CURDATE() + INTERVAL 1 DAY"
+        : "WHERE 1=0";
     $stmt = $db->query("
-        SELECT event_type, COUNT(*) as count 
-        FROM odoo_webhooks_log 
-        WHERE DATE({$processedAtExpr}) = CURDATE()
-        GROUP BY event_type 
+        SELECT event_type, COUNT(*) as count
+        FROM odoo_webhooks_log
+        {$todayWhere}
+        GROUP BY event_type
         ORDER BY count DESC
     ");
     $eventsByType = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -698,7 +773,7 @@ function getInvoiceLookup($db, $input)
  */
 function getCustomerList($db, $input)
 {
-    $limit = min((int) ($input['limit'] ?? 30), 200);
+    $limit = min((int) ($input['limit'] ?? 30), 9999);
     $offset = max((int) ($input['offset'] ?? 0), 0);
     $search = trim((string) ($input['search'] ?? ''));
     $invoiceFilter = trim((string) ($input['invoice_filter'] ?? ''));
@@ -739,6 +814,7 @@ function getCustomerList($db, $input)
 
             // Sort logic
             $sortMap = [
+                'activity_desc' => 'ORDER BY latest_order_at DESC',
                 'spend_desc'  => 'ORDER BY COALESCE(spend_30d,0) DESC, latest_order_at DESC',
                 'spend_asc'   => 'ORDER BY COALESCE(spend_30d,0) ASC, latest_order_at DESC',
                 'orders_desc' => 'ORDER BY COALESCE(orders_count_total,0) DESC, latest_order_at DESC',
@@ -1803,29 +1879,35 @@ function sendDailySummary($db, $userIds)
     $failedCount = 0;
     
     require_once __DIR__ . '/../classes/OdooFlexTemplates.php';
-    require_once __DIR__ . '/../classes/OdooWebhookHandler.php';
-    
-    // We need a dummy handler to use its Line API methods
-    $handler = new OdooWebhookHandler($db, null);
-    
+
     foreach ($userIds as $userId) {
         if (!isset($userRecords[$userId])) continue;
-        
+
         $record = $userRecords[$userId];
         if (empty($record['orders'])) continue;
-        
+
         // Skip if already sent today
         if ($record['sent_today']) {
             continue;
         }
-        
-        // Get user's Line access token
+
+        // Get access token directly from line_accounts
         $accessToken = null;
-        $user = $handler->findLineUserAcrossAccounts(null, $userId);
-        if ($user && !empty($user['channel_access_token'])) {
-            $accessToken = $user['channel_access_token'];
-        }
-        
+        try {
+            $tStmt = $db->prepare("
+                SELECT la.channel_access_token
+                FROM line_accounts la
+                INNER JOIN odoo_line_users olu ON olu.line_account_id = la.id
+                WHERE olu.line_user_id = ?
+                LIMIT 1
+            ");
+            $tStmt->execute([$userId]);
+            $tRow = $tStmt->fetch(PDO::FETCH_ASSOC);
+            if ($tRow && !empty($tRow['channel_access_token'])) {
+                $accessToken = $tRow['channel_access_token'];
+            }
+        } catch (Exception $e) { /* ignore */ }
+
         if (!$accessToken) {
             $failedCount++;
             continue;
@@ -1927,6 +2009,597 @@ function sendDailySummary($db, $userIds)
 }
 
 /**
+ * Send BDO payment notification to customer via LINE Flex Message.
+ *
+ * Requires: bdo_id, partner_id (optional: line_user_id)
+ * Reads data from local DB (odoo_bdo_context + odoo_bdos).
+ * Generates QR from EMVCo payload if available.
+ * Uses OdooFlexTemplates::bdoPaymentRequest() for Flex bubble.
+ */
+function sendBdoPaymentNotification($db, $input)
+{
+    $bdoId     = (int) ($input['bdo_id'] ?? 0);
+    $partnerId = (int) ($input['partner_id'] ?? 0);
+
+    if ($bdoId <= 0) {
+        throw new Exception('กรุณาระบุ BDO ID');
+    }
+
+    // ── 1. Resolve LINE user ────────────────────────────────────────────
+    $lineUserId = trim((string) ($input['line_user_id'] ?? ''));
+    if ($lineUserId === '' && $partnerId > 0) {
+        $lineUserId = resolveLineUserIdFromPartner($db, $partnerId);
+    }
+    if ($lineUserId === '') {
+        throw new Exception('ลูกค้ายังไม่ได้เชื่อมต่อ LINE — ไม่สามารถส่งแจ้งเตือนได้');
+    }
+
+    // ── 2. Throttle check (5 min cooldown per BDO) ──────────────────────
+    try {
+        $throttleStmt = $db->prepare("
+            SELECT sent_at FROM odoo_notification_log 
+            WHERE event_type = 'bdo.payment_request' AND delivery_id LIKE ?
+            AND status = 'sent' AND sent_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+            ORDER BY sent_at DESC LIMIT 1
+        ");
+        $throttleStmt->execute(['bdo_pay_' . $bdoId . '_%']);
+        if ($throttleStmt->fetch()) {
+            throw new Exception('เพิ่งส่งแจ้งเตือน BDO นี้ไปไม่นาน กรุณารอ 5 นาที');
+        }
+    } catch (Exception $e) {
+        if (strpos($e->getMessage(), 'กรุณารอ') !== false) throw $e;
+        // Ignore throttle check errors
+    }
+
+    // ── 3. Load BDO data from local DB ──────────────────────────────────
+    $stmt = $db->prepare("
+        SELECT b.bdo_id, b.bdo_name, b.order_name, b.amount_total, b.bdo_date, b.state,
+               b.customer_ref, b.partner_id,
+               c.qr_payload, c.statement_pdf_path, c.financial_summary_json,
+               c.selected_invoices_json, c.selected_credit_notes_json,
+               c.amount AS ctx_amount, c.delivery_type
+        FROM odoo_bdos b
+        LEFT JOIN odoo_bdo_context c ON c.bdo_id = b.bdo_id
+        WHERE b.bdo_id = ?
+        ORDER BY c.updated_at DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$bdoId]);
+    $bdo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$bdo) {
+        // Try context table alone
+        $stmt = $db->prepare("SELECT * FROM odoo_bdo_context WHERE bdo_id = ? ORDER BY updated_at DESC LIMIT 1");
+        $stmt->execute([$bdoId]);
+        $bdo = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    if (!$bdo) {
+        throw new Exception('ไม่พบข้อมูล BDO #' . $bdoId);
+    }
+
+    // ── 4. Resolve LINE account for access token ────────────────────────
+    $lineAccountId = resolveLineAccountId($db, $lineUserId);
+    if ($lineAccountId <= 0) {
+        throw new Exception('ไม่สามารถระบุ LINE Account ได้');
+    }
+
+    // Get access token — query line_accounts directly (avoids OdooWebhookHandler dependency)
+    $tokenStmt = $db->prepare("
+        SELECT la.channel_access_token
+        FROM line_accounts la
+        INNER JOIN odoo_line_users olu ON olu.line_account_id = la.id
+        WHERE olu.line_user_id = ?
+        LIMIT 1
+    ");
+    $tokenStmt->execute([$lineUserId]);
+    $tokenRow = $tokenStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$tokenRow) {
+        // Fallback: first active line_account for this line_account_id
+        $tokenStmt2 = $db->prepare("SELECT channel_access_token FROM line_accounts WHERE id = ? LIMIT 1");
+        $tokenStmt2->execute([$lineAccountId]);
+        $tokenRow = $tokenStmt2->fetch(PDO::FETCH_ASSOC);
+    }
+    if (!$tokenRow || empty($tokenRow['channel_access_token'])) {
+        throw new Exception('ไม่พบ LINE access token สำหรับลูกค้านี้');
+    }
+    $accessToken = $tokenRow['channel_access_token'];
+
+    // ── 5. Build data for Flex template — use getBdoDetailLive for fresh Odoo data ──
+    $amountTotal = (float) ($bdo['amount_total'] ?? $bdo['ctx_amount'] ?? 0);
+    $netToPay = $amountTotal;
+    $financialSummary = [];
+    $invoices = [];
+
+    try {
+        $liveDetail = getBdoDetailLive($db, [
+            'bdo_id'       => $bdoId,
+            'line_user_id' => $lineUserId,
+            'partner_id'   => $partnerId,
+        ]);
+        $liveSum = $liveDetail['summary'] ?? [];
+        if (!empty($liveSum) && isset($liveSum['net_to_pay']) && (float)$liveSum['net_to_pay'] >= 0) {
+            $netToPay = (float) $liveSum['net_to_pay'];
+            $financialSummary = [
+                'so_amount'          => $liveSum['so_amount']          ?? null,
+                'outstanding_amount' => $liveSum['outstanding_amount'] ?? null,
+                'credit_note_amount' => $liveSum['credit_note_amount'] ?? null,
+                'deposit_amount'     => $liveSum['deposit_amount']     ?? null,
+                'net_to_pay'         => $netToPay,
+            ];
+        }
+        foreach ($liveDetail['outstanding_invoices'] ?? [] as $inv) {
+            $invoices[] = [
+                'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                'residual' => (float) ($inv['residual'] ?? $inv['amount_total'] ?? 0),
+                'date'     => $inv['date'] ?? '',
+                'origin'   => $inv['origin'] ?? '',
+            ];
+        }
+    } catch (Exception $e) {
+        error_log('[sendBdoPaymentNotification] getBdoDetailLive failed: ' . $e->getMessage());
+        if (!empty($bdo['financial_summary_json'])) {
+            $fs = json_decode($bdo['financial_summary_json'], true);
+            if (is_array($fs)) {
+                $netToPay = (float) ($fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $amountTotal);
+                $financialSummary = [
+                    'so_amount'          => $fs['so_amount']          ?? null,
+                    'outstanding_amount' => $fs['outstanding_amount'] ?? null,
+                    'credit_note_amount' => $fs['credit_note_amount'] ?? null,
+                    'deposit_amount'     => $fs['deposit_amount']     ?? null,
+                    'net_to_pay'         => $netToPay,
+                ];
+            }
+        }
+        if (!empty($bdo['selected_invoices_json'])) {
+            $invs = json_decode($bdo['selected_invoices_json'], true);
+            if (is_array($invs)) {
+                foreach ($invs as $inv) {
+                    $invoices[] = [
+                        'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                        'residual' => (float) ($inv['residual'] ?? $inv['amount_residual'] ?? $inv['amount_total'] ?? 0),
+                        'date'     => $inv['date'] ?? $inv['invoice_date'] ?? '',
+                        'origin'   => $inv['origin'] ?? '',
+                    ];
+                }
+            }
+        }
+    }
+
+    // credit_notes already populated from getBdoDetailLive above (or fallback in catch)
+    // (liveDetail['credit_notes'] was not mapped into $creditNotes — add it here)
+    $creditNotes = [];
+    if (isset($liveDetail)) {
+        foreach ($liveDetail['credit_notes'] ?? [] as $cn) {
+            $creditNotes[] = [
+                'number'   => $cn['number'] ?? $cn['name'] ?? '-',
+                'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
+            ];
+        }
+    } elseif (!empty($bdo['selected_credit_notes_json'])) {
+        $cns = json_decode($bdo['selected_credit_notes_json'], true);
+        if (is_array($cns)) {
+            foreach ($cns as $cn) {
+                $creditNotes[] = [
+                    'number'   => $cn['number'] ?? $cn['name'] ?? '-',
+                    'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
+                ];
+            }
+        }
+    }
+
+    $bdoRef   = $bdo['bdo_name'] ?? ('BDO-' . $bdoId);
+    $orderRef = $bdo['order_name'] ?? '-';
+    $dueDate  = $bdo['bdo_date'] ?? date('Y-m-d');
+
+    // Statement PDF URL — always generate, not conditional on statement_pdf_path
+    $baseUrl = defined('BASE_URL') ? BASE_URL : 'https://cny.re-ya.com';
+    $invoicePdfUrl = $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId)
+        . ($lineAccountId > 0 ? '&line_account_id=' . $lineAccountId : '');
+
+    $flexData = [
+        'amount_total'      => $netToPay > 0 ? $netToPay : $amountTotal,
+        'bdo_ref'           => $bdoRef,
+        'order_ref'         => $orderRef,
+        'due_date'          => $dueDate,
+        'financial_summary' => $financialSummary,
+        'invoices'          => $invoices,
+        'credit_notes'      => $creditNotes,
+        'bank_account' => [
+            'bank_name'      => 'ธนาคารกสิกรไทย',
+            'account_number' => '027-8-40955-4',
+            'account_name'   => 'บริษัท ซีเอ็นวาย จำกัด',
+        ],
+        'invoice'  => ['pdf_url' => $invoicePdfUrl],
+        'liff_url' => '',
+    ];
+
+    // ── 6. Resolve QR payload — reuse liveDetail first to avoid second Odoo API call ──
+    $qrPayload = $bdo['qr_payload'] ?? '';
+    if (empty($qrPayload) && isset($liveDetail)) {
+        $qrPayload = $liveDetail['bdo']['qr_payment_data']['raw_payload']
+                  ?? $liveDetail['bdo']['qr_payload']
+                  ?? $liveDetail['qr_payload']
+                  ?? '';
+    }
+    if (empty($qrPayload)) {
+        $qrPayload = resolveQrPayload($db, $bdoId, '', $lineUserId, $partnerId);
+    }
+
+    $qrCodeUrl = '';
+    if (!empty($qrPayload)) {
+        require_once __DIR__ . '/../classes/QRCodeGenerator.php';
+        $qrGen = new QRCodeGenerator();
+        $qrResult = $qrGen->generatePromptPayQR($qrPayload, $bdoRef);
+        if ($qrResult['success'] && !empty($qrResult['url'])) {
+            $qrCodeUrl = $baseUrl . $qrResult['url'];
+        }
+    }
+
+    // Use a placeholder QR if generation failed — still send the notification
+    if (empty($qrCodeUrl)) {
+        $qrCodeUrl = $baseUrl . '/assets/img/promptpay-placeholder.png';
+    }
+
+    // ── 7. Build Flex Message ───────────────────────────────────────────
+    require_once __DIR__ . '/../classes/OdooFlexTemplates.php';
+    $flexBubble = OdooFlexTemplates::bdoPaymentRequest($flexData, $qrCodeUrl);
+
+    // ── 8. Send via LINE Push API ───────────────────────────────────────
+    $altText = '💰 แจ้งชำระเงิน ' . $bdoRef . ' ยอด ฿' . number_format($flexData['amount_total'], 2);
+
+    $body = json_encode([
+        'to'       => $lineUserId,
+        'messages' => [[
+            'type'     => 'flex',
+            'altText'  => $altText,
+            'contents' => $flexBubble,
+        ]]
+    ], JSON_UNESCAPED_UNICODE);
+
+    $sent = false;
+    $apiError = null;
+    $apiStatus = null;
+    $startTime = microtime(true);
+
+    try {
+        $ch = curl_init('https://api.line.me/v2/bot/message/push');
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $body,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $accessToken,
+            ],
+            CURLOPT_TIMEOUT => 10,
+        ]);
+        $response  = curl_exec($ch);
+        $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $apiStatus = $httpCode;
+        $sent      = ($httpCode >= 200 && $httpCode < 300);
+        if (!$sent) {
+            $apiError = $response;
+            error_log("[sendBdoPaymentNotification] LINE push failed [{$httpCode}]: {$response}");
+        }
+    } catch (Exception $e) {
+        $apiError = $e->getMessage();
+        error_log('[sendBdoPaymentNotification] exception: ' . $e->getMessage());
+    }
+
+    $latencyMs = (int) round((microtime(true) - $startTime) * 1000);
+
+    // ── 9. Log to notification log ──────────────────────────────────────
+    try {
+        $deliveryId = 'bdo_pay_' . $bdoId . '_' . date('Ymd_His') . '_' . substr(md5($lineUserId), 0, 8);
+        $status = $sent ? 'sent' : 'failed';
+
+        $logStmt = $db->prepare("
+            INSERT INTO odoo_notification_log
+            (delivery_id, event_type, recipient_type, line_user_id,
+             notification_method, status, line_api_status, line_api_response,
+             error_message, latency_ms, sent_at)
+            VALUES (?, 'bdo.payment_request', 'customer', ?, 'flex', ?, ?, ?, ?, ?, NOW())
+        ");
+        $logStmt->execute([
+            $deliveryId,
+            $lineUserId,
+            $status,
+            $apiStatus,
+            $sent ? null : json_encode(['error' => $apiError]),
+            $sent ? null : $apiError,
+            $latencyMs,
+        ]);
+    } catch (Exception $e) {
+        error_log('[sendBdoPaymentNotification] log error: ' . $e->getMessage());
+    }
+
+    if (!$sent) {
+        throw new Exception('ส่งแจ้งเตือนไม่สำเร็จ: ' . ($apiError ?: 'Unknown error'));
+    }
+
+    // ── 10. Save to inbox messages table for ChatPanel display ─────────
+    $inboxMessageId = null;
+    try {
+        $userStmt = $db->prepare("SELECT id, line_account_id FROM users WHERE line_user_id = ? LIMIT 1");
+        $userStmt->execute([$lineUserId]);
+        $inboxUser = $userStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($inboxUser) {
+            $inboxUserId      = (int) $inboxUser['id'];
+            $inboxLineAcctId  = (int) ($inboxUser['line_account_id'] ?: $lineAccountId);
+
+            $flexJson = json_encode([
+                'type'     => 'flex',
+                'altText'  => $altText,
+                'contents' => $flexBubble,
+            ], JSON_UNESCAPED_UNICODE);
+
+            $metadataJson = json_encode([
+                'flexContent' => [
+                    'type'     => 'flex',
+                    'altText'  => $altText,
+                    'contents' => $flexBubble,
+                ],
+                'bdo_id'  => $bdoId,
+                'bdo_ref' => $bdoRef,
+            ], JSON_UNESCAPED_UNICODE);
+
+            $msgStmt = $db->prepare("
+                INSERT INTO messages
+                (line_account_id, user_id, direction, message_type, content, metadata, sent_by, is_read, platform, created_at, updated_at)
+                VALUES (?, ?, 'outgoing', 'flex', ?, ?, 'system:bdo_notification', 1, 'line', NOW(), NOW())
+            ");
+            $msgStmt->execute([$inboxLineAcctId, $inboxUserId, $flexJson, $metadataJson]);
+            $inboxMessageId = (int) $db->lastInsertId();
+
+            // Notify Next.js via webhook-notify for real-time Pusher broadcast
+            $nextjsUrl = defined('NEXTJS_API_URL') ? NEXTJS_API_URL : '';
+            $apiSecret = defined('INTERNAL_API_SECRET') ? INTERNAL_API_SECRET : '';
+            if ($nextjsUrl !== '' && $apiSecret !== '' && $inboxMessageId > 0) {
+                $notifyPayload = json_encode([
+                    'type' => 'new_message',
+                    'data' => [
+                        'conversationId' => $inboxUserId,
+                        'message' => [
+                            'id'          => $inboxMessageId,
+                            'userId'      => $inboxUserId,
+                            'direction'   => 'outgoing',
+                            'messageType' => 'flex',
+                            'content'     => $flexJson,
+                            'mediaUrl'    => null,
+                            'createdAt'   => date('c'),
+                            'sentBy'      => 'system:bdo_notification',
+                            'platform'    => 'line',
+                        ],
+                    ],
+                ], JSON_UNESCAPED_UNICODE);
+
+                $nCh = curl_init($nextjsUrl . '/api/inbox/webhook-notify');
+                curl_setopt_array($nCh, [
+                    CURLOPT_POST           => true,
+                    CURLOPT_POSTFIELDS     => $notifyPayload,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER     => [
+                        'Content-Type: application/json',
+                        'x-api-key: ' . $apiSecret,
+                    ],
+                    CURLOPT_TIMEOUT => 5,
+                ]);
+                curl_exec($nCh);
+                curl_close($nCh);
+            }
+        }
+    } catch (Exception $e) {
+        error_log('[sendBdoPaymentNotification] inbox save error: ' . $e->getMessage());
+    }
+
+    return [
+        'sent'             => true,
+        'bdo_id'           => $bdoId,
+        'bdo_ref'          => $bdoRef,
+        'amount'           => $flexData['amount_total'],
+        'has_qr'           => !empty($qrPayload),
+        'latency_ms'       => $latencyMs,
+        'inbox_message_id' => $inboxMessageId,
+    ];
+}
+
+/**
+ * Preview BDO payment notification — returns the Flex JSON without sending.
+ * Same data-building logic as sendBdoPaymentNotification() steps 1-7.
+ *
+ * Requires: bdo_id, partner_id (optional)
+ */
+function previewBdoPaymentNotification($db, $input)
+{
+    $bdoId     = (int) ($input['bdo_id'] ?? 0);
+    $partnerId = (int) ($input['partner_id'] ?? 0);
+
+    if ($bdoId <= 0) {
+        throw new Exception('กรุณาระบุ BDO ID');
+    }
+
+    // ── 1. Load BDO data from local DB ──────────────────────────────────
+    $stmt = $db->prepare("
+        SELECT b.bdo_id, b.bdo_name, b.order_name, b.amount_total, b.bdo_date, b.state,
+               b.customer_ref, b.partner_id,
+               c.qr_payload, c.statement_pdf_path, c.financial_summary_json,
+               c.selected_invoices_json, c.selected_credit_notes_json,
+               c.amount AS ctx_amount, c.delivery_type
+        FROM odoo_bdos b
+        LEFT JOIN odoo_bdo_context c ON c.bdo_id = b.bdo_id
+        WHERE b.bdo_id = ?
+        ORDER BY c.updated_at DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$bdoId]);
+    $bdo = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$bdo) {
+        $stmt = $db->prepare("SELECT * FROM odoo_bdo_context WHERE bdo_id = ? ORDER BY updated_at DESC LIMIT 1");
+        $stmt->execute([$bdoId]);
+        $bdo = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+    if (!$bdo) {
+        throw new Exception('ไม่พบข้อมูล BDO #' . $bdoId);
+    }
+
+    // ── 2. Resolve LINE user & account ─────────────────────────────────
+    $lineUserId = trim((string) ($input['line_user_id'] ?? ''));
+    if ($lineUserId === '' && $partnerId > 0) {
+        try { $lineUserId = resolveLineUserIdFromPartner($db, $partnerId); } catch (Exception $e) { /* ignore */ }
+    }
+    $lineAccountId = 0;
+    if ($lineUserId !== '') {
+        try { $lineAccountId = resolveLineAccountId($db, $lineUserId); } catch (Exception $e) { /* ignore */ }
+    }
+
+    // ── 3. Build financial data — call getBdoDetailLive for fresh Odoo data ──
+    $amountTotal = (float) ($bdo['amount_total'] ?? $bdo['ctx_amount'] ?? 0);
+    $netToPay = $amountTotal;
+    $financialSummary = [];
+    $invoices = [];
+    $creditNotes = [];
+
+    try {
+        $liveDetail = getBdoDetailLive($db, [
+            'bdo_id'       => $bdoId,
+            'line_user_id' => $lineUserId,
+            'partner_id'   => $partnerId,
+        ]);
+        $liveSum = $liveDetail['summary'] ?? [];
+        if (!empty($liveSum) && isset($liveSum['net_to_pay']) && (float)$liveSum['net_to_pay'] >= 0) {
+            $netToPay = (float) $liveSum['net_to_pay'];
+            $financialSummary = [
+                'so_amount'          => $liveSum['so_amount']          ?? null,
+                'outstanding_amount' => $liveSum['outstanding_amount'] ?? null,
+                'credit_note_amount' => $liveSum['credit_note_amount'] ?? null,
+                'deposit_amount'     => $liveSum['deposit_amount']     ?? null,
+                'net_to_pay'         => $netToPay,
+            ];
+        }
+        foreach ($liveDetail['outstanding_invoices'] ?? [] as $inv) {
+            $invoices[] = [
+                'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                'residual' => (float) ($inv['residual'] ?? $inv['amount_total'] ?? 0),
+                'date'     => $inv['date'] ?? '',
+                'origin'   => $inv['origin'] ?? '',
+            ];
+        }
+        foreach ($liveDetail['credit_notes'] ?? [] as $cn) {
+            $creditNotes[] = [
+                'number'   => $cn['number'] ?? $cn['name'] ?? '-',
+                'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
+            ];
+        }
+    } catch (Exception $e) {
+        // Fallback to local DB financial_summary_json
+        error_log('[previewBdoPaymentNotification] getBdoDetailLive failed: ' . $e->getMessage());
+        if (!empty($bdo['financial_summary_json'])) {
+            $fs = json_decode($bdo['financial_summary_json'], true);
+            if (is_array($fs)) {
+                $netToPay = (float) ($fs['net_to_pay'] ?? $fs['amount_net_to_pay'] ?? $amountTotal);
+                $financialSummary = [
+                    'so_amount'          => $fs['so_amount']          ?? null,
+                    'outstanding_amount' => $fs['outstanding_amount'] ?? null,
+                    'credit_note_amount' => $fs['credit_note_amount'] ?? null,
+                    'deposit_amount'     => $fs['deposit_amount']     ?? null,
+                    'net_to_pay'         => $netToPay,
+                ];
+            }
+        }
+        if (!empty($bdo['selected_invoices_json'])) {
+            $invs = json_decode($bdo['selected_invoices_json'], true);
+            if (is_array($invs)) {
+                foreach ($invs as $inv) {
+                    $invoices[] = [
+                        'number'   => $inv['number'] ?? $inv['name'] ?? '-',
+                        'residual' => (float) ($inv['residual'] ?? $inv['amount_residual'] ?? $inv['amount_total'] ?? 0),
+                        'date'     => $inv['date'] ?? $inv['invoice_date'] ?? '',
+                        'origin'   => $inv['origin'] ?? '',
+                    ];
+                }
+            }
+        }
+        if (!empty($bdo['selected_credit_notes_json'])) {
+            $cns = json_decode($bdo['selected_credit_notes_json'], true);
+            if (is_array($cns)) {
+                foreach ($cns as $cn) {
+                    $creditNotes[] = [
+                        'number'   => $cn['number'] ?? $cn['name'] ?? '-',
+                        'residual' => (float) ($cn['residual'] ?? $cn['amount_total'] ?? 0),
+                    ];
+                }
+            }
+        }
+    }
+
+    $bdoRef   = $bdo['bdo_name'] ?? ('BDO-' . $bdoId);
+    $orderRef = $bdo['order_name'] ?? '-';
+    $dueDate  = $bdo['bdo_date'] ?? date('Y-m-d');
+
+    $baseUrl = defined('BASE_URL') ? BASE_URL : 'https://cny.re-ya.com';
+
+    $invoicePdfUrl = $baseUrl . '/api/odoo-dashboard-api.php?action=odoo_bdo_statement_pdf&bdo_id=' . urlencode($bdoId)
+        . ($lineAccountId > 0 ? '&line_account_id=' . $lineAccountId : '');
+
+    $flexData = [
+        'amount_total'      => $netToPay > 0 ? $netToPay : $amountTotal,
+        'bdo_ref'           => $bdoRef,
+        'order_ref'         => $orderRef,
+        'due_date'          => $dueDate,
+        'financial_summary' => $financialSummary,
+        'invoices'          => $invoices,
+        'credit_notes'      => $creditNotes,
+        'bank_account' => [
+            'bank_name'      => 'ธนาคารกสิกรไทย',
+            'account_number' => '027-8-40955-4',
+            'account_name'   => 'บริษัท ซี เอ็น วาย เฮลท์แคร์ จำกัด',
+        ],
+        'invoice'  => ['pdf_url' => $invoicePdfUrl],
+        'liff_url' => '',
+    ];
+
+    // ── 3. Resolve QR payload (local DB → Odoo live API fallback) ──────
+    $qrPayload = resolveQrPayload($db, $bdoId, $bdo['qr_payload'] ?? '', $lineUserId, $partnerId);
+
+    $qrCodeUrl = '';
+    if (!empty($qrPayload)) {
+        require_once __DIR__ . '/../classes/QRCodeGenerator.php';
+        $qrGen = new QRCodeGenerator();
+        $qrResult = $qrGen->generatePromptPayQR($qrPayload, $bdoRef);
+        if ($qrResult['success'] && !empty($qrResult['url'])) {
+            $qrCodeUrl = $baseUrl . $qrResult['url'];
+        }
+    }
+    if (empty($qrCodeUrl)) {
+        $qrCodeUrl = $baseUrl . '/assets/img/promptpay-placeholder.png';
+    }
+
+    // ── 4. Build Flex Message (without sending) ─────────────────────────
+    require_once __DIR__ . '/../classes/OdooFlexTemplates.php';
+    $flexBubble = OdooFlexTemplates::bdoPaymentRequest($flexData, $qrCodeUrl);
+
+    $altText = '💰 แจ้งชำระเงิน ' . $bdoRef . ' ยอด ฿' . number_format($flexData['amount_total'], 2);
+
+    return [
+        'bdo_id'       => $bdoId,
+        'bdo_ref'      => $bdoRef,
+        'amount'       => $flexData['amount_total'],
+        'has_qr'       => !empty($qrPayload),
+        'qr_code_url'  => !empty($qrCodeUrl) ? $qrCodeUrl : null,
+        'alt_text'     => $altText,
+        'flex_message' => [
+            'type'     => 'flex',
+            'altText'  => $altText,
+            'contents' => $flexBubble,
+        ],
+    ];
+}
+
+/**
  * Get notification log stats and paginated records.
  */
 function getNotificationLog($db, $input)
@@ -1949,7 +2622,7 @@ function getNotificationLog($db, $input)
         ];
     }
 
-    // Stats
+    // Stats — single-pass aggregate replaces 5 separate COUNT queries
     $stats = [];
     try {
         $statsRows = $db->query("
@@ -1960,13 +2633,23 @@ function getNotificationLog($db, $input)
         foreach ($statsRows as $row) {
             $stats[$row['status']] = (int) $row['count'];
         }
-
         $stats['total'] = array_sum($stats);
-        $stats['today_sent'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE status = 'sent' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
-        $stats['today_failed'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE status = 'failed' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
-        $stats['today_total'] = (int) $db->query("SELECT COUNT(*) FROM odoo_notification_log WHERE sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
-        $stats['unique_users'] = (int) $db->query("SELECT COUNT(DISTINCT line_user_id) FROM odoo_notification_log WHERE status = 'sent'")->fetchColumn();
-        $stats['unique_users_today'] = (int) $db->query("SELECT COUNT(DISTINCT line_user_id) FROM odoo_notification_log WHERE status = 'sent' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY")->fetchColumn();
+
+        // One aggregation query replaces the previous 5 individual COUNT queries
+        $aggRow = $db->query("
+            SELECT
+                SUM(IF(status = 'sent'   AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY, 1, 0)) as today_sent,
+                SUM(IF(status = 'failed' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY, 1, 0)) as today_failed,
+                SUM(IF(sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY, 1, 0)) as today_total,
+                COUNT(DISTINCT CASE WHEN status = 'sent' THEN line_user_id END) as unique_users,
+                COUNT(DISTINCT CASE WHEN status = 'sent' AND sent_at >= CURDATE() AND sent_at < CURDATE() + INTERVAL 1 DAY THEN line_user_id END) as unique_users_today
+            FROM odoo_notification_log
+        ")->fetch(PDO::FETCH_ASSOC);
+        $stats['today_sent']        = (int) ($aggRow['today_sent'] ?? 0);
+        $stats['today_failed']      = (int) ($aggRow['today_failed'] ?? 0);
+        $stats['today_total']       = (int) ($aggRow['today_total'] ?? 0);
+        $stats['unique_users']      = (int) ($aggRow['unique_users'] ?? 0);
+        $stats['unique_users_today'] = (int) ($aggRow['unique_users_today'] ?? 0);
 
         $eventRows = $db->query("
             SELECT event_type, COUNT(*) as count
@@ -2011,9 +2694,17 @@ function getNotificationLog($db, $input)
     $total = (int) $countStmt->fetchColumn();
 
     $hasWhLog = tableExists($db, 'odoo_webhooks_log');
-    $whJoin = $hasWhLog
-        ? "LEFT JOIN (SELECT delivery_id, MAX(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name'))) as order_name, MAX(order_id) as order_id FROM odoo_webhooks_log GROUP BY delivery_id) wh ON wh.delivery_id = n.delivery_id"
-        : "";
+    // Scope the derived-table join to the last 30 days to avoid materialising
+    // the entire odoo_webhooks_log table on every Notifications tab load.
+    if ($hasWhLog) {
+        $whTimeCol = resolveWebhookTimeColumn($db);
+        $whWindow  = $whTimeCol
+            ? "AND {$whTimeCol} >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+            : "";
+        $whJoin = "LEFT JOIN (SELECT delivery_id, MAX(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name'))) as order_name, MAX(order_id) as order_id FROM odoo_webhooks_log WHERE delivery_id IS NOT NULL {$whWindow} GROUP BY delivery_id) wh ON wh.delivery_id = n.delivery_id";
+    } else {
+        $whJoin = "";
+    }
     $whSelect = $hasWhLog ? ", wh.order_name, wh.order_id" : ", NULL as order_name, NULL as order_id";
 
     $stmt = $db->prepare("
@@ -2323,7 +3014,7 @@ function getOverviewToday($db)
     $ordersDate  = date('Y-m-d');
     try {
         if (tableExists($db, 'odoo_orders')) {
-            $countStmt = $db->query("SELECT COUNT(*) FROM odoo_orders WHERE DATE(date_order) = CURDATE() OR DATE(updated_at) = CURDATE()");
+            $countStmt = $db->query("SELECT COUNT(*) FROM odoo_orders WHERE (date_order >= CURDATE() AND date_order < CURDATE()+INTERVAL 1 DAY) OR (updated_at >= CURDATE() AND updated_at < CURDATE()+INTERVAL 1 DAY)");
             $ordersTotal = (int) $countStmt->fetchColumn();
 
             $stmt = $db->query("
@@ -2346,7 +3037,7 @@ function getOverviewToday($db)
                         END
                     ) as progress
                 FROM odoo_orders o
-                WHERE DATE(date_order) = CURDATE() OR DATE(updated_at) = CURDATE()
+                WHERE (date_order >= CURDATE() AND date_order < CURDATE()+INTERVAL 1 DAY) OR (updated_at >= CURDATE() AND updated_at < CURDATE()+INTERVAL 1 DAY)
                 ORDER BY updated_at DESC
                 LIMIT 5
             ");
@@ -2610,37 +3301,49 @@ function inferOrderProgressStageKey($eventType, $stateLabel)
         return 'order.packing';
     }
 
-    // Picking / warehouse prep
-    if (
-        $contains($text, 'delivery.validated') ||
-        $contains($text, 'picked') ||
-        $contains($text, 'เตรียมสินค้า')
-    ) {
-        return 'order.picking';
+    return null;
+}
+
+/**
+ * Check whether a column exists on a given table.
+ *
+ * @param PDO $db
+ * @param string $table
+ * @param string $column
+ * @return bool
+ */
+function hasTableColumn($db, $table, $column)
+{
+    static $cache = [];
+
+    $table = (string) $table;
+    $column = (string) $column;
+    if ($table === '' || $column === '') {
+        return false;
     }
 
-    // Confirmed order / waiting delivery confirmation
-    if (
-        $contains($text, 'sale.order.confirmed') ||
-        $contains($text, 'confirmed') ||
-        $contains($text, 'รอยืนยันจัดส่ง') ||
-        $contains($text, 'ยืนยันออเดอร์') ||
-        $contains($text, 'waiting_delivery_confirmation')
-    ) {
-        return 'sale.order.confirmed';
+    $cacheKey = $table . '.' . $column;
+    if (!isset($cache[$cacheKey])) {
+        try {
+            $stmt = $db->prepare("
+                SELECT 1
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = ?
+                  AND COLUMN_NAME = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$table, $column]);
+            $cache[$cacheKey] = (bool) $stmt->fetchColumn();
+        } catch (Exception $e) {
+            $quotedTable = str_replace('`', '``', $table);
+            $quotedColumn = $db->quote($column);
+            $stmt = $db->query("SHOW COLUMNS FROM `{$quotedTable}` LIKE {$quotedColumn}");
+            $cache[$cacheKey] = $stmt ? ($stmt->rowCount() > 0) : false;
+        }
     }
 
-    // Invoice posted/created (after delivery)
-    if (
-        $contains($text, 'invoice.posted') ||
-        $contains($text, 'invoice.created') ||
-        $contains($text, 'แจ้งหนี้') ||
-        $contains($text, 'วางบิล')
-    ) {
-        return 'invoice.posted';
-    }
-
-    return $eventType;
+    return $cache[$cacheKey];
 }
 
 /**
@@ -2652,1296 +3355,77 @@ function inferOrderProgressStageKey($eventType, $stateLabel)
  */
 function hasWebhookColumn($db, $column)
 {
-    static $cache = [];
-
-    $column = (string) $column;
-    if ($column === '') {
-        return false;
-    }
-
-    if (!isset($cache[$column])) {
-        try {
-            $stmt = $db->prepare("
-                SELECT 1
-                FROM information_schema.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = 'odoo_webhooks_log'
-                  AND COLUMN_NAME = ?
-                LIMIT 1
-            ");
-            $stmt->execute([$column]);
-            $cache[$column] = (bool) $stmt->fetchColumn();
-        } catch (Exception $e) {
-            $quoted = $db->quote($column);
-            $stmt = $db->query("SHOW COLUMNS FROM `odoo_webhooks_log` LIKE {$quoted}");
-            $cache[$column] = $stmt ? ($stmt->rowCount() > 0) : false;
-        }
-    }
-
-    return $cache[$column];
+    return hasTableColumn($db, 'odoo_webhooks_log', $column);
 }
 
 /**
- * Resolve the best available webhook timestamp column expression.
+ * Update local slip fields (amount, transfer_date, note).
+ * Only allowed when slip status = 'pending'.
  *
- * @param PDO $db
- * @return string|null Backticked column name or null if none found.
+ * Required: slip_id
+ * Optional: amount, transfer_date (YYYY-MM-DD), note
  */
-function resolveWebhookTimeColumn($db)
+function slipUpdateLocal($db, $input)
 {
-    foreach (['processed_at', 'created_at', 'received_at', 'updated_at'] as $column) {
-        if (hasWebhookColumn($db, $column)) {
-            return "`{$column}`";
-        }
+    $slipId       = (int) ($input['slip_id'] ?? 0);
+    $amount       = isset($input['amount']) ? (float) $input['amount'] : null;
+    $transferDate = isset($input['transfer_date']) ? trim((string) $input['transfer_date']) : null;
+    $note         = isset($input['note']) ? trim((string) $input['note']) : null;
+
+    if ($slipId <= 0) {
+        throw new Exception('slip_id is required');
     }
 
-    return null;
-}
+    $stmt = $db->prepare("SELECT id, status FROM odoo_slip_uploads WHERE id = ? LIMIT 1");
+    $stmt->execute([$slipId]);
+    $slip = $stmt->fetch(PDO::FETCH_ASSOC);
 
-function webhookRecentWindowWhere($db, $processedAtColumn, $days = 180, $maxRows = 80000)
-{
-    $days = max(1, (int) $days);
-    $maxRows = max(1000, (int) $maxRows);
-
-    if ($processedAtColumn) {
-        return "{$processedAtColumn} >= DATE_SUB(NOW(), INTERVAL {$days} DAY)";
+    if (!$slip) {
+        throw new Exception('Slip not found');
     }
 
-    return "id >= GREATEST((SELECT MAX(id) - {$maxRows} FROM odoo_webhooks_log), 0)";
-}
-
-/**
- * Get ORDER BY expression for webhook fallback customer list sorting.
- */
-function webhookCustomerSortExpr($sortBy)
-{
-    $map = [
-        'spend_desc'  => 'spend_30d DESC, latest_order_at DESC',
-        'spend_asc'   => 'spend_30d ASC, latest_order_at DESC',
-        'orders_desc' => 'orders_total DESC, latest_order_at DESC',
-        'orders_asc'  => 'orders_total ASC, latest_order_at DESC',
-        'due_desc'    => 'total_due DESC, latest_order_at DESC',
-        'name_asc'    => 'customer_name ASC',
-    ];
-    return $map[$sortBy] ?? 'latest_order_at DESC';
-}
-
-/**
- * Check table existence.
- *
- * @param PDO $db
- * @param string $table
- * @return bool
- */
-function tableExists($db, $table)
-{
-    static $cache = [];
-
-    $table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $table);
-    if ($table === '') {
-        return false;
+    if (!in_array($slip['status'], ['pending', 'new', 'failed'])) {
+        throw new Exception('Cannot edit slip with status: ' . $slip['status']);
     }
 
-    if (array_key_exists($table, $cache)) {
-        return $cache[$table];
+    $setClauses = [];
+    $params     = [];
+
+    if ($amount !== null) {
+        $setClauses[] = 'amount = ?';
+        $params[]     = $amount;
+    }
+    if ($transferDate !== null && $transferDate !== '') {
+        $setClauses[] = 'transfer_date = ?';
+        $params[]     = $transferDate;
+    }
+    if ($note !== null && $note !== '') {
+        $setClauses[] = 'match_reason = ?';
+        $params[]     = $note;
     }
 
-    try {
-        $stmt = $db->prepare("
-            SELECT 1
-            FROM information_schema.TABLES
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND TABLE_NAME = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$table]);
-        $cache[$table] = (bool) $stmt->fetchColumn();
-    } catch (Exception $e) {
-        $quoted = $db->quote($table);
-        $stmt = $db->query("SHOW TABLES LIKE {$quoted}");
-        $cache[$table] = $stmt ? ($stmt->rowCount() > 0) : false;
+    if (empty($setClauses)) {
+        return ['id' => $slipId, 'updated' => false, 'message' => 'No fields to update'];
     }
 
-    return $cache[$table];
-}
-
-function dashboardApiShouldCache($action, $input, $result)
-{
-    if (!is_array($result)) {
-        return false;
+    if (hasTableColumn($db, 'odoo_slip_uploads', 'updated_at')) {
+        $setClauses[] = 'updated_at = NOW()';
     }
+    $params[]     = $slipId;
 
-    if (!empty($result['error'])) {
-        return false;
-    }
+    $db->prepare("UPDATE odoo_slip_uploads SET " . implode(', ', $setClauses) . " WHERE id = ?")
+       ->execute($params);
 
-    if ($action === 'customer_list' && trim((string) ($input['search'] ?? '')) !== '') {
-        return false;
-    }
-
-    return true;
-}
-
-function dashboardApiBuildCacheKey($action, $input)
-{
-    if (is_array($input)) {
-        unset($input['_t']);
-        dashboardApiNormalizeCacheInput($input);
-    }
-
-    return $action . '_' . sha1(json_encode($input, JSON_UNESCAPED_UNICODE));
-}
-
-function dashboardApiNormalizeCacheInput(&$value)
-{
-    if (!is_array($value)) {
-        return;
-    }
-
-    ksort($value);
-    foreach ($value as &$item) {
-        if (is_array($item)) {
-            dashboardApiNormalizeCacheInput($item);
-        }
-    }
-    unset($item);
-}
-
-function dashboardApiCacheDir()
-{
-    static $dir = null;
-    if ($dir !== null) {
-        return $dir;
-    }
-
-    $dir = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'cny_odoo_dashboard_cache';
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0775, true);
-    }
-
-    return $dir;
-}
-
-function dashboardApiCachePath($key)
-{
-    return dashboardApiCacheDir() . DIRECTORY_SEPARATOR . preg_replace('/[^a-zA-Z0-9_-]/', '_', $key) . '.json';
-}
-
-function dashboardApiCacheRead($key)
-{
-    $path = dashboardApiCachePath($key);
-    if (!is_file($path)) {
-        return null;
-    }
-
-    $raw = @file_get_contents($path);
-    if ($raw === false || $raw === '') {
-        return null;
-    }
-
-    $payload = json_decode($raw, true);
-    if (!is_array($payload) || !isset($payload['t'])) {
-        @unlink($path);
-        return null;
-    }
-
-    return $payload;
-}
-
-function dashboardApiCacheGet($key, $ttl)
-{
-    $payload = dashboardApiCacheRead($key);
-    if ($payload === null) {
-        return null;
-    }
-
-    if ((time() - (int) $payload['t']) > $ttl) {
-        return null;
-    }
-
-    return $payload['d'] ?? null;
-}
-
-function dashboardApiCacheGetStale($key, $maxAge)
-{
-    $payload = dashboardApiCacheRead($key);
-    if ($payload === null) {
-        return null;
-    }
-
-    if ((time() - (int) $payload['t']) > $maxAge) {
-        return null;
-    }
-
-    return $payload['d'] ?? null;
-}
-
-function dashboardApiCacheSet($key, $data)
-{
-    $path = dashboardApiCachePath($key);
-    $payload = json_encode([
-        't' => time(),
-        'd' => $data,
-    ], JSON_UNESCAPED_UNICODE);
-
-    if ($payload !== false) {
-        @file_put_contents($path, $payload, LOCK_EX);
-    }
-}
-
-// =====================================================================
-// Customer Detail Page Functions
-// =====================================================================
-
-/**
- * Get full customer 360° detail: profile, credit, LINE link, points.
- * Accepts partner_id or customer_ref.
- */
-function getCustomerDetail($db, $input)
-{
-    $partnerId   = trim((string) ($input['partner_id'] ?? ''));
-    $customerRef = trim((string) ($input['customer_ref'] ?? ''));
-
-    if ($partnerId === '' && $customerRef === '') {
-        throw new Exception('Missing partner_id or customer_ref');
-    }
-
-    $detail = [
-        'partner_id'   => $partnerId,
-        'customer_ref' => $customerRef,
-        'profile'      => null,
-        'credit'       => null,
-        'link'         => null,
-        'points'       => null,
-        'warnings'     => [],
-    ];
-
-    // Resolve LINE link
-    $lineUserId = null;
-    $link = null;
-    if ($partnerId !== '' && $partnerId !== '-') {
-        try {
-            $stmt = $db->prepare("SELECT * FROM odoo_line_users WHERE odoo_partner_id = ? LIMIT 1");
-            $stmt->execute([(int) $partnerId]);
-            $link = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-        } catch (Exception $e) { /* ignore */ }
-    }
-    if (!$link && $customerRef !== '') {
-        try {
-            $stmt = $db->prepare("SELECT * FROM odoo_line_users WHERE odoo_customer_code = ? LIMIT 1");
-            $stmt->execute([$customerRef]);
-            $link = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-        } catch (Exception $e) { /* ignore */ }
-    }
-
-    if ($link) {
-        $lineUserId = $link['line_user_id'] ?? null;
-        $detail['link'] = $link;
-    }
-
-    // Profile from Odoo API
-    if ($lineUserId) {
-        try {
-            require_once __DIR__ . '/../classes/OdooAPIClient.php';
-            $lineAccountId = $link['line_account_id'] ?? null;
-            $odoo = new OdooAPIClient($db, $lineAccountId);
-            $profile = $odoo->getUserProfile($lineUserId);
-            if (is_array($profile)) {
-                $detail['profile'] = $profile;
-            }
-        } catch (Exception $e) {
-            $detail['warnings'][] = 'profile: ' . $e->getMessage();
-        }
-
-        // Credit
-        try {
-            if (isset($odoo)) {
-                $credit = $odoo->getCreditStatus($lineUserId);
-                if (is_array($credit)) {
-                    $detail['credit'] = $credit;
-                }
-            }
-        } catch (Exception $e) {
-            $detail['warnings'][] = 'credit: ' . $e->getMessage();
-        }
-
-        // Points
-        try {
-            // Find local user by line_user_id
-            $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ? LIMIT 1");
-            $stmt->execute([$lineUserId]);
-            $userId = $stmt->fetchColumn();
-            if ($userId) {
-                require_once __DIR__ . '/../classes/LoyaltyPoints.php';
-                $lp = new LoyaltyPoints($db, $lineAccountId);
-                $detail['points'] = $lp->getUserPoints($userId);
-            }
-        } catch (Exception $e) {
-            $detail['warnings'][] = 'points: ' . $e->getMessage();
-        }
-    }
-
-    // Fallback: profile from webhook if API didn't work
-    if (!$detail['profile'] && ($partnerId !== '' || $customerRef !== '')) {
-        try {
-            $pidExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.partner_id')), '')";
-            $cidExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), '')";
-            $refExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.ref')), '')";
-            $nameExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.name')), '')";
-
-            $where = [];
-            $params = [];
-            if ($partnerId !== '' && $partnerId !== '-') {
-                $where[] = "({$pidExpr} = ? OR {$cidExpr} = ?)";
-                $params[] = $partnerId;
-                $params[] = $partnerId;
-            } elseif ($customerRef !== '') {
-                $where[] = "{$refExpr} = ?";
-                $params[] = $customerRef;
-            }
-
-            if (!empty($where)) {
-                $stmt = $db->prepare("
-                    SELECT
-                        {$nameExpr} as name,
-                        {$refExpr} as ref,
-                        MAX({$pidExpr}) as partner_id,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.phone')), '')) as phone,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.mobile')), '')) as mobile,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.email')), '')) as email,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.street')), '')) as street,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.street2')), '')) as street2,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.city')), '')) as city,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.state')), '')) as state_name,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.zip')), '')) as zip,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.country')), '')) as country_name,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.delivery_address')), '')) as delivery_address,
-                        MAX(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.salesperson.name')), '')) as salesperson_name
-                    FROM odoo_webhooks_log
-                    WHERE " . implode(' AND ', $where) . "
-                    LIMIT 1
-                ");
-                $stmt->execute($params);
-                $row = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($row && ($row['name'] || $row['ref'])) {
-                    $detail['profile'] = $row;
-                    $detail['warnings'][] = 'profile_source: webhook';
-                }
-            }
-        } catch (Exception $e) {
-            $detail['warnings'][] = 'profile_webhook: ' . $e->getMessage();
-        }
-    }
-
-    // Fallback: compute credit/totals from webhook order+invoice data
-    if (!$detail['credit'] && ($partnerId !== '' || $customerRef !== '')) {
-        try {
-            $pidExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.partner_id')), '')";
-            $cidExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), '')";
-            $refExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.ref')), '')";
-            $amtExpr  = "CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.amount_total')), ''), '0') AS DECIMAL(14,2))";
-            $resExpr  = "CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.amount_residual')), ''), '0') AS DECIMAL(14,2))";
-            $orderNameExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.name')), ''))";
-
-            $wh = [];
-            $wp = [];
-            if ($partnerId !== '' && $partnerId !== '-') {
-                $wh[] = "({$pidExpr} = ? OR {$cidExpr} = ?)";
-                $wp[] = $partnerId;
-                $wp[] = $partnerId;
-            } elseif ($customerRef !== '') {
-                $wh[] = "{$refExpr} = ?";
-                $wp[] = $customerRef;
-            }
-
-            if (!empty($wh)) {
-                $whereStr = implode(' AND ', $wh);
-
-                // Total spend from orders (sum unique order amounts)
-                $stmtOrders = $db->prepare("
-                    SELECT
-                        COALESCE(SUM(t.amt), 0) as total_spend,
-                        COUNT(*) as order_count
-                    FROM (
-                        SELECT {$orderNameExpr} as oname, MAX({$amtExpr}) as amt
-                        FROM odoo_webhooks_log
-                        WHERE {$whereStr}
-                          AND ({$orderNameExpr}) IS NOT NULL
-                        GROUP BY oname
-                    ) t
-                ");
-                $stmtOrders->execute($wp);
-                $ordRow = $stmtOrders->fetch(PDO::FETCH_ASSOC);
-
-                // Outstanding due from unpaid invoices
-                $invExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.invoice_number')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.invoice.name')), ''))";
-                $stmtDue = $db->prepare("
-                    SELECT COALESCE(SUM(t.residual), 0) as total_due
-                    FROM (
-                        SELECT {$invExpr} as inv_num, MAX({$resExpr}) as residual
-                        FROM odoo_webhooks_log
-                        WHERE {$whereStr}
-                          AND event_type LIKE 'invoice.%'
-                          AND event_type NOT IN ('invoice.paid', 'invoice.cancelled')
-                          AND ({$invExpr}) IS NOT NULL
-                        GROUP BY inv_num
-                    ) t
-                ");
-                $stmtDue->execute($wp);
-                $dueRow = $stmtDue->fetch(PDO::FETCH_ASSOC);
-
-                // Check if any paid invoices exist (exclude those from due)
-                $stmtPaid = $db->prepare("
-                    SELECT {$invExpr} as inv_num
-                    FROM odoo_webhooks_log
-                    WHERE {$whereStr}
-                      AND event_type = 'invoice.paid'
-                      AND ({$invExpr}) IS NOT NULL
-                    GROUP BY inv_num
-                ");
-                $stmtPaid->execute($wp);
-                $paidInvs = $stmtPaid->fetchAll(PDO::FETCH_COLUMN);
-
-                $detail['credit'] = [
-                    'total_spend'      => (float) ($ordRow['total_spend'] ?? 0),
-                    'credit_used'      => (float) ($ordRow['total_spend'] ?? 0),
-                    'total_due'        => (float) ($dueRow['total_due'] ?? 0),
-                    'credit_remaining' => null,
-                    'credit_limit'     => null,
-                    'order_count'      => (int) ($ordRow['order_count'] ?? 0),
-                ];
-                $detail['warnings'][] = 'credit_source: webhook_computed';
-            }
-        } catch (Exception $e) {
-            $detail['warnings'][] = 'credit_webhook: ' . $e->getMessage();
-        }
-    }
-
-    // Pull LINE profile picture from users table
-    if ($lineUserId) {
-        try {
-            $stmt = $db->prepare("SELECT display_name, picture_url FROM users WHERE line_user_id = ? LIMIT 1");
-            $stmt->execute([$lineUserId]);
-            $lineProfile = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($lineProfile) {
-                $detail['line_profile'] = [
-                    'display_name' => $lineProfile['display_name'] ?? null,
-                    'picture_url'  => $lineProfile['picture_url'] ?? null,
-                ];
-            }
-        } catch (Exception $e) {
-            $detail['warnings'][] = 'line_profile: ' . $e->getMessage();
-        }
-    }
-
-    return $detail;
-}
-
-/**
- * Override order/invoice status manually. Requires reason + admin_name.
- * Logs to odoo_manual_overrides + ActivityLogger.
- */
-function orderStatusOverride($db, $input)
-{
-    $entityType = trim((string) ($input['entity_type'] ?? ''));
-    $entityRef  = trim((string) ($input['entity_ref'] ?? ''));
-    $oldStatus  = trim((string) ($input['old_status'] ?? ''));
-    $newStatus  = trim((string) ($input['new_status'] ?? ''));
-    $reason     = trim((string) ($input['reason'] ?? ''));
-    $adminName  = trim((string) ($input['admin_name'] ?? ''));
-    $partnerId  = isset($input['partner_id']) ? (int) $input['partner_id'] : null;
-
-    if (!in_array($entityType, ['order', 'invoice'], true)) {
-        throw new Exception('entity_type must be order or invoice');
-    }
-    if ($entityRef === '') throw new Exception('Missing entity_ref');
-    if ($newStatus === '') throw new Exception('Missing new_status');
-    if ($reason === '') throw new Exception('Missing reason (เหตุผล)');
-    if ($adminName === '') throw new Exception('Missing admin_name');
-
-    // Ensure table exists
-    $db->exec("CREATE TABLE IF NOT EXISTS odoo_manual_overrides (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        entity_type ENUM('order','invoice') NOT NULL,
-        entity_ref VARCHAR(100) NOT NULL,
-        partner_id INT NULL,
-        old_status VARCHAR(50) NULL,
-        new_status VARCHAR(50) NOT NULL,
-        reason TEXT NOT NULL,
-        admin_name VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_entity (entity_type, entity_ref),
-        INDEX idx_partner (partner_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-    $stmt = $db->prepare("INSERT INTO odoo_manual_overrides (entity_type, entity_ref, partner_id, old_status, new_status, reason, admin_name) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$entityType, $entityRef, $partnerId, $oldStatus, $newStatus, $reason, $adminName]);
-    $overrideId = (int) $db->lastInsertId();
-
-    // ActivityLogger
-    try {
-        require_once __DIR__ . '/../classes/ActivityLogger.php';
-        $logger = ActivityLogger::getInstance($db);
-        $logger->log(
-            ActivityLogger::TYPE_ADMIN,
-            ActivityLogger::ACTION_UPDATE,
-            "Override {$entityType} status: {$entityRef} [{$oldStatus}] → [{$newStatus}] reason: {$reason}",
-            [
-                'admin_name'  => $adminName,
-                'entity_type' => 'odoo_' . $entityType,
-                'entity_id'   => $overrideId,
-                'old_value'   => ['status' => $oldStatus, 'entity_ref' => $entityRef],
-                'new_value'   => ['status' => $newStatus, 'reason' => $reason],
-                'extra_data'  => ['partner_id' => $partnerId],
-            ]
-        );
-    } catch (Exception $e) {
-        error_log('ActivityLogger error in orderStatusOverride: ' . $e->getMessage());
-    }
-
-    return ['override_id' => $overrideId, 'entity_type' => $entityType, 'entity_ref' => $entityRef, 'new_status' => $newStatus];
-}
-
-/**
- * Add a note to an order or invoice.
- */
-function orderNoteAdd($db, $input)
-{
-    $entityType = trim((string) ($input['entity_type'] ?? ''));
-    $entityRef  = trim((string) ($input['entity_ref'] ?? ''));
-    $note       = trim((string) ($input['note'] ?? ''));
-    $adminName  = trim((string) ($input['admin_name'] ?? ''));
-    $partnerId  = isset($input['partner_id']) ? (int) $input['partner_id'] : null;
-
-    if (!in_array($entityType, ['order', 'invoice'], true)) {
-        throw new Exception('entity_type must be order or invoice');
-    }
-    if ($entityRef === '') throw new Exception('Missing entity_ref');
-    if ($note === '') throw new Exception('Missing note');
-    if ($adminName === '') throw new Exception('Missing admin_name');
-
-    // Ensure table exists
-    $db->exec("CREATE TABLE IF NOT EXISTS odoo_order_notes (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        entity_type ENUM('order','invoice') NOT NULL,
-        entity_ref VARCHAR(100) NOT NULL,
-        partner_id INT NULL,
-        note TEXT NOT NULL,
-        admin_name VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_entity (entity_type, entity_ref),
-        INDEX idx_partner (partner_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-    $stmt = $db->prepare("INSERT INTO odoo_order_notes (entity_type, entity_ref, partner_id, note, admin_name) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$entityType, $entityRef, $partnerId, $note, $adminName]);
-    $noteId = (int) $db->lastInsertId();
-
-    // ActivityLogger
-    try {
-        require_once __DIR__ . '/../classes/ActivityLogger.php';
-        $logger = ActivityLogger::getInstance($db);
-        $logger->log(
-            ActivityLogger::TYPE_ADMIN,
-            ActivityLogger::ACTION_CREATE,
-            "Add note to {$entityType}: {$entityRef} — {$note}",
-            [
-                'admin_name'  => $adminName,
-                'entity_type' => 'odoo_' . $entityType . '_note',
-                'entity_id'   => $noteId,
-                'new_value'   => ['note' => $note, 'entity_ref' => $entityRef],
-                'extra_data'  => ['partner_id' => $partnerId],
-            ]
-        );
-    } catch (Exception $e) {
-        error_log('ActivityLogger error in orderNoteAdd: ' . $e->getMessage());
-    }
-
-    return ['note_id' => $noteId, 'entity_type' => $entityType, 'entity_ref' => $entityRef];
-}
-
-/**
- * Get notes for a set of entity refs (orders or invoices).
- */
-function orderNotesList($db, $input)
-{
-    $entityType = trim((string) ($input['entity_type'] ?? ''));
-    $entityRef  = trim((string) ($input['entity_ref'] ?? ''));
-    $partnerId  = trim((string) ($input['partner_id'] ?? ''));
-
-    $notes = [];
-    $overrides = [];
-
-    // Notes
-    try {
-        $db->exec("CREATE TABLE IF NOT EXISTS odoo_order_notes (
-            id INT AUTO_INCREMENT PRIMARY KEY, entity_type ENUM('order','invoice') NOT NULL,
-            entity_ref VARCHAR(100) NOT NULL, partner_id INT NULL, note TEXT NOT NULL,
-            admin_name VARCHAR(255) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_entity (entity_type, entity_ref)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-        $where = ['1=1'];
-        $params = [];
-        if ($entityType !== '') { $where[] = 'entity_type = ?'; $params[] = $entityType; }
-        if ($entityRef !== '') { $where[] = 'entity_ref = ?'; $params[] = $entityRef; }
-        if ($partnerId !== '' && $partnerId !== '-') { $where[] = 'partner_id = ?'; $params[] = (int) $partnerId; }
-
-        $stmt = $db->prepare("SELECT * FROM odoo_order_notes WHERE " . implode(' AND ', $where) . " ORDER BY created_at DESC LIMIT 200");
-        $stmt->execute($params);
-        $notes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Exception $e) { /* ignore */ }
-
-    // Overrides
-    try {
-        $db->exec("CREATE TABLE IF NOT EXISTS odoo_manual_overrides (
-            id INT AUTO_INCREMENT PRIMARY KEY, entity_type ENUM('order','invoice') NOT NULL,
-            entity_ref VARCHAR(100) NOT NULL, partner_id INT NULL, old_status VARCHAR(50) NULL,
-            new_status VARCHAR(50) NOT NULL, reason TEXT NOT NULL, admin_name VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_entity (entity_type, entity_ref)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-        $where2 = ['1=1'];
-        $params2 = [];
-        if ($entityType !== '') { $where2[] = 'entity_type = ?'; $params2[] = $entityType; }
-        if ($entityRef !== '') { $where2[] = 'entity_ref = ?'; $params2[] = $entityRef; }
-        if ($partnerId !== '' && $partnerId !== '-') { $where2[] = 'partner_id = ?'; $params2[] = (int) $partnerId; }
-
-        $stmt2 = $db->prepare("SELECT * FROM odoo_manual_overrides WHERE " . implode(' AND ', $where2) . " ORDER BY created_at DESC LIMIT 200");
-        $stmt2->execute($params2);
-        $overrides = $stmt2->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Exception $e) { /* ignore */ }
-
-    return ['notes' => $notes, 'overrides' => $overrides];
-}
-
-/**
- * Get activity log entries for a customer (by partner_id) or entity.
- */
-function activityLogList($db, $input)
-{
-    $partnerId = trim((string) ($input['partner_id'] ?? ''));
-    $entityRef = trim((string) ($input['entity_ref'] ?? ''));
-    $limit     = min((int) ($input['limit'] ?? 50), 200);
-    $offset    = max((int) ($input['offset'] ?? 0), 0);
-
-    $items = [];
-
-    // Merge from odoo_manual_overrides + odoo_order_notes + activity_logs
-    // 1) Manual overrides
-    try {
-        $where = ['1=1'];
-        $params = [];
-        if ($partnerId !== '' && $partnerId !== '-') { $where[] = 'partner_id = ?'; $params[] = (int) $partnerId; }
-        if ($entityRef !== '') { $where[] = 'entity_ref = ?'; $params[] = $entityRef; }
-
-        $stmt = $db->prepare("SELECT id, 'override' as log_kind, entity_type, entity_ref, old_status, new_status, reason as description, admin_name, created_at FROM odoo_manual_overrides WHERE " . implode(' AND ', $where) . " ORDER BY created_at DESC LIMIT 100");
-        $stmt->execute($params);
-        $items = array_merge($items, $stmt->fetchAll(PDO::FETCH_ASSOC));
-    } catch (Exception $e) { /* table may not exist */ }
-
-    // 2) Notes
-    try {
-        $where = ['1=1'];
-        $params = [];
-        if ($partnerId !== '' && $partnerId !== '-') { $where[] = 'partner_id = ?'; $params[] = (int) $partnerId; }
-        if ($entityRef !== '') { $where[] = 'entity_ref = ?'; $params[] = $entityRef; }
-
-        $stmt = $db->prepare("SELECT id, 'note' as log_kind, entity_type, entity_ref, NULL as old_status, NULL as new_status, note as description, admin_name, created_at FROM odoo_order_notes WHERE " . implode(' AND ', $where) . " ORDER BY created_at DESC LIMIT 100");
-        $stmt->execute($params);
-        $items = array_merge($items, $stmt->fetchAll(PDO::FETCH_ASSOC));
-    } catch (Exception $e) { /* table may not exist */ }
-
-    // Sort merged items newest first
-    usort($items, function ($a, $b) {
-        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
-    });
-
-    $total = count($items);
-    $items = array_slice($items, $offset, $limit);
-
-    return ['items' => $items, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
-}
-
-/**
- * Get BDO records from odoo_bdos sync table (full columns).
- * Falls back to webhook log JSON extraction if table unavailable.
- */
-function getOdooBdos($db, $input)
-{
-    $partnerId   = trim((string) ($input['partner_id']   ?? ''));
-    $lineUserId  = trim((string) ($input['line_user_id'] ?? ''));
-    $customerRef = trim((string) ($input['customer_ref'] ?? ''));
-    $search      = trim((string) ($input['search'] ?? ''));
-    $limit       = min((int) ($input['limit']  ?? 100), 500);
-    $offset      = max((int) ($input['offset'] ?? 0), 0);
-
-    // Resolve line_user_id from partner_id if not provided
-    if ($lineUserId === '' && $partnerId !== '' && $partnerId !== '-') {
-        try {
-            $stmt = $db->prepare("SELECT line_user_id FROM odoo_line_users WHERE odoo_partner_id = ? AND line_user_id IS NOT NULL LIMIT 1");
-            $stmt->execute([(int) $partnerId]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($row) $lineUserId = $row['line_user_id'];
-        } catch (Exception $e) { /* ignore */ }
-    }
-
-    // Try dedicated sync table first
-    try {
-        $where = [];
-        $params = [];
-
-        if ($partnerId !== '' && $partnerId !== '-') {
-            $where[] = 'partner_id = ?';
-            $params[] = (int) $partnerId;
-        } elseif ($lineUserId !== '') {
-            $where[] = 'line_user_id = ?';
-            $params[] = $lineUserId;
-        } elseif ($customerRef !== '') {
-            $where[] = 'customer_ref = ?';
-            $params[] = $customerRef;
-        }
-        if ($search !== '') {
-            $where[] = '(bdo_name LIKE ? OR order_name LIKE ? OR customer_ref LIKE ? OR line_user_id LIKE ?)';
-            $searchLike = '%' . $search . '%';
-            $params[] = $searchLike;
-            $params[] = $searchLike;
-            $params[] = $searchLike;
-            $params[] = $searchLike;
-        }
-
-        $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
-
-        $contextTableExists = false;
-        try {
-            $contextTableCheck = $db->query("SHOW TABLES LIKE 'odoo_bdo_context'");
-            $contextTableExists = $contextTableCheck && $contextTableCheck->rowCount() > 0;
-        } catch (Exception $e) {
-            $contextTableExists = false;
-        }
-
-        $contextSelect = $contextTableExists
-            ? ", ctx.delivery_type, ctx.statement_pdf_path"
-            : ", NULL AS delivery_type, NULL AS statement_pdf_path";
-
-        $contextJoin = $contextTableExists
-            ? "
-                LEFT JOIN (
-                    SELECT c1.bdo_id, c1.delivery_type, c1.statement_pdf_path
-                    FROM odoo_bdo_context c1
-                    INNER JOIN (
-                        SELECT bdo_id, MAX(id) AS max_id
-                        FROM odoo_bdo_context
-                        GROUP BY bdo_id
-                    ) latest_ctx ON latest_ctx.max_id = c1.id
-                ) ctx ON b.bdo_id = ctx.bdo_id"
-            : "";
-
-        $totalStmt = $db->prepare("SELECT COUNT(*) FROM odoo_bdos {$whereClause}");
-        $totalStmt->execute($params);
-        $total = (int) $totalStmt->fetchColumn();
-
-        if ($total > 0 || $whereClause !== '') {
-            $sql = "
-                SELECT
-                    b.id, b.bdo_id, b.bdo_name,
-                    b.order_id, b.order_name,
-                    b.partner_id, b.customer_ref, b.line_user_id,
-                    b.salesperson_id, b.salesperson_name,
-                    b.state, b.amount_total, b.currency,
-                    b.bdo_date, b.expected_delivery,
-                    b.latest_event, b.synced_at, b.updated_at{$contextSelect}
-                FROM odoo_bdos b
-                {$contextJoin}
-                {$whereClause}
-                ORDER BY b.updated_at DESC
-                LIMIT ? OFFSET ?
-            ";
-            $params[] = $limit;
-            $params[] = $offset;
-            $stmt = $db->prepare($sql);
-            $stmt->execute($params);
-            $bdos = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            foreach ($bdos as &$b) {
-                $b['id']           = (int) $b['id'];
-                $b['bdo_id']       = (int) $b['bdo_id'];
-                $b['partner_id']   = $b['partner_id']   !== null ? (int) $b['partner_id']   : null;
-                $b['order_id']     = $b['order_id']     !== null ? (int) $b['order_id']     : null;
-                $b['salesperson_id']= $b['salesperson_id'] !== null ? (int) $b['salesperson_id'] : null;
-                $b['amount_total'] = $b['amount_total'] !== null ? (float) $b['amount_total'] : null;
-            }
-            unset($b);
-
-            // Backfill NULL bdo_date from webhook log
-            $nullBdos = array_filter($bdos, function($b) { return !$b['bdo_date'] && $b['bdo_name']; });
-            if (!empty($nullBdos)) {
-                try {
-                    $names = array_map(function($b) { return $b['bdo_name']; }, $nullBdos);
-                    $placeholders = implode(',', array_fill(0, count($names), '?'));
-                    $bdoNameExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.bdo_name')),'')";
-                    $dateExpr    = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.bdo_date')),'')";
-                    $wbStmt = $db->prepare("
-                        SELECT {$bdoNameExpr} AS bdo_name,
-                               MAX({$dateExpr}) AS bdo_date,
-                               MAX(processed_at) AS processed_at
-                        FROM odoo_webhooks_log
-                        WHERE event_type LIKE 'bdo.%'
-                          AND {$bdoNameExpr} IN ({$placeholders})
-                        GROUP BY {$bdoNameExpr}
-                    ");
-                    $wbStmt->execute($names);
-                    $wbMap = [];
-                    foreach ($wbStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                        $wbMap[$row['bdo_name']] = $row;
-                    }
-                    foreach ($bdos as &$b) {
-                        if (!$b['bdo_date'] && isset($wbMap[$b['bdo_name']])) {
-                            $wb = $wbMap[$b['bdo_name']];
-                            $b['bdo_date'] = $wb['bdo_date'] ?: $wb['processed_at'] ?: null;
-                        }
-                    }
-                    unset($b);
-                } catch (Exception $e) { /* ignore */ }
-            }
-
-            return ['bdos' => $bdos, 'total' => $total, 'source' => 'sync_table', 'limit' => $limit, 'offset' => $offset];
-        }
-    } catch (Exception $e) {
-        // fall through to webhook log
-    }
-
-    // Fallback: query from webhook log with JSON extraction
-    $pidExpr      = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), '')";
-    $refExpr      = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.ref')), '')";
-    $bdoIdExpr    = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.bdo_id')), '')";
-    $bdoNameExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.bdo_name')), '')";
-    $amountExpr   = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.amount_total')), '')";
-    $dateExpr     = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.bdo_date')), '')";
-    $stateExpr    = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.new_state')), '')";
-    $orderNameExpr= "JSON_UNQUOTE(JSON_EXTRACT(payload, '$.sale_orders[0].name'))";
-
-    $fbWhere  = ["event_type LIKE 'bdo.%'"];
-    $fbParams = [];
-    if ($partnerId !== '' && $partnerId !== '-') {
-        $fbWhere[] = "{$pidExpr} = ?";
-        $fbParams[] = $partnerId;
-    } elseif ($customerRef !== '') {
-        $fbWhere[] = "{$refExpr} = ?";
-        $fbParams[] = $customerRef;
-    }
-    if ($search !== '') {
-        $fbWhere[] = "({$bdoNameExpr} LIKE ? OR {$orderNameExpr} LIKE ?)";
-        $searchLike = '%' . $search . '%';
-        $fbParams[] = $searchLike;
-        $fbParams[] = $searchLike;
-    }
-    $fbWhereClause = 'WHERE ' . implode(' AND ', $fbWhere);
-
-    try {
-        $stmt = $db->prepare("SELECT COUNT(*) FROM odoo_webhooks_log {$fbWhereClause}");
-        $stmt->execute($fbParams);
-        $total = (int) $stmt->fetchColumn();
-
-        $fbParams2 = $fbParams;
-        $stmt = $db->prepare("
-            SELECT id, event_type,
-                {$bdoIdExpr} as bdo_id,
-                {$bdoNameExpr} as bdo_name,
-                {$orderNameExpr} as order_name,
-                {$amountExpr} as amount_total,
-                {$dateExpr} as bdo_date,
-                {$stateExpr} as state,
-                processed_at
-            FROM odoo_webhooks_log {$fbWhereClause}
-            ORDER BY processed_at DESC
-            LIMIT {$limit} OFFSET {$offset}
-        ");
-        $stmt->execute($fbParams2);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $bdos = [];
-        foreach ($rows as $row) {
-            $bdos[] = [
-                'id'           => (int) $row['id'],
-                'bdo_id'       => $row['bdo_id'] ? (int) $row['bdo_id'] : null,
-                'bdo_name'     => $row['bdo_name'] ?: null,
-                'order_name'   => $row['order_name'] ?: null,
-                'amount_total' => $row['amount_total'] ? (float) $row['amount_total'] : null,
-                'bdo_date'     => $row['bdo_date'] ?: $row['processed_at'],
-                'state'        => $row['state'] ?: 'confirmed',
-                'event_type'   => $row['event_type'],
-            ];
-        }
-        return ['bdos' => $bdos, 'total' => $total, 'source' => 'webhook_log', 'limit' => $limit, 'offset' => $offset];
-    } catch (Exception $e) {
-        return ['bdos' => [], 'total' => 0, 'error' => $e->getMessage()];
-    }
-}
-
-/**
- * Get distinct salespersons seen in odoo_webhooks_log payloads.
- * Used to populate the salesperson filter dropdown.
- */
-function getSalespersonList($db)
-{
-    $processedAtColumn = resolveWebhookTimeColumn($db);
-    $spIdExpr   = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.salesperson.id')), '')";
-    $spNameExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.salesperson.name')), '')";
-    $customerKeyExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.partner_id')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), ''))";
-
-    // Limit scan scope to keep dropdown API responsive on large logs.
-    $windowWhere = $processedAtColumn
-        ? "{$processedAtColumn} >= DATE_SUB(NOW(), INTERVAL 180 DAY)"
-        : "id >= GREATEST((SELECT MAX(id) - 50000 FROM odoo_webhooks_log), 0)";
-
-    try {
-        $stmt = $db->query("
-            SELECT
-                t.sp_id AS id,
-                MAX(t.sp_name) AS name,
-                COUNT(DISTINCT t.customer_key) AS customer_count
-            FROM (
-                SELECT
-                    {$spIdExpr} AS sp_id,
-                    {$spNameExpr} AS sp_name,
-                    {$customerKeyExpr} AS customer_key
-                FROM odoo_webhooks_log
-                WHERE {$windowWhere}
-            ) t
-            WHERE t.sp_id IS NOT NULL
-              AND t.sp_name IS NOT NULL
-            GROUP BY t.sp_id
-            ORDER BY name ASC
-        ");
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return ['salespersons' => $rows];
-    } catch (Exception $e) {
-        return ['salespersons' => [], 'error' => $e->getMessage()];
-    }
-}
-
-// ======================================================================== //
-// BDO Matching Functions (Phase 2 — staging-ready Odoo endpoints)          //
-// ======================================================================== //
-
-/**
- * Get BDO list from Odoo live API (with sync-table fallback).
- *
- * Required: line_user_id
- * Optional: line_account_id, state, limit, offset
- */
-function getBdoListLive($db, $input)
-{
-    $lineUserId    = trim((string) ($input['line_user_id'] ?? ''));
-    $partnerId     = (int) ($input['partner_id'] ?? 0);
-    $lineAccountId = (int) ($input['line_account_id'] ?? 0);
-    $state         = trim((string) ($input['state'] ?? ''));
-    $search        = trim((string) ($input['search'] ?? ''));
-    $limit         = min((int) ($input['limit'] ?? 20), 50);
-    $offset        = max((int) ($input['offset'] ?? 0), 0);
-
-    if ($lineUserId === '' && $partnerId <= 0) {
-        return array_merge(
-            getOdooBdos($db, array_merge($input, ['search' => $search, 'limit' => $limit, 'offset' => $offset])),
-            ['source' => 'sync_table_search']
-        );
-    }
-
-    if ($lineUserId === '' && $partnerId > 0) {
-        $lineUserId = resolveLineUserIdFromPartner($db, $partnerId);
-    }
-
-    if ($lineAccountId <= 0) {
-        $lineAccountId = resolveLineAccountId($db, $lineUserId);
-    }
-
-    // Try Odoo live API first
-    $odooError = null;
-    if ($lineAccountId > 0) {
-        try {
-            require_once __DIR__ . '/../classes/OdooAPIClient.php';
-            $odoo = new OdooAPIClient($db, $lineAccountId);
-
-            $options = ['limit' => $limit, 'offset' => $offset];
-            if ($state !== '') {
-                $options['state'] = $state;
-            }
-            if ($partnerId > 0) {
-                $options['partner_id'] = $partnerId;
-            }
-
-            $result = $odoo->getBdoList($lineUserId !== '' ? $lineUserId : null, $options);
-
-            return [
-                'bdos'   => $result['data']['bdos'] ?? $result['bdos'] ?? [],
-                'total'  => $result['data']['total'] ?? count($result['data']['bdos'] ?? $result['bdos'] ?? []),
-                'source' => 'odoo_live',
-                'limit'  => $limit,
-                'offset' => $offset,
-            ];
-        } catch (Exception $e) {
-            $odooError = $e->getMessage();
-            error_log('[bdo_list_live] Odoo API failed: ' . $odooError);
-        }
-    }
-
-    // Fallback: sync table
-    return array_merge(
-        getOdooBdos($db, array_merge($input, ['line_user_id' => $lineUserId, 'partner_id' => $partnerId, 'limit' => $limit, 'offset' => $offset])),
-        ['odoo_error' => $odooError, 'source' => 'sync_table_fallback']
-    );
-}
-
-/**
- * Get BDO detail from Odoo live API.
- *
- * Required: line_user_id, bdo_id
- * Optional: line_account_id
- */
-function getBdoDetailLive($db, $input)
-{
-    $lineUserId    = trim((string) ($input['line_user_id'] ?? ''));
-    $bdoId         = (int) ($input['bdo_id'] ?? 0);
-    $partnerId     = (int) ($input['partner_id'] ?? 0);
-    $lineAccountId = (int) ($input['line_account_id'] ?? 0);
-
-    if ($bdoId <= 0) {
-        throw new Exception('Missing bdo_id');
-    }
-
-    if ($lineUserId === '' && $partnerId > 0) {
-        $lineUserId = resolveLineUserIdFromPartner($db, $partnerId);
-    }
-
-    if ($lineUserId === '') {
-        throw new Exception('Missing line_user_id');
-    }
-
-    if ($lineAccountId <= 0) {
-        $lineAccountId = resolveLineAccountId($db, $lineUserId);
-    }
-
-    if ($lineAccountId <= 0) {
-        throw new Exception('Cannot resolve line_account_id for this user');
-    }
-
-    require_once __DIR__ . '/../classes/OdooAPIClient.php';
-    $odoo   = new OdooAPIClient($db, $lineAccountId);
-    $result = $odoo->getBdoDetail($lineUserId, $bdoId);
-
-    return $result['data'] ?? $result;
-}
-
-/**
- * Match a slip to BDO(s) via Odoo + update local DB.
- *
- * Required: line_user_id, slip_inbox_id, matches [{bdo_id, amount}]
- * Optional: line_account_id, note, local_slip_id
- */
-function slipMatchBdo($db, $input)
-{
-    $lineUserId    = trim((string) ($input['line_user_id'] ?? ''));
-    $slipInboxId   = (int) ($input['slip_inbox_id'] ?? 0);
-    $matches       = is_array($input['matches'] ?? null) ? $input['matches'] : [];
-    $note          = trim((string) ($input['note'] ?? ''));
-    $lineAccountId = (int) ($input['line_account_id'] ?? 0);
-    $localSlipId   = (int) ($input['local_slip_id'] ?? ($input['slip_id'] ?? 0));
-    $legacyBdoId   = (int) ($input['bdo_id'] ?? 0);
-    $legacyAmount  = isset($input['amount']) ? (float) $input['amount'] : null;
-
-    if (empty($matches) && $legacyBdoId > 0) {
-        $matches = [[
-            'bdo_id' => $legacyBdoId,
-            'amount' => $legacyAmount,
-        ]];
-    }
-
-    $localSlip = null;
-    if ($localSlipId > 0) {
-        $stmt = $db->prepare("
-            SELECT id, line_user_id, line_account_id, slip_inbox_id, odoo_slip_id, bdo_id, amount,
-                   transfer_date, image_path, invoice_id, order_id
-            FROM odoo_slip_uploads
-            WHERE id = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$localSlipId]);
-        $localSlip = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-    }
-
-    if ($lineUserId === '' && $localSlip) {
-        $lineUserId = trim((string) ($localSlip['line_user_id'] ?? ''));
-    }
-    if ($slipInboxId <= 0 && $localSlip) {
-        $slipInboxId = (int) ($localSlip['slip_inbox_id'] ?? $localSlip['odoo_slip_id'] ?? 0);
-    }
-    if ($lineAccountId <= 0 && $localSlip) {
-        $lineAccountId = (int) ($localSlip['line_account_id'] ?? 0);
-    }
-
-    if ($lineUserId === '') {
-        throw new Exception('Missing line_user_id');
-    }
-    if (empty($matches)) {
-        throw new Exception('Missing matches');
-    }
-
-    $normalizedMatches = [];
-    foreach ($matches as $match) {
-        $matchBdoId = (int) ($match['bdo_id'] ?? 0);
-        if ($matchBdoId <= 0) {
-            continue;
-        }
-        $matchAmount = isset($match['amount']) ? (float) $match['amount'] : null;
-        if ($matchAmount === null || $matchAmount <= 0) {
-            $matchAmount = resolveBdoAmount($db, $matchBdoId);
-        }
-        $normalizedMatches[] = [
-            'bdo_id' => $matchBdoId,
-            'amount' => $matchAmount,
-        ];
-    }
-
-    if (empty($normalizedMatches)) {
-        throw new Exception('No valid BDO matches');
-    }
-
-    if ($lineAccountId <= 0) {
-        $lineAccountId = resolveLineAccountId($db, $lineUserId);
-    }
-    if ($lineAccountId <= 0) {
-        throw new Exception('Cannot resolve line_account_id for this user');
-    }
-
-    require_once __DIR__ . '/../classes/OdooAPIClient.php';
-    $odoo = new OdooAPIClient($db, $lineAccountId);
-
-    if ($slipInboxId <= 0 && $localSlip) {
-        $slipInboxId = ensureOdooSlipInboxId($db, $odoo, $localSlip, $lineUserId);
-    }
-    if ($slipInboxId <= 0) {
-        throw new Exception('Missing slip_inbox_id');
-    }
-
-    $odooResult = $odoo->matchSlipBdo($lineUserId, $slipInboxId, $normalizedMatches, $note);
-
-    // Update local slip record if local_slip_id provided
-    if ($localSlipId > 0) {
-        $matchedBdos = $odooResult['data']['matched_bdos'] ?? $odooResult['matched_bdos'] ?? [];
-        $confidence  = $odooResult['data']['match_confidence'] ?? $odooResult['match_confidence'] ?? 'manual';
-        $firstBdoName = !empty($matchedBdos) ? ($matchedBdos[0]['bdo_name'] ?? null) : null;
-        $firstBdoId = !empty($matchedBdos) ? (int) ($matchedBdos[0]['bdo_id'] ?? ($normalizedMatches[0]['bdo_id'] ?? 0)) : (int) ($normalizedMatches[0]['bdo_id'] ?? 0);
-        $slipInboxName = $odooResult['data']['slip_inbox_name'] ?? $odooResult['slip_inbox_name'] ?? null;
-        $deliveryType = !empty($matchedBdos) ? ($matchedBdos[0]['delivery_type'] ?? null) : null;
-        $totalMatched = $odooResult['data']['total_matched'] ?? $odooResult['total_matched'] ?? null;
-
-        $db->prepare("
-            UPDATE odoo_slip_uploads
-            SET status = ?,
-                match_reason = ?,
-                matched_at = NOW(),
-                slip_inbox_id = ?,
-                slip_inbox_name = COALESCE(?, slip_inbox_name),
-                match_confidence = ?,
-                bdo_id = COALESCE(?, bdo_id),
-                bdo_name = COALESCE(?, bdo_name),
-                delivery_type = COALESCE(?, delivery_type),
-                bdo_amount = COALESCE(?, bdo_amount)
-            WHERE id = ?
-        ")->execute([
-            'BDO match via dashboard: ' . json_encode(array_column($normalizedMatches, 'bdo_id')),
-            $slipInboxId,
-            $slipInboxName,
-            $confidence,
-            $firstBdoId > 0 ? $firstBdoId : null,
-            $firstBdoName,
-            $deliveryType,
-            $totalMatched !== null ? (float) $totalMatched : null,
-            $localSlipId
-        ]);
-    }
+    $stmt2 = $db->prepare("SELECT id, amount, transfer_date, status FROM odoo_slip_uploads WHERE id = ? LIMIT 1");
+    $stmt2->execute([$slipId]);
+    $updated = $stmt2->fetch(PDO::FETCH_ASSOC);
 
     return [
-        'odoo_result' => $odooResult,
-        'local_updated' => $localSlipId > 0,
-        'line_user_id' => $lineUserId,
-        'slip_inbox_id' => $slipInboxId,
-    ];
-}
-
-/**
- * Unmatch a slip via Odoo + reset local DB.
- *
- * Required: line_user_id, slip_inbox_id
- * Optional: line_account_id, reason, local_slip_id
- */
-function slipUnmatch($db, $input)
-{
-    $lineUserId    = trim((string) ($input['line_user_id'] ?? ''));
-    $slipInboxId   = (int) ($input['slip_inbox_id'] ?? 0);
-    $reason        = trim((string) ($input['reason'] ?? 'Unmatched via dashboard'));
-    $lineAccountId = (int) ($input['line_account_id'] ?? 0);
-    $localSlipId   = (int) ($input['local_slip_id'] ?? ($input['slip_id'] ?? 0));
-
-    $localSlip = null;
-    if ($localSlipId > 0) {
-        $stmt = $db->prepare("
-            SELECT id, line_user_id, line_account_id, slip_inbox_id, odoo_slip_id
-            FROM odoo_slip_uploads
-            WHERE id = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$localSlipId]);
-        $localSlip = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
-    }
-
-    if ($lineUserId === '' && $localSlip) {
-        $lineUserId = trim((string) ($localSlip['line_user_id'] ?? ''));
-    }
-    if ($slipInboxId <= 0 && $localSlip) {
-        $slipInboxId = (int) ($localSlip['slip_inbox_id'] ?? $localSlip['odoo_slip_id'] ?? 0);
-    }
-    if ($lineAccountId <= 0 && $localSlip) {
-        $lineAccountId = (int) ($localSlip['line_account_id'] ?? 0);
-    }
-
-    if ($lineUserId === '' || $slipInboxId <= 0) {
-        throw new Exception('Missing line_user_id or slip_inbox_id');
-    }
-
-    if ($lineAccountId <= 0) {
-        $lineAccountId = resolveLineAccountId($db, $lineUserId);
-    }
-    if ($lineAccountId <= 0) {
-        throw new Exception('Cannot resolve line_account_id for this user');
-    }
-
-    require_once __DIR__ . '/../classes/OdooAPIClient.php';
-    $odoo       = new OdooAPIClient($db, $lineAccountId);
-    $odooResult = $odoo->unmatchSlip($lineUserId, $slipInboxId, $reason);
-
-    // Reset local slip record
-    if ($localSlipId > 0) {
-        $db->prepare("
-            UPDATE odoo_slip_uploads
-            SET status = ?,
-                match_reason = ?,
-                matched_at = NULL,
-                match_confidence = NULL,
-                bdo_name = NULL,
-                slip_inbox_id = NULL,
-                slip_inbox_name = NULL,
-                bdo_id = NULL,
-                delivery_type = NULL,
-                bdo_amount = NULL
-            WHERE id = ?
-        ")->execute(['Unmatched: ' . $reason, $localSlipId]);
-    }
-
-    return [
-        'odoo_result' => $odooResult,
-        'local_reset' => $localSlipId > 0,
+        'id'            => $slipId,
+        'updated'       => true,
+        'amount'        => $updated['amount'] ?? null,
+        'transfer_date' => $updated['transfer_date'] ?? null,
+        'status'        => $updated['status'] ?? null,
     ];
 }
 
@@ -4050,7 +3534,7 @@ function getPendingBdoOrdersApi($db, $input)
  */
 function getSlipCenterBdoOverview($db, $input)
 {
-    $limit = min((int) ($input['limit'] ?? 200), 500);
+    $limit = min((int) ($input['limit'] ?? 5000), 5000);
 
     try {
         $tableCheck = $db->query("SHOW TABLES LIKE 'odoo_bdo_orders'");
@@ -4087,6 +3571,8 @@ function getSlipCenterBdoOverview($db, $input)
             LEFT JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id
             {$contextJoin}
             WHERE bo.payment_status IN ('pending', 'partial')
+              AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
+              AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
             ORDER BY bo.created_at DESC
             LIMIT ?
         ");
@@ -4120,7 +3606,7 @@ function getSlipCenterBdoOverview($db, $input)
  */
 function getSlipCenterBdoGlobal($db, $input)
 {
-    $limit = min((int) ($input['limit'] ?? 200), 500);
+    $limit = min((int) ($input['limit'] ?? 5000), 5000);
 
     try {
         // Extract BDOs from webhook log
@@ -4187,7 +3673,7 @@ function getSlipCenterCustomerDetail($db, $input)
     $partnerId   = trim((string) ($input['partner_id']   ?? ''));
     $lineUserId  = trim((string) ($input['line_user_id'] ?? ''));
     $customerRef = trim((string) ($input['customer_ref'] ?? ''));
-    $limit       = min((int) ($input['limit'] ?? 100), 200);
+    $limit       = min((int) ($input['limit'] ?? 500), 500);
 
     if ($partnerId === '' && $lineUserId === '' && $customerRef === '') {
         return ['bdo_orders' => [], 'slips' => [], 'total_bdos' => 0, 'total_slips' => 0, 'error' => 'No identifier provided'];
@@ -4233,53 +3719,128 @@ function getSlipCenterCustomerDetail($db, $input)
     $bdoErrors  = [];
     $slipErrors = [];
 
-    // Step 2: Fetch BDO orders (pending)
-    if ($partnerId !== '' && $partnerId !== '-') {
+    // Step 2: Fetch BDO orders (pending) — try partner_id first, fallback to customer_ref
+    $hasBdoTable = false;
+    try {
+        $tableCheck = $db->query("SHOW TABLES LIKE 'odoo_bdo_orders'");
+        $hasBdoTable = $tableCheck->rowCount() > 0;
+    } catch (Exception $e) {}
+
+    if ($hasBdoTable) {
+        $contextTableExists = false;
         try {
-            $tableCheck = $db->query("SHOW TABLES LIKE 'odoo_bdo_orders'");
-            if ($tableCheck->rowCount() > 0) {
-                $contextTableExists = false;
-                try {
-                    $cx = $db->query("SHOW TABLES LIKE 'odoo_bdo_context'");
-                    $contextTableExists = $cx && $cx->rowCount() > 0;
-                } catch (Exception $e) {}
+            $cx = $db->query("SHOW TABLES LIKE 'odoo_bdo_context'");
+            $contextTableExists = $cx && $cx->rowCount() > 0;
+        } catch (Exception $e) {}
 
-                $contextSelect = $contextTableExists
-                    ? ", ctx.delivery_type, ctx.statement_pdf_path"
-                    : ", NULL AS delivery_type, NULL AS statement_pdf_path";
-                $contextJoin = $contextTableExists
-                    ? "LEFT JOIN (
-                        SELECT c1.bdo_id, c1.delivery_type, c1.statement_pdf_path
-                        FROM odoo_bdo_context c1
-                        INNER JOIN (SELECT bdo_id, MAX(id) AS max_id FROM odoo_bdo_context GROUP BY bdo_id) lc ON lc.max_id = c1.id
-                       ) ctx ON bo.bdo_id = ctx.bdo_id"
-                    : "";
+        $contextSelect = $contextTableExists
+            ? ", ctx.delivery_type, ctx.statement_pdf_path, ctx.financial_summary_json"
+            : ", NULL AS delivery_type, NULL AS statement_pdf_path, NULL AS financial_summary_json";
+        $contextJoin = $contextTableExists
+            ? "LEFT JOIN (
+                SELECT c1.bdo_id, c1.delivery_type, c1.statement_pdf_path, c1.financial_summary_json
+                FROM odoo_bdo_context c1
+                INNER JOIN (SELECT bdo_id, MAX(id) AS max_id FROM odoo_bdo_context GROUP BY bdo_id) lc ON lc.max_id = c1.id
+               ) ctx ON bo.bdo_id = ctx.bdo_id"
+            : "";
 
+        // Helper: enrich BDO rows with extra fields from odoo_bdos + context
+        $enrichBdoRows = function (array $rows): array {
+            foreach ($rows as &$r) {
+                $r['id']             = (int) $r['id'];
+                $r['bdo_id']         = (int) $r['bdo_id'];
+                $r['order_id']       = (int) $r['order_id'];
+                $r['partner_id']     = $r['partner_id'] !== null ? (int) $r['partner_id'] : null;
+                $r['amount_total']   = $r['amount_total'] !== null ? (float) $r['amount_total'] : null;
+                $r['slip_upload_id'] = $r['slip_upload_id'] !== null ? (int) $r['slip_upload_id'] : null;
+                $r['amount_net_to_pay'] = $r['amount_net_to_pay'] !== null ? (float) $r['amount_net_to_pay'] : null;
+                // Prefer payment_method from odoo_bdos if orders table has null
+                if (empty($r['payment_method']) && !empty($r['bdo_payment_method'])) {
+                    $r['payment_method'] = $r['bdo_payment_method'];
+                }
+                unset($r['bdo_payment_method']);
+                // Parse financial_summary_json from context
+                if (!empty($r['financial_summary_json'])) {
+                    $r['financial_summary'] = json_decode($r['financial_summary_json'], true);
+                }
+                unset($r['financial_summary_json']);
+            }
+            unset($r);
+            return $rows;
+        };
+
+        // Try by partner_id first
+        if ($partnerId !== '' && $partnerId !== '-') {
+            try {
                 $stmt = $db->prepare("
-                    SELECT bo.*, b.state as bdo_state, b.bdo_date, b.qr_data{$contextSelect}
+                    SELECT bo.*, b.state as bdo_state, b.bdo_date, b.qr_data, b.customer_ref as bdo_customer_ref,
+                           b.amount_net_to_pay, b.payment_method as bdo_payment_method, b.salesperson_name,
+                           b.payment_state as bdo_payment_state, b.due_date{$contextSelect}
                     FROM odoo_bdo_orders bo
                     LEFT JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id
                     {$contextJoin}
                     WHERE bo.partner_id = ?
                       AND bo.payment_status IN ('pending', 'partial')
+                      AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
+                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
                     ORDER BY bo.created_at DESC
                     LIMIT ?
                 ");
                 $stmt->execute([(int) $partnerId, $limit]);
                 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                foreach ($rows as &$r) {
-                    $r['id']             = (int) $r['id'];
-                    $r['bdo_id']         = (int) $r['bdo_id'];
-                    $r['order_id']       = (int) $r['order_id'];
-                    $r['partner_id']     = $r['partner_id'] !== null ? (int) $r['partner_id'] : null;
-                    $r['amount_total']   = $r['amount_total'] !== null ? (float) $r['amount_total'] : null;
-                    $r['slip_upload_id'] = $r['slip_upload_id'] !== null ? (int) $r['slip_upload_id'] : null;
-                }
-                unset($r);
-                $bdoOrders = $rows;
+                $bdoOrders = $enrichBdoRows($rows);
+            } catch (Exception $e) {
+                $bdoErrors[] = 'partner_id query: ' . $e->getMessage();
             }
-        } catch (Exception $e) {
-            $bdoErrors[] = $e->getMessage();
+        }
+
+        // Fallback: search by customer_ref via odoo_bdos join if partner_id returned nothing
+        if (empty($bdoOrders) && $customerRef !== '') {
+            try {
+                $stmt = $db->prepare("
+                    SELECT bo.*, b.state as bdo_state, b.bdo_date, b.qr_data, b.customer_ref as bdo_customer_ref,
+                           b.amount_net_to_pay, b.payment_method as bdo_payment_method, b.salesperson_name,
+                           b.payment_state as bdo_payment_state, b.due_date{$contextSelect}
+                    FROM odoo_bdo_orders bo
+                    INNER JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id AND b.customer_ref = ?
+                    {$contextJoin}
+                    WHERE bo.payment_status IN ('pending', 'partial')
+                      AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
+                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
+                    ORDER BY bo.created_at DESC
+                    LIMIT ?
+                ");
+                $stmt->execute([$customerRef, $limit]);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $bdoOrders = $enrichBdoRows($rows);
+            } catch (Exception $e) {
+                $bdoErrors[] = 'customer_ref query: ' . $e->getMessage();
+            }
+        }
+
+        // Fallback: search by line_user_id via odoo_bdo_orders.line_user_id
+        if (empty($bdoOrders) && $lineUserId !== '') {
+            try {
+                $stmt = $db->prepare("
+                    SELECT bo.*, b.state as bdo_state, b.bdo_date, b.qr_data, b.customer_ref as bdo_customer_ref,
+                           b.amount_net_to_pay, b.payment_method as bdo_payment_method, b.salesperson_name,
+                           b.payment_state as bdo_payment_state, b.due_date{$contextSelect}
+                    FROM odoo_bdo_orders bo
+                    LEFT JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id
+                    {$contextJoin}
+                    WHERE bo.line_user_id = ?
+                      AND bo.payment_status IN ('pending', 'partial')
+                      AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
+                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
+                    ORDER BY bo.created_at DESC
+                    LIMIT ?
+                ");
+                $stmt->execute([$lineUserId, $limit]);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $bdoOrders = $enrichBdoRows($rows);
+            } catch (Exception $e) {
+                $bdoErrors[] = 'line_user_id query: ' . $e->getMessage();
+            }
         }
     }
 
@@ -4440,6 +4001,58 @@ function ensureOdooSlipInboxId($db, $odoo, array $localSlip, $lineUserId)
     ]);
 
     return $slipInboxId;
+}
+
+/**
+ * Helper: Resolve QR payload for a BDO.
+ * 1. Return local qr_payload if available
+ * 2. Fallback: fetch from Odoo live API via getBdoDetail
+ * 3. If found from Odoo, cache back to odoo_bdo_context
+ */
+function resolveQrPayload($db, $bdoId, $localQrPayload, $lineUserId, $partnerId = 0)
+{
+    if (!empty($localQrPayload)) {
+        return $localQrPayload;
+    }
+
+    // Try Odoo live API
+    try {
+        if ($lineUserId === '' && $partnerId > 0) {
+            $lineUserId = resolveLineUserIdFromPartner($db, $partnerId);
+        }
+        if ($lineUserId === '') {
+            return '';
+        }
+
+        $lineAccountId = resolveLineAccountId($db, $lineUserId);
+        if ($lineAccountId <= 0) {
+            return '';
+        }
+
+        require_once __DIR__ . '/../classes/OdooAPIClient.php';
+        $odoo = new OdooAPIClient($db, $lineAccountId);
+        $detail = $odoo->getBdoDetail($lineUserId, $bdoId);
+        $detailData = $detail['data'] ?? $detail;
+
+        $rawPayload = $detailData['bdo']['qr_payment_data']['raw_payload']
+            ?? $detailData['qr_payment_data']['raw_payload']
+            ?? '';
+
+        if (!empty($rawPayload)) {
+            // Cache to odoo_bdo_context for next time
+            try {
+                $upd = $db->prepare("UPDATE odoo_bdo_context SET qr_payload = ? WHERE bdo_id = ? AND (qr_payload IS NULL OR qr_payload = '')");
+                $upd->execute([$rawPayload, $bdoId]);
+            } catch (Exception $e) {
+                error_log('[resolveQrPayload] cache update failed: ' . $e->getMessage());
+            }
+            return $rawPayload;
+        }
+    } catch (Exception $e) {
+        error_log('[resolveQrPayload] Odoo API fallback failed for BDO #' . $bdoId . ': ' . $e->getMessage());
+    }
+
+    return '';
 }
 
 /**
@@ -4935,4 +4548,355 @@ function getOverviewCombined($db, $input)
     } catch (Exception $e) { $result['errors'][] = 'overdue_customers: ' . $e->getMessage(); }
 
     return $result;
+}
+
+// ============================================================================ //
+// Slip Match / Unmatch — restored after accidental deletion in refactor        //
+// ============================================================================ //
+
+/**
+ * Match a slip to one or more BDOs via Odoo + update local DB.
+ *
+ * Required: line_user_id, matches (array of {bdo_id, amount?})
+ * Optional: line_account_id, local_slip_id (= slip_id), slip_inbox_id, note
+ */
+function slipMatchBdo($db, $input)
+{
+    $lineUserId    = trim((string) ($input['line_user_id']    ?? ''));
+    $slipInboxId   = (int) ($input['slip_inbox_id']  ?? 0);
+    $lineAccountId = (int) ($input['line_account_id'] ?? 0);
+    $localSlipId   = (int) ($input['local_slip_id']  ?? ($input['slip_id'] ?? 0));
+    $matches       = $input['matches'] ?? [];
+    $note          = trim((string) ($input['note'] ?? ''));
+
+    $localSlip = null;
+    if ($localSlipId > 0) {
+        $stmt = $db->prepare("
+            SELECT id, line_user_id, line_account_id, slip_inbox_id, odoo_slip_id, amount, transfer_date, image_path
+            FROM odoo_slip_uploads WHERE id = ? LIMIT 1
+        ");
+        $stmt->execute([$localSlipId]);
+        $localSlip = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    if ($lineUserId === '' && $localSlip)   { $lineUserId    = trim((string) ($localSlip['line_user_id']    ?? '')); }
+    if ($slipInboxId <= 0 && $localSlip)    { $slipInboxId   = (int) ($localSlip['slip_inbox_id'] ?? $localSlip['odoo_slip_id'] ?? 0); }
+    if ($lineAccountId <= 0 && $localSlip)  { $lineAccountId = (int) ($localSlip['line_account_id'] ?? 0); }
+
+    if ($lineUserId === '') { throw new Exception('Missing line_user_id'); }
+    if (empty($matches))   { throw new Exception('Missing matches'); }
+
+    $normalizedMatches = [];
+    foreach ($matches as $match) {
+        $matchBdoId = (int) ($match['bdo_id'] ?? 0);
+        if ($matchBdoId <= 0) continue;
+        $matchAmount = isset($match['amount']) ? (float) $match['amount'] : null;
+        if ($matchAmount === null || $matchAmount <= 0) {
+            $matchAmount = resolveBdoAmount($db, $matchBdoId);
+        }
+        $normalizedMatches[] = ['bdo_id' => $matchBdoId, 'amount' => $matchAmount];
+    }
+    if (empty($normalizedMatches)) { throw new Exception('No valid BDO matches'); }
+
+    if ($lineAccountId <= 0) { $lineAccountId = resolveLineAccountId($db, $lineUserId); }
+    if ($lineAccountId <= 0) { throw new Exception('Cannot resolve line_account_id for this user'); }
+
+    require_once __DIR__ . '/../classes/OdooAPIClient.php';
+    $odoo = new OdooAPIClient($db, $lineAccountId);
+
+    if ($slipInboxId <= 0 && $localSlip) {
+        $slipInboxId = ensureOdooSlipInboxId($db, $odoo, $localSlip, $lineUserId);
+    }
+    if ($slipInboxId <= 0) { throw new Exception('Missing slip_inbox_id'); }
+
+    $odooResult = $odoo->matchSlipBdo($lineUserId, $slipInboxId, $normalizedMatches, $note);
+
+    if ($localSlipId > 0) {
+        $matchedBdos   = $odooResult['data']['matched_bdos']    ?? $odooResult['matched_bdos']    ?? [];
+        $confidence    = $odooResult['data']['match_confidence'] ?? $odooResult['match_confidence'] ?? 'manual';
+        $firstBdoName  = !empty($matchedBdos) ? ($matchedBdos[0]['bdo_name'] ?? null) : null;
+        $firstBdoId    = !empty($matchedBdos)
+            ? (int) ($matchedBdos[0]['bdo_id'] ?? ($normalizedMatches[0]['bdo_id'] ?? 0))
+            : (int) ($normalizedMatches[0]['bdo_id'] ?? 0);
+        $slipInboxName = $odooResult['data']['slip_inbox_name'] ?? $odooResult['slip_inbox_name'] ?? null;
+        $deliveryType  = !empty($matchedBdos) ? ($matchedBdos[0]['delivery_type'] ?? null) : null;
+        $totalMatched  = $odooResult['data']['total_matched']   ?? $odooResult['total_matched']   ?? null;
+
+        $db->prepare("
+            UPDATE odoo_slip_uploads
+            SET status = ?,
+                match_reason = ?,
+                matched_at = NOW(),
+                slip_inbox_id = ?,
+                slip_inbox_name = ?,
+                match_confidence = ?,
+                bdo_id = ?,
+                bdo_name = ?,
+                delivery_type = ?,
+                bdo_amount = ?
+            WHERE id = ?
+        ")->execute([
+            'matched',
+            'BDO match via dashboard: ' . json_encode(array_column($normalizedMatches, 'bdo_id')),
+            $slipInboxId,
+            $slipInboxName,
+            $confidence,
+            $firstBdoId > 0 ? $firstBdoId : null,
+            $firstBdoName,
+            $deliveryType,
+            $totalMatched !== null ? (float) $totalMatched : null,
+            $localSlipId,
+        ]);
+    }
+
+    return [
+        'odoo_result'   => $odooResult,
+        'local_updated' => $localSlipId > 0,
+        'line_user_id'  => $lineUserId,
+        'slip_inbox_id' => $slipInboxId,
+    ];
+}
+
+/**
+ * Unmatch a slip via Odoo + reset local DB.
+ *
+ * Required: line_user_id, slip_inbox_id
+ * Optional: line_account_id, reason, local_slip_id
+ */
+function slipUnmatch($db, $input)
+{
+    $lineUserId    = trim((string) ($input['line_user_id']    ?? ''));
+    $slipInboxId   = (int) ($input['slip_inbox_id']  ?? 0);
+    $reason        = trim((string) ($input['reason']  ?? 'Unmatched via dashboard'));
+    $lineAccountId = (int) ($input['line_account_id'] ?? 0);
+    $localSlipId   = (int) ($input['local_slip_id']   ?? ($input['slip_id'] ?? 0));
+
+    $localSlip = null;
+    if ($localSlipId > 0) {
+        $stmt = $db->prepare("
+            SELECT id, line_user_id, line_account_id, slip_inbox_id, odoo_slip_id
+            FROM odoo_slip_uploads WHERE id = ? LIMIT 1
+        ");
+        $stmt->execute([$localSlipId]);
+        $localSlip = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    if ($lineUserId === '' && $localSlip)  { $lineUserId    = trim((string) ($localSlip['line_user_id']    ?? '')); }
+    if ($slipInboxId <= 0 && $localSlip)   { $slipInboxId   = (int) ($localSlip['slip_inbox_id'] ?? $localSlip['odoo_slip_id'] ?? 0); }
+    if ($lineAccountId <= 0 && $localSlip) { $lineAccountId = (int) ($localSlip['line_account_id'] ?? 0); }
+
+    if ($lineUserId === '' || $slipInboxId <= 0) {
+        throw new Exception('Missing line_user_id or slip_inbox_id');
+    }
+
+    if ($lineAccountId <= 0) { $lineAccountId = resolveLineAccountId($db, $lineUserId); }
+    if ($lineAccountId <= 0) { throw new Exception('Cannot resolve line_account_id for this user'); }
+
+    require_once __DIR__ . '/../classes/OdooAPIClient.php';
+    $odoo       = new OdooAPIClient($db, $lineAccountId);
+    $odooResult = $odoo->unmatchSlip($lineUserId, $slipInboxId, $reason);
+
+    if ($localSlipId > 0) {
+        $db->prepare("
+            UPDATE odoo_slip_uploads
+            SET status = ?,
+                match_reason = ?,
+                matched_at = NULL,
+                match_confidence = NULL,
+                bdo_name = NULL,
+                slip_inbox_id = NULL,
+                slip_inbox_name = NULL,
+                bdo_id = NULL,
+                delivery_type = NULL,
+                bdo_amount = NULL
+            WHERE id = ?
+        ")->execute(['new', 'Unmatched: ' . $reason, $localSlipId]);
+    }
+
+    return [
+        'odoo_result' => $odooResult,
+        'local_reset' => $localSlipId > 0,
+    ];
+}
+
+/**
+ * Get customer detail — DB-only (no live Odoo API).
+ * Sources: odoo_orders (profile+spend), odoo_bdos (due), odoo_line_users (LINE link).
+ * Prevents 500 / fallback to odoo-webhooks-dashboard.php which uses slow JSON_EXTRACT.
+ */
+function getCustomerDetail($db, $input)
+{
+    $partnerId   = trim((string) ($input['partner_id']   ?? ''));
+    $customerRef = trim((string) ($input['customer_ref'] ?? ''));
+
+    if ($partnerId === '' && $customerRef === '') {
+        throw new Exception('Missing partner_id or customer_ref');
+    }
+
+    $detail = [
+        'partner_id'   => $partnerId,
+        'customer_ref' => $customerRef,
+        'profile'      => null,
+        'credit'       => null,
+        'link'         => null,
+        'points'       => null,
+        'warnings'     => [],
+    ];
+
+    // ── LINE link ──────────────────────────────────────────────────────────
+    $link = null;
+    if ($partnerId !== '' && $partnerId !== '-') {
+        try {
+            $s = $db->prepare("SELECT * FROM odoo_line_users WHERE odoo_partner_id = ? LIMIT 1");
+            $s->execute([(int) $partnerId]);
+            $link = $s->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Exception $e) {}
+    }
+    if (!$link && $customerRef !== '') {
+        try {
+            $s = $db->prepare("SELECT * FROM odoo_line_users WHERE odoo_customer_code = ? LIMIT 1");
+            $s->execute([$customerRef]);
+            $link = $s->fetch(PDO::FETCH_ASSOC) ?: null;
+        } catch (Exception $e) {}
+    }
+    if ($link) $detail['link'] = $link;
+
+    // ── Profile from odoo_orders (indexed, <10ms) ──────────────────────────
+    try {
+        $where  = [];
+        $params = [];
+        if ($partnerId !== '' && $partnerId !== '-') {
+            $where[]  = 'partner_id = ?';
+            $params[] = (int) $partnerId;
+        } elseif ($customerRef !== '') {
+            $where[]  = 'customer_ref = ?';
+            $params[] = $customerRef;
+        }
+        if ($where) {
+            $s = $db->prepare("
+                SELECT customer_ref, salesperson_name, line_user_id, partner_id
+                FROM odoo_orders
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY updated_at DESC LIMIT 1
+            ");
+            $s->execute($params);
+            $row = $s->fetch(PDO::FETCH_ASSOC);
+            if ($row) {
+                $detail['profile'] = [
+                    'name'             => $row['customer_ref'] ?? '',
+                    'customer_name'    => $row['customer_ref'] ?? '',
+                    'ref'              => $row['customer_ref'] ?? '',
+                    'customer_ref'     => $row['customer_ref'] ?? '',
+                    'partner_id'       => $row['partner_id'],
+                    'phone'            => '',
+                    'email'            => '',
+                    'salesperson_name' => $row['salesperson_name'] ?? '',
+                ];
+                $detail['warnings'][] = 'profile_source: odoo_orders';
+                // Ensure customer_ref is resolved for BDO lookup below
+                if ($customerRef === '') $customerRef = $row['customer_ref'] ?? '';
+            }
+        }
+    } catch (Exception $e) {
+        $detail['warnings'][] = 'profile_error: ' . $e->getMessage();
+    }
+
+    // ── Credit/spend from odoo_orders + odoo_bdos (both indexed, <20ms) ───
+    try {
+        $where  = [];
+        $params = [];
+        if ($partnerId !== '' && $partnerId !== '-') {
+            $where[]  = 'partner_id = ?';
+            $params[] = (int) $partnerId;
+        } elseif ($customerRef !== '') {
+            $where[]  = 'customer_ref = ?';
+            $params[] = $customerRef;
+        }
+        if ($where) {
+            $s = $db->prepare("
+                SELECT COALESCE(SUM(amount_total),0) as total_spend, COUNT(*) as order_count
+                FROM odoo_orders WHERE " . implode(' AND ', $where)
+            );
+            $s->execute($params);
+            $spend = $s->fetch(PDO::FETCH_ASSOC);
+
+            // Due from odoo_bdos (by customer_ref)
+            $totalDue  = 0.0;
+            $overduAmt = 0.0;
+            if ($customerRef !== '') {
+                $bs = $db->prepare("
+                    SELECT
+                        COALESCE(SUM(amount_net_to_pay), 0) as total_due,
+                        COALESCE(SUM(CASE WHEN due_date < CURDATE() THEN amount_net_to_pay ELSE 0 END), 0) as overdue
+                    FROM odoo_bdos
+                    WHERE customer_ref = ?
+                      AND payment_state NOT IN ('paid','reversed','in_payment')
+                      AND state != 'cancel'
+                ");
+                $bs->execute([$customerRef]);
+                $brow      = $bs->fetch(PDO::FETCH_ASSOC);
+                $totalDue  = (float) ($brow['total_due'] ?? 0);
+                $overduAmt = (float) ($brow['overdue']   ?? 0);
+            }
+
+            $detail['credit'] = [
+                'total_spend'      => (float) ($spend['total_spend'] ?? 0),
+                'credit_used'      => (float) ($spend['total_spend'] ?? 0),
+                'total_due'        => $totalDue,
+                'overdue_amount'   => $overduAmt,
+                'credit_remaining' => null,
+                'credit_limit'     => null,
+                'order_count'      => (int) ($spend['order_count'] ?? 0),
+            ];
+            $detail['warnings'][] = 'credit_source: sync_tables';
+        }
+    } catch (Exception $e) {
+        $detail['warnings'][] = 'credit_error: ' . $e->getMessage();
+    }
+
+    return $detail;
+}
+
+/**
+ * Get activity log (manual overrides + order notes) for a customer.
+ * Defined here to prevent 500 fallback to odoo-webhooks-dashboard.php.
+ */
+function activityLogList($db, $input)
+{
+    $partnerId = trim((string) ($input['partner_id'] ?? ''));
+    $entityRef = trim((string) ($input['entity_ref'] ?? ''));
+    $limit     = min((int) ($input['limit']  ?? 50), 200);
+    $offset    = max((int) ($input['offset'] ?? 0),  0);
+
+    $items = [];
+
+    // Manual overrides
+    try {
+        $where  = ['1=1'];
+        $params = [];
+        if ($partnerId !== '' && $partnerId !== '-') { $where[] = 'partner_id = ?'; $params[] = (int) $partnerId; }
+        if ($entityRef !== '') { $where[] = 'entity_ref = ?'; $params[] = $entityRef; }
+        $s = $db->prepare("SELECT id,'override' as log_kind,entity_type,entity_ref,old_status,new_status,reason as description,admin_name,created_at FROM odoo_manual_overrides WHERE " . implode(' AND ', $where) . " ORDER BY created_at DESC LIMIT 100");
+        $s->execute($params);
+        $items = array_merge($items, $s->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Exception $e) {}
+
+    // Order notes
+    try {
+        $where  = ['1=1'];
+        $params = [];
+        if ($partnerId !== '' && $partnerId !== '-') { $where[] = 'partner_id = ?'; $params[] = (int) $partnerId; }
+        if ($entityRef !== '') { $where[] = 'entity_ref = ?'; $params[] = $entityRef; }
+        $s = $db->prepare("SELECT id,'note' as log_kind,entity_type,entity_ref,NULL as old_status,NULL as new_status,note as description,admin_name,created_at FROM odoo_order_notes WHERE " . implode(' AND ', $where) . " ORDER BY created_at DESC LIMIT 100");
+        $s->execute($params);
+        $items = array_merge($items, $s->fetchAll(PDO::FETCH_ASSOC));
+    } catch (Exception $e) {}
+
+    usort($items, function ($a, $b) {
+        return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+    });
+    $total = count($items);
+    $items = array_slice($items, $offset, $limit);
+
+    return ['items' => $items, 'total' => $total, 'limit' => $limit, 'offset' => $offset];
 }

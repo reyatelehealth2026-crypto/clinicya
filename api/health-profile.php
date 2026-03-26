@@ -6,13 +6,35 @@
  * Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7, 18.8, 18.9, 18.10
  */
 
+// CRITICAL: Error handling must be FIRST - before any includes
+error_reporting(0);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Start output buffering to catch any accidental output
+ob_start();
+
+// Set headers before any potential output
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+// Register shutdown function to clean output buffer on fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_end_clean();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Internal server error']);
+    }
+});
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    ob_clean();
     http_response_code(200);
+    echo json_encode(['success' => true]);
+    ob_end_flush();
     exit;
 }
 
@@ -728,6 +750,8 @@ function searchDrugs($pdo) {
  */
 function jsonResponse($data, $statusCode = 200) {
     http_response_code($statusCode);
+    ob_clean();
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    ob_end_flush();
     exit;
 }

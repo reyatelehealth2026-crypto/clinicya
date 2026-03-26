@@ -52,12 +52,13 @@ try {
     $cacheTtls = [
         'stats' => 30,
         'order_grouped_today' => 30,
-        'customer_list' => 30,
+        'customer_list' => 60,
         'notification_log' => 30,
         'salesperson_list' => 180,
         'odoo_orders' => 30,
         'odoo_invoices' => 30,
         'odoo_slips' => 30,
+        'odoo_bdo_list_api' => 45,
         'customer_detail' => 45,
         'pending_bdo_orders' => 60,
     ];
@@ -66,11 +67,13 @@ try {
         $cacheKey = dashboardApiBuildCacheKey($action, $input);
         $cachedResult = dashboardApiCacheGet($cacheKey, (int) $cacheTtls[$action]);
         if ($cachedResult !== null) {
+            header('X-Dashboard-Cache: HIT');
+            header('X-Cache-Layer: redis');
             $durationMs = round((microtime(true) - $_dashboardStartTime) * 1000);
             echo json_encode([
                 'success' => true,
                 'data' => $cachedResult,
-                '_meta' => ['duration_ms' => $durationMs, 'cached' => true, 'action' => $action],
+                '_meta' => ['duration_ms' => $durationMs, 'cached' => true, 'cache' => 'hit', 'action' => $action],
             ], JSON_UNESCAPED_UNICODE);
             exit;
         }
@@ -676,7 +679,7 @@ function getInvoiceLookup($db, $input)
  */
 function getCustomerList($db, $input)
 {
-    $limit = min((int) ($input['limit'] ?? 30), 200);
+    $limit = min((int) ($input['limit'] ?? 30), 9999);
     $offset = max((int) ($input['offset'] ?? 0), 0);
     $search = trim((string) ($input['search'] ?? ''));
     $invoiceFilter = trim((string) ($input['invoice_filter'] ?? ''));
@@ -717,6 +720,7 @@ function getCustomerList($db, $input)
 
             // Sort logic
             $sortMap = [
+                'activity_desc' => 'ORDER BY latest_order_at DESC',
                 'spend_desc'  => 'ORDER BY COALESCE(spend_30d,0) DESC, latest_order_at DESC',
                 'spend_asc'   => 'ORDER BY COALESCE(spend_30d,0) ASC, latest_order_at DESC',
                 'orders_desc' => 'ORDER BY COALESCE(orders_count_total,0) DESC, latest_order_at DESC',
@@ -2823,87 +2827,69 @@ function getCustomerDetail($db, $input)
         }
     }
 
-    // Fallback: compute credit/totals from webhook order+invoice data
+    // Fallback: compute credit/totals from sync tables (odoo_orders + odoo_bdos)
+    // Replaced: old JSON_EXTRACT subqueries on odoo_webhooks_log (O(n) per row, 5-30s)
+    // New: indexed queries on sync tables (<20ms)
     if (!$detail['credit'] && ($partnerId !== '' || $customerRef !== '')) {
         try {
-            $pidExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.partner_id')), '')";
-            $cidExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), '')";
-            $refExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.ref')), '')";
-            $amtExpr  = "CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.amount_total')), ''), '0') AS DECIMAL(14,2))";
-            $resExpr  = "CAST(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.amount_residual')), ''), '0') AS DECIMAL(14,2))";
-            $orderNameExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order_name')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.name')), ''))";
-
-            $wh = [];
-            $wp = [];
+            $where  = [];
+            $params = [];
             if ($partnerId !== '' && $partnerId !== '-') {
-                $wh[] = "({$pidExpr} = ? OR {$cidExpr} = ?)";
-                $wp[] = $partnerId;
-                $wp[] = $partnerId;
+                $where[]  = 'partner_id = ?';
+                $params[] = (int) $partnerId;
             } elseif ($customerRef !== '') {
-                $wh[] = "{$refExpr} = ?";
-                $wp[] = $customerRef;
+                $where[]  = 'customer_ref = ?';
+                $params[] = $customerRef;
             }
 
-            if (!empty($wh)) {
-                $whereStr = implode(' AND ', $wh);
+            if (!empty($where)) {
+                // Total spend + count from odoo_orders (indexed on partner_id / customer_ref)
+                $s = $db->prepare("SELECT COALESCE(SUM(amount_total),0) as total_spend, COUNT(*) as order_count FROM odoo_orders WHERE " . implode(' AND ', $where));
+                $s->execute($params);
+                $ordRow = $s->fetch(PDO::FETCH_ASSOC);
 
-                // Total spend from orders (sum unique order amounts)
-                $stmtOrders = $db->prepare("
-                    SELECT
-                        COALESCE(SUM(t.amt), 0) as total_spend,
-                        COUNT(*) as order_count
-                    FROM (
-                        SELECT {$orderNameExpr} as oname, MAX({$amtExpr}) as amt
-                        FROM odoo_webhooks_log
-                        WHERE {$whereStr}
-                          AND ({$orderNameExpr}) IS NOT NULL
-                        GROUP BY oname
-                    ) t
-                ");
-                $stmtOrders->execute($wp);
-                $ordRow = $stmtOrders->fetch(PDO::FETCH_ASSOC);
+                // Resolve customer_ref for BDO lookup if only partner_id was given
+                $refForBdo = $customerRef;
+                if ($refForBdo === '' && $partnerId !== '' && $partnerId !== '-') {
+                    try {
+                        $rs = $db->prepare("SELECT customer_ref FROM odoo_orders WHERE partner_id = ? AND customer_ref IS NOT NULL LIMIT 1");
+                        $rs->execute([(int) $partnerId]);
+                        $refForBdo = (string) ($rs->fetchColumn() ?: '');
+                    } catch (Exception $e) {}
+                }
 
-                // Outstanding due from unpaid invoices
-                $invExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.invoice_number')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.invoice.name')), ''))";
-                $stmtDue = $db->prepare("
-                    SELECT COALESCE(SUM(t.residual), 0) as total_due
-                    FROM (
-                        SELECT {$invExpr} as inv_num, MAX({$resExpr}) as residual
-                        FROM odoo_webhooks_log
-                        WHERE {$whereStr}
-                          AND event_type LIKE 'invoice.%'
-                          AND event_type NOT IN ('invoice.paid', 'invoice.cancelled')
-                          AND ({$invExpr}) IS NOT NULL
-                        GROUP BY inv_num
-                    ) t
-                ");
-                $stmtDue->execute($wp);
-                $dueRow = $stmtDue->fetch(PDO::FETCH_ASSOC);
-
-                // Check if any paid invoices exist (exclude those from due)
-                $stmtPaid = $db->prepare("
-                    SELECT {$invExpr} as inv_num
-                    FROM odoo_webhooks_log
-                    WHERE {$whereStr}
-                      AND event_type = 'invoice.paid'
-                      AND ({$invExpr}) IS NOT NULL
-                    GROUP BY inv_num
-                ");
-                $stmtPaid->execute($wp);
-                $paidInvs = $stmtPaid->fetchAll(PDO::FETCH_COLUMN);
+                // Outstanding + overdue from odoo_bdos (indexed on customer_ref + payment_state)
+                $totalDue  = 0.0;
+                $overduAmt = 0.0;
+                if ($refForBdo !== '') {
+                    $bs = $db->prepare("
+                        SELECT
+                            COALESCE(SUM(amount_net_to_pay), 0) as total_due,
+                            COALESCE(SUM(CASE WHEN due_date < CURDATE() THEN amount_net_to_pay ELSE 0 END), 0) as overdue
+                        FROM odoo_bdos
+                        WHERE customer_ref = ?
+                          AND payment_state NOT IN ('paid','reversed','in_payment')
+                          AND state != 'cancel'
+                    ");
+                    $bs->execute([$refForBdo]);
+                    $brow      = $bs->fetch(PDO::FETCH_ASSOC);
+                    $totalDue  = (float) ($brow['total_due'] ?? 0);
+                    $overduAmt = (float) ($brow['overdue']   ?? 0);
+                }
 
                 $detail['credit'] = [
                     'total_spend'      => (float) ($ordRow['total_spend'] ?? 0),
                     'credit_used'      => (float) ($ordRow['total_spend'] ?? 0),
-                    'total_due'        => (float) ($dueRow['total_due'] ?? 0),
+                    'total_due'        => $totalDue,
+                    'overdue_amount'   => $overduAmt,
                     'credit_remaining' => null,
                     'credit_limit'     => null,
                     'order_count'      => (int) ($ordRow['order_count'] ?? 0),
                 ];
-                $detail['warnings'][] = 'credit_source: webhook_computed';
+                $detail['warnings'][] = 'credit_source: sync_tables';
             }
         } catch (Exception $e) {
-            $detail['warnings'][] = 'credit_webhook: ' . $e->getMessage();
+            $detail['warnings'][] = 'credit_sync: ' . $e->getMessage();
         }
     }
 
@@ -3154,190 +3140,15 @@ function activityLogList($db, $input)
 }
 
 /**
- * Get BDO records from odoo_bdos sync table (full columns).
- * Falls back to webhook log JSON extraction if table unavailable.
- */
-function getOdooBdos($db, $input)
-{
-    $partnerId   = trim((string) ($input['partner_id']   ?? ''));
-    $lineUserId  = trim((string) ($input['line_user_id'] ?? ''));
-    $customerRef = trim((string) ($input['customer_ref'] ?? ''));
-    $limit       = min((int) ($input['limit']  ?? 100), 500);
-    $offset      = max((int) ($input['offset'] ?? 0), 0);
-
-    // Resolve line_user_id from partner_id if not provided
-    if ($lineUserId === '' && $partnerId !== '' && $partnerId !== '-') {
-        try {
-            $stmt = $db->prepare("SELECT line_user_id FROM odoo_line_users WHERE odoo_partner_id = ? AND line_user_id IS NOT NULL LIMIT 1");
-            $stmt->execute([(int) $partnerId]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($row) $lineUserId = $row['line_user_id'];
-        } catch (Exception $e) { /* ignore */ }
-    }
-
-    // Try dedicated sync table first
-    try {
-        $where = [];
-        $params = [];
-
-        if ($partnerId !== '' && $partnerId !== '-') {
-            $where[] = 'partner_id = ?';
-            $params[] = (int) $partnerId;
-        } elseif ($lineUserId !== '') {
-            $where[] = 'line_user_id = ?';
-            $params[] = $lineUserId;
-        } elseif ($customerRef !== '') {
-            $where[] = 'customer_ref = ?';
-            $params[] = $customerRef;
-        }
-
-        $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
-
-        $totalStmt = $db->prepare("SELECT COUNT(*) FROM odoo_bdos {$whereClause}");
-        $totalStmt->execute($params);
-        $total = (int) $totalStmt->fetchColumn();
-
-        if ($total > 0 || $whereClause !== '') {
-            $sql = "
-                SELECT
-                    id, bdo_id, bdo_name,
-                    order_id, order_name,
-                    partner_id, customer_ref, line_user_id,
-                    salesperson_id, salesperson_name,
-                    state, amount_total, currency,
-                    bdo_date, expected_delivery,
-                    latest_event, synced_at, updated_at
-                FROM odoo_bdos
-                {$whereClause}
-                ORDER BY updated_at DESC
-                LIMIT ? OFFSET ?
-            ";
-            $params[] = $limit;
-            $params[] = $offset;
-            $stmt = $db->prepare($sql);
-            $stmt->execute($params);
-            $bdos = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            foreach ($bdos as &$b) {
-                $b['id']           = (int) $b['id'];
-                $b['bdo_id']       = (int) $b['bdo_id'];
-                $b['partner_id']   = $b['partner_id']   !== null ? (int) $b['partner_id']   : null;
-                $b['order_id']     = $b['order_id']     !== null ? (int) $b['order_id']     : null;
-                $b['salesperson_id']= $b['salesperson_id'] !== null ? (int) $b['salesperson_id'] : null;
-                $b['amount_total'] = $b['amount_total'] !== null ? (float) $b['amount_total'] : null;
-            }
-            unset($b);
-
-            // Backfill NULL bdo_date from webhook log
-            $nullBdos = array_filter($bdos, function($b) { return !$b['bdo_date'] && $b['bdo_name']; });
-            if (!empty($nullBdos)) {
-                try {
-                    $names = array_map(function($b) { return $b['bdo_name']; }, $nullBdos);
-                    $placeholders = implode(',', array_fill(0, count($names), '?'));
-                    $bdoNameExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.bdo_name')),'')";
-                    $dateExpr    = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.bdo_date')),'')";
-                    $wbStmt = $db->prepare("
-                        SELECT {$bdoNameExpr} AS bdo_name,
-                               MAX({$dateExpr}) AS bdo_date,
-                               MAX(processed_at) AS processed_at
-                        FROM odoo_webhooks_log
-                        WHERE event_type LIKE 'bdo.%'
-                          AND {$bdoNameExpr} IN ({$placeholders})
-                        GROUP BY {$bdoNameExpr}
-                    ");
-                    $wbStmt->execute($names);
-                    $wbMap = [];
-                    foreach ($wbStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                        $wbMap[$row['bdo_name']] = $row;
-                    }
-                    foreach ($bdos as &$b) {
-                        if (!$b['bdo_date'] && isset($wbMap[$b['bdo_name']])) {
-                            $wb = $wbMap[$b['bdo_name']];
-                            $b['bdo_date'] = $wb['bdo_date'] ?: $wb['processed_at'] ?: null;
-                        }
-                    }
-                    unset($b);
-                } catch (Exception $e) { /* ignore */ }
-            }
-
-            return ['bdos' => $bdos, 'total' => $total, 'source' => 'sync_table', 'limit' => $limit, 'offset' => $offset];
-        }
-    } catch (Exception $e) {
-        // fall through to webhook log
-    }
-
-    // Fallback: query from webhook log with JSON extraction
-    $pidExpr      = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), '')";
-    $refExpr      = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.ref')), '')";
-    $bdoIdExpr    = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.bdo_id')), '')";
-    $bdoNameExpr  = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.bdo_name')), '')";
-    $amountExpr   = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.amount_total')), '')";
-    $dateExpr     = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.bdo_date')), '')";
-    $stateExpr    = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.new_state')), '')";
-    $orderNameExpr= "JSON_UNQUOTE(JSON_EXTRACT(payload, '$.sale_orders[0].name'))";
-
-    $fbWhere  = ["event_type LIKE 'bdo.%'"];
-    $fbParams = [];
-    if ($partnerId !== '' && $partnerId !== '-') {
-        $fbWhere[] = "{$pidExpr} = ?";
-        $fbParams[] = $partnerId;
-    } elseif ($customerRef !== '') {
-        $fbWhere[] = "{$refExpr} = ?";
-        $fbParams[] = $customerRef;
-    }
-    $fbWhereClause = 'WHERE ' . implode(' AND ', $fbWhere);
-
-    try {
-        $stmt = $db->prepare("SELECT COUNT(*) FROM odoo_webhooks_log {$fbWhereClause}");
-        $stmt->execute($fbParams);
-        $total = (int) $stmt->fetchColumn();
-
-        $fbParams2 = $fbParams;
-        $stmt = $db->prepare("
-            SELECT id, event_type,
-                {$bdoIdExpr} as bdo_id,
-                {$bdoNameExpr} as bdo_name,
-                {$orderNameExpr} as order_name,
-                {$amountExpr} as amount_total,
-                {$dateExpr} as bdo_date,
-                {$stateExpr} as state,
-                processed_at
-            FROM odoo_webhooks_log {$fbWhereClause}
-            ORDER BY processed_at DESC
-            LIMIT {$limit} OFFSET {$offset}
-        ");
-        $stmt->execute($fbParams2);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $bdos = [];
-        foreach ($rows as $row) {
-            $bdos[] = [
-                'id'           => (int) $row['id'],
-                'bdo_id'       => $row['bdo_id'] ? (int) $row['bdo_id'] : null,
-                'bdo_name'     => $row['bdo_name'] ?: null,
-                'order_name'   => $row['order_name'] ?: null,
-                'amount_total' => $row['amount_total'] ? (float) $row['amount_total'] : null,
-                'bdo_date'     => $row['bdo_date'] ?: $row['processed_at'],
-                'state'        => $row['state'] ?: 'confirmed',
-                'event_type'   => $row['event_type'],
-            ];
-        }
-        return ['bdos' => $bdos, 'total' => $total, 'source' => 'webhook_log', 'limit' => $limit, 'offset' => $offset];
-    } catch (Exception $e) {
-        return ['bdos' => [], 'total' => 0, 'error' => $e->getMessage()];
-    }
-}
-
-/**
  * Get distinct salespersons seen in odoo_webhooks_log payloads.
  * Used to populate the salesperson filter dropdown.
  */
 function getSalespersonList($db)
 {
     $processedAtColumn = resolveWebhookTimeColumn($db);
-    $spIdExpr   = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.salesperson.id')), '')";
-    $spNameExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.salesperson.name')), '')";
-    $customerKeyExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.partner_id')), ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')), ''))";
+    $spIdExpr   = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.salesperson.id')) COLLATE utf8mb4_unicode_ci, '')";
+    $spNameExpr = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.salesperson.name')) COLLATE utf8mb4_unicode_ci, '')";
+    $customerKeyExpr = "COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.partner_id')) COLLATE utf8mb4_unicode_ci, ''), NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.id')) COLLATE utf8mb4_unicode_ci, ''))";
 
     // Limit scan scope to keep dropdown API responsive on large logs.
     $windowWhere = $processedAtColumn
@@ -3713,13 +3524,13 @@ function getPendingBdoOrdersApi($db, $input)
         }
 
         $contextSelect = $contextTableExists
-            ? ", ctx.delivery_type, ctx.statement_pdf_path"
-            : ", NULL AS delivery_type, NULL AS statement_pdf_path";
+            ? ", ctx.delivery_type, ctx.statement_pdf_path, ctx.financial_summary_json"
+            : ", NULL AS delivery_type, NULL AS statement_pdf_path, NULL AS financial_summary_json";
 
         $contextJoin = $contextTableExists
             ? "
             LEFT JOIN (
-                SELECT c1.bdo_id, c1.delivery_type, c1.statement_pdf_path
+                SELECT c1.bdo_id, c1.delivery_type, c1.statement_pdf_path, c1.financial_summary_json
                 FROM odoo_bdo_context c1
                 INNER JOIN (
                     SELECT bdo_id, MAX(id) AS max_id
@@ -3748,6 +3559,16 @@ function getPendingBdoOrdersApi($db, $input)
             $r['bdo_id']       = (int) $r['bdo_id'];
             $r['order_id']     = (int) $r['order_id'];
             $r['partner_id']   = $r['partner_id'] !== null ? (int) $r['partner_id'] : null;
+            
+            // Prefer amount_net_to_pay from financial_summary_json to reflect real pending amount
+            if (!empty($r['financial_summary_json'])) {
+                $fin = json_decode($r['financial_summary_json'], true);
+                if (isset($fin['amount_net_to_pay'])) {
+                    $r['amount_total'] = $fin['amount_net_to_pay'];
+                }
+            }
+            unset($r['financial_summary_json']);
+
             $r['amount_total'] = $r['amount_total'] !== null ? (float) $r['amount_total'] : null;
             $r['slip_upload_id'] = $r['slip_upload_id'] !== null ? (int) $r['slip_upload_id'] : null;
         }
@@ -3790,7 +3611,7 @@ function unmatchSlipAction($db, $input)
                 if ($tblChk->rowCount() > 0) {
                     $db->prepare("
                         UPDATE odoo_bdo_orders
-                        SET payment_status = 'pending', slip_upload_id = NULL, updated_at = NOW()
+                        SET payment_status = 'pending', slip_upload_id = NULL
                         WHERE bdo_id = ? AND slip_upload_id = ?
                     ")->execute([$bdoId, $slipId]);
                 }
@@ -4082,7 +3903,7 @@ function _updateLocalSlipMatch($db, $slipInboxId, $matches, $note)
                 if ($tblChk->rowCount() > 0) {
                     $db->prepare("
                         UPDATE odoo_bdo_orders
-                        SET payment_status = 'matched', slip_upload_id = ?, updated_at = NOW()
+                        SET payment_status = 'matched', slip_upload_id = ?
                         WHERE bdo_id = ?
                     ")->execute([$slipInboxId, $bdoId]);
                 }

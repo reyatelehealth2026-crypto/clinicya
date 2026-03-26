@@ -249,8 +249,8 @@ if (!empty($events)) {
 // Trigger scheduled broadcasts in background for every incoming webhook
 try {
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-    $baseUrl = $protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']);
-    $triggerUrl = rtrim($baseUrl, '/') . '/api/process_scheduled_broadcasts.php';
+    $baseUrl = rtrim($protocol . $_SERVER['HTTP_HOST'], '/');
+    $triggerUrl = $baseUrl . '/api/process_scheduled_broadcasts.php';
     $ch = curl_init($triggerUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
     curl_setopt($ch, CURLOPT_NOBODY, true);
@@ -4167,7 +4167,12 @@ function handlePaymentSlipForOrder($db, $line, $dbUserId, $messageId, $replyToke
     }
 
     // Download image from LINE and save
-    $imageData = $line->getMessageContent($messageId);
+    try {
+        $imageData = $line->getMessageContent($messageId);
+    } catch (Exception $e) {
+        error_log('getMessageContent failed: ' . $e->getMessage());
+        $imageData = null;
+    }
     if (!$imageData || strlen($imageData) < 100) {
         sendMessageWithFallback($line, $replyToken, $userId, [['type' => 'text', 'text' => "❌ ไม่สามารถรับรูปภาพได้ กรุณาส่งใหม่อีกครั้ง"]], $db);
         return true;
@@ -4279,7 +4284,12 @@ function handlePaymentSlip($db, $line, $dbUserId, $messageId, $replyToken)
     }
 
     // Download image from LINE and save
-    $imageData = $line->getMessageContent($messageId);
+    try {
+        $imageData = $line->getMessageContent($messageId);
+    } catch (Exception $e) {
+        error_log('getMessageContent failed: ' . $e->getMessage());
+        $imageData = null;
+    }
     if (!$imageData) {
         return false;
     }
@@ -4360,7 +4370,12 @@ function sendTelegramNotificationWithMedia($db, $line, $displayName, $messageTyp
 
     if ($messageType === 'image') {
         // Get image content from LINE
-        $imageData = $line->getMessageContent($messageId);
+        try {
+            $imageData = $line->getMessageContent($messageId);
+        } catch (Exception $e) {
+            error_log('getMessageContent failed: ' . $e->getMessage());
+            $imageData = null;
+        }
         if ($imageData) {
             $telegram->sendPhoto($imageData, $caption, $dbUserId);
         } else {

@@ -641,7 +641,8 @@ function renderMatchingTab(){
         pendingBdos.forEach(function(b, idx){
             const bName=escapeHtml(b.bdo_name||('BDO-'+b.bdo_id)||'-');
             const oName=escapeHtml(b.order_name||'-');
-            const amt=b.amount_total!=null?'฿'+Number(b.amount_total).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2}):'-';
+            const _netAmt=b.amount_net_to_pay!=null?b.amount_net_to_pay:b.amount_total;
+            const amt=_netAmt!=null?'฿'+Number(_netAmt).toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2}):'-';
             const dt=b.bdo_date?new Date(b.bdo_date).toLocaleDateString('th-TH',{day:'2-digit',month:'short',year:'numeric'}):'-';
             const st=String(b.payment_status||b.state||'').toLowerCase();
             let stBg='#fef3c7';let stClr='#d97706';let stLbl='รอชำระ';
@@ -691,7 +692,7 @@ function renderBdos(bdos){
     const c=document.getElementById('bdosContent');
     if(!bdos.length){c.innerHTML='<div style="text-align:center;padding:2rem;color:var(--gray-400);"><i class="bi bi-truck" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>ไม่พบ BDO</div>';return;}
     let h='<div style="overflow-x:auto;"><table class="tbl"><thead><tr>';
-    h+='<th>BDO</th><th>ออเดอร์</th><th>วันที่</th><th style="text-align:right;">ยอดรวม</th><th>สถานะ</th>';
+    h+='<th>BDO</th><th>ออเดอร์</th><th>วันที่</th><th style="text-align:right;">ยอดสุทธิ</th><th>สถานะ</th>';
     h+='</tr></thead><tbody>';
     bdos.forEach(function(b,i){
         const bg=i%2===0?'white':'var(--gray-50)';
@@ -699,7 +700,7 @@ function renderBdos(bdos){
         h+='<td style="font-weight:600;">'+escapeHtml(b.bdo_name||'-')+'</td>';
         h+='<td style="font-size:0.85rem;color:var(--gray-600);">'+escapeHtml(b.order_name||'-')+'</td>';
         h+='<td style="font-size:0.8rem;color:var(--gray-500);">'+fmtThDate(b.bdo_date||b.synced_at||b.updated_at)+'</td>';
-        h+='<td style="text-align:right;font-weight:600;">'+fmtBaht(b.amount_total)+'</td>';
+        h+='<td style="text-align:right;font-weight:600;">'+fmtBaht(b.amount_net_to_pay!=null?b.amount_net_to_pay:b.amount_total)+'</td>';
         h+='<td>'+bdoStateBadge(b.state)+'</td>';
         h+='</tr>';
     });
@@ -922,8 +923,9 @@ function openBdoSlipAttach(bdoData, pendingSlips){
     _bsaBdoData=bdoData;_bsaSlips=pendingSlips||[];_bsaSelectedSlipId=null;_bsaFileBase64=null;
     document.getElementById('bsaBdoName').textContent=bdoData.bdo_name||('BDO-'+bdoData.bdo_id);
     document.getElementById('bsaOrderName').textContent=bdoData.order_name||'-';
-    document.getElementById('bsaAmount').textContent=bdoData.amount_total!=null?'฿'+Number(bdoData.amount_total).toLocaleString():'-';
-    document.getElementById('bsaAmountInput').value=bdoData.amount_total||'';
+    const _bsaNetAmt=bdoData.amount_net_to_pay!=null?bdoData.amount_net_to_pay:bdoData.amount_total;
+    document.getElementById('bsaAmount').textContent=_bsaNetAmt!=null?'฿'+Number(_bsaNetAmt).toLocaleString():'-';
+    document.getElementById('bsaAmountInput').value=_bsaNetAmt||'';
     document.getElementById('bsaDateInput').value=new Date().toISOString().slice(0,10);
     document.getElementById('bsaPreview').style.display='none';
     document.getElementById('bsaFileInput').value='';
@@ -999,7 +1001,7 @@ async function bsaConfirmAttach(){
                 action:'slip_match_bdo',
                 slip_inbox_id:slip.slip_inbox_id || slip.odoo_slip_id || slip.id || slip.slip_id,
                 line_user_id:slip.line_user_id || '',
-                matches:[{bdo_id:_bsaBdoData.bdo_id,amount:amount != null ? amount : parseFloat(_bsaBdoData.amount_total || _bsaBdoData.amount_net_to_pay || 0)}],
+                matches:[{bdo_id:_bsaBdoData.bdo_id,amount:amount != null ? amount : parseFloat(_bsaBdoData.amount_net_to_pay || _bsaBdoData.amount_total || 0)}],
                 note:'Attach slip from customer detail modal',
                 local_slip_id:slip.id || slip.slip_id
             });

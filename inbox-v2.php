@@ -6978,21 +6978,27 @@ function formatThaiDateTime($datetime)
 
             function formatThaiTimeLocal(timestamp) {
                 if (!timestamp) return '';
-                const date = new Date(timestamp);
-                const now = new Date();
-                const hours = date.getHours().toString().padStart(2, '0');
-                const minutes = date.getMinutes().toString().padStart(2, '0');
+                // DB stores Bangkok time (+07:00); append offset so JS parses correctly
+                const raw = String(timestamp).trim();
+                const date = raw.includes('T') || raw.includes('+') || raw.includes('Z')
+                    ? new Date(raw)
+                    : new Date(raw.replace(' ', 'T') + '+07:00');
+                if (isNaN(date)) return '';
+                const bangkokDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+                const nowBangkok = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+                const hours = bangkokDate.getHours().toString().padStart(2, '0');
+                const minutes = bangkokDate.getMinutes().toString().padStart(2, '0');
 
-                if (date.toDateString() === now.toDateString()) {
+                if (bangkokDate.toDateString() === nowBangkok.toDateString()) {
                     return `${hours}:${minutes} น.`;
                 }
-                const yesterday = new Date(now);
+                const yesterday = new Date(nowBangkok);
                 yesterday.setDate(yesterday.getDate() - 1);
-                if (date.toDateString() === yesterday.toDateString()) {
+                if (bangkokDate.toDateString() === yesterday.toDateString()) {
                     return `เมื่อวาน`;
                 }
-                const day = date.getDate().toString().padStart(2, '0');
-                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const day = bangkokDate.getDate().toString().padStart(2, '0');
+                const month = (bangkokDate.getMonth() + 1).toString().padStart(2, '0');
                 return `${day}/${month}`;
             }
 

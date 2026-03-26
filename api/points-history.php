@@ -3,13 +3,37 @@
  * Points History API
  * API สำหรับดูประวัติคะแนนสะสม
  */
+
+// CRITICAL: Error handling must be FIRST - before any includes
+error_reporting(0);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Start output buffering to catch any accidental output
+ob_start();
+
+// Set headers before any potential output
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+// Register shutdown function to clean output buffer on fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_end_clean();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Internal server error']);
+    }
+});
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    exit(0);
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(['success' => true]);
+    ob_end_flush();
+    exit;
 }
 
 require_once __DIR__ . '/../config/config.php';
@@ -22,7 +46,9 @@ $action = $_GET['action'] ?? $_POST['action'] ?? 'history';
 $lineUserId = $_GET['line_user_id'] ?? $_POST['line_user_id'] ?? null;
 
 if (!$lineUserId) {
-    echo json_encode(['success' => false, 'error' => 'Missing line_user_id']);
+    ob_clean();
+    echo json_encode(["success" => false, "error" => "Missing line_user_id"]);
+    ob_end_flush();
     exit;
 }
 
@@ -33,7 +59,9 @@ try {
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$user) {
+        ob_clean();
         echo json_encode(['success' => false, 'error' => 'User not found']);
+        ob_end_flush();
         exit;
     }
 
@@ -163,6 +191,7 @@ try {
                 'pending_confirmation_date' => $pendingConfirmDate,
                 'history' => $formatted
             ]);
+            ob_end_flush();
             break;
 
         case 'history':
@@ -194,6 +223,7 @@ try {
                 ],
                 'history' => $formatted
             ]);
+            ob_end_flush();
             break;
 
         case 'full_history':
@@ -299,6 +329,7 @@ try {
                     'has_more' => ($offset + count($history)) < $totalCount
                 ]
             ]);
+            ob_end_flush();
             break;
 
         case 'rewards':
@@ -334,12 +365,15 @@ try {
                 'rewards' => $rewards,
                 'my_redemptions' => $formattedRedemptions
             ]);
+            ob_end_flush();
             break;
 
         case 'redeem':
             $rewardId = (int) ($_POST['reward_id'] ?? 0);
             if (!$rewardId) {
+                ob_clean();
                 echo json_encode(['success' => false, 'error' => 'Missing reward_id']);
+                ob_end_flush();
                 exit;
             }
 
@@ -347,25 +381,34 @@ try {
 
             // Format response
             if ($result['success']) {
+                ob_clean();
                 echo json_encode([
                     'success' => true,
                     'message' => 'แลกรางวัลสำเร็จ!',
                     'redemption_code' => $result['redemption_code'],
                     'reward_name' => $result['reward']['name'] ?? ''
                 ]);
+                ob_end_flush();
             } else {
+                ob_clean();
                 echo json_encode([
                     'success' => false,
                     'error' => $result['message'] ?? 'ไม่สามารถแลกรางวัลได้'
                 ]);
+                ob_end_flush();
             }
             break;
 
         default:
+            ob_clean();
             echo json_encode(['success' => false, 'error' => 'Invalid action']);
+            ob_end_flush();
+    }
     }
 
 } catch (Exception $e) {
     error_log("Points History API error: " . $e->getMessage());
+    ob_clean();
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    ob_end_flush();
 }

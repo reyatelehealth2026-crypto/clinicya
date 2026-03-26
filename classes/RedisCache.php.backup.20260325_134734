@@ -1,0 +1,384 @@
+<?php
+/**
+ * RedisCache — Optimized Redis adapter with retry mechanism and file fallback
+ *
+ * @version 2.0.0 - OPTIMIZED
+ * @updated 2026-03-25 - Added retry mechanism, connection pooling, file fallback
+ */
+
+class RedisCache
+{
+    private static ?RedisCache $instance = null;
+    private ?object $redis = null;
+    private bool $connected = false;
+    private string $prefix;
+    private string $fileCacheDir;
+    private int $connectAttempts = 0;
+    private const MAX_CONNECT_ATTEMPTS = 3;
+
+    // OPTIMIZED: Increased timeout from 2.0 to 5.0 seconds
+    private const DEFAULT_HOST    = '127.0.0.1';
+    private const DEFAULT_PORT    = 6379;
+    private const DEFAULT_TIMEOUT = 5.0;  // OPTIMIZED: Was 2.0
+    private const DEFAULT_READ_TIMEOUT = 10.0;  // NEW: Separate read timeout
+    private const DEFAULT_RETRY_INTERVAL = 100000; // NEW: 100ms between retries
+    private const DEFAULT_PREFIX  = 'cny:dash:';
+
+    private function __construct()
+    {
+        $this->prefix = defined('REDIS_PREFIX') ? REDIS_PREFIX : self::DEFAULT_PREFIX;
+        $this->fileCacheDir = sys_get_temp_dir() . '/cny_cache/' . $this->prefix;
+        
+        // Create file cache directory if needed
+        if (!is_dir($this->fileCacheDir)) {
+            @mkdir($this->fileCacheDir, 0755, true);
+        }
+        
+        $this->connectWithRetry();
+    }
+
+    /**
+     * Singleton accessor
+     */
+    public static function getInstance(): self
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    /**
+     * OPTIMIZED: Connection with retry mechanism
+     */
+    private function connectWithRetry(): void
+    {
+        while ($this->connectAttempts < self::MAX_CONNECT_ATTEMPTS) {
+            if ($this->attemptConnect()) {
+                $this->connected = true;
+                return;
+            }
+            
+            $this->connectAttempts++;
+            if ($this->connectAttempts < self::MAX_CONNECT_ATTEMPTS) {
+                usleep(self::DEFAULT_RETRY_INTERVAL * $this->connectAttempts);
+            }
+        }
+        
+        $this->connected = false;
+        $this->redis = null;
+        error_log('[RedisCache] Failed to connect after ' . self::MAX_CONNECT_ATTEMPTS . ' attempts');
+    }
+
+    /**
+     * Single connection attempt
+     */
+    private function attemptConnect(): bool
+    {
+        $host    = defined('REDIS_HOST') ? REDIS_HOST : self::DEFAULT_HOST;
+        $port    = defined('REDIS_PORT') ? (int) REDIS_PORT : self::DEFAULT_PORT;
+        $timeout = defined('REDIS_TIMEOUT') ? (float) REDIS_TIMEOUT : self::DEFAULT_TIMEOUT;
+        $readTimeout = defined('REDIS_READ_TIMEOUT') ? (float) REDIS_READ_TIMEOUT : self::DEFAULT_READ_TIMEOUT;
+        $user    = defined('REDIS_USERNAME') ? REDIS_USERNAME : null;
+        $pass    = defined('REDIS_PASSWORD') ? REDIS_PASSWORD : null;
+        $db      = defined('REDIS_DB') ? (int) REDIS_DB : 0;
+
+        // Prefer native phpredis extension
+        if (extension_loaded('redis')) {
+            try {
+                $r = new \Redis();
+                
+                // OPTIMIZED: Use persistent connections for better performance
+                $persistent = defined('REDIS_PERSISTENT') ? REDIS_PERSISTENT : true;
+                
+                if ($persistent) {
+                    $connected = $r->pconnect($host, $port, $timeout);
+                } else {
+                    $connected = $r->connect($host, $port, $timeout);
+                }
+                
+                if (!$connected) {
+                    return false;
+                }
+                
+                // OPTIMIZED: Set read timeout
+                $r->setOption(\Redis::OPT_READ_TIMEOUT, $readTimeout);
+                
+                if ($user && $pass) {
+                    $r->auth([$user, $pass]);
+                } elseif ($pass) {
+                    $r->auth($pass);
+                }
+                
+                if ($db > 0) {
+                    $r->select($db);
+                }
+                
+                $r->setOption(\Redis::OPT_SERIALIZER, \Redis::SERIALIZER_JSON);
+                $r->setOption(\Redis::OPT_PREFIX, $this->prefix);
+                
+                // Test connection
+                if ($r->ping() !== '+PONG') {
+                    return false;
+                }
+                
+                $this->redis = $r;
+                return true;
+            } catch (\Exception $e) {
+                error_log('[RedisCache] Connection attempt failed: ' . $e->getMessage());
+                return false;
+            }
+        }
+
+        // Fallback: Predis library
+        if (class_exists('Predis\\Client')) {
+            try {
+                $params = [
+                    'scheme'  => 'tcp',
+                    'host'    => $host,
+                    'port'    => $port,
+                    'timeout' => $timeout,
+                ];
+                if ($user) $params['username'] = $user;
+                if ($pass) $params['password'] = $pass;
+                if ($db > 0) $params['database'] = $db;
+                
+                $r = new \Predis\Client($params);
+                $r->ping();
+                $this->redis = $r;
+                return true;
+            } catch (\Exception $e) {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if Redis is available
+     */
+    public function isConnected(): bool
+    {
+        if (!$this->connected || $this->redis === null) {
+            return false;
+        }
+        
+        // Health check
+        try {
+            if ($this->redis instanceof \Redis) {
+                return $this->redis->ping() === '+PONG';
+            }
+            $this->redis->ping();
+            return true;
+        } catch (\Exception $e) {
+            $this->connected = false;
+            return false;
+        }
+    }
+
+    /**
+     * OPTIMIZED: Get with file fallback
+     */
+    public function get(string $key)
+    {
+        // Try Redis first
+        if ($this->isConnected()) {
+            try {
+                if ($this->redis instanceof \Redis) {
+                    $raw = $this->redis->get($key);
+                    if ($raw !== false) {
+                        return $raw;
+                    }
+                } else {
+                    $raw = $this->redis->get($this->prefix . $key);
+                    if ($raw !== null) {
+                        return json_decode($raw, true);
+                    }
+                }
+            } catch (\Exception $e) {
+                $this->handleError($e);
+            }
+        }
+        
+        // NEW: File cache fallback
+        return $this->fileGet($key);
+    }
+
+    /**
+     * OPTIMIZED: Set with file fallback
+     */
+    public function set(string $key, $data, int $ttl = 60): bool
+    {
+        $redisSuccess = false;
+        
+        // Try Redis first
+        if ($this->isConnected()) {
+            try {
+                if ($this->redis instanceof \Redis) {
+                    $redisSuccess = $this->redis->setex($key, $ttl, $data);
+                } else {
+                    $encoded = json_encode($data, JSON_UNESCAPED_UNICODE);
+                    $this->redis->setex($this->prefix . $key, $ttl, $encoded);
+                    $redisSuccess = true;
+                }
+            } catch (\Exception $e) {
+                $this->handleError($e);
+            }
+        }
+        
+        // NEW: Always write to file cache as fallback
+        $fileSuccess = $this->fileSet($key, $data, $ttl);
+        
+        return $redisSuccess || $fileSuccess;
+    }
+
+    /**
+     * NEW: File-based cache get
+     */
+    private function fileGet(string $key): ?array
+    {
+        $file = $this->fileCacheDir . '/' . $this->sanitizeKey($key) . '.cache';
+        
+        if (!file_exists($file)) {
+            return null;
+        }
+        
+        $data = @unserialize(@file_get_contents($file));
+        if ($data === false || !is_array($data)) {
+            @unlink($file);
+            return null;
+        }
+        
+        // Check expiration
+        if (isset($data['exp']) && $data['exp'] < time()) {
+            @unlink($file);
+            return null;
+        }
+        
+        return $data['val'] ?? null;
+    }
+
+    /**
+     * NEW: File-based cache set
+     */
+    private function fileSet(string $key, $value, int $ttl): bool
+    {
+        $file = $this->fileCacheDir . '/' . $this->sanitizeKey($key) . '.cache';
+        $data = [
+            'exp' => time() + $ttl,
+            'val' => $value
+        ];
+        
+        return @file_put_contents($file, serialize($data), LOCK_EX) !== false;
+    }
+
+    /**
+     * NEW: Sanitize key for filesystem
+     */
+    private function sanitizeKey(string $key): string
+    {
+        return preg_replace('/[^a-zA-Z0-9_-]/', '_', $key);
+    }
+
+    /**
+     * Delete one or more keys
+     */
+    public function del($keys): int
+    {
+        if (!$this->isConnected()) {
+            return 0;
+        }
+
+        try {
+            $keys = (array) $keys;
+            if ($this->redis instanceof \Redis) {
+                return $this->redis->del(...$keys);
+            }
+            $prefixed = array_map(fn($k) => $this->prefix . $k, $keys);
+            return $this->redis->del($prefixed);
+        } catch (\Exception $e) {
+            $this->handleError($e);
+            return 0;
+        }
+    }
+
+    /**
+     * Flush all dashboard cache keys
+     */
+    public function flush(): int
+    {
+        $count = 0;
+        
+        // Flush Redis
+        if ($this->isConnected()) {
+            try {
+                $pattern = $this->prefix . '*';
+                if ($this->redis instanceof \Redis) {
+                    $it = null;
+                    while ($keys = $this->redis->scan($it, $pattern, 100)) {
+                        if (!empty($keys)) {
+                            $count += $this->redis->del(...$keys);
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                $this->handleError($e);
+            }
+        }
+        
+        // Flush file cache
+        foreach (glob($this->fileCacheDir . '/*.cache') as $file) {
+            @unlink($file);
+            $count++;
+        }
+        
+        return $count;
+    }
+
+    /**
+     * Get Redis info for health check
+     */
+    public function getInfo(): array
+    {
+        if (!$this->isConnected()) {
+            return ['connected' => false, 'fallback' => 'file_cache'];
+        }
+
+        try {
+            if ($this->redis instanceof \Redis) {
+                $info = $this->redis->info('memory');
+                return [
+                    'connected'     => true,
+                    'driver'        => 'phpredis',
+                    'persistent'    => defined('REDIS_PERSISTENT') ? REDIS_PERSISTENT : true,
+                    'used_memory'   => $info['used_memory_human'] ?? 'N/A',
+                    'uptime_days'   => ($info['uptime_in_seconds'] ?? 0) / 86400,
+                    'keys'          => $this->redis->dbSize(),
+                    'fallback'      => 'file_cache',
+                ];
+            }
+            return ['connected' => true, 'driver' => 'predis', 'fallback' => 'file_cache'];
+        } catch (\Exception $e) {
+            return ['connected' => false, 'error' => $e->getMessage(), 'fallback' => 'file_cache'];
+        }
+    }
+
+    /**
+     * Handle Redis error
+     */
+    private function handleError(\Exception $e): void
+    {
+        error_log('[RedisCache] Error: ' . $e->getMessage());
+        
+        // Mark disconnected to avoid cascade failures
+        $this->connected = false;
+        
+        // Try to reconnect on next operation if enough time has passed
+        if ($this->connectAttempts < self::MAX_CONNECT_ATTEMPTS) {
+            $this->connectWithRetry();
+        }
+    }
+
+    private function __clone() {}
+}

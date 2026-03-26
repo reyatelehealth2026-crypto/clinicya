@@ -1,4 +1,5 @@
 <?php
+ob_start();
 /**
  * Odoo Slip Upload API
  * 
@@ -11,9 +12,9 @@
  */
 
 // Debugging 500 errors
-ini_set('display_errors', 0);
-ini_set('log_errors', 1);
-error_reporting(E_ALL);
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 
 register_shutdown_function(function () {
     $error = error_get_last();
@@ -307,7 +308,7 @@ try {
             if ($tblCheck->rowCount() > 0) {
                 $updBdo = $db->prepare("
                     UPDATE odoo_bdo_orders 
-                    SET payment_status = 'slip_uploaded', slip_upload_id = ?, updated_at = NOW()
+                    SET payment_status = 'slip_uploaded', slip_upload_id = ?
                     WHERE bdo_id = ? AND payment_status = 'pending'
                 ");
                 $updBdo->execute([(int) $slipDbId, (int) $bdoId]);
@@ -318,6 +319,7 @@ try {
     }
 
     // Return success response
+    ob_clean();
     echo json_encode([
         'success' => true,
         'message' => 'บันทึกสลิปเรียบร้อยแล้ว',
@@ -332,6 +334,7 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Exception $e) {
+    ob_clean();
     http_response_code(400);
     echo json_encode([
         'success' => false,

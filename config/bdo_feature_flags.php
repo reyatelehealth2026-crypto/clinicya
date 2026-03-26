@@ -16,7 +16,7 @@
 
 return [
     /**
-     * Use BdoContextManager (multi-BDO-safe) instead of legacy saveBdoContext().
+     * Use BdoCodntextManager (multi-BDO-safe) instead of legacy saveBdoContext().
      * When true: openContext() / closeContext() are called on webhook events.
      * When false: legacy saveBdoContext() is used (single-BDO-per-customer).
      */

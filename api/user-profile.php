@@ -3,13 +3,36 @@
  * User Profile API
  * สำหรับ LIFF - บันทึก/ดึงข้อมูล user profile
  */
+
+// CRITICAL: Error handling must be FIRST - before any includes
+error_reporting(0);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Start output buffering to catch any accidental output
+ob_start();
+
+// Set headers before any potential output
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+// Register shutdown function to clean output buffer on fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        ob_end_clean();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Internal server error']);
+    }
+});
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    ob_clean();
     http_response_code(200);
+    echo json_encode(['success' => true]);
+    ob_end_flush();
     exit;
 }
 
@@ -37,7 +60,9 @@ try {
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$user) {
+                ob_clean();
                 echo json_encode(['success' => false, 'error' => 'User not found']);
+                ob_end_flush();
                 exit;
             }
 
@@ -78,7 +103,9 @@ try {
             } catch (Exception $e) {
             }
 
+            ob_clean();
             echo json_encode($response);
+            ob_end_flush();
             exit;
         }
 
@@ -95,10 +122,13 @@ try {
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$user) {
+                ob_clean();
                 echo json_encode(['success' => false, 'error' => 'User not found']);
+                ob_end_flush();
                 exit;
             }
 
+            ob_clean();
             echo json_encode([
                 'success' => true,
                 'data' => [
@@ -114,10 +144,13 @@ try {
                     'postal_code' => $user['postal_code'] ?? ''
                 ]
             ]);
+            ob_end_flush();
             exit;
         }
 
+        ob_clean();
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
+        ob_end_flush();
         exit;
     }
 
@@ -153,11 +186,13 @@ try {
                 $userId = $db->lastInsertId();
             }
 
+            ob_clean();
             echo json_encode([
                 'success' => true,
                 'user_id' => $userId,
                 'message' => 'Profile updated'
             ]);
+            ob_end_flush();
             exit;
         }
 
@@ -205,21 +240,27 @@ try {
                 WHERE id = ?");
             $stmt->execute([$realName, $phone, $email, $birthday, $gender, $address, $province, $postalCode, $userId]);
 
+            ob_clean();
             echo json_encode([
                 'success' => true,
                 'message' => 'บันทึกข้อมูลเรียบร้อยแล้ว'
             ]);
+            ob_end_flush();
             exit;
         }
 
+        ob_clean();
         echo json_encode(['success' => false, 'error' => 'Invalid action']);
+        ob_end_flush();
         exit;
     }
 
 } catch (Exception $e) {
+    ob_clean();
     http_response_code(500);
     echo json_encode([
         'success' => false,
         'error' => $e->getMessage()
     ]);
+    ob_end_flush();
 }

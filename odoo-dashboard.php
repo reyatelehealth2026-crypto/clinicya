@@ -1,16 +1,12 @@
 <!DOCTYPE html>
 <html lang="th">
 
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CNY ERP - ระบบจัดการข้อมูล</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
-    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
@@ -233,34 +229,6 @@
         .spin { animation: spin 0.8s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-        /* ── Skeleton Loading ── */
-        .skeleton {
-            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-            background-size: 200% 100%;
-            animation: skeleton-loading 1.5s ease-in-out infinite;
-        }
-        @keyframes skeleton-loading {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-        .skeleton-row {
-            height: 60px;
-            border-radius: 8px;
-            margin-bottom: 8px;
-        }
-        .skeleton-card {
-            height: 120px;
-            border-radius: 12px;
-        }
-
-        /* ── Performance Optimizations ── */
-        .menu-card, .kpi-card, .chip {
-            will-change: transform;
-        }
-        .section-panel {
-            contain: layout style paint;
-        }
-
         /* ── Modal Backdrop ── */
         .modal-backdrop-custom {
             position: fixed; inset: 0;
@@ -433,59 +401,6 @@
         }
         .overview-section-title .view-all:hover { text-decoration: underline; }
 
-        /* ── Customer Card Grid ── */
-        .cust-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-            gap: 0.75rem;
-        }
-        @media (max-width: 600px) {
-            .cust-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-        }
-        .cust-card {
-            background: var(--white);
-            border: 1.5px solid var(--gray-200);
-            border-radius: var(--radius-md);
-            padding: 0.9rem 1rem;
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
-            position: relative;
-            overflow: hidden;
-        }
-        .cust-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-            border-color: var(--primary);
-        }
-        .cust-card.has-overdue { border-left: 3px solid var(--danger); }
-        .cust-card.has-unpaid  { border-left: 3px solid var(--warning); }
-        .cust-card.has-bdo     { border-left: 3px solid var(--violet); }
-        .cust-name { font-weight: 600; font-size: 0.9rem; color: var(--gray-800); margin-bottom: 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .cust-ref  { font-size: 0.75rem; color: var(--gray-400); margin-bottom: 0.5rem; }
-        .cust-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-        .cust-badge {
-            display: inline-flex; align-items: center; gap: 0.25rem;
-            padding: 2px 7px; border-radius: 50px;
-            font-size: 0.7rem; font-weight: 600; white-space: nowrap;
-        }
-        .cust-badge-bdo    { background: var(--violet-light); color: #6d28d9; }
-        .cust-badge-overdue{ background: var(--danger-light);  color: #b91c1c; }
-        .cust-badge-unpaid { background: var(--warning-light); color: #b45309; }
-        .cust-badge-line   { background: #dcfce7; color: #15803d; }
-        .cust-badge-no-line{ background: var(--gray-100); color: var(--gray-400); }
-        /* ── Filter bar ── */
-        .filter-bar {
-            display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;
-            padding: 0.75rem 1rem;
-            background: var(--white);
-            border: 1px solid var(--gray-200);
-            border-radius: var(--radius-md);
-            margin-bottom: 1rem;
-            box-shadow: var(--shadow-sm);
-        }
-        .filter-bar .form-control {
-            font-size: 0.82rem; padding: 0.4rem 0.75rem;
-        }
         .overview-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -504,14 +419,18 @@
         <div class="d-flex justify-content-between align-items-center">
             <div>
                 <div class="header-title">
-                    <i class="bi bi-people me-1" style="color:var(--primary);"></i>CNY ERP — ลูกค้า
+                    <i class="bi bi-box-seam me-1" style="color:var(--primary);"></i>CNY ERP
                 </div>
-                <div class="header-subtitle">รายการลูกค้าทั้งหมด · คลิกการ์ดเพื่อดูรายละเอียด</div>
+                <div class="header-subtitle">ระบบจัดการคำสั่งซื้อ</div>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <div id="connectionStatus" class="status-badge offline">
                     <span class="status-dot"></span>
                     <span>กำลังเชื่อมต่อ...</span>
+                </div>
+                <div class="admin-toggle" id="adminToggle" onclick="toggleAdminMode()" title="เปิด/ปิดโหมดผู้ดูแลระบบ">
+                    <i class="bi bi-gear"></i>
+                    <span id="adminToggleLabel">Admin</span>
                 </div>
             </div>
         </div>
@@ -519,40 +438,573 @@
 
     <!-- Main Container -->
     <div class="main-container">
-
-        <!-- Filter Bar -->
-        <div class="filter-bar">
-            <input type="text" class="form-control" id="custSearch" placeholder="ค้นหาชื่อ / รหัสลูกค้า..." style="max-width:220px;" oninput="debouncedLoadCustomerCards()">
-            <select class="form-control" id="custInvoiceFilter" onchange="custCardOffset=0;loadCustomerCards()" style="max-width:160px;">
-                <option value="">ทุกสถานะ</option>
-                <option value="unpaid">มีค้างชำระ</option>
-                <option value="overdue">เกินกำหนด</option>
-            </select>
-            <select class="form-control" id="custSalesperson" onchange="custCardOffset=0;loadCustomerCards()" style="max-width:200px;">
-                <option value="">พนักงานขาย: ทั้งหมด</option>
-            </select>
-            <select class="form-control" id="custSortBy" onchange="custCardOffset=0;loadCustomerCards()" style="max-width:180px;">
-                <option value="">เรียงตาม: ล่าสุด</option>
-                <option value="spend_desc">ยอดซื้อ: มาก→น้อย</option>
-                <option value="due_desc">ค้างชำระ: มาก→น้อย</option>
-                <option value="orders_desc">ออเดอร์: มาก→น้อย</option>
-                <option value="name_asc">ชื่อ: ก→ฮ</option>
-            </select>
-            <button class="btn-primary" onclick="custCardOffset=0;loadCustomerCards()"><i class="bi bi-search"></i> ค้นหา</button>
-            <button class="chip" onclick="resetCardFilter()"><i class="bi bi-x-circle"></i> ล้าง</button>
-            <button class="chip" onclick="custCardOffset=0;loadCustomerCards()"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
-            <span id="custTotalCount" style="font-size:0.8rem;color:var(--gray-400);margin-left:auto;"></span>
-        </div><!-- /.filter-bar -->
-
-        <!-- Customer Card Grid -->
-        <div id="customerCardGrid">
-            <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+        <!-- Menu Grid -->
+        <div class="menu-grid" id="menuGrid">
+            <!-- Sales Mode menus (always visible) -->
+            <div class="menu-card active" onclick="showSection('overview')">
+                <div class="menu-icon"><i class="bi bi-speedometer2"></i></div>
+                <div class="menu-title">ภาพรวมวันนี้</div>
+                <div class="menu-desc">สรุปออเดอร์และสิ่งที่ต้องทำ</div>
+            </div>
+            <div class="menu-card" onclick="showSection('webhooks')">
+                <div class="menu-icon"><i class="bi bi-box-seam"></i></div>
+                <div class="menu-title">ออเดอร์</div>
+                <div class="menu-desc">ติดตามสถานะออเดอร์</div>
+            </div>
+            <div class="menu-card" onclick="showSection('customers')">
+                <div class="menu-icon"><i class="bi bi-people"></i></div>
+                <div class="menu-title">ลูกค้า</div>
+                <div class="menu-desc">รายการลูกค้าและใบแจ้งหนี้</div>
+            </div>
+            <div class="menu-card" onclick="showSection('slips')">
+                <div class="menu-icon"><i class="bi bi-receipt"></i></div>
+                <div class="menu-title">อัพสลิป</div>
+                <div class="menu-desc">บันทึกสลิปจาก LINE Inbox</div>
+            </div>
+            <div class="menu-card" onclick="showSection('matching')">
+                <div class="menu-icon"><i class="bi bi-link-45deg"></i></div>
+                <div class="menu-title">จับคู่สลิป</div>
+                <div class="menu-desc">จับคู่สลิป ↔ BDO</div>
+            </div>
+            <div class="menu-card" onclick="showSection('daily-summary')">
+                <div class="menu-icon"><i class="bi bi-calendar-check"></i></div>
+                <div class="menu-title">สรุปประจำวัน</div>
+                <div class="menu-desc">ตรวจสอบและส่งสรุปออเดอร์</div>
+            </div>
+            <div class="menu-card" onclick="window.location.href='dashboard.php'">
+                <div class="menu-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                <div class="menu-title">Executive</div>
+                <div class="menu-desc">ภาพรวมธุรกิจและ KPI</div>
+            </div>
+            <!-- Admin Mode menus (hidden by default) -->
+            <div class="menu-card admin-only" onclick="showSection('webhooks-raw')">
+                <div class="menu-icon"><i class="bi bi-broadcast"></i></div>
+                <div class="menu-title">Webhooks Log</div>
+                <div class="menu-desc">Raw webhook data</div>
+            </div>
+            <div class="menu-card admin-only" onclick="showSection('notifications')">
+                <div class="menu-icon"><i class="bi bi-bell"></i></div>
+                <div class="menu-title">Log แจ้งเตือน</div>
+                <div class="menu-desc">ประวัติการแจ้งเตือน LINE</div>
+            </div>
+            <div class="menu-card admin-only" onclick="showSection('health')">
+                <div class="menu-icon"><i class="bi bi-heart-pulse"></i></div>
+                <div class="menu-title">System Health</div>
+                <div class="menu-desc">สุขภาพระบบรวม</div>
+            </div>
         </div>
 
-        <!-- Pagination -->
-        <div id="customerCardPagination" class="d-flex justify-content-center gap-2 mt-3" style="display:none !important;"></div>
+        <!-- ═══════════════════════ Overview Section (Sales Default) ═══════════════════════ -->
+        <div id="section-overview" class="section-panel active">
+            <div id="overviewKPI" class="kpi-grid">
+                <div class="kpi-card" onclick="showSection('webhooks')">
+                    <div class="kpi-label">ออเดอร์วันนี้</div>
+                    <div class="kpi-value" id="kpiOrdersToday" style="color:var(--primary);">-</div>
+                </div>
+                <div class="kpi-card" onclick="showSection('webhooks')">
+                    <div class="kpi-label">ยอดขายวันนี้</div>
+                    <div class="kpi-value" id="kpiSalesToday" style="color:#059669;">-</div>
+                    <div class="kpi-sub">รวมทุกออเดอร์</div>
+                </div>
+                <div class="kpi-card" onclick="showSection('slips')">
+                    <div class="kpi-label">สลิปรอตรวจสอบ</div>
+                    <div class="kpi-value" id="kpiSlipsPending" style="color:#d97706;">-</div>
+                    <div class="kpi-sub">คลิกจัดการ</div>
+                </div>
+                <div class="kpi-card" onclick="showSection('matching')">
+                    <div class="kpi-label">BDO รอชำระ</div>
+                    <div class="kpi-value" id="kpiBdosPending" style="color:#7c3aed;">-</div>
+                    <div class="kpi-sub">ยอดรอจับคู่</div>
+                </div>
+                <div class="kpi-card" onclick="showSection('matching')">
+                    <div class="kpi-label">ยอดชำระวันนี้</div>
+                    <div class="kpi-value" id="kpiPaymentsToday" style="color:#0891b2;">-</div>
+                    <div class="kpi-sub">จากสลิปที่จับคู่แล้ว</div>
+                </div>
+                <div class="kpi-card" onclick="showSection('customers')">
+                    <div class="kpi-label">ลูกค้าค้างชำระ</div>
+                    <div class="kpi-value" id="kpiOverdueCustomers" style="color:#dc2626;">-</div>
+                    <div class="kpi-sub">ต้องติดตาม</div>
+                </div>
+            </div>
 
-    </div><!-- /.main-container -->
+            <div class="overview-grid">
+                <!-- Left column: Recent Orders + Pending Slips -->
+                <div>
+                    <div class="content-card">
+                        <div class="overview-section-title">
+                            <i class="bi bi-box-seam"></i> ออเดอร์ล่าสุด
+                            <a class="view-all" onclick="showSection('webhooks')">ดูทั้งหมด →</a>
+                        </div>
+                        <div id="overviewRecentOrders">
+                            <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+                        </div>
+                    </div>
+
+                    <div class="content-card" style="margin-top:1rem;">
+                        <div class="overview-section-title">
+                            <i class="bi bi-receipt"></i> สลิปรอจับคู่
+                            <a class="view-all" onclick="showSection('slips')">ดูทั้งหมด →</a>
+                        </div>
+                        <div id="overviewPendingSlips">
+                            <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right column: Overdue Customers -->
+                <div>
+                    <div class="content-card">
+                        <div class="overview-section-title">
+                            <i class="bi bi-exclamation-triangle"></i> ลูกค้าค้างชำระเร่งด่วน
+                            <a class="view-all" onclick="showSection('customers')">ดูทั้งหมด →</a>
+                        </div>
+                        <div id="overviewOverdueCustomers">
+                            <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+                        </div>
+                    </div>
+
+                    <div class="content-card" style="margin-top:1rem;">
+                        <div class="overview-section-title">
+                            <i class="bi bi-bell"></i> แจ้งเตือน LINE วันนี้
+                        </div>
+                        <div id="overviewLineNotifs">
+                            <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align:center;margin-top:1rem;">
+                <button class="chip" onclick="loadTodayOverview()" style="font-size:0.8rem;"><i class="bi bi-arrow-repeat"></i> รีเฟรชภาพรวม</button>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════ Webhooks Section ═══════════════════════ -->
+        <div id="section-webhooks" class="section-panel">
+            <div id="webhookStats" class="mb-3">
+                <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลดสถิติ...</div></div>
+            </div>
+
+            <div class="content-card" style="margin-bottom:0.75rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+                    <div style="display:flex;gap:4px;">
+                        <button id="whViewBtnGrouped" onclick="setWhViewMode('grouped')" style="background:var(--primary);color:white;border:none;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:0.82rem;font-weight:500;font-family:inherit;"><i class="bi bi-box-seam"></i> ออเดอร์</button>
+                        <button id="whViewBtnList" onclick="setWhViewMode('list')" style="background:var(--gray-100);color:var(--gray-600);border:none;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:0.82rem;font-weight:500;font-family:inherit;"><i class="bi bi-list-ul"></i> รายการ</button>
+                    </div>
+                    <div id="grpSearchBar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                        <input type="date" class="form-control" id="grpDateInput" style="width:auto;font-size:0.82rem;padding:4px 8px;" onchange="grpCurrentOffset=0;loadOrdersGrouped()">
+                        <input type="text" class="form-control" id="grpSearchInput" placeholder="ค้นหาออเดอร์/ลูกค้า..." style="width:180px;font-size:0.82rem;padding:4px 8px;" oninput="debouncedLoadOrdersGrouped()">>
+                        <button class="chip" onclick="grpCurrentOffset=0;loadOrdersGrouped();" style="font-size:0.8rem;"><i class="bi bi-search"></i></button>
+                        <button class="chip" onclick="loadWebhookStats();grpCurrentOffset=0;loadOrdersGrouped();" style="font-size:0.8rem;"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+                        <span id="whDateScopeBadge" class="badge-status badge-primary">วันนี้</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-card" id="whFilterCard" style="display:none;">
+                <div class="content-title"><i class="bi bi-funnel"></i> ตัวกรอง</div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label class="form-label">ประเภท Event</label>
+                            <select class="form-control" id="whFilterEvent" onchange="loadWebhooks()"><option value="">ทั้งหมด</option></select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label class="form-label">สถานะ</label>
+                            <select class="form-control" id="whFilterStatus" onchange="loadWebhooks()">
+                                <option value="">ทั้งหมด</option>
+                                <option value="received">Received</option>
+                                <option value="processing">Processing</option>
+                                <option value="success">Success</option>
+                                <option value="failed">Failed</option>
+                                <option value="retry">Retry</option>
+                                <option value="dead_letter">Dead Letter</option>
+                                <option value="duplicate">Duplicate</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label class="form-label">จากวันที่</label>
+                            <input type="date" class="form-control" id="whFilterDateFrom" onchange="loadWebhooks()">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label class="form-label">ถึงวันที่</label>
+                            <input type="date" class="form-control" id="whFilterDateTo" onchange="loadWebhooks()">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label class="form-label">ค้นหา (Order/Delivery ID)</label>
+                            <input type="text" class="form-control" id="whFilterSearch" placeholder="ค้นหา..." oninput="debouncedLoadWebhooks()">>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-2">
+                    <button class="btn-primary" onclick="loadWebhooks()"><i class="bi bi-search"></i> ค้นหา</button>
+                    <button class="chip" onclick="resetWebhookFilters()"><i class="bi bi-x-circle"></i> ล้างตัวกรอง</button>
+                    <button class="chip" onclick="loadWebhookStats();loadWebhooks();"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+                </div>
+            </div>
+
+            <div class="content-card" style="margin-top:1rem;">
+                <div class="content-title">
+                    <i class="bi bi-box-seam"></i> ภาพรวมออเดอร์
+                    <span id="whTotalCount" style="font-size:0.8rem;color:var(--gray-500);margin-left:auto;"></span>
+                </div>
+                <div id="webhookList"><div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div></div>
+                <div id="webhookPagination" class="d-flex justify-content-center gap-2 mt-3" style="display:none !important;"></div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════ Customers Section ═══════════════════════ -->
+        <div id="section-customers" class="section-panel">
+            <div class="content-card">
+                <div class="content-title">
+                    <i class="bi bi-people"></i> รายการลูกค้า
+                    <span id="custTotalCount" style="font-size:0.8rem;color:var(--gray-500);margin-left:auto;"></span>
+                </div>
+                <div class="d-flex gap-2 mb-3" style="flex-wrap:wrap;">
+                    <input type="text" class="form-control" id="custSearch" placeholder="ค้นหาชื่อ / รหัสลูกค้า..." style="max-width:280px;" oninput="debouncedLoadCustomers()">>
+                    <select class="form-control" id="custInvoiceFilter" onchange="custCurrentOffset=0;loadCustomers()" style="max-width:180px;">
+                        <option value="">ทุกสถานะ</option>
+                        <option value="unpaid">มีค้างชำระ</option>
+                        <option value="overdue">เกินกำหนด</option>
+                    </select>
+                    <select class="form-control" id="custSalesperson" onchange="custCurrentOffset=0;loadCustomers()" style="max-width:220px;">
+                        <option value="">พนักงานขาย: ทั้งหมด</option>
+                    </select>
+                    <select class="form-control" id="custSortBy" onchange="custCurrentOffset=0;loadCustomers()" style="max-width:200px;">
+                        <option value="">เรียงตาม: ล่าสุด</option>
+                        <option value="spend_desc">ยอดซื้อ: มาก→น้อย</option>
+                        <option value="spend_asc">ยอดซื้อ: น้อย→มาก</option>
+                        <option value="orders_desc">ออเดอร์: มาก→น้อย</option>
+                        <option value="orders_asc">ออเดอร์: น้อย→มาก</option>
+                        <option value="due_desc">ค้างชำระ: มาก→น้อย</option>
+                        <option value="name_asc">ชื่อ: ก→ฮ</option>
+                    </select>
+                    <button class="btn-primary" onclick="loadCustomers()"><i class="bi bi-search"></i> ค้นหา</button>
+                    <button class="chip" onclick="resetCustomerFilter()"><i class="bi bi-x-circle"></i> ล้าง</button>
+                    <button class="chip" onclick="loadCustomers()"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+                </div>
+                <div id="customerList"><div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div></div>
+                <div id="customerPagination" class="d-flex justify-content-center gap-2 mt-3" style="display:none !important;"></div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════ Daily Summary Section ═══════════════════════ -->
+        <div id="section-daily-summary" class="section-panel">
+            <div class="content-card mb-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="content-title mb-0">
+                        <i class="bi bi-calendar-check"></i> สรุปออเดอร์ประจำวัน
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn-primary" onclick="loadDailySummary()"><i class="bi bi-arrow-repeat"></i> โหลดข้อมูลใหม่</button>
+                        <button class="btn-primary" onclick="sendDailySummaryAll()" style="background:linear-gradient(135deg,#059669,#10b981);"><i class="bi bi-send-check"></i> ส่งแจ้งเตือนทั้งหมด</button>
+                    </div>
+                </div>
+                <div class="mt-3 text-muted" style="font-size:0.85rem;">
+                    แสดงรายการลูกค้าที่มีออเดอร์ค้างส่งหรือมีการเคลื่อนไหวในวันนี้ คุณสามารถตรวจสอบและกดส่งแจ้งเตือนสรุปสถานะให้ลูกค้าทาง LINE ได้ (ส่งได้ 1 ครั้ง/วัน/คน)
+                </div>
+            </div>
+
+            <div class="content-card mb-3">
+                <div class="content-title">
+                    <i class="bi bi-clock-history"></i> ตั้งค่าส่งอัตโนมัติ
+                </div>
+                <div id="autoSendSettingsContent">
+                    <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลดการตั้งค่า...</div></div>
+                </div>
+            </div>
+
+            <div class="content-card mb-3" id="autoSendHistoryCard" style="display:none;">
+                <div class="content-title">
+                    <i class="bi bi-list-check"></i> ประวัติการส่งอัตโนมัติ
+                    <button class="chip" onclick="loadAutoSendHistory()" style="margin-left:auto;"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+                </div>
+                <div id="autoSendHistoryContent">
+                    <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+                </div>
+            </div>
+
+            <div class="content-card">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="fw-bold"><span id="dailySummaryCount">0</span> รายการ</div>
+                    <div class="d-flex gap-2">
+                        <select class="form-control form-control-sm" id="dailySummaryFilterStatus" onchange="filterDailySummaryList()" style="width:150px;">
+                            <option value="all">ทั้งหมด</option>
+                            <option value="pending">ยังไม่ได้ส่งวันนี้</option>
+                            <option value="sent">ส่งแล้ววันนี้</option>
+                        </select>
+                        <input type="text" class="form-control form-control-sm" id="dailySummarySearch" placeholder="ค้นหาชื่อ..." onkeyup="filterDailySummaryList()" style="width:200px;">
+                    </div>
+                </div>
+                <div id="dailySummaryList"><div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>คลิกโหลดข้อมูลใหม่เพื่อดูรายการ...</div></div></div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════ Slips Section ═══════════════════════ -->
+        <div id="section-slips" class="section-panel">
+            <div class="content-card mb-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="content-title mb-0"><i class="bi bi-receipt"></i> สลิปการชำระเงิน</div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <input type="text" class="form-control" id="slipSearch" placeholder="ค้นหาชื่อลูกค้า / LINE ID..." style="max-width:240px;" oninput="debouncedLoadSlips()">>
+                        <select class="form-control" id="slipStatusFilter" onchange="loadSlips()" style="max-width:160px;">
+                            <option value="">ทุกสถานะ</option>
+                            <option value="pending">รอตรวจสอบ</option>
+                            <option value="matched">จับคู่แล้ว</option>
+                            <option value="failed">ไม่สำเร็จ</option>
+                        </select>
+                        <input type="date" class="form-control" id="slipDateFilter" onchange="loadSlips()" style="max-width:160px;">
+                        <button class="btn-primary" onclick="loadSlips()"><i class="bi bi-search"></i> ค้นหา</button>
+                        <button class="chip" onclick="document.getElementById('slipSearch').value='';document.getElementById('slipStatusFilter').value='';document.getElementById('slipDateFilter').value='';loadSlips();"><i class="bi bi-x-circle"></i> ล้าง</button>
+                        <button class="chip" onclick="loadSlips()"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+                        <button class="btn-primary" id="sendAllOdooBtn" onclick="sendAllSlipsToOdoo()" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);"><i class="bi bi-cloud-upload"></i> ส่งทั้งหมดไปยัง Odoo</button>
+                    </div>
+                </div>
+            </div>
+            <div class="content-card">
+                <div class="content-title">
+                    <i class="bi bi-list-ul"></i> รายการสลิปทั้งหมด
+                    <span id="slipTotalCount" style="font-size:0.8rem;color:var(--gray-500);margin-left:auto;"></span>
+                </div>
+                <div id="slipList"><div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กดรีเฟรชเพื่อโหลดข้อมูล</div></div></div>
+                <div id="slipPagination" class="d-flex justify-content-center gap-2 mt-3"></div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════ Matching Section (Slip ↔ BDO) ═══════════════════════ -->
+        <div id="section-matching" class="section-panel">
+
+            <!-- ══ ZONE A: Customer Grid (shown on entry) ══ -->
+            <div id="matchCustomerGridZone">
+                <!-- Grid Toolbar -->
+                <div class="content-card" style="margin-bottom:0.75rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+                        <div class="content-title mb-0"><i class="bi bi-people"></i> เลือกลูกค้าเพื่อจับคู่</div>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                            <select class="form-control" id="matchCustomerSort" onchange="loadMatchingCustomerGrid(true)" style="max-width:220px;font-size:0.82rem;padding:4px 8px;" title="เรียงลำดับ">
+                                <option value="">กิจกรรมล่าสุด (event)</option>
+                                <option value="orders_desc">จำนวน order (มาก → น้อย)</option>
+                                <option value="orders_asc">จำนวน order (น้อย → มาก)</option>
+                            </select>
+                            <select class="form-control" id="matchSalespersonFilter" onchange="loadMatchingCustomerGrid(true)" style="max-width:200px;font-size:0.82rem;padding:4px 8px;">
+                                <option value="">พนักงานขาย: ทั้งหมด</option>
+                            </select>
+                            <input type="text" class="form-control" id="matchCustomerSearch" placeholder="ค้นหารหัส / ชื่อลูกค้า..." style="max-width:200px;font-size:0.82rem;padding:4px 8px;" oninput="matchCustomerSearchDebounced()">
+                            <button class="chip" onclick="loadMatchingCustomerGrid(true)" style="font-size:0.8rem;"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Customer Cards Grid (lazy load) -->
+                <div id="matchCustomerGrid">
+                    <div id="matchCustomerGridMeta" style="font-size:0.75rem;color:var(--gray-500);margin-bottom:0.5rem;"></div>
+                    <div id="matchCustomerGridCards"></div>
+                    <div id="matchCustomerGridLoader" style="display:none;text-align:center;padding:0.75rem;color:var(--gray-500);font-size:0.82rem;"><i class="bi bi-arrow-repeat spin"></i> กำลังโหลดเพิ่ม...</div>
+                    <div id="matchCustomerGridSentinel" style="height:24px;width:100%;" aria-hidden="true"></div>
+                </div>
+            </div>
+
+            <!-- ══ ZONE B: Customer-scoped Matching (hidden until customer selected) ══ -->
+            <div id="matchCustomerDetailZone" style="display:none;">
+                <!-- Back Header -->
+                <div id="matchCustomerDetailHeader" style="margin-bottom:0.75rem;"></div>
+
+                <!-- KPI Cards -->
+                <div class="kpi-grid" id="matchingKPI">
+                    <div class="kpi-card" style="border-left:4px solid #d97706;">
+                        <div class="kpi-label">รอดำเนินการ</div>
+                        <div class="kpi-value" id="matchKpiPending" style="color:#d97706;">-</div>
+                        <div class="kpi-sub">สลิปรอจับคู่ + BDO ที่ยังค้างชำระ</div>
+                    </div>
+                    <div class="kpi-card" style="border-left:4px solid var(--primary);">
+                        <div class="kpi-label">แนะนำจับคู่</div>
+                        <div class="kpi-value" id="matchKpiSuggested" style="color:var(--primary);">-</div>
+                        <div class="kpi-sub">ระบบแนะนำอัตโนมัติ</div>
+                    </div>
+                    <div class="kpi-card" style="border-left:4px solid #16a34a;">
+                        <div class="kpi-label">สำเร็จวันนี้</div>
+                        <div class="kpi-value" id="matchKpiSuccess" style="color:#16a34a;">-</div>
+                        <div class="kpi-sub">จับคู่เรียบร้อยแล้ว</div>
+                    </div>
+                    <div class="kpi-card" style="border-left:4px solid #dc2626;">
+                        <div class="kpi-label">มีปัญหา</div>
+                        <div class="kpi-value" id="matchKpiProblem" style="color:#dc2626;">-</div>
+                        <div class="kpi-sub">ยอดไม่ตรง / ต้องตรวจสอบ</div>
+                    </div>
+                </div>
+
+                <!-- Detail Toolbar -->
+                <div class="content-card" style="margin-bottom:0.75rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+                        <div class="content-title mb-0"><i class="bi bi-link-45deg"></i> จับคู่สลิป ↔ BDO</div>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                            <select class="form-control" id="matchFilterMode" onchange="loadMatchingDashboard()" style="max-width:180px;font-size:0.82rem;padding:4px 8px;">
+                                <option value="pending">เฉพาะรอจับคู่</option>
+                                <option value="all">ทั้งหมด</option>
+                                <option value="matched">จับคู่แล้ว</option>
+                            </select>
+                            <input type="text" class="form-control" id="matchSearchInput" placeholder="ค้นหา BDO..." style="max-width:200px;font-size:0.82rem;padding:4px 8px;" onkeyup="if(event.key==='Enter')loadMatchingDashboard()">
+                            <button class="chip" onclick="loadMatchingDashboard()" style="font-size:0.8rem;"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+                            <button class="btn-primary" id="matchBatchConfirmBtn" onclick="batchConfirmMatches()" disabled style="background:linear-gradient(135deg,#16a34a,#059669);font-size:0.82rem;"><i class="bi bi-check2-all"></i> ยืนยันที่แนะนำทั้งหมด</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zone 1: Suggested Pairs -->
+                <div class="content-card" id="matchSuggestedSection" style="margin-bottom:0.75rem;">
+                    <div class="content-title" style="margin-bottom:0.5rem;">
+                        <i class="bi bi-stars" style="color:#7c3aed;"></i> แนะนำจับคู่อัตโนมัติ
+                        <span id="matchSuggestedCount" style="font-size:0.8rem;color:var(--gray-500);margin-left:6px;"></span>
+                        <div style="margin-left:auto;font-size:0.75rem;color:var(--gray-400);">เลือกคู่ด้านล่างแล้วกด ยืนยัน หรือจับคู่เองด้วยช่องล่าง</div>
+                    </div>
+                    <div id="matchSuggestedList">
+                        <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div>
+                    </div>
+                </div>
+
+                <!-- Zone 2+3: Unmatched items (compact 2-col) -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;" id="matchingSplitView">
+                    <!-- Left: Unmatched Slips -->
+                    <div class="content-card" style="max-height:45vh;overflow-y:auto;">
+                        <div class="content-title" style="font-size:0.85rem;padding-bottom:0.4rem;">
+                            <i class="bi bi-image"></i> สลิปยังไม่จับคู่
+                            <span id="matchSlipCount" style="font-size:0.78rem;color:var(--gray-500);margin-left:auto;"></span>
+                        </div>
+                        <div id="matchSlipList"></div>
+                    </div>
+                    <!-- Right: Unmatched BDOs -->
+                    <div class="content-card" style="max-height:45vh;overflow-y:auto;">
+                        <div class="content-title" style="font-size:0.85rem;padding-bottom:0.4rem;">
+                            <i class="bi bi-file-earmark-check"></i> BDO ค้างชำระ (คลิกชื่อเพื่อดูรายละเอียด)
+                            <span id="matchBdoCount" style="font-size:0.78rem;color:var(--gray-500);margin-left:auto;"></span>
+                        </div>
+                        <div id="matchBdoList"></div>
+                    </div>
+                </div>
+
+                <!-- LINE chat images (recent) -->
+                <div class="content-card" style="margin-top:0.75rem;">
+                    <div class="content-title" style="margin-bottom:0.5rem;">
+                        <i class="bi bi-chat-dots"></i> รูปภาพจากแชท (ย้อนหลัง 10 วัน · สูงสุด 10 รายการ)
+                        <span style="font-size:0.75rem;color:var(--gray-400);font-weight:400;margin-left:6px;">แตะรูปเพื่อแนบเป็นสลิป · ซ่อนรูปที่ไม่ใช่สลิป</span>
+                    </div>
+                    <div id="matchChatImageGallery" style="min-height:40px;font-size:0.82rem;color:var(--gray-500);">—</div>
+                </div>
+
+                <!-- Match Summary Bar -->
+                <div class="content-card" id="matchSummaryBar" style="margin-top:1rem;display:none;">
+                    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+                        <div id="matchSummaryText" style="flex:1;min-width:220px;font-size:0.85rem;color:var(--gray-700);"></div>
+                        <div style="flex:1;min-width:200px;">
+                            <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
+                                <div>
+                                    <div style="font-size:0.72rem;color:var(--gray-500);">สลิปที่เลือก</div>
+                                    <div style="font-weight:700;font-size:1.1rem;" id="matchSumSlipAmt">-</div>
+                                </div>
+                                <div style="font-size:1.2rem;color:var(--gray-400);">↔</div>
+                                <div>
+                                    <div style="font-size:0.72rem;color:var(--gray-500);">BDO ที่เลือก</div>
+                                    <div style="font-weight:700;font-size:1.1rem;" id="matchSumBdoAmt">-</div>
+                                </div>
+                                <div id="matchSumDiff" style="font-weight:600;font-size:0.9rem;"></div>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <input type="text" class="form-control" id="matchNote" placeholder="หมายเหตุ (ถ้ามี)..." style="max-width:200px;font-size:0.82rem;padding:4px 8px;">
+                            <button class="btn-primary" id="matchConfirmBtn" onclick="confirmManualMatch()" disabled style="background:linear-gradient(135deg,#16a34a,#059669);"><i class="bi bi-check2-circle"></i> ยืนยันจับคู่</button>
+                            <button class="chip" onclick="clearMatchSelection()"><i class="bi bi-x-circle"></i> ยกเลิก</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Matched Today List -->
+                <div class="content-card" style="margin-top:1rem;">
+                    <div class="content-title">
+                        <i class="bi bi-check-circle"></i> จับคู่สำเร็จล่าสุด
+                        <span id="matchedTodayCount" style="font-size:0.8rem;color:var(--gray-500);margin-left:auto;"></span>
+                    </div>
+                    <div id="matchedTodayList">
+                        <div style="text-align:center;padding:1.5rem;color:var(--gray-400);font-size:0.85rem;">โหลดข้อมูลเพื่อดูรายการ</div>
+                    </div>
+                </div>
+            </div><!-- /#matchCustomerDetailZone -->
+
+        </div><!-- /#section-matching -->
+
+        <!-- ═══════════════════════ System Health Section ═══════════════════════ -->
+        <div id="section-health" class="section-panel">
+            <div class="content-card">
+                <div class="content-title" style="display:flex;justify-content:space-between;align-items:center;">
+                    <span><i class="bi bi-heart-pulse"></i> System Health Dashboard</span>
+                    <button class="chip" onclick="loadSystemHealth()" style="font-size:0.8rem;"><i class="bi bi-arrow-repeat"></i> รีเฟรช</button>
+                </div>
+                <div id="healthContent">
+                    <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังตรวจสอบสุขภาพระบบ...</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════ Notifications Section ═══════════════════════ -->
+        <div id="section-notifications" class="section-panel">
+            <div id="notifStats" class="mb-3">
+                <div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลดสถิติ...</div></div>
+            </div>
+            <div class="content-card">
+                <div class="content-title"><i class="bi bi-funnel"></i> ตัวกรอง</div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label class="form-label">สถานะ</label>
+                            <select class="form-control" id="notifFilterStatus" onchange="loadNotifications()">
+                                <option value="">ทั้งหมด</option>
+                                <option value="sent">ส่งสำเร็จ</option>
+                                <option value="failed">ล้มเหลว</option>
+                                <option value="skipped">ข้าม</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label class="form-label">ประเภท Event</label>
+                            <select class="form-control" id="notifFilterEvent" onchange="loadNotifications()"><option value="">ทั้งหมด</option></select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label class="form-label">จากวันที่</label>
+                            <input type="date" class="form-control" id="notifFilterDateFrom" onchange="loadNotifications()">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label class="form-label">ถึงวันที่</label>
+                            <input type="date" class="form-control" id="notifFilterDateTo" onchange="loadNotifications()">
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end gap-2" style="padding-bottom:1rem;">
+                        <button class="btn-primary" onclick="loadNotifications()"><i class="bi bi-search"></i> ค้นหา</button>
+                        <button class="chip" onclick="resetNotifFilters()"><i class="bi bi-x-circle"></i> ล้าง</button>
+                    </div>
+                </div>
+            </div>
+            <div class="content-card" style="margin-top:1rem;">
+                <div class="content-title">
+                    <i class="bi bi-bell"></i> ประวัติการแจ้งเตือน
+                    <span id="notifTotalCount" style="font-size:0.8rem;color:var(--gray-500);margin-left:auto;"></span>
+                </div>
+                <div id="notifList"><div class="loading"><i class="bi bi-arrow-repeat spin"></i><div>กำลังโหลด...</div></div></div>
+                <div id="notifPagination" class="d-flex justify-content-center gap-2 mt-3" style="display:none !important;"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- ═══════════════════════ ORDER TIMELINE MODAL ═══════════════════════ -->
     <div id="orderTimelineModal" class="modal-backdrop-custom" onclick="if(event.target===this){this.classList.remove('active');}">
@@ -725,6 +1177,53 @@
         </div>
     </div>
 
-    <script src="odoo-dashboard.js?v=<?= filemtime(__DIR__ . '/odoo-dashboard.js') ?>"></script>
+    <!-- Matching: create slip from LINE chat image -->
+    <div id="matchImageSlipModal" style="display:none;position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,0.45);padding:16px;align-items:center;justify-content:center;" class="match-image-slip-modal-wrap">
+        <div style="background:var(--surface);border-radius:var(--radius-lg);max-width:420px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.2);overflow:hidden;">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--gray-200);font-weight:600;color:var(--gray-800);">
+                <i class="bi bi-receipt-cutoff"></i> แนบสลิปจากรูปแชท
+            </div>
+            <div style="padding:16px 20px;">
+                <div style="text-align:center;margin-bottom:12px;">
+                    <img id="matchImageSlipPreview" alt="" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid var(--gray-200);object-fit:contain;background:var(--gray-50);">
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label class="form-label">จำนวนเงิน (บาท) <span style="color:#dc2626">*</span></label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="matchImageSlipAmount" placeholder="0.00" style="font-size:0.88rem;">
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label class="form-label">วันที่โอน</label>
+                    <input type="date" class="form-control" id="matchImageSlipDate" style="font-size:0.88rem;">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">BDO <span style="color:#dc2626">*</span></label>
+                    <select class="form-control" id="matchImageSlipBdoId" style="font-size:0.88rem;">
+                        <option value="">— เลือก BDO —</option>
+                    </select>
+                </div>
+            </div>
+            <div style="padding:14px 20px;border-top:1px solid var(--gray-200);display:flex;gap:10px;justify-content:flex-end;background:var(--gray-50);">
+                <button type="button" onclick="closeMatchImageSlipModal()" class="chip">ยกเลิก</button>
+                <button type="button" id="matchImageSlipSubmitBtn" onclick="submitImageAsSlip()" class="btn-primary" style="background:linear-gradient(135deg,#16a34a,#059669);font-size:0.85rem;"><i class="bi bi-check2-circle"></i> บันทึกสลิป</button>
+            </div>
+        </div>
+    </div>
+
+    <?php
+    // Manual version bump — update on every code change to bust cache
+    $JS_VERSION = '20260325.5';
+
+    // Load minified JS if available, fallback to source
+    $jsMin = __DIR__ . '/odoo-dashboard.min.js';
+    $jsSrc = __DIR__ . '/odoo-dashboard.js';
+    if (file_exists($jsMin)) {
+        $jsFile = 'odoo-dashboard.min.js';
+        $jsVer  = $JS_VERSION . '.' . filemtime($jsMin);
+    } else {
+        $jsFile = 'odoo-dashboard.js';
+        $jsVer  = $JS_VERSION . '.' . filemtime($jsSrc);
+    }
+    ?>
+    <script src="<?= $jsFile ?>?v=<?= $jsVer ?>" defer></script>
 </body>
 </html>

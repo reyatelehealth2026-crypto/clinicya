@@ -61,7 +61,7 @@ class OdooAPIClient
     public function __construct($db, $lineAccountId = null)
     {
         $this->db = $db;
-        $this->lineAccountId = $lineAccountId;
+        $this->lineAccountId = $lineAccountId ?? 3;
         $this->apiKey = ODOO_API_KEY;
         $this->baseUrl = rtrim(ODOO_API_BASE_URL, '/');
         $this->timeout = ODOO_API_TIMEOUT;
