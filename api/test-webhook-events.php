@@ -281,7 +281,10 @@ foreach ($events as $item) {
     if (isset($item['notify']))           $body['notify']           = $item['notify'];
     if (isset($item['message_template'])) $body['message_template'] = $item['message_template'];
 
-    $payload = json_encode($body, JSON_UNESCAPED_UNICODE);
+    $payload    = json_encode($body, JSON_UNESCAPED_UNICODE);
+    // Unique delivery_id per run+event — prevents idempotency collision on re-runs
+    $deliveryId = 'test-' . date('YmdHis') . '-' . substr(md5($item['event']), 0, 8);
+    $headers    = buildWebhookHeaders($payload, $item['event'], $deliveryId, $webhookSecret);
 
     // curl POST to webhook endpoint
     $ch = curl_init($webhookUrl);
@@ -289,11 +292,7 @@ foreach ($events as $item) {
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/json',
-            'X-Odoo-Event: ' . $item['event'],
-            'X-Internal-Secret: ' . $internalSecret,
-        ],
+        CURLOPT_HTTPHEADER     => $headers,
         CURLOPT_TIMEOUT        => 15,
         CURLOPT_SSL_VERIFYPEER => false,
     ]);
