@@ -2113,6 +2113,13 @@ class OdooWebhookHandler
         $amount = isset($data['amount_total']) ? number_format((float) $data['amount_total'], 2) : '0.00';
         $invoiceNumber = $data['invoice_number'] ?? ($data['invoice_ref'] ?? '');
 
+        // Award loyalty points (1,000 ฿ = 1 point)
+        try {
+            $this->awardInvoicePoints($data);
+        } catch (Exception $e) {
+            error_log('[handleInvoicePaid] awardInvoicePoints error: ' . $e->getMessage());
+        }
+
         $message = "📌 แจ้งรับชำระเงินเรียบร้อย\n\n";
         if ($invoiceNumber) {
             $message .= "เลขที่ใบแจ้งหนี้: {$invoiceNumber}\n";
@@ -2489,6 +2496,279 @@ class OdooWebhookHandler
 
         } catch (Exception $e) {
             error_log('[saveBdoContext] Error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Award loyalty points when invoice.paid fires.
+     * อัตรา: 1,000 ฿ = 1 point (ปัดลง)
+     * Deduplication: เช็ค points_transactions (reference_type='invoice', reference_id=invoice_id)
+     */
+    private function awardInvoicePoints($invoiceData)
+    {
+        $invoiceId     = (int) ($invoiceData['invoice_id'] ?? 0);
+        $invoiceNumber = $invoiceData['invoice_number'] ?? "INV-{$invoiceId}";
+        $orderName     = $invoiceData['order_name'] ?? '';
+        $amountTotal   = (float) ($invoiceData['amount_total'] ?? 0);
+        $lineUserId    = $invoiceData['customer']['line_user_id'] ?? null;
+        $pdfPath       = $invoiceData['pdf_url'] ?? null;
+
+        if (!$invoiceId || !$lineUserId || $lineUserId === 'false' || $lineUserId === false) {
+            return;
+        }
+
+        // Deduplicate
+        $checkStmt = $this->db->prepare(
+            "SELECT id FROM points_transactions WHERE reference_type = 'invoice' AND reference_id = ? LIMIT 1"
+        );
+        $checkStmt->execute([$invoiceId]);
+        if ($checkStmt->fetch()) {
+            error_log("[awardInvoicePoints] Already processed invoice {$invoiceId}, skipping");
+            return;
+        }
+
+        // คำนวณแต้ม
+        $points = (int) floor($amountTotal / 1000);
+        if ($points <= 0) {
+            error_log("[awardInvoicePoints] Amount {$amountTotal} too low for points (invoice {$invoiceId})");
+            return;
+        }
+
+        // หา user
+        $userStmt = $this->db->prepare(
+            "SELECT id, points, line_account_id, display_name, picture_url
+             FROM users WHERE line_user_id = ? LIMIT 1"
+        );
+        $userStmt->execute([$lineUserId]);
+        $user = $userStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$user) {
+            error_log("[awardInvoicePoints] LineUser not found for line_user_id={$lineUserId}");
+            return;
+        }
+
+        $userId        = (int) $user['id'];
+        $lineAccountId = (int) ($user['line_account_id'] ?? 3);
+        $newPoints     = (int) $user['points'] + $points;
+        $displayName   = $user['display_name'] ?? 'ลูกค้า';
+        $pictureUrl    = $user['picture_url'] ?? '';
+
+        // อัพเดทแต้ม
+        $this->db->prepare(
+            "UPDATE users SET
+                points           = points + ?,
+                available_points = available_points + ?,
+                total_points     = total_points + ?,
+                total_spent      = total_spent + ?,
+                order_count      = order_count + 1
+             WHERE id = ?"
+        )->execute([$points, $points, $points, $amountTotal, $userId]);
+
+        // บันทึก points_transactions
+        $desc = "ได้รับแต้มจากออเดอ " . ($orderName ?: $invoiceNumber)
+              . " (" . number_format($amountTotal, 0, '.', ',') . " ฿ → {$points} point)";
+        $this->db->prepare(
+            "INSERT INTO points_transactions
+                (user_id, points, type, balance_after, reference_type, reference_id, description, line_account_id, created_at)
+             VALUES (?, ?, 'earn', ?, 'invoice', ?, ?, ?, NOW())"
+        )->execute([$userId, $points, $newPoints, $invoiceId, $desc, $lineAccountId]);
+
+        // System message
+        $msgContent = "🧾 ชำระเงินใบแจ้งหนี้ {$invoiceNumber} เรียบร้อย\n"
+                    . "🛒 ยอดซื้อ " . number_format($amountTotal, 0, '.', ',') . " ฿\n"
+                    . "🎁 ได้รับ {$points} point\n"
+                    . "แต้มคงเหลือ: " . number_format($newPoints, 0, '.', ',') . " แต้ม";
+        $this->db->prepare(
+            "INSERT INTO messages
+                (user_id, line_account_id, direction, message_type, content, sent_by, is_read, created_at, updated_at)
+             VALUES (?, ?, 'outgoing', 'text', ?, 'system_invoice_paid', 1, NOW(), NOW())"
+        )->execute([$userId, $lineAccountId, $msgContent]);
+
+        // Flex Message
+        $odooBase = defined('ODOO_PRODUCTION_API_BASE_URL') ? ODOO_PRODUCTION_API_BASE_URL : 'https://erp.cnyrxapp.com';
+        $pdfUrl   = $pdfPath ? rtrim($odooBase, '/') . $pdfPath : null;
+
+        $defaultAvatar = 'https://profile.line-scdn.net/0hLhff-3aQE0dbHwxJqYdsEGdaHSosMRUPI3EPJ39PTCBze1BDZC1Zc3ofGiUiLlcUZHgIJS0cTSV-';
+
+        $footerButtons = [[
+            'type'   => 'button',
+            'action' => ['type' => 'uri', 'label' => 'เข้าสู่เมนูแลกพอยท์', 'uri' => 'https://liff.line.me/2008876929-yRgjH7fX'],
+            'style'  => 'primary',
+            'color'  => '#0C665D',
+            'height' => 'sm',
+        ]];
+        if ($pdfUrl) {
+            $footerButtons[] = [
+                'type'   => 'button',
+                'action' => ['type' => 'uri', 'label' => 'ดูใบแจ้งหนี้ PDF', 'uri' => $pdfUrl],
+                'style'  => 'secondary',
+                'height' => 'sm',
+                'margin' => 'sm',
+            ];
+        }
+
+        $invoiceInfoContents = [[
+            'type'     => 'box',
+            'layout'   => 'horizontal',
+            'contents' => [
+                ['type' => 'text', 'text' => 'ใบแจ้งหนี้', 'size' => 'sm', 'color' => '#666666', 'flex' => 0],
+                ['type' => 'text', 'text' => $invoiceNumber, 'size' => 'sm', 'color' => '#1A1A1A', 'weight' => 'bold', 'align' => 'end'],
+            ],
+        ]];
+        if ($orderName) {
+            $invoiceInfoContents[] = [
+                'type'     => 'box',
+                'layout'   => 'horizontal',
+                'margin'   => 'xs',
+                'contents' => [
+                    ['type' => 'text', 'text' => 'ออเดอร์', 'size' => 'sm', 'color' => '#666666', 'flex' => 0],
+                    ['type' => 'text', 'text' => $orderName, 'size' => 'sm', 'color' => '#1A1A1A', 'align' => 'end'],
+                ],
+            ];
+        }
+        $invoiceInfoContents[] = [
+            'type'     => 'box',
+            'layout'   => 'horizontal',
+            'margin'   => 'xs',
+            'contents' => [
+                ['type' => 'text', 'text' => 'ยอดชำระ', 'size' => 'sm', 'color' => '#666666', 'flex' => 0],
+                ['type' => 'text', 'text' => number_format($amountTotal, 2, '.', ',') . ' ฿', 'size' => 'sm', 'color' => '#1A1A1A', 'weight' => 'bold', 'align' => 'end'],
+            ],
+        ];
+
+        $flexMessage = [
+            'type'     => 'flex',
+            'altText'  => "🧾 ได้รับแต้มจากออเดอ " . ($orderName ?: $invoiceNumber) . " — +{$points} point!",
+            'contents' => [
+                'type' => 'bubble',
+                'size' => 'kilo',
+                'body' => [
+                    'type'       => 'box',
+                    'layout'     => 'vertical',
+                    'paddingAll' => '20px',
+                    'contents'   => [
+                        [
+                            'type'            => 'box',
+                            'layout'          => 'horizontal',
+                            'paddingAll'      => '14px',
+                            'backgroundColor' => '#FFFFFF',
+                            'cornerRadius'    => '12px',
+                            'borderWidth'     => '2px',
+                            'borderColor'     => '#0C665D',
+                            'contents'        => [
+                                [
+                                    'type'         => 'box',
+                                    'layout'       => 'vertical',
+                                    'width'        => '56px',
+                                    'height'       => '56px',
+                                    'cornerRadius' => '28px',
+                                    'contents'     => [[
+                                        'type'        => 'image',
+                                        'url'         => $pictureUrl ?: $defaultAvatar,
+                                        'aspectMode'  => 'cover',
+                                        'aspectRatio' => '1:1',
+                                        'size'        => 'full',
+                                    ]],
+                                ],
+                                [
+                                    'type'           => 'box',
+                                    'layout'         => 'vertical',
+                                    'margin'         => 'md',
+                                    'justifyContent' => 'center',
+                                    'contents'       => [
+                                        ['type' => 'text', 'text' => $displayName, 'weight' => 'bold', 'size' => 'md', 'color' => '#1A1A1A', 'wrap' => true],
+                                        ['type' => 'text', 'text' => 'ได้รับแต้มสะสม', 'size' => 'xs', 'color' => '#0C665D', 'margin' => 'xs'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                        [
+                            'type'            => 'box',
+                            'layout'          => 'vertical',
+                            'margin'          => 'xl',
+                            'paddingAll'      => '12px',
+                            'backgroundColor' => '#F5F5F5',
+                            'cornerRadius'    => '10px',
+                            'contents'        => $invoiceInfoContents,
+                        ],
+                        [
+                            'type'            => 'box',
+                            'layout'          => 'vertical',
+                            'margin'          => 'lg',
+                            'paddingAll'      => '20px',
+                            'backgroundColor' => '#F0F9F8',
+                            'cornerRadius'    => '16px',
+                            'contents'        => [
+                                ['type' => 'text', 'text' => 'ได้รับแต้มจากออเดอ', 'size' => 'sm', 'color' => '#666666', 'align' => 'center'],
+                                ['type' => 'text', 'text' => "+{$points}", 'size' => '4xl', 'weight' => 'bold', 'color' => '#0C665D', 'align' => 'center'],
+                                ['type' => 'text', 'text' => 'point', 'size' => 'md', 'color' => '#0C665D', 'weight' => 'bold', 'align' => 'center', 'margin' => 'xs'],
+                            ],
+                        ],
+                        ['type' => 'text', 'text' => '(อัตรา 1,000 ฿ = 1 point)', 'size' => 'xs', 'color' => '#999999', 'align' => 'center', 'margin' => 'sm'],
+                        [
+                            'type'            => 'box',
+                            'layout'          => 'horizontal',
+                            'margin'          => 'xl',
+                            'paddingAll'      => '14px',
+                            'backgroundColor' => '#FFFFFF',
+                            'cornerRadius'    => '10px',
+                            'borderWidth'     => '1px',
+                            'borderColor'     => '#E5E5E5',
+                            'contents'        => [
+                                ['type' => 'text', 'text' => 'แต้มคงเหลือ', 'size' => 'sm', 'color' => '#666666', 'flex' => 0],
+                                ['type' => 'text', 'text' => number_format($newPoints, 0, '.', ',') . ' แต้ม', 'size' => 'md', 'color' => '#0C665D', 'weight' => 'bold', 'align' => 'end'],
+                            ],
+                        ],
+                        ['type' => 'text', 'text' => "ได้รับชำระเงินใบแจ้งหนี้ {$invoiceNumber} เรียบร้อยแล้ว ขอบคุณที่ใช้บริการ", 'size' => 'xs', 'color' => '#999999', 'margin' => 'xl', 'wrap' => true, 'align' => 'center'],
+                    ],
+                ],
+                'footer' => [
+                    'type'       => 'box',
+                    'layout'     => 'vertical',
+                    'paddingAll' => '16px',
+                    'contents'   => $footerButtons,
+                ],
+            ],
+        ];
+
+        $this->sendFlexViaBridge($lineUserId, $lineAccountId, $flexMessage);
+
+        error_log("[awardInvoicePoints] ✅ invoice={$invoiceNumber} user={$lineUserId} +{$points}pt → {$newPoints}pt");
+    }
+
+    /**
+     * ส่ง Flex Message ผ่าน liff-bridge.php via HTTP
+     */
+    private function sendFlexViaBridge($lineUserId, $lineAccountId, $flexMessage)
+    {
+        $bridgeUrl = defined('APP_URL') ? APP_URL . '/api/liff-bridge.php' : 'https://cny.re-ya.com/api/liff-bridge.php';
+        $secret    = $_ENV['INTERNAL_API_SECRET'] ?? '';
+
+        $payload = json_encode([
+            'action'          => 'send_flex_message',
+            'line_user_id'    => $lineUserId,
+            'lineUserId'      => $lineUserId,
+            'line_account_id' => $lineAccountId,
+            'lineAccountId'   => $lineAccountId,
+            'data'            => ['flexMessage' => $flexMessage],
+        ], JSON_UNESCAPED_UNICODE);
+
+        $ch = curl_init($bridgeUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'X-Internal-Secret: ' . $secret,
+            ],
+            CURLOPT_TIMEOUT        => 10,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200) {
+            error_log("[sendFlexViaBridge] HTTP {$httpCode}: {$response}");
         }
     }
 }
