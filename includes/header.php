@@ -548,23 +548,40 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             --primary-dark: #00A000;
             --primary-light: #00C300;
             --sidebar-width: 260px;
-            --sidebar-bg: #ffffff;
-            --surface-muted: #f8fafc;
-            --surface-subtle: #f1f5f9;
-            --sidebar-border: #e5e7eb;
-            --sidebar-text: #374151;
-            --sidebar-text-muted: #6b7280;
-            --sidebar-hover: #f3f4f6;
-            --sidebar-active-bg: #ecfdf5;
-            --sidebar-active-text: #047857;
-            --sidebar-active-border: #10b981;
+            --sidebar-bg: #f8fafc;
+            --surface-muted: #f3f6fb;
+            --surface-subtle: #eef2f7;
+            --sidebar-border: #d9e2ec;
+            --sidebar-text: #243447;
+            --sidebar-text-muted: #61758a;
+            --sidebar-hover: #edf2f7;
+            --sidebar-active-bg: linear-gradient(90deg, rgba(3, 105, 161, 0.08) 0%, rgba(16, 185, 129, 0.05) 100%);
+            --sidebar-active-text: #114b5f;
+            --sidebar-active-border: #1f8f77;
+            --erp-ink: #0f172a;
+            --erp-ink-soft: #334155;
+            --erp-panel: rgba(255, 255, 255, 0.94);
+            --erp-panel-strong: #ffffff;
+            --erp-panel-muted: #f7f9fc;
+            --erp-border-strong: #cbd5e1;
+            --erp-shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.06);
+            --erp-shadow-medium: 0 18px 40px rgba(15, 23, 42, 0.10);
+            --erp-header-tint: rgba(248, 250, 252, 0.88);
+            --erp-accent: #0f766e;
+            --erp-accent-soft: rgba(15, 118, 110, 0.10);
+            --erp-accent-strong: #14532d;
+            --erp-navy: #1e293b;
+            --erp-navy-soft: #334155;
         }
         
         body { 
             font-family: 'Inter', 'Noto Sans Thai', sans-serif; 
-            background: #f1f5f9;
+            background:
+                radial-gradient(circle at top left, rgba(15, 118, 110, 0.05), transparent 28%),
+                linear-gradient(180deg, #f5f7fb 0%, #eef2f7 100%);
             margin: 0;
             padding: 0;
+            color: var(--erp-ink-soft);
         }
         
         /* App Layout - Main Container */
@@ -592,12 +609,14 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             height: 100vh;
             overflow-y: auto;
             overflow-x: hidden;
+            box-shadow: inset -1px 0 0 rgba(255,255,255,0.65);
         }
         
         .sidebar-brand {
             padding: 14px 16px 12px;
             border-bottom: 1px solid var(--sidebar-border);
-            background: var(--sidebar-bg);
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.92) 100%);
         }
 
         .sidebar-brand-meta {
@@ -614,39 +633,44 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             gap: 5px;
             padding: 3px 8px;
             border-radius: 999px;
-            background: var(--surface-muted);
-            border: 1px solid #e2e8f0;
-            color: #64748b;
+            background: rgba(255,255,255,0.88);
+            border: 1px solid var(--erp-border-strong);
+            color: #516274;
             font-size: 10px;
-            font-weight: 600;
+            font-weight: 700;
+            letter-spacing: 0.01em;
         }
         
         /* Bot Selector */
         .bot-selector {
             padding: 10px 14px;
             border-bottom: 1px solid var(--sidebar-border);
-            background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+            background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(247,249,252,0.92) 100%);
         }
         
         .bot-card {
             display: flex;
             align-items: center;
             padding: 10px 12px;
-            background: #f9fafb;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(245,247,250,0.96) 100%);
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.2s;
-            border: 1px solid var(--sidebar-border);
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--erp-border-strong);
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
         }
         
-        .bot-card:hover { background: var(--sidebar-hover); border-color: #d1d5db; }
+        .bot-card:hover {
+            background: #ffffff;
+            border-color: #b8c6d6;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        }
         
         .bot-avatar {
             width: 32px;
             height: 32px;
             border-radius: 8px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: linear-gradient(135deg, #1f8f77 0%, #125f55 100%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -654,6 +678,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             font-size: 14px;
             overflow: hidden;
             flex-shrink: 0;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
         }
         
         .bot-avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -666,7 +691,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         .menu-section-title {
             font-size: 10px;
             font-weight: 700;
-            color: #94a3b8;
+            color: #7b8ea3;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             padding: 0 2px 8px;
@@ -700,7 +725,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
         
         .menu-item.active .menu-icon { color: var(--sidebar-active-text); }
-        .menu-item.active:hover { background: #d1fae5; }
+        .menu-item.active:hover { background: linear-gradient(90deg, rgba(15,118,110,0.14) 0%, rgba(255,255,255,0.92) 100%); }
         
         .menu-icon {
             width: 18px;
@@ -714,16 +739,17 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             margin-left: auto;
             padding: 1px 6px;
             font-size: 9px;
-            font-weight: 600;
+            font-weight: 700;
             border-radius: 8px;
-            background: #ef4444;
+            background: #9f1239;
             color: white;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
         }
         
-        .menu-badge.yellow { background: #f59e0b; }
-        .menu-badge.blue { background: #3b82f6; }
-        .menu-badge.green { background: var(--primary); }
-        .menu-badge.orange { background: #f97316; }
+        .menu-badge.yellow { background: #a16207; }
+        .menu-badge.blue { background: #1d4ed8; }
+        .menu-badge.green { background: #166534; }
+        .menu-badge.orange { background: #9a3412; }
         
         /* Group Header Wrapper */
         .menu-parent-wrapper {
@@ -741,29 +767,30 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             border-radius: 12px;
             color: var(--sidebar-text);
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
             transition: all 0.15s ease;
             user-select: none;
-            border: 1px solid transparent;
+            border: 1px solid rgba(0,0,0,0);
             background: transparent;
         }
         
         .menu-parent:hover { 
-            background: var(--surface-muted); 
-            color: #111827; 
-            border-color: #e5e7eb;
+            background: rgba(255,255,255,0.82); 
+            color: var(--erp-ink); 
+            border-color: #d6deea;
         }
 
         .menu-section.is-open .menu-parent {
-            background: #f8fafc;
-            border-color: #e5e7eb;
+            background: rgba(255,255,255,0.88);
+            border-color: #d6deea;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
         }
 
         .menu-section.has-active .menu-parent {
-            background: #effcf6;
-            border-color: #bbf7d0;
-            color: #065f46;
+            background: linear-gradient(90deg, rgba(15,118,110,0.10) 0%, rgba(255,255,255,0.9) 100%);
+            border-color: rgba(31, 143, 119, 0.28);
+            color: #0f4c5c;
             box-shadow: inset 3px 0 0 var(--sidebar-active-border);
         }
         
@@ -771,15 +798,15 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         .sidebar-footer {
             padding: 10px 14px;
             border-top: 1px solid var(--sidebar-border);
-            background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+            background: linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(246,248,252,0.96) 100%);
         }
         
         .sidebar-footer-info {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-size: 9px;
-            color: #9ca3af;
+            font-size: 10px;
+            color: #71859a;
         }
         
         .menu-parent-icon {
@@ -793,7 +820,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         
         .menu-arrow {
             font-size: 10px;
-            color: #9ca3af;
+            color: #7b8ea3;
             transition: transform 0.2s ease;
         }
         
@@ -842,13 +869,13 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
         
         .nested-menu-parent:hover { 
-            background: var(--surface-muted); 
-            color: #111827;
+            background: rgba(255,255,255,0.74); 
+            color: var(--erp-ink);
         }
 
         .nested-menu-group.has-active > .nested-menu-parent {
-            color: #0f766e;
-            background: rgba(16, 185, 129, 0.08);
+            color: #0f4c5c;
+            background: rgba(15, 118, 110, 0.08);
         }
         
         .nested-menu-icon {
@@ -916,12 +943,12 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
         
         .nested-menu-item:hover {
-            background: var(--surface-muted);
-            color: #111827;
+            background: rgba(255,255,255,0.76);
+            color: var(--erp-ink);
         }
         
         .nested-menu-item.active {
-            background: var(--sidebar-active-bg);
+            background: linear-gradient(90deg, rgba(15,118,110,0.11) 0%, rgba(255,255,255,0.94) 100%);
             color: var(--sidebar-active-text);
             font-weight: 600;
             box-shadow: inset 3px 0 0 var(--sidebar-active-border);
@@ -932,9 +959,10 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             margin: 10px 12px 14px;
             padding: 12px;
             border-radius: 16px;
-            border: 1px solid #e2e8f0;
-            background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
-            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--erp-border-strong);
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(244,247,251,0.98) 100%);
+            box-shadow: var(--erp-shadow-soft);
         }
 
         .quick-access-header {
@@ -950,7 +978,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             align-items: center;
             gap: 6px;
             font-size: 11px;
-            color: #64748b;
+            color: #5d7084;
         }
 
         .quick-access-grid {
@@ -968,14 +996,14 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             text-decoration: none;
             transition: all 0.2s;
             position: relative;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(247,249,252,0.98) 100%);
+            border: 1px solid #d9e2ec;
         }
         
         .quick-item:hover {
             transform: translateY(-1px);
-            border-color: #cbd5e1;
-            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
+            border-color: #b9c6d6;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
         }
         
         .quick-icon {
@@ -988,31 +1016,31 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             font-size: 14px;
             color: white;
             margin-bottom: 0;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+            box-shadow: 0 10px 18px rgba(15, 23, 42, 0.12);
             transition: all 0.2s;
             flex-shrink: 0;
         }
         
         .quick-item:hover .quick-icon { transform: scale(1.05); }
         
-        .quick-icon.green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-        .quick-icon.orange { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); }
-        .quick-icon.blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
-        .quick-icon.purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
-        .quick-icon.pink { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
-        .quick-icon.cyan { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
-        .quick-icon.teal { background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); }
-        .quick-icon.amber { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-        .quick-icon.emerald { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-        .quick-icon.sky { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); }
-        .quick-icon.violet { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
-        .quick-icon.rose { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); }
-        .quick-icon.fuchsia { background: linear-gradient(135deg, #d946ef 0%, #c026d3 100%); }
-        .quick-icon.lime { background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%); }
-        .quick-icon.slate { background: linear-gradient(135deg, #64748b 0%, #475569 100%); }
-        .quick-icon.indigo { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); }
-        .quick-icon.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-        .quick-icon.yellow { background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); }
+        .quick-icon.green { background: linear-gradient(135deg, #1f8f77 0%, #176255 100%); }
+        .quick-icon.orange { background: linear-gradient(135deg, #b66a2c 0%, #8a4a1e 100%); }
+        .quick-icon.blue { background: linear-gradient(135deg, #3c5f8f 0%, #27456d 100%); }
+        .quick-icon.purple { background: linear-gradient(135deg, #6c5a95 0%, #4d3d78 100%); }
+        .quick-icon.pink { background: linear-gradient(135deg, #9d5f79 0%, #7c425a 100%); }
+        .quick-icon.cyan { background: linear-gradient(135deg, #2e7f8b 0%, #1f5e68 100%); }
+        .quick-icon.teal { background: linear-gradient(135deg, #1f8f77 0%, #176255 100%); }
+        .quick-icon.amber { background: linear-gradient(135deg, #a57a26 0%, #7f5d16 100%); }
+        .quick-icon.emerald { background: linear-gradient(135deg, #1f8f77 0%, #176255 100%); }
+        .quick-icon.sky { background: linear-gradient(135deg, #366f94 0%, #224f72 100%); }
+        .quick-icon.violet { background: linear-gradient(135deg, #65598d 0%, #4d3f74 100%); }
+        .quick-icon.rose { background: linear-gradient(135deg, #a55e66 0%, #7f4147 100%); }
+        .quick-icon.fuchsia { background: linear-gradient(135deg, #8f5b87 0%, #6d4067 100%); }
+        .quick-icon.lime { background: linear-gradient(135deg, #6f8f3a 0%, #546d24 100%); }
+        .quick-icon.slate { background: linear-gradient(135deg, #516274 0%, #334155 100%); }
+        .quick-icon.indigo { background: linear-gradient(135deg, #536597 0%, #384975 100%); }
+        .quick-icon.red { background: linear-gradient(135deg, #a85757 0%, #7f3d3d 100%); }
+        .quick-icon.yellow { background: linear-gradient(135deg, #a1883d 0%, #7c6625 100%); }
         
         .quick-label {
             font-size: 12px;
@@ -1031,15 +1059,15 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             font-size: 10px;
             font-weight: 700;
             border-radius: 9px;
-            background: #ef4444;
+            background: #9f1239;
             color: white;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 4px rgba(239,68,68,0.4);
+            box-shadow: 0 6px 12px rgba(136, 19, 55, 0.28);
         }
         
-        .quick-badge.yellow { background: #f59e0b; box-shadow: 0 2px 4px rgba(245,158,11,0.4); }
+        .quick-badge.yellow { background: #a16207; box-shadow: 0 6px 12px rgba(161,98,7,0.25); }
 
         .recent-nav-section {
             margin-top: 12px;
@@ -1063,14 +1091,14 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             text-decoration: none;
             color: #475569;
             font-size: 12px;
-            background: rgba(255, 255, 255, 0.65);
-            border: 1px solid transparent;
+            background: rgba(255, 255, 255, 0.74);
+            border: 1px solid rgba(203, 213, 225, 0.5);
             transition: all 0.15s ease;
         }
 
         .recent-nav-item:hover {
             background: #ffffff;
-            border-color: #e2e8f0;
+            border-color: #cbd5e1;
             color: #0f172a;
         }
 
@@ -1081,10 +1109,11 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: #e2e8f0;
-            color: #475569;
+            background: linear-gradient(180deg, #eef2f7 0%, #dde6f0 100%);
+            color: #3f5468;
             font-size: 11px;
             flex-shrink: 0;
+            border: 1px solid rgba(203, 213, 225, 0.7);
         }
 
         .recent-nav-copy {
@@ -1115,19 +1144,20 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             height: 20px;
             padding: 0 6px;
             border-radius: 999px;
-            background: #e2e8f0;
-            color: #475569;
+            background: linear-gradient(180deg, #e9eef5 0%, #dce5ef 100%);
+            color: #425569;
             font-size: 10px;
             font-weight: 700;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             margin-right: 8px;
+            border: 1px solid rgba(203, 213, 225, 0.8);
         }
 
         .menu-section.has-active .group-badge {
-            background: rgba(16, 185, 129, 0.16);
-            color: #047857;
+            background: rgba(15, 118, 110, 0.14);
+            color: #0f766e;
         }
         
         /* Dropdown */
@@ -1136,14 +1166,15 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             top: calc(100% + 4px);
             left: 0;
             right: 0;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.12);
-            border: 1px solid #e2e8f0;
+            background: rgba(255,255,255,0.98);
+            border-radius: 14px;
+            box-shadow: var(--erp-shadow-medium);
+            border: 1px solid #d9e2ec;
             z-index: 100;
             display: none;
             max-height: 280px;
             overflow-y: auto;
+            backdrop-filter: blur(10px);
         }
         
         .dropdown-menu.open { display: block; }
@@ -1156,10 +1187,10 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             cursor: pointer;
         }
         
-        .dropdown-item:hover { background: #f8fafc; }
-        .dropdown-item.active { background: #ecfdf5; }
-        .dropdown-item:first-child { border-radius: 12px 12px 0 0; }
-        .dropdown-item:last-child { border-radius: 0 0 12px 12px; }
+        .dropdown-item:hover { background: #f6f9fc; }
+        .dropdown-item.active { background: rgba(15, 118, 110, 0.09); }
+        .dropdown-item:first-child { border-radius: 14px 14px 0 0; }
+        .dropdown-item:last-child { border-radius: 0 0 14px 14px; }
         
         /* Main Content */
         .main-content {
@@ -1173,7 +1204,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
         
         .top-header {
-            background: white;
+            background: var(--erp-header-tint);
             padding: 14px 24px;
             border-bottom: 1px solid #e2e8f0;
             display: flex;
@@ -1183,6 +1214,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             top: 0;
             z-index: 30;
             gap: 16px;
+            backdrop-filter: blur(14px);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
         }
 
         .header-primary {
@@ -1202,7 +1235,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            color: #94a3b8;
+            color: #74869a;
             margin-bottom: 2px;
         }
 
@@ -1215,15 +1248,15 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         
         .page-title {
             font-size: 20px;
-            font-weight: 600;
-            color: #1e293b;
+            font-weight: 700;
+            color: #132235;
             line-height: 1.2;
             margin: 0;
         }
 
         .page-subtitle {
             margin-top: 4px;
-            color: #64748b;
+            color: #5f7286;
             font-size: 12px;
             white-space: nowrap;
             overflow: hidden;
@@ -1236,11 +1269,12 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             gap: 6px;
             padding: 5px 9px;
             border-radius: 999px;
-            background: #eff6ff;
-            color: #1d4ed8;
+            background: rgba(15, 118, 110, 0.10);
+            color: #0f766e;
             font-size: 11px;
             font-weight: 700;
             white-space: nowrap;
+            border: 1px solid rgba(15, 118, 110, 0.15);
         }
 
         .header-command-wrap {
@@ -1251,8 +1285,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
 
         .command-launcher {
             width: 100%;
-            border: 1px solid #e2e8f0;
-            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid #d7e0ea;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,248,251,0.98) 100%);
             border-radius: 14px;
             height: 44px;
             display: flex;
@@ -1263,13 +1297,13 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             color: #64748b;
             cursor: pointer;
             transition: all 0.15s ease;
-            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
         }
 
         .command-launcher:hover {
-            border-color: #cbd5e1;
-            color: #334155;
-            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07);
+            border-color: #b8c6d6;
+            color: #243447;
+            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.09);
         }
 
         .command-launcher-copy {
@@ -1290,11 +1324,12 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         .command-shortcut {
             padding: 4px 7px;
             border-radius: 8px;
-            background: #e2e8f0;
-            color: #475569;
+            background: linear-gradient(180deg, #edf2f7 0%, #dce5ef 100%);
+            color: #425569;
             font-size: 11px;
             font-weight: 700;
             flex-shrink: 0;
+            border: 1px solid rgba(203, 213, 225, 0.85);
         }
         
         .header-actions { display: flex; align-items: center; gap: 8px; }
@@ -1306,15 +1341,40 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #f8fafc;
-            color: #64748b;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(243,246,250,0.96) 100%);
+            color: #5f7286;
             transition: all 0.15s;
             cursor: pointer;
             position: relative;
-            border: 1px solid transparent;
+            border: 1px solid #d7e0ea;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
         }
         
-        .header-btn:hover { background: #f1f5f9; color: #334155; border-color: #e2e8f0; }
+        .header-btn:hover {
+            background: #ffffff;
+            color: #243447;
+            border-color: #b8c6d6;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+        }
+
+        .header-btn.erp-quick-btn {
+            background: linear-gradient(135deg, #1f8f77 0%, #16665a 100%);
+            border-color: rgba(20, 83, 45, 0.16);
+            color: white;
+        }
+
+        .header-btn.erp-ai-btn {
+            background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+            border-color: rgba(15, 23, 42, 0.12);
+            color: white;
+        }
+
+        .header-btn.erp-odoo-btn {
+            background: linear-gradient(135deg, #334155 0%, #0f172a 100%);
+            border-color: rgba(15, 23, 42, 0.2);
+            color: white;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+        }
         
         .header-btn .badge {
             position: absolute;
@@ -1336,26 +1396,32 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             display: flex;
             align-items: center;
             padding: 6px 12px 6px 6px;
-            background: #f8fafc;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(243,246,250,0.96) 100%);
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.15s;
-            border: 1px solid transparent;
+            border: 1px solid #d7e0ea;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
         }
         
-        .user-menu:hover { background: #f1f5f9; border-color: #e2e8f0; }
+        .user-menu:hover {
+            background: #ffffff;
+            border-color: #b8c6d6;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+        }
         
         .user-avatar {
             width: 32px;
             height: 32px;
             border-radius: 8px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: 600;
             font-size: 13px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
         }
         
         .content-area {
@@ -1385,11 +1451,12 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             position: relative;
             width: min(720px, calc(100vw - 32px));
             margin: 72px auto 0;
-            background: #ffffff;
+            background: rgba(255,255,255,0.98);
             border-radius: 20px;
-            border: 1px solid rgba(226, 232, 240, 0.8);
-            box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+            border: 1px solid rgba(203, 213, 225, 0.95);
+            box-shadow: 0 36px 90px rgba(15, 23, 42, 0.28);
             overflow: hidden;
+            backdrop-filter: blur(18px);
         }
 
         .command-palette-input {
@@ -1416,8 +1483,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             justify-content: space-between;
             gap: 8px;
             padding: 10px 18px;
-            background: #f8fafc;
-            color: #64748b;
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            color: #5f7286;
             font-size: 12px;
             border-bottom: 1px solid #e2e8f0;
         }
@@ -1443,8 +1510,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
 
         .command-result:hover,
         .command-result.is-selected {
-            background: #f8fafc;
-            border-color: #e2e8f0;
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            border-color: #d7e0ea;
         }
 
         .command-result-icon {
@@ -1454,10 +1521,11 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #dcfce7 0%, #dbeafe 100%);
-            color: #0f766e;
+            background: linear-gradient(135deg, #e9eef5 0%, #dbe5ef 100%);
+            color: #1f3a52;
             font-size: 15px;
             flex-shrink: 0;
+            border: 1px solid rgba(203, 213, 225, 0.8);
         }
 
         .command-result-copy {
@@ -1485,11 +1553,12 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             margin-left: auto;
             padding: 3px 8px;
             border-radius: 999px;
-            background: #fee2e2;
-            color: #b91c1c;
+            background: #fce7f3;
+            color: #9f1239;
             font-size: 11px;
             font-weight: 700;
             flex-shrink: 0;
+            border: 1px solid rgba(244, 114, 182, 0.18);
         }
 
         .command-result-empty {
@@ -2022,8 +2091,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                 <div class="header-actions">
                     <?php if ($isOdooMode): ?>
                     <!-- Odoo Dashboard Shortcut -->
-                    <a href="/odoo-dashboard" class="header-btn" title="Odoo Dashboard"
-                       style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); color: white; width: auto; padding: 0 14px; gap: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">
+                    <a href="/odoo-dashboard" class="header-btn erp-odoo-btn" title="Odoo Dashboard"
+                       style="width: auto; padding: 0 14px; gap: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">
                         <i class="fas fa-satellite-dish" style="font-size: 13px;"></i>
                         <span class="hidden sm:inline">Odoo</span>
                     </a>
@@ -2031,8 +2100,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
 
                     <!-- Quick Access Dropdown -->
                     <div class="relative" x-data="{ open: false }">
-                        <button @click="open = !open" class="header-btn" title="Quick Access"
-                            style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;">
+                        <button @click="open = !open" class="header-btn erp-quick-btn" title="Quick Access">
                             <i class="fas fa-bolt"></i>
                         </button>
                         <div x-show="open" @click.away="open = false" x-transition
@@ -2074,8 +2142,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
 
                     <!-- AI Tools Dropdown -->
                     <div class="relative" x-data="{ open: false }">
-                        <button @click="open = !open" class="header-btn ai-tools-btn" title="AI Tools"
-                            style="background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); color: white;">
+                        <button @click="open = !open" class="header-btn ai-tools-btn erp-ai-btn" title="AI Tools">
                             <i class="fas fa-brain"></i>
                             <i class="fas fa-chevron-down text-xs ml-1"></i>
                         </button>
