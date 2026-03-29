@@ -176,7 +176,7 @@ $orderDataSource = getShopOrderDataSource($db, $currentBotId);
 $isOdooMode = $orderDataSource === 'odoo';
 $ordersMenuLabel = $isOdooMode ? 'ออเดอร์ (Odoo)' : 'ออเดอร์';
 $dashboardMenuLabel = $isOdooMode ? 'จัดการลูกค้า Odoo' : 'แดชบอร์ดผู้บริหาร';
-$dashboardDefaultHref = $isOdooMode ? '/dashboard?tab=odoo-customers' : '/dashboard?tab=executive';
+$dashboardDefaultHref = $isOdooMode ? '/odoo-dashboard' : '/dashboard?tab=executive';
 
 // Initialize Vibe Selling Helper for v2 toggle (Requirements: 10.6)
 $vibeSellingHelper = null;
@@ -260,7 +260,7 @@ $quickAccessMenus = [
     // ==================== Insights & Overview ====================
     'executive' => ['icon' => 'fa-chart-line', 'label' => $dashboardMenuLabel, 'url' => $dashboardDefaultHref, 'page' => 'dashboard', 'color' => 'indigo', 'roles' => ['owner', 'admin']],
     'crm-dashboard' => ['icon' => 'fa-users-cog', 'label' => 'CRM Dashboard', 'url' => '/dashboard?tab=crm', 'page' => 'dashboard', 'color' => 'blue', 'roles' => ['owner', 'admin']],
-    'odoo-customers' => ['icon' => 'fa-file-invoice-dollar', 'label' => 'จัดการลูกค้า Odoo', 'url' => '/dashboard?tab=odoo-customers', 'page' => 'dashboard', 'color' => 'violet', 'roles' => ['owner', 'admin'], 'condition' => $isOdooMode],
+    'odoo-customers' => ['icon' => 'fa-file-invoice-dollar', 'label' => 'จัดการลูกค้า Odoo', 'url' => '/odoo-dashboard', 'page' => 'odoo-dashboard', 'color' => 'violet', 'roles' => ['owner', 'admin'], 'condition' => $isOdooMode],
     'triage' => ['icon' => 'fa-stethoscope', 'label' => 'สถิติการรักษา', 'url' => '/triage-analytics', 'page' => 'triage-analytics', 'color' => 'emerald', 'roles' => ['pharmacist', 'owner']],
     'drug-interactions' => ['icon' => 'fa-pills', 'label' => 'ยาตีกัน', 'url' => '/pharmacy?tab=interactions', 'page' => 'pharmacy', 'color' => 'red', 'roles' => ['pharmacist', 'owner']],
     'activity-logs' => ['icon' => 'fa-history', 'label' => 'ประวัติการใช้งาน', 'url' => '/activity-logs', 'page' => 'activity-logs', 'color' => 'slate', 'roles' => ['owner']],
@@ -390,7 +390,7 @@ $menuGroups = [
                 'submenus' => array_filter([
                     ['title' => $isOdooMode ? 'Odoo Overview' : 'Executive Overview', 'href' => $dashboardDefaultHref],
                     ['title' => 'CRM Dashboard', 'href' => '/dashboard?tab=crm'],
-                    $isOdooMode ? ['title' => 'จัดการลูกค้า Odoo', 'href' => '/dashboard?tab=odoo-customers'] : null,
+                    $isOdooMode ? ['title' => 'จัดการลูกค้า Odoo', 'href' => '/odoo-dashboard'] : null,
                 ])
             ],
             ['title' => 'วิเคราะห์ข้อมูล', 'icon' => '📈', 'href' => '/analytics'],

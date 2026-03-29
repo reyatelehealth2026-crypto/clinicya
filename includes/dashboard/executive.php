@@ -78,7 +78,7 @@ try {
 } catch (Exception $e) {
 }
 
-// 5. วิดีโอคอลวันนี้ (New)
+// 5. วิดีโอคอลวันนี้
 $videoStats = ['total' => 0, 'completed' => 0, 'avg_duration' => 0];
 try {
     $stmt = $db->prepare("SELECT 
@@ -205,289 +205,275 @@ try {
     $topIssues = array_slice($issueKeywords, 0, 5, true);
 } catch (Exception $e) {
 }
+
+$responseClass = $avgResponseTime <= 5 ? 'text-emerald-600' : ($avgResponseTime <= 15 ? 'text-amber-600' : 'text-red-600');
+$responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <= 15 ? 'พอใช้' : 'ต้องปรับปรุง');
 ?>
 
-<div class="space-y-6">
-    <!-- Date Filter -->
-    <div class="flex flex-wrap items-center justify-between gap-4">
-        <div>
-            <p class="text-gray-500">ภาพรวมการทำงานและวิเคราะห์ประจำวัน</p>
+<!-- ─── Command Strip: Date & Actions ─── -->
+<div class="flex flex-wrap items-center justify-between gap-3 mb-1">
+    <p class="text-sm text-gray-500 font-medium">
+        <i class="fas fa-calendar-day mr-1.5 text-gray-400"></i>
+        <?= date('l, j M Y', strtotime($dateFilter)) ?>
+    </p>
+    <div class="flex items-center gap-2">
+        <input type="date" id="dateFilter" value="<?= $dateFilter ?>"
+            class="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white/80 focus:ring-2 focus:ring-teal-500 focus:border-teal-400 outline-none transition"
+            onchange="window.location='?tab=executive&date='+this.value">
+        <button onclick="window.print()"
+            class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition">
+            <i class="fas fa-print mr-1.5"></i>พิมพ์
+        </button>
+    </div>
+</div>
+
+<!-- ─── Primary KPI Row ─── -->
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+    <div class="db-kpi">
+        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#2563eb;">
+            <i class="fas fa-comments"></i>
         </div>
-        <div class="flex items-center gap-3">
-            <input type="date" id="dateFilter" value="<?= $dateFilter ?>"
-                class="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-                onchange="window.location='?tab=executive&date='+this.value">
-            <button onclick="window.print()" class="px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">
-                <i class="fas fa-print mr-2"></i>พิมพ์
-            </button>
+        <div class="db-kpi-copy">
+            <div class="db-kpi-label">ข้อความวันนี้</div>
+            <div class="db-kpi-value"><?= number_format($msgStats['total'] ?? 0) ?></div>
+            <div class="db-kpi-meta">รับ <?= number_format($msgStats['incoming'] ?? 0) ?> / ส่ง <?= number_format($msgStats['outgoing'] ?? 0) ?></div>
         </div>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-comments text-blue-500 text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">ข้อความวันนี้</p>
-                    <p class="text-2xl font-bold"><?= number_format($msgStats['total'] ?? 0) ?></p>
-                    <p class="text-xs text-gray-400">รับ <?= number_format($msgStats['incoming'] ?? 0) ?> / ส่ง
-                        <?= number_format($msgStats['outgoing'] ?? 0) ?>
-                    </p>
-                </div>
-            </div>
+    <div class="db-kpi">
+        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#059669;">
+            <i class="fas fa-users"></i>
         </div>
-
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-users text-green-500 text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">ลูกค้าติดต่อ</p>
-                    <p class="text-2xl font-bold"><?= number_format($customersToday) ?></p>
-                    <p class="text-xs text-green-500">+<?= $newCustomers ?> ใหม่</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-shopping-cart text-orange-500 text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">ออเดอร์</p>
-                    <p class="text-2xl font-bold"><?= number_format($orderStats['total'] ?? 0) ?></p>
-                    <p class="text-xs text-orange-500"><?= $orderStats['pending'] ?? 0 ?> รอดำเนินการ</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-baht-sign text-purple-500 text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">รายได้</p>
-                    <p class="text-2xl font-bold">฿<?= number_format($orderStats['revenue'] ?? 0) ?></p>
-                    <p class="text-xs text-gray-400"><?= $orderStats['completed'] ?? 0 ?> สำเร็จ</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-video text-red-500 text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">วิดีโอคอล</p>
-                    <p class="text-2xl font-bold"><?= number_format($videoStats['total'] ?? 0) ?></p>
-                    <p class="text-xs text-gray-400">เฉลี่ย <?= round($videoStats['avg_duration'] / 60, 1) ?> นาที</p>
-                </div>
-            </div>
+        <div class="db-kpi-copy">
+            <div class="db-kpi-label">ลูกค้าติดต่อ</div>
+            <div class="db-kpi-value"><?= number_format($customersToday) ?></div>
+            <div class="db-kpi-meta" style="color:#059669;">+<?= $newCustomers ?> ใหม่</div>
         </div>
     </div>
 
-    <!-- Second Row -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="flex items-center gap-3">
-                <div class="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-clock text-cyan-500 text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">เวลาตอบกลับเฉลี่ย</p>
-                    <p class="text-2xl font-bold"><?= $avgResponseTime ?> <span class="text-sm font-normal">นาที</span>
-                    </p>
-                    <p
-                        class="text-xs <?= $avgResponseTime <= 5 ? 'text-green-500' : ($avgResponseTime <= 15 ? 'text-yellow-500' : 'text-red-500') ?>">
-                        <?= $avgResponseTime <= 5 ? '✅ ดีมาก' : ($avgResponseTime <= 15 ? '⚠️ พอใช้' : '❌ ต้องปรับปรุง') ?>
-                    </p>
-                </div>
-            </div>
+    <div class="db-kpi">
+        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#ffedd5,#fed7aa);color:#ea580c;">
+            <i class="fas fa-shopping-cart"></i>
         </div>
-
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="flex items-center gap-3">
-                <div
-                    class="w-12 h-12 <?= ($msgStats['unread'] ?? 0) > 0 ? 'bg-red-100' : 'bg-green-100' ?> rounded-lg flex items-center justify-center">
-                    <i
-                        class="fas fa-envelope <?= ($msgStats['unread'] ?? 0) > 0 ? 'text-red-500' : 'text-green-500' ?> text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">ยังไม่ได้อ่าน</p>
-                    <p class="text-2xl font-bold <?= ($msgStats['unread'] ?? 0) > 0 ? 'text-red-500' : '' ?>">
-                        <?= number_format($msgStats['unread'] ?? 0) ?>
-                    </p>
-                    <p class="text-xs text-gray-400">ข้อความ</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="flex items-center gap-3">
-                <div
-                    class="w-12 h-12 <?= count($problemMessages) > 0 ? 'bg-red-100' : 'bg-green-100' ?> rounded-lg flex items-center justify-center">
-                    <i
-                        class="fas fa-exclamation-triangle <?= count($problemMessages) > 0 ? 'text-red-500' : 'text-green-500' ?> text-xl"></i>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">ปัญหา/ข้อร้องเรียน</p>
-                    <p class="text-2xl font-bold <?= count($problemMessages) > 0 ? 'text-red-500' : '' ?>">
-                        <?= count($problemMessages) ?>
-                    </p>
-                    <p class="text-xs text-gray-400">รายการ</p>
-                </div>
-            </div>
+        <div class="db-kpi-copy">
+            <div class="db-kpi-label">ออเดอร์</div>
+            <div class="db-kpi-value"><?= number_format($orderStats['total'] ?? 0) ?></div>
+            <div class="db-kpi-meta" style="color:#ea580c;"><?= $orderStats['pending'] ?? 0 ?> รอดำเนินการ</div>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Admin Performance -->
-        <div class="bg-white rounded-xl shadow">
-            <div class="px-4 py-3 border-b flex items-center justify-between">
-                <h3 class="font-semibold text-gray-700"><i class="fas fa-user-tie text-blue-500 mr-2"></i>ผลงาน Admin
-                    วันนี้</h3>
-            </div>
-            <div class="p-4">
-                <?php if (empty($adminPerformance)): ?>
-                    <p class="text-gray-400 text-center py-4">ไม่มีข้อมูล</p>
-                <?php else: ?>
-                    <div class="space-y-3">
-                        <?php foreach ($adminPerformance as $i => $admin): ?>
-                            <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                                <div
-                                    class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold">
-                                    <?= $i + 1 ?>
-                                </div>
-                                <div class="flex-1">
-                                    <p class="font-medium"><?= htmlspecialchars($admin['admin_name'] ?: 'System/Bot') ?></p>
-                                    <p class="text-xs text-gray-500">ดูแล <?= $admin['customers_handled'] ?> ลูกค้า</p>
-                                </div>
-                                <div class="text-right">
-                                    <p class="text-lg font-bold text-blue-600">
-                                        <?= number_format($admin['messages_sent'] ?? 0) ?>
-                                    </p>
-                                    <p class="text-xs text-gray-400">ข้อความ</p>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
+    <div class="db-kpi">
+        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed;">
+            <i class="fas fa-baht-sign"></i>
         </div>
-
-        <!-- Hourly Activity Chart -->
-        <div class="bg-white rounded-xl shadow">
-            <div class="px-4 py-3 border-b">
-                <h3 class="font-semibold text-gray-700"><i
-                        class="fas fa-chart-area text-green-500 mr-2"></i>กิจกรรมรายชั่วโมง</h3>
-            </div>
-            <div class="p-4">
-                <canvas id="hourlyChart" height="200"></canvas>
-            </div>
+        <div class="db-kpi-copy">
+            <div class="db-kpi-label">รายได้</div>
+            <div class="db-kpi-value">฿<?= number_format($orderStats['revenue'] ?? 0) ?></div>
+            <div class="db-kpi-meta"><?= $orderStats['completed'] ?? 0 ?> สำเร็จ</div>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Problem Messages -->
-        <div class="bg-white rounded-xl shadow">
-            <div class="px-4 py-3 border-b flex items-center justify-between bg-red-50">
-                <h3 class="font-semibold text-red-700"><i
-                        class="fas fa-exclamation-circle mr-2"></i>ข้อความที่อาจเป็นปัญหา</h3>
-                <span class="px-2 py-1 bg-red-100 text-red-600 text-xs rounded-full"><?= count($problemMessages) ?>
-                    รายการ</span>
+    <div class="db-kpi">
+        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8);color:#db2777;">
+            <i class="fas fa-video"></i>
+        </div>
+        <div class="db-kpi-copy">
+            <div class="db-kpi-label">วิดีโอคอล</div>
+            <div class="db-kpi-value"><?= number_format($videoStats['total'] ?? 0) ?></div>
+            <div class="db-kpi-meta">เฉลี่ย <?= round(($videoStats['avg_duration'] ?? 0) / 60, 1) ?> นาที</div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Attention Zone: Response Time + Unread + Problems ─── -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="db-kpi">
+        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#cffafe,#a5f3fc);color:#0891b2;">
+            <i class="fas fa-clock"></i>
+        </div>
+        <div class="db-kpi-copy">
+            <div class="db-kpi-label">เวลาตอบกลับเฉลี่ย</div>
+            <div class="db-kpi-value"><?= $avgResponseTime ?> <span style="font-size:13px;font-weight:500;color:#74869a;">นาที</span></div>
+            <div class="db-kpi-meta <?= $responseClass ?>" style="font-weight:600;"><?= $responseLabel ?></div>
+        </div>
+    </div>
+
+    <div class="db-kpi" style="<?= ($msgStats['unread'] ?? 0) > 0 ? 'border-color:#fecaca;' : '' ?>">
+        <div class="db-kpi-icon" style="background:linear-gradient(135deg,<?= ($msgStats['unread'] ?? 0) > 0 ? '#fee2e2,#fecaca' : '#d1fae5,#a7f3d0' ?>);color:<?= ($msgStats['unread'] ?? 0) > 0 ? '#dc2626' : '#059669' ?>;">
+            <i class="fas fa-envelope"></i>
+        </div>
+        <div class="db-kpi-copy">
+            <div class="db-kpi-label">ยังไม่ได้อ่าน</div>
+            <div class="db-kpi-value <?= ($msgStats['unread'] ?? 0) > 0 ? 'text-red-600' : '' ?>"><?= number_format($msgStats['unread'] ?? 0) ?></div>
+            <div class="db-kpi-meta">ข้อความ</div>
+        </div>
+    </div>
+
+    <div class="db-kpi" style="<?= count($problemMessages) > 0 ? 'border-color:#fecaca;' : '' ?>">
+        <div class="db-kpi-icon" style="background:linear-gradient(135deg,<?= count($problemMessages) > 0 ? '#fee2e2,#fecaca' : '#d1fae5,#a7f3d0' ?>);color:<?= count($problemMessages) > 0 ? '#dc2626' : '#059669' ?>;">
+            <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <div class="db-kpi-copy">
+            <div class="db-kpi-label">ปัญหา/ข้อร้องเรียน</div>
+            <div class="db-kpi-value <?= count($problemMessages) > 0 ? 'text-red-600' : '' ?>"><?= count($problemMessages) ?></div>
+            <div class="db-kpi-meta">รายการ</div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Analytics: Admin Performance + Hourly Activity ─── -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="db-section">
+        <div class="db-section-header">
+            <div class="db-section-title">
+                <i class="fas fa-user-tie" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#2563eb;"></i>
+                ผลงาน Admin วันนี้
             </div>
-            <div class="divide-y max-h-96 overflow-y-auto">
-                <?php if (empty($problemMessages)): ?>
-                    <div class="p-8 text-center text-gray-400">
-                        <i class="fas fa-check-circle text-4xl text-green-300 mb-2"></i>
-                        <p>ไม่พบข้อความที่เป็นปัญหา 🎉</p>
-                    </div>
-                <?php else: ?>
-                    <?php foreach ($problemMessages as $msg): ?>
-                        <div class="p-3 hover:bg-red-50 cursor-pointer" onclick="viewChat(<?= $msg['user_id'] ?>)">
-                            <div class="flex items-start gap-3">
-                                <img src="<?= $msg['picture_url'] ?: 'https://via.placeholder.com/40' ?>"
-                                    class="w-10 h-10 rounded-full">
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2">
-                                        <span
-                                            class="font-medium text-sm"><?= htmlspecialchars($msg['display_name'] ?: 'ลูกค้า') ?></span>
-                                        <span
-                                            class="text-xs text-gray-400"><?= date('H:i', strtotime($msg['created_at'])) ?></span>
-                                    </div>
-                                    <p class="text-sm text-gray-600 truncate"><?= htmlspecialchars($msg['content'] ?? '') ?></p>
-                                </div>
-                                <i class="fas fa-chevron-right text-gray-300"></i>
-                            </div>
+        </div>
+        <div class="db-section-body-flush">
+            <?php if (empty($adminPerformance)): ?>
+                <div class="db-empty">
+                    <i class="fas fa-user-clock"></i>
+                    <p>ไม่มีข้อมูลผลงาน Admin</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($adminPerformance as $i => $admin): ?>
+                    <div class="db-list-item">
+                        <div style="width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;flex-shrink:0;">
+                            <?= $i + 1 ?>
                         </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-        </div>
-
-        <!-- Recent Conversations -->
-        <div class="bg-white rounded-xl shadow">
-            <div class="px-4 py-3 border-b">
-                <h3 class="font-semibold text-gray-700"><i
-                        class="fas fa-history text-purple-500 mr-2"></i>การสนทนาล่าสุด</h3>
-            </div>
-            <div class="divide-y max-h-96 overflow-y-auto">
-                <?php foreach ($recentConversations as $conv): ?>
-                    <div class="p-3 hover:bg-gray-50 cursor-pointer" onclick="viewChat(<?= $conv['id'] ?>)">
-                        <div class="flex items-center gap-3">
-                            <img src="<?= $conv['picture_url'] ?: 'https://via.placeholder.com/40' ?>"
-                                class="w-10 h-10 rounded-full">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2">
-                                    <span
-                                        class="font-medium text-sm"><?= htmlspecialchars($conv['display_name'] ?: 'ลูกค้า') ?></span>
-                                    <span
-                                        class="px-1.5 py-0.5 bg-blue-100 text-blue-600 text-[10px] rounded"><?= $conv['message_count'] ?>
-                                        ข้อความ</span>
-                                </div>
-                                <p class="text-xs text-gray-500 truncate"><?= htmlspecialchars($conv['last_message']) ?></p>
-                            </div>
-                            <span
-                                class="text-xs text-gray-400"><?= date('H:i', strtotime($conv['last_message_at'])) ?></span>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:14px;font-weight:600;color:#132235;"><?= htmlspecialchars($admin['admin_name'] ?: 'System/Bot') ?></div>
+                            <div style="font-size:11px;color:#74869a;">ดูแล <?= $admin['customers_handled'] ?> ลูกค้า</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:20px;font-weight:800;color:#2563eb;"><?= number_format($admin['messages_sent'] ?? 0) ?></div>
+                            <div style="font-size:11px;color:#94a3b8;">ข้อความ</div>
                         </div>
                     </div>
                 <?php endforeach; ?>
-            </div>
+            <?php endif; ?>
         </div>
     </div>
 
-    <!-- Top Issues -->
-    <div class="bg-white rounded-xl shadow">
-        <div class="px-4 py-3 border-b">
-            <h3 class="font-semibold text-gray-700"><i
-                    class="fas fa-tags text-orange-500 mr-2"></i>หัวข้อที่ลูกค้าถามบ่อย</h3>
+    <div class="db-section">
+        <div class="db-section-header">
+            <div class="db-section-title">
+                <i class="fas fa-chart-area" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#059669;"></i>
+                กิจกรรมรายชั่วโมง
+            </div>
         </div>
-        <div class="p-4">
-            <div class="flex flex-wrap gap-3">
+        <div class="db-section-body">
+            <canvas id="hourlyChart" height="200"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Attention: Problem Messages + Recent Conversations ─── -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="db-section" style="<?= count($problemMessages) > 0 ? 'border-color:#fecaca;' : '' ?>">
+        <div class="db-section-header" style="<?= count($problemMessages) > 0 ? 'background:linear-gradient(180deg,#fef2f2,#fee2e2);border-color:#fecaca;' : '' ?>">
+            <div class="db-section-title" style="<?= count($problemMessages) > 0 ? 'color:#991b1b;' : '' ?>">
+                <i class="fas fa-exclamation-circle" style="background:linear-gradient(135deg,#fee2e2,#fecaca);color:#dc2626;"></i>
+                ข้อความที่อาจเป็นปัญหา
+            </div>
+            <span class="db-section-badge" style="background:#fef2f2;color:#dc2626;border-color:#fecaca;">
+                <?= count($problemMessages) ?> รายการ
+            </span>
+        </div>
+        <div class="db-section-body-flush" style="max-height:400px;overflow-y:auto;">
+            <?php if (empty($problemMessages)): ?>
+                <div class="db-empty">
+                    <i class="fas fa-check-circle" style="color:#86efac;"></i>
+                    <p>ไม่พบข้อความที่เป็นปัญหา</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($problemMessages as $msg): ?>
+                    <div class="db-list-item cursor-pointer" onclick="viewChat(<?= $msg['user_id'] ?>)">
+                        <img src="<?= $msg['picture_url'] ?: 'https://via.placeholder.com/40' ?>"
+                            style="width:40px;height:40px;border-radius:12px;object-fit:cover;flex-shrink:0;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:13px;font-weight:600;color:#132235;"><?= htmlspecialchars($msg['display_name'] ?: 'ลูกค้า') ?></span>
+                                <span style="font-size:11px;color:#94a3b8;"><?= date('H:i', strtotime($msg['created_at'])) ?></span>
+                            </div>
+                            <p style="font-size:12px;color:#5f7286;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($msg['content'] ?? '') ?></p>
+                        </div>
+                        <i class="fas fa-chevron-right" style="color:#cbd5e1;font-size:12px;"></i>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="db-section">
+        <div class="db-section-header">
+            <div class="db-section-title">
+                <i class="fas fa-history" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed;"></i>
+                การสนทนาล่าสุด
+            </div>
+        </div>
+        <div class="db-section-body-flush" style="max-height:400px;overflow-y:auto;">
+            <?php if (empty($recentConversations)): ?>
+                <div class="db-empty">
+                    <i class="fas fa-comments"></i>
+                    <p>ยังไม่มีการสนทนาวันนี้</p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($recentConversations as $conv): ?>
+                    <div class="db-list-item cursor-pointer" onclick="viewChat(<?= $conv['id'] ?>)">
+                        <img src="<?= $conv['picture_url'] ?: 'https://via.placeholder.com/40' ?>"
+                            style="width:40px;height:40px;border-radius:12px;object-fit:cover;flex-shrink:0;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:13px;font-weight:600;color:#132235;"><?= htmlspecialchars($conv['display_name'] ?: 'ลูกค้า') ?></span>
+                                <span style="display:inline-flex;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;background:#dbeafe;color:#2563eb;"><?= $conv['message_count'] ?> ข้อความ</span>
+                            </div>
+                            <p style="font-size:12px;color:#5f7286;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($conv['last_message']) ?></p>
+                        </div>
+                        <span style="font-size:11px;color:#94a3b8;flex-shrink:0;"><?= date('H:i', strtotime($conv['last_message_at'])) ?></span>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Top Issues ─── -->
+<div class="db-section">
+    <div class="db-section-header">
+        <div class="db-section-title">
+            <i class="fas fa-tags" style="background:linear-gradient(135deg,#ffedd5,#fed7aa);color:#ea580c;"></i>
+            หัวข้อที่ลูกค้าถามบ่อย
+        </div>
+    </div>
+    <div class="db-section-body">
+        <?php
+        $hasIssues = false;
+        foreach ($topIssues as $count) { if ($count > 0) { $hasIssues = true; break; } }
+        ?>
+        <?php if (!$hasIssues): ?>
+            <div class="db-empty">
+                <i class="fas fa-tags"></i>
+                <p>ยังไม่มีข้อมูลหัวข้อ</p>
+            </div>
+        <?php else: ?>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;">
                 <?php foreach ($topIssues as $issue => $count): ?>
                     <?php if ($count > 0): ?>
-                        <div class="px-4 py-2 bg-orange-50 border border-orange-200 rounded-full">
-                            <span class="font-medium text-orange-700"><?= $issue ?></span>
-                            <span
-                                class="ml-2 px-2 py-0.5 bg-orange-200 text-orange-800 text-xs rounded-full"><?= $count ?></span>
+                        <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1px solid #fed7aa;font-size:13px;">
+                            <span style="font-weight:600;color:#9a3412;"><?= $issue ?></span>
+                            <span style="display:inline-flex;align-items:center;justify-content:center;min-width:24px;padding:2px 8px;border-radius:999px;background:#fdba74;color:#7c2d12;font-size:11px;font-weight:700;"><?= $count ?></span>
                         </div>
                     <?php endif; ?>
                 <?php endforeach; ?>
             </div>
-        </div>
+        <?php endif; ?>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Hourly Activity Chart
     const hourlyData = <?= json_encode(array_values($hourlyActivity)) ?>;
     const ctx = document.getElementById('hourlyChart').getContext('2d');
     new Chart(ctx, {
@@ -497,18 +483,40 @@ try {
             datasets: [{
                 label: 'ข้อความ',
                 data: hourlyData,
-                borderColor: '#10B981',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                borderColor: '#0d9488',
+                backgroundColor: 'rgba(13, 148, 136, 0.08)',
                 fill: true,
-                tension: 0.4
+                tension: 0.4,
+                borderWidth: 2.5,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: '#0d9488'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#132235',
+                    titleFont: { size: 12, weight: '600' },
+                    bodyFont: { size: 12 },
+                    padding: 10,
+                    cornerRadius: 10,
+                    displayColors: false
+                }
+            },
             scales: {
-                y: { beginAtZero: true }
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,0.04)' },
+                    ticks: { font: { size: 11 }, color: '#94a3b8' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 11 }, color: '#94a3b8', maxRotation: 0 }
+                }
             }
         }
     });
