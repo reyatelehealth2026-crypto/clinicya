@@ -218,7 +218,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
     </p>
     <div class="flex items-center gap-2">
         <input type="date" id="dateFilter" value="<?= $dateFilter ?>"
-            class="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white/80 focus:ring-2 focus:ring-teal-500 focus:border-teal-400 outline-none transition"
+            class="px-3 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-teal-500 focus:border-teal-400 outline-none transition"
             onchange="window.location='?tab=executive&date='+this.value">
         <button onclick="window.print()"
             class="px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition">
@@ -230,7 +230,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
 <!-- ─── Primary KPI Row ─── -->
 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#2563eb;">
+        <div class="db-kpi-icon" style="background:#dbeafe;color:#2563eb;">
             <i class="fas fa-comments"></i>
         </div>
         <div class="db-kpi-copy">
@@ -241,7 +241,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
     </div>
 
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#059669;">
+        <div class="db-kpi-icon" style="background:#d1fae5;color:#059669;">
             <i class="fas fa-users"></i>
         </div>
         <div class="db-kpi-copy">
@@ -252,7 +252,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
     </div>
 
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#ffedd5,#fed7aa);color:#ea580c;">
+        <div class="db-kpi-icon" style="background:#ffedd5;color:#ea580c;">
             <i class="fas fa-shopping-cart"></i>
         </div>
         <div class="db-kpi-copy">
@@ -263,7 +263,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
     </div>
 
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed;">
+        <div class="db-kpi-icon" style="background:#ede9fe;color:#7c3aed;">
             <i class="fas fa-baht-sign"></i>
         </div>
         <div class="db-kpi-copy">
@@ -274,7 +274,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
     </div>
 
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#fce7f3,#fbcfe8);color:#db2777;">
+        <div class="db-kpi-icon" style="background:#fce7f3;color:#db2777;">
             <i class="fas fa-video"></i>
         </div>
         <div class="db-kpi-copy">
@@ -288,18 +288,18 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
 <!-- ─── Attention Zone: Response Time + Unread + Problems ─── -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#cffafe,#a5f3fc);color:#0891b2;">
+        <div class="db-kpi-icon" style="background:#cffafe;color:#0891b2;">
             <i class="fas fa-clock"></i>
         </div>
         <div class="db-kpi-copy">
             <div class="db-kpi-label">เวลาตอบกลับเฉลี่ย</div>
-            <div class="db-kpi-value"><?= $avgResponseTime ?> <span style="font-size:13px;font-weight:500;color:#74869a;">นาที</span></div>
+            <div class="db-kpi-value"><?= $avgResponseTime ?> <span style="font-size:13px;font-weight:500;color:#64748b;">นาที</span></div>
             <div class="db-kpi-meta <?= $responseClass ?>" style="font-weight:600;"><?= $responseLabel ?></div>
         </div>
     </div>
 
-    <div class="db-kpi" style="<?= ($msgStats['unread'] ?? 0) > 0 ? 'border-color:#fecaca;' : '' ?>">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,<?= ($msgStats['unread'] ?? 0) > 0 ? '#fee2e2,#fecaca' : '#d1fae5,#a7f3d0' ?>);color:<?= ($msgStats['unread'] ?? 0) > 0 ? '#dc2626' : '#059669' ?>;">
+    <div class="db-kpi <?= ($msgStats['unread'] ?? 0) > 0 ? 'db-kpi--alert' : '' ?>">
+        <div class="db-kpi-icon" style="background:<?= ($msgStats['unread'] ?? 0) > 0 ? '#fee2e2' : '#d1fae5' ?>;color:<?= ($msgStats['unread'] ?? 0) > 0 ? '#dc2626' : '#059669' ?>;">
             <i class="fas fa-envelope"></i>
         </div>
         <div class="db-kpi-copy">
@@ -309,8 +309,8 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
         </div>
     </div>
 
-    <div class="db-kpi" style="<?= count($problemMessages) > 0 ? 'border-color:#fecaca;' : '' ?>">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,<?= count($problemMessages) > 0 ? '#fee2e2,#fecaca' : '#d1fae5,#a7f3d0' ?>);color:<?= count($problemMessages) > 0 ? '#dc2626' : '#059669' ?>;">
+    <div class="db-kpi <?= count($problemMessages) > 0 ? 'db-kpi--alert' : '' ?>">
+        <div class="db-kpi-icon" style="background:<?= count($problemMessages) > 0 ? '#fee2e2' : '#d1fae5' ?>;color:<?= count($problemMessages) > 0 ? '#dc2626' : '#059669' ?>;">
             <i class="fas fa-exclamation-triangle"></i>
         </div>
         <div class="db-kpi-copy">
@@ -326,7 +326,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
     <div class="db-section">
         <div class="db-section-header">
             <div class="db-section-title">
-                <i class="fas fa-user-tie" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#2563eb;"></i>
+                <i class="fas fa-user-tie" style="background:#dbeafe;color:#2563eb;"></i>
                 ผลงาน Admin วันนี้
             </div>
         </div>
@@ -339,7 +339,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
             <?php else: ?>
                 <?php foreach ($adminPerformance as $i => $admin): ?>
                     <div class="db-list-item">
-                        <div style="width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#2563eb);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;flex-shrink:0;">
+                        <div style="width:36px;height:36px;border-radius:10px;background:#2563eb;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;flex-shrink:0;">
                             <?= $i + 1 ?>
                         </div>
                         <div style="flex:1;min-width:0;">
@@ -359,7 +359,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
     <div class="db-section">
         <div class="db-section-header">
             <div class="db-section-title">
-                <i class="fas fa-chart-area" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#059669;"></i>
+                <i class="fas fa-chart-area" style="background:#d1fae5;color:#059669;"></i>
                 กิจกรรมรายชั่วโมง
             </div>
         </div>
@@ -371,10 +371,10 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
 
 <!-- ─── Attention: Problem Messages + Recent Conversations ─── -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <div class="db-section" style="<?= count($problemMessages) > 0 ? 'border-color:#fecaca;' : '' ?>">
-        <div class="db-section-header" style="<?= count($problemMessages) > 0 ? 'background:linear-gradient(180deg,#fef2f2,#fee2e2);border-color:#fecaca;' : '' ?>">
+    <div class="db-section <?= count($problemMessages) > 0 ? 'db-section--alert' : '' ?>">
+        <div class="db-section-header">
             <div class="db-section-title" style="<?= count($problemMessages) > 0 ? 'color:#991b1b;' : '' ?>">
-                <i class="fas fa-exclamation-circle" style="background:linear-gradient(135deg,#fee2e2,#fecaca);color:#dc2626;"></i>
+                <i class="fas fa-exclamation-circle" style="background:#fee2e2;color:#dc2626;"></i>
                 ข้อความที่อาจเป็นปัญหา
             </div>
             <span class="db-section-badge" style="background:#fef2f2;color:#dc2626;border-color:#fecaca;">
@@ -409,7 +409,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
     <div class="db-section">
         <div class="db-section-header">
             <div class="db-section-title">
-                <i class="fas fa-history" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed;"></i>
+                <i class="fas fa-history" style="background:#ede9fe;color:#7c3aed;"></i>
                 การสนทนาล่าสุด
             </div>
         </div>
@@ -443,7 +443,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
 <div class="db-section">
     <div class="db-section-header">
         <div class="db-section-title">
-            <i class="fas fa-tags" style="background:linear-gradient(135deg,#ffedd5,#fed7aa);color:#ea580c;"></i>
+            <i class="fas fa-tags" style="background:#ffedd5;color:#ea580c;"></i>
             หัวข้อที่ลูกค้าถามบ่อย
         </div>
     </div>
@@ -461,7 +461,7 @@ $responseLabel = $avgResponseTime <= 5 ? 'ดีมาก' : ($avgResponseTime <
             <div style="display:flex;flex-wrap:wrap;gap:10px;">
                 <?php foreach ($topIssues as $issue => $count): ?>
                     <?php if ($count > 0): ?>
-                        <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1px solid #fed7aa;font-size:13px;">
+                        <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;background:#fff7ed;border:1px solid #fed7aa;font-size:13px;">
                             <span style="font-weight:600;color:#9a3412;"><?= $issue ?></span>
                             <span style="display:inline-flex;align-items:center;justify-content:center;min-width:24px;padding:2px 8px;border-radius:999px;background:#fdba74;color:#7c2d12;font-size:11px;font-weight:700;"><?= $count ?></span>
                         </div>

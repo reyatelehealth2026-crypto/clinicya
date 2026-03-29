@@ -82,7 +82,7 @@ $autoRules = $autoTagManager->getRules();
 <!-- ─── CRM KPI Row ─── -->
 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#2563eb;">
+        <div class="db-kpi-icon" style="background:#dbeafe;color:#2563eb;">
             <i class="fas fa-users"></i>
         </div>
         <div class="db-kpi-copy">
@@ -93,7 +93,7 @@ $autoRules = $autoTagManager->getRules();
     </div>
 
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#059669;">
+        <div class="db-kpi-icon" style="background:#d1fae5;color:#059669;">
             <i class="fas fa-user-plus"></i>
         </div>
         <div class="db-kpi-copy">
@@ -104,7 +104,7 @@ $autoRules = $autoTagManager->getRules();
     </div>
 
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed;">
+        <div class="db-kpi-icon" style="background:#ede9fe;color:#7c3aed;">
             <i class="fas fa-tags"></i>
         </div>
         <div class="db-kpi-copy">
@@ -115,7 +115,7 @@ $autoRules = $autoTagManager->getRules();
     </div>
 
     <div class="db-kpi">
-        <div class="db-kpi-icon" style="background:linear-gradient(135deg,#ffedd5,#fed7aa);color:#ea580c;">
+        <div class="db-kpi-icon" style="background:#ffedd5;color:#ea580c;">
             <i class="fas fa-robot"></i>
         </div>
         <div class="db-kpi-copy">
@@ -132,7 +132,7 @@ $autoRules = $autoTagManager->getRules();
     <div class="db-section">
         <div class="db-section-header">
             <div class="db-section-title">
-                <i class="fas fa-tags" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed;"></i>
+                <i class="fas fa-tags" style="background:#ede9fe;color:#7c3aed;"></i>
                 Tags
             </div>
             <a href="user-tags.php" class="db-action-link">
@@ -168,7 +168,7 @@ $autoRules = $autoTagManager->getRules();
     <div class="db-section">
         <div class="db-section-header">
             <div class="db-section-title">
-                <i class="fas fa-robot" style="background:linear-gradient(135deg,#ffedd5,#fed7aa);color:#ea580c;"></i>
+                <i class="fas fa-robot" style="background:#ffedd5;color:#ea580c;"></i>
                 Auto Tag Rules
             </div>
             <a href="auto-tag-rules.php" class="db-action-link">
@@ -207,7 +207,7 @@ $autoRules = $autoTagManager->getRules();
     <div class="db-section">
         <div class="db-section-header">
             <div class="db-section-title">
-                <i class="fas fa-user-clock" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#2563eb;"></i>
+                <i class="fas fa-user-clock" style="background:#dbeafe;color:#2563eb;"></i>
                 ลูกค้าล่าสุด
             </div>
             <a href="users.php" class="db-action-link">
@@ -251,7 +251,7 @@ $autoRules = $autoTagManager->getRules();
 <div class="db-section">
     <div class="db-section-header">
         <div class="db-section-title">
-            <i class="fas fa-bolt" style="background:linear-gradient(135deg,#fef3c7,#fde68a);color:#d97706;"></i>
+            <i class="fas fa-bolt" style="background:#fef3c7;color:#d97706;"></i>
             Quick Actions
         </div>
     </div>
