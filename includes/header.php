@@ -1828,6 +1828,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             }
         }
     </style>
+    <?php if (isset($extraStyles)) echo $extraStyles; ?>
 </head>
 
 <body>
