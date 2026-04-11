@@ -404,7 +404,6 @@ try {
             echo json_encode(['success' => false, 'error' => 'Invalid action']);
             ob_end_flush();
     }
-    }
 
 } catch (Exception $e) {
     error_log("Points History API error: " . $e->getMessage());

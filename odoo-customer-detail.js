@@ -242,7 +242,7 @@ async function loadAll(forceRefresh){
 
     // Matching tab count
     const _pendingSlipsForBadge=_allSlips.filter(function(s){return s.status==='pending'||s.status==='new';});
-    const _pendingBdosForBadge=_allBdos.filter(function(b){const st=String(b.payment_status||b.state||'').toLowerCase();return st!=='done'&&st!=='cancelled'&&st!=='cancel'&&st!=='paid'&&st!=='fully_paid';});
+    const _pendingBdosForBadge=_allBdos.filter(function(b){var bdoD=new Date(b.bdo_date||b.created_at||0);if(bdoD<new Date('2026-03-24'))return false;const st=String(b.payment_status||b.state||'').toLowerCase();return st!=='done'&&st!=='cancelled'&&st!=='cancel'&&st!=='paid'&&st!=='fully_paid';});
     const _mtcEl=document.getElementById('tabCountMatching');
     if(_mtcEl){
         if(_pendingSlipsForBadge.length>0||_pendingBdosForBadge.length>0){
@@ -299,7 +299,7 @@ function _restoreFromCache(c){
     document.getElementById('tabCountBdos').textContent='('+_allBdos.length+')';
     document.getElementById('tabCountSlips').textContent='('+_allSlips.length+')';
     const _pendingSlipsForBadge=_allSlips.filter(function(s){return s.status==='pending'||s.status==='new';});
-    const _pendingBdosForBadge=_allBdos.filter(function(b){const st=String(b.payment_status||b.state||'').toLowerCase();return st!=='done'&&st!=='cancelled'&&st!=='cancel'&&st!=='paid'&&st!=='fully_paid';});
+    const _pendingBdosForBadge=_allBdos.filter(function(b){var bdoD=new Date(b.bdo_date||b.created_at||0);if(bdoD<new Date('2026-03-24'))return false;const st=String(b.payment_status||b.state||'').toLowerCase();return st!=='done'&&st!=='cancelled'&&st!=='cancel'&&st!=='paid'&&st!=='fully_paid';});
     const _mtcEl=document.getElementById('tabCountMatching');
     if(_mtcEl){
         if(_pendingSlipsForBadge.length>0||_pendingBdosForBadge.length>0){
@@ -590,6 +590,8 @@ function renderMatchingTab(){
 
     const pendingSlips=_allSlips.filter(function(s){return s.status==='pending'||s.status==='new'||(!s.status&&s.id);});
     const pendingBdos=_allBdos.filter(function(b){
+        var bdoD=new Date(b.bdo_date||b.created_at||0);
+        if(bdoD<new Date('2026-03-24'))return false;
         const st=String(b.payment_status||b.state||'').toLowerCase();
         return st!=='done'&&st!=='cancelled'&&st!=='cancel'&&st!=='paid'&&st!=='fully_paid';
     });

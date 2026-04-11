@@ -3558,6 +3558,7 @@ function getPendingBdoOrdersApi($db, $input)
             LEFT JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id
             WHERE bo.partner_id = ?
               AND bo.payment_status = 'pending'
+              AND bo.created_at >= '2026-03-24'
             ORDER BY bo.created_at DESC
             LIMIT ?
         ");
@@ -3619,13 +3620,14 @@ function getSlipCenterBdoOverview($db, $input)
                 bo.amount_total, bo.payment_status, bo.payment_method,
                 bo.created_at, bo.updated_at,
                 b.state AS bdo_state, b.bdo_date, b.customer_ref,
-                b.salesperson_name{$contextSelect}
+                b.salesperson_name, b.payment_state AS bdo_payment_state{$contextSelect}
             FROM odoo_bdo_orders bo
             LEFT JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id
             {$contextJoin}
-            WHERE bo.payment_status IN ('pending', 'partial')
+            WHERE bo.payment_status IN ('pending','partial')
               AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
-              AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
+              AND (b.state IS NULL OR b.state NOT IN ('done','cancel','cancelled'))
+              AND bo.created_at >= '2026-03-24'
             ORDER BY bo.created_at DESC
             LIMIT ?
         ");
@@ -3833,10 +3835,11 @@ function getSlipCenterCustomerDetail($db, $input)
                     LEFT JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id
                     {$contextJoin}
                     WHERE bo.partner_id = ?
-                      AND bo.payment_status IN ('pending', 'partial')
+                      AND bo.payment_status IN ('pending','partial')
                       AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
-                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
-                    ORDER BY bo.created_at DESC
+                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel','cancelled'))
+                      AND bo.created_at >= '2026-03-24'
+                    ORDER BY b.updated_at DESC
                     LIMIT ?
                 ");
                 $stmt->execute([(int) $partnerId, $limit]);
@@ -3855,12 +3858,13 @@ function getSlipCenterCustomerDetail($db, $input)
                            b.amount_net_to_pay, b.payment_method as bdo_payment_method, b.salesperson_name,
                            b.payment_state as bdo_payment_state, b.due_date{$contextSelect}
                     FROM odoo_bdo_orders bo
-                    INNER JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id AND b.customer_ref = ?
+                    LEFT JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id AND b.customer_ref = ?
                     {$contextJoin}
-                    WHERE bo.payment_status IN ('pending', 'partial')
+                    WHERE bo.payment_status IN ('pending','partial')
                       AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
-                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
-                    ORDER BY bo.created_at DESC
+                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel','cancelled'))
+                      AND bo.created_at >= '2026-03-24'
+                    ORDER BY b.updated_at DESC
                     LIMIT ?
                 ");
                 $stmt->execute([$customerRef, $limit]);
@@ -3882,10 +3886,11 @@ function getSlipCenterCustomerDetail($db, $input)
                     LEFT JOIN odoo_bdos b ON bo.bdo_id = b.bdo_id
                     {$contextJoin}
                     WHERE bo.line_user_id = ?
-                      AND bo.payment_status IN ('pending', 'partial')
+                      AND bo.payment_status IN ('pending','partial')
                       AND (b.payment_state IS NULL OR b.payment_state NOT IN ('paid','reversed','in_payment'))
-                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel'))
-                    ORDER BY bo.created_at DESC
+                      AND (b.state IS NULL OR b.state NOT IN ('done','cancel','cancelled'))
+                      AND bo.created_at >= '2026-03-24'
+                    ORDER BY b.updated_at DESC
                     LIMIT ?
                 ");
                 $stmt->execute([$lineUserId, $limit]);

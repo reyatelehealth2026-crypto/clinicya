@@ -22,7 +22,7 @@ if (!file_exists($configPath)) {
 }
 
 require_once $configPath;
-require_once __DIR__ . '/classes/Database.php';
+require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/classes/SitemapGenerator.php';
 
 try {

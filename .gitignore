@@ -18,14 +18,21 @@ logs/
 # IDE & Editor
 .idea/
 .vscode/
+.windsurf/
 *.swp
 *.swo
 *~
+*.code-workspace
+NUL
 
 # AI Tools
 .claude/
 .kiro/
 .gemini/
+.assistant/
+.codepilot/
+.codepilot-uploads/
+.cursor/
 
 # OS
 .DS_Store
@@ -37,6 +44,9 @@ vendor/
 composer.lock
 node_modules/
 package-lock.json
+
+# Next.js build
+.next/
 
 # Test & Cache
 test*.php

@@ -540,11 +540,15 @@ if (!function_exists('getOdooBdos')) {
             }
 
             if ($paymentFilterUnpaid) {
-                // ใช้ payment_state เป็นหลัก — BDO state = done อาจหมายถึงส่งของแล้ว แต่ลูกค้ายังค้างจ่าย
+                // กรองด้วย payment_status (enum) เป็นหลัก — payment_state อาจ NULL ได้
+                $where[] = "LOWER(TRIM(COALESCE(b.payment_status,''))) NOT IN ('paid','fully_paid','reversed')";
+                // fallback: ถ้ามี payment_state และมีค่า ให้กรองด้วย (ใช้ COALESCE เพื่อไม่ให้ NULL ผ่าน)
                 if ($hasPaymentStateCol) {
-                    $where[] = "(b.payment_state IS NULL OR LOWER(TRIM(b.payment_state)) NOT IN ('paid','reversed'))";
+                    $where[] = "LOWER(TRIM(COALESCE(b.payment_state,''))) NOT IN ('paid','reversed')";
                 }
                 $where[] = "(b.state IS NULL OR LOWER(TRIM(b.state)) NOT IN ('cancel','cancelled'))";
+                // ไม่แสดง BDO ก่อน 24 มีนา 2569 (ถือว่าชำระครบแล้ว)
+                $where[] = "DATE(b.created_at) >= '2026-03-24'";
             }
 
             $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';

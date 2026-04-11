@@ -136,6 +136,221 @@ try {
 /**
  * Handle user linking
  */
+
+/**
+ * Normalize phone number for comparison
+ * - Remove spaces, dashes, parentheses
+ * - Convert +66 prefix to 0
+ */
+function normalizePhone(?string $phone): ?string
+{
+    if (empty($phone)) return null;
+    $p = preg_replace('/[\s\-\(\)\.]/', '', $phone);
+    if (strpos($p, '+66') === 0) {
+        $p = '0' . substr($p, 3);
+    }
+    if (strlen($p) > 10 && strpos($p, '66') === 0 && $p[2] !== '0') {
+        $p = '0' . substr($p, 2);
+    }
+    return $p !== '' ? $p : null;
+}
+
+/**
+ * Detect if this is a LINE-change scenario (phone matches existing link)
+ * Returns existing odoo_line_users row if exactly 1 match, null otherwise
+ */
+function detectRelinkCandidate(PDO $pdo, string $phone, ?string $customerCode = null): ?array
+{
+    $normalizedPhone = normalizePhone($phone);
+    if (!$normalizedPhone) return null;
+
+    $stmt = $pdo->prepare("SELECT * FROM odoo_line_users WHERE odoo_phone IS NOT NULL AND odoo_phone != ''");
+    $stmt->execute();
+    $allLinks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $matches = [];
+    foreach ($allLinks as $link) {
+        $linkPhone = normalizePhone($link['odoo_phone']);
+        if ($linkPhone && $linkPhone === $normalizedPhone) {
+            $matches[] = $link;
+        }
+    }
+
+    if (empty($matches)) return null;
+
+    // Disambiguate with customer_code if multiple matches
+    if (count($matches) > 1 && $customerCode) {
+        $filtered = array_filter($matches, function ($m) use ($customerCode) {
+            return strtoupper($m['odoo_customer_code'] ?? '') === strtoupper($customerCode);
+        });
+        if (count($filtered) === 1) {
+            return reset($filtered);
+        }
+    }
+
+    return count($matches) === 1 ? $matches[0] : null;
+}
+
+/**
+ * Perform LINE account migration: old_line_user_id -> new_line_user_id
+ */
+
+/**
+ * Detect relink candidate from user_notes table (admin-entered PC codes)
+ */
+function detectRelinkByNote(PDO $pdo, string $lineUserId): ?array
+{
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE line_user_id = ?");
+    $stmt->execute([$lineUserId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user) return null;
+
+    $stmt = $pdo->prepare("
+        SELECT REGEXP_SUBSTR(note, 'PC[0-9]{6}') AS pc_code
+        FROM user_notes
+        WHERE user_id = ?
+          AND note REGEXP 'PC[0-9]{6}'
+        ORDER BY created_at DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$user['id']]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row || empty($row['pc_code'])) return null;
+
+    $pcCode = $row['pc_code'];
+
+    $stmt = $pdo->prepare("SELECT * FROM odoo_line_users WHERE odoo_customer_code = ? LIMIT 1");
+    $stmt->execute([$pcCode]);
+    $link = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$link) return null;
+
+    error_log("[AutoRelink] Note match: line={$lineUserId}, user_id={$user['id']}, pc={$pcCode}, partner={$link['odoo_partner_id']}");
+
+    return $link;
+}
+
+function performRelink(PDO $pdo, $odooClient, string $newLineUserId, array $existingLink, array $data): array
+{
+    $oldLineUserId = $existingLink['line_user_id'];
+    $partnerId = (int) $existingLink['odoo_partner_id'];
+    $partnerName = $existingLink['odoo_partner_name'];
+    $customerCode = $data['customer_code'] ?? $existingLink['odoo_customer_code'];
+    $phone = $data['phone'] ?? $existingLink['odoo_phone'];
+    $email = $data['email'] ?? $existingLink['odoo_email'];
+    $accountId = $data['account_id'] ?? $existingLink['line_account_id'];
+
+    error_log("[AutoRelink] START: old={$oldLineUserId}, new={$newLineUserId}, partner={$partnerId} ({$partnerName})");
+
+    // 1. Odoo: unlink old (best-effort)
+    try {
+        $odooClient->unlinkUser($oldLineUserId);
+        error_log("[AutoRelink] Odoo unlink old OK");
+    } catch (Exception $e) {
+        error_log("[AutoRelink] Odoo unlink old FAILED (non-fatal): " . $e->getMessage());
+    }
+
+    // 2. Odoo: link new
+    try {
+        $odooClient->linkUser($newLineUserId, $phone, $customerCode, $email);
+        error_log("[AutoRelink] Odoo link new OK");
+    } catch (Exception $e) {
+        error_log("[AutoRelink] Odoo link new FAILED (non-fatal): " . $e->getMessage());
+    }
+
+    // 3. Migrate all local tables in transaction
+    $pdo->beginTransaction();
+    try {
+        // --- UNIQUE constraint tables: delete old, insert new ---
+
+        // odoo_line_users (UNIQUE line_user_id)
+        $pdo->prepare("DELETE FROM odoo_line_users WHERE line_user_id = ?")->execute([$oldLineUserId]);
+        $pdo->prepare("
+            INSERT INTO odoo_line_users
+            (line_user_id, line_account_id, odoo_partner_id, odoo_partner_name, odoo_customer_code,
+             linked_via, line_notification_enabled, linked_at, odoo_phone, odoo_email)
+            VALUES (?, ?, ?, ?, ?, 'phone_auto', 1, NOW(), ?, ?)
+        ")->execute([$newLineUserId, $accountId, $partnerId, $partnerName, $customerCode, $phone, $email]);
+
+        // odoo_bdo_context (UNIQUE line_user_id, bdo_id)
+        $rows = $pdo->prepare("SELECT * FROM odoo_bdo_context WHERE line_user_id = ?");
+        $rows->execute([$oldLineUserId]);
+        $bdoCtxs = $rows->fetchAll(PDO::FETCH_ASSOC);
+        $pdo->prepare("DELETE FROM odoo_bdo_context WHERE line_user_id = ?")->execute([$oldLineUserId]);
+
+        if (!empty($bdoCtxs)) {
+            $ins = $pdo->prepare("
+                INSERT INTO odoo_bdo_context
+                (line_user_id, bdo_id, bdo_name, amount, delivery_type, state, qr_payload,
+                 statement_pdf_path, webhook_delivery_id, created_at, updated_at,
+                 financial_summary_json, selected_invoices_json, selected_credit_notes_json, line_account_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?, ?, ?, ?)
+            ");
+            foreach ($bdoCtxs as $c) {
+                $ins->execute([$newLineUserId, $c['bdo_id'], $c['bdo_name'], $c['amount'],
+                    $c['delivery_type'], $c['state'], $c['qr_payload'], $c['statement_pdf_path'],
+                    $c['webhook_delivery_id'], $c['created_at'],
+                    $c['financial_summary_json'], $c['selected_invoices_json'],
+                    $c['selected_credit_notes_json'], $c['line_account_id']]);
+            }
+        }
+
+        // odoo_customer_product_stats (UNIQUE line_user_id, product_name)
+        $rows = $pdo->prepare("SELECT * FROM odoo_customer_product_stats WHERE line_user_id = ?");
+        $rows->execute([$oldLineUserId]);
+        $prodStats = $rows->fetchAll(PDO::FETCH_ASSOC);
+        $pdo->prepare("DELETE FROM odoo_customer_product_stats WHERE line_user_id = ?")->execute([$oldLineUserId]);
+
+        if (!empty($prodStats)) {
+            $ins = $pdo->prepare("
+                INSERT INTO odoo_customer_product_stats
+                (line_user_id, odoo_partner_id, product_id, product_code, product_name,
+                 qty_30d, qty_90d, amount_30d, amount_90d, last_purchased_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+            foreach ($prodStats as $ps) {
+                $ins->execute([$newLineUserId, $ps['odoo_partner_id'], $ps['product_id'],
+                    $ps['product_code'], $ps['product_name'], $ps['qty_30d'], $ps['qty_90d'],
+                    $ps['amount_30d'], $ps['amount_90d'], $ps['last_purchased_at']]);
+            }
+        }
+
+        // --- Simple tables: direct UPDATE ---
+        $simpleTables = [
+            'odoo_customer_projection', 'odoo_order_projection', 'odoo_customers_cache',
+            'odoo_orders', 'odoo_bdos', 'odoo_invoices', 'odoo_slip_uploads',
+            'odoo_payments', 'odoo_notification_preferences', 'odoo_notification_queue',
+        ];
+        foreach ($simpleTables as $table) {
+            try {
+                $pdo->prepare("UPDATE `{$table}` SET line_user_id = ? WHERE line_user_id = ?")
+                    ->execute([$newLineUserId, $oldLineUserId]);
+            } catch (Exception $e) {
+                error_log("[AutoRelink] UPDATE {$table} non-fatal: " . $e->getMessage());
+            }
+        }
+
+        $pdo->commit();
+        error_log("[AutoRelink] DB migration COMMIT OK");
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("[AutoRelink] DB ROLLBACK: " . $e->getMessage());
+        throw new Exception("Auto-relink ล้มเหลว: " . $e->getMessage());
+    }
+
+    error_log("[AutoRelink] DONE: {$partnerName} migrated {$oldLineUserId} -> {$newLineUserId}");
+
+    return [
+        'partner_id'       => $partnerId,
+        'partner_name'     => $partnerName,
+        'customer_code'    => $customerCode,
+        'phone'            => $phone,
+        'email'            => $email,
+        'linked_via'       => 'phone_auto',
+        'old_line_user_id' => $oldLineUserId,
+        'message'          => 'ย้ายบัญชี LINE สำเร็จ (เชื่อมต่ออัตโนมัติด้วยเบอร์โทร)',
+    ];
+}
+
 function handleLink($pdo, $odooClient, $lineUserId, $data)
 {
     // Check if already linked
@@ -147,14 +362,37 @@ function handleLink($pdo, $odooClient, $lineUserId, $data)
         throw new Exception('ALREADY_LINKED: บัญชี LINE นี้เชื่อมต่อกับบัญชีอื่นแล้ว');
     }
 
-    // Extract linking parameters
     $phone = $data['phone'] ?? null;
     $customerCode = $data['customer_code'] ?? null;
     $email = $data['email'] ?? null;
     $accountId = $data['account_id'] ?? null;
 
-    if (!$accountId) {
-        throw new Exception('Missing required field: account_id');
+    // ===== Phone Auto-Relink: detect LINE account change =====
+    if ($phone) {
+        $relinkCandidate = detectRelinkCandidate($pdo, $phone, $customerCode);
+        if ($relinkCandidate !== null) {
+            // Use accountId from request, fallback to existing
+            if (!$accountId) {
+                $accountId = $relinkCandidate['line_account_id'];
+            }
+            return performRelink($pdo, $odooClient, $lineUserId, $relinkCandidate, $data);
+        }
+    }
+    // ===== End Phone Auto-Relink =====
+
+    // ===== Note-based Auto-Relink =====
+    if ($relinkCandidate === null) {
+        $relinkCandidate = detectRelinkByNote($pdo, $lineUserId);
+        if ($relinkCandidate !== null) {
+            if (!$accountId) {
+                $accountId = $relinkCandidate['line_account_id'];
+            }
+            return performRelink($pdo, $odooClient, $lineUserId, $relinkCandidate, $data);
+        }
+    }
+    // ===== End Note-based Auto-Relink =====
+
+    if (!$accountId) {        throw new Exception('Missing required field: account_id');
     }
 
     if (!$phone && !$customerCode && !$email) {
