@@ -1,5 +1,10 @@
 import { appConfig } from '@/lib/config'
 
+export type ShopProductBadge = {
+  text: string
+  color?: string
+}
+
 export type ShopProduct = {
   id: number
   name: string
@@ -10,12 +15,24 @@ export type ShopProduct = {
   stock?: number | null
   sku?: string | null
   category_id?: number | null
+  /** From PHP `enrichProductRow` or derived client-side */
+  is_flash_sale?: boolean
+  promotion_label?: string | null
+  discount_percent?: number | null
+  badges?: ShopProductBadge[]
+  category_name?: string | null
 }
 
 export type TransferBankRow = {
   bank_name: string
   account_number: string
   account_holder: string
+}
+
+export type BankAccount = {
+  bank_name: string
+  account_name: string
+  account_number: string
 }
 
 export type TransferInfo = {
@@ -38,6 +55,23 @@ export async function fetchProducts(categoryId?: string | null, search?: string)
   })
   if (categoryId) params.set('category_id', categoryId)
   if (search && search.trim() !== '') params.set('search', search.trim())
+  const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
+  return res.json()
+}
+
+export type ProductDetailResponse = {
+  success: boolean
+  product?: ShopProduct
+  message?: string
+}
+
+/** Single product — `action=product_detail` on `api/checkout.php` */
+export async function fetchProductDetail(productId: number): Promise<ProductDetailResponse> {
+  const params = new URLSearchParams({
+    action: 'product_detail',
+    product_id: String(productId),
+    line_account_id: String(appConfig.lineAccountId)
+  })
   const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
   return res.json()
 }
@@ -105,6 +139,7 @@ export async function updateCartItem(lineUserId: string, productId: number, quan
     body: JSON.stringify({
       action: 'update_cart',
       line_user_id: lineUserId,
+      line_account_id: appConfig.lineAccountId,
       product_id: productId,
       quantity
     })
@@ -119,6 +154,7 @@ export async function removeCartLine(lineUserId: string, productId: number) {
     body: JSON.stringify({
       action: 'remove_from_cart',
       line_user_id: lineUserId,
+      line_account_id: appConfig.lineAccountId,
       product_id: productId
     })
   })
@@ -131,7 +167,8 @@ export async function clearCart(lineUserId: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       action: 'clear_cart',
-      line_user_id: lineUserId
+      line_user_id: lineUserId,
+      line_account_id: appConfig.lineAccountId
     })
   })
   return res.json() as Promise<{ success: boolean; message?: string }>

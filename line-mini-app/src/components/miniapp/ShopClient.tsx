@@ -1,21 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ShoppingCart, Store, Search, X } from 'lucide-react'
+import { Store, Search, X } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
 import { AppShell } from '@/components/miniapp/AppShell'
 import { VerifiedOnlyNotice } from '@/components/miniapp/VerifiedOnlyNotice'
-import { fetchProducts, addToCart, type ShopProduct } from '@/lib/shop-api'
-
-function priceLabel(p: ShopProduct) {
-  const sale = p.sale_price != null && p.sale_price !== '' ? Number(p.sale_price) : null
-  const base = p.price != null && p.price !== '' ? Number(p.price) : null
-  if (sale != null && !Number.isNaN(sale)) return `฿${sale.toLocaleString()}`
-  if (base != null && !Number.isNaN(base)) return `฿${base.toLocaleString()}`
-  return '—'
-}
+import { ShopProductCard } from '@/components/miniapp/ShopProductCard'
+import { fetchProducts, addToCart } from '@/lib/shop-api'
+import { enrichShopProduct } from '@/lib/shop-product-utils'
 
 export function ShopClient() {
   const line = useLineContext()
@@ -46,7 +39,7 @@ export function ShopClient() {
     }
   })
 
-  const products = productsQuery.data?.products ?? []
+  const products = (productsQuery.data?.products ?? []).map((p) => enrichShopProduct(p))
   const categories = productsQuery.data?.categories ?? []
 
   function handleCategoryClick(id: string) {
@@ -143,30 +136,13 @@ export function ShopClient() {
       ) : (
         <div className="grid grid-cols-2 gap-3">
           {products.map((p) => (
-            <article key={p.id} className="overflow-hidden rounded-2xl bg-white shadow-soft">
-              <div className="relative aspect-square w-full bg-slate-100">
-                {p.image_url ? (
-                  <Image src={p.image_url} alt="" fill className="object-cover" sizes="(max-width: 480px) 50vw, 200px" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-slate-300">
-                    <Store size={32} />
-                  </div>
-                )}
-              </div>
-              <div className="p-3">
-                <h3 className="line-clamp-2 text-sm font-semibold text-slate-900">{p.name}</h3>
-                <p className="mt-1 text-sm font-bold text-line">{priceLabel(p)}</p>
-                <button
-                  type="button"
-                  disabled={!lineUserId || addMutation.isPending}
-                  onClick={() => addMutation.mutate({ id: p.id })}
-                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-line py-2 text-xs font-semibold text-white transition-colors hover:bg-line-dark disabled:opacity-50"
-                >
-                  <ShoppingCart size={14} />
-                  ใส่ตะกร้า
-                </button>
-              </div>
-            </article>
+            <ShopProductCard
+              key={p.id}
+              product={p}
+              lineUserId={lineUserId}
+              disabledAdd={!lineUserId || addMutation.isPending}
+              onAdd={() => addMutation.mutate({ id: p.id })}
+            />
           ))}
         </div>
       )}

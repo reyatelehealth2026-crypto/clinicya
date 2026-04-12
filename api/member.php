@@ -17,11 +17,18 @@ require_once __DIR__ . '/../config/database.php';
 
 $db = Database::getInstance()->getConnection();
 
-// Get action
+// Get action (read php://input once for JSON POST)
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($action)) {
- $input = json_decode(file_get_contents('php://input'), true);
- $action = $input['action'] ?? '';
+$input = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $raw = file_get_contents('php://input');
+    if ($raw !== '' && $raw !== false) {
+        $decoded = json_decode($raw, true);
+        $input = is_array($decoded) ? $decoded : [];
+        if ($action === '' && !empty($input['action'])) {
+            $action = $input['action'];
+        }
+    }
 }
 
 try {

@@ -79,6 +79,9 @@ try {
         case 'shop_info':
             handleGetShopInfo();
             break;
+        case 'product_detail':
+            handleGetProductDetail();
+            break;
         default:
             jsonResponse(false, 'Invalid action');
     }
@@ -89,6 +92,67 @@ try {
 function jsonResponse($success, $message = '', $data = []) {
     echo json_encode(array_merge(['success' => $success, 'message' => $message], $data));
     exit;
+}
+
+/**
+ * Add derived UI fields for shop (badges, discount %) — safe if columns are missing.
+ */
+function enrichProductRow(array &$p) {
+    $price = isset($p['price']) && $p['price'] !== '' && $p['price'] !== null ? floatval($p['price']) : null;
+    $sale = isset($p['sale_price']) && $p['sale_price'] !== '' && $p['sale_price'] !== null ? floatval($p['sale_price']) : null;
+    if (!isset($p['is_flash_sale'])) {
+        $p['is_flash_sale'] = false;
+    }
+    $p['discount_percent'] = null;
+    $p['promotion_label'] = $p['promotion_label'] ?? null;
+    $p['badges'] = isset($p['badges']) && is_array($p['badges']) ? $p['badges'] : [];
+    if ($sale !== null && $price !== null && $sale < $price && $price > 0) {
+        $p['discount_percent'] = (int) round((1 - $sale / $price) * 100);
+        if ($p['promotion_label'] === null || $p['promotion_label'] === '') {
+            $p['promotion_label'] = 'โปรโมชัน';
+        }
+        if (empty($p['badges'])) {
+            $p['badges'][] = ['text' => '-' . $p['discount_percent'] . '%', 'color' => 'red'];
+        }
+    }
+}
+
+/**
+ * Single product for LINE mini-app product detail page (GET action=product_detail).
+ */
+function handleGetProductDetail() {
+    global $db;
+
+    $productId = isset($_GET['product_id']) ? (int) $_GET['product_id'] : 0;
+    $lineAccountId = $_GET['line_account_id'] ?? null;
+
+    if ($productId <= 0) {
+        jsonResponse(false, 'Missing product_id');
+    }
+
+    try {
+        $sql = "SELECT p.id, p.name, p.description, p.price, p.sale_price, p.image_url, p.stock, p.sku, p.barcode,
+                       p.manufacturer, p.generic_name, p.usage_instructions, p.unit, p.category_id,
+                       c.name AS category_name
+                FROM business_items p
+                LEFT JOIN business_categories c ON c.id = p.category_id AND c.is_active = 1
+                WHERE p.id = ? AND p.is_active = 1";
+        $params = [$productId];
+        if ($lineAccountId !== null && $lineAccountId !== '') {
+            $sql .= " AND (p.line_account_id = ? OR p.line_account_id IS NULL)";
+            $params[] = $lineAccountId;
+        }
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$product) {
+            jsonResponse(false, 'Product not found');
+        }
+        enrichProductRow($product);
+        jsonResponse(true, '', ['product' => $product]);
+    } catch (Exception $e) {
+        jsonResponse(false, 'Error loading product: ' . $e->getMessage());
+    }
 }
 
 /**
@@ -193,6 +257,11 @@ function handleGetProducts() {
         $stmt->execute($params);
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        foreach ($products as &$row) {
+            enrichProductRow($row);
+        }
+        unset($row);
+
         // Get categories
         $catSql = "SELECT id, name FROM business_categories WHERE is_active = 1";
         $catParams = [];
@@ -272,27 +341,41 @@ function handleAddToCart($data) {
         jsonResponse(false, 'Not enough stock');
     }
 
-    // Add to cart using INSERT ... ON DUPLICATE KEY UPDATE
+    // Add to cart — cart_items may require line_user_id NOT NULL (UNIQUE line_user_id + product_id)
     try {
         $stmt = $db->prepare("
-            INSERT INTO cart_items (user_id, product_id, quantity)
-            VALUES (?, ?, ?)
+            INSERT INTO cart_items (user_id, line_user_id, product_id, quantity)
+            VALUES (?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
         ");
-        $stmt->execute([$userId, $productId, $quantity]);
+        $stmt->execute([$userId, $lineUserId, $productId, $quantity]);
     } catch (Exception $e) {
-        // Fallback: try simple insert/update
-        $stmt = $db->prepare("SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?");
-        $stmt->execute([$userId, $productId]);
-        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $db->prepare("SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?");
+            $stmt->execute([$userId, $productId]);
+            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($existing) {
-            $newQty = $existing['quantity'] + $quantity;
-            $stmt = $db->prepare("UPDATE cart_items SET quantity = ? WHERE id = ?");
-            $stmt->execute([$newQty, $existing['id']]);
-        } else {
-            $stmt = $db->prepare("INSERT INTO cart_items (user_id, product_id, quantity) VALUES (?, ?, ?)");
-            $stmt->execute([$userId, $productId, $quantity]);
+            if ($existing) {
+                $newQty = $existing['quantity'] + $quantity;
+                $stmt = $db->prepare("UPDATE cart_items SET quantity = ? WHERE id = ?");
+                $stmt->execute([$newQty, $existing['id']]);
+            } else {
+                $stmt = $db->prepare("INSERT INTO cart_items (user_id, line_user_id, product_id, quantity) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$userId, $lineUserId, $productId, $quantity]);
+            }
+        } catch (Exception $e2) {
+            $stmt = $db->prepare("SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?");
+            $stmt->execute([$userId, $productId]);
+            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($existing) {
+                $newQty = $existing['quantity'] + $quantity;
+                $stmt = $db->prepare("UPDATE cart_items SET quantity = ? WHERE id = ?");
+                $stmt->execute([$newQty, $existing['id']]);
+            } else {
+                $stmt = $db->prepare("INSERT INTO cart_items (user_id, product_id, quantity) VALUES (?, ?, ?)");
+                $stmt->execute([$userId, $productId, $quantity]);
+            }
         }
     }
 
@@ -588,6 +671,14 @@ function handleCreateOrder($data) {
         jsonResponse(false, 'User not found (line_user_id: ' . ($lineUserId ?? 'null') . ')');
     }
 
+    // Full user row for notifications (also set when user was just INSERTed)
+    $stmt = $db->prepare("SELECT id, line_account_id, display_name, line_user_id FROM users WHERE id = ? LIMIT 1");
+    $stmt->execute([$userId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user) {
+        $user = ['display_name' => $displayName, 'line_user_id' => $lineUserId];
+    }
+
     // Use cart items from request if provided, otherwise get from database
     $items = [];
     if (!empty($cartItems) && is_array($cartItems)) {
@@ -685,23 +776,44 @@ function handleCreateOrder($data) {
         $orderStatus = ($paymentMethod === 'cod') ? 'confirmed' : 'pending';
         $paymentStatus = ($paymentMethod === 'cod') ? 'cod_pending' : 'pending';
 
-        $stmt = $db->prepare("
-            INSERT INTO transactions
-            (line_account_id, transaction_type, order_number, user_id, total_amount, shipping_fee, grand_total, delivery_info, payment_method, status, payment_status)
-            VALUES (?, 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
-            $lineAccountId,
-            $orderNumber,
-            $userId,
-            $subtotal,
-            $shippingFee,
-            $total,
-            json_encode($deliveryInfo, JSON_UNESCAPED_UNICODE),
-            $paymentMethod,
-            $orderStatus,
-            $paymentStatus
-        ]);
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO transactions
+                (line_account_id, transaction_type, order_number, user_id, line_user_id, total_amount, shipping_fee, grand_total, delivery_info, payment_method, status, payment_status)
+                VALUES (?, 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $lineAccountId,
+                $orderNumber,
+                $userId,
+                $lineUserId,
+                $subtotal,
+                $shippingFee,
+                $total,
+                json_encode($deliveryInfo, JSON_UNESCAPED_UNICODE),
+                $paymentMethod,
+                $orderStatus,
+                $paymentStatus
+            ]);
+        } catch (Exception $e) {
+            $stmt = $db->prepare("
+                INSERT INTO transactions
+                (line_account_id, transaction_type, order_number, user_id, total_amount, shipping_fee, grand_total, delivery_info, payment_method, status, payment_status)
+                VALUES (?, 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $lineAccountId,
+                $orderNumber,
+                $userId,
+                $subtotal,
+                $shippingFee,
+                $total,
+                json_encode($deliveryInfo, JSON_UNESCAPED_UNICODE),
+                $paymentMethod,
+                $orderStatus,
+                $paymentStatus
+            ]);
+        }
 
         $orderId = $db->lastInsertId();
 
