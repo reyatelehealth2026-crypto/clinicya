@@ -25,8 +25,10 @@ logs/
 *.code-workspace
 NUL
 
-# AI Tools
-.claude/
+# AI Tools — track shared Claude Code agents; keep other local plugin state ignored
+.claude/*
+!.claude/agents/
+!.claude/agents/**
 .kiro/
 .gemini/
 .assistant/
@@ -120,5 +122,8 @@ database/*.sql
 *.png
 DB_CONNECTION.md
 *.md
+!docs/plans/2026-04-12-line-mini-app-implementation-checklist.md
+!docs/plans/2026-04-13-line-mini-app-100pct-subagent-orchestration.md
+!.claude/agents/*.md
 *.bak*
 *.bak-*
