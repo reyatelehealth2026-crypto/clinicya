@@ -73,6 +73,12 @@ try {
         case 'promptpay_qr':
             handlePromptPayQR();
             break;
+        case 'my_orders':
+            handleMyOrders($jsonInput);
+            break;
+        case 'shop_info':
+            handleGetShopInfo();
+            break;
         default:
             jsonResponse(false, 'Invalid action');
     }
@@ -86,31 +92,93 @@ function jsonResponse($success, $message = '', $data = []) {
 }
 
 /**
+ * List shop orders (transactions) for LINE user — B2C CRM (MySQL), not Odoo
+ */
+function handleMyOrders($data) {
+    global $db;
+
+    $lineUserId = null;
+    if (is_array($data) && !empty($data['line_user_id'])) {
+        $lineUserId = $data['line_user_id'];
+    }
+    $lineAccountId = null;
+    if (is_array($data) && isset($data['line_account_id']) && $data['line_account_id'] !== '') {
+        $lineAccountId = (int) $data['line_account_id'];
+    }
+
+    if (!$lineUserId) {
+        jsonResponse(false, 'Missing line_user_id');
+    }
+
+    $stmt = $db->prepare("SELECT id, line_account_id FROM users WHERE line_user_id = ? LIMIT 1");
+    $stmt->execute([$lineUserId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$user) {
+        jsonResponse(true, '', ['orders' => [], 'total' => 0, 'source' => 'shop']);
+    }
+
+    $userId = (int) $user['id'];
+    $params = [$userId];
+    $sql = "SELECT id, order_number, status, payment_status, grand_total, created_at, tracking_number, line_account_id
+            FROM transactions
+            WHERE user_id = ?";
+    if ($lineAccountId) {
+        $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
+        $params[] = $lineAccountId;
+    }
+    $sql .= " ORDER BY created_at DESC LIMIT 50";
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $out = [];
+    foreach ($orders as $row) {
+        $grand = isset($row['grand_total']) ? floatval($row['grand_total']) : null;
+        $created = $row['created_at'] ?? null;
+        $pay = $row['payment_status'] ?? '';
+        $st = $row['status'] ?? '';
+        $out[] = array_merge($row, [
+            'order_name' => $row['order_number'] ?? '',
+            'order_id' => isset($row['id']) ? (int) $row['id'] : 0,
+            'amount_total' => $grand,
+            'date_order' => $created,
+            'state' => $st,
+            'items_count' => 0,
+            'is_paid' => in_array($pay, ['paid'], true) || in_array($st, ['confirmed', 'preparing', 'processing', 'shipped', 'shipping', 'delivered', 'completed'], true),
+            'is_delivered' => in_array($st, ['delivered', 'completed'], true),
+        ]);
+    }
+
+    jsonResponse(true, '', ['orders' => $out, 'total' => count($out), 'source' => 'shop']);
+}
+
+/**
  * Get products list for shop page
  */
 function handleGetProducts() {
     global $db;
-    
+
     $lineAccountId = $_GET['line_account_id'] ?? null;
     $categoryId = $_GET['category_id'] ?? null;
     $search = $_GET['search'] ?? null;
-    
+
     try {
-        $sql = "SELECT id, name, description, price, sale_price, image_url, stock, sku, barcode, 
+        $sql = "SELECT id, name, description, price, sale_price, image_url, stock, sku, barcode,
                        manufacturer, generic_name, usage_instructions, unit, category_id
                 FROM business_items WHERE is_active = 1";
         $params = [];
-        
+
         if ($lineAccountId) {
             $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
             $params[] = $lineAccountId;
         }
-        
+
         if ($categoryId) {
             $sql .= " AND category_id = ?";
             $params[] = $categoryId;
         }
-        
+
         if ($search) {
             $sql .= " AND (name LIKE ? OR description LIKE ? OR sku LIKE ?)";
             $searchTerm = "%{$search}%";
@@ -118,13 +186,13 @@ function handleGetProducts() {
             $params[] = $searchTerm;
             $params[] = $searchTerm;
         }
-        
+
         $sql .= " ORDER BY id DESC LIMIT 100";
-        
+
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Get categories
         $catSql = "SELECT id, name FROM business_categories WHERE is_active = 1";
         $catParams = [];
@@ -136,7 +204,7 @@ function handleGetProducts() {
         $catStmt = $db->prepare($catSql);
         $catStmt->execute($catParams);
         $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         jsonResponse(true, '', ['products' => $products, 'categories' => $categories]);
     } catch (Exception $e) {
         jsonResponse(false, 'Error loading products: ' . $e->getMessage());
@@ -148,25 +216,25 @@ function handleGetProducts() {
  */
 function getUserIdFromLineUserId($lineUserId) {
     global $db;
-    
+
     if (!$lineUserId) return [null, null];
-    
+
     $stmt = $db->prepare("SELECT id, line_account_id FROM users WHERE line_user_id = ?");
     $stmt->execute([$lineUserId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if ($user) {
         return [$user['id'], $user['line_account_id']];
     }
-    
+
     // Auto-create user
     $stmt = $db->query("SELECT id FROM line_accounts WHERE is_active = 1 ORDER BY is_default DESC LIMIT 1");
     $account = $stmt->fetch();
     $lineAccountId = $account['id'] ?? 1;
-    
+
     $stmt = $db->prepare("INSERT INTO users (line_account_id, line_user_id, display_name) VALUES (?, ?, 'LIFF User')");
     $stmt->execute([$lineAccountId, $lineUserId]);
-    
+
     return [$db->lastInsertId(), $lineAccountId];
 }
 
@@ -175,39 +243,39 @@ function getUserIdFromLineUserId($lineUserId) {
  */
 function handleAddToCart($data) {
     global $db;
-    
+
     $lineUserId = $data['line_user_id'] ?? null;
     $productId = $data['product_id'] ?? null;
     $quantity = max(1, intval($data['quantity'] ?? 1));
-    
+
     if (!$lineUserId || !$productId) {
         jsonResponse(false, 'Missing required fields');
     }
-    
+
     list($userId, $lineAccountId) = getUserIdFromLineUserId($lineUserId);
-    
+
     if (!$userId) {
         jsonResponse(false, 'User not found');
     }
-    
+
     // Check if product exists and is active
     $stmt = $db->prepare("SELECT id, name, price, sale_price, stock FROM business_items WHERE id = ? AND is_active = 1");
     $stmt->execute([$productId]);
     $product = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$product) {
         jsonResponse(false, 'Product not found');
     }
-    
+
     // Check stock
     if (isset($product['stock']) && $product['stock'] !== null && $product['stock'] < $quantity) {
         jsonResponse(false, 'Not enough stock');
     }
-    
+
     // Add to cart using INSERT ... ON DUPLICATE KEY UPDATE
     try {
         $stmt = $db->prepare("
-            INSERT INTO cart_items (user_id, product_id, quantity) 
+            INSERT INTO cart_items (user_id, product_id, quantity)
             VALUES (?, ?, ?)
             ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
         ");
@@ -217,7 +285,7 @@ function handleAddToCart($data) {
         $stmt = $db->prepare("SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?");
         $stmt->execute([$userId, $productId]);
         $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if ($existing) {
             $newQty = $existing['quantity'] + $quantity;
             $stmt = $db->prepare("UPDATE cart_items SET quantity = ? WHERE id = ?");
@@ -227,12 +295,12 @@ function handleAddToCart($data) {
             $stmt->execute([$userId, $productId, $quantity]);
         }
     }
-    
+
     // Get updated cart count
     $stmt = $db->prepare("SELECT SUM(quantity) as total FROM cart_items WHERE user_id = ?");
     $stmt->execute([$userId]);
     $cartCount = $stmt->fetchColumn() ?: 0;
-    
+
     jsonResponse(true, 'Added to cart', [
         'cart_count' => intval($cartCount),
         'product_name' => $product['name']
@@ -244,21 +312,21 @@ function handleAddToCart($data) {
  */
 function handleUpdateCart($data) {
     global $db;
-    
+
     $lineUserId = $data['line_user_id'] ?? null;
     $productId = $data['product_id'] ?? null;
     $quantity = intval($data['quantity'] ?? 0);
-    
+
     if (!$lineUserId || !$productId) {
         jsonResponse(false, 'Missing required fields');
     }
-    
+
     list($userId, $lineAccountId) = getUserIdFromLineUserId($lineUserId);
-    
+
     if (!$userId) {
         jsonResponse(false, 'User not found');
     }
-    
+
     if ($quantity <= 0) {
         // Remove item if quantity is 0 or less
         $stmt = $db->prepare("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?");
@@ -268,21 +336,21 @@ function handleUpdateCart($data) {
         $stmt = $db->prepare("SELECT stock FROM business_items WHERE id = ?");
         $stmt->execute([$productId]);
         $stock = $stmt->fetchColumn();
-        
+
         if ($stock !== null && $stock !== false && $stock < $quantity) {
             jsonResponse(false, 'Not enough stock');
         }
-        
+
         // Update quantity
         $stmt = $db->prepare("UPDATE cart_items SET quantity = ?, updated_at = NOW() WHERE user_id = ? AND product_id = ?");
         $stmt->execute([$quantity, $userId, $productId]);
     }
-    
+
     // Get updated cart count
     $stmt = $db->prepare("SELECT SUM(quantity) as total FROM cart_items WHERE user_id = ?");
     $stmt->execute([$userId]);
     $cartCount = $stmt->fetchColumn() ?: 0;
-    
+
     jsonResponse(true, 'Cart updated', ['cart_count' => intval($cartCount)]);
 }
 
@@ -291,28 +359,28 @@ function handleUpdateCart($data) {
  */
 function handleRemoveFromCart($data) {
     global $db;
-    
+
     $lineUserId = $data['line_user_id'] ?? null;
     $productId = $data['product_id'] ?? null;
-    
+
     if (!$lineUserId || !$productId) {
         jsonResponse(false, 'Missing required fields');
     }
-    
+
     list($userId, $lineAccountId) = getUserIdFromLineUserId($lineUserId);
-    
+
     if (!$userId) {
         jsonResponse(false, 'User not found');
     }
-    
+
     $stmt = $db->prepare("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?");
     $stmt->execute([$userId, $productId]);
-    
+
     // Get updated cart count
     $stmt = $db->prepare("SELECT SUM(quantity) as total FROM cart_items WHERE user_id = ?");
     $stmt->execute([$userId]);
     $cartCount = $stmt->fetchColumn() ?: 0;
-    
+
     jsonResponse(true, 'Item removed', ['cart_count' => intval($cartCount)]);
 }
 
@@ -321,22 +389,22 @@ function handleRemoveFromCart($data) {
  */
 function handleClearCart($data) {
     global $db;
-    
+
     $lineUserId = $data['line_user_id'] ?? null;
-    
+
     if (!$lineUserId) {
         jsonResponse(false, 'Missing line_user_id');
     }
-    
+
     list($userId, $lineAccountId) = getUserIdFromLineUserId($lineUserId);
-    
+
     if (!$userId) {
         jsonResponse(false, 'User not found');
     }
-    
+
     $stmt = $db->prepare("DELETE FROM cart_items WHERE user_id = ?");
     $stmt->execute([$userId]);
-    
+
     jsonResponse(true, 'Cart cleared', ['cart_count' => 0]);
 }
 
@@ -345,10 +413,10 @@ function handleClearCart($data) {
  */
 function handleGetCart() {
     global $db;
-    
+
     $userId = $_GET['user_id'] ?? null;
     $lineUserId = $_GET['line_user_id'] ?? null;
-    
+
     // Debug logging
     $debug = isset($_GET['debug']);
     $debugInfo = [
@@ -356,7 +424,7 @@ function handleGetCart() {
         'input_line_user_id' => $lineUserId,
         'line_user_id_length' => strlen($lineUserId ?? '')
     ];
-    
+
     // Get user ID and line_account_id from LINE user ID
     $lineAccountId = null;
     if ($lineUserId) {
@@ -374,7 +442,7 @@ function handleGetCart() {
             $stmt = $db->query("SELECT id FROM line_accounts WHERE is_active = 1 ORDER BY is_default DESC LIMIT 1");
             $account = $stmt->fetch();
             $lineAccountId = $account['id'] ?? 1;
-            
+
             $stmt = $db->prepare("INSERT INTO users (line_account_id, line_user_id, display_name) VALUES (?, ?, 'LIFF User')");
             $stmt->execute([$lineAccountId, $lineUserId]);
             $userId = $db->lastInsertId();
@@ -382,14 +450,14 @@ function handleGetCart() {
             $debugInfo['new_user_id'] = $userId;
         }
     }
-    
+
     if (!$userId) {
         if ($debug) {
             jsonResponse(false, 'User not found', ['debug' => $debugInfo]);
         }
         jsonResponse(false, 'User not found');
     }
-    
+
     // Get cart items - use LEFT JOIN to include items even if product was deleted
     $stmt = $db->prepare("
         SELECT c.*, p.name, p.price, p.sale_price, p.image_url, p.is_active,
@@ -400,9 +468,9 @@ function handleGetCart() {
     ");
     $stmt->execute([$userId]);
     $allItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     $debugInfo['raw_cart_count'] = count($allItems);
-    
+
     // Filter out items where product doesn't exist (deleted)
     // Note: We allow inactive products in cart since pharmacist may dispense them
     $items = [];
@@ -419,17 +487,17 @@ function handleGetCart() {
             ];
         }
     }
-    
+
     $debugInfo['filtered_cart_count'] = count($items);
     $debugInfo['filtered_out'] = $filteredOut;
-    
+
     // Calculate totals
     $subtotal = 0;
     foreach ($items as &$item) {
         $item['subtotal'] = floatval($item['subtotal']);
         $subtotal += $item['subtotal'];
     }
-    
+
     // Get shipping fee based on user's line_account_id
     if ($lineAccountId) {
         $stmt = $db->prepare("SELECT shipping_fee, free_shipping_min FROM shop_settings WHERE line_account_id = ? LIMIT 1");
@@ -442,13 +510,13 @@ function handleGetCart() {
     }
     $shippingFee = floatval($settings['shipping_fee'] ?? 50);
     $freeShippingMin = floatval($settings['free_shipping_min'] ?? 500);
-    
+
     if ($subtotal >= $freeShippingMin) {
         $shippingFee = 0;
     }
-    
+
     $total = $subtotal + $shippingFee;
-    
+
     $response = [
         'items' => $items,
         'subtotal' => $subtotal,
@@ -457,11 +525,11 @@ function handleGetCart() {
         'total' => $total,
         'item_count' => count($items)
     ];
-    
+
     if ($debug) {
         $response['debug'] = $debugInfo;
     }
-    
+
     jsonResponse(true, '', $response);
 }
 
@@ -470,7 +538,7 @@ function handleGetCart() {
  */
 function handleCreateOrder($data) {
     global $db;
-    
+
     $userId = $data['user_id'] ?? null;
     $lineUserId = $data['line_user_id'] ?? null;
     $requestLineAccountId = $data['line_account_id'] ?? null;
@@ -481,7 +549,7 @@ function handleCreateOrder($data) {
     $requestSubtotal = $data['subtotal'] ?? null;
     $requestShipping = $data['shipping'] ?? null;
     $requestTotal = $data['total'] ?? null;
-    
+
     // Get user ID and line_account_id from LINE user ID
     $lineAccountId = null;
     if ($lineUserId) {
@@ -499,13 +567,13 @@ function handleCreateOrder($data) {
                 $account = $stmt->fetch();
                 $lineAccountId = $account['id'] ?? 1;
             }
-            
+
             $stmt = $db->prepare("INSERT INTO users (line_account_id, line_user_id, display_name) VALUES (?, ?, ?)");
             $stmt->execute([$lineAccountId, $lineUserId, $displayName]);
             $userId = $db->lastInsertId();
         }
     }
-    
+
     // Fallback line_account_id
     if (!$lineAccountId) {
         $lineAccountId = $requestLineAccountId;
@@ -515,11 +583,11 @@ function handleCreateOrder($data) {
             $lineAccountId = $account['id'] ?? 1;
         }
     }
-    
+
     if (!$userId) {
         jsonResponse(false, 'User not found (line_user_id: ' . ($lineUserId ?? 'null') . ')');
     }
-    
+
     // Use cart items from request if provided, otherwise get from database
     $items = [];
     if (!empty($cartItems) && is_array($cartItems)) {
@@ -546,23 +614,23 @@ function handleCreateOrder($data) {
         $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
         error_log("handleCreateOrder: Using " . count($items) . " items from database");
     }
-    
+
     if (empty($items)) {
         jsonResponse(false, 'Cart is empty');
     }
-    
+
     // Calculate totals (or use from request)
     $subtotal = 0;
     foreach ($items as $item) {
         $price = $item['sale_price'] ?? $item['price'];
         $subtotal += $price * $item['quantity'];
     }
-    
+
     // Use request values if provided
     if ($requestSubtotal !== null) {
         $subtotal = floatval($requestSubtotal);
     }
-    
+
     // Get shipping fee
     $shippingFee = 0;
     if ($requestShipping !== null) {
@@ -579,14 +647,14 @@ function handleCreateOrder($data) {
         }
         $shippingFee = floatval($settings['shipping_fee'] ?? 50);
         $freeShippingMin = floatval($settings['free_shipping_min'] ?? 500);
-        
+
         if ($subtotal >= $freeShippingMin) {
             $shippingFee = 0;
         }
     }
-    
+
     $total = ($requestTotal !== null) ? floatval($requestTotal) : ($subtotal + $shippingFee);
-    
+
     // Build delivery info - keep all fields separate for future use
     $deliveryInfo = [
         'type' => 'shipping',
@@ -605,20 +673,20 @@ function handleCreateOrder($data) {
             $address['postcode'] ?? ''
         ])))
     ];
-    
+
     // Create order
     $db->beginTransaction();
-    
+
     try {
         $orderNumber = 'TXN' . date('Ymd') . str_pad(mt_rand(1, 9999), 4, '0', STR_PAD_LEFT);
-        
+
         // กำหนดสถานะตาม payment method
         // COD: ข้ามขั้นตอนรอชำระเงิน ไปยืนยันออเดอร์เลย
         $orderStatus = ($paymentMethod === 'cod') ? 'confirmed' : 'pending';
         $paymentStatus = ($paymentMethod === 'cod') ? 'cod_pending' : 'pending';
-        
+
         $stmt = $db->prepare("
-            INSERT INTO transactions 
+            INSERT INTO transactions
             (line_account_id, transaction_type, order_number, user_id, total_amount, shipping_fee, grand_total, delivery_info, payment_method, status, payment_status)
             VALUES (?, 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
@@ -634,14 +702,14 @@ function handleCreateOrder($data) {
             $orderStatus,
             $paymentStatus
         ]);
-        
+
         $orderId = $db->lastInsertId();
-        
+
         // Add order items
         foreach ($items as $item) {
             $price = $item['sale_price'] ?? $item['price'];
             $itemSubtotal = $price * $item['quantity'];
-            
+
             $stmt = $db->prepare("
                 INSERT INTO transaction_items (transaction_id, product_id, product_name, product_price, quantity, subtotal)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -654,11 +722,11 @@ function handleCreateOrder($data) {
                 $item['quantity'],
                 $itemSubtotal
             ]);
-            
+
             // ลดสต็อกสินค้า
             $stmt = $db->prepare("UPDATE business_items SET stock = stock - ? WHERE id = ? AND stock >= ?");
             $stmt->execute([$item['quantity'], $item['product_id'], $item['quantity']]);
-            
+
             // บันทึก stock movement
             try {
                 // ตรวจสอบว่าตาราง stock_movements มีหรือไม่
@@ -667,9 +735,9 @@ function handleCreateOrder($data) {
                     $stmtStock = $db->prepare("SELECT stock FROM business_items WHERE id = ?");
                     $stmtStock->execute([$item['product_id']]);
                     $currentStock = $stmtStock->fetchColumn();
-                    
+
                     $stmt = $db->prepare("
-                        INSERT INTO stock_movements 
+                        INSERT INTO stock_movements
                         (line_account_id, product_id, movement_type, quantity, stock_before, stock_after, reference_type, reference_id, reference_number, notes, created_by)
                         VALUES (?, ?, 'sale', ?, ?, ?, 'order', ?, ?, ?, NULL)
                     ");
@@ -690,11 +758,11 @@ function handleCreateOrder($data) {
                 error_log("Stock movement error: " . $e->getMessage());
             }
         }
-        
+
         // Clear cart
         $stmt = $db->prepare("DELETE FROM cart_items WHERE user_id = ?");
         $stmt->execute([$userId]);
-        
+
         // WMS Integration: Set wms_status to pending_pick for COD orders (already confirmed)
         if ($orderStatus === 'confirmed') {
             try {
@@ -704,9 +772,9 @@ function handleCreateOrder($data) {
                 // wms_status column may not exist, ignore
             }
         }
-        
+
         $db->commit();
-        
+
         // Hook: Auto-create Account Receivable for credit sales
         // Requirement 8.2: WHEN an Invoice is created from shop order THEN the Accounting System SHALL automatically create corresponding AR record
         // Credit sales are identified by payment methods that don't require immediate payment (credit, cod)
@@ -722,10 +790,10 @@ function handleCreateOrder($data) {
                 error_log("AR creation from order failed: " . $arError->getMessage());
             }
         }
-        
+
         // 🔔 แจ้งเตือน Telegram เมื่อมี order ใหม่
         notifyTelegramNewOrder($orderId, $orderNumber, $total, $user, $deliveryInfo);
-        
+
         // 🔔 แจ้งเตือนผ่าน LINE/Email ด้วย NotificationService
         try {
             require_once __DIR__ . '/../classes/NotificationService.php';
@@ -739,7 +807,7 @@ function handleCreateOrder($data) {
         } catch (Exception $e) {
             error_log("NotificationService error: " . $e->getMessage());
         }
-        
+
         // Log activity
         global $activityLogger;
         $activityLogger->logOrder(ActivityLogger::ACTION_CREATE, 'สร้างคำสั่งซื้อใหม่', [
@@ -754,7 +822,7 @@ function handleCreateOrder($data) {
             ],
             'line_account_id' => $lineAccountId
         ]);
-        
+
         jsonResponse(true, 'Order created', [
             'order_id' => $orderId,
             'order_number' => $orderNumber,
@@ -762,7 +830,7 @@ function handleCreateOrder($data) {
             'payment_method' => $paymentMethod,
             'ar_id' => $arId
         ]);
-        
+
     } catch (Exception $e) {
         $db->rollBack();
         throw $e;
@@ -774,20 +842,20 @@ function handleCreateOrder($data) {
  */
 function sendOrderConfirmation($order, $items) {
     global $db;
-    
+
     try {
         // Get user's LINE user ID
-        $stmt = $db->prepare("SELECT u.line_user_id, la.channel_access_token 
-                              FROM users u 
-                              JOIN line_accounts la ON u.line_account_id = la.id 
+        $stmt = $db->prepare("SELECT u.line_user_id, la.channel_access_token
+                              FROM users u
+                              JOIN line_accounts la ON u.line_account_id = la.id
                               WHERE u.id = ?");
         $stmt->execute([$order['user_id']]);
         $userData = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$userData || !$userData['line_user_id'] || !$userData['channel_access_token']) {
             return false;
         }
-        
+
         // Build items list
         $itemsText = "";
         foreach ($items as $item) {
@@ -795,10 +863,10 @@ function sendOrderConfirmation($order, $items) {
             $subtotal = $price * $item['quantity'];
             $itemsText .= "• {$item['name']} x{$item['quantity']} = ฿" . number_format($subtotal, 0) . "\n";
         }
-        
+
         // Get delivery info
         $deliveryInfo = json_decode($order['delivery_info'] ?? '{}', true);
-        
+
         // Build confirmation message
         $msg = "✅ สั่งซื้อสำเร็จ!\n";
         $msg .= "━━━━━━━━━━━━━━━\n";
@@ -815,7 +883,7 @@ function sendOrderConfirmation($order, $items) {
             $msg .= "🏠 {$deliveryInfo['address']}";
         }
         $msg .= "\n\n🚚 รอการจัดส่ง 1-3 วันทำการ";
-        
+
         // Call LINE API
         $ch = curl_init('https://api.line.me/v2/bot/message/push');
         curl_setopt_array($ch, [
@@ -830,10 +898,10 @@ function sendOrderConfirmation($order, $items) {
                 'messages' => [['type' => 'text', 'text' => $msg]]
             ])
         ]);
-        
+
         curl_exec($ch);
         curl_close($ch);
-        
+
         return true;
     } catch (Exception $e) {
         error_log('sendOrderConfirmation error: ' . $e->getMessage());
@@ -846,64 +914,64 @@ function sendOrderConfirmation($order, $items) {
  */
 function handleUploadSlip() {
     global $db;
-    
+
     // Debug logging
     error_log("=== handleUploadSlip START ===");
     error_log("POST data: " . json_encode($_POST));
     error_log("FILES: " . json_encode(array_keys($_FILES)));
-    
+
     $orderId = $_POST['order_id'] ?? null;
     $userId = $_POST['user_id'] ?? null;
-    
+
     error_log("orderId: {$orderId}, userId: {$userId}");
-    
+
     if (!$orderId) {
         error_log("ERROR: Order ID required");
         jsonResponse(false, 'Order ID required');
     }
-    
+
     if (!isset($_FILES['slip']) || $_FILES['slip']['error'] !== UPLOAD_ERR_OK) {
         jsonResponse(false, 'No file uploaded');
     }
-    
+
     $file = $_FILES['slip'];
-    
+
     // Validate file type
     $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!in_array($file['type'], $allowedTypes)) {
         jsonResponse(false, 'Invalid file type');
     }
-    
+
     // Validate file size (max 5MB)
     if ($file['size'] > 5 * 1024 * 1024) {
         jsonResponse(false, 'File too large (max 5MB)');
     }
-    
+
     // Get order info
     $stmt = $db->prepare("SELECT * FROM transactions WHERE id = ?");
     $stmt->execute([$orderId]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$order) {
         jsonResponse(false, 'Order not found');
     }
-    
+
     // Create upload directory
     $uploadDir = __DIR__ . '/../uploads/slips/';
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0755, true);
     }
-    
+
     // Generate filename
     $ext = pathinfo($file['name'], PATHINFO_EXTENSION) ?: 'jpg';
     $filename = 'slip_' . $order['order_number'] . '_' . time() . '.' . $ext;
     $filepath = $uploadDir . $filename;
-    
+
     // Move uploaded file
     if (!move_uploaded_file($file['tmp_name'], $filepath)) {
         jsonResponse(false, 'Failed to save file');
     }
-    
+
     // Get base URL - use BASE_URL from config if available
     if (defined('BASE_URL')) {
         $baseUrl = rtrim(BASE_URL, '/');
@@ -911,7 +979,7 @@ function handleUploadSlip() {
         $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
     }
     $imageUrl = $baseUrl . '/uploads/slips/' . $filename;
-    
+
     // Save to payment_slips table (use transaction_id and order_id)
     $slipSaved = false;
     try {
@@ -932,20 +1000,20 @@ function handleUploadSlip() {
             error_log('payment_slips insert error (retry): ' . $e2->getMessage());
         }
     }
-    
+
     // Update order status
     $stmt = $db->prepare("UPDATE transactions SET status = 'paid', updated_at = NOW() WHERE id = ?");
     $stmt->execute([$orderId]);
-    
+
     // Send LINE receipt message
     sendReceiptMessage($order, $imageUrl);
-    
+
     // 🔔 แจ้งเตือน Telegram เมื่อมีการอัพโหลดสลิป
     $stmt = $db->prepare("SELECT display_name FROM users WHERE id = ?");
     $stmt->execute([$order['user_id']]);
     $slipUser = $stmt->fetch(PDO::FETCH_ASSOC);
     notifyTelegramPayment($orderId, $order['order_number'], $imageUrl, $slipUser ?: []);
-    
+
     // 🔔 แจ้งเตือนผ่าน LINE/Email ด้วย NotificationService
     try {
         require_once __DIR__ . '/../classes/NotificationService.php';
@@ -959,7 +1027,7 @@ function handleUploadSlip() {
     } catch (Exception $e) {
         error_log("NotificationService payment error: " . $e->getMessage());
     }
-    
+
     jsonResponse(true, 'Slip uploaded', [
         'image_url' => $imageUrl
     ]);
@@ -971,31 +1039,31 @@ function handleUploadSlip() {
  */
 function sendReceiptMessage($order, $slipUrl = null) {
     global $db;
-    
+
     try {
         // Get user's LINE user ID
-        $stmt = $db->prepare("SELECT u.line_user_id, u.display_name, la.channel_access_token 
-                              FROM users u 
-                              JOIN line_accounts la ON u.line_account_id = la.id 
+        $stmt = $db->prepare("SELECT u.line_user_id, u.display_name, la.channel_access_token
+                              FROM users u
+                              JOIN line_accounts la ON u.line_account_id = la.id
                               WHERE u.id = ?");
         $stmt->execute([$order['user_id']]);
         $userData = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$userData || !$userData['line_user_id'] || !$userData['channel_access_token']) {
             return false;
         }
-        
+
         // Get order items
         $stmt = $db->prepare("SELECT * FROM transaction_items WHERE transaction_id = ?");
         $stmt->execute([$order['id']]);
         $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Get delivery info
         $deliveryInfo = json_decode($order['delivery_info'] ?? '{}', true);
-        
+
         // Build Flex Receipt
         $flex = buildFlexReceipt($order, $items, $deliveryInfo, $slipUrl);
-        
+
         $messages = [
             [
                 'type' => 'flex',
@@ -1003,7 +1071,7 @@ function sendReceiptMessage($order, $slipUrl = null) {
                 'contents' => $flex
             ]
         ];
-        
+
         // Call LINE API
         $ch = curl_init('https://api.line.me/v2/bot/message/push');
         curl_setopt_array($ch, [
@@ -1018,11 +1086,11 @@ function sendReceiptMessage($order, $slipUrl = null) {
                 'messages' => $messages
             ])
         ]);
-        
+
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        
+
         return $httpCode === 200;
     } catch (Exception $e) {
         error_log('sendReceiptMessage error: ' . $e->getMessage());
@@ -1047,14 +1115,14 @@ function buildFlexReceipt($order, $items, $deliveryInfo, $slipUrl) {
             ]
         ];
     }
-    
+
     // Address String
     $addrParts = [];
     if (!empty($deliveryInfo['name'])) $addrParts[] = $deliveryInfo['name'];
     if (!empty($deliveryInfo['phone'])) $addrParts[] = $deliveryInfo['phone'];
     if (!empty($deliveryInfo['address'])) $addrParts[] = $deliveryInfo['address'];
     $addr = implode("\n", $addrParts) ?: 'ไม่ระบุที่อยู่';
-    
+
     // Build bubble
     $bubble = [
         'type' => 'bubble',
@@ -1110,7 +1178,7 @@ function buildFlexReceipt($order, $items, $deliveryInfo, $slipUrl) {
             ]
         ]
     ];
-    
+
     // Add slip image as hero if available
     if ($slipUrl) {
         $bubble['hero'] = [
@@ -1122,7 +1190,7 @@ function buildFlexReceipt($order, $items, $deliveryInfo, $slipUrl) {
             'action' => ['type' => 'uri', 'uri' => $slipUrl]
         ];
     }
-    
+
     return $bubble;
 }
 
@@ -1131,29 +1199,29 @@ function buildFlexReceipt($order, $items, $deliveryInfo, $slipUrl) {
  */
 function handleGetOrder() {
     global $db;
-    
+
     $orderId = $_GET['order_id'] ?? null;
-    
+
     if (!$orderId) {
         jsonResponse(false, 'Order ID required');
     }
-    
+
     $stmt = $db->prepare("SELECT * FROM transactions WHERE id = ?");
     $stmt->execute([$orderId]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$order) {
         jsonResponse(false, 'Order not found');
     }
-    
+
     // Get items
     $stmt = $db->prepare("SELECT * FROM transaction_items WHERE transaction_id = ?");
     $stmt->execute([$orderId]);
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     $order['items'] = $items;
     $order['delivery_info'] = json_decode($order['delivery_info'] ?? '{}', true);
-    
+
     jsonResponse(true, '', ['order' => $order]);
 }
 
@@ -1163,30 +1231,30 @@ function handleGetOrder() {
  */
 function handleGetOrderItems() {
     global $db;
-    
+
     $orderId = $_GET['order_id'] ?? null;
-    
+
     if (!$orderId) {
         jsonResponse(false, 'Order ID required');
     }
-    
+
     // Get transaction
     $stmt = $db->prepare("SELECT * FROM transactions WHERE id = ?");
     $stmt->execute([$orderId]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$order) {
         jsonResponse(false, 'Order not found');
     }
-    
+
     // Get items
-    $stmt = $db->prepare("SELECT ti.*, p.image_url 
-        FROM transaction_items ti 
-        LEFT JOIN business_items p ON ti.product_id = p.id 
+    $stmt = $db->prepare("SELECT ti.*, p.image_url
+        FROM transaction_items ti
+        LEFT JOIN business_items p ON ti.product_id = p.id
         WHERE ti.transaction_id = ?");
     $stmt->execute([$orderId]);
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // Format items like cart format
     $formattedItems = [];
     foreach ($items as $item) {
@@ -1200,10 +1268,10 @@ function handleGetOrderItems() {
             'label_data' => json_decode($item['label_data'] ?? '{}', true)
         ];
     }
-    
+
     // Parse delivery info
     $deliveryInfo = json_decode($order['delivery_info'] ?? '{}', true);
-    
+
     jsonResponse(true, '', [
         'order' => [
             'id' => $order['id'],
@@ -1239,24 +1307,24 @@ function handleGetOrderItems() {
  */
 function handleUpdatePaymentMethod($data) {
     global $db;
-    
+
     $orderId = $data['order_id'] ?? null;
     $paymentMethod = $data['payment_method'] ?? 'cash';
-    
+
     if (!$orderId) {
         jsonResponse(false, 'Order ID required');
     }
-    
+
     // Update payment method
     $stmt = $db->prepare("UPDATE transactions SET payment_method = ?, updated_at = NOW() WHERE id = ?");
     $stmt->execute([$paymentMethod, $orderId]);
-    
+
     // If COD/cash, mark as paid immediately (for dispense at pharmacy)
     if ($paymentMethod === 'cod' || $paymentMethod === 'cash') {
         $stmt = $db->prepare("UPDATE transactions SET payment_status = 'paid', status = 'completed', updated_at = NOW() WHERE id = ?");
         $stmt->execute([$orderId]);
     }
-    
+
     jsonResponse(true, 'Payment method updated', ['order_id' => $orderId]);
 }
 
@@ -1269,16 +1337,16 @@ function handleUpdatePaymentMethod($data) {
  */
 function handleValidatePromo($data) {
     global $db;
-    
+
     $code = strtoupper(trim($data['code'] ?? ''));
     $lineUserId = $data['line_user_id'] ?? null;
     $lineAccountId = $data['line_account_id'] ?? null;
     $subtotal = floatval($data['subtotal'] ?? 0);
-    
+
     if (!$code) {
         jsonResponse(false, 'กรุณากรอกโค้ดส่วนลด', ['valid' => false]);
     }
-    
+
     try {
         // Check if promotions table exists
         $tableCheck = $db->query("SHOW TABLES LIKE 'promotions'");
@@ -1297,24 +1365,24 @@ function handleValidatePromo($data) {
             }
             return;
         }
-        
+
         // Query promotion from database
         $sql = "SELECT * FROM promotions WHERE code = ? AND is_active = 1";
         $params = [$code];
-        
+
         if ($lineAccountId) {
             $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
             $params[] = $lineAccountId;
         }
-        
+
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $promo = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$promo) {
             jsonResponse(false, 'โค้ดไม่ถูกต้อง', ['valid' => false]);
         }
-        
+
         // Check validity dates
         $now = date('Y-m-d H:i:s');
         if ($promo['start_date'] && $now < $promo['start_date']) {
@@ -1323,33 +1391,33 @@ function handleValidatePromo($data) {
         if ($promo['end_date'] && $now > $promo['end_date']) {
             jsonResponse(false, 'โค้ดหมดอายุแล้ว', ['valid' => false]);
         }
-        
+
         // Check minimum order amount
         $minOrder = floatval($promo['min_order_amount'] ?? 0);
         if ($minOrder > 0 && $subtotal < $minOrder) {
             jsonResponse(false, "ยอดสั่งซื้อขั้นต่ำ ฿" . number_format($minOrder, 0), ['valid' => false]);
         }
-        
+
         // Check usage limit
         if ($promo['usage_limit'] && $promo['usage_count'] >= $promo['usage_limit']) {
             jsonResponse(false, 'โค้ดถูกใช้ครบจำนวนแล้ว', ['valid' => false]);
         }
-        
+
         // Check per-user limit
         if ($lineUserId && $promo['per_user_limit']) {
             $stmt = $db->prepare("SELECT COUNT(*) FROM promotion_usage WHERE promotion_id = ? AND line_user_id = ?");
             $stmt->execute([$promo['id'], $lineUserId]);
             $userUsage = $stmt->fetchColumn();
-            
+
             if ($userUsage >= $promo['per_user_limit']) {
                 jsonResponse(false, 'คุณใช้โค้ดนี้ครบจำนวนแล้ว', ['valid' => false]);
             }
         }
-        
+
         // Calculate discount
         $discount = 0;
         $discountType = $promo['discount_type'] ?? 'fixed';
-        
+
         if ($discountType === 'percentage') {
             $discount = $subtotal * (floatval($promo['discount_value']) / 100);
             // Apply max discount cap if set
@@ -1359,10 +1427,10 @@ function handleValidatePromo($data) {
         } else {
             $discount = floatval($promo['discount_value']);
         }
-        
+
         // Ensure discount doesn't exceed subtotal
         $discount = min($discount, $subtotal);
-        
+
         jsonResponse(true, 'โค้ดถูกต้อง', [
             'valid' => true,
             'discount' => $discount,
@@ -1372,7 +1440,7 @@ function handleValidatePromo($data) {
             'promo_id' => $promo['id'],
             'promo_name' => $promo['name'] ?? $code
         ]);
-        
+
     } catch (Exception $e) {
         error_log("Promo validation error: " . $e->getMessage());
         jsonResponse(false, 'ไม่สามารถตรวจสอบโค้ดได้', ['valid' => false]);
@@ -1390,18 +1458,18 @@ function validateHardcodedPromo($code, $subtotal) {
         'FREESHIP' => ['type' => 'fixed', 'value' => 50, 'min' => 0],
         'NEWUSER' => ['type' => 'percentage', 'value' => 15, 'min' => 200, 'max' => 100],
     ];
-    
+
     if (!isset($promoCodes[$code])) {
         return 0;
     }
-    
+
     $promo = $promoCodes[$code];
-    
+
     // Check minimum
     if ($subtotal < $promo['min']) {
         return 0;
     }
-    
+
     // Calculate discount
     if ($promo['type'] === 'percentage') {
         $discount = $subtotal * ($promo['value'] / 100);
@@ -1411,7 +1479,7 @@ function validateHardcodedPromo($code, $subtotal) {
     } else {
         $discount = $promo['value'];
     }
-    
+
     return min($discount, $subtotal);
 }
 
@@ -1421,40 +1489,40 @@ function validateHardcodedPromo($code, $subtotal) {
  */
 function handleGetLastAddress() {
     global $db;
-    
+
     $lineUserId = $_GET['line_user_id'] ?? null;
     $userId = $_GET['user_id'] ?? null;
-    
+
     // Get user ID from line_user_id
     if ($lineUserId && !$userId) {
         $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ?");
         $stmt->execute([$lineUserId]);
         $userId = $stmt->fetchColumn();
     }
-    
+
     if (!$userId) {
         jsonResponse(false, 'User not found', ['address' => null]);
     }
-    
+
     try {
         // Get last order with delivery info
         $stmt = $db->prepare("
-            SELECT delivery_info 
-            FROM transactions 
+            SELECT delivery_info
+            FROM transactions
             WHERE user_id = ? AND delivery_info IS NOT NULL AND delivery_info != '' AND delivery_info != '{}'
-            ORDER BY created_at DESC 
+            ORDER BY created_at DESC
             LIMIT 1
         ");
         $stmt->execute([$userId]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if ($result && $result['delivery_info']) {
             $deliveryInfo = json_decode($result['delivery_info'], true);
-            
+
             if ($deliveryInfo && !empty($deliveryInfo['name'])) {
                 // Check if we have separate fields or just combined address
                 $hasSeperateFields = !empty($deliveryInfo['subdistrict']) || !empty($deliveryInfo['district']) || !empty($deliveryInfo['province']);
-                
+
                 jsonResponse(true, 'Last address found', [
                     'address' => [
                         'name' => $deliveryInfo['name'] ?? '',
@@ -1468,12 +1536,12 @@ function handleGetLastAddress() {
                 ]);
             }
         }
-        
+
         // No previous address found, try to get from user profile
         $stmt = $db->prepare("SELECT display_name, phone, address FROM users WHERE id = ?");
         $stmt->execute([$userId]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if ($user) {
             jsonResponse(true, 'User profile found', [
                 'address' => [
@@ -1487,9 +1555,9 @@ function handleGetLastAddress() {
                 ]
             ]);
         }
-        
+
         jsonResponse(true, 'No address found', ['address' => null]);
-        
+
     } catch (Exception $e) {
         error_log("Get last address error: " . $e->getMessage());
         jsonResponse(false, 'Error getting address', ['address' => null]);
@@ -1501,37 +1569,37 @@ function handleGetLastAddress() {
  */
 function notifyTelegramNewOrder($orderId, $orderNumber, $total, $user, $deliveryInfo) {
     global $db;
-    
+
     try {
         // Get Telegram settings
         $stmt = $db->prepare("SELECT * FROM telegram_settings WHERE id = 1");
         $stmt->execute();
         $settings = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$settings || !$settings['is_enabled'] || !$settings['bot_token'] || !$settings['chat_id']) {
             return false;
         }
-        
+
         // Check if notify_new_order is enabled
         if (!($settings['notify_new_order'] ?? 1)) {
             return false;
         }
-        
+
         // Get order items
         $stmt = $db->prepare("SELECT product_name, quantity, subtotal FROM transaction_items WHERE transaction_id = ?");
         $stmt->execute([$orderId]);
         $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
+
         // Build message
         $itemList = "";
         foreach ($items as $item) {
             $itemList .= "  • {$item['product_name']} x{$item['quantity']} = ฿" . number_format($item['subtotal']) . "\n";
         }
-        
+
         $customerName = $user['display_name'] ?? 'ลูกค้า';
         $phone = $deliveryInfo['phone'] ?? '-';
         $address = $deliveryInfo['address'] ?? '-';
-        
+
         $message = "🛒 <b>ออเดอร์ใหม่!</b>\n\n";
         $message .= "📋 Order: <code>{$orderNumber}</code>\n";
         $message .= "👤 ลูกค้า: {$customerName}\n";
@@ -1540,7 +1608,7 @@ function notifyTelegramNewOrder($orderId, $orderNumber, $total, $user, $delivery
         $message .= "📦 <b>รายการสินค้า:</b>\n{$itemList}\n";
         $message .= "💰 <b>ยอดรวม: ฿" . number_format($total) . "</b>\n\n";
         $message .= "🔗 <a href=\"" . rtrim(BASE_URL, '/') . "/shop/orders.php\">ดูรายละเอียด</a>";
-        
+
         // Send to Telegram
         $url = "https://api.telegram.org/bot{$settings['bot_token']}/sendMessage";
         $data = [
@@ -1549,7 +1617,7 @@ function notifyTelegramNewOrder($orderId, $orderNumber, $total, $user, $delivery
             'parse_mode' => 'HTML',
             'disable_web_page_preview' => true
         ];
-        
+
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
@@ -1559,7 +1627,7 @@ function notifyTelegramNewOrder($orderId, $orderNumber, $total, $user, $delivery
         ]);
         $result = curl_exec($ch);
         curl_close($ch);
-        
+
         return true;
     } catch (Exception $e) {
         error_log('notifyTelegramNewOrder error: ' . $e->getMessage());
@@ -1572,24 +1640,24 @@ function notifyTelegramNewOrder($orderId, $orderNumber, $total, $user, $delivery
  */
 function notifyTelegramPayment($orderId, $orderNumber, $slipUrl, $user) {
     global $db;
-    
+
     try {
         // Get Telegram settings
         $stmt = $db->prepare("SELECT * FROM telegram_settings WHERE id = 1");
         $stmt->execute();
         $settings = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$settings || !$settings['is_enabled'] || !$settings['bot_token'] || !$settings['chat_id']) {
             return false;
         }
-        
+
         // Check if notify_payment is enabled
         if (!($settings['notify_payment'] ?? 1)) {
             return false;
         }
-        
+
         $customerName = $user['display_name'] ?? 'ลูกค้า';
-        
+
         // Send photo with caption
         $url = "https://api.telegram.org/bot{$settings['bot_token']}/sendPhoto";
         $data = [
@@ -1598,7 +1666,7 @@ function notifyTelegramPayment($orderId, $orderNumber, $slipUrl, $user) {
             'caption' => "💳 <b>แจ้งชำระเงิน!</b>\n\n📋 Order: <code>{$orderNumber}</code>\n👤 ลูกค้า: {$customerName}\n\n🔗 <a href=\"" . rtrim(BASE_URL, '/') . "/shop/orders.php?pending_slip=1\">ตรวจสอบสลิป</a>",
             'parse_mode' => 'HTML'
         ];
-        
+
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
@@ -1608,7 +1676,7 @@ function notifyTelegramPayment($orderId, $orderNumber, $slipUrl, $user) {
         ]);
         $result = curl_exec($ch);
         curl_close($ch);
-        
+
         return true;
     } catch (Exception $e) {
         error_log('notifyTelegramPayment error: ' . $e->getMessage());
@@ -1622,10 +1690,10 @@ function notifyTelegramPayment($orderId, $orderNumber, $slipUrl, $user) {
  */
 function handlePromptPayQR() {
     global $db;
-    
+
     $amount = floatval($_GET['amount'] ?? 0);
     $lineAccountId = $_GET['account'] ?? $_GET['line_account_id'] ?? 1;
-    
+
     // Get PromptPay number from shop settings
     $promptpayNumber = '';
     try {
@@ -1633,7 +1701,7 @@ function handlePromptPayQR() {
         $stmt->execute([$lineAccountId]);
         $settings = $stmt->fetch(PDO::FETCH_ASSOC);
         $promptpayNumber = $settings['promptpay_number'] ?? '';
-        
+
         // Fallback to first shop settings if not found
         if (empty($promptpayNumber)) {
             $stmt = $db->query("SELECT promptpay_number FROM shop_settings WHERE promptpay_number IS NOT NULL AND promptpay_number != '' LIMIT 1");
@@ -1643,7 +1711,7 @@ function handlePromptPayQR() {
     } catch (Exception $e) {
         error_log('PromptPay QR error: ' . $e->getMessage());
     }
-    
+
     if (empty($promptpayNumber)) {
         // Return empty image or error
         header('Content-Type: image/png');
@@ -1655,10 +1723,10 @@ function handlePromptPayQR() {
         imagedestroy($img);
         exit;
     }
-    
+
     // Generate PromptPay payload
     $payload = generatePromptPayPayload($promptpayNumber, $amount);
-    
+
     if (!$payload) {
         header('Content-Type: image/png');
         $img = imagecreate(200, 200);
@@ -1669,14 +1737,14 @@ function handlePromptPayQR() {
         imagedestroy($img);
         exit;
     }
-    
+
     // Generate QR Code using external API (simple approach)
     $qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' . urlencode($payload);
-    
+
     // Fetch and output the QR image
     header('Content-Type: image/png');
     header('Cache-Control: public, max-age=3600');
-    
+
     $qrImage = @file_get_contents($qrUrl);
     if ($qrImage) {
         echo $qrImage;
@@ -1698,7 +1766,7 @@ function handlePromptPayQR() {
 function generatePromptPayPayload($promptpayNumber, $amount = 0) {
     // Clean the number
     $target = preg_replace('/[^0-9]/', '', $promptpayNumber);
-    
+
     // Determine target type
     if (strlen($target) === 10) {
         // Phone number - add country code
@@ -1709,41 +1777,41 @@ function generatePromptPayPayload($promptpayNumber, $amount = 0) {
     } else {
         return null;
     }
-    
+
     // Build EMVCo QR payload
     $payload = '';
-    
+
     // Payload Format Indicator
     $payload .= '000201';
-    
+
     // Point of Initiation Method (12 = dynamic QR with amount)
     $payload .= '010212';
-    
+
     // Merchant Account Information (PromptPay)
     $merchantInfo = '';
     $merchantInfo .= '0016A000000677010111'; // AID
     $merchantInfo .= $targetType . sprintf('%02d', strlen($target)) . $target;
     $payload .= '29' . sprintf('%02d', strlen($merchantInfo)) . $merchantInfo;
-    
+
     // Transaction Currency (THB = 764)
     $payload .= '5303764';
-    
+
     // Transaction Amount (if provided)
     if ($amount > 0) {
         $amountStr = number_format($amount, 2, '.', '');
         $payload .= '54' . sprintf('%02d', strlen($amountStr)) . $amountStr;
     }
-    
+
     // Country Code
     $payload .= '5802TH';
-    
+
     // CRC placeholder
     $payload .= '6304';
-    
+
     // Calculate CRC16
     $crc = calculateCRC16CCITT($payload);
     $payload .= strtoupper(sprintf('%04X', $crc));
-    
+
     return $payload;
 }
 
@@ -1764,4 +1832,99 @@ function calculateCRC16CCITT($str) {
         $crc &= 0xFFFF;
     }
     return $crc;
+}
+
+/**
+ * Get shop payment info: shop_name, promptpay_number, bank_accounts
+ * ดึงข้อมูลการชำระเงินของร้าน: ชื่อร้าน, พร้อมเพย์, บัญชีธนาคาร
+ *
+ * Scoped by line_account_id resolved from line_user_id (via users table)
+ * or directly from the line_account_id GET/POST parameter.
+ *
+ * GET /api/checkout.php?action=shop_info&line_user_id=U...
+ * GET /api/checkout.php?action=shop_info&line_account_id=1
+ *
+ * Response:
+ * {
+ *   "success": true,
+ *   "message": "",
+ *   "shop_name": "...",
+ *   "promptpay_number": "...",
+ *   "bank_accounts": [{"bank_name":"...","account_name":"...","account_number":"..."}] | null
+ * }
+ */
+function handleGetShopInfo() {
+    global $db;
+
+    // Resolve line_account_id — prefer to derive from the authenticated LINE user
+    $lineUserId   = $_GET['line_user_id']   ?? $_POST['line_user_id']   ?? null;
+    $lineAccountId = $_GET['line_account_id'] ?? $_POST['line_account_id'] ?? null;
+
+    if ($lineUserId) {
+        $stmt = $db->prepare("SELECT line_account_id FROM users WHERE line_user_id = ? LIMIT 1");
+        $stmt->execute([$lineUserId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            $lineAccountId = $row['line_account_id'];
+        }
+    }
+
+    // Last resort: use the default active account
+    if (!$lineAccountId) {
+        $stmt = $db->query("SELECT id FROM line_accounts WHERE is_active = 1 ORDER BY is_default DESC LIMIT 1");
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $lineAccountId = $row['id'] ?? 1;
+    }
+
+    try {
+        // Primary: fetch for the resolved tenant
+        $stmt = $db->prepare(
+            "SELECT shop_name, promptpay_number, bank_accounts
+             FROM shop_settings
+             WHERE line_account_id = ?
+             LIMIT 1"
+        );
+        $stmt->execute([$lineAccountId]);
+        $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        // Fallback: any row that has at least one payment field configured
+        if (empty($settings)) {
+            $stmt = $db->query(
+                "SELECT shop_name, promptpay_number, bank_accounts
+                 FROM shop_settings
+                 WHERE (promptpay_number IS NOT NULL AND promptpay_number != '')
+                    OR (bank_accounts IS NOT NULL AND bank_accounts != '')
+                 LIMIT 1"
+            );
+            $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+        }
+
+        if (empty($settings)) {
+            // No shop settings found at all — return safe empty values
+            jsonResponse(true, 'ไม่พบข้อมูลร้าน / Shop settings not found', [
+                'shop_name'        => '',
+                'promptpay_number' => '',
+                'bank_accounts'    => null,
+            ]);
+        }
+
+        // Decode bank_accounts TEXT column as JSON if it looks like JSON
+        $bankAccountsRaw = $settings['bank_accounts'] ?? null;
+        $bankAccounts = null;
+        if (!empty($bankAccountsRaw)) {
+            $decoded = json_decode($bankAccountsRaw, true);
+            // json_decode returns null on failure; keep raw string only if it wasn't JSON
+            $bankAccounts = (json_last_error() === JSON_ERROR_NONE) ? $decoded : $bankAccountsRaw;
+        }
+
+        jsonResponse(true, '', [
+            'shop_name'        => $settings['shop_name']        ?? '',
+            'promptpay_number' => $settings['promptpay_number'] ?? '',
+            'bank_accounts'    => $bankAccounts,
+        ]);
+
+    } catch (Exception $e) {
+        error_log('handleGetShopInfo error: ' . $e->getMessage());
+        jsonResponse(false, 'ไม่สามารถดึงข้อมูลร้านได้ / Unable to load shop info');
+    }
 }

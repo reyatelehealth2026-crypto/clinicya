@@ -2,7 +2,7 @@
 /**
  * LIFF Message Handler
  * Processes LIFF-triggered messages and replies with Flex Messages
- * 
+ *
  * Requirements: 20.3, 20.9, 20.12
  * - Process LIFF-triggered messages
  * - Reply with Flex Messages
@@ -13,7 +13,7 @@ class LiffMessageHandler {
     private $db;
     private $line;
     private $lineAccountId;
-    
+
     // LIFF action message patterns
     // Requirements: 20.4, 20.5, 20.6, 20.7, 20.8
     private $patterns = [
@@ -23,13 +23,13 @@ class LiffMessageHandler {
         'points_redeemed' => '/^แลกแต้มสำเร็จ\s*(\d+)\s*แต้ม/u',
         'health_updated' => '/^อัพเดทข้อมูลสุขภาพ/u'
     ];
-    
+
     public function __construct($db, $line, $lineAccountId = null) {
         $this->db = $db;
         $this->line = $line;
         $this->lineAccountId = $lineAccountId;
     }
-    
+
     /**
      * Check if message is a LIFF-triggered action
      * @param string $message - Message text
@@ -54,35 +54,35 @@ class LiffMessageHandler {
      */
     public function processMessage($message, $userId, $lineUserId) {
         $action = $this->detectLiffAction($message);
-        
+
         if (!$action) {
             return null;
         }
-        
+
         // Log the LIFF action
         $this->logAction($action, $message, $userId, $lineUserId);
-        
+
         switch ($action) {
             case 'order_placed':
                 return $this->handleOrderPlaced($message, $userId);
-                
+
             case 'appointment_booked':
                 return $this->handleAppointmentBooked($message, $userId);
-                
+
             case 'consult_request':
                 return $this->handleConsultRequest($userId, $lineUserId);
-                
+
             case 'points_redeemed':
                 return $this->handlePointsRedeemed($message, $userId);
-                
+
             case 'health_updated':
                 return $this->handleHealthUpdated($userId);
-                
+
             default:
                 return null;
         }
     }
-    
+
     /**
      * Handle order placed message
      * Requirements: 20.4, 20.12
@@ -91,19 +91,19 @@ class LiffMessageHandler {
         // Extract order ID from message
         preg_match($this->patterns['order_placed'], $message, $matches);
         $orderId = $matches[1] ?? '';
-        
+
         if (empty($orderId)) {
             return null;
         }
-        
+
         // Get order details from database
         $order = $this->getOrderDetails($orderId, $userId);
-        
+
         if (!$order) {
             // Return simple confirmation if order not found
             return $this->createSimpleOrderConfirmation($orderId);
         }
-        
+
         // Create detailed order confirmation Flex Message
         return $this->createOrderConfirmationFlex($order);
     }
@@ -115,16 +115,16 @@ class LiffMessageHandler {
         try {
             // Try transactions table first
             $stmt = $this->db->prepare("
-                SELECT t.*, u.display_name 
-                FROM transactions t 
+                SELECT t.*, u.display_name
+                FROM transactions t
                 LEFT JOIN users u ON t.user_id = u.id
-                WHERE (t.id = ? OR t.order_number = ?) 
+                WHERE (t.id = ? OR t.order_number = ?)
                 AND t.user_id = ?
                 AND t.transaction_type = 'purchase'
             ");
             $stmt->execute([$orderId, $orderId, $userId]);
             $order = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if ($order) {
                 // Get order items
                 $stmt = $this->db->prepare("
@@ -136,16 +136,16 @@ class LiffMessageHandler {
                 ");
                 $stmt->execute([$order['id']]);
                 $order['items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
+
                 return $order;
             }
         } catch (Exception $e) {
             error_log("LiffMessageHandler getOrderDetails error: " . $e->getMessage());
         }
-        
+
         return null;
     }
-    
+
     /**
      * Create simple order confirmation when order details not found
      */
@@ -159,7 +159,7 @@ class LiffMessageHandler {
                 'backgroundColor' => '#11B0A6',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => '✅ สั่งซื้อสำเร็จ', 'color' => '#FFFFFF', 
+                    ['type' => 'text', 'text' => '✅ สั่งซื้อสำเร็จ', 'color' => '#FFFFFF',
                      'weight' => 'bold', 'size' => 'lg', 'align' => 'center']
                 ]
             ],
@@ -168,17 +168,17 @@ class LiffMessageHandler {
                 'layout' => 'vertical',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => "ออเดอร์ #{$orderId}", 
+                    ['type' => 'text', 'text' => "ออเดอร์ #{$orderId}",
                      'weight' => 'bold', 'size' => 'md', 'align' => 'center'],
-                    ['type' => 'text', 'text' => 'ขอบคุณที่สั่งซื้อค่ะ', 
+                    ['type' => 'text', 'text' => 'ขอบคุณที่สั่งซื้อค่ะ',
                      'size' => 'sm', 'color' => '#888888', 'align' => 'center', 'margin' => 'md'],
                     ['type' => 'separator', 'margin' => 'lg'],
-                    ['type' => 'text', 'text' => '⏳ รอตรวจสอบการชำระเงิน', 
+                    ['type' => 'text', 'text' => '⏳ รอตรวจสอบการชำระเงิน',
                      'size' => 'sm', 'color' => '#F59E0B', 'align' => 'center', 'margin' => 'lg']
                 ]
             ]
         ];
-        
+
         return [
             'type' => 'flex',
             'altText' => "✅ สั่งซื้อสำเร็จ #{$orderId}",
@@ -196,13 +196,13 @@ class LiffMessageHandler {
         $items = $order['items'] ?? [];
         $itemCount = count($items);
         $status = $order['status'] ?? 'pending';
-        
+
         // Get shop name
         $shopName = $this->getShopName();
-        
+
         // Get LIFF URL for tracking
         $liffUrl = $this->getLiffTrackingUrl($orderId);
-        
+
         // Build items preview (max 3 items)
         $itemContents = [];
         $displayItems = array_slice($items, 0, 3);
@@ -211,15 +211,15 @@ class LiffMessageHandler {
                 'type' => 'box',
                 'layout' => 'horizontal',
                 'contents' => [
-                    ['type' => 'text', 'text' => $item['name'] ?? 'สินค้า', 
+                    ['type' => 'text', 'text' => $item['name'] ?? 'สินค้า',
                      'size' => 'sm', 'color' => '#555555', 'flex' => 3, 'wrap' => true],
-                    ['type' => 'text', 'text' => 'x' . ($item['quantity'] ?? 1), 
+                    ['type' => 'text', 'text' => 'x' . ($item['quantity'] ?? 1),
                      'size' => 'sm', 'color' => '#888888', 'align' => 'end', 'flex' => 1]
                 ],
                 'margin' => 'sm'
             ];
         }
-        
+
         if ($itemCount > 3) {
             $itemContents[] = [
                 'type' => 'text',
@@ -229,7 +229,7 @@ class LiffMessageHandler {
                 'margin' => 'sm'
             ];
         }
-        
+
         // Status config
         $statusConfig = [
             'pending' => ['icon' => '⏳', 'text' => 'รอชำระเงิน', 'color' => '#F59E0B'],
@@ -240,15 +240,15 @@ class LiffMessageHandler {
             'delivered' => ['icon' => '✅', 'text' => 'จัดส่งแล้ว', 'color' => '#10B981']
         ];
         $statusInfo = $statusConfig[$status] ?? $statusConfig['pending'];
-        
+
         $bodyContents = [
-            ['type' => 'text', 'text' => "ออเดอร์ #{$orderId}", 
+            ['type' => 'text', 'text' => "ออเดอร์ #{$orderId}",
              'weight' => 'bold', 'size' => 'md', 'align' => 'center'],
-            ['type' => 'text', 'text' => $shopName, 
+            ['type' => 'text', 'text' => $shopName,
              'size' => 'sm', 'color' => '#888888', 'align' => 'center', 'margin' => 'sm'],
             ['type' => 'separator', 'margin' => 'lg']
         ];
-        
+
         // Add items
         if (!empty($itemContents)) {
             $bodyContents[] = [
@@ -259,7 +259,7 @@ class LiffMessageHandler {
             ];
             $bodyContents[] = ['type' => 'separator', 'margin' => 'lg'];
         }
-        
+
         // Add total
         $bodyContents[] = [
             'type' => 'box',
@@ -267,11 +267,11 @@ class LiffMessageHandler {
             'margin' => 'lg',
             'contents' => [
                 ['type' => 'text', 'text' => 'ยอดรวม', 'size' => 'md', 'color' => '#555555', 'flex' => 1],
-                ['type' => 'text', 'text' => '฿' . number_format($total, 2), 
+                ['type' => 'text', 'text' => '฿' . number_format($total, 2),
                  'size' => 'lg', 'weight' => 'bold', 'color' => '#11B0A6', 'align' => 'end', 'flex' => 1]
             ]
         ];
-        
+
         // Add status
         $bodyContents[] = [
             'type' => 'box',
@@ -281,11 +281,11 @@ class LiffMessageHandler {
             'backgroundColor' => '#F8FAFC',
             'cornerRadius' => 'md',
             'contents' => [
-                ['type' => 'text', 'text' => $statusInfo['icon'] . ' ' . $statusInfo['text'], 
+                ['type' => 'text', 'text' => $statusInfo['icon'] . ' ' . $statusInfo['text'],
                  'size' => 'sm', 'color' => $statusInfo['color'], 'weight' => 'bold', 'align' => 'center']
             ]
         ];
-        
+
         $bubble = [
             'type' => 'bubble',
             'size' => 'kilo',
@@ -295,7 +295,7 @@ class LiffMessageHandler {
                 'backgroundColor' => '#11B0A6',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => '✅ สั่งซื้อสำเร็จ', 'color' => '#FFFFFF', 
+                    ['type' => 'text', 'text' => '✅ สั่งซื้อสำเร็จ', 'color' => '#FFFFFF',
                      'weight' => 'bold', 'size' => 'lg', 'align' => 'center']
                 ]
             ],
@@ -312,7 +312,7 @@ class LiffMessageHandler {
                 'contents' => []
             ]
         ];
-        
+
         // Add tracking button if LIFF URL available
         if (!empty($liffUrl)) {
             $bubble['footer']['contents'][] = [
@@ -323,7 +323,7 @@ class LiffMessageHandler {
                 'height' => 'sm'
             ];
         }
-        
+
         return [
             'type' => 'flex',
             'altText' => "✅ สั่งซื้อสำเร็จ #{$orderId} - ฿" . number_format($total, 2),
@@ -338,12 +338,12 @@ class LiffMessageHandler {
     private function handleAppointmentBooked($message, $userId) {
         preg_match($this->patterns['appointment_booked'], $message, $matches);
         $dateTime = $matches[1] ?? '';
-        
+
         // Parse date and time
         $parts = preg_split('/\s+/', trim($dateTime), 2);
         $date = $parts[0] ?? '';
         $time = $parts[1] ?? '';
-        
+
         $bubble = [
             'type' => 'bubble',
             'size' => 'kilo',
@@ -353,7 +353,7 @@ class LiffMessageHandler {
                 'backgroundColor' => '#3B82F6',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => '📅 นัดหมายสำเร็จ', 'color' => '#FFFFFF', 
+                    ['type' => 'text', 'text' => '📅 นัดหมายสำเร็จ', 'color' => '#FFFFFF',
                      'weight' => 'bold', 'size' => 'lg', 'align' => 'center']
                 ]
             ],
@@ -362,7 +362,7 @@ class LiffMessageHandler {
                 'layout' => 'vertical',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => 'ปรึกษาเภสัชกร', 
+                    ['type' => 'text', 'text' => 'ปรึกษาเภสัชกร',
                      'weight' => 'bold', 'size' => 'md', 'align' => 'center'],
                     ['type' => 'separator', 'margin' => 'lg'],
                     [
@@ -384,19 +384,19 @@ class LiffMessageHandler {
                         ]
                     ],
                     ['type' => 'separator', 'margin' => 'lg'],
-                    ['type' => 'text', 'text' => '🔔 จะแจ้งเตือนก่อนนัด 30 นาที', 
+                    ['type' => 'text', 'text' => '🔔 จะแจ้งเตือนก่อนนัด 30 นาที',
                      'size' => 'xs', 'color' => '#888888', 'align' => 'center', 'margin' => 'lg']
                 ]
             ]
         ];
-        
+
         return [
             'type' => 'flex',
             'altText' => "📅 นัดหมายสำเร็จ {$dateTime}",
             'contents' => $bubble
         ];
     }
-    
+
     /**
      * Handle consultation request message
      * Requirements: 20.6
@@ -404,7 +404,7 @@ class LiffMessageHandler {
     private function handleConsultRequest($userId, $lineUserId) {
         // Create consultation queue entry
         $this->createConsultationQueue($userId, $lineUserId);
-        
+
         $bubble = [
             'type' => 'bubble',
             'size' => 'kilo',
@@ -414,7 +414,7 @@ class LiffMessageHandler {
                 'backgroundColor' => '#9333EA',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => '👨‍⚕️ ขอปรึกษาเภสัชกร', 'color' => '#FFFFFF', 
+                    ['type' => 'text', 'text' => '👨‍⚕️ ขอปรึกษาเภสัชกร', 'color' => '#FFFFFF',
                      'weight' => 'bold', 'size' => 'lg', 'align' => 'center']
                 ]
             ],
@@ -423,17 +423,17 @@ class LiffMessageHandler {
                 'layout' => 'vertical',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => 'ได้รับคำขอปรึกษาแล้ว', 
+                    ['type' => 'text', 'text' => 'ได้รับคำขอปรึกษาแล้ว',
                      'weight' => 'bold', 'size' => 'md', 'align' => 'center'],
-                    ['type' => 'text', 'text' => 'เภสัชกรจะติดต่อกลับโดยเร็วที่สุด', 
+                    ['type' => 'text', 'text' => 'เภสัชกรจะติดต่อกลับโดยเร็วที่สุด',
                      'size' => 'sm', 'color' => '#888888', 'align' => 'center', 'margin' => 'md', 'wrap' => true],
                     ['type' => 'separator', 'margin' => 'lg'],
-                    ['type' => 'text', 'text' => '⏳ กรุณารอสักครู่...', 
+                    ['type' => 'text', 'text' => '⏳ กรุณารอสักครู่...',
                      'size' => 'sm', 'color' => '#F59E0B', 'align' => 'center', 'margin' => 'lg']
                 ]
             ]
         ];
-        
+
         return [
             'type' => 'flex',
             'altText' => '👨‍⚕️ ขอปรึกษาเภสัชกร - รอเภสัชกรติดต่อกลับ',
@@ -448,10 +448,10 @@ class LiffMessageHandler {
     private function handlePointsRedeemed($message, $userId) {
         preg_match($this->patterns['points_redeemed'], $message, $matches);
         $points = (int)($matches[1] ?? 0);
-        
+
         // Get remaining points
         $remainingPoints = $this->getUserPoints($userId);
-        
+
         $bubble = [
             'type' => 'bubble',
             'size' => 'kilo',
@@ -461,7 +461,7 @@ class LiffMessageHandler {
                 'backgroundColor' => '#F59E0B',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => '🎁 แลกแต้มสำเร็จ', 'color' => '#FFFFFF', 
+                    ['type' => 'text', 'text' => '🎁 แลกแต้มสำเร็จ', 'color' => '#FFFFFF',
                      'weight' => 'bold', 'size' => 'lg', 'align' => 'center']
                 ]
             ],
@@ -470,7 +470,7 @@ class LiffMessageHandler {
                 'layout' => 'vertical',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => 'แลกแต้มเรียบร้อย', 
+                    ['type' => 'text', 'text' => 'แลกแต้มเรียบร้อย',
                      'weight' => 'bold', 'size' => 'md', 'align' => 'center'],
                     ['type' => 'separator', 'margin' => 'lg'],
                     [
@@ -479,7 +479,7 @@ class LiffMessageHandler {
                         'margin' => 'lg',
                         'contents' => [
                             ['type' => 'text', 'text' => 'แต้มที่ใช้', 'size' => 'sm', 'color' => '#888888', 'flex' => 1],
-                            ['type' => 'text', 'text' => number_format($points) . ' แต้ม', 
+                            ['type' => 'text', 'text' => number_format($points) . ' แต้ม',
                              'size' => 'sm', 'weight' => 'bold', 'color' => '#EF4444', 'align' => 'end', 'flex' => 1]
                         ]
                     ],
@@ -489,21 +489,21 @@ class LiffMessageHandler {
                         'margin' => 'sm',
                         'contents' => [
                             ['type' => 'text', 'text' => 'แต้มคงเหลือ', 'size' => 'sm', 'color' => '#888888', 'flex' => 1],
-                            ['type' => 'text', 'text' => number_format($remainingPoints) . ' แต้ม', 
+                            ['type' => 'text', 'text' => number_format($remainingPoints) . ' แต้ม',
                              'size' => 'sm', 'weight' => 'bold', 'color' => '#11B0A6', 'align' => 'end', 'flex' => 1]
                         ]
                     ]
                 ]
             ]
         ];
-        
+
         return [
             'type' => 'flex',
             'altText' => "🎁 แลกแต้มสำเร็จ {$points} แต้ม",
             'contents' => $bubble
         ];
     }
-    
+
     /**
      * Handle health profile updated message
      * Requirements: 20.8
@@ -518,7 +518,7 @@ class LiffMessageHandler {
                 'backgroundColor' => '#10B981',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => '💚 อัพเดทข้อมูลสุขภาพ', 'color' => '#FFFFFF', 
+                    ['type' => 'text', 'text' => '💚 อัพเดทข้อมูลสุขภาพ', 'color' => '#FFFFFF',
                      'weight' => 'bold', 'size' => 'lg', 'align' => 'center']
                 ]
             ],
@@ -527,17 +527,17 @@ class LiffMessageHandler {
                 'layout' => 'vertical',
                 'paddingAll' => '15px',
                 'contents' => [
-                    ['type' => 'text', 'text' => 'บันทึกข้อมูลสุขภาพเรียบร้อย', 
+                    ['type' => 'text', 'text' => 'บันทึกข้อมูลสุขภาพเรียบร้อย',
                      'weight' => 'bold', 'size' => 'md', 'align' => 'center'],
-                    ['type' => 'text', 'text' => 'ข้อมูลนี้จะช่วยให้เภสัชกรให้คำแนะนำได้ดียิ่งขึ้น', 
+                    ['type' => 'text', 'text' => 'ข้อมูลนี้จะช่วยให้เภสัชกรให้คำแนะนำได้ดียิ่งขึ้น',
                      'size' => 'sm', 'color' => '#888888', 'align' => 'center', 'margin' => 'md', 'wrap' => true],
                     ['type' => 'separator', 'margin' => 'lg'],
-                    ['type' => 'text', 'text' => '✅ ข้อมูลถูกเข้ารหัสอย่างปลอดภัย', 
+                    ['type' => 'text', 'text' => '✅ ข้อมูลถูกเข้ารหัสอย่างปลอดภัย',
                      'size' => 'xs', 'color' => '#10B981', 'align' => 'center', 'margin' => 'lg']
                 ]
             ]
         ];
-        
+
         return [
             'type' => 'flex',
             'altText' => '💚 อัพเดทข้อมูลสุขภาพสำเร็จ',
@@ -559,12 +559,14 @@ class LiffMessageHandler {
                 }
             }
         } catch (Exception $e) {}
-        
+
         return 'ร้านค้า';
     }
-    
+
     /**
-     * Get LIFF URL for order tracking
+     * Get LIFF URL for order tracking.
+     * Uses path-based routing compatible with line-mini-app Next.js App Router.
+     * Route: src/app/order/[id]/page.tsx
      */
     private function getLiffTrackingUrl($orderId) {
         try {
@@ -573,14 +575,14 @@ class LiffMessageHandler {
                 $stmt->execute([$this->lineAccountId]);
                 $account = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($account && !empty($account['liff_id'])) {
-                    return "https://liff.line.me/{$account['liff_id']}?page=order-detail&order_id={$orderId}";
+                    return "https://liff.line.me/{$account['liff_id']}/order/{$orderId}";
                 }
             }
         } catch (Exception $e) {}
-        
+
         return '';
     }
-    
+
     /**
      * Get user points balance
      */
@@ -591,10 +593,10 @@ class LiffMessageHandler {
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             return (int)($user['points'] ?? 0);
         } catch (Exception $e) {}
-        
+
         return 0;
     }
-    
+
     /**
      * Create consultation queue entry
      */
@@ -604,8 +606,8 @@ class LiffMessageHandler {
             $stmt = $this->db->query("SHOW TABLES LIKE 'video_call_sessions'");
             if ($stmt->rowCount() > 0) {
                 $stmt = $this->db->prepare("
-                    INSERT INTO video_call_sessions 
-                    (user_id, line_user_id, line_account_id, status, created_at) 
+                    INSERT INTO video_call_sessions
+                    (user_id, line_user_id, line_account_id, status, created_at)
                     VALUES (?, ?, ?, 'waiting', NOW())
                 ");
                 $stmt->execute([$userId, $lineUserId, $this->lineAccountId]);
@@ -614,7 +616,7 @@ class LiffMessageHandler {
             error_log("LiffMessageHandler createConsultationQueue error: " . $e->getMessage());
         }
     }
-    
+
     /**
      * Log LIFF action
      */
@@ -623,7 +625,7 @@ class LiffMessageHandler {
             $stmt = $this->db->query("SHOW TABLES LIKE 'dev_logs'");
             if ($stmt->rowCount() > 0) {
                 $stmt = $this->db->prepare("
-                    INSERT INTO dev_logs (log_type, source, message, data, created_at) 
+                    INSERT INTO dev_logs (log_type, source, message, data, created_at)
                     VALUES ('info', 'liff_message_handler', ?, ?, NOW())
                 ");
                 $stmt->execute([
