@@ -573,7 +573,8 @@ class LiffMessageHandler {
                 $stmt->execute([$this->lineAccountId]);
                 $account = $stmt->fetch(PDO::FETCH_ASSOC);
                 if ($account && !empty($account['liff_id'])) {
-                    return "https://liff.line.me/{$account['liff_id']}?page=order-detail&order_id={$orderId}";
+                    // Next.js mini app: /order/{id} (LIFF path URL)
+                    return "https://liff.line.me/{$account['liff_id']}/order/{$orderId}";
                 }
             }
         } catch (Exception $e) {}

@@ -73,6 +73,9 @@ try {
         case 'promptpay_qr':
             handlePromptPayQR();
             break;
+        case 'payment_info':
+            handleGetPaymentInfo();
+            break;
         default:
             jsonResponse(false, 'Invalid action');
     }
@@ -83,6 +86,152 @@ try {
 function jsonResponse($success, $message = '', $data = []) {
     echo json_encode(array_merge(['success' => $success, 'message' => $message], $data));
     exit;
+}
+
+/**
+ * Bank transfer display info from shop_settings.bank_accounts (JSON) + PromptPay id
+ */
+function checkoutGetTransferDisplayInfo(PDO $db, $lineAccountId) {
+    $row = [];
+    try {
+        if ($lineAccountId) {
+            $stmt = $db->prepare('SELECT bank_accounts, promptpay_number FROM shop_settings WHERE line_account_id = ? LIMIT 1');
+            $stmt->execute([(int) $lineAccountId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        }
+        if (empty($row['bank_accounts']) && empty($row['promptpay_number'])) {
+            $stmt = $db->query('SELECT bank_accounts, promptpay_number FROM shop_settings ORDER BY id ASC LIMIT 1');
+            $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        }
+    } catch (Exception $e) {
+        return ['banks' => [], 'promptpay_number' => ''];
+    }
+    $banks = [];
+    if (!empty($row['bank_accounts'])) {
+        $decoded = json_decode($row['bank_accounts'], true);
+        if (is_array($decoded) && isset($decoded['banks']) && is_array($decoded['banks'])) {
+            foreach ($decoded['banks'] as $b) {
+                $banks[] = [
+                    'bank_name' => trim((string) ($b['name'] ?? '')),
+                    'account_number' => trim((string) ($b['account'] ?? '')),
+                    'account_holder' => trim((string) ($b['holder'] ?? '')),
+                ];
+            }
+        }
+    }
+
+    return [
+        'banks' => $banks,
+        'promptpay_number' => trim((string) ($row['promptpay_number'] ?? '')),
+    ];
+}
+
+/**
+ * Next.js mini app deep link: https://liff.line.me/{liffId}/order/{id}
+ */
+function checkoutMiniAppLiffPathUrl(PDO $db, $lineAccountId, $path) {
+    $path = trim((string) $path, '/');
+    if ($path === '') {
+        return '';
+    }
+    try {
+        $stmt = $db->prepare('SELECT liff_id FROM line_accounts WHERE id = ?');
+        $stmt->execute([(int) $lineAccountId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $liffId = $row['liff_id'] ?? '';
+        if ($liffId === '') {
+            return '';
+        }
+
+        return 'https://liff.line.me/' . $liffId . '/' . $path;
+    } catch (Exception $e) {
+        return '';
+    }
+}
+
+function checkoutMapTransactionItemsForConfirmation(array $transactionItems) {
+    $out = [];
+    foreach ($transactionItems as $item) {
+        $p = floatval($item['product_price'] ?? 0);
+        $out[] = [
+            'name' => $item['product_name'] ?? 'สินค้า',
+            'quantity' => intval($item['quantity'] ?? 1),
+            'price' => $p,
+            'sale_price' => $p,
+        ];
+    }
+
+    return $out;
+}
+
+/**
+ * LINE push to buyer after order (COD uses existing sendOrderConfirmation; transfer = bank + LIFF link)
+ */
+function checkoutNotifyCustomerLineAfterOrder(PDO $db, array $orderRow, array $transactionItems, $paymentMethod, $lineAccountId) {
+    $pm = strtolower((string) $paymentMethod);
+    $mapped = checkoutMapTransactionItemsForConfirmation($transactionItems);
+    if ($pm === 'cod') {
+        sendOrderConfirmation($orderRow, $mapped);
+
+        return;
+    }
+    if ($pm !== 'transfer') {
+        return;
+    }
+    try {
+        $stmt = $db->prepare('SELECT u.line_user_id, la.channel_access_token FROM users u JOIN line_accounts la ON u.line_account_id = la.id WHERE u.id = ?');
+        $stmt->execute([$orderRow['user_id']]);
+        $userData = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (empty($userData['line_user_id']) || empty($userData['channel_access_token'])) {
+            return;
+        }
+        $info = checkoutGetTransferDisplayInfo($db, $lineAccountId);
+        $lines = [];
+        $lines[] = '✅ ได้รับคำสั่งซื้อแล้ว';
+        $lines[] = '📋 #' . ($orderRow['order_number'] ?? '');
+        $lines[] = '💵 ยอดโอน ฿' . number_format((float) ($orderRow['grand_total'] ?? 0), 0);
+        $lines[] = '';
+        foreach ($info['banks'] as $b) {
+            $bn = $b['bank_name'] ?? '';
+            $an = $b['account_number'] ?? '';
+            $ah = $b['account_holder'] ?? '';
+            if ($bn !== '' || $an !== '' || $ah !== '') {
+                $lines[] = '🏦 ' . trim($bn . ' · ' . $ah, ' ·');
+                if ($an !== '') {
+                    $lines[] = 'เลขบัญชี: ' . $an;
+                }
+            }
+        }
+        if (($info['promptpay_number'] ?? '') !== '') {
+            $lines[] = 'พร้อมเพย์: ' . $info['promptpay_number'];
+        }
+        $track = checkoutMiniAppLiffPathUrl($db, $lineAccountId, 'order/' . (int) $orderRow['id']);
+        if ($track !== '') {
+            $lines[] = '';
+            $lines[] = '🔗 ติดตามคำสั่งซื้อ:';
+            $lines[] = $track;
+        }
+        $lines[] = '';
+        $lines[] = 'หลังโอนแล้ว กรุณาอัปโหลดสลิปในเมนูออเดอร์';
+        $msg = implode("\n", $lines);
+        $ch = curl_init('https://api.line.me/v2/bot/message/push');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . $userData['channel_access_token'],
+            ],
+            CURLOPT_POSTFIELDS => json_encode([
+                'to' => $userData['line_user_id'],
+                'messages' => [['type' => 'text', 'text' => $msg]],
+            ]),
+        ]);
+        curl_exec($ch);
+        curl_close($ch);
+    } catch (Exception $e) {
+        error_log('checkoutNotifyCustomerLineAfterOrder: ' . $e->getMessage());
+    }
 }
 
 /**
@@ -136,8 +285,14 @@ function handleGetProducts() {
         $catStmt = $db->prepare($catSql);
         $catStmt->execute($catParams);
         $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $transferInfo = checkoutGetTransferDisplayInfo($db, $lineAccountId ? (int) $lineAccountId : null);
         
-        jsonResponse(true, '', ['products' => $products, 'categories' => $categories]);
+        jsonResponse(true, '', [
+            'products' => $products,
+            'categories' => $categories,
+            'transfer_info' => $transferInfo,
+        ]);
     } catch (Exception $e) {
         jsonResponse(false, 'Error loading products: ' . $e->getMessage());
     }
@@ -706,6 +861,11 @@ function handleCreateOrder($data) {
         }
         
         $db->commit();
+
+        // Reload user row for notifications (auto-created users may not have had $user set)
+        $stmt = $db->prepare('SELECT id, display_name, line_user_id, line_account_id FROM users WHERE id = ?');
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['display_name' => $displayName, 'line_user_id' => $lineUserId];
         
         // Hook: Auto-create Account Receivable for credit sales
         // Requirement 8.2: WHEN an Invoice is created from shop order THEN the Accounting System SHALL automatically create corresponding AR record
@@ -725,6 +885,21 @@ function handleCreateOrder($data) {
         
         // 🔔 แจ้งเตือน Telegram เมื่อมี order ใหม่
         notifyTelegramNewOrder($orderId, $orderNumber, $total, $user, $deliveryInfo);
+
+        // 🔔 LINE ถึงลูกค้า: ยืนยันคำสั่งซื้อ (COD) / แนะนำโอน + ลิงก์ติดตาม (โอน)
+        try {
+            $stmt = $db->prepare('SELECT * FROM transactions WHERE id = ?');
+            $stmt->execute([$orderId]);
+            $orderRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt = $db->prepare('SELECT * FROM transaction_items WHERE transaction_id = ?');
+            $stmt->execute([$orderId]);
+            $orderItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if ($orderRow && !empty($orderItems)) {
+                checkoutNotifyCustomerLineAfterOrder($db, $orderRow, $orderItems, $paymentMethod, $lineAccountId);
+            }
+        } catch (Exception $e) {
+            error_log('Customer LINE order notification: ' . $e->getMessage());
+        }
         
         // 🔔 แจ้งเตือนผ่าน LINE/Email ด้วย NotificationService
         try {
@@ -1153,8 +1328,24 @@ function handleGetOrder() {
     
     $order['items'] = $items;
     $order['delivery_info'] = json_decode($order['delivery_info'] ?? '{}', true);
+
+    $extra = [];
+    $pm = strtolower((string) ($order['payment_method'] ?? ''));
+    if ($pm === 'transfer') {
+        $extra['transfer_info'] = checkoutGetTransferDisplayInfo($db, (int) ($order['line_account_id'] ?? 0));
+    }
     
-    jsonResponse(true, '', ['order' => $order]);
+    jsonResponse(true, '', array_merge(['order' => $order], $extra));
+}
+
+/**
+ * Transfer / bank display for checkout (same payload as nested in products)
+ */
+function handleGetPaymentInfo() {
+    global $db;
+    $lineAccountId = $_GET['line_account_id'] ?? null;
+    $transferInfo = checkoutGetTransferDisplayInfo($db, $lineAccountId ? (int) $lineAccountId : null);
+    jsonResponse(true, '', ['transfer_info' => $transferInfo]);
 }
 
 /**
