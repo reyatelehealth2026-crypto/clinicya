@@ -120,6 +120,7 @@ database/*.sql
 !database/migration_bdos_schema_fix.sql
 !database/migration_additional_indexes.sql
 !database/migration_fix_indexes.sql
+!database/migration_transactions_payment_status.sql
 *.png
 DB_CONNECTION.md
 *.md

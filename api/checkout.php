@@ -774,8 +774,18 @@ function handleCreateOrder($data) {
         // กำหนดสถานะตาม payment method
         // COD: ข้ามขั้นตอนรอชำระเงิน ไปยืนยันออเดอร์เลย
         $orderStatus = ($paymentMethod === 'cod') ? 'confirmed' : 'pending';
-        $paymentStatus = ($paymentMethod === 'cod') ? 'cod_pending' : 'pending';
+        // payment_status ต้องอยู่ใน ENUM('pending','paid','failed','refunded') — cod ใช้ pending เหมือนกัน
+        $paymentStatus = 'pending';
 
+        // Auto-add payment_status column if missing (defensive migration)
+        try {
+            $db->exec("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'");
+        } catch (Exception $e) {
+            // Ignore: column already exists or DB doesn't support IF NOT EXISTS
+        }
+
+        // Level 1: full insert (all columns)
+        $inserted = false;
         try {
             $stmt = $db->prepare("
                 INSERT INTO transactions
@@ -795,11 +805,43 @@ function handleCreateOrder($data) {
                 $orderStatus,
                 $paymentStatus
             ]);
+            $inserted = true;
         } catch (Exception $e) {
+            error_log("checkout create_order level1 failed: " . $e->getMessage());
+        }
+
+        // Level 2: without line_user_id
+        if (!$inserted) {
+            try {
+                $stmt = $db->prepare("
+                    INSERT INTO transactions
+                    (line_account_id, transaction_type, order_number, user_id, total_amount, shipping_fee, grand_total, delivery_info, payment_method, status, payment_status)
+                    VALUES (?, 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([
+                    $lineAccountId,
+                    $orderNumber,
+                    $userId,
+                    $subtotal,
+                    $shippingFee,
+                    $total,
+                    json_encode($deliveryInfo, JSON_UNESCAPED_UNICODE),
+                    $paymentMethod,
+                    $orderStatus,
+                    $paymentStatus
+                ]);
+                $inserted = true;
+            } catch (Exception $e) {
+                error_log("checkout create_order level2 failed: " . $e->getMessage());
+            }
+        }
+
+        // Level 3: without payment_status (oldest schema fallback)
+        if (!$inserted) {
             $stmt = $db->prepare("
                 INSERT INTO transactions
-                (line_account_id, transaction_type, order_number, user_id, total_amount, shipping_fee, grand_total, delivery_info, payment_method, status, payment_status)
-                VALUES (?, 'purchase', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (line_account_id, transaction_type, order_number, user_id, total_amount, shipping_fee, grand_total, delivery_info, payment_method, status)
+                VALUES (?, 'purchase', ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
                 $lineAccountId,
@@ -810,8 +852,7 @@ function handleCreateOrder($data) {
                 $total,
                 json_encode($deliveryInfo, JSON_UNESCAPED_UNICODE),
                 $paymentMethod,
-                $orderStatus,
-                $paymentStatus
+                $orderStatus
             ]);
         }
 
