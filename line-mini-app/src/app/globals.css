@@ -1,0 +1,554 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --line-green: #004aad;
+  --line-dark: #003890;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: var(--font-inter), var(--font-noto-sans-thai), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.5rem);
+}
+
+.safe-top {
+  padding-top: max(env(safe-area-inset-top, 0px), 0.75rem);
+}
+
+@layer components {
+  .skeleton {
+    @apply relative overflow-hidden rounded-2xl bg-slate-100;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  .glass-card {
+    @apply rounded-3xl border border-white/60 bg-white/80 shadow-card backdrop-blur-lg;
+  }
+
+  .gradient-card {
+    background: linear-gradient(135deg, #0062d6 0%, #004aad 50%, #003890 100%);
+  }
+
+  .gradient-card-dark {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  }
+
+  .input-field {
+    @apply w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm outline-none transition-all;
+    @apply placeholder:text-slate-400;
+    @apply focus:border-line focus:ring-2 focus:ring-line/10;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-line px-5 py-3.5 text-sm font-semibold text-white shadow-soft transition-all;
+    @apply hover:bg-line-dark hover:shadow-glow;
+    @apply active:scale-[0.98];
+    @apply disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-semibold text-slate-700 shadow-soft transition-all;
+    @apply hover:bg-slate-50 hover:border-slate-300;
+    @apply active:scale-[0.98];
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium text-slate-600 transition-all;
+    @apply hover:bg-slate-100;
+    @apply active:scale-[0.98];
+  }
+
+  .section-title {
+    @apply text-xs font-semibold uppercase tracking-widest text-slate-400;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+  .badge-green {
+    @apply bg-emerald-50 text-emerald-700;
+  }
+  .badge-amber {
+    @apply bg-amber-50 text-amber-700;
+  }
+  .badge-blue {
+    @apply bg-blue-50 text-blue-700;
+  }
+  .badge-red {
+    @apply bg-red-50 text-red-700;
+  }
+  .badge-slate {
+    @apply bg-slate-100 text-slate-600;
+  }
+}
+
+/* ============================================================
+   Banner Slider
+   ============================================================ */
+.banner-slider {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.banner-slider-track {
+  display: flex;
+  transition: transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+  will-change: transform;
+}
+
+.banner-slider-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.banner-slider-dots {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 0 6px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+.banner-slider-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.4);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.25s;
+}
+
+.banner-slider-dot.active {
+  background: white;
+  width: 18px;
+  border-radius: 3px;
+}
+
+/* ============================================================
+   Flash Sale Section — Makro Pro dark promo banner
+   ============================================================ */
+.flash-sale-section {
+  border-radius: 16px;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.flash-sale-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.flash-sale-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.flash-sale-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.flash-sale-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.flash-sale-title {
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.flash-sale-subtitle {
+  font-size: 11px;
+  margin: 2px 0 0;
+  opacity: 0.75;
+}
+
+.flash-sale-countdown {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.flash-sale-countdown-block {
+  font-family: var(--font-inter), monospace;
+  font-weight: 700;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  min-width: 26px;
+  text-align: center;
+}
+
+.flash-sale-expired {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.flash-sale-see-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.8;
+  cursor: pointer;
+  padding: 0;
+}
+
+.flash-sale-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.flash-sale-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================================
+   Product Card — Makro Pro style
+   ============================================================ */
+.product-card {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.2s;
+  scroll-snap-align: start;
+  border: 1px solid #f0f0f0;
+}
+
+.product-card:hover {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+.product-card-flash_sale {
+  min-width: 132px;
+  max-width: 148px;
+  flex-shrink: 0;
+}
+
+.product-card-default {
+  min-width: 144px;
+  max-width: 164px;
+  flex-shrink: 0;
+}
+
+.product-card-img-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #fafafa;
+  padding: 8px;
+}
+
+.product-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.product-card-discount-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: #e53935;
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 0 0 8px 0;
+  line-height: 1;
+}
+
+.product-card-promo-label {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  background: #333;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.product-card-badges {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+}
+
+.product-card-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: white;
+}
+
+.product-card-badge-red { background: #e53935; }
+.product-card-badge-orange { background: #ef6c00; }
+.product-card-badge-green { background: #2e7d32; }
+.product-card-badge-blue { background: #1565c0; }
+
+.product-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 8px 10px 10px;
+  gap: 2px;
+}
+
+.product-card-promo-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 2px;
+}
+
+.product-card-promo-tag {
+  font-size: 9px;
+  color: #1565c0;
+  background: #e3f2fd;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.3;
+}
+
+.product-card-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+}
+
+.product-card-desc {
+  font-size: 11px;
+  color: #999;
+  margin: 0;
+}
+
+.product-card-delivery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.product-card-delivery-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  color: #2e7d32;
+  background: #e8f5e9;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.product-card-stock {
+  font-size: 9px;
+  color: #e53935;
+  margin: 0;
+  font-weight: 600;
+}
+
+.product-card-price-area {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.product-card-price {
+  font-size: 16px;
+  font-weight: 800;
+  color: #e53935;
+  line-height: 1;
+}
+
+.product-card-price-unit {
+  font-size: 11px;
+  font-weight: 400;
+  color: #999;
+}
+
+.product-card-original-price {
+  font-size: 11px;
+  color: #bbb;
+  text-decoration: line-through;
+}
+
+/* ============================================================
+   Home Section — Makro Pro white card sections
+   ============================================================ */
+.home-section {
+  position: relative;
+}
+
+.home-section-card {
+  background: white;
+  margin: 0 12px;
+  border-radius: 16px;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.home-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.home-section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.home-section-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.home-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.home-section-subtitle {
+  font-size: 11px;
+  color: #999;
+  margin: 2px 0 0;
+}
+
+.home-section-see-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  color: #004aad;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.home-section-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.home-section-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.home-section-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.home-section-grid .product-card {
+  min-width: 0;
+  max-width: none;
+}

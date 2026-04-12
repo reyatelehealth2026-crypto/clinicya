@@ -25,8 +25,10 @@ logs/
 *.code-workspace
 NUL
 
-# AI Tools
-.claude/
+# AI Tools — track shared Claude Code agents; keep other local plugin state ignored
+.claude/*
+!.claude/agents/
+!.claude/agents/**
 .kiro/
 .gemini/
 .assistant/
@@ -44,6 +46,7 @@ vendor/
 composer.lock
 node_modules/
 package-lock.json
+!line-mini-app/package-lock.json
 
 # Next.js build
 .next/
@@ -120,6 +123,12 @@ database/*.sql
 *.png
 DB_CONNECTION.md
 *.md
+!docs/plans/2026-04-12-line-mini-app-implementation-checklist.md
+!docs/plans/2026-04-13-line-mini-app-100pct-subagent-orchestration.md
+!docs/plans/2026-04-13-line-mini-app-human-vs-ai.md
+!docs/plans/UAT-line-mini-app-b4.md
+!docs/plans/2026-04-13-line-mini-app-gap-closure.md
+!.claude/agents/*.md
 *.bak*
 *.bak-*
 line-mini-app/

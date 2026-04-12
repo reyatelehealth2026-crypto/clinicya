@@ -536,7 +536,7 @@ class BusinessBot
 
         // LIFF Shop URL - ใช้ LIFF URL ถ้ามี liff_id
         if ($liffId) {
-            $shopUrl = "https://liff.line.me/{$liffId}?page=shop&user={$userId}";
+            $shopUrl = "https://liff.line.me/{$liffId}/shop";
         } else {
             // Fallback to direct URL if no LIFF ID
             $shopUrl = rtrim($baseUrl, '/') . "/liff-shop.php?user={$userId}";
@@ -649,7 +649,7 @@ class BusinessBot
         if ($cartCount > 0) {
             // ใช้ LIFF URL ถ้ามี liff_id
             if ($liffId) {
-                $checkoutUrl = "https://liff.line.me/{$liffId}?page=checkout&user={$userId}";
+                $checkoutUrl = "https://liff.line.me/{$liffId}/checkout";
             } else {
                 $checkoutUrl = rtrim($baseUrl, '/') . "/liff-checkout.php?user={$userId}&action=address";
             }
@@ -1179,7 +1179,7 @@ class BusinessBot
             // Use LINE User ID if provided, otherwise use DB ID
             $userParam = $lineUserId ?: $userDbId;
 
-            return "https://liff.line.me/{$liffId}?page=checkout&user={$userParam}";
+            return "https://liff.line.me/{$liffId}/checkout";
         } catch (Exception $e) {
             return null;
         }

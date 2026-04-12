@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+dist
+.omx
+img/*.jpg
+img/*.jpeg
+img/*.png
+.env.local
+.env
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
