@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Banknote, CreditCard, MapPin, Tag } from 'lucide-react'
+import { Banknote, CheckCircle2, CreditCard, Loader2, MapPin, Tag } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
 import { AppShell } from '@/components/miniapp/AppShell'
 import { VerifiedOnlyNotice } from '@/components/miniapp/VerifiedOnlyNotice'
@@ -50,6 +50,7 @@ export function CheckoutClient() {
   const [address, setAddress] = useState('')
   const [promoInput, setPromoInput] = useState('')
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null)
+  const [successOrderId, setSuccessOrderId] = useState<number | null>(null)
 
   const cartQuery = useQuery({
     queryKey: ['shop-cart', lineUserId],
@@ -89,9 +90,11 @@ export function CheckoutClient() {
 
   useEffect(() => {
     if (!lineUserId || cartQuery.isLoading) return
-    if (items.length === 0) {
+    // Only redirect away if we haven't just completed an order
+    if (items.length === 0 && !createMutation.isSuccess) {
       router.replace('/cart')
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lineUserId, items.length, cartQuery.isLoading, router])
 
   const promoMutation = useMutation({
@@ -131,15 +134,9 @@ export function CheckoutClient() {
         toast.error(data.message || 'สั่งซื้อไม่สำเร็จ')
         return
       }
-      toast.success('สั่งซื้อสำเร็จ!')
       queryClient.invalidateQueries({ queryKey: ['shop-cart', lineUserId] })
       queryClient.invalidateQueries({ queryKey: ['my-orders', lineUserId] })
-      const oid = data.order_id
-      if (oid) {
-        router.push(`/order/${oid}`)
-      } else {
-        router.push('/orders')
-      }
+      setSuccessOrderId(data.order_id ?? null)
     },
     onError: (e: Error) => {
       toast.error(e.message || 'เกิดข้อผิดพลาด')
@@ -176,8 +173,72 @@ export function CheckoutClient() {
     )
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !createMutation.isSuccess) {
     return null
+  }
+
+  // Success screen — rendered after order is placed
+  if (successOrderId !== null || createMutation.isSuccess) {
+    return (
+      <AppShell title="สั่งซื้อสำเร็จ" subtitle="">
+        <div className="flex flex-col items-center gap-4 rounded-3xl bg-white p-8 text-center shadow-soft">
+          {/* Big green checkmark */}
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50">
+            <CheckCircle2 size={40} className="text-emerald-500" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">สั่งซื้อสำเร็จ!</h2>
+            {successOrderId ? (
+              <p className="mt-1 text-sm text-slate-500">หมายเลขออเดอร์ #{successOrderId}</p>
+            ) : (
+              <p className="mt-1 text-sm text-slate-500">ระบบรับออเดอร์แล้ว</p>
+            )}
+          </div>
+
+          {/* Next steps */}
+          <div className="w-full rounded-2xl bg-slate-50 p-4 text-left text-sm text-slate-600 space-y-2">
+            <p className="font-semibold text-slate-800">ขั้นตอนถัดไป</p>
+            {payment === 'transfer' ? (
+              <>
+                <p>1. โอนเงินตามบัญชีด้านล่าง หรือผ่าน PromptPay</p>
+                <p>2. อัปโหลดสลิปในหน้าออเดอร์</p>
+                <p>3. ร้านจะยืนยันและจัดส่งสินค้า</p>
+              </>
+            ) : (
+              <>
+                <p>1. ร้านกำลังเตรียมออเดอร์</p>
+                <p>2. ชำระเงินเมื่อได้รับสินค้า (COD)</p>
+                <p>3. ติดตามสถานะในหน้าออเดอร์</p>
+              </>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex w-full flex-col gap-2">
+            {successOrderId ? (
+              <Link
+                href={`/order/${successOrderId}`}
+                className="flex w-full items-center justify-center rounded-2xl bg-line py-3 text-sm font-semibold text-white"
+              >
+                ดูรายละเอียดออเดอร์
+              </Link>
+            ) : null}
+            <Link
+              href="/orders"
+              className="flex w-full items-center justify-center rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-700"
+            >
+              ดูออเดอร์ทั้งหมด
+            </Link>
+            <Link
+              href="/shop"
+              className="text-center text-sm text-slate-500 underline decoration-slate-300"
+            >
+              กลับร้านค้า
+            </Link>
+          </div>
+        </div>
+      </AppShell>
+    )
   }
 
   return (
@@ -321,9 +382,16 @@ export function CheckoutClient() {
           type="button"
           disabled={createMutation.isPending}
           onClick={handleSubmit}
-          className="mt-2 flex w-full items-center justify-center rounded-2xl bg-line py-3.5 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-line py-3.5 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
         >
-          {createMutation.isPending ? 'กำลังส่งคำสั่งซื้อ…' : `ยืนยันสั่งซื้อ ${formatThb(total)}`}
+          {createMutation.isPending ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              กำลังส่งคำสั่งซื้อ…
+            </>
+          ) : (
+            `ยืนยันสั่งซื้อ ${formatThb(total)}`
+          )}
         </button>
       </div>
     </AppShell>

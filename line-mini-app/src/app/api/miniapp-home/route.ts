@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
     const limit = searchParams.get('limit')
     if (limit) url.searchParams.set('limit', limit)
 
+    const surface = searchParams.get('surface')
+    if (surface) url.searchParams.set('surface', surface)
+
     const response = await fetch(url.toString(), {
       method: 'GET',
       cache: 'no-store'

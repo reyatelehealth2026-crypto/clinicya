@@ -34,6 +34,7 @@ try {
         link_label VARCHAR(100) COMMENT 'CTA text เช่น ดูเพิ่มเติม',
         
         -- การแสดงผล
+        surface ENUM('home','shop') DEFAULT 'home' COMMENT 'ใช้แบนเนอร์บนหน้าไหน',
         position ENUM('home_top','home_middle','home_bottom') DEFAULT 'home_top' COMMENT 'ตำแหน่ง',
         display_order INT DEFAULT 0 COMMENT 'ลำดับ',
         is_active TINYINT(1) DEFAULT 1 COMMENT 'เปิด/ปิดการแสดงผล',
@@ -80,6 +81,7 @@ try {
         countdown_ends_at DATETIME DEFAULT NULL COMMENT 'นับถอยหลังถึง (flash_sale only)',
         
         -- การแสดงผล
+        surface ENUM('home','shop') DEFAULT 'home' COMMENT 'ใช้ section บนหน้าไหน',
         display_order INT DEFAULT 0 COMMENT 'ลำดับ',
         is_active TINYINT(1) DEFAULT 1 COMMENT 'เปิด/ปิด',
         

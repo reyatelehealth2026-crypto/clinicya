@@ -94,6 +94,52 @@ function jsonResponse($success, $message = '', $data = []) {
     exit;
 }
 
+function getTableColumns(string $table): array {
+    global $db;
+    static $cache = [];
+
+    if (!isset($cache[$table])) {
+        $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+        $stmt = $db->query("SHOW COLUMNS FROM `{$safeTable}`");
+        $cache[$table] = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $cache[$table][$row['Field']] = true;
+        }
+    }
+
+    return $cache[$table];
+}
+
+function hasTableColumn(string $table, string $column): bool {
+    $columns = getTableColumns($table);
+    return isset($columns[$column]);
+}
+
+function tableExists(string $table): bool {
+    global $db;
+    static $cache = [];
+
+    if (!array_key_exists($table, $cache)) {
+        $stmt = $db->prepare("SHOW TABLES LIKE ?");
+        $stmt->execute([$table]);
+        $cache[$table] = (bool) $stmt->fetchColumn();
+    }
+
+    return $cache[$table];
+}
+
+function decodeJsonArrayValue($value): array {
+    if (is_array($value)) {
+        return $value;
+    }
+    if (!is_string($value) || trim($value) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($value, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
 /**
  * Add derived UI fields for shop (badges, discount %) — safe if columns are missing.
  */
@@ -103,9 +149,9 @@ function enrichProductRow(array &$p) {
     if (!isset($p['is_flash_sale'])) {
         $p['is_flash_sale'] = false;
     }
-    $p['discount_percent'] = null;
+    $p['discount_percent'] = isset($p['discount_percent']) && $p['discount_percent'] !== '' ? (int) $p['discount_percent'] : null;
     $p['promotion_label'] = $p['promotion_label'] ?? null;
-    $p['badges'] = isset($p['badges']) && is_array($p['badges']) ? $p['badges'] : [];
+    $p['badges'] = decodeJsonArrayValue($p['badges'] ?? []);
     if ($sale !== null && $price !== null && $sale < $price && $price > 0) {
         $p['discount_percent'] = (int) round((1 - $sale / $price) * 100);
         if ($p['promotion_label'] === null || $p['promotion_label'] === '') {
@@ -117,6 +163,119 @@ function enrichProductRow(array &$p) {
     }
 }
 
+function getExistingUserIdFromLineUserId(?string $lineUserId): ?int {
+    global $db;
+
+    if (!$lineUserId) {
+        return null;
+    }
+
+    $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ? LIMIT 1");
+    $stmt->execute([$lineUserId]);
+    $userId = $stmt->fetchColumn();
+
+    return $userId ? (int) $userId : null;
+}
+
+function buildShopImageGallery(array $product): array {
+    $gallery = [];
+
+    foreach (decodeJsonArrayValue($product['image_gallery'] ?? []) as $url) {
+        if (is_string($url) && trim($url) !== '') {
+            $gallery[] = trim($url);
+        }
+    }
+
+    foreach (['image_url', 'photo_path'] as $field) {
+        if (!empty($product[$field]) && is_string($product[$field])) {
+            $gallery[] = trim($product[$field]);
+        }
+    }
+
+    return array_values(array_unique(array_filter($gallery)));
+}
+
+function normalizeShopProductRow(array &$product): void {
+    enrichProductRow($product);
+    $product['image_gallery'] = buildShopImageGallery($product);
+    $product['is_favorite'] = !empty($product['is_favorite']);
+    $product['brand'] = $product['manufacturer'] ?? null;
+    $product['category_name'] = $product['category_name'] ?? null;
+    $product['unit'] = $product['unit'] ?? null;
+}
+
+function buildBusinessItemSelectFields(string $alias = 'p'): array {
+    $fields = [
+        "{$alias}.id",
+        "{$alias}.name",
+        hasTableColumn('business_items', 'description') ? "{$alias}.description" : "NULL AS description",
+        "{$alias}.price",
+        "{$alias}.sale_price",
+        hasTableColumn('business_items', 'stock') ? "{$alias}.stock" : "NULL AS stock",
+        hasTableColumn('business_items', 'sku') ? "{$alias}.sku" : "NULL AS sku",
+        hasTableColumn('business_items', 'barcode') ? "{$alias}.barcode" : "NULL AS barcode",
+        hasTableColumn('business_items', 'manufacturer') ? "{$alias}.manufacturer" : "NULL AS manufacturer",
+        hasTableColumn('business_items', 'generic_name') ? "{$alias}.generic_name" : "NULL AS generic_name",
+        hasTableColumn('business_items', 'usage_instructions') ? "{$alias}.usage_instructions" : "NULL AS usage_instructions",
+        hasTableColumn('business_items', 'properties_other') ? "{$alias}.properties_other" : "NULL AS properties_other",
+        hasTableColumn('business_items', 'unit') ? "{$alias}.unit" : "NULL AS unit",
+        "{$alias}.category_id",
+        hasTableColumn('business_items', 'image_gallery') ? "{$alias}.image_gallery" : "NULL AS image_gallery",
+        hasTableColumn('business_items', 'photo_path') ? "{$alias}.photo_path" : "NULL AS photo_path",
+        hasTableColumn('business_items', 'is_flash_sale') ? "{$alias}.is_flash_sale" : "0 AS is_flash_sale",
+        hasTableColumn('business_items', 'promotion_label') ? "{$alias}.promotion_label" : "NULL AS promotion_label",
+        hasTableColumn('business_items', 'badges') ? "{$alias}.badges" : "NULL AS badges",
+    ];
+
+    $imageSources = [];
+    if (hasTableColumn('business_items', 'image_url')) {
+        $imageSources[] = "NULLIF({$alias}.image_url, '')";
+    }
+    if (hasTableColumn('business_items', 'photo_path')) {
+        $imageSources[] = "NULLIF({$alias}.photo_path, '')";
+    }
+
+    $fields[] = (count($imageSources) > 0 ? 'COALESCE(' . implode(', ', $imageSources) . ')' : 'NULL') . ' AS image_url';
+
+    return $fields;
+}
+
+function buildProductSearchWhere(string $alias, string $search, array &$params): ?string {
+    $searchableColumns = ['name', 'description', 'sku', 'manufacturer', 'generic_name'];
+    $parts = [];
+
+    foreach ($searchableColumns as $column) {
+        if ($column === 'name' || hasTableColumn('business_items', $column)) {
+            $parts[] = "{$alias}.{$column} LIKE ?";
+            $params[] = "%{$search}%";
+        }
+    }
+
+    if (empty($parts)) {
+        return null;
+    }
+
+    return '(' . implode(' OR ', $parts) . ')';
+}
+
+function buildProductSortClause(string $sort, string $alias = 'p'): string {
+    $effectivePrice = "COALESCE(NULLIF({$alias}.sale_price, ''), NULLIF({$alias}.price, ''), 0)";
+    $discountExpr = "CASE WHEN {$alias}.price IS NOT NULL AND {$alias}.sale_price IS NOT NULL AND {$alias}.sale_price < {$alias}.price AND {$alias}.price > 0 THEN (1 - {$alias}.sale_price / {$alias}.price) ELSE 0 END";
+
+    switch ($sort) {
+        case 'price_asc':
+            return "{$effectivePrice} ASC, {$alias}.id DESC";
+        case 'price_desc':
+            return "{$effectivePrice} DESC, {$alias}.id DESC";
+        case 'discount':
+            return "{$discountExpr} DESC, {$alias}.id DESC";
+        case 'name_asc':
+            return "{$alias}.name ASC";
+        default:
+            return "{$alias}.id DESC";
+    }
+}
+
 /**
  * Single product for LINE mini-app product detail page (GET action=product_detail).
  */
@@ -125,30 +284,45 @@ function handleGetProductDetail() {
 
     $productId = isset($_GET['product_id']) ? (int) $_GET['product_id'] : 0;
     $lineAccountId = $_GET['line_account_id'] ?? null;
+    $lineUserId = $_GET['line_user_id'] ?? null;
 
     if ($productId <= 0) {
         jsonResponse(false, 'Missing product_id');
     }
 
     try {
-        $sql = "SELECT p.id, p.name, p.description, p.price, p.sale_price, p.image_url, p.stock, p.sku, p.barcode,
-                       p.manufacturer, p.generic_name, p.usage_instructions, p.unit, p.category_id,
-                       c.name AS category_name
+        $wishlistUserId = getExistingUserIdFromLineUserId($lineUserId);
+        $canJoinWishlist = $wishlistUserId !== null && tableExists('user_wishlist');
+        $selectFields = buildBusinessItemSelectFields('p');
+        $selectFields[] = "c.name AS category_name";
+        $selectFields[] = ($canJoinWishlist ? "CASE WHEN uw.id IS NULL THEN 0 ELSE 1 END AS is_favorite" : "0 AS is_favorite");
+
+        $params = [];
+        if ($canJoinWishlist) {
+            $params[] = $wishlistUserId;
+        }
+        $params[] = $productId;
+
+        $sql = "SELECT " . implode(', ', $selectFields) . "
                 FROM business_items p
                 LEFT JOIN business_categories c ON c.id = p.category_id AND c.is_active = 1
+                " . ($canJoinWishlist ? "LEFT JOIN user_wishlist uw ON uw.product_id = p.id AND uw.user_id = ?" : "") . "
                 WHERE p.id = ? AND p.is_active = 1";
-        $params = [$productId];
+
         if ($lineAccountId !== null && $lineAccountId !== '') {
             $sql .= " AND (p.line_account_id = ? OR p.line_account_id IS NULL)";
             $params[] = $lineAccountId;
         }
+
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $product = $stmt->fetch(PDO::FETCH_ASSOC);
+
         if (!$product) {
             jsonResponse(false, 'Product not found');
         }
-        enrichProductRow($product);
+
+        normalizeShopProductRow($product);
         jsonResponse(true, '', ['product' => $product]);
     } catch (Exception $e) {
         jsonResponse(false, 'Error loading product: ' . $e->getMessage());
@@ -225,45 +399,90 @@ function handleGetProducts() {
 
     $lineAccountId = $_GET['line_account_id'] ?? null;
     $categoryId = $_GET['category_id'] ?? null;
-    $search = $_GET['search'] ?? null;
+    $search = trim((string) ($_GET['search'] ?? ''));
+    $sort = $_GET['sort'] ?? 'latest';
+    $brand = trim((string) ($_GET['brand'] ?? ''));
+    $lineUserId = $_GET['line_user_id'] ?? null;
+    $limit = max(1, min(24, (int) ($_GET['limit'] ?? 12)));
+    $offset = max(0, (int) ($_GET['offset'] ?? 0));
 
     try {
-        $sql = "SELECT id, name, description, price, sale_price, image_url, stock, sku, barcode,
-                       manufacturer, generic_name, usage_instructions, unit, category_id
-                FROM business_items WHERE is_active = 1";
-        $params = [];
+        $wishlistUserId = getExistingUserIdFromLineUserId($lineUserId);
+        $canJoinWishlist = $wishlistUserId !== null && tableExists('user_wishlist');
+        $selectFields = buildBusinessItemSelectFields('p');
+        $selectFields[] = "c.name AS category_name";
+        $selectFields[] = ($canJoinWishlist ? "CASE WHEN uw.id IS NULL THEN 0 ELSE 1 END AS is_favorite" : "0 AS is_favorite");
+
+        $whereParts = ["p.is_active = 1"];
+        $whereParams = [];
 
         if ($lineAccountId) {
-            $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
-            $params[] = $lineAccountId;
+            $whereParts[] = "(p.line_account_id = ? OR p.line_account_id IS NULL)";
+            $whereParams[] = $lineAccountId;
         }
 
         if ($categoryId) {
-            $sql .= " AND category_id = ?";
-            $params[] = $categoryId;
+            $whereParts[] = "p.category_id = ?";
+            $whereParams[] = $categoryId;
         }
 
         if ($search) {
-            $sql .= " AND (name LIKE ? OR description LIKE ? OR sku LIKE ?)";
-            $searchTerm = "%{$search}%";
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
-            $params[] = $searchTerm;
+            $searchWhere = buildProductSearchWhere('p', $search, $whereParams);
+            if ($searchWhere !== null) {
+                $whereParts[] = $searchWhere;
+            }
         }
 
-        $sql .= " ORDER BY id DESC LIMIT 100";
+        if ($brand !== '') {
+            if (!hasTableColumn('business_items', 'manufacturer')) {
+                jsonResponse(true, '', [
+                    'products' => [],
+                    'categories' => [],
+                    'brands' => [],
+                    'offset' => $offset,
+                    'limit' => $limit,
+                    'total' => 0,
+                    'has_more' => false,
+                ]);
+            }
+            $whereParts[] = "p.manufacturer = ?";
+            $whereParams[] = $brand;
+        }
+
+        $whereSql = implode(' AND ', $whereParts);
+        $sql = "SELECT " . implode(', ', $selectFields) . "
+                FROM business_items p
+                LEFT JOIN business_categories c ON c.id = p.category_id AND c.is_active = 1
+                " . ($canJoinWishlist ? "LEFT JOIN user_wishlist uw ON uw.product_id = p.id AND uw.user_id = ?" : "") . "
+                WHERE {$whereSql}
+                ORDER BY " . buildProductSortClause($sort, 'p') . "
+                LIMIT ? OFFSET ?";
 
         $stmt = $db->prepare($sql);
-        $stmt->execute($params);
+        $bindIndex = 1;
+        if ($canJoinWishlist) {
+            $stmt->bindValue($bindIndex++, $wishlistUserId, PDO::PARAM_INT);
+        }
+        foreach ($whereParams as $param) {
+            $stmt->bindValue($bindIndex++, $param);
+        }
+        $stmt->bindValue($bindIndex++, $limit, PDO::PARAM_INT);
+        $stmt->bindValue($bindIndex, $offset, PDO::PARAM_INT);
+        $stmt->execute();
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($products as &$row) {
-            enrichProductRow($row);
+            normalizeShopProductRow($row);
         }
         unset($row);
 
+        $countStmt = $db->prepare("SELECT COUNT(*) FROM business_items p WHERE {$whereSql}");
+        $countStmt->execute($whereParams);
+        $total = (int) $countStmt->fetchColumn();
+
         // Get categories
-        $catSql = "SELECT id, name FROM business_categories WHERE is_active = 1";
+        $catIconExpr = hasTableColumn('business_categories', 'icon_url') ? 'icon_url' : 'NULL AS icon_url';
+        $catSql = "SELECT id, name, {$catIconExpr} FROM business_categories WHERE is_active = 1";
         $catParams = [];
         if ($lineAccountId) {
             $catSql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
@@ -274,7 +493,37 @@ function handleGetProducts() {
         $catStmt->execute($catParams);
         $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        jsonResponse(true, '', ['products' => $products, 'categories' => $categories]);
+        $brands = [];
+        if (hasTableColumn('business_items', 'manufacturer')) {
+            $brandSql = "SELECT DISTINCT p.manufacturer
+                         FROM business_items p
+                         WHERE p.is_active = 1
+                           AND p.manufacturer IS NOT NULL
+                           AND p.manufacturer != ''";
+            $brandParams = [];
+            if ($lineAccountId) {
+                $brandSql .= " AND (p.line_account_id = ? OR p.line_account_id IS NULL)";
+                $brandParams[] = $lineAccountId;
+            }
+            if ($categoryId) {
+                $brandSql .= " AND p.category_id = ?";
+                $brandParams[] = $categoryId;
+            }
+            $brandSql .= " ORDER BY p.manufacturer ASC LIMIT 16";
+            $brandStmt = $db->prepare($brandSql);
+            $brandStmt->execute($brandParams);
+            $brands = array_values(array_filter(array_map(static fn(array $row) => $row['manufacturer'] ?? null, $brandStmt->fetchAll(PDO::FETCH_ASSOC))));
+        }
+
+        jsonResponse(true, '', [
+            'products' => $products,
+            'categories' => $categories,
+            'brands' => $brands,
+            'offset' => $offset,
+            'limit' => $limit,
+            'total' => $total,
+            'has_more' => $offset + $limit < $total,
+        ]);
     } catch (Exception $e) {
         jsonResponse(false, 'Error loading products: ' . $e->getMessage());
     }

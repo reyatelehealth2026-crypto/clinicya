@@ -1,5 +1,5 @@
-import { PhaseDPlaceholder } from '@/components/miniapp/PhaseDPlaceholder'
+import { WishlistClient } from '@/components/miniapp/WishlistClient'
 
 export default function WishlistPage() {
-  return <PhaseDPlaceholder title="รายการโปรด" subtitle="Phase D" />
+  return <WishlistClient />
 }

@@ -1,5 +1,5 @@
-import { PhaseDPlaceholder } from '@/components/miniapp/PhaseDPlaceholder'
+import { VideoClient } from '@/components/miniapp/VideoClient'
 
 export default function VideoPage() {
-  return <PhaseDPlaceholder title="วิดีโอคำปรึกษา" subtitle="Phase D" />
+  return <VideoClient />
 }

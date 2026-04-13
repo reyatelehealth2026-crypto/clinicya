@@ -12,8 +12,10 @@ import {
   CreditCard,
   Gift,
   Heart,
+  LogOut,
   Package,
   Pill,
+  Star,
   Stethoscope,
   Store,
   UserPlus,
@@ -89,9 +91,30 @@ function ProfileMenuRow({
   )
 }
 
+function handleLogout() {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const liff = (window as any).liff
+    if (liff && typeof liff.logout === 'function') {
+      liff.logout()
+    }
+  } catch {
+    // not in LIFF context — fall through
+  }
+  try {
+    sessionStorage.clear()
+  } catch {
+    // ignore
+  }
+  window.location.href = '/'
+}
+
 export function ProfileClient() {
   const line = useLineContext()
   const lineUserId = line.profile?.userId || ''
+  const displayName = line.profile?.displayName || ''
+  const pictureUrl = line.profile?.pictureUrl || null
+  const avatarFallback = displayName ? displayName.charAt(0).toUpperCase() : '?'
 
   const checkQuery = useQuery({
     queryKey: ['member-check', lineUserId],
@@ -105,9 +128,42 @@ export function ProfileClient() {
     enabled: Boolean(lineUserId)
   })
 
+  const member = memberQuery.data?.member
+  const tier = memberQuery.data?.tier
+
   return (
     <AppShell title="โปรไฟล์" subtitle="สมาชิกและบริการ">
       {line.error ? <VerifiedOnlyNotice title="LINE bootstrap issue" description={line.error} /> : null}
+
+      {/* Gradient hero header */}
+      {lineUserId ? (
+        <div className="-mx-4 -mt-5 mb-2 gradient-card px-4 pb-14 pt-6 text-white">
+          <div className="flex flex-col items-center gap-3">
+            {/* Avatar */}
+            {pictureUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={pictureUrl}
+                alt={displayName}
+                className="h-16 w-16 rounded-full border-2 border-white/30 object-cover shadow-lg ring-2 ring-white/20"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-white/30 bg-white/20 text-xl font-bold shadow-lg ring-2 ring-white/20">
+                {avatarFallback}
+              </div>
+            )}
+            {/* Name */}
+            <div className="text-center">
+              <p className="text-base font-bold">{displayName || 'LINE User'}</p>
+              {member?.phone ? (
+                <p className="mt-0.5 text-xs text-white/60">{member.phone}</p>
+              ) : member?.email ? (
+                <p className="mt-0.5 text-xs text-white/60">{member.email}</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {!lineUserId || memberQuery.isLoading ? <LoadingSkeleton /> : null}
 
@@ -122,9 +178,43 @@ export function ProfileClient() {
         </div>
       ) : null}
 
-      {memberQuery.data?.member && memberQuery.data?.tier ? (
+      {member && tier ? (
         <>
-          <MemberCard member={memberQuery.data.member} tier={memberQuery.data.tier} />
+          {/* Stats card */}
+          <div className="-mt-8 rounded-2xl bg-white p-4 shadow-card">
+            <div className="grid grid-cols-3 divide-x divide-slate-100">
+              {/* Points */}
+              <div className="flex flex-col items-center gap-1 px-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50">
+                  <Coins size={16} className="text-emerald-600" />
+                </div>
+                <p className="text-sm font-bold tabular-nums text-slate-900">
+                  {member.points.toLocaleString()}
+                </p>
+                <p className="text-[10px] text-slate-400">คะแนน</p>
+              </div>
+              {/* Tier */}
+              <div className="flex flex-col items-center gap-1 px-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-50">
+                  <Star size={16} className="text-violet-600" />
+                </div>
+                <p className="text-sm font-bold text-slate-900">{tier.tier_name || 'Bronze'}</p>
+                <p className="text-[10px] text-slate-400">ระดับ</p>
+              </div>
+              {/* Orders */}
+              <Link href="/orders" className="flex flex-col items-center gap-1 px-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50">
+                  <Package size={16} className="text-blue-600" />
+                </div>
+                <p className="text-sm font-bold tabular-nums text-slate-900">
+                  {(member.total_orders ?? 0).toLocaleString()}
+                </p>
+                <p className="text-[10px] text-slate-400">ออเดอร์</p>
+              </Link>
+            </div>
+          </div>
+
+          <MemberCard member={member} tier={tier} />
 
           <div className="space-y-2">
             <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">สมาชิก</p>
@@ -174,6 +264,20 @@ export function ProfileClient() {
             <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">ช้อปปิ้ง</p>
             <QuickLink href="/shop" icon={Store} title="ร้านค้า" description="เลือกสินค้าและสั่งซื้อ" />
             <QuickLink href="/orders" icon={Package} title="ออเดอร์ของฉัน" description="ติดตามคำสั่งซื้อ" />
+          </div>
+
+          {/* Logout */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-soft transition-colors hover:bg-red-50"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50">
+                <LogOut size={18} className="text-red-500" />
+              </div>
+              <span className="flex-1 text-left text-sm font-medium text-red-500">ออกจากระบบ</span>
+            </button>
           </div>
         </>
       ) : null}

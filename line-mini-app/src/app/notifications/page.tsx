@@ -1,5 +1,5 @@
-import { PhaseDPlaceholder } from '@/components/miniapp/PhaseDPlaceholder'
+import { RemindersClient } from '@/components/miniapp/RemindersClient'
 
 export default function NotificationsPage() {
-  return <PhaseDPlaceholder title="การแจ้งเตือน" subtitle="Phase D" />
+  return <RemindersClient />
 }

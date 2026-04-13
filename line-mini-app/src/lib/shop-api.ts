@@ -5,6 +5,14 @@ export type ShopProductBadge = {
   color?: string
 }
 
+export type ProductSort = 'latest' | 'discount' | 'price_asc' | 'price_desc' | 'name_asc'
+
+export type ShopCategory = {
+  id: number
+  name: string
+  icon_url?: string | null
+}
+
 export type ShopProduct = {
   id: number
   name: string
@@ -12,9 +20,18 @@ export type ShopProduct = {
   price?: number | string | null
   sale_price?: number | string | null
   image_url?: string | null
+  image_gallery?: string[]
   stock?: number | null
   sku?: string | null
+  barcode?: string | null
   category_id?: number | null
+  manufacturer?: string | null
+  brand?: string | null
+  generic_name?: string | null
+  usage_instructions?: string | null
+  properties_other?: string | null
+  unit?: string | null
+  is_favorite?: boolean
   /** From PHP `enrichProductRow` or derived client-side */
   is_flash_sale?: boolean
   promotion_label?: string | null
@@ -43,18 +60,46 @@ export type TransferInfo = {
 export type ProductsResponse = {
   success: boolean
   products?: ShopProduct[]
-  categories?: { id: number; name: string }[]
+  categories?: ShopCategory[]
+  brands?: string[]
+  total?: number
+  offset?: number
+  limit?: number
+  has_more?: boolean
   transfer_info?: TransferInfo
   message?: string
 }
 
-export async function fetchProducts(categoryId?: string | null, search?: string): Promise<ProductsResponse> {
+export type FetchProductsInput = {
+  categoryId?: string | null
+  search?: string
+  limit?: number
+  offset?: number
+  sort?: ProductSort
+  brand?: string | null
+  lineUserId?: string
+}
+
+export async function fetchProducts({
+  categoryId,
+  search,
+  limit,
+  offset,
+  sort,
+  brand,
+  lineUserId,
+}: FetchProductsInput = {}): Promise<ProductsResponse> {
   const params = new URLSearchParams({
     action: 'products',
     line_account_id: String(appConfig.lineAccountId)
   })
   if (categoryId) params.set('category_id', categoryId)
   if (search && search.trim() !== '') params.set('search', search.trim())
+  if (limit != null) params.set('limit', String(limit))
+  if (offset != null) params.set('offset', String(offset))
+  if (sort) params.set('sort', sort)
+  if (brand && brand.trim() !== '') params.set('brand', brand.trim())
+  if (lineUserId) params.set('line_user_id', lineUserId)
   const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
   return res.json()
 }
@@ -66,12 +111,13 @@ export type ProductDetailResponse = {
 }
 
 /** Single product — `action=product_detail` on `api/checkout.php` */
-export async function fetchProductDetail(productId: number): Promise<ProductDetailResponse> {
+export async function fetchProductDetail(productId: number, lineUserId?: string): Promise<ProductDetailResponse> {
   const params = new URLSearchParams({
     action: 'product_detail',
     product_id: String(productId),
     line_account_id: String(appConfig.lineAccountId)
   })
+  if (lineUserId) params.set('line_user_id', lineUserId)
   const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
   return res.json()
 }

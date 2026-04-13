@@ -1,5 +1,5 @@
-import { PhaseDPlaceholder } from '@/components/miniapp/PhaseDPlaceholder'
+import { AppointmentsClient } from '@/components/miniapp/AppointmentsClient'
 
 export default function AppointmentsPage() {
-  return <PhaseDPlaceholder title="นัดหมาย" subtitle="Phase D" />
+  return <AppointmentsClient />
 }

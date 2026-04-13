@@ -10,6 +10,8 @@ class MiniAppContentService
 {
     private PDO $db;
     private ?int $lineAccountId;
+    /** @var array<string, array<string, bool>> */
+    private array $columnCache = [];
 
     public function __construct(PDO $db, ?int $lineAccountId = null)
     {
@@ -24,7 +26,7 @@ class MiniAppContentService
     /**
      * Get active banners for display (filtered by date range + line_account_id)
      */
-    public function getActiveBanners(string $position = 'home_top', int $limit = 10): array
+    public function getActiveBanners(string $position = 'home_top', int $limit = 10, string $surface = 'home'): array
     {
         $sql = "SELECT * FROM miniapp_banners 
                 WHERE is_active = 1 
@@ -32,6 +34,11 @@ class MiniAppContentService
                   AND (start_date IS NULL OR start_date <= NOW())
                   AND (end_date IS NULL OR end_date >= NOW())";
         $params = [':position' => $position];
+
+        if ($this->supportsSurfaceField('miniapp_banners')) {
+            $sql .= " AND surface = :surface";
+            $params[':surface'] = $surface;
+        }
 
         $sql .= $this->lineAccountFilter('miniapp_banners');
         $sql .= " ORDER BY display_order ASC, id DESC LIMIT :limit";
@@ -57,7 +64,7 @@ class MiniAppContentService
             $params[':laid'] = $this->lineAccountId;
         }
 
-        $sql .= " ORDER BY position ASC, display_order ASC, id DESC";
+        $sql .= " ORDER BY " . ($this->supportsSurfaceField('miniapp_banners') ? 'surface ASC, ' : '') . "position ASC, display_order ASC, id DESC";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
 
@@ -74,33 +81,60 @@ class MiniAppContentService
 
     public function createBanner(array $data): int
     {
-        $sql = "INSERT INTO miniapp_banners 
-                (title, subtitle, description, image_url, image_mobile_url, 
-                 link_type, link_value, link_label, position, display_order, 
-                 is_active, bg_color, start_date, end_date, line_account_id)
-                VALUES 
-                (:title, :subtitle, :description, :image_url, :image_mobile_url,
-                 :link_type, :link_value, :link_label, :position, :display_order,
-                 :is_active, :bg_color, :start_date, :end_date, :line_account_id)";
+        $columns = [
+            'title', 'subtitle', 'description', 'image_url', 'image_mobile_url',
+            'link_type', 'link_value', 'link_label', 'position', 'display_order',
+            'is_active', 'bg_color', 'start_date', 'end_date', 'line_account_id'
+        ];
+        $params = $this->bannerParams($data);
+
+        if ($this->supportsSurfaceField('miniapp_banners')) {
+            $columns[] = 'surface';
+        } else {
+            unset($params[':surface']);
+        }
+
+        $placeholders = array_map(static fn(string $column) => ':' . $column, $columns);
+        $sql = sprintf(
+            'INSERT INTO miniapp_banners (%s) VALUES (%s)',
+            implode(', ', $columns),
+            implode(', ', $placeholders)
+        );
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute($this->bannerParams($data));
+        $stmt->execute($params);
         return (int) $this->db->lastInsertId();
     }
 
     public function updateBanner(int $id, array $data): bool
     {
-        $sql = "UPDATE miniapp_banners SET
-                title = :title, subtitle = :subtitle, description = :description,
-                image_url = :image_url, image_mobile_url = :image_mobile_url,
-                link_type = :link_type, link_value = :link_value, link_label = :link_label,
-                position = :position, display_order = :display_order,
-                is_active = :is_active, bg_color = :bg_color,
-                start_date = :start_date, end_date = :end_date, line_account_id = :line_account_id
-                WHERE id = :id";
-
         $params = $this->bannerParams($data);
         $params[':id'] = $id;
+        $assignments = [
+            'title = :title',
+            'subtitle = :subtitle',
+            'description = :description',
+            'image_url = :image_url',
+            'image_mobile_url = :image_mobile_url',
+            'link_type = :link_type',
+            'link_value = :link_value',
+            'link_label = :link_label',
+            'position = :position',
+            'display_order = :display_order',
+            'is_active = :is_active',
+            'bg_color = :bg_color',
+            'start_date = :start_date',
+            'end_date = :end_date',
+            'line_account_id = :line_account_id',
+        ];
+
+        if ($this->supportsSurfaceField('miniapp_banners')) {
+            $assignments[] = 'surface = :surface';
+        } else {
+            unset($params[':surface']);
+        }
+
+        $sql = "UPDATE miniapp_banners SET\n                " . implode(",\n                ", $assignments) . "\n                WHERE id = :id";
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute($params);
@@ -118,10 +152,14 @@ class MiniAppContentService
         return $stmt->execute([$id]);
     }
 
-    public function getBannerCount(): int
+    public function getBannerCount(?string $surface = null): int
     {
         $sql = "SELECT COUNT(*) FROM miniapp_banners WHERE 1=1";
         $params = [];
+        if ($surface !== null && $this->supportsSurfaceField('miniapp_banners')) {
+            $sql .= " AND surface = ?";
+            $params[] = $surface;
+        }
         if ($this->lineAccountId !== null) {
             $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
             $params[] = $this->lineAccountId;
@@ -138,17 +176,24 @@ class MiniAppContentService
     /**
      * Get active sections with their products (for display)
      */
-    public function getActiveSections(int $limit = 10): array
+    public function getActiveSections(int $limit = 10, string $surface = 'home'): array
     {
         $sql = "SELECT * FROM miniapp_home_sections 
                 WHERE is_active = 1
                   AND (start_date IS NULL OR start_date <= NOW())
                   AND (end_date IS NULL OR end_date >= NOW())";
 
+        if ($this->supportsSurfaceField('miniapp_home_sections')) {
+            $sql .= " AND surface = :surface";
+        }
+
         $sql .= $this->lineAccountFilter('miniapp_home_sections');
         $sql .= " ORDER BY display_order ASC, id ASC LIMIT :limit";
 
         $stmt = $this->db->prepare($sql);
+        if ($this->supportsSurfaceField('miniapp_home_sections')) {
+            $stmt->bindValue(':surface', $surface);
+        }
         $this->bindLineAccount($stmt);
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
@@ -171,7 +216,7 @@ class MiniAppContentService
             $sql .= " AND (line_account_id = :laid OR line_account_id IS NULL)";
             $params[':laid'] = $this->lineAccountId;
         }
-        $sql .= " ORDER BY display_order ASC, id DESC";
+        $sql .= " ORDER BY " . ($this->supportsSurfaceField('miniapp_home_sections') ? 'surface ASC, ' : '') . "display_order ASC, id DESC";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -187,32 +232,58 @@ class MiniAppContentService
 
     public function createSection(array $data): int
     {
-        $sql = "INSERT INTO miniapp_home_sections 
-                (section_key, title, subtitle, section_style, bg_color, text_color,
-                 icon_url, countdown_ends_at, display_order, is_active,
-                 start_date, end_date, line_account_id)
-                VALUES
-                (:section_key, :title, :subtitle, :section_style, :bg_color, :text_color,
-                 :icon_url, :countdown_ends_at, :display_order, :is_active,
-                 :start_date, :end_date, :line_account_id)";
+        $columns = [
+            'section_key', 'title', 'subtitle', 'section_style', 'bg_color', 'text_color',
+            'icon_url', 'countdown_ends_at', 'display_order', 'is_active',
+            'start_date', 'end_date', 'line_account_id'
+        ];
+        $params = $this->sectionParams($data);
+
+        if ($this->supportsSurfaceField('miniapp_home_sections')) {
+            $columns[] = 'surface';
+        } else {
+            unset($params[':surface']);
+        }
+
+        $placeholders = array_map(static fn(string $column) => ':' . $column, $columns);
+        $sql = sprintf(
+            'INSERT INTO miniapp_home_sections (%s) VALUES (%s)',
+            implode(', ', $columns),
+            implode(', ', $placeholders)
+        );
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute($this->sectionParams($data));
+        $stmt->execute($params);
         return (int) $this->db->lastInsertId();
     }
 
     public function updateSection(int $id, array $data): bool
     {
-        $sql = "UPDATE miniapp_home_sections SET
-                section_key = :section_key, title = :title, subtitle = :subtitle,
-                section_style = :section_style, bg_color = :bg_color, text_color = :text_color,
-                icon_url = :icon_url, countdown_ends_at = :countdown_ends_at,
-                display_order = :display_order, is_active = :is_active,
-                start_date = :start_date, end_date = :end_date, line_account_id = :line_account_id
-                WHERE id = :id";
-
         $params = $this->sectionParams($data);
         $params[':id'] = $id;
+        $assignments = [
+            'section_key = :section_key',
+            'title = :title',
+            'subtitle = :subtitle',
+            'section_style = :section_style',
+            'bg_color = :bg_color',
+            'text_color = :text_color',
+            'icon_url = :icon_url',
+            'countdown_ends_at = :countdown_ends_at',
+            'display_order = :display_order',
+            'is_active = :is_active',
+            'start_date = :start_date',
+            'end_date = :end_date',
+            'line_account_id = :line_account_id',
+        ];
+
+        if ($this->supportsSurfaceField('miniapp_home_sections')) {
+            $assignments[] = 'surface = :surface';
+        } else {
+            unset($params[':surface']);
+        }
+
+        $sql = "UPDATE miniapp_home_sections SET\n                " . implode(",\n                ", $assignments) . "\n                WHERE id = :id";
 
         $stmt = $this->db->prepare($sql);
         return $stmt->execute($params);
@@ -230,10 +301,14 @@ class MiniAppContentService
         return $stmt->execute([$id]);
     }
 
-    public function getSectionCount(): int
+    public function getSectionCount(?string $surface = null): int
     {
         $sql = "SELECT COUNT(*) FROM miniapp_home_sections WHERE 1=1";
         $params = [];
+        if ($surface !== null && $this->supportsSurfaceField('miniapp_home_sections')) {
+            $sql .= " AND surface = ?";
+            $params[] = $surface;
+        }
         if ($this->lineAccountId !== null) {
             $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
             $params[] = $this->lineAccountId;
@@ -379,11 +454,11 @@ class MiniAppContentService
     // HOME ALL — single call to get everything
     // =========================================================================
 
-    public function getHomeAll(): array
+    public function getHomeAll(string $surface = 'home'): array
     {
         return [
-            'banners' => $this->getActiveBanners('home_top'),
-            'sections' => $this->getActiveSections()
+            'banners' => $this->getActiveBanners('home_top', 10, $surface),
+            'sections' => $this->getActiveSections(10, $surface)
         ];
     }
 
@@ -478,6 +553,7 @@ class MiniAppContentService
             ':start_date' => !empty($d['start_date']) ? $d['start_date'] : null,
             ':end_date' => !empty($d['end_date']) ? $d['end_date'] : null,
             ':line_account_id' => $this->lineAccountId,
+            ':surface' => $d['surface'] ?? 'home',
         ];
     }
 
@@ -497,6 +573,7 @@ class MiniAppContentService
             ':start_date' => !empty($d['start_date']) ? $d['start_date'] : null,
             ':end_date' => !empty($d['end_date']) ? $d['end_date'] : null,
             ':line_account_id' => $this->lineAccountId,
+            ':surface' => $d['surface'] ?? 'home',
         ];
     }
 
@@ -547,5 +624,24 @@ class MiniAppContentService
         if ($this->lineAccountId !== null) {
             $stmt->bindValue(':laid', $this->lineAccountId, PDO::PARAM_INT);
         }
+    }
+
+    private function supportsSurfaceField(string $table): bool
+    {
+        return $this->hasColumn($table, 'surface');
+    }
+
+    private function hasColumn(string $table, string $column): bool
+    {
+        if (!isset($this->columnCache[$table])) {
+            $safeTable = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+            $stmt = $this->db->query("SHOW COLUMNS FROM `{$safeTable}`");
+            $this->columnCache[$table] = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $this->columnCache[$table][$row['Field']] = true;
+            }
+        }
+
+        return isset($this->columnCache[$table][$column]);
     }
 }

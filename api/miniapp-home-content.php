@@ -33,13 +33,14 @@ try {
 
 $action = $_GET['action'] ?? 'home_all';
 $lineAccountId = isset($_GET['line_account_id']) ? (int) $_GET['line_account_id'] : null;
+$surface = $_GET['surface'] ?? 'home';
 
 $service = new MiniAppContentService($db, $lineAccountId);
 
 try {
     switch ($action) {
         case 'home_all':
-            $data = $service->getHomeAll();
+            $data = $service->getHomeAll($surface);
             echo json_encode([
                 'success' => true,
                 'data' => $data,
@@ -50,7 +51,7 @@ try {
         case 'banners':
             $position = $_GET['position'] ?? 'home_top';
             $limit = min(20, max(1, (int) ($_GET['limit'] ?? 10)));
-            $banners = $service->getActiveBanners($position, $limit);
+            $banners = $service->getActiveBanners($position, $limit, $surface);
             echo json_encode([
                 'success' => true,
                 'data' => ['banners' => $banners],
@@ -61,7 +62,7 @@ try {
 
         case 'sections':
             $limit = min(20, max(1, (int) ($_GET['limit'] ?? 10)));
-            $sections = $service->getActiveSections($limit);
+            $sections = $service->getActiveSections($limit, $surface);
             echo json_encode([
                 'success' => true,
                 'data' => ['sections' => $sections],

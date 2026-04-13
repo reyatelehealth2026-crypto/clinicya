@@ -1,5 +1,5 @@
-import { PhaseDPlaceholder } from '@/components/miniapp/PhaseDPlaceholder'
+import { HealthClient } from '@/components/miniapp/HealthClient'
 
 export default function HealthProfilePage() {
-  return <PhaseDPlaceholder title="โปรไฟล์สุขภาพ" subtitle="Phase D" />
+  return <HealthClient />
 }
