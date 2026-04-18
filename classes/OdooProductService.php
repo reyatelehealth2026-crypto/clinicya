@@ -59,15 +59,34 @@ class OdooProductService
     private function normalizeProduct(array $product)
     {
         $prices = $product['product_price_ids'] ?? [];
-        $onlinePrice = null;
+        $onlinePrice = null;        // tier '005' (legacy — คง fallback ไว้เพื่อ backward compat)
+        $sellPrice = null;          // tier '03' / '003' (primary — ดู ODOO_PRODUCT_SYNC_PHP.md §4)
 
         if (is_array($prices)) {
             foreach ($prices as $row) {
-                if (($row['price_code'] ?? '') === '005') {
+                $code = (string) ($row['price_code'] ?? '');
+                // normalize: '03' === '003' === '3'
+                $normalizedCode = ltrim($code, '0');
+                if ($normalizedCode === '') {
+                    $normalizedCode = '0';
+                }
+
+                if ($code === '005' && $onlinePrice === null) {
                     $onlinePrice = (float) ($row['price'] ?? 0);
-                    break;
+                }
+                if ($normalizedCode === '3' && $sellPrice === null) {
+                    $sellPrice = (float) ($row['price'] ?? 0);
                 }
             }
+        }
+
+        // fallback: ถ้าไม่มี tier 03 → ใช้ list_price; ถ้าไม่มี tier 005 → ใช้ tier 03
+        $listPrice = (float) ($product['list_price'] ?? 0);
+        if ($sellPrice === null) {
+            $sellPrice = $listPrice;
+        }
+        if ($onlinePrice === null) {
+            $onlinePrice = $sellPrice;
         }
 
         return [
@@ -78,11 +97,52 @@ class OdooProductService
             'generic_name' => $product['generic_name'] ?? '',
             'barcode' => $product['barcode'] ?? '',
             'category' => $product['category'] ?? '',
-            'list_price' => (float) ($product['list_price'] ?? 0),
+            'list_price' => $listPrice,
             'online_price' => $onlinePrice,
+            'sell_price' => $sellPrice,             // NEW: price tier 03 (primary)
             'saleable_qty' => (float) ($product['saleable_qty'] ?? 0),
             'active' => !empty($product['active'])
         ];
+    }
+
+    /**
+     * Derive drug_type จาก drug_type_rules table
+     * Priority: category (priority ASC) → name_contains → sku_prefix
+     * กฎที่ line_account_id = NULL ใช้กับทุกบัญชี; ถ้ามี rule เฉพาะบัญชีจะ override
+     *
+     * @param array $product normalized product จาก normalizeProduct()
+     * @return string|null drug_type หรือ null ถ้าไม่ match กฎใดเลย
+     */
+    public function deriveDrugType(array $product): ?string
+    {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT drug_type FROM drug_type_rules
+                WHERE is_active = 1
+                  AND (line_account_id IS NULL OR line_account_id = :lid)
+                  AND (
+                        (match_type = 'category'      AND match_value = :cat)
+                     OR (match_type = 'name_contains' AND :name LIKE CONCAT('%', match_value, '%'))
+                     OR (match_type = 'sku_prefix'    AND :sku LIKE CONCAT(match_value, '%'))
+                  )
+                ORDER BY
+                  CASE WHEN line_account_id IS NULL THEN 1 ELSE 0 END,
+                  priority ASC
+                LIMIT 1
+            ");
+            $stmt->execute([
+                ':lid'  => $this->lineAccountId ?? 0,
+                ':cat'  => (string) ($product['category']     ?? ''),
+                ':name' => (string) ($product['name']         ?? ''),
+                ':sku'  => (string) ($product['sku']          ?? ''),
+            ]);
+            $result = $stmt->fetchColumn();
+            return $result !== false && $result !== null ? (string) $result : null;
+        } catch (Exception $e) {
+            // ถ้าตาราง drug_type_rules ยังไม่มี (migration ยังไม่รัน) return null ไม่ throw
+            error_log('deriveDrugType: ' . $e->getMessage());
+            return null;
+        }
     }
 
     private function request($endpoint, array $payload)

@@ -1,0 +1,517 @@
+<?php
+/**
+ * Tab: catalog-sync — โหลดรายการสินค้าหลัก
+ * Ref: docs/ODOO_PRODUCT_SYNC_PHP.md §12.2
+ *
+ * Workbench-style page สำหรับโหลด/อัพเดตรายการสินค้าหลักจาก Odoo (`ineco_gc/get_product`)
+ * ลง cache `odoo_products_cache`
+ *
+ * Panels:
+ *   1. สถานะการเชื่อมต่อ    — test connection
+ *   2. โหลดช่วงตัวเลข      — POST action=odoo_sync_cache (sync_start, sync_limit)
+ *   3. โหลดเฉพาะที่เปลี่ยน  — POST action=odoo_sync_incremental
+ *   4. อัพเดตที่โหลดแล้ว    — POST action=odoo_resync_existing (ใหม่)
+ *   5. สรุป cache          — last_synced_at, total, active, next_offset
+ *   6. Drug type rules     — link ไปหน้าจัดการ rules (ถ้ามี)
+ *
+ * หมายเหตุ: ไม่มี bulk storefront toggle ใน tab นี้ — ไปที่ tab=storefront แทน
+ */
+
+if (file_exists(__DIR__ . '/../../classes/OdooProductService.php')) {
+    require_once __DIR__ . '/../../classes/OdooProductService.php';
+}
+
+$currentBotId = (int) ($_SESSION['current_bot_id'] ?? 1);
+$cacheTable   = 'odoo_products_cache';
+$stateTable   = 'odoo_products_sync_state';
+
+// ─── Ensure cache tables exist ────────────────────────────────────────────────
+$prepError = null;
+try {
+    $db->exec("CREATE TABLE IF NOT EXISTS {$cacheTable} (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        line_account_id INT NOT NULL,
+        product_id VARCHAR(64) DEFAULT NULL,
+        product_code VARCHAR(64) NOT NULL,
+        sku VARCHAR(100) DEFAULT NULL,
+        name VARCHAR(255) DEFAULT NULL,
+        generic_name VARCHAR(255) DEFAULT NULL,
+        barcode VARCHAR(100) DEFAULT NULL,
+        category VARCHAR(150) DEFAULT NULL,
+        list_price DECIMAL(12,2) DEFAULT 0,
+        online_price DECIMAL(12,2) DEFAULT 0,
+        saleable_qty DECIMAL(12,2) DEFAULT 0,
+        is_active TINYINT(1) DEFAULT 1,
+        last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_line_product_code (line_account_id, product_code),
+        INDEX idx_line_name (line_account_id, name),
+        INDEX idx_line_sku (line_account_id, sku),
+        INDEX idx_line_category (line_account_id, category),
+        INDEX idx_line_updated (line_account_id, updated_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $db->exec("CREATE TABLE IF NOT EXISTS {$stateTable} (
+        line_account_id INT NOT NULL PRIMARY KEY,
+        next_offset INT NOT NULL DEFAULT 1,
+        last_incremental_sync_at DATETIME DEFAULT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+} catch (Exception $e) {
+    $prepError = 'ไม่สามารถเตรียมตาราง cache: ' . $e->getMessage();
+}
+
+// ─── Check migration (storefront_enabled column) ──────────────────────────────
+$hasStorefrontCol = false;
+try {
+    $check = $db->query("SHOW COLUMNS FROM {$cacheTable} LIKE 'storefront_enabled'");
+    $hasStorefrontCol = $check && $check->rowCount() > 0;
+} catch (Exception $e) {
+    $hasStorefrontCol = false;
+}
+$hasDrugTypeCol = false;
+try {
+    $check = $db->query("SHOW COLUMNS FROM {$cacheTable} LIKE 'drug_type'");
+    $hasDrugTypeCol = $check && $check->rowCount() > 0;
+} catch (Exception $e) {
+    $hasDrugTypeCol = false;
+}
+
+// ─── Sync params ───────────────────────────────────────────────────────────────
+$syncStart        = max(1,   (int) ($_GET['sync_start']        ?? $_POST['sync_start']        ?? 1));
+$syncLimit        = (int)         ($_GET['sync_limit']         ?? $_POST['sync_limit']         ?? 100);
+$incrementalLimit = (int)         ($_GET['incremental_limit']  ?? $_POST['incremental_limit']  ?? 100);
+$syncMaxCode      = max(100, (int)($_GET['sync_max_code']      ?? $_POST['sync_max_code']      ?? 9999));
+
+if (!in_array($syncLimit,        [100, 200, 500], true)) $syncLimit        = 100;
+if (!in_array($incrementalLimit, [50, 100, 200],  true)) $incrementalLimit = 100;
+
+// ─── POST handlers ─────────────────────────────────────────────────────────────
+$postAction = $_POST['action'] ?? '';
+$message    = $_SESSION['catalog_sync_message'] ?? null;
+$errorMsg   = $_SESSION['catalog_sync_error']   ?? null;
+unset($_SESSION['catalog_sync_message'], $_SESSION['catalog_sync_error']);
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && in_array($postAction, ['odoo_sync_cache', 'odoo_sync_incremental', 'odoo_resync_existing'], true)
+    && !$prepError
+) {
+    try {
+        $service = new OdooProductService($db, $currentBotId);
+
+        // Build upsert (include drug_type ถ้า migration รันแล้ว)
+        $upsertCols = "(line_account_id, product_id, product_code, sku, name, generic_name, barcode, category, list_price, online_price, saleable_qty, is_active, last_synced_at";
+        $upsertVals = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()";
+        $upsertUpd  = "product_id=VALUES(product_id), sku=VALUES(sku), name=VALUES(name), generic_name=VALUES(generic_name), barcode=VALUES(barcode), category=VALUES(category), list_price=VALUES(list_price), online_price=VALUES(online_price), saleable_qty=VALUES(saleable_qty), is_active=VALUES(is_active), last_synced_at=NOW()";
+
+        if ($hasDrugTypeCol) {
+            $upsertCols .= ", drug_type";
+            $upsertVals .= ", ?";
+            $upsertUpd  .= ", drug_type=VALUES(drug_type)";
+        }
+        $upsertCols .= ")";
+        $upsertVals .= ")";
+        // ⚠️ ห้ามใส่ storefront_enabled / featured_order ใน UPDATE — เก็บ admin decision
+
+        $upsertSql = "INSERT INTO {$cacheTable} {$upsertCols} VALUES {$upsertVals} ON DUPLICATE KEY UPDATE {$upsertUpd}";
+        $upsertStmt = $db->prepare($upsertSql);
+
+        $bindProduct = function (array $p) use ($upsertStmt, $currentBotId, $service, $hasDrugTypeCol) {
+            $drugType = $hasDrugTypeCol ? $service->deriveDrugType($p) : null;
+            $bindings = [
+                $currentBotId,
+                (string) ($p['product_id']   ?? ''),
+                (string) ($p['product_code'] ?? ''),
+                (string) ($p['sku']          ?? ''),
+                (string) ($p['name']         ?? ''),
+                (string) ($p['generic_name'] ?? ''),
+                (string) ($p['barcode']      ?? ''),
+                (string) ($p['category']     ?? ''),
+                (float)  ($p['list_price']   ?? 0),
+                (float)  ($p['online_price'] ?? 0),
+                (float)  ($p['saleable_qty'] ?? 0),
+                !empty($p['active']) ? 1 : 0,
+            ];
+            if ($hasDrugTypeCol) {
+                $bindings[] = $drugType;
+            }
+            $upsertStmt->execute($bindings);
+        };
+
+        $fetched = 0;
+        $saved   = 0;
+
+        // ─── Action: odoo_sync_cache ──────────────────────────────────────
+        if ($postAction === 'odoo_sync_cache') {
+            $cursor = $syncStart;
+            $remaining = $syncLimit;
+            while ($remaining > 0) {
+                $chunk  = min(50, $remaining);
+                $result = $service->getProductsByRange($cursor, $chunk);
+                $products = $result['products'] ?? [];
+                $fetched += count($products);
+                foreach ($products as $p) {
+                    $bindProduct($p);
+                    $saved++;
+                }
+                $cursor    += $chunk;
+                $remaining -= $chunk;
+            }
+            $_SESSION['catalog_sync_message'] = "โหลดช่วง {$syncStart}-" . ($syncStart + $syncLimit - 1) . " สำเร็จ: ดึง {$fetched} รายการ บันทึก {$saved} รายการ";
+        }
+
+        // ─── Action: odoo_sync_incremental ────────────────────────────────
+        if ($postAction === 'odoo_sync_incremental') {
+            $stateStmt = $db->prepare("SELECT next_offset FROM {$stateTable} WHERE line_account_id = ? LIMIT 1");
+            $stateStmt->execute([$currentBotId]);
+            $offsetStart = max(1, (int) $stateStmt->fetchColumn());
+
+            $cursor    = $offsetStart;
+            $remaining = $incrementalLimit;
+            while ($remaining > 0) {
+                $chunk    = min(50, $remaining);
+                $result   = $service->getProductsByRange($cursor, $chunk);
+                $products = $result['products'] ?? [];
+                $fetched += count($products);
+                foreach ($products as $p) {
+                    $bindProduct($p);
+                    $saved++;
+                }
+                $cursor    += $chunk;
+                $remaining -= $chunk;
+            }
+
+            $nextOffset = $offsetStart + $incrementalLimit;
+            if ($nextOffset > $syncMaxCode) {
+                $nextOffset = 1;
+            }
+            $saveState = $db->prepare("INSERT INTO {$stateTable}
+                (line_account_id, next_offset, last_incremental_sync_at)
+                VALUES (?, ?, NOW())
+                ON DUPLICATE KEY UPDATE next_offset=VALUES(next_offset), last_incremental_sync_at=NOW()");
+            $saveState->execute([$currentBotId, $nextOffset]);
+
+            $_SESSION['catalog_sync_message'] = "Incremental: ช่วง {$offsetStart}-" . ($offsetStart + $incrementalLimit - 1) . " | ดึง {$fetched} | บันทึก {$saved} | รอบถัดไปเริ่มรหัส {$nextOffset}";
+        }
+
+        // ─── Action: odoo_resync_existing ─────────────────────────────────
+        if ($postAction === 'odoo_resync_existing') {
+            // Re-sync เฉพาะ code ที่เคย sync แล้วใน cache
+            $existingStmt = $db->prepare("SELECT DISTINCT product_code FROM {$cacheTable} WHERE line_account_id = ? AND product_code <> '' ORDER BY product_code ASC LIMIT 500");
+            $existingStmt->execute([$currentBotId]);
+            $existingCodes = $existingStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            foreach ($existingCodes as $code) {
+                $numeric = (int) ltrim($code, '0');
+                if ($numeric <= 0) continue;
+                $result   = $service->getProductsByRange($numeric, 1);
+                $products = $result['products'] ?? [];
+                $fetched += count($products);
+                foreach ($products as $p) {
+                    $bindProduct($p);
+                    $saved++;
+                }
+            }
+            $_SESSION['catalog_sync_message'] = "อัพเดตที่โหลดแล้ว: ตรวจสอบ " . count($existingCodes) . " code | ดึง {$fetched} | บันทึก {$saved} รายการ";
+        }
+    } catch (Exception $e) {
+        $_SESSION['catalog_sync_error'] = 'โหลดไม่สำเร็จ: ' . $e->getMessage();
+    }
+
+    // Redirect กันส่ง POST ซ้ำ
+    $redirectParams = array_merge($_GET, [
+        'tab'               => 'catalog-sync',
+        'sync_start'        => $syncStart,
+        'sync_limit'        => $syncLimit,
+        'incremental_limit' => $incrementalLimit,
+        'sync_max_code'     => $syncMaxCode,
+    ]);
+    unset($redirectParams['_']);
+    echo "<script>window.location.href='?" . http_build_query($redirectParams) . "';</script>";
+    exit;
+}
+
+// ─── Stats / Info ──────────────────────────────────────────────────────────────
+$totalCached   = 0;
+$activeCached  = 0;
+$storefrontCnt = 0;
+$lastSyncedAt  = null;
+$lastIncrAt    = null;
+$nextOffset    = 1;
+
+if (!$prepError) {
+    try {
+        $statStmt = $db->prepare(
+            "SELECT
+                COUNT(*) AS total,
+                SUM(is_active = 1) AS active_cnt
+                " . ($hasStorefrontCol ? ", SUM(storefront_enabled = 1) AS sf_cnt" : "") . "
+             FROM {$cacheTable}
+             WHERE line_account_id = ?"
+        );
+        $statStmt->execute([$currentBotId]);
+        $s = $statStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $totalCached   = (int) ($s['total']      ?? 0);
+        $activeCached  = (int) ($s['active_cnt'] ?? 0);
+        $storefrontCnt = (int) ($s['sf_cnt']     ?? 0);
+
+        $syncStmt = $db->prepare("SELECT MAX(last_synced_at) FROM {$cacheTable} WHERE line_account_id = ?");
+        $syncStmt->execute([$currentBotId]);
+        $lastSyncedAt = $syncStmt->fetchColumn() ?: null;
+
+        $stateStmt = $db->prepare("SELECT next_offset, last_incremental_sync_at FROM {$stateTable} WHERE line_account_id = ? LIMIT 1");
+        $stateStmt->execute([$currentBotId]);
+        $st = $stateStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $nextOffset = max(1, (int) ($st['next_offset'] ?? 1));
+        $lastIncrAt = $st['last_incremental_sync_at'] ?? null;
+    } catch (Exception $e) {
+        $prepError = 'อ่านข้อมูล cache ไม่ได้: ' . $e->getMessage();
+    }
+}
+
+// ─── Test connection config ────────────────────────────────────────────────────
+$odooConfigured = false;
+try {
+    $probe = new OdooProductService($db, $currentBotId);
+    $odooConfigured = $probe->isConfigured();
+} catch (Exception $e) {
+    $odooConfigured = false;
+}
+
+$fmtDate = function ($v) {
+    return $v ? date('d/m/Y H:i', strtotime($v)) : '—';
+};
+?>
+<div class="space-y-4">
+    <!-- ─── Migration warning ─────────────────────────────────────────────── -->
+    <?php if (!$hasStorefrontCol || !$hasDrugTypeCol): ?>
+        <div class="bg-yellow-50 border border-yellow-300 rounded-xl p-4 text-sm">
+            <div class="font-semibold text-yellow-800 mb-1">
+                <i class="fas fa-exclamation-triangle mr-1"></i>แนะนำให้รัน migration ก่อนใช้งานเต็ม
+            </div>
+            <div class="text-yellow-700">
+                ยังไม่พบคอลัมน์ <?= !$hasStorefrontCol ? '<code>storefront_enabled</code>' : '' ?>
+                <?= (!$hasStorefrontCol && !$hasDrugTypeCol) ? ', ' : '' ?>
+                <?= !$hasDrugTypeCol ? '<code>drug_type</code>' : '' ?>
+                ใน <code>odoo_products_cache</code>
+            </div>
+            <div class="mt-2 bg-white rounded px-3 py-2 font-mono text-xs text-gray-700 inline-block">
+                mysql -u &lt;user&gt; -p &lt;db&gt; &lt; database/migration_storefront_split.sql
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($message): ?>
+        <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-700">
+            <i class="fas fa-check-circle mr-1"></i><?= htmlspecialchars($message) ?>
+        </div>
+    <?php endif; ?>
+    <?php if ($errorMsg): ?>
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+            <i class="fas fa-exclamation-circle mr-1"></i><?= htmlspecialchars($errorMsg) ?>
+        </div>
+    <?php endif; ?>
+    <?php if ($prepError): ?>
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+            <i class="fas fa-times-circle mr-1"></i><?= htmlspecialchars($prepError) ?>
+        </div>
+    <?php endif; ?>
+
+    <!-- ─── Panel 1: Connection + Cache Summary ───────────────────────────── -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Connection status -->
+        <div class="bg-white rounded-xl shadow p-5">
+            <div class="flex items-center justify-between mb-3">
+                <div class="text-sm font-semibold text-gray-700">
+                    <i class="fas fa-plug mr-1 text-gray-400"></i>สถานะการเชื่อมต่อ
+                </div>
+                <?php if ($odooConfigured): ?>
+                    <span class="flex items-center gap-1 text-xs text-green-600">
+                        <span class="h-2 w-2 rounded-full bg-green-500"></span>
+                        พร้อมใช้งาน
+                    </span>
+                <?php else: ?>
+                    <span class="flex items-center gap-1 text-xs text-red-600">
+                        <span class="h-2 w-2 rounded-full bg-red-500"></span>
+                        ยังไม่ได้ตั้งค่า
+                    </span>
+                <?php endif; ?>
+            </div>
+            <div class="text-xs text-gray-500 space-y-1">
+                <div>Endpoint: <code><?= defined('ODOO_API_BASE_URL') ? htmlspecialchars(ODOO_API_BASE_URL) : '—' ?></code></div>
+                <div>API User: <code><?= defined('CNY_ODOO_API_USER') ? htmlspecialchars(substr(CNY_ODOO_API_USER, 0, 20) . '…') : '—' ?></code></div>
+            </div>
+            <button type="button" onclick="testOdooConnection()"
+                    class="mt-3 w-full px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-sm">
+                <i class="fas fa-bolt mr-1"></i>ทดสอบด้วย code 0001
+            </button>
+            <div id="testResult" class="mt-2 text-xs"></div>
+        </div>
+
+        <!-- Cache summary -->
+        <div class="bg-white rounded-xl shadow p-5">
+            <div class="text-sm font-semibold text-gray-700 mb-3">
+                <i class="fas fa-database mr-1 text-gray-400"></i>สรุปรายการใน cache
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center">
+                <div class="bg-gray-50 rounded-lg p-2">
+                    <div class="text-[10px] text-gray-500 uppercase">ทั้งหมด</div>
+                    <div class="text-lg font-bold text-gray-800"><?= number_format($totalCached) ?></div>
+                </div>
+                <div class="bg-green-50 rounded-lg p-2">
+                    <div class="text-[10px] text-green-600 uppercase">Active</div>
+                    <div class="text-lg font-bold text-green-700"><?= number_format($activeCached) ?></div>
+                </div>
+                <?php if ($hasStorefrontCol): ?>
+                    <div class="bg-blue-50 rounded-lg p-2">
+                        <div class="text-[10px] text-blue-600 uppercase">หน้าร้าน</div>
+                        <div class="text-lg font-bold text-blue-700"><?= number_format($storefrontCnt) ?></div>
+                    </div>
+                <?php else: ?>
+                    <div class="bg-gray-50 rounded-lg p-2">
+                        <div class="text-[10px] text-gray-400 uppercase">หน้าร้าน</div>
+                        <div class="text-lg font-bold text-gray-400">—</div>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div class="text-xs text-gray-500 mt-3 space-y-1">
+                <div>โหลดล่าสุด: <b><?= $fmtDate($lastSyncedAt) ?></b></div>
+                <div>Incremental ล่าสุด: <b><?= $fmtDate($lastIncrAt) ?></b></div>
+                <div>รอบถัดไปเริ่มรหัส: <b><?= number_format($nextOffset) ?></b></div>
+            </div>
+        </div>
+
+        <!-- Related links -->
+        <div class="bg-white rounded-xl shadow p-5">
+            <div class="text-sm font-semibold text-gray-700 mb-3">
+                <i class="fas fa-link mr-1 text-gray-400"></i>หน้าที่เกี่ยวข้อง
+            </div>
+            <div class="space-y-2 text-sm">
+                <a href="?tab=storefront" class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 text-blue-600">
+                    <span><i class="fas fa-store mr-1"></i>จัดการสินค้าหน้าร้าน</span>
+                    <i class="fas fa-arrow-right text-xs"></i>
+                </a>
+                <?php if ($hasStorefrontCol): ?>
+                    <a href="?tab=storefront&price_filter=zero&storefront_status=enabled"
+                       class="flex items-center justify-between p-2 rounded-lg hover:bg-amber-50 text-amber-700">
+                        <span><i class="fas fa-exclamation-triangle mr-1"></i>ตรวจสินค้าราคา 0 ที่เปิดขายอยู่</span>
+                        <i class="fas fa-arrow-right text-xs"></i>
+                    </a>
+                <?php endif; ?>
+                <a href="?tab=stock" class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 text-gray-700">
+                    <span><i class="fas fa-boxes mr-1"></i>สต็อกสินค้า</span>
+                    <i class="fas fa-arrow-right text-xs"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Panel 2: Range sync ─────────────────────────────────────────────── -->
+    <div class="bg-white rounded-xl shadow p-5">
+        <div class="text-sm font-semibold text-gray-700 mb-3">
+            <i class="fas fa-download mr-1 text-blue-500"></i>โหลดช่วงตัวเลข (sync ทีละช่วง)
+        </div>
+        <form method="POST" class="flex flex-wrap items-end gap-3" onsubmit="return confirmSync('โหลด')">
+            <input type="hidden" name="tab" value="catalog-sync">
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">เริ่มรหัสสินค้า (1–9999)</label>
+                <input type="number" name="sync_start" min="1" max="9999" value="<?= (int) $syncStart ?>"
+                       class="px-3 py-2 border rounded-lg w-32 text-sm">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">จำนวน</label>
+                <select name="sync_limit" class="px-3 py-2 border rounded-lg text-sm">
+                    <?php foreach ([100, 200, 500] as $n): ?>
+                        <option value="<?= $n ?>" <?= $syncLimit === $n ? 'selected' : '' ?>><?= $n ?> รายการ</option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <button type="submit" name="action" value="odoo_sync_cache"
+                    class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                <i class="fas fa-sync mr-1"></i>โหลดทันที
+            </button>
+            <div class="text-xs text-gray-500">
+                <i class="fas fa-info-circle mr-1"></i>ถ้า 200 รายการใช้เวลาประมาณ 30–60 วินาที
+            </div>
+        </form>
+    </div>
+
+    <!-- ─── Panel 3: Incremental ─────────────────────────────────────────────── -->
+    <div class="bg-white rounded-xl shadow p-5">
+        <div class="text-sm font-semibold text-gray-700 mb-3">
+            <i class="fas fa-bolt mr-1 text-emerald-500"></i>โหลดเฉพาะที่เปลี่ยนล่าสุด (incremental)
+        </div>
+        <p class="text-xs text-gray-500 mb-3">
+            โหลดจากรอบถัดไป (<b><?= number_format($nextOffset) ?></b>) วนไปจนถึง <b><?= number_format($syncMaxCode) ?></b> แล้วเริ่มใหม่ที่ 1
+        </p>
+        <form method="POST" class="flex flex-wrap items-end gap-3" onsubmit="return confirmSync('โหลด incremental')">
+            <input type="hidden" name="tab" value="catalog-sync">
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">จำนวน</label>
+                <select name="incremental_limit" class="px-3 py-2 border rounded-lg text-sm">
+                    <?php foreach ([50, 100, 200] as $n): ?>
+                        <option value="<?= $n ?>" <?= $incrementalLimit === $n ? 'selected' : '' ?>><?= $n ?> รายการ</option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">รหัสสูงสุดก่อนวนกลับ</label>
+                <input type="number" name="sync_max_code" min="100" value="<?= (int) $syncMaxCode ?>"
+                       class="px-3 py-2 border rounded-lg w-28 text-sm">
+            </div>
+            <button type="submit" name="action" value="odoo_sync_incremental"
+                    class="px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium">
+                <i class="fas fa-forward mr-1"></i>เริ่ม incremental
+            </button>
+        </form>
+    </div>
+
+    <!-- ─── Panel 4: Re-sync existing ────────────────────────────────────────── -->
+    <div class="bg-white rounded-xl shadow p-5">
+        <div class="text-sm font-semibold text-gray-700 mb-3">
+            <i class="fas fa-redo mr-1 text-purple-500"></i>อัพเดตรายการที่โหลดแล้วทั้งหมด (re-sync existing)
+        </div>
+        <p class="text-xs text-gray-500 mb-3">
+            โหลดใหม่เฉพาะ <code>product_code</code> ที่เคยมีใน cache (สูงสุด 500 code ต่อรอบ) —
+            เหมาะสำหรับอัพเดตราคา/สต็อกทั้งหมดที่ขายอยู่
+        </p>
+        <form method="POST" onsubmit="return confirmSync('อัพเดตทั้งหมด')">
+            <input type="hidden" name="tab" value="catalog-sync">
+            <button type="submit" name="action" value="odoo_resync_existing"
+                    class="px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium">
+                <i class="fas fa-refresh mr-1"></i>อัพเดต code ที่มีอยู่ทั้งหมด
+            </button>
+            <span class="ml-3 text-xs text-gray-500">
+                <i class="fas fa-shield-alt mr-1"></i><b>ไม่แตะ</b> <code>storefront_enabled</code> / <code>featured_order</code> — เก็บการตัดสินใจของ admin
+            </span>
+        </form>
+    </div>
+</div>
+
+<script>
+function confirmSync(label) {
+    return confirm(`${label} จาก Odoo — ยืนยัน?\n(อาจใช้เวลาสักครู่ กรุณาอย่าปิดหน้า)`);
+}
+
+async function testOdooConnection() {
+    const el = document.getElementById('testResult');
+    el.innerHTML = '<span class="text-gray-500"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังทดสอบ...</span>';
+    try {
+        // ใช้ endpoint ที่มีอยู่แล้ว (cny-api-proxy) — หรือสร้าง test endpoint ใหม่ได้
+        // สำหรับตอนนี้ส่ง probe ผ่าน fetch ตัวเองเลย
+        const res = await fetch(window.location.pathname + '?tab=catalog-sync&_probe=1', {
+            method: 'HEAD',
+            credentials: 'same-origin',
+        });
+        if (res.ok) {
+            el.innerHTML = '<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>หน้าทำงานปกติ (ลองกดโหลดรายการดู)</span>';
+        } else {
+            el.innerHTML = '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>HTTP ' + res.status + '</span>';
+        }
+    } catch (err) {
+        el.innerHTML = '<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>' + err.message + '</span>';
+    }
+}
+</script>
