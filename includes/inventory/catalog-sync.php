@@ -323,6 +323,15 @@ $fmtDate = function ($v) {
     <!-- ─── Panel 1: Connection + Cache Summary ───────────────────────────── -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Connection status -->
+        <?php
+        $cfgBaseUrl   = defined('ODOO_API_BASE_URL') ? ODOO_API_BASE_URL : '';
+        $cfgApiUser   = defined('CNY_ODOO_API_USER') ? CNY_ODOO_API_USER : '';
+        $cfgUserToken = defined('CNY_ODOO_USER_TOKEN') ? CNY_ODOO_USER_TOKEN : '';
+        $cfgEnv       = defined('ODOO_ENVIRONMENT') ? ODOO_ENVIRONMENT : '';
+        $baseUrlOk    = $cfgBaseUrl !== '';
+        $apiUserOk    = $cfgApiUser !== '';
+        $tokenOk      = $cfgUserToken !== '';
+        ?>
         <div class="bg-white rounded-xl shadow p-5">
             <div class="flex items-center justify-between mb-3">
                 <div class="text-sm font-semibold text-gray-700">
@@ -340,15 +349,38 @@ $fmtDate = function ($v) {
                     </span>
                 <?php endif; ?>
             </div>
-            <div class="text-xs text-gray-500 space-y-1">
-                <div>Endpoint: <code><?= defined('ODOO_API_BASE_URL') ? htmlspecialchars(ODOO_API_BASE_URL) : '—' ?></code></div>
-                <div>API User: <code><?= defined('CNY_ODOO_API_USER') ? htmlspecialchars(substr(CNY_ODOO_API_USER, 0, 20) . '…') : '—' ?></code></div>
+            <div class="text-xs space-y-1">
+                <div>
+                    <span class="text-gray-500">ENV:</span>
+                    <code class="<?= $cfgEnv === 'production' ? 'text-green-700' : 'text-red-600 font-semibold' ?>"><?= htmlspecialchars($cfgEnv ?: '—') ?></code>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i class="fas <?= $baseUrlOk ? 'fa-check-circle text-green-500' : 'fa-times-circle text-red-500' ?>"></i>
+                    <span class="text-gray-500">Endpoint:</span>
+                    <code class="text-gray-700 truncate"><?= htmlspecialchars($cfgBaseUrl ?: '(ว่าง)') ?></code>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i class="fas <?= $apiUserOk ? 'fa-check-circle text-green-500' : 'fa-times-circle text-red-500' ?>"></i>
+                    <span class="text-gray-500">API User:</span>
+                    <code class="text-gray-700 truncate"><?= $apiUserOk ? htmlspecialchars(substr($cfgApiUser, 0, 20)) . '…' : '(ว่าง)' ?></code>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i class="fas <?= $tokenOk ? 'fa-check-circle text-green-500' : 'fa-times-circle text-red-500' ?>"></i>
+                    <span class="text-gray-500">Token:</span>
+                    <code class="text-gray-700"><?= $tokenOk ? 'set (' . strlen($cfgUserToken) . ' ตัวอักษร)' : '(ว่าง)' ?></code>
+                </div>
             </div>
-            <button type="button" onclick="testOdooConnection()"
-                    class="mt-3 w-full px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-sm">
-                <i class="fas fa-bolt mr-1"></i>ทดสอบด้วย code 0001
-            </button>
-            <div id="testResult" class="mt-2 text-xs"></div>
+            <?php if (!$odooConfigured): ?>
+                <a href="/install/check_odoo_config.php"
+                   class="mt-3 block text-center px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 text-sm font-medium">
+                    <i class="fas fa-wrench mr-1"></i>เปิด Diagnostic แก้ config
+                </a>
+            <?php else: ?>
+                <a href="/install/check_odoo_config.php?test=1"
+                   class="mt-3 block text-center px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-sm">
+                    <i class="fas fa-bolt mr-1"></i>ทดสอบเรียก API (code 0001)
+                </a>
+            <?php endif; ?>
         </div>
 
         <!-- Cache summary -->
