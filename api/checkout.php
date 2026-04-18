@@ -745,6 +745,17 @@ function handleMyOrders($data) {
         $lineAccountId = (int) $data['line_account_id'];
     }
 
+    $limit = 50;
+    $offset = 0;
+    if (is_array($data)) {
+        if (isset($data['limit']) && $data['limit'] !== '') {
+            $limit = max(1, min(200, (int) $data['limit']));
+        }
+        if (isset($data['offset']) && $data['offset'] !== '') {
+            $offset = max(0, (int) $data['offset']);
+        }
+    }
+
     if (!$lineUserId) {
         jsonResponse(false, 'Missing line_user_id');
     }
@@ -758,18 +769,35 @@ function handleMyOrders($data) {
 
     $userId = (int) $user['id'];
     $params = [$userId];
-    $sql = "SELECT id, order_number, status, payment_status, grand_total, created_at, tracking_number, line_account_id
+
+    $selectCols = ['id', 'order_number', 'status'];
+    if (hasTableColumn('transactions', 'payment_status')) {
+        $selectCols[] = 'payment_status';
+    }
+    $selectCols[] = 'grand_total';
+    $selectCols[] = 'created_at';
+    if (hasTableColumn('transactions', 'tracking_number')) {
+        $selectCols[] = 'tracking_number';
+    }
+    $selectCols[] = 'line_account_id';
+
+    $sql = 'SELECT ' . implode(', ', $selectCols) . '
             FROM transactions
-            WHERE user_id = ?";
+            WHERE user_id = ?';
     if ($lineAccountId) {
-        $sql .= " AND (line_account_id = ? OR line_account_id IS NULL)";
+        $sql .= ' AND (line_account_id = ? OR line_account_id IS NULL)';
         $params[] = $lineAccountId;
     }
-    $sql .= " ORDER BY created_at DESC LIMIT 50";
+    $sql .= ' ORDER BY created_at DESC LIMIT ' . (int) $limit . ' OFFSET ' . (int) $offset;
 
-    $stmt = $db->prepare($sql);
-    $stmt->execute($params);
-    $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+        $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        error_log('handleMyOrders query error: ' . $e->getMessage());
+        jsonResponse(false, 'Could not load orders');
+    }
 
     $out = [];
     foreach ($orders as $row) {
