@@ -1773,7 +1773,9 @@ function handleCreateOrder($data) {
         ]);
 
     } catch (Exception $e) {
-        $db->rollBack();
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
         throw $e;
     }
 }

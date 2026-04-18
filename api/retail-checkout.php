@@ -399,7 +399,9 @@ try {
     ]);
     
 } catch (Exception $e) {
-    $db->rollBack();
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
     error_log("Checkout error: " . $e->getMessage());
     echo json_encode([
         'success' => false,
