@@ -44,11 +44,14 @@ bash deploy_testry_branch.sh
 | Path | Purpose |
 |------|---------|
 | `webhook.php?account={id}` | LINE Messaging API webhook (multi-account) |
-| `liff/index.php` | LIFF SPA (client-side routing, single entry point) |
+| `line-mini-app/` | **Current LINE Mini App (Next.js)** — this is the **active** in-LIFF client: shop (`/shop`), cart, App Router UI. Folder may live in a separate worktree or deploy; same PHP `api/*.php` backend. See `docs/plans/2026-04-12-line-mini-app-implementation-checklist.md`. |
+| `liff/` | **Legacy** LIFF bundle (`liff/index.php`, `liff/assets/js/liff-app.js`). **Not used for routine production anymore** — do not treat as the default place to fix shop/LIFF bugs; prefer `line-mini-app/`. |
 | `api/*.php` | 59 REST API endpoints |
 | Root `*.php` files | Admin panel pages (104 files) |
 | `cron/*.php` | 19 scheduled background tasks |
 | `index.php` | Public landing page |
+
+**LINE in-app UI:** The deployed LIFF experience users see is **`line-mini-app/`**. The older **`liff/`** SPA remains in the repo for reference/compat only and is not the primary maintenance target — **do not add new shop features there.** Odoo storefront + product photos for the mini app: `docs/integrations/line-mini-app-odoo-storefront.md`.
 
 ### Database — Always Use Singleton
 
@@ -95,7 +98,7 @@ Role hierarchy: `super_admin` → `admin` → `pharmacist` / `marketing` / `tech
 
 - **`file_exists()` guards** — Optional classes (`BusinessBot`, `WebSocketNotifier`) are `require_once`-d only after a `file_exists()` check in `webhook.php`. Do the same for new optional integrations.
 - **AI settings from DB** — Never hardcode AI model names. Stored in `ai_settings.model` (default `gemini-2.0-flash`).
-- **Cache buster** — LIFF SPA uses `$v` version string (e.g., `202602142228`). Update it on any JS/CSS change in `liff/index.php`.
+- **Cache buster** — **Active:** bump build/version in `line-mini-app` when changing its assets. **Legacy:** `liff/index.php` still has `$v` for the old SPA if you ever touch that tree.
 - **Odoo dashboard queries** — Always query cache tables (`odoo_orders`, `odoo_invoices`, `odoo_bdos`); never hit the Odoo API directly for dashboard reads.
 - **`dev_logs` table** — Fatal errors in `webhook.php` are written here. For debug logging in webhook context: `INSERT INTO dev_logs (log_type, source, message, data, created_at)`.
 - **Clean URLs** — `.htaccess` strips `.php` extensions. Use `cleanUrl()` from `includes/header.php` when building admin nav links.

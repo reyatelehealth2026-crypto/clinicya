@@ -1824,6 +1824,19 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
     </style>
     <?php if (isset($extraStyles)) echo $extraStyles; ?>
+    <script>
+        (function () {
+            window.toggleUserMenu = function () {
+                var el = document.getElementById('userMenu');
+                if (el) {
+                    el.classList.toggle('hidden');
+                }
+            };
+            window.toggleTheme = function () {
+                document.body.classList.toggle('dark');
+            };
+        })();
+    </script>
 </head>
 
 <body>
@@ -2575,15 +2588,6 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
 
                         document.getElementById('commandPaletteInput')?.addEventListener('input', filterCommandPalette);
                     });
-
-                    function toggleUserMenu() {
-                        document.getElementById('userMenu').classList.toggle('hidden');
-                    }
-
-                    function toggleTheme() {
-                        // Placeholder for theme toggle
-                        document.body.classList.toggle('dark');
-                    }
 
                     // Close dropdowns on outside click
                     document.addEventListener('click', function (e) {

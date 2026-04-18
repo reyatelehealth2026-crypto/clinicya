@@ -230,6 +230,20 @@ if (
         'sync_max_code'     => $syncMaxCode,
     ]);
     unset($redirectParams['_']);
+
+    if (!empty($_POST['__ajax']) && (string) $_POST['__ajax'] === '1') {
+        header('Content-Type: application/json; charset=utf-8');
+        $okMsg = $_SESSION['catalog_sync_message'] ?? null;
+        $errMsg = $_SESSION['catalog_sync_error'] ?? null;
+        unset($_SESSION['catalog_sync_message'], $_SESSION['catalog_sync_error']);
+        echo json_encode([
+            'success' => $errMsg === null || $errMsg === '',
+            'message' => $okMsg,
+            'error' => $errMsg,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     echo "<script>window.location.href='?" . http_build_query($redirectParams) . "';</script>";
     exit;
 }
@@ -284,6 +298,8 @@ try {
 $fmtDate = function ($v) {
     return $v ? date('d/m/Y H:i', strtotime($v)) : '—';
 };
+
+$catalogSyncChunkUrl = '../api/catalog-sync-chunk.php';
 ?>
 <div class="space-y-4">
     <!-- ─── Migration warning ─────────────────────────────────────────────── -->
@@ -446,7 +462,7 @@ $fmtDate = function ($v) {
         <div class="text-sm font-semibold text-gray-700 mb-3">
             <i class="fas fa-download mr-1 text-blue-500"></i>โหลดช่วงตัวเลข (sync ทีละช่วง)
         </div>
-        <form method="POST" class="flex flex-wrap items-end gap-3" onsubmit="return confirmSync('โหลด')">
+        <form id="catalogSyncFormRange" method="POST" class="flex flex-wrap items-end gap-3" action="">
             <input type="hidden" name="tab" value="catalog-sync">
             <div>
                 <label class="text-xs text-gray-500 block mb-1">เริ่มรหัสสินค้า (1–9999)</label>
@@ -479,7 +495,7 @@ $fmtDate = function ($v) {
         <p class="text-xs text-gray-500 mb-3">
             โหลดจากรอบถัดไป (<b><?= number_format($nextOffset) ?></b>) วนไปจนถึง <b><?= number_format($syncMaxCode) ?></b> แล้วเริ่มใหม่ที่ 1
         </p>
-        <form method="POST" class="flex flex-wrap items-end gap-3" onsubmit="return confirmSync('โหลด incremental')">
+        <form id="catalogSyncFormIncremental" method="POST" class="flex flex-wrap items-end gap-3" action="">
             <input type="hidden" name="tab" value="catalog-sync">
             <div>
                 <label class="text-xs text-gray-500 block mb-1">จำนวน</label>
@@ -510,7 +526,7 @@ $fmtDate = function ($v) {
             โหลดใหม่เฉพาะ <code>product_code</code> ที่เคยมีใน cache (สูงสุด 500 code ต่อรอบ) —
             เหมาะสำหรับอัพเดตราคา/สต็อกทั้งหมดที่ขายอยู่
         </p>
-        <form method="POST" onsubmit="return confirmSync('อัพเดตทั้งหมด')">
+        <form id="catalogSyncFormResync" method="POST" action="">
             <input type="hidden" name="tab" value="catalog-sync">
             <button type="submit" name="action" value="odoo_resync_existing"
                     class="px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium">
@@ -523,13 +539,176 @@ $fmtDate = function ($v) {
     </div>
 </div>
 
+<!-- Overlay ซิงค์ — progress ชัดเจน + แจ้ง timeout -->
+<div id="catalogSyncOverlay" class="hidden fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 p-4" aria-hidden="true">
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-slate-200">
+        <div class="flex items-center gap-2 text-slate-800 font-semibold mb-1">
+            <i class="fas fa-cloud-download-alt text-blue-500"></i>
+            <span id="catalogSyncOverlayTitle">กำลังโหลดจาก Odoo</span>
+        </div>
+        <p class="text-xs text-slate-500 mb-4" id="catalogSyncOverlayHint">
+            แต่ละช่วงรอสูงสุด 3 นาที — ถ้าเครือข่ายช้าอาจต้องรอนานขึ้น ห้ามปิดหน้าจนกว่าจะเสร็จ
+        </p>
+        <div class="h-3 w-full rounded-full bg-slate-100 overflow-hidden mb-2">
+            <div id="catalogSyncProgressBar" class="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-[width] duration-300 ease-out" style="width: 0%"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-slate-500 mb-3">
+            <span id="catalogSyncProgressPct">0%</span>
+            <span id="catalogSyncProgressCount">0 / 0</span>
+        </div>
+        <p class="text-sm text-slate-700 min-h-[3rem] leading-relaxed" id="catalogSyncStatusLine">กำลังเตรียม…</p>
+        <p class="text-xs text-amber-700 mt-2 hidden" id="catalogSyncTimeoutNote"></p>
+        <div class="mt-4 flex justify-end">
+            <button type="button" id="catalogSyncOverlayClose" class="hidden px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200">
+                ปิด
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
-function confirmSync(label) {
-    return confirm(`${label} จาก Odoo — ยืนยัน?\n(อาจใช้เวลาสักครู่ กรุณาอย่าปิดหน้า)`);
-}
+(function () {
+    var CHUNK_URL = <?= json_encode($catalogSyncChunkUrl, JSON_UNESCAPED_UNICODE) ?>;
+    var PER_CHUNK_MS = 180000;
+    var FULL_SYNC_MS = 900000;
+
+    function qs(id) { return document.getElementById(id); }
+
+    function showOverlay(show) {
+        var el = qs('catalogSyncOverlay');
+        if (!el) return;
+        el.classList.toggle('hidden', !show);
+        el.setAttribute('aria-hidden', show ? 'false' : 'true');
+    }
+
+    function setProgress(pct, processed, total, line, hint) {
+        pct = Math.max(0, Math.min(100, pct));
+        var bar = qs('catalogSyncProgressBar');
+        var p = qs('catalogSyncProgressPct');
+        var c = qs('catalogSyncProgressCount');
+        var s = qs('catalogSyncStatusLine');
+        var note = qs('catalogSyncTimeoutNote');
+        if (bar) bar.style.width = pct + '%';
+        if (p) p.textContent = Math.round(pct) + '%';
+        if (c) c.textContent = (processed != null && total != null) ? (processed + ' / ' + total) : '';
+        if (s && line) s.textContent = line;
+        if (note) { note.textContent = hint || ''; note.classList.toggle('hidden', !hint); }
+    }
+
+    function abortableFetch(url, options, ms) {
+        var ctrl = new AbortController();
+        var t = setTimeout(function () { ctrl.abort(); }, ms);
+        var p = fetch(url, Object.assign({}, options, { signal: ctrl.signal }));
+        return p.finally(function () { clearTimeout(t); });
+    }
+
+    async function runRangeSyncChunked(form) {
+        if (!confirm('โหลดจาก Odoo — ยืนยัน?\n(จะซิงค์ทีละช่วงและแสดงความคืบหน้า — ห้ามปิดหน้า)')) return;
+
+        var fd = new FormData(form);
+        var syncStart = parseInt(String(fd.get('sync_start') || '1'), 10) || 1;
+        var syncLimit = parseInt(String(fd.get('sync_limit') || '100'), 10) || 100;
+
+        qs('catalogSyncOverlayTitle').textContent = 'โหลดช่วงตัวเลขจาก Odoo';
+        qs('catalogSyncOverlayHint').textContent = 'แต่ละกลุ่มสูงสุด 50 รหัส — รอแต่ละกลุ่มได้สูงสุด ' + (PER_CHUNK_MS / 60000) + ' นาที';
+        qs('catalogSyncOverlayClose').classList.add('hidden');
+        showOverlay(true);
+        setProgress(0, 0, syncLimit, 'กำลังเริ่ม…', '');
+
+        var processed = 0;
+        var guard = 0;
+        try {
+            while (processed < syncLimit && guard++ < 400) {
+                var res = await abortableFetch(CHUNK_URL, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({
+                        action: 'range_step',
+                        sync_start: syncStart,
+                        sync_limit: syncLimit,
+                        processed: processed
+                    })
+                }, PER_CHUNK_MS);
+
+                var data = await res.json().catch(function () { return {}; });
+                if (!res.ok || !data.success) {
+                    throw new Error(data.message || ('HTTP ' + res.status));
+                }
+                processed = data.processed;
+                var pct = (processed / syncLimit) * 100;
+                setProgress(pct, processed, syncLimit, data.label_th || '', '');
+                if (data.done) {
+                    setProgress(100, syncLimit, syncLimit, data.summary_th || 'เสร็จแล้ว', '');
+                    break;
+                }
+            }
+            if (guard >= 400) {
+                throw new Error('หยุดการซิงค์ — เกินจำนวนรอบที่อนุญาต กรุณาแจ้งผู้ดูแลระบบ');
+            }
+            setTimeout(function () { window.location.reload(); }, 600);
+        } catch (e) {
+            var msg = (e && e.name === 'AbortError')
+                ? 'หมดเวลารอแต่ละช่วง — Odoo ตอบช้าหรือเครือข่ายขัดข้อง ลองลดจำนวนต่อครั้ง หรือลองใหม่ภายหลัง'
+                : ((e && e.message) ? e.message : 'เกิดข้อผิดพลาด');
+            setProgress(0, 0, syncLimit, msg, msg);
+            qs('catalogSyncOverlayClose').classList.remove('hidden');
+        }
+    }
+
+    async function runFullSyncAjax(form, title) {
+        if (!confirm(title + ' — ยืนยัน?\n(อาจใช้เวลาหลายนาที กรุณาอย่าปิดหน้า)')) return;
+
+        qs('catalogSyncOverlayTitle').textContent = title;
+        qs('catalogSyncOverlayHint').textContent = 'รอได้สูงสุด ' + (FULL_SYNC_MS / 60000) + ' นาที — ถ้าหมดเวลาให้ลองใหม่หรือลดขนาดงาน';
+        qs('catalogSyncOverlayClose').classList.add('hidden');
+        showOverlay(true);
+        setProgress(5, null, null, 'กำลังเชื่อมต่อ Odoo และบันทึกลงฐานข้อมูล… (อาจนาน)', '');
+
+        var fd = new FormData(form);
+        fd.append('__ajax', '1');
+        try {
+            var res = await abortableFetch(form.action || window.location.href, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }, FULL_SYNC_MS);
+            var data = await res.json().catch(function () { return {}; });
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || data.message || ('HTTP ' + res.status));
+            }
+            setProgress(100, null, null, data.message || 'สำเร็จ', '');
+            setTimeout(function () { window.location.reload(); }, 800);
+        } catch (e) {
+            var msg = (e && e.name === 'AbortError')
+                ? 'หมดเวลา (' + (FULL_SYNC_MS / 60000) + ' นาที) — งานอาจยังทำไม่จบ ลองรันใหม่หรือแบ่งเป็นช่วงเล็กลง'
+                : ((e && e.message) ? e.message : 'เกิดข้อผิดพลาด');
+            setProgress(0, null, null, msg, msg);
+            qs('catalogSyncOverlayClose').classList.remove('hidden');
+        }
+    }
+
+    document.getElementById('catalogSyncFormRange')?.addEventListener('submit', function (e) {
+        e.preventDefault();
+        runRangeSyncChunked(this);
+    });
+    document.getElementById('catalogSyncFormIncremental')?.addEventListener('submit', function (e) {
+        e.preventDefault();
+        runFullSyncAjax(this, 'โหลด incremental');
+    });
+    document.getElementById('catalogSyncFormResync')?.addEventListener('submit', function (e) {
+        e.preventDefault();
+        runFullSyncAjax(this, 'อัพเดตรายการที่มีอยู่');
+    });
+    document.getElementById('catalogSyncOverlayClose')?.addEventListener('click', function () {
+        showOverlay(false);
+    });
+})();
 
 async function testOdooConnection() {
     const el = document.getElementById('testResult');
+    if (!el) return;
     el.innerHTML = '<span class="text-gray-500"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังทดสอบ...</span>';
     try {
         // ใช้ endpoint ที่มีอยู่แล้ว (cny-api-proxy) — หรือสร้าง test endpoint ใหม่ได้

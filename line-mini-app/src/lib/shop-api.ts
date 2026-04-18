@@ -8,7 +8,8 @@ export type ShopProductBadge = {
 export type ProductSort = 'latest' | 'discount' | 'price_asc' | 'price_desc' | 'name_asc'
 
 export type ShopCategory = {
-  id: number
+  /** Numeric id (`business_items`) or category label string (`odoo_products_cache`) */
+  id: number | string
   name: string
   icon_url?: string | null
 }
@@ -44,6 +45,8 @@ export type ShopProduct = {
   is_enabled?: boolean | number | null
   catalog_visible?: boolean | number | null
   catalog_bucket?: string | null
+  /** Set when catalog is served from Odoo cache (`api/checkout.php` / `shop-products.php`) */
+  product_source?: 'odoo_products_cache' | 'business_items'
 }
 
 export type TransferBankRow = {
@@ -74,6 +77,9 @@ export type ProductsResponse = {
   has_more?: boolean
   transfer_info?: TransferInfo
   message?: string
+  /** Present when `action=products` uses Odoo storefront rows */
+  product_catalog_source?: 'odoo_products_cache' | 'business_items'
+  category_id_is_string?: boolean
 }
 
 export type FetchProductsInput = {
