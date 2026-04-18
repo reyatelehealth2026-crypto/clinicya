@@ -300,6 +300,7 @@ $fmtDate = function ($v) {
 };
 
 $catalogSyncChunkUrl = '../api/catalog-sync-chunk.php';
+$catalogSyncFormAction = htmlspecialchars($_SERVER['SCRIPT_NAME'] ?? '/inventory/index.php', ENT_QUOTES, 'UTF-8');
 ?>
 <div class="space-y-4">
     <!-- ─── Migration warning ─────────────────────────────────────────────── -->
@@ -462,7 +463,7 @@ $catalogSyncChunkUrl = '../api/catalog-sync-chunk.php';
         <div class="text-sm font-semibold text-gray-700 mb-3">
             <i class="fas fa-download mr-1 text-blue-500"></i>โหลดช่วงตัวเลข (sync ทีละช่วง)
         </div>
-        <form id="catalogSyncFormRange" method="POST" class="flex flex-wrap items-end gap-3" action="">
+        <form id="catalogSyncFormRange" method="POST" class="flex flex-wrap items-end gap-3" action="<?= $catalogSyncFormAction ?>">
             <input type="hidden" name="tab" value="catalog-sync">
             <div>
                 <label class="text-xs text-gray-500 block mb-1">เริ่มรหัสสินค้า (1–9999)</label>
@@ -495,7 +496,10 @@ $catalogSyncChunkUrl = '../api/catalog-sync-chunk.php';
         <p class="text-xs text-gray-500 mb-3">
             โหลดจากรอบถัดไป (<b><?= number_format($nextOffset) ?></b>) วนไปจนถึง <b><?= number_format($syncMaxCode) ?></b> แล้วเริ่มใหม่ที่ 1
         </p>
-        <form id="catalogSyncFormIncremental" method="POST" class="flex flex-wrap items-end gap-3" action="">
+        <p class="text-xs text-emerald-700 mb-3">
+            <i class="fas fa-bolt mr-1"></i>ซิงค์ผ่าน <code class="bg-emerald-50 px-1 rounded">api/catalog-sync-chunk.php</code> ทีละกลุ่ม (ไม่ POST ยาวไปที่หน้า inventory — แก้ปัญหา HTTP 404)
+        </p>
+        <form id="catalogSyncFormIncremental" method="POST" class="flex flex-wrap items-end gap-3" action="<?= $catalogSyncFormAction ?>">
             <input type="hidden" name="tab" value="catalog-sync">
             <div>
                 <label class="text-xs text-gray-500 block mb-1">จำนวน</label>
@@ -526,7 +530,10 @@ $catalogSyncChunkUrl = '../api/catalog-sync-chunk.php';
             โหลดใหม่เฉพาะ <code>product_code</code> ที่เคยมีใน cache (สูงสุด 500 code ต่อรอบ) —
             เหมาะสำหรับอัพเดตราคา/สต็อกทั้งหมดที่ขายอยู่
         </p>
-        <form id="catalogSyncFormResync" method="POST" action="">
+        <p class="text-xs text-purple-800 mb-3">
+            <i class="fas fa-code-branch mr-1"></i>ยิง Odoo <b>ทีละรหัส</b> ตามลำดับใน cache — แสดงความคืบหน้า 1/500, 2/500 …
+        </p>
+        <form id="catalogSyncFormResync" method="POST" action="<?= $catalogSyncFormAction ?>">
             <input type="hidden" name="tab" value="catalog-sync">
             <button type="submit" name="action" value="odoo_resync_existing"
                     class="px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium">
@@ -570,7 +577,7 @@ $catalogSyncChunkUrl = '../api/catalog-sync-chunk.php';
 (function () {
     var CHUNK_URL = <?= json_encode($catalogSyncChunkUrl, JSON_UNESCAPED_UNICODE) ?>;
     var PER_CHUNK_MS = 180000;
-    var FULL_SYNC_MS = 900000;
+    var RESYNC_STEP_MS = 120000;
 
     function qs(id) { return document.getElementById(id); }
 
@@ -656,35 +663,111 @@ $catalogSyncChunkUrl = '../api/catalog-sync-chunk.php';
         }
     }
 
-    async function runFullSyncAjax(form, title) {
-        if (!confirm(title + ' — ยืนยัน?\n(อาจใช้เวลาหลายนาที กรุณาอย่าปิดหน้า)')) return;
-
-        qs('catalogSyncOverlayTitle').textContent = title;
-        qs('catalogSyncOverlayHint').textContent = 'รอได้สูงสุด ' + (FULL_SYNC_MS / 60000) + ' นาที — ถ้าหมดเวลาให้ลองใหม่หรือลดขนาดงาน';
-        qs('catalogSyncOverlayClose').classList.add('hidden');
-        showOverlay(true);
-        setProgress(5, null, null, 'กำลังเชื่อมต่อ Odoo และบันทึกลงฐานข้อมูล… (อาจนาน)', '');
+    async function runIncrementalChunked(form) {
+        if (!confirm('โหลด incremental จาก Odoo — ยืนยัน?\n(ยิง API ทีละกลุ่มเหมือนโหลดช่วง — แสดงความคืบหน้า)')) return;
 
         var fd = new FormData(form);
-        fd.append('__ajax', '1');
+        var incrementalLimit = parseInt(String(fd.get('incremental_limit') || '100'), 10) || 100;
+        var syncMaxCode = parseInt(String(fd.get('sync_max_code') || '9999'), 10) || 9999;
+
+        qs('catalogSyncOverlayTitle').textContent = 'โหลด incremental';
+        qs('catalogSyncOverlayHint').textContent = 'แต่ละกลุ่มสูงสุด 50 รหัส — รอแต่ละกลุ่มได้สูงสุด ' + (PER_CHUNK_MS / 60000) + ' นาที';
+        qs('catalogSyncOverlayClose').classList.add('hidden');
+        showOverlay(true);
+
+        var processed = 0;
+        var jobOffsetStart = 0;
+        var guard = 0;
         try {
-            var res = await abortableFetch(form.action || window.location.href, {
-                method: 'POST',
-                body: fd,
-                credentials: 'same-origin',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            }, FULL_SYNC_MS);
-            var data = await res.json().catch(function () { return {}; });
-            if (!res.ok || !data.success) {
-                throw new Error(data.error || data.message || ('HTTP ' + res.status));
+            while (processed < incrementalLimit && guard++ < 80) {
+                var body = {
+                    action: 'incremental_step',
+                    incremental_limit: incrementalLimit,
+                    sync_max_code: syncMaxCode,
+                    processed: processed
+                };
+                if (jobOffsetStart > 0) {
+                    body.job_offset_start = jobOffsetStart;
+                }
+                var res = await abortableFetch(CHUNK_URL, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify(body)
+                }, PER_CHUNK_MS);
+                var data = await res.json().catch(function () { return {}; });
+                if (!res.ok || !data.success) {
+                    throw new Error(data.message || ('HTTP ' + res.status));
+                }
+                if (data.job_offset_start) {
+                    jobOffsetStart = data.job_offset_start;
+                }
+                processed = data.processed;
+                var pct = (processed / incrementalLimit) * 100;
+                setProgress(pct, processed, incrementalLimit, data.label_th || '', '');
+                if (data.done) {
+                    setProgress(100, incrementalLimit, incrementalLimit, data.summary_th || data.label_th || 'เสร็จแล้ว', '');
+                    break;
+                }
             }
-            setProgress(100, null, null, data.message || 'สำเร็จ', '');
-            setTimeout(function () { window.location.reload(); }, 800);
+            if (guard >= 80) {
+                throw new Error('หยุด — เกินจำนวนรอบที่กำหนด');
+            }
+            setTimeout(function () { window.location.reload(); }, 700);
         } catch (e) {
             var msg = (e && e.name === 'AbortError')
-                ? 'หมดเวลา (' + (FULL_SYNC_MS / 60000) + ' นาที) — งานอาจยังทำไม่จบ ลองรันใหม่หรือแบ่งเป็นช่วงเล็กลง'
+                ? 'หมดเวลารอแต่ละช่วง — Odoo ตอบช้า ลองใหม่หรือลดจำนวนรายการต่อรอบ'
                 : ((e && e.message) ? e.message : 'เกิดข้อผิดพลาด');
-            setProgress(0, null, null, msg, msg);
+            setProgress(0, 0, incrementalLimit, msg, msg);
+            qs('catalogSyncOverlayClose').classList.remove('hidden');
+        }
+    }
+
+    async function runResyncChunked(form) {
+        if (!confirm('อัพเดตรายการที่มีใน cache — ยืนยัน?\n(ยิง Odoo ทีละรหัสสินค้า สูงสุด 500 รหัส — อาจใช้เวลานาน)')) return;
+
+        qs('catalogSyncOverlayTitle').textContent = 'Re-sync รายการที่มีอยู่';
+        qs('catalogSyncOverlayHint').textContent = 'แต่ละรหัส = 1 คำขอไป Odoo — รอต่อขั้นได้สูงสุด ' + (RESYNC_STEP_MS / 60000) + ' นาที';
+        qs('catalogSyncOverlayClose').classList.add('hidden');
+        showOverlay(true);
+
+        var offset = 0;
+        var total = 1;
+        var guard = 0;
+        try {
+            while (guard++ < 600) {
+                var res = await abortableFetch(CHUNK_URL, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify({
+                        action: 'resync_step',
+                        offset: offset,
+                        reset_queue: offset === 0 ? '1' : '0'
+                    })
+                }, RESYNC_STEP_MS);
+                var data = await res.json().catch(function () { return {}; });
+                if (!res.ok || !data.success) {
+                    throw new Error(data.message || ('HTTP ' + res.status));
+                }
+                total = data.total != null ? data.total : total;
+                offset = data.offset != null ? data.offset : offset;
+                var pct = total > 0 ? (offset / total) * 100 : 0;
+                setProgress(pct, offset, total, data.label_th || '', '');
+                if (data.done) {
+                    setProgress(100, total, total, data.summary_th || data.label_th || 'เสร็จแล้ว', '');
+                    break;
+                }
+            }
+            if (guard >= 600) {
+                throw new Error('หยุด — เกินจำนวนรอบ (500+)');
+            }
+            setTimeout(function () { window.location.reload(); }, 700);
+        } catch (e) {
+            var msg = (e && e.name === 'AbortError')
+                ? 'หมดเวลารอแต่ละรหัส — ลองใหม่ภายหลัง'
+                : ((e && e.message) ? e.message : 'เกิดข้อผิดพลาด');
+            setProgress(0, 0, total, msg, msg);
             qs('catalogSyncOverlayClose').classList.remove('hidden');
         }
     }
@@ -695,11 +778,11 @@ $catalogSyncChunkUrl = '../api/catalog-sync-chunk.php';
     });
     document.getElementById('catalogSyncFormIncremental')?.addEventListener('submit', function (e) {
         e.preventDefault();
-        runFullSyncAjax(this, 'โหลด incremental');
+        runIncrementalChunked(this);
     });
     document.getElementById('catalogSyncFormResync')?.addEventListener('submit', function (e) {
         e.preventDefault();
-        runFullSyncAjax(this, 'อัพเดตรายการที่มีอยู่');
+        runResyncChunked(this);
     });
     document.getElementById('catalogSyncOverlayClose')?.addEventListener('click', function () {
         showOverlay(false);
