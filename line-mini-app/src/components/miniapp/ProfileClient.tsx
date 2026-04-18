@@ -13,9 +13,11 @@ import {
   Gift,
   Heart,
   LogOut,
+  MessageCircle,
   Package,
   Pill,
   Star,
+  MessagesSquare,
   Stethoscope,
   Store,
   UserPlus,
@@ -26,6 +28,9 @@ import { AppShell } from '@/components/miniapp/AppShell'
 import { MemberCard } from '@/components/miniapp/MemberCard'
 import { VerifiedOnlyNotice } from '@/components/miniapp/VerifiedOnlyNotice'
 import { checkMember, getMemberCard } from '@/lib/member-api'
+import { appConfig } from '@/lib/config'
+import { miniappChannelCopy } from '@/lib/miniapp-channel-copy'
+import { openLineOfficialAccountChat } from '@/lib/open-line-oa-chat'
 
 function LoadingSkeleton() {
   return (
@@ -88,6 +93,35 @@ function ProfileMenuRow({
       </div>
       <ChevronRight className="shrink-0 text-slate-300" size={20} aria-hidden />
     </Link>
+  )
+}
+
+function ProfileMenuButton({
+  onClick,
+  icon: Icon,
+  title,
+  subtitle
+}: {
+  onClick: () => void
+  icon: typeof Store
+  title: string
+  subtitle?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3.5 text-left shadow-soft transition-colors hover:bg-slate-50"
+    >
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50">
+        <Icon size={20} className="text-emerald-600" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-slate-900">{title}</p>
+        {subtitle ? <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p> : null}
+      </div>
+      <ChevronRight className="shrink-0 text-slate-300" size={20} aria-hidden />
+    </button>
   )
 }
 
@@ -350,8 +384,35 @@ export function ProfileClient() {
               title="ประเมินอาการ"
               subtitle="สอบถามอาการเบื้องต้น"
             />
-            <ProfileMenuRow href="/ai-chat" icon={Bot} title="ผู้ช่วย AI" subtitle="แชทสอบถามสินค้าและสุขภาพ" />
+            <ProfileMenuRow
+              href="/ai-chat"
+              icon={Bot}
+              title={miniappChannelCopy.ai.titleTh}
+              subtitle={miniappChannelCopy.ai.subtitleTh}
+            />
           </div>
+
+          {appConfig.isLiveChatConfigured || appConfig.isLineOaChatConfigured ? (
+            <div className="space-y-2">
+              <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">ติดต่อ</p>
+              {appConfig.isLiveChatConfigured ? (
+                <ProfileMenuRow
+                  href="/livechat"
+                  icon={MessagesSquare}
+                  title={miniappChannelCopy.liveChat.titleTh}
+                  subtitle={miniappChannelCopy.liveChat.subtitleTh}
+                />
+              ) : null}
+              {appConfig.isLineOaChatConfigured ? (
+                <ProfileMenuButton
+                  onClick={() => openLineOfficialAccountChat(appConfig.lineOaChatUrl)}
+                  icon={MessageCircle}
+                  title={miniappChannelCopy.lineOa.titleTh}
+                  subtitle={miniappChannelCopy.lineOa.subtitleTh}
+                />
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">ช้อปปิ้ง</p>

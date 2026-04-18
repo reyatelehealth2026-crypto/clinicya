@@ -35,9 +35,15 @@ export function UniversalLink({ link, children, className, style }: UniversalLin
         }
         break
 
-      case 'line_chat':
-        window.location.href = link.value || 'https://line.me/R/oaMessage/@reya'
+      case 'line_chat': {
+        const url = link.value || 'https://line.me/R/oaMessage/@reya'
+        if (liff?.openWindow) {
+          liff.openWindow({ url, external: true })
+        } else {
+          window.location.href = url
+        }
         break
+      }
 
       case 'deep_link':
         window.location.href = link.value
