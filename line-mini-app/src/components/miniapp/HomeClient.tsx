@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useRef } from 'react'
-import { Gift, MessageCircle, MessagesSquare, Package, Star, Store, UserRound } from 'lucide-react'
+import { Gift, MessageCircle, Package, Star, Store, UserRound } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
 import { BottomNav } from '@/components/miniapp/BottomNav'
 import { ServiceMessageBanner } from '@/components/miniapp/ServiceMessageBanner'
@@ -13,9 +13,6 @@ import { getMemberCard } from '@/lib/member-api'
 import { getMyOrders } from '@/lib/orders-api'
 import { getHomeAll } from '@/lib/miniapp-home-api'
 import { usePullToRefresh } from '@/lib/hooks'
-import { appConfig } from '@/lib/config'
-import { miniappChannelCopy } from '@/lib/miniapp-channel-copy'
-import { openLineOfficialAccountChat } from '@/lib/open-line-oa-chat'
 
 function QuickActionIcon({ href, icon: Icon, label, color }: {
   href: string
@@ -157,44 +154,13 @@ export function HomeClient() {
                 color="bg-emerald-50 text-emerald-600"
               />
             </div>
-            <div className="mt-3 flex flex-col gap-2">
-              <Link
-                href="/ai-chat"
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-line-soft py-2.5 text-sm font-semibold text-line transition-colors hover:bg-line/10"
-              >
-                <MessageCircle size={18} />
-                {miniappChannelCopy.ai.homeCtaTh}
-              </Link>
-              {appConfig.isLiveChatConfigured ? (
-                <Link
-                  href="/livechat"
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-800 transition-colors hover:bg-slate-50"
-                >
-                  <MessagesSquare size={18} className="text-slate-600" />
-                  <span className="text-left leading-tight">
-                    <span className="block">{miniappChannelCopy.liveChat.titleTh}</span>
-                    <span className="block text-[10px] font-normal text-slate-500">
-                      {miniappChannelCopy.liveChat.subtitleTh}
-                    </span>
-                  </span>
-                </Link>
-              ) : null}
-              {appConfig.isLineOaChatConfigured ? (
-                <button
-                  type="button"
-                  onClick={() => openLineOfficialAccountChat(appConfig.lineOaChatUrl)}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
-                >
-                  <MessageCircle size={18} />
-                  <span className="text-left leading-tight">
-                    <span className="block">{miniappChannelCopy.lineOa.titleTh}</span>
-                    <span className="block text-[10px] font-normal text-emerald-100">
-                      {miniappChannelCopy.lineOa.subtitleTh}
-                    </span>
-                  </span>
-                </button>
-              ) : null}
-            </div>
+            <Link
+              href="/ai-chat"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-line-soft py-2.5 text-sm font-semibold text-line transition-colors hover:bg-line/10"
+            >
+              <MessageCircle size={18} />
+              แชท AI เภสัชกร
+            </Link>
           </div>
 
           {/* Notification Banner */}
