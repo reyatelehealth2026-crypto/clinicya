@@ -70,22 +70,47 @@ if (empty($userMessage)) $userMessage = "test"; // for CLI testing
 $db = Database::getInstance()->getConnection();
 
 /**
- * ลำดับคีย์: ai_settings ก่อน (เหมือนที่ทดสอบในหน้า AI Settings) — ถ้าไม่มีค่อยใช้ GEMINI_API_KEY ใน config/env
- * เดิมโหลด env ก่อน ทำให้คีย์เก่าใน .env หมดอายุแต่ DB มีคีย์ใหม่ → ทดสอบในฟอร์มผ่าน แต่ /api/ai-chat.php ไปใช้ของเก่า
+ * ลำดับคีย์: ai_settings ทุกแถว (newest first) → env/config — ลองทีละตัวใน loop ด้านล่าง
+ * ถ้าทุกคีย์ Gemini ใช้ไม่ได้ (leaked/auth/quota) → fallback ไป OpenAI
  */
-$geminiKey = '';
+$geminiKeys = [];
 try {
     $stmt = $db->query(
-        "SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) != '' ORDER BY line_account_id IS NULL DESC LIMIT 1"
+        "SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) != '' ORDER BY line_account_id IS NULL DESC, updated_at DESC, id DESC"
     );
-    $geminiKey = $stmt ? (string) $stmt->fetchColumn() : '';
+    if ($stmt) {
+        foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $k) {
+            $k = trim((string) $k);
+            if ($k !== '' && !in_array($k, $geminiKeys, true)) {
+                $geminiKeys[] = $k;
+            }
+        }
+    }
 } catch (Throwable $e) {
-    $geminiKey = '';
 }
-if ($geminiKey === '') {
-    $geminiKey = defined('GEMINI_API_KEY') ? GEMINI_API_KEY : (getenv('GEMINI_API_KEY') ?: '');
+$envGeminiKey = defined('GEMINI_API_KEY') ? GEMINI_API_KEY : (getenv('GEMINI_API_KEY') ?: '');
+if ($envGeminiKey !== '' && !in_array($envGeminiKey, $geminiKeys, true)) {
+    $geminiKeys[] = $envGeminiKey;
 }
-if (!$geminiKey) { echo "data: " . json_encode(['error' => 'GEMINI_API_KEY not configured']) . "\n\n"; flush(); exit; }
+
+$openaiKey = '';
+try {
+    $stmt = $db->query(
+        "SELECT openai_api_key FROM ai_settings WHERE openai_api_key IS NOT NULL AND TRIM(openai_api_key) != '' ORDER BY line_account_id IS NULL DESC, updated_at DESC, id DESC LIMIT 1"
+    );
+    $openaiKey = $stmt ? (string) $stmt->fetchColumn() : '';
+} catch (Throwable $e) {
+    $openaiKey = '';
+}
+if ($openaiKey === '') {
+    $openaiKey = defined('OPENAI_API_KEY') ? OPENAI_API_KEY : (getenv('OPENAI_API_KEY') ?: '');
+}
+
+if (empty($geminiKeys) && $openaiKey === '') {
+    echo "data: " . json_encode(['error' => 'AI key not configured (gemini/openai)']) . "\n\n";
+    flush();
+    exit;
+}
 
 // --- FAST CONTEXT (queries must not fatal — missing tables / SQL errors → defaults) ---
 $oy = ['total' => 0, 'amount' => 0, 'customers' => 0];
@@ -209,146 +234,227 @@ if ($payload === false) {
     exit;
 }
 
-$url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent?alt=sse&key=" . urlencode($geminiKey);
-$ch = curl_init($url);
-
-$sseBuffer = '';
-$upstreamBody = '';
+// State sharing across attempts
 $emittedAnyToken = false;
-$streamHadError = false;
+$capturedError = '';
+$silentMode = true; // true = บัฟเฟอร์ error ไว้ลอง key/provider ถัดไป (ไม่ส่งให้ client ทันที)
 
-$emitSseDataLine = static function (string $line) use (&$emittedAnyToken, &$streamHadError): void {
-    $line = rtrim($line, "\r\n");
-    if ($line === '' || $line === 'data: [DONE]') {
-        return;
+$emitToken = static function (string $t) use (&$emittedAnyToken): void {
+    $emittedAnyToken = true;
+    $flags = JSON_UNESCAPED_UNICODE;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
     }
-    if (strncmp($line, 'data:', 5) !== 0) {
-        return;
+    echo 'data: ' . json_encode(['token' => $t], $flags) . "\n\n";
+    if (function_exists('ob_get_level') && ob_get_level() > 0) {
+        ob_flush();
     }
-    $raw = trim(substr($line, 5));
-    if ($raw === '' || $raw === '[DONE]') {
-        return;
-    }
-    $json = json_decode($raw, true);
-    if (!is_array($json)) {
-        return;
-    }
-    if (isset($json['error'])) {
-        $streamHadError = true;
-        $msg = is_array($json['error']) ? ($json['error']['message'] ?? json_encode($json['error'], JSON_UNESCAPED_UNICODE)) : (string) $json['error'];
-        echo 'data: ' . json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE) . "\n\n";
-        if (function_exists('ob_get_level') && ob_get_level() > 0) {
-            ob_flush();
-        }
-        flush();
-
-        return;
-    }
-    if (!empty($json['promptFeedback']['blockReason'])) {
-        $streamHadError = true;
-        echo 'data: ' . json_encode([
-            'error' => 'Prompt blocked: ' . $json['promptFeedback']['blockReason'],
-        ], JSON_UNESCAPED_UNICODE) . "\n\n";
-        if (function_exists('ob_get_level') && ob_get_level() > 0) {
-            ob_flush();
-        }
-        flush();
-
-        return;
-    }
-    // ครบทุก candidate และทุก part (บางโมเดล/การส่งอาร์กิวเมนต์ใช้ index > 0 หรือหลาย part ต่อ chunk)
-    $candidateList = $json['candidates'] ?? null;
-    if (!is_array($candidateList)) {
-        return;
-    }
-    $emitToken = static function (string $t) use (&$emittedAnyToken): void {
-        $emittedAnyToken = true;
-        $flags = JSON_UNESCAPED_UNICODE;
-        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
-            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
-        }
-        echo 'data: ' . json_encode(['token' => $t], $flags) . "\n\n";
-        if (function_exists('ob_get_level') && ob_get_level() > 0) {
-            ob_flush();
-        }
-        flush();
-    };
-    foreach ($candidateList as $candidate) {
-        if (!is_array($candidate)) {
-            continue;
-        }
-        $parts = $candidate['content']['parts'] ?? null;
-        if (!is_array($parts)) {
-            continue;
-        }
-        foreach ($parts as $part) {
-            if (!is_array($part)) {
-                continue;
-            }
-            if (!empty($part['text']) && is_string($part['text'])) {
-                $emitToken($part['text']);
-            }
-        }
-    }
+    flush();
 };
 
-curl_setopt_array($ch, [
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => $payload,
-    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-    CURLOPT_RETURNTRANSFER => false,
-    CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_TIMEOUT => 90,
-    CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$sseBuffer, &$upstreamBody, $emitSseDataLine) {
-        $upstreamBody .= $data;
-        if (strlen($upstreamBody) > 98304) {
-            $upstreamBody = substr($upstreamBody, -98304);
-        }
-        $sseBuffer .= $data;
-        while (($pos = strpos($sseBuffer, "\n")) !== false) {
-            $line = substr($sseBuffer, 0, $pos);
-            $sseBuffer = substr($sseBuffer, $pos + 1);
-            $emitSseDataLine($line);
-        }
+$emitErrorOrCapture = static function (string $msg) use (&$silentMode, &$capturedError): void {
+    if ($silentMode) {
+        $capturedError = $msg;
+        return;
+    }
+    echo 'data: ' . json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE) . "\n\n";
+    if (function_exists('ob_get_level') && ob_get_level() > 0) {
+        ob_flush();
+    }
+    flush();
+};
 
-        return strlen($data);
-    },
-]);
+/**
+ * ลอง Gemini ด้วยคีย์ที่ระบุ คืน true ถ้ามี token ส่งออกอย่างน้อย 1 ตัว
+ */
+$tryGemini = function (string $key) use ($payload, $emitToken, &$capturedError, &$emittedAnyToken): bool {
+    $tokenCountBefore = $emittedAnyToken ? 1 : 0;
+    $sseBuffer = '';
+    $upstreamBody = '';
+    $streamErrorMsg = '';
 
-curl_exec($ch);
-$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curlErr = curl_error($ch);
-if ($curlErr !== '') {
-    echo 'data: ' . json_encode(['error' => $curlErr], JSON_UNESCAPED_UNICODE) . "\n\n";
-} elseif ($httpCode >= 400 && !$emittedAnyToken && !$streamHadError) {
-    $detail = 'Gemini HTTP ' . $httpCode . ' — ตรวจสอบ API Key / โควต้า / รูปแบบคำขอ';
-    $parsed = json_decode($upstreamBody, true);
-    if (is_array($parsed) && isset($parsed['error']['message'])) {
-        $detail = (string) $parsed['error']['message'];
-    } elseif (trim($upstreamBody) !== '') {
-        $snippet = preg_replace('/\s+/', ' ', $upstreamBody);
-        if (is_string($snippet) && strlen($snippet) > 280) {
-            $snippet = substr($snippet, 0, 280) . '…';
+    $processLine = function (string $line) use (&$streamErrorMsg, $emitToken): void {
+        $line = rtrim($line, "\r\n");
+        if ($line === '' || $line === 'data: [DONE]') {
+            return;
         }
-        if (is_string($snippet) && $snippet !== '') {
-            $detail .= ' | ' . $snippet;
+        if (strncmp($line, 'data:', 5) !== 0) {
+            return;
+        }
+        $raw = trim(substr($line, 5));
+        if ($raw === '' || $raw === '[DONE]') {
+            return;
+        }
+        $json = json_decode($raw, true);
+        if (!is_array($json)) {
+            return;
+        }
+        if (isset($json['error'])) {
+            $streamErrorMsg = is_array($json['error']) ? ($json['error']['message'] ?? json_encode($json['error'], JSON_UNESCAPED_UNICODE)) : (string) $json['error'];
+            return;
+        }
+        if (!empty($json['promptFeedback']['blockReason'])) {
+            $streamErrorMsg = 'Prompt blocked: ' . $json['promptFeedback']['blockReason'];
+            return;
+        }
+        $candidateList = $json['candidates'] ?? null;
+        if (!is_array($candidateList)) {
+            return;
+        }
+        foreach ($candidateList as $candidate) {
+            if (!is_array($candidate)) {
+                continue;
+            }
+            $parts = $candidate['content']['parts'] ?? null;
+            if (!is_array($parts)) {
+                continue;
+            }
+            foreach ($parts as $part) {
+                if (is_array($part) && !empty($part['text']) && is_string($part['text'])) {
+                    $emitToken($part['text']);
+                }
+            }
+        }
+    };
+
+    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent?alt=sse&key=" . urlencode($key);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => false,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => 90,
+        CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$sseBuffer, &$upstreamBody, $processLine) {
+            $upstreamBody .= $data;
+            if (strlen($upstreamBody) > 98304) {
+                $upstreamBody = substr($upstreamBody, -98304);
+            }
+            $sseBuffer .= $data;
+            while (($pos = strpos($sseBuffer, "\n")) !== false) {
+                $line = substr($sseBuffer, 0, $pos);
+                $sseBuffer = substr($sseBuffer, $pos + 1);
+                $processLine($line);
+            }
+            return strlen($data);
+        },
+    ]);
+    curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($sseBuffer !== '') {
+        $processLine($sseBuffer);
+    }
+
+    $tokensAfter = $emittedAnyToken ? 1 : 0;
+    if ($tokensAfter > $tokenCountBefore) {
+        return true;
+    }
+
+    // ไม่ได้ token — เก็บ error ไว้ใน capturedError
+    $detail = $streamErrorMsg;
+    if ($detail === '' && $curlErr !== '') {
+        $detail = $curlErr;
+    }
+    if ($detail === '' && $httpCode >= 400) {
+        $parsed = json_decode($upstreamBody, true);
+        if (is_array($parsed) && isset($parsed['error']['message'])) {
+            $detail = (string) $parsed['error']['message'];
+        } else {
+            $detail = 'Gemini HTTP ' . $httpCode;
+            if (trim($upstreamBody) !== '') {
+                $snippet = preg_replace('/\s+/', ' ', substr($upstreamBody, 0, 280));
+                if (is_string($snippet) && $snippet !== '') {
+                    $detail .= ' | ' . $snippet;
+                }
+            }
         }
     }
-    echo 'data: ' . json_encode(['error' => $detail], JSON_UNESCAPED_UNICODE) . "\n\n";
+    if ($detail === '') {
+        $detail = 'ไม่ได้รับข้อความจากโมเดล';
+    }
+    $capturedError = $detail;
+    return false;
+};
+
+/**
+ * Fallback OpenAI (non-streaming) — emit เป็น chunk เดียว
+ */
+$tryOpenAI = function (string $key) use ($systemPrompt, $contents, $emitToken, &$capturedError): bool {
+    $messages = [['role' => 'system', 'content' => $systemPrompt]];
+    foreach ($contents as $turn) {
+        $role = ($turn['role'] ?? 'user') === 'model' ? 'assistant' : 'user';
+        $text = $turn['parts'][0]['text'] ?? '';
+        if ($text === '') {
+            continue;
+        }
+        $messages[] = ['role' => $role, 'content' => $text];
+    }
+    $body = json_encode([
+        'model' => 'gpt-4o-mini',
+        'messages' => $messages,
+        'max_tokens' => 512,
+        'temperature' => 0.3,
+    ], JSON_UNESCAPED_UNICODE);
+
+    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $body,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $key,
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 60,
+    ]);
+    $resp = curl_exec($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlErr !== '') {
+        $capturedError = 'OpenAI: ' . $curlErr;
+        return false;
+    }
+    $parsed = is_string($resp) ? json_decode($resp, true) : null;
+    if ($httpCode >= 400 || !is_array($parsed)) {
+        $msg = is_array($parsed) && isset($parsed['error']['message']) ? (string) $parsed['error']['message'] : 'OpenAI HTTP ' . $httpCode;
+        $capturedError = $msg;
+        return false;
+    }
+    $text = $parsed['choices'][0]['message']['content'] ?? '';
+    if (!is_string($text) || $text === '') {
+        $capturedError = 'OpenAI: empty response';
+        return false;
+    }
+    $emitToken($text);
+    return true;
+};
+
+// 1) ลอง Gemini ทุกคีย์
+$success = false;
+foreach ($geminiKeys as $key) {
+    if ($tryGemini($key)) {
+        $success = true;
+        break;
+    }
 }
 
-// เหลือ buffer สุดท้ายที่ไม่มี newline (chunk สุดท้ายจาก curl)
-if ($sseBuffer !== '') {
-    $emitSseDataLine($sseBuffer);
-    $sseBuffer = '';
+// 2) ถ้าทุกคีย์ Gemini พัง → ลอง OpenAI
+if (!$success && $openaiKey !== '') {
+    if ($tryOpenAI($openaiKey)) {
+        $success = true;
+    }
 }
 
-curl_close($ch);
-
-if (!$emittedAnyToken && !$streamHadError && ($httpCode === 200 || $httpCode === 0) && $curlErr === '') {
-    echo 'data: ' . json_encode([
-        'error' => 'ไม่ได้รับข้อความจากโมเดล (สตรีมว่างหรือถูกบล็อก) — ลองข้อความสั้นลงหรือล้างประวัติแชท',
-    ], JSON_UNESCAPED_UNICODE) . "\n\n";
+// 3) ถ้ายังพังอีก → ส่ง error สุดท้ายที่เก็บไว้
+$silentMode = false;
+if (!$success) {
+    $emitErrorOrCapture($capturedError !== '' ? $capturedError : 'AI ไม่ตอบสนอง — ตรวจสอบคีย์ Gemini/OpenAI');
 }
 
 echo "data: [DONE]\n\n";
