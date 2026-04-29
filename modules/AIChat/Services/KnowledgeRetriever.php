@@ -255,6 +255,27 @@ class KnowledgeRetriever
             $p = trim($p);
             if (mb_strlen($p) >= 2) $out[] = $p;
         }
+        // Thai มักไม่มี space — สร้าง sliding window 3-4 chars จาก contiguous Thai runs
+        // เพื่อให้ "ปวดหัวมาก" match chunk ที่มี "ปวดหัว"
+        if (preg_match_all('/[\x{0E00}-\x{0E7F}]+/u', $text, $m)) {
+            foreach ($m[0] as $run) {
+                $len = mb_strlen($run);
+                if ($len <= 4) continue;
+                foreach ([4, 3] as $win) {
+                    if ($len < $win) continue;
+                    for ($i = 0; $i <= $len - $win; $i++) {
+                        $sub = mb_substr($run, $i, $win);
+                        if (!in_array($sub, $out, true)) {
+                            $out[] = $sub;
+                        }
+                    }
+                }
+            }
+        }
+        // จำกัดจำนวน token เพื่อกัน SQL ระเบิด
+        if (count($out) > 40) {
+            $out = array_slice($out, 0, 40);
+        }
         return $out;
     }
 

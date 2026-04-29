@@ -732,12 +732,23 @@ document.getElementById('seedDefaultBtn').addEventListener('click', async () => 
   out.innerHTML = '<div class="text-emerald-600">⏳ กำลัง seed...</div>';
   const r = await adminCall('seed_default_data');
   if (!r.success) { out.innerHTML = '<div class="text-red-500">' + (r.error || 'error') + '</div>'; return; }
+  const fmt = (newVal, totalVal) => {
+    const t = (totalVal === undefined || totalVal === null) ? '—' : totalVal;
+    const n = (newVal === undefined || newVal === null) ? 0 : newVal;
+    return '<strong>' + t + '</strong> (เพิ่มรอบนี้ ' + n + ')';
+  };
+  const kb = (r.kb_chunks_total === undefined) ? null : r.kb_chunks_total;
   out.innerHTML = '<div class="p-3 bg-emerald-50 text-emerald-700 rounded-lg space-y-1">'
     + '<div class="font-semibold">✅ Seed สำเร็จ</div>'
-    + '<div class="text-xs">🚨 Red flags ใหม่: <strong>' + r.red_flags_inserted + '</strong> รายการ</div>'
-    + '<div class="text-xs">❓ Triage questions ใหม่: <strong>' + r.triage_questions_inserted + '</strong> รายการ</div>'
-    + '<div class="text-xs">🔗 Symptom→Product mapping: <strong>' + r.symptom_map_inserted + '</strong> รายการ</div>'
-    + '<div class="text-xs">📦 Business items classified: <strong>' + r.business_items_classified + '</strong> ชิ้น</div>'
+    + '<div class="text-xs">🚨 Red flags: ' + fmt(r.red_flags_inserted, r.red_flags_total) + '</div>'
+    + '<div class="text-xs">❓ Triage questions: ' + fmt(r.triage_questions_inserted, r.triage_questions_total) + '</div>'
+    + '<div class="text-xs">🔗 Symptom→Product mapping: ' + fmt(r.symptom_map_inserted, r.symptom_map_total) + '</div>'
+    + '<div class="text-xs">📦 Business items: <strong>' + (r.business_items_recommend ?? '—') + '/' + (r.business_items_active ?? '—') + '</strong> แนะนำได้ (อัปเดตรอบนี้ ' + (r.business_items_classified ?? 0) + ')</div>'
+    + (kb !== null
+        ? ('<div class="text-xs">📚 RAG knowledge chunks: <strong>' + kb + '</strong>'
+            + (kb === 0 ? ' <span class="text-rose-600">— ยังไม่ได้ import! ใช้แท็บ Knowledge Base</span>' : '')
+            + '</div>')
+        : '')
     + '<div class="text-xs italic mt-2">ℹ️ ' + (r.note || '') + '</div>'
     + '</div>';
   loadSymptomCodes();

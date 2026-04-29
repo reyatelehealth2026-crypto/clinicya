@@ -298,6 +298,7 @@ $ctxJson = json_encode([
 
 // RAG context — ดึงความรู้ที่เกี่ยวข้องจาก ai_knowledge_base ก่อน build prompt
 $ragContext = '';
+$ragDiag = ['chunks' => 0, 'codes' => [], 'kb_total' => 0];
 try {
     require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
     if (function_exists('loadAIChatModule')) {
@@ -312,9 +313,22 @@ try {
         $retriever = new \Modules\AIChat\Services\KnowledgeRetriever($db);
         $chunks = $retriever->retrieve($kbAccId, $userMessage, $codes, 4);
         $ragContext = $retriever->buildPromptContext($chunks);
+        $ragDiag['chunks'] = count($chunks);
+        $ragDiag['codes']  = $codes;
+        try {
+            $stmt = $db->query("SELECT COUNT(*) FROM ai_knowledge_base WHERE is_active=1");
+            $ragDiag['kb_total'] = (int) ($stmt ? $stmt->fetchColumn() : 0);
+        } catch (\Throwable $e) {}
     }
 } catch (\Throwable $e) {
     error_log('KnowledgeRetriever skipped: ' . $e->getMessage());
+}
+
+// Emit RAG diagnostic เป็น SSE event แรก (เฉพาะ consult mode) — client ที่ไม่รู้จัก key นี้จะ ignore
+if ($isConsultMode) {
+    echo 'data: ' . json_encode(['rag_diag' => $ragDiag], JSON_UNESCAPED_UNICODE) . "\n\n";
+    if (function_exists('ob_get_level') && ob_get_level() > 0) { ob_flush(); }
+    flush();
 }
 
 if ($isConsultMode) {

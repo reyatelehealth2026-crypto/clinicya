@@ -1015,30 +1015,32 @@ try {
                 $hasItemCat = false;
                 try { $db->query("SELECT 1 FROM item_categories LIMIT 1"); $hasItemCat = true; } catch (\Throwable $e) {}
 
+                // [keywords, category cny_code prefixes] — กรณีร้านจัดสินค้าตามหมวดหมู่ (เช่น VIT-01, SKI-01)
+                // ระบบจะ OR-match ทั้ง name/active_ingredient/category_name AND category cny_code prefix
                 $matches = [
-                    'fever'           => ['paracetamol', 'พาราเซตามอล', 'ลดไข้', 'tylenol', 'sara'],
-                    'cough'           => ['dextromethorphan', 'ระงับไอ', 'แก้ไอ', 'guaifenesin'],
-                    'runny_nose'      => ['chlorpheniramine', 'แก้แพ้', 'น้ำมูก', 'cpm'],
-                    'sore_throat'     => ['อม', 'เจ็บคอ', 'strepsils', 'lozenge', 'difflam'],
-                    'allergy_rhinitis'=> ['loratadine', 'cetirizine', 'แก้แพ้', 'แอนตี้ฮีสต'],
-                    'diarrhea'        => ['loperamide', 'ท้องเสีย', 'ผงเกลือแร่', 'ors', 'อิเล็กโทรไลต์'],
-                    'indigestion'     => ['antacid', 'ลดกรด', 'ขับลม', 'simethicone', 'eno'],
-                    'headache'        => ['paracetamol', 'พาราเซตามอล', 'ปวดหัว'],
-                    'musculoskeletal_pain' => ['ยาทาแก้ปวด', 'counterpain', 'salonpas', 'capsaicin', 'น้ำมันมวย'],
-                    'mouth_ulcer'     => ['kenalog', 'แผลในปาก', 'sm-33', 'borax'],
-                    'constipation'    => ['ยาระบาย', 'fiber', 'lactulose', 'senna', 'bisacodyl'],
-                    'motion_sickness' => ['dimenhydrinate', 'แก้เมา', 'ดรามามีน'],
-                    'eye_allergy'     => ['น้ำตาเทียม', 'eye drop', 'ตา'],
-                    'skin_infection'  => ['ฆ่าเชื้อแผล', 'betadine', 'iodine', 'antiseptic', 'แอลกอฮอล์'],
-                    'urticaria'       => ['ทาแก้คัน', 'calamine'],
-                    'dermatitis'      => ['ครีม', 'cream', 'lotion', 'โลชั่น'],
-                    'acne'            => ['สิว', 'acne', 'benzoyl'],
-                    'athlete_foot'    => ['เชื้อรา', 'antifungal', 'clotrimazole', 'miconazole'],
-                    'burn_minor'      => ['silver sulfadiazine', 'แผลไหม้', 'burn'],
-                    'eczema'          => ['eczema', 'ผื่น'],
-                    'insomnia'        => ['valerian', 'melatonin'],
-                    'body_ache'       => ['paracetamol', 'แก้ปวด', 'ปวดเมื่อย'],
-                    'nausea'          => ['domperidone', 'แก้คลื่นไส้'],
+                    'fever'           => [['paracetamol', 'พาราเซตามอล', 'ลดไข้', 'tylenol', 'sara'], ['PAR', 'PAI', 'FEV']],
+                    'cough'           => [['dextromethorphan', 'ระงับไอ', 'แก้ไอ', 'guaifenesin', 'ไอ'], ['COU', 'COL']],
+                    'runny_nose'      => [['chlorpheniramine', 'แก้แพ้', 'น้ำมูก', 'cpm', 'หวัด'], ['COL', 'ANT']],
+                    'sore_throat'     => [['อม', 'เจ็บคอ', 'strepsils', 'lozenge', 'difflam'], ['LOZ', 'COL', 'THR']],
+                    'allergy_rhinitis'=> [['loratadine', 'cetirizine', 'แก้แพ้', 'แอนตี้ฮีสต', 'antihistamine'], ['ANT', 'COL']],
+                    'diarrhea'        => [['loperamide', 'ท้องเสีย', 'ผงเกลือแร่', 'ors', 'อิเล็กโทรไลต์', 'electrolyte'], ['DIA', 'GI', 'ORS']],
+                    'indigestion'     => [['antacid', 'ลดกรด', 'ขับลม', 'simethicone', 'eno', 'แสบยอดอก'], ['GI', 'ANT']],
+                    'headache'        => [['paracetamol', 'พาราเซตามอล', 'ปวดหัว', 'แก้ปวด'], ['PAR', 'PAI']],
+                    'musculoskeletal_pain' => [['ยาทาแก้ปวด', 'counterpain', 'salonpas', 'capsaicin', 'น้ำมันมวย', 'ปวดเมื่อย'], ['PAI', 'TOP', 'PLA']],
+                    'mouth_ulcer'     => [['kenalog', 'แผลในปาก', 'sm-33', 'borax', 'ปาก'], ['ORA', 'GI']],
+                    'constipation'    => [['ยาระบาย', 'fiber', 'lactulose', 'senna', 'bisacodyl', 'ระบาย'], ['LAX', 'GI']],
+                    'motion_sickness' => [['dimenhydrinate', 'แก้เมา', 'ดรามามีน', 'เมารถ'], ['MOT', 'NAU']],
+                    'eye_allergy'     => [['น้ำตาเทียม', 'eye drop', 'ตา', 'eye'], ['EYE']],
+                    'skin_infection'  => [['ฆ่าเชื้อแผล', 'betadine', 'iodine', 'antiseptic', 'แอลกอฮอล์', 'ทาฆ่าเชื้อ', 'แบคทีเรีย', 'แผล'], ['SKI', 'WOU', 'ANT']],
+                    'urticaria'       => [['ทาแก้คัน', 'calamine', 'คัน', 'ลมพิษ'], ['SKI', 'TOP']],
+                    'dermatitis'      => [['ครีม', 'cream', 'lotion', 'โลชั่น', 'ผื่น'], ['SKI', 'CRE', 'TOP']],
+                    'acne'            => [['สิว', 'acne', 'benzoyl'], ['ACN', 'SKI']],
+                    'athlete_foot'    => [['เชื้อรา', 'antifungal', 'clotrimazole', 'miconazole', 'น้ำกัดเท้า'], ['ANT', 'SKI', 'FUN']],
+                    'burn_minor'      => [['silver sulfadiazine', 'แผลไหม้', 'burn'], ['BUR', 'SKI']],
+                    'eczema'          => [['eczema', 'ผื่น', 'ผื่นแห้ง'], ['SKI', 'CRE']],
+                    'insomnia'        => [['valerian', 'melatonin', 'นอนหลับ'], ['SLE']],
+                    'body_ache'       => [['paracetamol', 'แก้ปวด', 'ปวดเมื่อย'], ['PAR', 'PAI']],
+                    'nausea'          => [['domperidone', 'แก้คลื่นไส้', 'คลื่นไส้'], ['NAU', 'GI']],
                 ];
 
                 $smInsert = $db->prepare(
@@ -1049,9 +1051,19 @@ try {
 
                 $catJoin = $hasItemCat ? "LEFT JOIN item_categories ic ON bi.category_id = ic.id" : "";
                 $catFields = $hasItemCat ? "CONCAT_WS(' ', COALESCE(ic.name,''), COALESCE(ic.cny_code,''))" : "''";
+                $catCodeCol = $hasItemCat ? "COALESCE(ic.cny_code,'')" : "''";
                 $aiCol = "COALESCE(bi.active_ingredient,'')";
 
-                foreach ($matches as $code => $kws) {
+                foreach ($matches as $code => $cfg) {
+                    // รองรับทั้งแบบเก่า (string[]) และแบบใหม่ ([keywords, prefixes])
+                    if (is_array($cfg) && isset($cfg[0]) && is_array($cfg[0])) {
+                        $kws = $cfg[0];
+                        $prefixes = isset($cfg[1]) && is_array($cfg[1]) ? $cfg[1] : [];
+                    } else {
+                        $kws = is_array($cfg) ? $cfg : [];
+                        $prefixes = [];
+                    }
+
                     $orParts = [];
                     $bind = [];
                     foreach ($kws as $i => $kw) {
@@ -1059,6 +1071,16 @@ try {
                         $orParts[] = "(LOWER(bi.name) LIKE LOWER(:k$i)"
                             . " OR LOWER($aiCol) LIKE LOWER(:k$i)"
                             . " OR LOWER($catFields) LIKE LOWER(:k$i))";
+                    }
+                    if ($hasItemCat) {
+                        foreach ($prefixes as $j => $pfx) {
+                            $bind[":p$j"] = $pfx . '%';
+                            $orParts[] = "UPPER($catCodeCol) LIKE UPPER(:p$j)";
+                        }
+                    }
+
+                    if (empty($orParts)) {
+                        continue;
                     }
                     $sql2 = "SELECT bi.id FROM business_items bi $catJoin
                              WHERE COALESCE(bi.ai_recommendable,1)=1
@@ -1090,11 +1112,34 @@ try {
                 error_log('seed symptom map error: ' . $e->getMessage());
             }
 
+            // Totals หลัง seed (ใช้แทน rowCount เพราะ INSERT IGNORE / UPDATE ที่ค่าเดิมจะคืน 0 ทุกครั้ง)
+            $tally = function (string $sql) use ($db): int {
+                try {
+                    $stmt = $db->query($sql);
+                    if (!$stmt) return 0;
+                    return (int) ($stmt->fetchColumn() ?: 0);
+                } catch (\Throwable $e) { return 0; }
+            };
+            $rfTotal      = $tally("SELECT COUNT(*) FROM red_flag_symptoms WHERE is_active=1");
+            $tqTotal      = $tally("SELECT COUNT(*) FROM triage_questions WHERE is_active=1");
+            $smTotal      = $tally("SELECT COUNT(*) FROM product_symptom_map");
+            $biActive     = $tally("SELECT COUNT(*) FROM business_items WHERE is_active=1");
+            $biRecommend  = $tally("SELECT COUNT(*) FROM business_items WHERE is_active=1 AND COALESCE(ai_recommendable,1)=1");
+            $kbTotal      = $tally("SELECT COUNT(*) FROM ai_knowledge_base WHERE is_active=1");
+
             $respond(true, [
+                // เก่า — ยังคงไว้เพื่อ backward-compat กับ UI
                 'red_flags_inserted'         => $rfCount,
                 'triage_questions_inserted'  => $tqCount,
                 'symptom_map_inserted'       => $smCount,
                 'business_items_classified'  => $aiRecommendUpdated,
+                // ใหม่ — total หลัง seed (เลขนี้คือสิ่งที่ user ควรเห็น)
+                'red_flags_total'            => $rfTotal,
+                'triage_questions_total'     => $tqTotal,
+                'symptom_map_total'          => $smTotal,
+                'business_items_active'      => $biActive,
+                'business_items_recommend'   => $biRecommend,
+                'kb_chunks_total'            => $kbTotal,
                 'note' => 'AI แนะนำได้ = เฉพาะ household/otc/traditional ที่ไม่ต้องใบสั่งแพทย์ — ตามกฎหมายไทย',
             ]);
         }

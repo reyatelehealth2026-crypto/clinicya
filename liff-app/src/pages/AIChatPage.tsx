@@ -26,8 +26,9 @@ export function AIChatPage() {
 
     const history = messages
       .filter((m) => typeof m.content === 'string' && m.content.trim())
+      .slice(-10)
       .map((m) => ({ role: m.role, content: m.content }))
-    history.push({ role: 'user', content: text })
+    // อย่าซ้อน user — API มี field `message` แล้ว; ซ้อนทำให้ Gemini ได้ contents ผิดและรอบนี้อาจว่างการตอบ
 
     try {
       abortRef.current = new AbortController()

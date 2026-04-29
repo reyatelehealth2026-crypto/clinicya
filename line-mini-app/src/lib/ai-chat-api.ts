@@ -1,10 +1,15 @@
 import { apiUrl } from '@/lib/config'
-import type { ChatHistoryItem, AIChatStreamCallbacks } from '@/types/ai-chat'
+import type {
+  ChatHistoryItem,
+  AIChatStreamCallbacks,
+  TriageStructuredPayload
+} from '@/types/ai-chat'
 
 /** ดึง payload หลัง prefix SSE `data:` — ไม่ใช้ JSON.parse กับทั้งบรรทัดที่มีคำว่า data: */
 function parseSseDataLine(trimmed: string): { data: string } | null {
-  if (!trimmed.startsWith('data:')) return null
-  const data = trimmed.replace(/^data:\s*/, '').trim()
+  const clean = trimmed.replace(/^\uFEFF/, '').trim()
+  if (!clean.startsWith('data:')) return null
+  const data = clean.replace(/^data:\s*/, '').trim()
   return { data }
 }
 
@@ -19,10 +24,17 @@ function handleSsePayload(
     return 'done'
   }
   try {
-    const parsed = JSON.parse(data) as { token?: string; error?: string }
+    const parsed = JSON.parse(data) as {
+      token?: string
+      error?: string
+      structured?: TriageStructuredPayload
+    }
     if (parsed.error) {
       callbacks.onError(parsed.error)
       return 'error'
+    }
+    if (parsed.structured && callbacks.onStructured) {
+      callbacks.onStructured(parsed.structured)
     }
     if (parsed.token) {
       callbacks.onToken(parsed.token)
@@ -46,19 +58,30 @@ function processSseTextBlock(text: string, callbacks: AIChatStreamCallbacks, saf
   }
 }
 
+export interface AIChatMeta {
+  line_user_id?: string
+  line_account_id?: number
+}
+
 export async function streamAIChat(
   message: string,
   history: ChatHistoryItem[],
-  callbacks: AIChatStreamCallbacks
+  callbacks: AIChatStreamCallbacks,
+  meta?: AIChatMeta
 ): Promise<void> {
   const url = apiUrl('/api/ai-chat.php')
+  // mode=consult บังคับใช้ persona เภสัชกรผู้ช่วย — ห้าม backend สลับไป B2B/admin
+  const body: Record<string, unknown> = { message, history, mode: 'consult' }
+  if (meta?.line_user_id) body.line_user_id = meta.line_user_id
+  if (typeof meta?.line_account_id === 'number') body.line_account_id = meta.line_account_id
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream'
     },
-    body: JSON.stringify({ message, history })
+    body: JSON.stringify(body)
   })
 
   let completed = false
@@ -118,6 +141,7 @@ export async function streamAIChat(
         if (done) break
 
         buffer += decoder.decode(value, { stream: true })
+        buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 
         const lines = buffer.split(/\n/)
         buffer = lines.pop() ?? ''

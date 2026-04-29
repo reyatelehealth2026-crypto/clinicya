@@ -4,9 +4,18 @@ import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, AlertCircle } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
 import { AppShell } from '@/components/miniapp/AppShell'
+import { TriageOptions } from '@/components/miniapp/TriageOptions'
+import { ProductCardList } from '@/components/miniapp/ProductCardList'
+import { EscalationBanner } from '@/components/miniapp/EscalationBanner'
 import { streamAIChat } from '@/lib/ai-chat-api'
 import { useToast } from '@/lib/toast'
-import type { ChatMessage, ChatHistoryItem } from '@/types/ai-chat'
+import type {
+  ChatMessage,
+  ChatHistoryItem,
+  TriageOption,
+  TriageProduct,
+  TriageStructuredPayload
+} from '@/types/ai-chat'
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
@@ -23,7 +32,7 @@ function LoadingDots() {
 }
 
 export function AIChatClient() {
-  useLineContext()
+  const lineCtx = useLineContext()
   const { toast } = useToast()
 
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -37,6 +46,9 @@ export function AIChatClient() {
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const [currentOptions, setCurrentOptions] = useState<TriageOption[]>([])
+  const [currentProducts, setCurrentProducts] = useState<TriageProduct[]>([])
+  const [escalation, setEscalation] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom
@@ -44,9 +56,14 @@ export function AIChatClient() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  const handleSend = async () => {
-    const text = input.trim()
+  const handleSend = async (textOverride?: string) => {
+    const text = (textOverride ?? input).trim()
     if (!text || isStreaming) return
+
+    // เคลียร์ structured panels ของรอบก่อน (จะ re-populate จาก response รอบนี้ถ้ามี)
+    setCurrentOptions([])
+    setCurrentProducts([])
+    setEscalation(null)
 
     // ประวัติก่อนข้อความรอบนี้ (ไม่รวม user ที่กำลังส่ง — ส่งเป็น message แยกใน API)
     const historyPayload: ChatHistoryItem[] = messages.slice(-10).map((m) => ({
@@ -66,55 +83,80 @@ export function AIChatClient() {
     setStreamingContent('')
 
     let fullResponse = ''
+    let lastStructured: TriageStructuredPayload | null = null
 
     try {
-      await streamAIChat(text, historyPayload, {
-        onToken: (token) => {
-          fullResponse += token
-          setStreamingContent(fullResponse)
-        },
-        onComplete: () => {
-          const aiMsg: ChatMessage = {
-            id: generateId(),
-            role: 'assistant',
-            content: fullResponse.trim() || 'ขออภัย ไม่สามารถให้คำตอบได้',
-            timestamp: new Date()
-          }
-          setMessages((prev) => [...prev, aiMsg])
-          setStreamingContent('')
-          setIsStreaming(false)
-        },
-        onError: (error) => {
-          console.error('AI Chat error:', error)
-          const short =
-            error.length > 220 ? `${error.slice(0, 220)}…` : error
-          toast.error(short)
+      await streamAIChat(
+        text,
+        historyPayload,
+        {
+          onToken: (token) => {
+            fullResponse += token
+            setStreamingContent(fullResponse)
+          },
+          onStructured: (payload) => {
+            lastStructured = payload
+            if (payload.type === 'question' && Array.isArray(payload.options)) {
+              setCurrentOptions(payload.options)
+            } else if (payload.type === 'products' && Array.isArray(payload.products)) {
+              setCurrentProducts(payload.products)
+            } else if (payload.type === 'escalate') {
+              setEscalation(payload.message ?? 'พบสัญญาณที่ต้องพบเภสัชกร/แพทย์')
+            }
+          },
+          onComplete: () => {
+            const finalText =
+              fullResponse.trim() ||
+              lastStructured?.message ||
+              lastStructured?.question_th ||
+              'ขออภัย ไม่สามารถให้คำตอบได้'
+            const aiMsg: ChatMessage = {
+              id: generateId(),
+              role: 'assistant',
+              content: finalText,
+              timestamp: new Date()
+            }
+            setMessages((prev) => [...prev, aiMsg])
+            setStreamingContent('')
+            setIsStreaming(false)
+          },
+          onError: (error) => {
+            const short = error.length > 220 ? `${error.slice(0, 220)}…` : error
+            toast.error(short)
 
-          const errorMsg: ChatMessage = {
-            id: generateId(),
-            role: 'assistant',
-            content: `ขออภัย: ${short}`,
-            timestamp: new Date()
+            const errorMsg: ChatMessage = {
+              id: generateId(),
+              role: 'assistant',
+              content: `ขออภัย: ${short}`,
+              timestamp: new Date()
+            }
+            setMessages((prev) => [...prev, errorMsg])
+            setStreamingContent('')
+            setIsStreaming(false)
           }
-          setMessages((prev) => [...prev, errorMsg])
-          setStreamingContent('')
-          setIsStreaming(false)
+        },
+        {
+          line_user_id: lineCtx.profile?.userId
         }
-      })
+      )
     } catch (error) {
-      console.error('Failed to stream:', error)
-      const msg =
-        error instanceof Error ? error.message : 'ไม่สามารถเชื่อมต่อกับ AI ได้'
+      const msg = error instanceof Error ? error.message : 'ไม่สามารถเชื่อมต่อกับ AI ได้'
       toast.error(msg.length > 180 ? `${msg.slice(0, 180)}…` : msg)
       setStreamingContent('')
       setIsStreaming(false)
     }
   }
 
+  const handleOptionClick = (value: string, label: string) => {
+    if (isStreaming) return
+    setCurrentOptions([])
+    void handleSend(label || value)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSend()
+      void handleSend()
     }
   }
 
@@ -198,6 +240,19 @@ export function AIChatClient() {
             </div>
           )}
 
+          {/* Triage structured UI — แสดงใต้ messages */}
+          {!isStreaming && escalation ? (
+            <EscalationBanner message={escalation} />
+          ) : null}
+
+          {!isStreaming && currentOptions.length > 0 ? (
+            <TriageOptions options={currentOptions} onSelect={handleOptionClick} />
+          ) : null}
+
+          {!isStreaming && currentProducts.length > 0 ? (
+            <ProductCardList products={currentProducts} />
+          ) : null}
+
           <div ref={bottomRef} />
         </div>
 
@@ -214,7 +269,7 @@ export function AIChatClient() {
               className="flex-1 px-4 py-3 bg-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 disabled:opacity-50"
             />
             <button
-              onClick={handleSend}
+              onClick={() => void handleSend()}
               disabled={!input.trim() || isStreaming}
               className="w-11 h-11 bg-purple-600 text-white rounded-full flex items-center justify-center disabled:opacity-40 active:scale-90 transition-transform"
             >
@@ -228,10 +283,7 @@ export function AIChatClient() {
               {['ไข้หวัด', 'ปวดหัว', 'ท้องเสีย', 'แพ้อากาศ', 'ปรึกษาเภสัชกร'].map((suggestion) => (
                 <button
                   key={suggestion}
-                  onClick={() => {
-                    setInput(suggestion)
-                    setTimeout(() => handleSend(), 0)
-                  }}
+                  onClick={() => handleSend(suggestion)}
                   className="px-3 py-1.5 bg-purple-50 text-purple-700 text-xs rounded-full border border-purple-100 hover:bg-purple-100 transition-colors"
                 >
                   {suggestion}
