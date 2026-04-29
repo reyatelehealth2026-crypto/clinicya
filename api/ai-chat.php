@@ -174,6 +174,61 @@ if (empty($geminiKeys) && $openaiKey === '') {
     exit;
 }
 
+// --- TRIAGE ROUTER (telepharmacy Yes/No flow) ---------------------------------
+// ถ้า consult mode + triage feature เปิด → ลอง route ผ่าน TriageRouter ก่อน
+// ถ้า router คืน type=continue → fall through ไป LLM แบบเดิม
+// ถ้า type=question/products/escalate → emit structured + exit ทันที
+if ($isConsultMode) {
+    try {
+        require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+        if (function_exists('loadAIChatModule')) {
+            loadAIChatModule();
+        }
+        $lineAccountId = isset($input['line_account_id']) && is_numeric($input['line_account_id'])
+            ? (int) $input['line_account_id'] : null;
+        $userId = isset($input['user_id']) && is_numeric($input['user_id'])
+            ? (int) $input['user_id'] : 0;
+        // ถ้าไม่มี user_id ให้ derive จาก line_user_id (string) ผ่าน crc32 — stable per LINE user
+        if ($userId === 0 && !empty($input['line_user_id']) && is_string($input['line_user_id'])) {
+            $userId = (int) (crc32(trim($input['line_user_id'])) & 0x7FFFFFFF);
+        }
+
+        if ($userId > 0 && class_exists(\Modules\AIChat\Services\TriageRouter::class)) {
+            $router = new \Modules\AIChat\Services\TriageRouter($db, $geminiKeys, $lineAccountId);
+            $tr = $router->handleTurn($userMessage, $userId);
+            if (is_array($tr) && isset($tr['type']) && $tr['type'] !== 'continue') {
+                // emit สรุปข้อความเป็น token (สำหรับ client ที่ไม่ render structured)
+                if (!empty($tr['question_th'])) {
+                    echo 'data: ' . json_encode(['token' => (string) $tr['question_th']], JSON_UNESCAPED_UNICODE) . "\n\n";
+                } elseif (!empty($tr['message'])) {
+                    echo 'data: ' . json_encode(['token' => (string) $tr['message']], JSON_UNESCAPED_UNICODE) . "\n\n";
+                }
+                if (function_exists('ob_get_level') && ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+
+                // emit structured สำหรับ client ใหม่
+                $structuredFlags = JSON_UNESCAPED_UNICODE;
+                if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+                    $structuredFlags |= JSON_INVALID_UTF8_SUBSTITUTE;
+                }
+                echo 'data: ' . json_encode(['structured' => $tr], $structuredFlags) . "\n\n";
+                if (function_exists('ob_get_level') && ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+                echo "data: [DONE]\n\n";
+                flush();
+                exit;
+            }
+        }
+    } catch (\Throwable $e) {
+        // ถ้า triage layer พัง → log แล้ว fall through ไป LLM ปกติ
+        error_log('TriageRouter error: ' . $e->getMessage());
+    }
+}
+
 // --- FAST CONTEXT (queries must not fatal — missing tables / SQL errors → defaults) ---
 $oy = ['total' => 0, 'amount' => 0, 'customers' => 0];
 $ot = ['total' => 0, 'amount' => 0];

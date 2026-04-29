@@ -97,6 +97,16 @@ require_once __DIR__ . '/includes/header.php';
     <?php if ($success): ?><div class="mb-4 p-4 bg-green-100 text-green-700 rounded-lg"><i class="fas fa-check-circle mr-2"></i><?= $success ?></div><?php endif; ?>
     <?php if ($error): ?><div class="mb-4 p-4 bg-red-100 text-red-700 rounded-lg"><i class="fas fa-exclamation-circle mr-2"></i><?= $error ?></div><?php endif; ?>
 
+    <a href="/ai-telepharmacy-settings.php" class="block mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl hover:shadow-md transition">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="font-semibold text-purple-700">💊 AI Telepharmacy — ตั้งค่าครบชุด</div>
+                <p class="text-sm text-purple-600 mt-0.5">จัดการสินค้าที่ AI แนะนำได้, จับคู่อาการ → สินค้า, red flag, คำถาม Yes/No, ทดสอบ AI sandbox</p>
+            </div>
+            <i class="fas fa-arrow-right text-purple-500"></i>
+        </div>
+    </a>
+
     <form method="POST">
     <input type="hidden" name="action" value="save_settings">
     

@@ -1,0 +1,366 @@
+<?php
+/**
+ * AI Telepharmacy Admin API — JSON CRUD endpoint for admin settings page
+ *
+ * Tabs supported:
+ *   - Tab 1: products (list, toggle ai_recommendable)
+ *   - Tab 2: product_symptom_map (list/save/delete)
+ *   - Tab 3: triage_questions + red_flag_symptoms (list/save/delete)
+ *   - Tab 4: sandbox preview (read-only triage simulation)
+ *
+ * Single endpoint pattern: POST { action, ...params } → { success, data?, error? }
+ */
+
+declare(strict_types=1);
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/database.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'error' => 'Method not allowed']);
+    exit;
+}
+
+$db = Database::getInstance()->getConnection();
+$db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+
+$input = json_decode(file_get_contents('php://input'), true);
+if (!is_array($input)) {
+    $input = $_POST;
+}
+
+$action = (string) ($input['action'] ?? '');
+$lineAccountId = isset($input['line_account_id']) && is_numeric($input['line_account_id'])
+    ? (int) $input['line_account_id'] : null;
+
+$respond = static function (bool $success, array $extra = []): void {
+    echo json_encode(array_merge(['success' => $success], $extra), JSON_UNESCAPED_UNICODE);
+    exit;
+};
+
+try {
+    switch ($action) {
+
+        // ---------------------- Tab 1: Products ----------------------
+        case 'list_products': {
+            $search = trim((string) ($input['search'] ?? ''));
+            $drugType = trim((string) ($input['drug_type'] ?? ''));
+            $rxOnly = !empty($input['rx_only']) ? 1 : 0;
+            $page = max(1, (int) ($input['page'] ?? 1));
+            $perPage = min(200, max(10, (int) ($input['per_page'] ?? 50)));
+            $offset = ($page - 1) * $perPage;
+
+            $where = ['p.is_active = 1'];
+            $params = [];
+            if ($lineAccountId !== null) {
+                $where[] = '(p.line_account_id = :acc OR p.line_account_id IS NULL)';
+                $params[':acc'] = $lineAccountId;
+            }
+            if ($search !== '') {
+                $where[] = '(p.name LIKE :q OR p.sku LIKE :q OR p.active_ingredient LIKE :q)';
+                $params[':q'] = "%$search%";
+            }
+            if ($drugType !== '') {
+                $where[] = 'p.drug_type = :dt';
+                $params[':dt'] = $drugType;
+            }
+            if ($rxOnly === 1) {
+                $where[] = 'p.requires_prescription = 1';
+            }
+
+            $sqlBase = 'FROM products p WHERE ' . implode(' AND ', $where);
+            $countStmt = $db->prepare("SELECT COUNT(*) $sqlBase");
+            $countStmt->execute($params);
+            $total = (int) $countStmt->fetchColumn();
+
+            $listStmt = $db->prepare(
+                "SELECT p.id, p.name, p.sku, p.price, p.sale_price, p.image_url,
+                        p.drug_type, p.requires_prescription, p.requires_pharmacist,
+                        p.active_ingredient, p.strength, p.dosage_form, p.stock,
+                        COALESCE(p.ai_recommendable, 1) AS ai_recommendable
+                 $sqlBase
+                 ORDER BY p.is_featured DESC, p.id DESC
+                 LIMIT $perPage OFFSET $offset"
+            );
+            $listStmt->execute($params);
+            $rows = $listStmt->fetchAll(\PDO::FETCH_ASSOC);
+            $respond(true, ['data' => $rows, 'total' => $total, 'page' => $page, 'per_page' => $perPage]);
+        }
+
+        case 'toggle_product_recommendable': {
+            $productId = (int) ($input['product_id'] ?? 0);
+            $recommendable = !empty($input['ai_recommendable']) ? 1 : 0;
+            if ($productId <= 0) {
+                $respond(false, ['error' => 'invalid product_id']);
+            }
+            $stmt = $db->prepare("UPDATE products SET ai_recommendable = :r WHERE id = :id");
+            $stmt->execute([':r' => $recommendable, ':id' => $productId]);
+            $respond(true);
+        }
+
+        // ---------------------- Tab 2: Symptom Map ----------------------
+        case 'list_symptom_codes': {
+            $stmt = $db->query(
+                "SELECT DISTINCT symptom_code, MAX(symptom_label_th) AS label
+                 FROM product_symptom_map
+                 GROUP BY symptom_code
+                 ORDER BY symptom_code"
+            );
+            $codes = $stmt ? $stmt->fetchAll(\PDO::FETCH_ASSOC) : [];
+            $respond(true, ['data' => $codes]);
+        }
+
+        case 'list_symptom_map': {
+            $symptomCode = trim((string) ($input['symptom_code'] ?? ''));
+            if ($symptomCode === '') {
+                $respond(false, ['error' => 'symptom_code required']);
+            }
+            $sql = "SELECT psm.id, psm.product_id, psm.symptom_code, psm.symptom_label_th,
+                           psm.weight, psm.is_first_line, psm.notes,
+                           p.name AS product_name, p.image_url, p.price,
+                           p.drug_type, p.active_ingredient, p.strength
+                    FROM product_symptom_map psm
+                    INNER JOIN products p ON p.id = psm.product_id
+                    WHERE psm.symptom_code = :sc
+                      AND (psm.line_account_id <=> :acc OR psm.line_account_id IS NULL)
+                    ORDER BY psm.is_first_line DESC, psm.weight DESC";
+            $stmt = $db->prepare($sql);
+            $stmt->execute([':sc' => $symptomCode, ':acc' => $lineAccountId]);
+            $respond(true, ['data' => $stmt->fetchAll(\PDO::FETCH_ASSOC)]);
+        }
+
+        case 'save_symptom_map': {
+            $productId = (int) ($input['product_id'] ?? 0);
+            $symptomCode = trim((string) ($input['symptom_code'] ?? ''));
+            $label = trim((string) ($input['symptom_label_th'] ?? ''));
+            $weight = max(1, min(100, (int) ($input['weight'] ?? 50)));
+            $firstLine = !empty($input['is_first_line']) ? 1 : 0;
+            $notes = trim((string) ($input['notes'] ?? ''));
+
+            if ($productId <= 0 || $symptomCode === '') {
+                $respond(false, ['error' => 'product_id and symptom_code required']);
+            }
+
+            $stmt = $db->prepare(
+                "INSERT INTO product_symptom_map
+                   (line_account_id, product_id, symptom_code, symptom_label_th, weight, is_first_line, notes)
+                 VALUES (:acc, :pid, :sc, :lbl, :w, :fl, :n)
+                 ON DUPLICATE KEY UPDATE
+                   symptom_label_th = VALUES(symptom_label_th),
+                   weight = VALUES(weight),
+                   is_first_line = VALUES(is_first_line),
+                   notes = VALUES(notes),
+                   updated_at = NOW()"
+            );
+            $stmt->execute([
+                ':acc' => $lineAccountId,
+                ':pid' => $productId,
+                ':sc'  => $symptomCode,
+                ':lbl' => $label !== '' ? $label : null,
+                ':w'   => $weight,
+                ':fl'  => $firstLine,
+                ':n'   => $notes !== '' ? $notes : null,
+            ]);
+            $respond(true);
+        }
+
+        case 'delete_symptom_map': {
+            $id = (int) ($input['id'] ?? 0);
+            if ($id <= 0) {
+                $respond(false, ['error' => 'invalid id']);
+            }
+            $stmt = $db->prepare("DELETE FROM product_symptom_map WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            $respond(true);
+        }
+
+        // ---------------------- Tab 3a: Triage Questions ----------------------
+        case 'list_triage_questions': {
+            $conditionCode = trim((string) ($input['condition_code'] ?? ''));
+            if ($conditionCode === '') {
+                $stmt = $db->prepare(
+                    "SELECT DISTINCT condition_code FROM triage_questions
+                     WHERE (line_account_id <=> :acc OR line_account_id IS NULL)
+                     ORDER BY condition_code"
+                );
+                $stmt->execute([':acc' => $lineAccountId]);
+                $respond(true, ['conditions' => $stmt->fetchAll(\PDO::FETCH_COLUMN)]);
+            }
+            $stmt = $db->prepare(
+                "SELECT * FROM triage_questions
+                 WHERE condition_code = :cc
+                   AND (line_account_id <=> :acc OR line_account_id IS NULL)
+                 ORDER BY sort_order ASC, id ASC"
+            );
+            $stmt->execute([':cc' => $conditionCode, ':acc' => $lineAccountId]);
+            $respond(true, ['data' => $stmt->fetchAll(\PDO::FETCH_ASSOC)]);
+        }
+
+        case 'save_triage_question': {
+            $id = (int) ($input['id'] ?? 0);
+            $cc = trim((string) ($input['condition_code'] ?? ''));
+            $qth = trim((string) ($input['question_th'] ?? ''));
+            $qen = trim((string) ($input['question_en'] ?? ''));
+            $type = trim((string) ($input['answer_type'] ?? 'yes_no'));
+            $nextYes = isset($input['next_if_yes']) && $input['next_if_yes'] !== '' ? (int) $input['next_if_yes'] : null;
+            $nextNo = isset($input['next_if_no']) && $input['next_if_no'] !== '' ? (int) $input['next_if_no'] : null;
+            $rfYes = !empty($input['red_flag_if_yes']) ? 1 : 0;
+            $sympCodes = trim((string) ($input['recommend_symptom_codes'] ?? ''));
+            $order = (int) ($input['sort_order'] ?? 0);
+            $active = isset($input['is_active']) ? (int) !empty($input['is_active']) : 1;
+
+            if ($cc === '' || $qth === '' || !in_array($type, ['yes_no', 'scale_1_10', 'multi_choice'], true)) {
+                $respond(false, ['error' => 'invalid input']);
+            }
+
+            if ($id > 0) {
+                $stmt = $db->prepare(
+                    "UPDATE triage_questions SET
+                        condition_code=:cc, question_th=:qth, question_en=:qen,
+                        answer_type=:t, next_if_yes=:ny, next_if_no=:nn,
+                        red_flag_if_yes=:rf, recommend_symptom_codes=:sc,
+                        sort_order=:o, is_active=:a
+                     WHERE id=:id"
+                );
+                $stmt->execute([
+                    ':cc' => $cc, ':qth' => $qth, ':qen' => $qen ?: null,
+                    ':t' => $type, ':ny' => $nextYes, ':nn' => $nextNo,
+                    ':rf' => $rfYes, ':sc' => $sympCodes ?: null,
+                    ':o' => $order, ':a' => $active, ':id' => $id,
+                ]);
+            } else {
+                $stmt = $db->prepare(
+                    "INSERT INTO triage_questions
+                     (line_account_id, condition_code, question_th, question_en, answer_type,
+                      next_if_yes, next_if_no, red_flag_if_yes, recommend_symptom_codes,
+                      sort_order, is_active)
+                     VALUES (:acc, :cc, :qth, :qen, :t, :ny, :nn, :rf, :sc, :o, :a)"
+                );
+                $stmt->execute([
+                    ':acc' => $lineAccountId, ':cc' => $cc, ':qth' => $qth,
+                    ':qen' => $qen ?: null, ':t' => $type,
+                    ':ny' => $nextYes, ':nn' => $nextNo, ':rf' => $rfYes,
+                    ':sc' => $sympCodes ?: null, ':o' => $order, ':a' => $active,
+                ]);
+                $id = (int) $db->lastInsertId();
+            }
+            $respond(true, ['id' => $id]);
+        }
+
+        case 'delete_triage_question': {
+            $id = (int) ($input['id'] ?? 0);
+            if ($id <= 0) {
+                $respond(false, ['error' => 'invalid id']);
+            }
+            $stmt = $db->prepare("DELETE FROM triage_questions WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            $respond(true);
+        }
+
+        // ---------------------- Tab 3b: Red Flag Symptoms ----------------------
+        case 'list_red_flags': {
+            $stmt = $db->query("SELECT * FROM red_flag_symptoms ORDER BY severity, id");
+            $respond(true, ['data' => $stmt ? $stmt->fetchAll(\PDO::FETCH_ASSOC) : []]);
+        }
+
+        case 'save_red_flag': {
+            $id = (int) ($input['id'] ?? 0);
+            $code = trim((string) ($input['symptom_code'] ?? ''));
+            $thaiName = trim((string) ($input['symptom_name_th'] ?? ''));
+            $enName = trim((string) ($input['symptom_name_en'] ?? ''));
+            $desc = trim((string) ($input['description'] ?? ''));
+            $sev = trim((string) ($input['severity'] ?? 'warning'));
+            $action_required = trim((string) ($input['action_required'] ?? ''));
+            $active = isset($input['is_active']) ? (int) !empty($input['is_active']) : 1;
+
+            if ($code === '' || $thaiName === '' || !in_array($sev, ['critical', 'urgent', 'warning'], true)) {
+                $respond(false, ['error' => 'invalid input']);
+            }
+
+            if ($id > 0) {
+                $stmt = $db->prepare(
+                    "UPDATE red_flag_symptoms SET
+                        symptom_code=:c, symptom_name_th=:tn, symptom_name_en=:en,
+                        description=:d, severity=:s, action_required=:a, is_active=:act
+                     WHERE id=:id"
+                );
+                $stmt->execute([
+                    ':c' => $code, ':tn' => $thaiName, ':en' => $enName ?: null,
+                    ':d' => $desc ?: null, ':s' => $sev, ':a' => $action_required ?: null,
+                    ':act' => $active, ':id' => $id,
+                ]);
+            } else {
+                $stmt = $db->prepare(
+                    "INSERT INTO red_flag_symptoms
+                     (symptom_code, symptom_name_th, symptom_name_en, description,
+                      severity, action_required, is_active)
+                     VALUES (:c, :tn, :en, :d, :s, :a, :act)
+                     ON DUPLICATE KEY UPDATE
+                       symptom_name_th=VALUES(symptom_name_th),
+                       severity=VALUES(severity),
+                       is_active=VALUES(is_active)"
+                );
+                $stmt->execute([
+                    ':c' => $code, ':tn' => $thaiName, ':en' => $enName ?: null,
+                    ':d' => $desc ?: null, ':s' => $sev, ':a' => $action_required ?: null,
+                    ':act' => $active,
+                ]);
+                $id = (int) $db->lastInsertId();
+            }
+            $respond(true, ['id' => $id]);
+        }
+
+        case 'delete_red_flag': {
+            $id = (int) ($input['id'] ?? 0);
+            if ($id <= 0) {
+                $respond(false, ['error' => 'invalid id']);
+            }
+            $stmt = $db->prepare("DELETE FROM red_flag_symptoms WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            $respond(true);
+        }
+
+        // ---------------------- Tab 4: Sandbox Preview ----------------------
+        case 'sandbox_preview_recommendation': {
+            $codesRaw = $input['symptom_codes'] ?? [];
+            $codes = is_array($codesRaw) ? array_values(array_filter(array_map('strval', $codesRaw))) : [];
+            if (empty($codes)) {
+                $respond(false, ['error' => 'symptom_codes required']);
+            }
+            require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+            if (function_exists('loadAIChatModule')) {
+                loadAIChatModule();
+            }
+            $rec = new \Modules\AIChat\Services\ProductRecommender($db, []);
+            $candidates = $rec->lookupCandidates($lineAccountId, $codes, 20);
+            $respond(true, ['data' => array_slice($candidates, 0, 10)]);
+        }
+
+        case 'sandbox_recent_sessions': {
+            $stmt = $db->prepare(
+                "SELECT id, user_id, current_state, status, triage_level, outcome,
+                        chief_complaint, created_at, updated_at
+                 FROM triage_sessions
+                 WHERE (line_account_id <=> :acc)
+                 ORDER BY id DESC LIMIT 20"
+            );
+            $stmt->execute([':acc' => $lineAccountId]);
+            $respond(true, ['data' => $stmt->fetchAll(\PDO::FETCH_ASSOC)]);
+        }
+
+        default:
+            $respond(false, ['error' => 'unknown action: ' . $action]);
+    }
+} catch (\Throwable $e) {
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'error'   => 'server_error',
+        'message' => $e->getMessage(),
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
