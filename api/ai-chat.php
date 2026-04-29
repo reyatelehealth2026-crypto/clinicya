@@ -22,6 +22,31 @@ if (!is_array($input)) {
 $userMessage = trim((string) ($input['message'] ?? ''));
 $history = is_array($input['history'] ?? null) ? $input['history'] : [];
 
+/**
+ * ตัดข้อความแปลกปลอม (เช่น client แปะ JSON ทั้งก้อนต่อท้ายข้อความ) และจำกัดความยาว
+ */
+$cleanChatText = static function (string $text): string {
+    $text = trim($text);
+    if ($text === '') {
+        return '';
+    }
+    // แก้กรณีแปะ body ทั้งก้อนต่อท้าย เช่น ..."ปรึกษาเภสัชกร"{"message":"http...
+    if (strpos($text, '{"message"') !== false && strpos($text, '"history"') !== false) {
+        $cut = strpos($text, '{"message"');
+        if ($cut !== false && $cut > 0) {
+            $text = rtrim(substr($text, 0, $cut));
+        } else {
+            $text = '';
+        }
+    }
+    if (mb_strlen($text) > 12000) {
+        $text = mb_substr($text, 0, 12000) . '…';
+    }
+    return $text;
+};
+
+$userMessage = $cleanChatText($userMessage);
+
 if (!$userMessage && empty($_SERVER['argv'])) { echo "data: " . json_encode(['error' => 'No message']) . "\n\n"; flush(); exit; }
 if (empty($userMessage)) $userMessage = "test"; // for CLI testing
 
@@ -110,8 +135,14 @@ $systemPrompt = "คุณเป็น REYA Intelligence AI — ผู้ช่�
 
 $contents = [];
 foreach (array_slice($history, -10) as $h) {
-    if (!isset($h['role'], $h['content'])) continue;
-    $contents[] = ['role' => $h['role'] === 'assistant' ? 'model' : 'user', 'parts' => [['text' => $h['content']]]];
+    if (!isset($h['role'], $h['content'])) {
+        continue;
+    }
+    $turn = $cleanChatText((string) $h['content']);
+    if ($turn === '') {
+        continue;
+    }
+    $contents[] = ['role' => $h['role'] === 'assistant' ? 'model' : 'user', 'parts' => [['text' => $turn]]];
 }
 $contents[] = ['role' => 'user', 'parts' => [['text' => $userMessage]]];
 
@@ -121,34 +152,118 @@ $payload = json_encode([
     'generationConfig' => ['maxOutputTokens' => 512, 'temperature' => 0.3],
 ], JSON_UNESCAPED_UNICODE);
 
+if ($payload === false) {
+    echo "data: " . json_encode(['error' => 'Invalid UTF-8 / JSON encode failed']) . "\n\n";
+    echo "data: [DONE]\n\n";
+    flush();
+    exit;
+}
+
 $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent?alt=sse&key=" . urlencode($geminiKey);
 $ch = curl_init($url);
+
+$sseBuffer = '';
+$emittedAnyToken = false;
+$streamHadError = false;
+
+$emitSseDataLine = static function (string $line) use (&$emittedAnyToken, &$streamHadError): void {
+    $line = rtrim($line, "\r\n");
+    if ($line === '' || $line === 'data: [DONE]') {
+        return;
+    }
+    if (strncmp($line, 'data:', 5) !== 0) {
+        return;
+    }
+    $raw = trim(substr($line, 5));
+    if ($raw === '' || $raw === '[DONE]') {
+        return;
+    }
+    $json = json_decode($raw, true);
+    if (!is_array($json)) {
+        return;
+    }
+    if (isset($json['error'])) {
+        $streamHadError = true;
+        $msg = is_array($json['error']) ? ($json['error']['message'] ?? json_encode($json['error'], JSON_UNESCAPED_UNICODE)) : (string) $json['error'];
+        echo 'data: ' . json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE) . "\n\n";
+        if (function_exists('ob_get_level') && ob_get_level() > 0) {
+            ob_flush();
+        }
+        flush();
+
+        return;
+    }
+    if (!empty($json['promptFeedback']['blockReason'])) {
+        $streamHadError = true;
+        echo 'data: ' . json_encode([
+            'error' => 'Prompt blocked: ' . $json['promptFeedback']['blockReason'],
+        ], JSON_UNESCAPED_UNICODE) . "\n\n";
+        if (function_exists('ob_get_level') && ob_get_level() > 0) {
+            ob_flush();
+        }
+        flush();
+
+        return;
+    }
+    $parts = $json['candidates'][0]['content']['parts'] ?? null;
+    if (!is_array($parts)) {
+        return;
+    }
+    foreach ($parts as $part) {
+        if (!empty($part['text'])) {
+            $emittedAnyToken = true;
+            echo 'data: ' . json_encode(['token' => $part['text']], JSON_UNESCAPED_UNICODE) . "\n\n";
+            if (function_exists('ob_get_level') && ob_get_level() > 0) {
+                ob_flush();
+            }
+            flush();
+        }
+    }
+};
+
 curl_setopt_array($ch, [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => $payload,
     CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
     CURLOPT_RETURNTRANSFER => false,
     CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_TIMEOUT => 30,
-    CURLOPT_WRITEFUNCTION => function($ch, $data) {
-        $lines = explode("\n", $data);
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (!$line || $line === 'data: [DONE]') continue;
-            if (strpos($line, 'data: ') === 0) {
-                $json = json_decode(substr($line, 6), true);
-                if (isset($json['candidates'][0]['content']['parts'][0]['text'])) {
-                    $text = $json['candidates'][0]['content']['parts'][0]['text'];
-                    echo "data: " . json_encode(['token' => $text], JSON_UNESCAPED_UNICODE) . "\n\n";
-                    ob_flush(); flush();
-                }
-            }
+    CURLOPT_TIMEOUT => 90,
+    CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$sseBuffer, $emitSseDataLine) {
+        $sseBuffer .= $data;
+        while (($pos = strpos($sseBuffer, "\n")) !== false) {
+            $line = substr($sseBuffer, 0, $pos);
+            $sseBuffer = substr($sseBuffer, $pos + 1);
+            $emitSseDataLine($line);
         }
+
         return strlen($data);
     },
 ]);
 
 curl_exec($ch);
-if ($err = curl_error($ch)) echo "data: " . json_encode(['error' => $err]) . "\n\n";
+$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlErr = curl_error($ch);
+if ($curlErr !== '') {
+    echo 'data: ' . json_encode(['error' => $curlErr], JSON_UNESCAPED_UNICODE) . "\n\n";
+} elseif ($httpCode >= 400 && !$emittedAnyToken && !$streamHadError) {
+    echo 'data: ' . json_encode([
+        'error' => 'Gemini HTTP ' . $httpCode . ' — ตรวจสอบ API Key และโควต้า',
+    ], JSON_UNESCAPED_UNICODE) . "\n\n";
+}
+
+// เหลือ buffer สุดท้ายที่ไม่มี newline (chunk สุดท้ายจาก curl)
+if ($sseBuffer !== '') {
+    $emitSseDataLine($sseBuffer);
+    $sseBuffer = '';
+}
+
+curl_close($ch);
+
+if (!$emittedAnyToken && !$streamHadError && ($httpCode === 200 || $httpCode === 0) && $curlErr === '') {
+    echo 'data: ' . json_encode([
+        'error' => 'ไม่ได้รับข้อความจากโมเดล (สตรีมว่างหรือถูกบล็อก) — ลองข้อความสั้นลงหรือล้างประวัติแชท',
+    ], JSON_UNESCAPED_UNICODE) . "\n\n";
+}
+
 echo "data: [DONE]\n\n";
 flush();
