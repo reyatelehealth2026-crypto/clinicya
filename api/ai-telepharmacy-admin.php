@@ -683,11 +683,32 @@ try {
             if (function_exists('loadAIChatModule')) {
                 loadAIChatModule();
             }
+            // diagnostic: count rows in KB to detect import failures
+            $kbCount = 0;
+            $kbCountByAcc = 0;
+            try {
+                $stmt = $db->query("SELECT COUNT(*) FROM ai_knowledge_base WHERE is_active=1");
+                $kbCount = (int) $stmt->fetchColumn();
+                if ($lineAccountId !== null) {
+                    $stmt2 = $db->prepare("SELECT COUNT(*) FROM ai_knowledge_base WHERE is_active=1 AND (line_account_id=:a OR line_account_id IS NULL)");
+                    $stmt2->execute([':a' => $lineAccountId]);
+                    $kbCountByAcc = (int) $stmt2->fetchColumn();
+                } else {
+                    $stmt2 = $db->query("SELECT COUNT(*) FROM ai_knowledge_base WHERE is_active=1 AND line_account_id IS NULL");
+                    $kbCountByAcc = (int) $stmt2->fetchColumn();
+                }
+            } catch (\Throwable $e) {}
             $mapper = new \Modules\AIChat\Services\SymptomMapper();
             $codes = $mapper->mapAllConditions($q);
             $retriever = new \Modules\AIChat\Services\KnowledgeRetriever($db);
             $chunks = $retriever->retrieve($lineAccountId, $q, $codes, 5);
-            $respond(true, ['data' => $chunks, 'matched_conditions' => $codes]);
+            $respond(true, [
+                'data'                  => $chunks,
+                'matched_conditions'    => $codes,
+                'total_chunks_in_kb'    => $kbCount,
+                'chunks_for_account'    => $kbCountByAcc,
+                'account_id_used'       => $lineAccountId,
+            ]);
         }
 
         case 'sandbox_recent_sessions': {

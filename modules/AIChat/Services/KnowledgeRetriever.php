@@ -37,6 +37,10 @@ class KnowledgeRetriever
         }
 
         $rows = $this->loadCandidates($lineAccountId, $tokens, $conditionCodes, 50);
+        // Fallback: ถ้าไม่เจอด้วย scope ปัจจุบัน ลองดึงข้าม account ทั้งหมด เพื่อกัน account-id mismatch ระหว่าง import กับ query
+        if (empty($rows)) {
+            $rows = $this->loadCandidatesAcrossAllAccounts($tokens, $conditionCodes, 50);
+        }
         if (empty($rows)) {
             return [];
         }
@@ -106,23 +110,83 @@ class KnowledgeRetriever
      * @param list<string> $conditionCodes
      * @return list<array<string, mixed>>
      */
-    private function loadCandidates(?int $lineAccountId, array $tokens, array $conditionCodes, int $maxRows): array
+    /**
+     * Cross-tenant fallback — ดึง chunks ทั้งหมด (ไม่ filter line_account_id)
+     * เพื่อกัน case ที่ chunks ถูก import ใต้ account-id ต่างจาก runtime query
+     *
+     * @param list<string> $tokens
+     * @param list<string> $conditionCodes
+     * @return list<array<string, mixed>>
+     */
+    private function loadCandidatesAcrossAllAccounts(array $tokens, array $conditionCodes, int $maxRows): array
     {
-        $where = ['is_active = 1', '(line_account_id <=> :acc OR line_account_id IS NULL)'];
-        $params = [':acc' => $lineAccountId];
-
+        $where = ['is_active = 1'];
         $orParts = [];
+        $bindings = [];
         $i = 0;
         foreach ($tokens as $t) {
             if (mb_strlen($t) < 2) continue;
-            $key = ':t' . $i++;
-            $orParts[] = "(content LIKE $key OR keywords LIKE $key OR title LIKE $key)";
-            $params[$key] = '%' . $t . '%';
+            $kc = ':xc' . $i; $kk = ':xk' . $i; $kt = ':xt' . $i;
+            $orParts[] = "(content LIKE $kc OR keywords LIKE $kk OR title LIKE $kt)";
+            $bindings[$kc] = '%' . $t . '%';
+            $bindings[$kk] = '%' . $t . '%';
+            $bindings[$kt] = '%' . $t . '%';
+            $i++;
+        }
+        foreach ($conditionCodes as $cc) {
+            $key = ':xcc' . $i++;
+            $orParts[] = "condition_codes LIKE $key";
+            $bindings[$key] = '%' . $cc . '%';
+        }
+        if (!empty($orParts)) {
+            $where[] = '(' . implode(' OR ', $orParts) . ')';
+        }
+        $sql = "SELECT id, source, title, heading_path, content, keywords, condition_codes, priority
+                FROM ai_knowledge_base
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY priority DESC
+                LIMIT " . (int) $maxRows;
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            foreach ($bindings as $k => $v) {
+                $stmt->bindValue($k, $v, \PDO::PARAM_STR);
+            }
+            $stmt->execute();
+            return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    private function loadCandidates(?int $lineAccountId, array $tokens, array $conditionCodes, int $maxRows): array
+    {
+        // ใช้ literal SQL สำหรับ line_account_id เพื่อกัน PDO null binding ที่อาจแปลง NULL → '' ทำให้ <=> ไม่ match
+        $where = ['is_active = 1'];
+        if ($lineAccountId === null) {
+            $where[] = 'line_account_id IS NULL';
+        } else {
+            $where[] = '(line_account_id = ' . (int) $lineAccountId . ' OR line_account_id IS NULL)';
+        }
+
+        $orParts = [];
+        $bindings = [];
+        $i = 0;
+        foreach ($tokens as $t) {
+            if (mb_strlen($t) < 2) continue;
+            // unique placeholder ต่อ field กัน PDO native prepares ห้าม reuse
+            $kc = ':tc' . $i;
+            $kk = ':tk' . $i;
+            $kt = ':tt' . $i;
+            $orParts[] = "(content LIKE $kc OR keywords LIKE $kk OR title LIKE $kt)";
+            $bindings[$kc] = '%' . $t . '%';
+            $bindings[$kk] = '%' . $t . '%';
+            $bindings[$kt] = '%' . $t . '%';
+            $i++;
         }
         foreach ($conditionCodes as $cc) {
             $key = ':c' . $i++;
             $orParts[] = "condition_codes LIKE $key";
-            $params[$key] = '%' . $cc . '%';
+            $bindings[$key] = '%' . $cc . '%';
         }
         if (!empty($orParts)) {
             $where[] = '(' . implode(' OR ', $orParts) . ')';
@@ -136,7 +200,10 @@ class KnowledgeRetriever
 
         try {
             $stmt = $this->pdo->prepare($sql);
-            $stmt->execute($params);
+            foreach ($bindings as $k => $v) {
+                $stmt->bindValue($k, $v, \PDO::PARAM_STR);
+            }
+            $stmt->execute();
             return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
         } catch (\Throwable $e) {
             return [];

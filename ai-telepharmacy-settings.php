@@ -679,18 +679,37 @@ document.getElementById('kbTestBtn').addEventListener('click', async () => {
   out.innerHTML = '<div class="text-purple-600">⏳</div>';
   const r = await adminCall('sandbox_test_retrieve', { query: q });
   if (!r.success) { out.innerHTML = '<div class="text-red-500">' + (r.error || 'error') + '</div>'; return; }
-  if (r.data.length === 0) {
-    out.innerHTML = '<div class="text-gray-400">ไม่พบ chunk ที่เกี่ยวข้อง — ลอง import ก่อน</div>';
+
+  const conds = Array.isArray(r.matched_conditions) ? r.matched_conditions : [];
+  const diag = '<div class="p-2 bg-gray-50 rounded text-xs space-y-0.5">'
+    + '<div>🔍 query: <code>' + q + '</code></div>'
+    + '<div>📊 chunks ใน KB ทั้งหมด: <strong>' + (r.total_chunks_in_kb || 0) + '</strong></div>'
+    + '<div>📊 chunks สำหรับ account นี้: <strong>' + (r.chunks_for_account || 0) + '</strong></div>'
+    + '<div>🆔 account_id ที่ใช้: <code>' + (r.account_id_used === null ? 'NULL' : r.account_id_used) + '</code></div>'
+    + '<div>🏷️ condition_codes detect ได้: <code>' + (conds.join(', ') || '-') + '</code></div>'
+    + '</div>';
+
+  if (!Array.isArray(r.data) || r.data.length === 0) {
+    out.innerHTML = diag
+      + '<div class="mt-2 p-3 bg-amber-50 text-amber-700 rounded text-sm">'
+      + '⚠️ ไม่พบ chunk — '
+      + (r.total_chunks_in_kb === 0
+          ? 'KB ว่างเปล่า ให้ import ก่อน'
+          : 'มี chunks ใน KB แต่ retrieval ไม่เจอ — ลองพิมพ์ keyword ใกล้เคียง เช่น "ปวดศีรษะ" หรือ "ไมเกรน"')
+      + '</div>';
     return;
   }
-  out.innerHTML = '<div class="text-xs text-gray-500">condition_codes ที่ตรวจจับได้: ' + (r.matched_conditions.join(', ') || '-') + '</div>'
+
+  out.innerHTML = diag
+    + '<div class="mt-2 space-y-2">'
     + r.data.map((c, i) =>
       '<div class="p-2 border rounded">'
-      + '<div class="text-xs text-purple-600 font-bold">#' + (i + 1) + ' • ' + c.source + ' • score=' + c.score.toFixed(1) + '</div>'
-      + '<div class="text-xs font-medium mt-1">' + (c.heading_path || c.title) + '</div>'
+      + '<div class="text-xs text-purple-600 font-bold">#' + (i + 1) + ' • ' + c.source + ' • score=' + Number(c.score || 0).toFixed(1) + '</div>'
+      + '<div class="text-xs font-medium mt-1">' + (c.heading_path || c.title || '-') + '</div>'
       + '<div class="text-xs text-gray-700 mt-1 line-clamp-3">' + (c.content || '').replace(/[<>]/g, '').substring(0, 300) + '…</div>'
       + '</div>'
-    ).join('');
+    ).join('')
+    + '</div>';
 });
 
 loadSymptomCodes();
