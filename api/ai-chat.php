@@ -52,17 +52,21 @@ if (empty($userMessage)) $userMessage = "test"; // for CLI testing
 
 $db = Database::getInstance()->getConnection();
 
-$geminiKey = defined('GEMINI_API_KEY') ? GEMINI_API_KEY : (getenv('GEMINI_API_KEY') ?: '');
-// Fallback: ใช้คีย์จาก ai_settings เหมือนหน้า /ai-settings เมื่อยังไม่ได้ใส่ใน config / env
-if (!$geminiKey) {
-    try {
-        $stmt = $db->query(
-            "SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) != '' ORDER BY line_account_id IS NULL DESC LIMIT 1"
-        );
-        $geminiKey = $stmt ? (string) $stmt->fetchColumn() : '';
-    } catch (Throwable $e) {
-        $geminiKey = '';
-    }
+/**
+ * ลำดับคีย์: ai_settings ก่อน (เหมือนที่ทดสอบในหน้า AI Settings) — ถ้าไม่มีค่อยใช้ GEMINI_API_KEY ใน config/env
+ * เดิมโหลด env ก่อน ทำให้คีย์เก่าใน .env หมดอายุแต่ DB มีคีย์ใหม่ → ทดสอบในฟอร์มผ่าน แต่ /api/ai-chat.php ไปใช้ของเก่า
+ */
+$geminiKey = '';
+try {
+    $stmt = $db->query(
+        "SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) != '' ORDER BY line_account_id IS NULL DESC LIMIT 1"
+    );
+    $geminiKey = $stmt ? (string) $stmt->fetchColumn() : '';
+} catch (Throwable $e) {
+    $geminiKey = '';
+}
+if ($geminiKey === '') {
+    $geminiKey = defined('GEMINI_API_KEY') ? GEMINI_API_KEY : (getenv('GEMINI_API_KEY') ?: '');
 }
 if (!$geminiKey) { echo "data: " . json_encode(['error' => 'GEMINI_API_KEY not configured']) . "\n\n"; flush(); exit; }
 
