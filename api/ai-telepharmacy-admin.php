@@ -721,6 +721,28 @@ try {
                 $rfCount += $rfInsert->rowCount();
             }
 
+            // De-dup triage_questions: ตารางไม่มี UNIQUE KEY → INSERT รอบ 2+ จะซ้ำ
+            // ลบของซ้ำเก่า (เก็บ id เล็กสุดต่อ condition_code+question_th) ก่อน insert
+            try {
+                $db->exec(
+                    "DELETE tq1 FROM triage_questions tq1
+                     INNER JOIN triage_questions tq2
+                       ON tq2.condition_code = tq1.condition_code
+                      AND tq2.question_th    = tq1.question_th
+                      AND (tq2.line_account_id <=> tq1.line_account_id)
+                      AND tq2.id < tq1.id"
+                );
+            } catch (\Throwable $e) {
+                error_log('seed dedup triage_questions error: ' . $e->getMessage());
+            }
+            // กัน insert ซ้ำในรอบหน้าด้วย UNIQUE KEY (best-effort — ignore ถ้ามีอยู่แล้ว)
+            try {
+                $db->exec(
+                    "ALTER TABLE triage_questions
+                     ADD UNIQUE KEY uniq_tq_cond_qth (condition_code, question_th(191), line_account_id)"
+                );
+            } catch (\Throwable $e) { /* index may already exist */ }
+
             // Triage questions: 22 conditions x 4-7 questions
             $tqInsert = $db->prepare(
                 "INSERT IGNORE INTO triage_questions
@@ -1201,12 +1223,21 @@ try {
                         if (empty($matchedCodes)) continue;
 
                         // ดึงสินค้าใน category — limit 20 ต่อหมวด (กัน mapping ระเบิด)
+                        // หมวดที่ match dictionary = OTC อยู่แล้ว → ไม่ filter ด้วย ai_recommendable
+                        // และ force set ai_recommendable=1 ให้ทุกตัวในหมวดนั้น (กัน auto-classify รอบก่อนตั้งเป็น 0)
+                        try {
+                            $upd = $db->prepare(
+                                "UPDATE business_items SET ai_recommendable=1
+                                 WHERE category_id = :cid AND COALESCE(is_active,1)=1"
+                            );
+                            $upd->execute([':cid' => (int) $cat['id']]);
+                        } catch (\Throwable $e) {}
+
                         try {
                             $pStmt = $db->prepare(
                                 "SELECT id FROM business_items
                                  WHERE category_id = :cid
                                    AND COALESCE(is_active,1) = 1
-                                   AND COALESCE(ai_recommendable,1) = 1
                                  ORDER BY id ASC
                                  LIMIT 20"
                             );
