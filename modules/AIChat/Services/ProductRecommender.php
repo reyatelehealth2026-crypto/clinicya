@@ -75,18 +75,21 @@ class ProductRecommender
         foreach ($symptomCodes as $i => $_) {
             $placeholders[] = ':sc' . $i;
         }
+        // ระบบใช้ business_items เป็นตารางสินค้าหลัก
         $sql = "SELECT
                     p.id, p.name, p.description, p.price, p.sale_price, p.image_url,
-                    p.drug_type, p.requires_prescription, p.requires_pharmacist,
+                    p.drug_category AS drug_type,
+                    COALESCE(p.requires_prescription, 0) AS requires_prescription,
+                    COALESCE(p.is_prescription, 0) AS requires_pharmacist,
                     p.active_ingredient, p.strength, p.dosage_form, p.usage_instructions,
                     psm.symptom_code, psm.weight, psm.is_first_line, psm.notes
                 FROM product_symptom_map psm
-                INNER JOIN products p ON p.id = psm.product_id
+                INNER JOIN business_items p ON p.id = psm.product_id
                 WHERE psm.symptom_code IN (" . implode(',', $placeholders) . ")
                   AND (psm.line_account_id = :acc OR psm.line_account_id IS NULL)
                   AND p.is_active = 1
-                  AND p.ai_recommendable = 1
-                  AND p.requires_prescription = 0
+                  AND COALESCE(p.ai_recommendable, 1) = 1
+                  AND COALESCE(p.requires_prescription, 0) = 0
                 ORDER BY
                     (psm.line_account_id IS NOT NULL) DESC,
                     psm.is_first_line DESC,

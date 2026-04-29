@@ -65,25 +65,27 @@ try {
                 $params[':q'] = "%$search%";
             }
             if ($drugType !== '') {
-                $where[] = 'p.drug_type = :dt';
+                $where[] = 'p.drug_category = :dt';
                 $params[':dt'] = $drugType;
             }
             if ($rxOnly === 1) {
                 $where[] = 'p.requires_prescription = 1';
             }
 
-            $sqlBase = 'FROM products p WHERE ' . implode(' AND ', $where);
+            $sqlBase = 'FROM business_items p WHERE ' . implode(' AND ', $where);
             $countStmt = $db->prepare("SELECT COUNT(*) $sqlBase");
             $countStmt->execute($params);
             $total = (int) $countStmt->fetchColumn();
 
             $listStmt = $db->prepare(
                 "SELECT p.id, p.name, p.sku, p.price, p.sale_price, p.image_url,
-                        p.drug_type, p.requires_prescription, p.requires_pharmacist,
+                        p.drug_category AS drug_type,
+                        p.requires_prescription,
+                        p.is_prescription AS requires_pharmacist,
                         p.active_ingredient, p.strength, p.dosage_form, p.stock,
                         COALESCE(p.ai_recommendable, 1) AS ai_recommendable
                  $sqlBase
-                 ORDER BY p.is_featured DESC, p.id DESC
+                 ORDER BY COALESCE(p.is_featured,0) DESC, p.id DESC
                  LIMIT $perPage OFFSET $offset"
             );
             $listStmt->execute($params);
@@ -97,7 +99,7 @@ try {
             if ($productId <= 0) {
                 $respond(false, ['error' => 'invalid product_id']);
             }
-            $stmt = $db->prepare("UPDATE products SET ai_recommendable = :r WHERE id = :id");
+            $stmt = $db->prepare("UPDATE business_items SET ai_recommendable = :r WHERE id = :id");
             $stmt->execute([':r' => $recommendable, ':id' => $productId]);
             $respond(true);
         }
@@ -122,9 +124,9 @@ try {
             $sql = "SELECT psm.id, psm.product_id, psm.symptom_code, psm.symptom_label_th,
                            psm.weight, psm.is_first_line, psm.notes,
                            p.name AS product_name, p.image_url, p.price,
-                           p.drug_type, p.active_ingredient, p.strength
+                           p.drug_category AS drug_type, p.active_ingredient, p.strength
                     FROM product_symptom_map psm
-                    INNER JOIN products p ON p.id = psm.product_id
+                    INNER JOIN business_items p ON p.id = psm.product_id
                     WHERE psm.symptom_code = :sc
                       AND (psm.line_account_id <=> :acc OR psm.line_account_id IS NULL)
                     ORDER BY psm.is_first_line DESC, psm.weight DESC";
