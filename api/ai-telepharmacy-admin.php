@@ -1112,6 +1112,128 @@ try {
                 error_log('seed symptom map error: ' . $e->getMessage());
             }
 
+            // ----- Pass 2: category-driven symptom map -------------------------
+            // สแกน item_categories.name ด้วย Thai keyword dictionary แล้ว link ทุกสินค้าในหมวด
+            // → ครอบร้านที่ใช้ category-only naming (เช่น VIT-01, SKI-01)
+            $catPassInserted = 0;
+            try {
+                $catKeywordToSymptom = [
+                    // category keyword (TH/EN substring) → symptom_codes ที่จะ map
+                    'วิตามิน'         => ['vitamin_general'],
+                    'vitamin'         => ['vitamin_general'],
+                    'อาหารเสริม'      => ['vitamin_general'],
+                    'supplement'      => ['vitamin_general'],
+                    'ลดไข้'           => ['fever', 'headache', 'body_ache'],
+                    'แก้ปวด'          => ['headache', 'body_ache', 'musculoskeletal_pain'],
+                    'paracetamol'     => ['fever', 'headache', 'body_ache'],
+                    'พาราเซตา'        => ['fever', 'headache', 'body_ache'],
+                    'แก้ไอ'           => ['cough'],
+                    'ไอ'              => ['cough'],
+                    'แก้หวัด'         => ['runny_nose', 'common_cold'],
+                    'หวัด'            => ['runny_nose', 'common_cold'],
+                    'น้ำมูก'          => ['runny_nose'],
+                    'แก้แพ้'          => ['allergy_rhinitis', 'urticaria'],
+                    'antihistamine'   => ['allergy_rhinitis', 'urticaria'],
+                    'อมเจ็บคอ'        => ['sore_throat'],
+                    'เจ็บคอ'          => ['sore_throat'],
+                    'lozenge'         => ['sore_throat'],
+                    'ท้องเสีย'        => ['diarrhea'],
+                    'เกลือแร่'        => ['diarrhea'],
+                    'ลดกรด'           => ['indigestion'],
+                    'ขับลม'           => ['indigestion'],
+                    'antacid'         => ['indigestion'],
+                    'ระบาย'           => ['constipation'],
+                    'laxative'        => ['constipation'],
+                    'แก้เมา'          => ['motion_sickness'],
+                    'ตา'              => ['eye_allergy'],
+                    'eye drop'        => ['eye_allergy'],
+                    'น้ำตาเทียม'      => ['eye_allergy'],
+                    'ฆ่าเชื้อ'        => ['skin_infection'],
+                    'แอลกอฮอล์'       => ['skin_infection'],
+                    'antiseptic'      => ['skin_infection'],
+                    'แบคทีเรีย'       => ['skin_infection'],
+                    'แผล'             => ['skin_infection', 'burn_minor'],
+                    'ทา'              => ['urticaria', 'dermatitis', 'musculoskeletal_pain'],
+                    'ครีม'            => ['dermatitis'],
+                    'cream'           => ['dermatitis'],
+                    'โลชั่น'          => ['dermatitis'],
+                    'แก้คัน'          => ['urticaria'],
+                    'calamine'        => ['urticaria'],
+                    'สิว'             => ['acne'],
+                    'acne'            => ['acne'],
+                    'เชื้อรา'         => ['athlete_foot'],
+                    'antifungal'      => ['athlete_foot'],
+                    'ไหม้'            => ['burn_minor'],
+                    'นอนหลับ'         => ['insomnia'],
+                    'melatonin'       => ['insomnia'],
+                    'แก้คลื่นไส้'     => ['nausea'],
+                    'แผลในปาก'        => ['mouth_ulcer'],
+                    'ปวดเมื่อย'       => ['musculoskeletal_pain', 'body_ache'],
+                    'salonpas'        => ['musculoskeletal_pain'],
+                    'plaster'         => ['musculoskeletal_pain'],
+                ];
+
+                if ($hasItemCat) {
+                    // ดึง item_categories ทั้งหมด
+                    $catRows = $db->query("SELECT id, name, cny_code FROM item_categories")->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+                    // เตรียม INSERT IGNORE
+                    $smInsert2 = $db->prepare(
+                        "INSERT IGNORE INTO product_symptom_map
+                         (line_account_id, product_id, symptom_code, symptom_label_th, weight, is_first_line)
+                         VALUES (NULL, :pid, :sc, NULL, :w, :fl)"
+                    );
+
+                    foreach ($catRows as $cat) {
+                        $haystack = mb_strtolower(((string) ($cat['name'] ?? '')) . ' ' . ((string) ($cat['cny_code'] ?? '')));
+                        if ($haystack === '') continue;
+
+                        $matchedCodes = [];
+                        foreach ($catKeywordToSymptom as $kw => $codes) {
+                            if (mb_stripos($haystack, mb_strtolower($kw)) !== false) {
+                                foreach ($codes as $c) {
+                                    if (!in_array($c, $matchedCodes, true)) {
+                                        $matchedCodes[] = $c;
+                                    }
+                                }
+                            }
+                        }
+                        if (empty($matchedCodes)) continue;
+
+                        // ดึงสินค้าใน category — limit 20 ต่อหมวด (กัน mapping ระเบิด)
+                        try {
+                            $pStmt = $db->prepare(
+                                "SELECT id FROM business_items
+                                 WHERE category_id = :cid
+                                   AND COALESCE(is_active,1) = 1
+                                   AND COALESCE(ai_recommendable,1) = 1
+                                 ORDER BY id ASC
+                                 LIMIT 20"
+                            );
+                            $pStmt->execute([':cid' => (int) $cat['id']]);
+                            $pids = $pStmt->fetchAll(\PDO::FETCH_COLUMN) ?: [];
+                        } catch (\Throwable $e) {
+                            $pids = [];
+                        }
+
+                        foreach ($pids as $idx => $pid) {
+                            foreach ($matchedCodes as $sc) {
+                                $smInsert2->execute([
+                                    ':pid' => (int) $pid,
+                                    ':sc'  => $sc,
+                                    ':w'   => max(20, 90 - ($idx * 5)),
+                                    ':fl'  => $idx === 0 ? 1 : 0,
+                                ]);
+                                $catPassInserted += $smInsert2->rowCount();
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                error_log('seed category-pass error: ' . $e->getMessage());
+            }
+            $smCount += $catPassInserted;
+
             // Totals หลัง seed (ใช้แทน rowCount เพราะ INSERT IGNORE / UPDATE ที่ค่าเดิมจะคืน 0 ทุกครั้ง)
             $tally = function (string $sql) use ($db): int {
                 try {
@@ -1140,6 +1262,7 @@ try {
                 'business_items_active'      => $biActive,
                 'business_items_recommend'   => $biRecommend,
                 'kb_chunks_total'            => $kbTotal,
+                'category_pass_inserted'     => $catPassInserted,
                 'note' => 'AI แนะนำได้ = เฉพาะ household/otc/traditional ที่ไม่ต้องใบสั่งแพทย์ — ตามกฎหมายไทย',
             ]);
         }

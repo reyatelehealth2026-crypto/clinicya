@@ -743,6 +743,7 @@ document.getElementById('seedDefaultBtn').addEventListener('click', async () => 
     + '<div class="text-xs">🚨 Red flags: ' + fmt(r.red_flags_inserted, r.red_flags_total) + '</div>'
     + '<div class="text-xs">❓ Triage questions: ' + fmt(r.triage_questions_inserted, r.triage_questions_total) + '</div>'
     + '<div class="text-xs">🔗 Symptom→Product mapping: ' + fmt(r.symptom_map_inserted, r.symptom_map_total) + '</div>'
+    + '<div class="text-[10px] text-gray-500 ml-4">↳ category-pass insert: ' + (r.category_pass_inserted ?? 0) + '</div>'
     + '<div class="text-xs">📦 Business items: <strong>' + (r.business_items_recommend ?? '—') + '/' + (r.business_items_active ?? '—') + '</strong> แนะนำได้ (อัปเดตรอบนี้ ' + (r.business_items_classified ?? 0) + ')</div>'
     + (kb !== null
         ? ('<div class="text-xs">📚 RAG knowledge chunks: <strong>' + kb + '</strong>'
