@@ -674,6 +674,316 @@ try {
             $respond(true);
         }
 
+        // ---------------------- Seed default data ----------------------
+        case 'seed_default_data': {
+            $rfInsert = $db->prepare(
+                "INSERT IGNORE INTO red_flag_symptoms
+                 (symptom_code, symptom_name_th, symptom_name_en, description, severity, action_required, is_active)
+                 VALUES (:c, :tn, :en, :d, :s, :a, 1)"
+            );
+            $redFlags = [
+                // Existing 9 + 19 new (28 total)
+                ['chest_pain_severe', 'เจ็บหน้าอกรุนแรง', 'Severe chest pain', 'อาจเป็นโรคหัวใจขาดเลือด', 'critical', 'โทร 1669 ทันที'],
+                ['breathing_difficulty', 'หายใจไม่ออก/หายใจลำบาก', 'Difficulty breathing', 'ปัญหาทางเดินหายใจรุนแรง', 'critical', 'พบแพทย์ฉุกเฉินทันที'],
+                ['stroke_signs', 'อาการสโตรก (FAST)', 'Stroke warning signs', 'ปากเบี้ยว/แขนอ่อนแรง/พูดไม่ชัด', 'critical', 'โทร 1669 ทันที — ทุกนาทีมีค่า'],
+                ['severe_bleeding', 'เลือดออกไม่หยุด', 'Severe bleeding', 'เลือดออกผิดปกติไม่หยุด', 'critical', 'พบแพทย์ฉุกเฉินทันที'],
+                ['high_fever_persistent', 'ไข้สูงเกิน 3 วัน', 'Persistent high fever', 'ไข้ > 39°C นานกว่า 3 วัน', 'urgent', 'ปรึกษาแพทย์ภายในวันนี้'],
+                ['severe_dehydration', 'ขาดน้ำรุนแรง', 'Severe dehydration', 'ปัสสาวะน้อย ปากแห้งมาก', 'urgent', 'พบแพทย์ภายในวันนี้'],
+                ['allergic_reaction_anaphylaxis', 'แพ้รุนแรง (anaphylaxis)', 'Anaphylactic reaction', 'ผื่นลาม + หายใจลำบาก', 'critical', 'โทร 1669 ทันที'],
+                ['severe_abdominal_pain', 'ปวดท้องรุนแรง', 'Severe abdominal pain', 'ปวดบีบไม่หาย > 6 ชั่วโมง', 'urgent', 'พบแพทย์ภายในวันนี้'],
+                ['blood_in_stool_vomit', 'ถ่าย/อาเจียนเป็นเลือด', 'Blood in stool or vomit', 'อุจจาระดำหรือมีเลือด', 'urgent', 'พบแพทย์ภายในวันนี้'],
+                ['thunderclap_headache', 'ปวดหัวรุนแรงเฉียบพลัน', 'Thunderclap headache', 'ปวดหัวที่สุดในชีวิต รุนแรงเฉียบพลัน', 'critical', 'โทร 1669 ทันที — สงสัยเส้นเลือดในสมองแตก'],
+                ['vision_loss_sudden', 'ตามองไม่เห็นเฉียบพลัน', 'Sudden vision loss', 'มองไม่เห็นทันทีหรือเห็นภาพซ้อนเฉียบพลัน', 'critical', 'พบจักษุแพทย์ฉุกเฉินทันที'],
+                ['paralysis_sudden', 'อ่อนแรงครึ่งซีกเฉียบพลัน', 'Sudden hemiparesis', 'แขนหรือขาอ่อนแรงข้างเดียวเฉียบพลัน', 'critical', 'โทร 1669 ทันที (สโตรก)'],
+                ['confusion_altered', 'สับสน/ซึมลง', 'Altered mental status', 'สับสนเฉียบพลันหรือซึมลงผิดปกติ', 'critical', 'พบแพทย์ฉุกเฉิน'],
+                ['suicide_ideation', 'คิดทำร้ายตัวเอง', 'Suicidal ideation', 'มีความคิดฆ่าตัวตายหรือทำร้ายตัวเอง', 'critical', 'โทรสายด่วนสุขภาพจิต 1323 ทันที'],
+                ['severe_burn', 'ไฟไหม้/น้ำร้อนลวกรุนแรง', 'Severe burn', 'แผลไหม้กว้างหรือลึกถึงชั้นไขมัน', 'urgent', 'พบแพทย์ฉุกเฉิน'],
+                ['eye_injury', 'อุบัติเหตุที่ดวงตา', 'Eye trauma', 'มีของแข็ง/สารเคมีเข้าตา', 'urgent', 'ล้างตา + พบจักษุแพทย์ทันที'],
+                ['neck_stiffness_fever', 'ไข้ + คอแข็ง', 'Fever with neck stiffness', 'ไข้สูงร่วมกับคอแข็ง อาจเป็นเยื่อหุ้มสมองอักเสบ', 'critical', 'พบแพทย์ฉุกเฉินทันที'],
+                ['infant_high_fever', 'ทารก < 3 เดือน มีไข้', 'Fever in infant <3mo', 'ทารกอายุน้อยกว่า 3 เดือนมีไข้', 'urgent', 'พบแพทย์ทันที — ห้ามให้ยาลดไข้เอง'],
+                ['pregnancy_bleeding', 'ตั้งครรภ์ + เลือดออก', 'Bleeding in pregnancy', 'มีเลือดออกผิดปกติระหว่างตั้งครรภ์', 'urgent', 'พบสูตินรีแพทย์ทันที'],
+                ['severe_diarrhea_blood', 'ท้องเสียมีเลือด', 'Bloody diarrhea', 'ถ่ายเหลวมีเลือดปนมากกว่า 1 ครั้ง', 'urgent', 'พบแพทย์ภายในวันนี้'],
+                ['persistent_vomiting', 'อาเจียนไม่หยุด', 'Persistent vomiting', 'อาเจียนเกิน 6 ครั้ง/วัน หรือไม่หยุด', 'urgent', 'พบแพทย์ภายในวันนี้'],
+                ['throat_swelling_breathing', 'คอบวม + หายใจลำบาก', 'Throat swelling + dyspnea', 'อาการแพ้รุนแรงหรือติดเชื้อทางเดินหายใจ', 'critical', 'โทร 1669 ทันที'],
+                ['asthma_severe_attack', 'หอบหืดกำเริบรุนแรง', 'Severe asthma attack', 'พ่นยาแล้วยังหอบ พูดไม่จบประโยค', 'critical', 'พบแพทย์ฉุกเฉินทันที'],
+                ['testicular_torsion', 'ปวดอัณฑะเฉียบพลัน', 'Testicular pain acute', 'ปวดอัณฑะรุนแรงเฉียบพลัน อาจเป็น torsion', 'urgent', 'พบแพทย์ภายใน 6 ชั่วโมง'],
+                ['back_pain_neuro', 'ปวดหลัง + ขาชา/อ่อนแรง', 'Back pain with neuro deficit', 'ปวดหลังร่วมกับขาอ่อนแรงหรือควบคุมปัสสาวะไม่ได้', 'urgent', 'พบแพทย์ทันที (cauda equina)'],
+                ['jaundice_progressive', 'ตา/ตัวเหลือง', 'Progressive jaundice', 'ผิวหนังหรือตาขาวเหลืองชัดและเพิ่มขึ้น', 'urgent', 'พบแพทย์ภายใน 1-2 วัน'],
+                ['dehydration_infant', 'ทารกขาดน้ำ', 'Infant dehydration', 'ทารกซึม ปัสสาวะน้อย กระหม่อมยุบ', 'urgent', 'พบแพทย์ทันที'],
+                ['mouth_swelling_anaphylaxis', 'ปาก/ลิ้นบวม', 'Tongue/lip swelling', 'ปากหรือลิ้นบวมเฉียบพลัน อาจเป็น anaphylaxis', 'critical', 'โทร 1669 ทันที'],
+            ];
+            $rfCount = 0;
+            foreach ($redFlags as $rf) {
+                $rfInsert->execute([
+                    ':c' => $rf[0], ':tn' => $rf[1], ':en' => $rf[2],
+                    ':d' => $rf[3], ':s' => $rf[4], ':a' => $rf[5],
+                ]);
+                $rfCount += $rfInsert->rowCount();
+            }
+
+            // Triage questions: 22 conditions x 4-7 questions
+            $tqInsert = $db->prepare(
+                "INSERT IGNORE INTO triage_questions
+                 (line_account_id, condition_code, question_th, question_en, answer_type, red_flag_if_yes, recommend_symptom_codes, sort_order, is_active)
+                 VALUES (NULL, :cc, :qth, :qen, 'yes_no', :rf, :sc, :so, 1)"
+            );
+            $triageData = [
+                // [condition_code, [[question_th, question_en, red_flag, symptom_codes_csv], ...]]
+                ['common_cold', [
+                    ['มีไข้สูงเกิน 38.5°C ไหม?', 'Fever above 38.5C?', 0, 'fever'],
+                    ['หายใจลำบากหรือเหนื่อยผิดปกติไหม?', 'Difficulty breathing?', 1, ''],
+                    ['มีน้ำมูกใส/คัดจมูกไหม?', 'Runny/stuffy nose?', 0, 'runny_nose'],
+                    ['ไอแห้งหรือไอมีเสมหะไหม?', 'Cough?', 0, 'cough'],
+                    ['เจ็บคอหรือกลืนเจ็บไหม?', 'Sore throat?', 0, 'sore_throat'],
+                    ['ปวดเมื่อยตัวไหม?', 'Body aches?', 0, 'body_ache'],
+                ]],
+                ['allergy', [
+                    ['ผื่นลามทั่วตัว + หายใจลำบาก/ปากบวม?', 'Hives + dyspnea?', 1, ''],
+                    ['จาม/คัดจมูก/น้ำมูกไหลซ้ำๆ?', 'Sneezing/rhinitis?', 0, 'allergy_rhinitis'],
+                    ['คันตา/ตาแดง/น้ำตาไหล?', 'Itchy eyes?', 0, 'eye_allergy'],
+                    ['ผื่นคัน/ลมพิษ?', 'Hives?', 0, 'urticaria'],
+                    ['อาการเกิดหลังสัมผัสอาหาร/ฝุ่น/สัตว์เลี้ยง?', 'Food/dust/pet trigger?', 0, ''],
+                ]],
+                ['headache', [
+                    ['ปวดหัวรุนแรงที่สุดในชีวิตหรือเฉียบพลันมาก?', 'Worst-ever headache?', 1, ''],
+                    ['มีไข้ + คอแข็ง + อาเจียน?', 'Fever + neck stiffness?', 1, ''],
+                    ['ปวดข้างเดียว + เห็นแสงเป็นเส้น?', 'One-sided + aura?', 0, 'migraine'],
+                    ['ปวดตื้อๆ ทั่วศีรษะ/บีบรัด?', 'Tension headache?', 0, 'headache'],
+                    ['นอนน้อย/เครียด/พักผ่อนไม่พอ?', 'Sleep deprived?', 0, ''],
+                    ['ปวดหลังตา?', 'Pain behind eyes?', 0, 'sinus_headache'],
+                ]],
+                ['gi', [
+                    ['ถ่ายเป็นเลือด/อาเจียนเป็นเลือด?', 'Blood in stool/vomit?', 1, ''],
+                    ['ปวดท้องรุนแรงไม่หายเกิน 6 ชั่วโมง?', 'Severe pain >6h?', 1, ''],
+                    ['ท้องเสียถ่ายเหลวเกิน 3 ครั้ง/วัน?', 'Diarrhea >3x/day?', 0, 'diarrhea'],
+                    ['คลื่นไส้/อาเจียน?', 'Nausea/vomiting?', 0, 'nausea'],
+                    ['ท้องอืด/แน่นท้อง?', 'Bloating?', 0, 'bloating'],
+                    ['มีไข้ร่วมไหม?', 'Fever?', 0, 'fever'],
+                    ['ปวดท้องน้อยข้างขวา?', 'RLQ pain?', 1, ''],
+                ]],
+                ['skin_rash', [
+                    ['ผื่นลามรวดเร็ว + ปากบวม/หายใจลำบาก?', 'Spreading + dyspnea?', 1, ''],
+                    ['ผื่นคัน + ตุ่มน้ำใส?', 'Itchy + vesicles?', 0, 'eczema'],
+                    ['ผิวหนังแดง/ลอก/แห้ง?', 'Red/scaly?', 0, 'dermatitis'],
+                    ['มีหนองหรือบาดแผลติดเชื้อ?', 'Pus/infected?', 0, 'skin_infection'],
+                    ['ผื่นแพ้สัมผัสจากเครื่องสำอาง/โลหะ?', 'Contact allergy?', 0, 'contact_dermatitis'],
+                ]],
+                ['insomnia', [
+                    ['มีความคิดทำร้ายตัวเอง?', 'Self-harm thoughts?', 1, ''],
+                    ['นอนไม่หลับติดต่อกันเกิน 2 สัปดาห์?', '>2 weeks insomnia?', 0, 'chronic_insomnia'],
+                    ['หลับยาก/ตื่นกลางดึกบ่อย?', 'Sleep problem?', 0, 'insomnia'],
+                    ['มีความเครียด/วิตกกังวลร่วม?', 'Anxiety?', 0, 'anxiety'],
+                    ['ดื่มกาแฟ/เครื่องดื่มชูกำลังบ่อย?', 'Caffeine?', 0, ''],
+                ]],
+                ['cough', [
+                    ['ไอเป็นเลือด/เหนื่อยมาก?', 'Hemoptysis/SOB?', 1, ''],
+                    ['ไอแห้งไม่มีเสมหะ?', 'Dry cough?', 0, 'cough_dry'],
+                    ['ไอมีเสมหะเหลือง/เขียว?', 'Productive yellow/green?', 0, 'cough_productive'],
+                    ['ไอมานานกว่า 2 สัปดาห์?', '>2 weeks?', 0, 'cough_chronic'],
+                    ['ไอตอนกลางคืน?', 'Night cough?', 0, 'asthma'],
+                ]],
+                ['fever', [
+                    ['ไข้สูงเกิน 39.5°C หรือชัก?', 'Fever >39.5C or seizure?', 1, ''],
+                    ['ไข้ติดต่อกันเกิน 3 วัน?', '>3 days?', 1, ''],
+                    ['ปวดหัว/ปวดเมื่อยตัว?', 'Headache/myalgia?', 0, 'fever'],
+                    ['มีผื่น/จุดแดง (สงสัยไข้เลือดออก)?', 'Petechiae?', 1, ''],
+                    ['มีอาการเฉพาะที่ใดเป็นพิเศษ?', 'Localized?', 0, ''],
+                ]],
+                ['pain_general', [
+                    ['ปวดรุนแรงระดับ 8-10/10?', 'Severe 8-10/10?', 1, ''],
+                    ['ปวดข้อ/กล้ามเนื้อจากการเคลื่อนไหว?', 'Joint/muscle?', 0, 'musculoskeletal_pain'],
+                    ['ปวดเรื้อรังเกิน 1 เดือน?', '>1 month?', 0, 'chronic_pain'],
+                ]],
+                ['sore_throat', [
+                    ['คอบวมจนหายใจลำบาก?', 'Throat swelling + dyspnea?', 1, ''],
+                    ['เจ็บคอ + ไข้สูง > 38.5?', 'Sore throat + high fever?', 0, 'streptococcal_pharyngitis'],
+                    ['คอแดง มีจุดขาว?', 'White patches?', 0, 'pharyngitis'],
+                    ['เสียงแหบมานานเกิน 2 สัปดาห์?', 'Hoarseness >2w?', 1, ''],
+                    ['ต่อมน้ำเหลืองที่คอบวม?', 'Cervical lymphadenopathy?', 0, 'pharyngitis'],
+                ]],
+                ['eye_irritation', [
+                    ['การมองเห็นลดลงเฉียบพลัน?', 'Sudden vision loss?', 1, ''],
+                    ['มีของเข้าตาหรือกระแทก?', 'Foreign body/trauma?', 1, ''],
+                    ['คันตา/ตาแดง/น้ำตาไหล?', 'Itchy/red/tearing?', 0, 'eye_allergy'],
+                    ['ตาแห้ง/แสบตา?', 'Dry eye?', 0, 'dry_eye'],
+                    ['มีขี้ตาเขียว/เหลือง?', 'Purulent discharge?', 0, 'conjunctivitis'],
+                ]],
+                ['ear_pain', [
+                    ['ปวดหูรุนแรง + ไข้สูง + คอแข็ง?', 'Ear pain + fever + neck stiffness?', 1, ''],
+                    ['การได้ยินลดลง?', 'Hearing loss?', 0, 'otitis_media'],
+                    ['มีน้ำหนองออกจากหู?', 'Ear discharge?', 0, 'ear_infection'],
+                    ['คันในรูหู?', 'Itchy ear?', 0, 'otitis_externa'],
+                ]],
+                ['menstrual_pain', [
+                    ['เลือดออกมากผิดปกติจนหน้ามืด?', 'Heavy bleeding + faint?', 1, ''],
+                    ['ปวดท้องน้อยเกี่ยวกับรอบเดือน?', 'Cyclic pelvic pain?', 0, 'dysmenorrhea'],
+                    ['ปวดร้าวลงต้นขา?', 'Radiating pain?', 0, 'dysmenorrhea'],
+                ]],
+                ['constipation', [
+                    ['ถ่ายเป็นเลือดสด?', 'Fresh blood?', 1, ''],
+                    ['ไม่ถ่ายเกิน 3 วัน + ปวดท้อง?', '>3d + abdo pain?', 0, 'constipation'],
+                    ['อุจจาระแข็ง/ก้อนเล็ก?', 'Hard stool?', 0, 'constipation'],
+                    ['น้ำหนักลดผิดปกติ?', 'Weight loss?', 1, ''],
+                ]],
+                ['hemorrhoids', [
+                    ['เลือดออกทางทวารมาก?', 'Heavy rectal bleeding?', 1, ''],
+                    ['ก้อนยื่นออกมาทางทวาร?', 'Prolapse?', 0, 'hemorrhoids'],
+                    ['คันรอบทวาร?', 'Anal itching?', 0, 'hemorrhoids'],
+                ]],
+                ['muscle_pain', [
+                    ['ปวดร่วมกับชา/อ่อนแรง?', 'Pain + numbness?', 1, ''],
+                    ['ปวดหลังจากออกกำลังกาย?', 'Post-exercise?', 0, 'musculoskeletal_pain'],
+                    ['ปวดตอนกลางคืน?', 'Night pain?', 0, 'musculoskeletal_pain'],
+                ]],
+                ['burn_minor', [
+                    ['แผลไหม้ใหญ่กว่าฝ่ามือ?', 'Larger than palm?', 1, ''],
+                    ['ผิวพอง + แดง?', 'Blister + redness?', 0, 'burn_minor'],
+                    ['ไหม้ที่ใบหน้า/ข้อต่อ?', 'Face/joint burn?', 1, ''],
+                ]],
+                ['motion_sickness', [
+                    ['อาเจียนไม่หยุด > 6 ครั้ง?', 'Persistent vomiting?', 1, ''],
+                    ['คลื่นไส้เวลาเดินทาง?', 'Travel-induced nausea?', 0, 'motion_sickness'],
+                    ['เวียนศีรษะเป็นพัก ๆ?', 'Vertigo?', 0, 'vertigo'],
+                ]],
+                ['indigestion', [
+                    ['ปวดอกร้าวไปแขนซ้าย/กราม?', 'Radiating chest pain?', 1, ''],
+                    ['แสบยอดอก/เรอเปรี้ยว?', 'Heartburn?', 0, 'indigestion'],
+                    ['ท้องอืด/แน่นท้องหลังกินอาหาร?', 'Postprandial bloating?', 0, 'indigestion'],
+                ]],
+                ['athlete_foot', [
+                    ['ผิวเปื่อย + เลือดออก/ติดเชื้อ?', 'Macerated + infected?', 1, ''],
+                    ['คันระหว่างนิ้วเท้า/ผิวลอก?', 'Itchy between toes?', 0, 'athlete_foot'],
+                ]],
+                ['mouth_ulcer', [
+                    ['แผลไม่หาย > 3 สัปดาห์?', 'Non-healing >3w?', 1, ''],
+                    ['แผลในปากเจ็บ?', 'Painful ulcer?', 0, 'mouth_ulcer'],
+                    ['น้ำหนักลด/กลืนลำบาก?', 'Weight loss/dysphagia?', 1, ''],
+                ]],
+                ['acne', [
+                    ['ผื่นแดง + ไข้?', 'Rash + fever?', 1, ''],
+                    ['สิวเล็กหัวขาว/หัวดำ?', 'Comedones?', 0, 'acne'],
+                    ['สิวอักเสบหนอง?', 'Pustular acne?', 0, 'acne_inflammatory'],
+                ]],
+            ];
+            $tqCount = 0;
+            foreach ($triageData as $cond) {
+                [$cc, $questions] = $cond;
+                $so = 1;
+                foreach ($questions as $q) {
+                    $tqInsert->execute([
+                        ':cc' => $cc,
+                        ':qth' => $q[0],
+                        ':qen' => $q[1] ?: null,
+                        ':rf' => $q[2],
+                        ':sc' => $q[3] ?: null,
+                        ':so' => $so++,
+                    ]);
+                    $tqCount += $tqInsert->rowCount();
+                }
+            }
+
+            // Auto-classify business_items.ai_recommendable ตามกฎหมายไทย:
+            // - ยาสามัญประจำบ้าน (household, otc) → ai_recommendable=1
+            // - ยาแผนโบราณ (traditional) → ai_recommendable=1 (ส่วนใหญ่เป็น OTC)
+            // - ยาอันตราย (dangerous) / ยาควบคุมพิเศษ (controlled) → ai_recommendable=0
+            // - requires_prescription=1 หรือ is_prescription=1 → ai_recommendable=0
+            $aiRecommendUpdated = 0;
+            try {
+                $bcols = [];
+                $stmt = $db->query("SHOW COLUMNS FROM business_items");
+                foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $c) { $bcols[$c] = true; }
+
+                $whereParts = ["1=1"];
+                $rxCol = isset($bcols['requires_prescription']) ? 'COALESCE(requires_prescription,0)' : '0';
+                $isRxCol = isset($bcols['is_prescription']) ? 'COALESCE(is_prescription,0)' : '0';
+                $catCol = isset($bcols['drug_category']) ? "COALESCE(drug_category,'')" : "''";
+                $typeCol = isset($bcols['drug_type']) ? "COALESCE(drug_type,'')" : "''";
+
+                if (!isset($bcols['ai_recommendable'])) {
+                    $db->exec("ALTER TABLE business_items ADD COLUMN ai_recommendable TINYINT(1) NOT NULL DEFAULT 1");
+                }
+
+                // มาตรฐานกฎหมายไทย: เฉพาะ household/otc/traditional ที่ไม่ต้องใบสั่ง = AI แนะนำได้
+                $sql = "UPDATE business_items SET ai_recommendable = CASE
+                    WHEN $rxCol = 1 THEN 0
+                    WHEN $isRxCol = 1 THEN 0
+                    WHEN $catCol IN ('controlled','dangerous') THEN 0
+                    WHEN $typeCol IN ('controlled','dangerous') THEN 0
+                    WHEN $catCol IN ('household','otc','traditional') THEN 1
+                    WHEN $typeCol IN ('household','traditional') THEN 1
+                    ELSE 0
+                END";
+                $db->exec($sql);
+                $cnt = $db->query("SELECT ROW_COUNT()")->fetchColumn();
+                $aiRecommendUpdated = (int) $cnt;
+            } catch (\Throwable $e) {
+                error_log('seed ai_recommendable update error: ' . $e->getMessage());
+            }
+
+            // Sample symptom map: เพิ่ม mapping ตัวอย่างถ้ายังไม่มี
+            $smCount = 0;
+            try {
+                $check = $db->query("SELECT COUNT(*) FROM product_symptom_map");
+                if ((int) $check->fetchColumn() === 0) {
+                    // ดึง business_items ที่ ai_recommendable=1 + match keyword → สร้าง mapping
+                    $matches = [
+                        'fever'         => ['paracetamol', 'พาราเซตามอล', 'ลดไข้', 'tylenol'],
+                        'cough'         => ['dextromethorphan', 'ระงับไอ', 'แก้ไอ', 'ไอ'],
+                        'runny_nose'    => ['chlorpheniramine', 'แก้แพ้', 'น้ำมูก'],
+                        'sore_throat'   => ['อมแก้เจ็บคอ', 'ยาอมเจ็บคอ', 'strepsils'],
+                        'allergy_rhinitis' => ['loratadine', 'cetirizine', 'แก้แพ้'],
+                        'diarrhea'      => ['loperamide', 'ท้องเสีย', 'ผงเกลือแร่', 'ors'],
+                        'indigestion'   => ['antacid', 'แก้กรดไหล', 'ขับลม'],
+                        'headache'      => ['paracetamol', 'พาราเซตามอล', 'ibuprofen'],
+                        'musculoskeletal_pain' => ['ยาทาแก้ปวด', 'น้ำมันมวย', 'counterpain'],
+                        'mouth_ulcer'   => ['kenalog', 'แผลในปาก'],
+                        'constipation'  => ['ยาระบาย', 'fiber', 'lactulose'],
+                        'motion_sickness' => ['dimenhydrinate', 'แก้เมา'],
+                    ];
+                    $smInsert = $db->prepare(
+                        "INSERT IGNORE INTO product_symptom_map
+                         (line_account_id, product_id, symptom_code, symptom_label_th, weight, is_first_line)
+                         VALUES (NULL, :pid, :sc, :lb, :w, :fl)"
+                    );
+                    foreach ($matches as $code => $kws) {
+                        $orParts = [];
+                        $bind = [];
+                        foreach ($kws as $i => $kw) {
+                            $orParts[] = "name LIKE :k$i";
+                            $bind[":k$i"] = "%$kw%";
+                        }
+                        $sql2 = "SELECT id FROM business_items WHERE COALESCE(ai_recommendable,1)=1 AND is_active=1 AND ("
+                            . implode(' OR ', $orParts) . ") LIMIT 5";
+                        $stmt2 = $db->prepare($sql2);
+                        $stmt2->execute($bind);
+                        $ids = $stmt2->fetchAll(\PDO::FETCH_COLUMN);
+                        $idx = 0;
+                        foreach ($ids as $pid) {
+                            $smInsert->execute([
+                                ':pid' => (int) $pid,
+                                ':sc'  => $code,
+                                ':lb'  => null,
+                                ':w'   => 100 - ($idx * 10),
+                                ':fl'  => $idx === 0 ? 1 : 0,
+                            ]);
+                            $smCount += $smInsert->rowCount();
+                            $idx++;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                error_log('seed symptom map error: ' . $e->getMessage());
+            }
+
+            $respond(true, [
+                'red_flags_inserted'         => $rfCount,
+                'triage_questions_inserted'  => $tqCount,
+                'symptom_map_inserted'       => $smCount,
+                'business_items_classified'  => $aiRecommendUpdated,
+                'note' => 'AI แนะนำได้ = เฉพาะ household/otc/traditional ที่ไม่ต้องใบสั่งแพทย์ — ตามกฎหมายไทย',
+            ]);
+        }
+
         case 'sandbox_test_retrieve': {
             $q = trim((string) ($input['query'] ?? ''));
             if ($q === '') {

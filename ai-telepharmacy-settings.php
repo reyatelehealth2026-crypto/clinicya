@@ -33,6 +33,20 @@ require_once __DIR__ . '/includes/header.php';
   <h1 class="text-2xl font-bold mb-1">💊 AI Telepharmacy</h1>
   <p class="text-sm text-gray-600 mb-4">จัดการระบบ triage Yes/No, อาการ → สินค้า, red flag และทดสอบ AI ก่อน publish</p>
 
+  <div class="mb-4 p-3 bg-gradient-to-r from-emerald-50 to-cyan-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-3 flex-wrap">
+    <div class="flex-1 min-w-[200px]">
+      <div class="font-semibold text-emerald-700">🌱 Seed default data — โหลดข้อมูลตั้งต้นทั้งระบบ</div>
+      <p class="text-xs text-emerald-600 mt-0.5">
+        เพิ่ม red flags 28 รายการ, triage questions 100+ รายการ ครอบคลุม 22 อาการ, จับคู่อาการ↔สินค้าตัวอย่าง,
+        และจัดประเภท <strong>"AI แนะนำได้"</strong> ให้สินค้าตามกฎหมายไทย (เฉพาะยาสามัญประจำบ้าน)
+      </p>
+    </div>
+    <button id="seedDefaultBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium">
+      🌱 Seed ทั้งหมด
+    </button>
+  </div>
+  <div id="seedResult" class="mb-4 text-sm"></div>
+
   <div class="flex gap-1 border-b mb-6">
     <div class="tabbtn active" data-tab="products">📦 สินค้า (AI แนะนำได้)</div>
     <div class="tabbtn" data-tab="map">🔗 อาการ → สินค้า</div>
@@ -710,6 +724,26 @@ document.getElementById('kbTestBtn').addEventListener('click', async () => {
       + '</div>'
     ).join('')
     + '</div>';
+});
+
+document.getElementById('seedDefaultBtn').addEventListener('click', async () => {
+  const out = document.getElementById('seedResult');
+  if (!confirm('ดำเนินการ seed ข้อมูลตั้งต้น? (จะเพิ่ม red flags, คำถาม Yes/No, จับคู่อาการ→สินค้า, จัด AI แนะนำได้ตามกฎหมายไทย)')) return;
+  out.innerHTML = '<div class="text-emerald-600">⏳ กำลัง seed...</div>';
+  const r = await adminCall('seed_default_data');
+  if (!r.success) { out.innerHTML = '<div class="text-red-500">' + (r.error || 'error') + '</div>'; return; }
+  out.innerHTML = '<div class="p-3 bg-emerald-50 text-emerald-700 rounded-lg space-y-1">'
+    + '<div class="font-semibold">✅ Seed สำเร็จ</div>'
+    + '<div class="text-xs">🚨 Red flags ใหม่: <strong>' + r.red_flags_inserted + '</strong> รายการ</div>'
+    + '<div class="text-xs">❓ Triage questions ใหม่: <strong>' + r.triage_questions_inserted + '</strong> รายการ</div>'
+    + '<div class="text-xs">🔗 Symptom→Product mapping: <strong>' + r.symptom_map_inserted + '</strong> รายการ</div>'
+    + '<div class="text-xs">📦 Business items classified: <strong>' + r.business_items_classified + '</strong> ชิ้น</div>'
+    + '<div class="text-xs italic mt-2">ℹ️ ' + (r.note || '') + '</div>'
+    + '</div>';
+  loadSymptomCodes();
+  loadRedFlags();
+  loadConditions();
+  if (typeof loadProducts === 'function') loadProducts();
 });
 
 loadSymptomCodes();
