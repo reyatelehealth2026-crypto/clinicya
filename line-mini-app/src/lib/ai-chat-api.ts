@@ -1,111 +1,180 @@
 import { apiUrl } from '@/lib/config'
 import type { ChatHistoryItem, AIChatStreamCallbacks } from '@/types/ai-chat'
 
+/** ดึง payload หลัง prefix SSE `data:` — ไม่ใช้ JSON.parse กับทั้งบรรทัดที่มีคำว่า data: */
+function parseSseDataLine(trimmed: string): { data: string } | null {
+  if (!trimmed.startsWith('data:')) return null
+  const data = trimmed.replace(/^data:\s*/, '').trim()
+  return { data }
+}
+
+/** ประมวลผลบรรทัด SSE หนึ่งบรรทัด (หลังตัด prefix แล้วค่อย JSON.parse) */
+function handleSsePayload(
+  data: string,
+  callbacks: AIChatStreamCallbacks,
+  safeComplete: () => void
+): 'error' | 'done' | 'continue' {
+  if (data === '[DONE]') {
+    safeComplete()
+    return 'done'
+  }
+  try {
+    const parsed = JSON.parse(data) as { token?: string; error?: string }
+    if (parsed.error) {
+      callbacks.onError(parsed.error)
+      return 'error'
+    }
+    if (parsed.token) {
+      callbacks.onToken(parsed.token)
+    }
+  } catch {
+    /* ไม่ใช่ JSON — ข้าม */
+  }
+  return 'continue'
+}
+
+/** แปลงข้อความทั้งก้อนที่เป็น SSE (กรณีไม่มี getReader หรือดึงทั้ง response มาแล้ว) */
+function processSseTextBlock(text: string, callbacks: AIChatStreamCallbacks, safeComplete: () => void): void {
+  const lines = text.split(/\r?\n/)
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const parsedLine = parseSseDataLine(trimmed)
+    if (!parsedLine) continue
+    const r = handleSsePayload(parsedLine.data, callbacks, safeComplete)
+    if (r === 'done' || r === 'error') return
+  }
+}
+
 export async function streamAIChat(
   message: string,
   history: ChatHistoryItem[],
   callbacks: AIChatStreamCallbacks
 ): Promise<void> {
-  const response = await fetch(apiUrl('/api/ai-chat.php'), {
+  const url = apiUrl('/api/ai-chat.php')
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Accept': 'text/event-stream'
+      Accept: 'text/event-stream'
     },
     body: JSON.stringify({ message, history })
   })
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`)
+  let completed = false
+  const safeComplete = () => {
+    if (completed) return
+    completed = true
+    callbacks.onComplete()
   }
 
-  const contentType = response.headers.get('content-type') || ''
-  
-  // Handle SSE streaming
-  if (contentType.includes('text/event-stream')) {
-    const reader = response.body?.getReader()
-    const decoder = new TextDecoder()
-    
-    if (!reader) {
-      throw new Error('No response body available')
+  if (!response.ok) {
+    let detail = ''
+    try {
+      detail = await response.text()
+      const dataLine = detail
+        .split(/\n/)
+        .map((l) => l.trim())
+        .find((l) => l.startsWith('data:') && l.includes('error'))
+      if (dataLine) {
+        const parsedLine = parseSseDataLine(dataLine)
+        if (parsedLine) {
+          try {
+            const j = JSON.parse(parsedLine.data) as { error?: string }
+            if (j.error) {
+              callbacks.onError(j.error)
+              return
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    } catch {
+      /* ignore */
     }
+    const preview = detail.replace(/\s+/g, ' ').slice(0, 200)
+    callbacks.onError(
+      preview
+        ? `HTTP ${response.status}: ${preview}`
+        : `HTTP ${response.status} — ตั้งค่า NEXT_PUBLIC_PHP_API_BASE_URL ให้ชี้ PHP ที่มี /api/ai-chat.php (เช่น https://clinicya.re-ya.com)`
+    )
+    return
+  }
 
+  /**
+   * ใช้ ReadableStream เสมอเมื่อมี — อย่าพึ่ง Content-Type:
+   * บางพร็อกซีส่งเป็น application/octet-stream แต่ body จริงเป็น SSE → เดิมไปกิ่ง response.json() แล้วพังที่ "data:"
+   */
+  const reader = response.body?.getReader()
+
+  if (reader) {
+    const decoder = new TextDecoder()
     let buffer = ''
 
     try {
       while (true) {
         const { done, value } = await reader.read()
-        
         if (done) break
-        
+
         buffer += decoder.decode(value, { stream: true })
-        
-        // Process SSE lines
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete line in buffer
-        
+
+        const lines = buffer.split(/\n/)
+        buffer = lines.pop() ?? ''
+
         for (const line of lines) {
           const trimmed = line.trim()
-          
-          if (!trimmed.startsWith('data: ')) continue
-          
-          const data = trimmed.slice(6) // Remove 'data: ' prefix
-          
-          if (data === '[DONE]') {
-            callbacks.onComplete()
-            return
-          }
-          
-          try {
-            const parsed = JSON.parse(data) as { token?: string; error?: string }
-            
-            if (parsed.error) {
-              callbacks.onError(parsed.error)
-              return
-            }
-            
-            if (parsed.token) {
-              callbacks.onToken(parsed.token)
-            }
-          } catch {
-            // Ignore parse errors for malformed lines
-          }
+          if (!trimmed) continue
+
+          const parsedLine = parseSseDataLine(trimmed)
+          if (!parsedLine) continue
+
+          const r = handleSsePayload(parsedLine.data, callbacks, safeComplete)
+          if (r === 'done' || r === 'error') return
         }
       }
-      
-      // Process any remaining data in buffer
+
       if (buffer.trim()) {
         const trimmed = buffer.trim()
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6)
-          if (data === '[DONE]') {
-            callbacks.onComplete()
-          } else {
-            try {
-              const parsed = JSON.parse(data) as { token?: string; error?: string }
-              if (parsed.token) callbacks.onToken(parsed.token)
-            } catch {
-              // Ignore
-            }
-          }
+        const parsedLine = parseSseDataLine(trimmed)
+        if (parsedLine) {
+          const r = handleSsePayload(parsedLine.data, callbacks, safeComplete)
+          if (r === 'done' || r === 'error') return
         }
       }
-      
-      callbacks.onComplete()
+
+      safeComplete()
     } catch (error) {
       callbacks.onError(error instanceof Error ? error.message : 'Stream error')
     } finally {
       reader.releaseLock()
     }
-  } else {
-    // Fallback for non-SSE response
-    const data = await response.json()
-    if (data.error) {
-      throw new Error(data.error)
+    return
+  }
+
+  /** ไม่มี stream body — อ่านเป็นข้อความ */
+  try {
+    const text = await response.text()
+    const first = text.trimStart()
+    if (first.startsWith('data:')) {
+      processSseTextBlock(text, callbacks, safeComplete)
+      if (!completed) safeComplete()
+      return
     }
-    if (data.response) {
-      callbacks.onToken(data.response)
+    if (first.startsWith('{')) {
+      const data = JSON.parse(text) as { error?: string; response?: string }
+      if (data.error) {
+        callbacks.onError(data.error)
+        return
+      }
+      if (data.response) {
+        callbacks.onToken(data.response)
+      }
+      safeComplete()
+      return
     }
-    callbacks.onComplete()
+    callbacks.onError('รูปแบบคำตอบจากเซิร์ฟเวอร์ไม่ถูกต้อง')
+  } catch {
+    callbacks.onError('รูปแบบคำตอบจากเซิร์ฟเวอร์ไม่ถูกต้อง')
   }
 }

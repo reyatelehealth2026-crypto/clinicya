@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Send, Bot, User, AlertCircle } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
 import { AppShell } from '@/components/miniapp/AppShell'
@@ -23,10 +23,9 @@ function LoadingDots() {
 }
 
 export function AIChatClient() {
-  const line = useLineContext()
+  useLineContext()
   const { toast } = useToast()
-  const lineUserId = line.profile?.userId || ''
-  
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: generateId(),
@@ -39,41 +38,37 @@ export function AIChatClient() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Auto-scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  const getHistory = useCallback((): ChatHistoryItem[] => {
-    return messages.slice(-10).map(m => ({
-      role: m.role,
-      content: m.content
-    }))
-  }, [messages])
-
   const handleSend = async () => {
     const text = input.trim()
     if (!text || isStreaming) return
 
-    // Add user message
+    // ประวัติก่อนข้อความรอบนี้ (ไม่รวม user ที่กำลังส่ง — ส่งเป็น message แยกใน API)
+    const historyPayload: ChatHistoryItem[] = messages.slice(-10).map((m) => ({
+      role: m.role,
+      content: m.content
+    }))
+
     const userMsg: ChatMessage = {
       id: generateId(),
       role: 'user',
       content: text,
       timestamp: new Date()
     }
-    setMessages(prev => [...prev, userMsg])
+    setMessages((prev) => [...prev, userMsg])
     setInput('')
     setIsStreaming(true)
     setStreamingContent('')
 
-    const history = getHistory()
     let fullResponse = ''
 
     try {
-      await streamAIChat(text, history, {
+      await streamAIChat(text, historyPayload, {
         onToken: (token) => {
           fullResponse += token
           setStreamingContent(fullResponse)
@@ -82,32 +77,35 @@ export function AIChatClient() {
           const aiMsg: ChatMessage = {
             id: generateId(),
             role: 'assistant',
-            content: fullResponse || 'ขออภัย ไม่สามารถให้คำตอบได้',
+            content: fullResponse.trim() || 'ขออภัย ไม่สามารถให้คำตอบได้',
             timestamp: new Date()
           }
-          setMessages(prev => [...prev, aiMsg])
+          setMessages((prev) => [...prev, aiMsg])
           setStreamingContent('')
           setIsStreaming(false)
         },
         onError: (error) => {
           console.error('AI Chat error:', error)
-          toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่')
-          
-          // Add error message
+          const short =
+            error.length > 220 ? `${error.slice(0, 220)}…` : error
+          toast.error(short)
+
           const errorMsg: ChatMessage = {
             id: generateId(),
             role: 'assistant',
-            content: 'ขออภัย ระบบ AI มีปัญหาชั่วคราว กรุณาลองใหม่หรือติดต่อเภสัชกร',
+            content: `ขออภัย: ${short}`,
             timestamp: new Date()
           }
-          setMessages(prev => [...prev, errorMsg])
+          setMessages((prev) => [...prev, errorMsg])
           setStreamingContent('')
           setIsStreaming(false)
         }
       })
     } catch (error) {
       console.error('Failed to stream:', error)
-      toast.error('ไม่สามารถเชื่อมต่อกับ AI ได้')
+      const msg =
+        error instanceof Error ? error.message : 'ไม่สามารถเชื่อมต่อกับ AI ได้'
+      toast.error(msg.length > 180 ? `${msg.slice(0, 180)}…` : msg)
       setStreamingContent('')
       setIsStreaming(false)
     }

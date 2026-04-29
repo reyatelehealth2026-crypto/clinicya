@@ -24,31 +24,75 @@ export function AIChatPage() {
     const aiId = ++msgId
     setMessages((prev) => [...prev, { id: aiId, role: 'assistant', content: '' }])
 
-    const history = messages.filter((m) => m.content).map((m) => ({ role: m.role, content: m.content }))
+    const history = messages
+      .filter((m) => typeof m.content === 'string' && m.content.trim())
+      .map((m) => ({ role: m.role, content: m.content }))
     history.push({ role: 'user', content: text })
 
     try {
       abortRef.current = new AbortController()
       const res = await fetch(`${env.API_BASE_URL}/api/ai-chat.php`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text, history }), signal: abortRef.current.signal })
+      if (!res.ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiId ? { ...m, content: `ไม่สามารถเชื่อมต่อกับ AI ได้ (HTTP ${res.status})` } : m
+          )
+        )
+        return
+      }
       const reader = res.body?.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let receivedToken = false
+      let receivedStreamError = false
       if (reader) {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
           buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n'); buffer = lines.pop() || ''
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
           for (const line of lines) {
             const t = line.trim()
             if (!t || t === 'data: [DONE]') continue
-            if (t.startsWith('data: ')) { try { const j = JSON.parse(t.slice(6)); if (j.token) setMessages((prev) => prev.map((m) => m.id === aiId ? { ...m, content: m.content + j.token } : m)) } catch { /* skip */ } }
+            if (!t.startsWith('data: ')) continue
+            try {
+              const j = JSON.parse(t.slice(6)) as { token?: string; error?: string }
+              if (j.error) {
+                receivedStreamError = true
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === aiId ? { ...m, content: `ขออภัย: ${j.error}` } : m))
+                )
+                continue
+              }
+              if (j.token) {
+                receivedToken = true
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === aiId ? { ...m, content: m.content + j.token } : m))
+                )
+              }
+            } catch {
+              /* skip malformed chunk */
+            }
           }
         }
       }
+      if (!receivedToken && !receivedStreamError) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiId && !m.content.trim()
+              ? { ...m, content: 'ไม่สามารถเชื่อมต่อกับ AI ได้' }
+              : m
+          )
+        )
+      }
     } catch (err: unknown) {
-      if ((err as Error).name !== 'AbortError') setMessages((prev) => prev.map((m) => m.id === aiId ? { ...m, content: 'เกิดข้อผิดพลาด กรุณาลองใหม่' } : m))
-    } finally { setLoading(false); abortRef.current = null }
+      if ((err as Error).name !== 'AbortError')
+        setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, content: 'เกิดข้อผิดพลาด กรุณาลองใหม่' } : m)))
+    } finally {
+      setLoading(false)
+      abortRef.current = null
+    }
   }, [input, loading, messages])
 
   return (
