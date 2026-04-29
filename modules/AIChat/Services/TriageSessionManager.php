@@ -124,6 +124,34 @@ class TriageSessionManager
     }
 
     /**
+     * บันทึก last_question_id และเพิ่ม id เข้า asked_question_ids — ใช้ตอนถามคำถามใหม่
+     * (ก่อนหน้านี้ field นี้ถูก set ใน recordResponse เท่านั้น ทำให้ turn แรก
+     * ของแต่ละคำถามไม่ถูก persist และ router หา last_question_id ไม่เจอใน turn ถัดไป)
+     */
+    public function setLastQuestion(int $sessionId, int $questionId): void
+    {
+        $sel = $this->pdo->prepare("SELECT triage_data FROM triage_sessions WHERE id = :id");
+        $sel->execute([':id' => $sessionId]);
+        $raw = $sel->fetchColumn();
+        $data = is_string($raw) ? (json_decode($raw, true) ?: []) : [];
+        if (!isset($data['asked_question_ids']) || !is_array($data['asked_question_ids'])) {
+            $data['asked_question_ids'] = [];
+        }
+        if (!in_array($questionId, $data['asked_question_ids'], true)) {
+            $data['asked_question_ids'][] = $questionId;
+        }
+        $data['last_question_id'] = $questionId;
+
+        $upd = $this->pdo->prepare(
+            "UPDATE triage_sessions SET triage_data = :d, updated_at = NOW() WHERE id = :id"
+        );
+        $upd->execute([
+            ':d'  => json_encode($data, JSON_UNESCAPED_UNICODE),
+            ':id' => $sessionId,
+        ]);
+    }
+
+    /**
      * ดึง symptom codes ที่สะสมไว้ใน session.
      *
      * @return list<string>

@@ -211,10 +211,19 @@ class TriageRouter
      */
     private function buildQuestionResult(?int $sessionId, array $question): array
     {
+        $qid = (int) $question['id'];
+        // persist last_question_id ทันที — กัน turn ถัดไปไม่เจอ context และลูปคำถามเดิม
+        if ($sessionId !== null && $qid > 0) {
+            try {
+                $this->sessions->setLastQuestion($sessionId, $qid);
+            } catch (\Throwable $e) {
+                error_log('setLastQuestion failed: ' . $e->getMessage());
+            }
+        }
         return [
             'type'        => 'question',
             'session_id'  => $sessionId,
-            'question_id' => (int) $question['id'],
+            'question_id' => $qid,
             'question_th' => (string) $question['question_th'],
             'options'     => $question['options'],
         ];
