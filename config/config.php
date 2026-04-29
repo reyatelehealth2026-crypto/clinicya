@@ -146,7 +146,7 @@ define('CNY_ODOO_API_USER', getenv('CNY_ODOO_API_USER') ?: (getenv('ODOO_PRODUCT
 define('CNY_ODOO_USER_TOKEN', getenv('CNY_ODOO_USER_TOKEN') ?: (getenv('ODOO_PRODUCTION_USER_TOKEN') ?: $defaultCnyOdooUserToken));
 
 // Gemini AI Chat
-define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: 'AIzaSyDvqhwWDiCg_KVLj5gT89unsuBSfbZ6Vcg');
+define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: '');
 
 // Webhook URL (for Odoo team reference)
 define('ODOO_WEBHOOK_URL', APP_URL . '/api/webhook/odoo.php');
