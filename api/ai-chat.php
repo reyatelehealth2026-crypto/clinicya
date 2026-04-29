@@ -70,44 +70,106 @@ if (empty($userMessage)) $userMessage = "test"; // for CLI testing
 $db = Database::getInstance()->getConnection();
 
 /**
- * ลำดับคีย์: ai_settings ทุกแถว (newest first) → env/config — ลองทีละตัวใน loop ด้านล่าง
- * ถ้าทุกคีย์ Gemini ใช้ไม่ได้ (leaked/auth/quota) → fallback ไป OpenAI
+ * ลำดับคีย์: ai_settings ทุกแถว → ai_settings_global → ai_chat_settings → env/config/.env
+ * รองรับชื่อคอลัมน์/ตารางเก่า เพื่อไม่ให้ schema ต่างเวอร์ชันทำให้คีย์หายไป
  */
 $geminiKeys = [];
-try {
-    $stmt = $db->query(
-        "SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) != '' ORDER BY line_account_id IS NULL DESC, updated_at DESC, id DESC"
-    );
-    if ($stmt) {
-        foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $k) {
-            $k = trim((string) $k);
-            if ($k !== '' && !in_array($k, $geminiKeys, true)) {
-                $geminiKeys[] = $k;
+$openaiKey = '';
+$diagnostics = [];
+
+$loadKeysFromQuery = function (string $sql, string $col) use ($db, &$diagnostics): array {
+    $out = [];
+    try {
+        $stmt = $db->query($sql);
+        if ($stmt) {
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            $diagnostics[] = $sql . ' → ' . count($rows) . ' rows';
+            foreach ($rows as $r) {
+                $v = isset($r[$col]) ? trim((string) $r[$col]) : '';
+                if ($v !== '') {
+                    $out[] = $v;
+                }
             }
         }
+    } catch (\Throwable $e) {
+        $diagnostics[] = 'SQL fail: ' . substr($e->getMessage(), 0, 80);
     }
-} catch (Throwable $e) {
-}
-$envGeminiKey = defined('GEMINI_API_KEY') ? GEMINI_API_KEY : (getenv('GEMINI_API_KEY') ?: '');
-if ($envGeminiKey !== '' && !in_array($envGeminiKey, $geminiKeys, true)) {
-    $geminiKeys[] = $envGeminiKey;
+    return $out;
+};
+
+// 1) ai_settings — ลอง query แบบง่ายสุดก่อน
+foreach ($loadKeysFromQuery(
+    "SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> ''",
+    'gemini_api_key'
+) as $k) {
+    if (!in_array($k, $geminiKeys, true)) {
+        $geminiKeys[] = $k;
+    }
 }
 
-$openaiKey = '';
-try {
-    $stmt = $db->query(
-        "SELECT openai_api_key FROM ai_settings WHERE openai_api_key IS NOT NULL AND TRIM(openai_api_key) != '' ORDER BY line_account_id IS NULL DESC, updated_at DESC, id DESC LIMIT 1"
-    );
-    $openaiKey = $stmt ? (string) $stmt->fetchColumn() : '';
-} catch (Throwable $e) {
-    $openaiKey = '';
+// 2) ตารางเก่า: ai_chat_settings (บางเวอร์ชันใช้ชื่อนี้)
+foreach ($loadKeysFromQuery(
+    "SELECT gemini_api_key FROM ai_chat_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> ''",
+    'gemini_api_key'
+) as $k) {
+    if (!in_array($k, $geminiKeys, true)) {
+        $geminiKeys[] = $k;
+    }
 }
+
+// 3) settings table แบบ key-value
+foreach ($loadKeysFromQuery(
+    "SELECT setting_value AS gemini_api_key FROM settings WHERE setting_key IN ('gemini_api_key','GEMINI_API_KEY') AND setting_value IS NOT NULL AND TRIM(setting_value) <> ''",
+    'gemini_api_key'
+) as $k) {
+    if (!in_array($k, $geminiKeys, true)) {
+        $geminiKeys[] = $k;
+    }
+}
+
+// 4) env/constant
+$envGeminiKey = defined('GEMINI_API_KEY') ? (string) GEMINI_API_KEY : '';
+if ($envGeminiKey === '') {
+    $envGeminiKey = (string) (getenv('GEMINI_API_KEY') ?: '');
+}
+$envGeminiKey = trim($envGeminiKey);
+if ($envGeminiKey !== '' && !in_array($envGeminiKey, $geminiKeys, true)) {
+    $geminiKeys[] = $envGeminiKey;
+    $diagnostics[] = 'env GEMINI_API_KEY: present';
+} else {
+    $diagnostics[] = 'env GEMINI_API_KEY: ' . ($envGeminiKey === '' ? 'empty' : 'duplicate');
+}
+
+// OpenAI: ai_settings → ai_chat_settings → settings → env
+$openaiCandidates = array_merge(
+    $loadKeysFromQuery(
+        "SELECT openai_api_key FROM ai_settings WHERE openai_api_key IS NOT NULL AND TRIM(openai_api_key) <> ''",
+        'openai_api_key'
+    ),
+    $loadKeysFromQuery(
+        "SELECT openai_api_key FROM ai_chat_settings WHERE openai_api_key IS NOT NULL AND TRIM(openai_api_key) <> ''",
+        'openai_api_key'
+    ),
+    $loadKeysFromQuery(
+        "SELECT setting_value AS openai_api_key FROM settings WHERE setting_key IN ('openai_api_key','OPENAI_API_KEY') AND setting_value IS NOT NULL AND TRIM(setting_value) <> ''",
+        'openai_api_key'
+    )
+);
+$openaiKey = $openaiCandidates[0] ?? '';
 if ($openaiKey === '') {
-    $openaiKey = defined('OPENAI_API_KEY') ? OPENAI_API_KEY : (getenv('OPENAI_API_KEY') ?: '');
+    $envOpenAI = defined('OPENAI_API_KEY') ? (string) OPENAI_API_KEY : '';
+    if ($envOpenAI === '') {
+        $envOpenAI = (string) (getenv('OPENAI_API_KEY') ?: '');
+    }
+    $openaiKey = trim($envOpenAI);
+    $diagnostics[] = 'env OPENAI_API_KEY: ' . ($openaiKey === '' ? 'empty' : 'present');
 }
 
 if (empty($geminiKeys) && $openaiKey === '') {
-    echo "data: " . json_encode(['error' => 'AI key not configured (gemini/openai)']) . "\n\n";
+    $diag = implode(' | ', $diagnostics);
+    echo "data: " . json_encode([
+        'error' => 'AI key not configured (gemini/openai) — ' . $diag,
+    ], JSON_UNESCAPED_UNICODE) . "\n\n";
     flush();
     exit;
 }
