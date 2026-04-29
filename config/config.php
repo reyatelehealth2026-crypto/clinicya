@@ -19,14 +19,14 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Database
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'cny_re_ya_com');
-define('DB_USER', 'cny_re_ya_com');
-define('DB_PASS', 'cny_re_ya_com');
+define('DB_NAME', 'zrismpsz_clinicya');
+define('DB_USER', 'zrismpsz_clinicya');
+define('DB_PASS', 'zrismpsz_clinicya');
 
 // Application
-define('APP_NAME', 'Agentic line');
-define('APP_URL', 'https://cny.re-ya.com');
-define('BASE_URL', 'https://cny.re-ya.com');
+define('APP_NAME', 'CLINICYA REYA');
+define('APP_URL', 'https://clinicya.re-ya.com/');
+define('BASE_URL', 'https://clinicya.re-ya.com/');
 define('TIMEZONE', 'Asia/Bangkok');
 
 // LINE API (ตั้งค่าผ่านหน้า Admin)
@@ -38,9 +38,8 @@ define('TABLE_USERS', 'users');
 define('TABLE_GROUPS', 'groups');
 // Next.js API Integration
 // URL ของ Next.js app (ปรับตาม environment)
-define('NEXTJS_API_URL', 'https://inbox.re-ya.com');
+define('NEXTJS_API_URL', 'https://app.re-ya.com');
 // Secret key สำหรับ authentication (ใช้ค่าเดียวกับ Next.js INTERNAL_API_SECRET)
-define('INTERNAL_API_SECRET', 'UIFW4a63EGivOlJi4ulxBmaV+0S5WpS5i3ofQqzIOhI=');
 
 // ============================================================================
 // Odoo ERP Integration Configuration
