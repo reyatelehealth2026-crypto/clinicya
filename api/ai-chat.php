@@ -227,18 +227,38 @@ $emitSseDataLine = static function (string $line) use (&$emittedAnyToken, &$stre
 
         return;
     }
-    $parts = $json['candidates'][0]['content']['parts'] ?? null;
-    if (!is_array($parts)) {
+    // ครบทุก candidate และทุก part (บางโมเดล/การส่งอาร์กิวเมนต์ใช้ index > 0 หรือหลาย part ต่อ chunk)
+    $candidateList = $json['candidates'] ?? null;
+    if (!is_array($candidateList)) {
         return;
     }
-    foreach ($parts as $part) {
-        if (!empty($part['text'])) {
-            $emittedAnyToken = true;
-            echo 'data: ' . json_encode(['token' => $part['text']], JSON_UNESCAPED_UNICODE) . "\n\n";
-            if (function_exists('ob_get_level') && ob_get_level() > 0) {
-                ob_flush();
+    $emitToken = static function (string $t) use (&$emittedAnyToken): void {
+        $emittedAnyToken = true;
+        $flags = JSON_UNESCAPED_UNICODE;
+        if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+            $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+        }
+        echo 'data: ' . json_encode(['token' => $t], $flags) . "\n\n";
+        if (function_exists('ob_get_level') && ob_get_level() > 0) {
+            ob_flush();
+        }
+        flush();
+    };
+    foreach ($candidateList as $candidate) {
+        if (!is_array($candidate)) {
+            continue;
+        }
+        $parts = $candidate['content']['parts'] ?? null;
+        if (!is_array($parts)) {
+            continue;
+        }
+        foreach ($parts as $part) {
+            if (!is_array($part)) {
+                continue;
             }
-            flush();
+            if (!empty($part['text']) && is_string($part['text'])) {
+                $emitToken($part['text']);
+            }
         }
     }
 };
