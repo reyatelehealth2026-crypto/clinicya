@@ -37,6 +37,7 @@ require_once __DIR__ . '/includes/header.php';
     <div class="tabbtn active" data-tab="products">📦 สินค้า (AI แนะนำได้)</div>
     <div class="tabbtn" data-tab="map">🔗 อาการ → สินค้า</div>
     <div class="tabbtn" data-tab="triage">🩺 Red Flag &amp; คำถาม Yes/No</div>
+    <div class="tabbtn" data-tab="knowledge">📚 Knowledge (RAG)</div>
     <div class="tabbtn" data-tab="sandbox">🧪 Sandbox</div>
   </div>
 
@@ -156,6 +157,73 @@ require_once __DIR__ . '/includes/header.php';
         </thead>
         <tbody id="triageQuestionList"></tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- TAB 5: KNOWLEDGE (RAG) -->
+  <section id="tab-knowledge" class="tabpane space-y-4">
+    <div class="bg-white rounded-xl shadow p-4">
+      <h3 class="font-semibold mb-2">📥 Import จาก docs/*.md</h3>
+      <p class="text-sm text-gray-600 mb-3">
+        นำเข้า 3 ไฟล์ความรู้หลัก (ระบบประเมินอาการเบื้องต้น.md, ข้อมูลโรค.md, Thailand MIMS Clinical Guidelines.md) — ระบบจะ chunk ตาม markdown headings และเก็บใน <code>ai_knowledge_base</code> เพื่อ inject เข้า AI prompt
+      </p>
+      <div class="flex flex-wrap gap-2">
+        <button id="kbImportAllBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm">
+          🚀 Import ทั้ง 3 ไฟล์
+        </button>
+        <button data-file="ระบบประเมินอาการเบื้องต้น.md" class="kb-import-one px-3 py-2 bg-gray-100 rounded-lg text-sm">📄 ระบบประเมินอาการ</button>
+        <button data-file="ข้อมูลโรค.md" class="kb-import-one px-3 py-2 bg-gray-100 rounded-lg text-sm">📄 ข้อมูลโรค</button>
+        <button data-file="Thailand MIMS Clinical Guidelines.md" class="kb-import-one px-3 py-2 bg-gray-100 rounded-lg text-sm">📄 MIMS Guidelines</button>
+      </div>
+      <div id="kbImportResult" class="mt-3 text-sm"></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-4">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 class="font-semibold">📚 Sources</h3>
+        <button id="kbReloadBtn" class="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm">โหลด</button>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left">
+          <tr><th class="p-2">Source</th><th class="p-2 text-center">Chunks</th><th class="p-2">Last update</th></tr>
+        </thead>
+        <tbody id="kbSourceList"></tbody>
+      </table>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-4">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 class="font-semibold">📝 Chunks</h3>
+        <div class="flex gap-2">
+          <select id="kbSourceFilter" class="px-3 py-1.5 border rounded-lg text-sm">
+            <option value="">— ทุก source —</option>
+          </select>
+          <button id="kbAddChunkBtn" class="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm">+ เพิ่ม chunk</button>
+        </div>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-left">
+          <tr>
+            <th class="p-2">Source</th>
+            <th class="p-2">หัวข้อ</th>
+            <th class="p-2">Preview</th>
+            <th class="p-2 w-28">Conditions</th>
+            <th class="p-2 w-16 text-center">Pri</th>
+            <th class="p-2 w-24"></th>
+          </tr>
+        </thead>
+        <tbody id="kbChunkList"><tr><td colspan="6" class="p-6 text-center text-gray-400">กดโหลด</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-4">
+      <h3 class="font-semibold mb-2">🔎 ทดลอง retrieval</h3>
+      <div class="flex gap-2 mb-2">
+        <input id="kbTestQuery" placeholder="พิมพ์คำถามทดสอบ เช่น &quot;ปวดหัวมา 2 วัน&quot;"
+               class="flex-1 px-3 py-2 border rounded-lg text-sm" />
+        <button id="kbTestBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm">ค้นหา</button>
+      </div>
+      <div id="kbTestResult" class="space-y-2 text-sm"></div>
     </div>
   </section>
 
@@ -473,9 +541,121 @@ document.getElementById('sandboxLoadSessionsBtn').addEventListener('click', asyn
   ).join('');
 });
 
+// ---------------- TAB 5: KNOWLEDGE (RAG) ----------------
+async function kbLoadSources() {
+  const r = await adminCall('list_knowledge_sources');
+  const tbody = document.getElementById('kbSourceList');
+  const filter = document.getElementById('kbSourceFilter');
+  if (!r.success) { tbody.innerHTML = ''; return; }
+  tbody.innerHTML = r.data.map((s) =>
+    '<tr class="border-t">'
+    + '<td class="p-2 font-mono text-xs">' + s.source + '</td>'
+    + '<td class="p-2 text-center">' + s.chunks + '</td>'
+    + '<td class="p-2 text-xs text-gray-500">' + (s.last_update || '-') + '</td>'
+    + '</tr>'
+  ).join('');
+  filter.innerHTML = '<option value="">— ทุก source —</option>'
+    + r.data.map((s) => '<option value="' + s.source + '">' + s.source + '</option>').join('');
+}
+
+async function kbLoadChunks(source) {
+  const r = await adminCall('list_knowledge_chunks', { source: source || '' });
+  const tbody = document.getElementById('kbChunkList');
+  if (!r.success) return;
+  if (r.data.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-400">ยังไม่มีข้อมูล</td></tr>'; return; }
+  tbody.innerHTML = r.data.map((c) =>
+    '<tr class="border-t" data-id="' + c.id + '">'
+    + '<td class="p-2 text-xs">' + c.source + '</td>'
+    + '<td class="p-2 text-xs">' + (c.title || '-') + '<div class="text-[10px] text-gray-400">' + (c.heading_path || '') + '</div></td>'
+    + '<td class="p-2 text-xs text-gray-600">' + (c.preview || '').replace(/[<>]/g, '') + '…</td>'
+    + '<td class="p-2 text-xs font-mono">' + (c.condition_codes || '-') + '</td>'
+    + '<td class="p-2 text-center text-xs">' + c.priority + '</td>'
+    + '<td class="p-2"><button class="kb-del text-red-500 text-xs">ลบ</button></td>'
+    + '</tr>'
+  ).join('');
+  document.querySelectorAll('.kb-del').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.closest('tr').dataset.id, 10);
+      if (!confirm('ลบ chunk นี้?')) return;
+      const r2 = await adminCall('delete_knowledge_chunk', { id });
+      if (r2.success) kbLoadChunks(document.getElementById('kbSourceFilter').value);
+    });
+  });
+}
+
+document.getElementById('kbReloadBtn').addEventListener('click', () => {
+  kbLoadSources();
+  kbLoadChunks('');
+});
+
+document.getElementById('kbSourceFilter').addEventListener('change', (e) => {
+  kbLoadChunks(e.target.value);
+});
+
+document.getElementById('kbImportAllBtn').addEventListener('click', async () => {
+  const out = document.getElementById('kbImportResult');
+  out.innerHTML = '<div class="text-purple-600">⏳ กำลัง import...</div>';
+  const r = await adminCall('import_knowledge_md');
+  if (!r.success) { out.innerHTML = '<div class="text-red-500">' + (r.error || 'error') + '</div>'; return; }
+  out.innerHTML = '<div class="text-green-600">✅ สำเร็จ — รวม ' + r.total_chunks + ' chunks</div>'
+    + '<ul class="mt-2 text-xs">'
+    + r.data.map((d) => '<li>📄 ' + d.file + ': ' + d.chunks + ' chunks</li>').join('')
+    + '</ul>';
+  kbLoadSources();
+  kbLoadChunks('');
+});
+
+document.querySelectorAll('.kb-import-one').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const file = btn.dataset.file;
+    const out = document.getElementById('kbImportResult');
+    out.innerHTML = '<div class="text-purple-600">⏳ กำลัง import ' + file + '...</div>';
+    const r = await adminCall('import_knowledge_md', { filename: file });
+    if (!r.success) { out.innerHTML = '<div class="text-red-500">' + (r.error || 'error') + '</div>'; return; }
+    out.innerHTML = '<div class="text-green-600">✅ ' + file + ': ' + r.chunks_imported + ' chunks</div>';
+    kbLoadSources();
+  });
+});
+
+document.getElementById('kbAddChunkBtn').addEventListener('click', async () => {
+  const source = prompt('source label (เช่น custom_pharmacy_note):', 'custom');
+  if (!source) return;
+  const title = prompt('หัวข้อ:');
+  const content = prompt('เนื้อหา (ขั้นต่ำ 20 chars):');
+  if (!content || content.length < 20) return alert('เนื้อหาสั้นเกินไป');
+  const cc = prompt('condition_codes (csv) เช่น fever,cough:', '');
+  const r = await adminCall('save_knowledge_chunk', {
+    source, title, content, condition_codes: cc, priority: 60, is_active: 1
+  });
+  if (r.success) kbLoadSources();
+  else alert(r.error || 'error');
+});
+
+document.getElementById('kbTestBtn').addEventListener('click', async () => {
+  const q = document.getElementById('kbTestQuery').value.trim();
+  if (!q) return;
+  const out = document.getElementById('kbTestResult');
+  out.innerHTML = '<div class="text-purple-600">⏳</div>';
+  const r = await adminCall('sandbox_test_retrieve', { query: q });
+  if (!r.success) { out.innerHTML = '<div class="text-red-500">' + (r.error || 'error') + '</div>'; return; }
+  if (r.data.length === 0) {
+    out.innerHTML = '<div class="text-gray-400">ไม่พบ chunk ที่เกี่ยวข้อง — ลอง import ก่อน</div>';
+    return;
+  }
+  out.innerHTML = '<div class="text-xs text-gray-500">condition_codes ที่ตรวจจับได้: ' + (r.matched_conditions.join(', ') || '-') + '</div>'
+    + r.data.map((c, i) =>
+      '<div class="p-2 border rounded">'
+      + '<div class="text-xs text-purple-600 font-bold">#' + (i + 1) + ' • ' + c.source + ' • score=' + c.score.toFixed(1) + '</div>'
+      + '<div class="text-xs font-medium mt-1">' + (c.heading_path || c.title) + '</div>'
+      + '<div class="text-xs text-gray-700 mt-1 line-clamp-3">' + (c.content || '').replace(/[<>]/g, '').substring(0, 300) + '…</div>'
+      + '</div>'
+    ).join('');
+});
+
 loadSymptomCodes();
 loadRedFlags();
 loadConditions();
+kbLoadSources();
 </script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

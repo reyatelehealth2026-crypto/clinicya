@@ -287,6 +287,27 @@ $ctxJson = json_encode([
     'top_admins_response_time' => $admins,
 ], JSON_UNESCAPED_UNICODE);
 
+// RAG context — ดึงความรู้ที่เกี่ยวข้องจาก ai_knowledge_base ก่อน build prompt
+$ragContext = '';
+try {
+    require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+    if (function_exists('loadAIChatModule')) {
+        loadAIChatModule();
+    }
+    if (class_exists(\Modules\AIChat\Services\KnowledgeRetriever::class)
+        && class_exists(\Modules\AIChat\Services\SymptomMapper::class)) {
+        $kbAccId = isset($input['line_account_id']) && is_numeric($input['line_account_id'])
+            ? (int) $input['line_account_id'] : null;
+        $mapper = new \Modules\AIChat\Services\SymptomMapper();
+        $codes = $mapper->mapAllConditions($userMessage);
+        $retriever = new \Modules\AIChat\Services\KnowledgeRetriever($db);
+        $chunks = $retriever->retrieve($kbAccId, $userMessage, $codes, 4);
+        $ragContext = $retriever->buildPromptContext($chunks);
+    }
+} catch (\Throwable $e) {
+    error_log('KnowledgeRetriever skipped: ' . $e->getMessage());
+}
+
 if ($isConsultMode) {
     $systemPrompt = "คุณเป็น AI เภสัชกรผู้ช่วยของร้านยา Re-Ya ให้คำแนะนำเบื้องต้นด้านสุขภาพและยาแก่ลูกค้าทั่วไป\n" .
         "บทบาท: ให้คำแนะนำอาการเบื้องต้น ข้อมูลยาที่ไม่ต้องใช้ใบสั่งแพทย์ วิธีดูแลตัวเองเบื้องต้น และแนะนำให้พบแพทย์เมื่อจำเป็น\n" .
@@ -296,7 +317,8 @@ if ($isConsultMode) {
         "3. ถ้าอาการรุนแรง/ฉุกเฉิน แนะนำพบแพทย์หรือโทร 1669\n" .
         "4. ห้ามแนะนำตัว ไม่ต้องทวนคำถาม ตอบตรงประเด็น\n" .
         "5. emoji 1-2 ตัวสูงสุด\n" .
-        "6. ถ้าถามเรื่องที่ไม่เกี่ยวกับสุขภาพ/ยา ให้บอกอย่างสุภาพว่าตอบได้เฉพาะเรื่องสุขภาพและยา";
+        "6. ถ้าถามเรื่องที่ไม่เกี่ยวกับสุขภาพ/ยา ให้บอกอย่างสุภาพว่าตอบได้เฉพาะเรื่องสุขภาพและยา"
+        . ($ragContext !== '' ? "\n\n" . $ragContext : '');
 } else {
     $systemPrompt = "คุณเป็น REYA Intelligence AI — ผู้ช่วยบริหารธุรกิจของ REYA ร้านยาส่ง B2B\n" .
         "คุณมีความรู้เชิง ontology: ลูกค้าเป็นร้านขายยา/เภสัชชุมชน, สินค้าหลักคือยาและอุปกรณ์การแพทย์, ช่องทางขายผ่าน LINE, admin ตอบลูกค้า\n" .
@@ -305,7 +327,8 @@ if ($isConsultMode) {
         $ctxJson . "\n" .
         "สินค้าที่ถูกถามเยอะสุด 5 อันดับ (ใช้แทนสินค้าขายดี):\n" . $topProductsStr . "\n" .
         "===================\n\n" .
-        "กฎเด็ดขาด:\n1. ตอบภาษาไทยเท่านั้น\n2. ตอบทีละคำถาม สั้น 1-4 ประโยค ตรงประเด็น\n3. ห้ามแนะนำตัว ไม่ต้องทวนคำถาม\n4. ถ้าวิเคราะห์ ให้เชื่อมโยงกับ pattern ธุรกิจ B2B (ontology)\n5. ถ้าถามสินค้าขายดี ให้ตอบตามรายชื่อที่ให้ไป\n6. ใช้ตัวเลขจริงจาก context ห้ามแต่งเอง\n7. emoji 1-2 ตัวสูงสุด";
+        "กฎเด็ดขาด:\n1. ตอบภาษาไทยเท่านั้น\n2. ตอบทีละคำถาม สั้น 1-4 ประโยค ตรงประเด็น\n3. ห้ามแนะนำตัว ไม่ต้องทวนคำถาม\n4. ถ้าวิเคราะห์ ให้เชื่อมโยงกับ pattern ธุรกิจ B2B (ontology)\n5. ถ้าถามสินค้าขายดี ให้ตอบตามรายชื่อที่ให้ไป\n6. ใช้ตัวเลขจริงจาก context ห้ามแต่งเอง\n7. emoji 1-2 ตัวสูงสุด"
+        . ($ragContext !== '' ? "\n\n" . $ragContext : '');
 }
 
 $contents = [];

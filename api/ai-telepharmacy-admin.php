@@ -382,6 +382,151 @@ try {
             $respond(true, ['data' => array_slice($candidates, 0, 10)]);
         }
 
+        // ---------------------- Tab 5: Knowledge Base (RAG) ----------------------
+        case 'list_knowledge_sources': {
+            $stmt = $db->prepare(
+                "SELECT source, COUNT(*) AS chunks, MAX(updated_at) AS last_update
+                 FROM ai_knowledge_base
+                 WHERE (line_account_id <=> :acc OR line_account_id IS NULL)
+                 GROUP BY source
+                 ORDER BY source"
+            );
+            $stmt->execute([':acc' => $lineAccountId]);
+            $respond(true, ['data' => $stmt->fetchAll(\PDO::FETCH_ASSOC)]);
+        }
+
+        case 'list_knowledge_chunks': {
+            $source = trim((string) ($input['source'] ?? ''));
+            $sql = "SELECT id, source, title, heading_path, LEFT(content, 200) AS preview,
+                           keywords, condition_codes, priority, is_active, updated_at
+                    FROM ai_knowledge_base
+                    WHERE (line_account_id <=> :acc OR line_account_id IS NULL)";
+            $params = [':acc' => $lineAccountId];
+            if ($source !== '') {
+                $sql .= ' AND source = :s';
+                $params[':s'] = $source;
+            }
+            $sql .= ' ORDER BY source, id LIMIT 200';
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
+            $respond(true, ['data' => $stmt->fetchAll(\PDO::FETCH_ASSOC)]);
+        }
+
+        case 'import_knowledge_md': {
+            $docsDir = realpath(__DIR__ . '/../docs');
+            if ($docsDir === false) {
+                $respond(false, ['error' => 'docs directory not found']);
+            }
+            $allowed = [
+                'ระบบประเมินอาการเบื้องต้น.md',
+                'ข้อมูลโรค.md',
+                'Thailand MIMS Clinical Guidelines.md',
+            ];
+            $relName = trim((string) ($input['filename'] ?? ''));
+            if ($relName === '') {
+                // import all 3 default files
+                require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+                if (function_exists('loadAIChatModule')) {
+                    loadAIChatModule();
+                }
+                $retriever = new \Modules\AIChat\Services\KnowledgeRetriever($db);
+                $totalChunks = 0;
+                $report = [];
+                foreach ($allowed as $fname) {
+                    $path = $docsDir . DIRECTORY_SEPARATOR . $fname;
+                    $label = pathinfo($fname, PATHINFO_FILENAME);
+                    $n = $retriever->importMarkdownFile($lineAccountId, $path, $label);
+                    $totalChunks += $n;
+                    $report[] = ['file' => $fname, 'chunks' => $n];
+                }
+                $respond(true, ['data' => $report, 'total_chunks' => $totalChunks]);
+            }
+
+            if (!in_array($relName, $allowed, true)) {
+                $respond(false, ['error' => 'filename not in allowlist']);
+            }
+            $path = $docsDir . DIRECTORY_SEPARATOR . $relName;
+            require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+            if (function_exists('loadAIChatModule')) {
+                loadAIChatModule();
+            }
+            $retriever = new \Modules\AIChat\Services\KnowledgeRetriever($db);
+            $label = pathinfo($relName, PATHINFO_FILENAME);
+            $n = $retriever->importMarkdownFile($lineAccountId, $path, $label);
+            $respond(true, ['chunks_imported' => $n]);
+        }
+
+        case 'save_knowledge_chunk': {
+            $id = (int) ($input['id'] ?? 0);
+            $source = trim((string) ($input['source'] ?? 'custom'));
+            $title = trim((string) ($input['title'] ?? ''));
+            $headingPath = trim((string) ($input['heading_path'] ?? ''));
+            $content = trim((string) ($input['content'] ?? ''));
+            $keywords = trim((string) ($input['keywords'] ?? ''));
+            $conditionCodes = trim((string) ($input['condition_codes'] ?? ''));
+            $priority = max(1, min(100, (int) ($input['priority'] ?? 50)));
+            $active = isset($input['is_active']) ? (int) !empty($input['is_active']) : 1;
+
+            if ($content === '' || mb_strlen($content) < 20) {
+                $respond(false, ['error' => 'content too short']);
+            }
+
+            if ($id > 0) {
+                $stmt = $db->prepare(
+                    "UPDATE ai_knowledge_base SET
+                        source=:s, title=:t, heading_path=:hp, content=:c,
+                        keywords=:k, condition_codes=:cc, priority=:p, is_active=:a
+                     WHERE id=:id"
+                );
+                $stmt->execute([
+                    ':s' => $source, ':t' => $title ?: null, ':hp' => $headingPath ?: null,
+                    ':c' => $content, ':k' => $keywords ?: null,
+                    ':cc' => $conditionCodes ?: null, ':p' => $priority,
+                    ':a' => $active, ':id' => $id,
+                ]);
+            } else {
+                $stmt = $db->prepare(
+                    "INSERT INTO ai_knowledge_base
+                     (line_account_id, source, title, heading_path, content, keywords, condition_codes, priority, is_active)
+                     VALUES (:acc, :s, :t, :hp, :c, :k, :cc, :p, :a)"
+                );
+                $stmt->execute([
+                    ':acc' => $lineAccountId, ':s' => $source,
+                    ':t' => $title ?: null, ':hp' => $headingPath ?: null,
+                    ':c' => $content, ':k' => $keywords ?: null,
+                    ':cc' => $conditionCodes ?: null, ':p' => $priority, ':a' => $active,
+                ]);
+                $id = (int) $db->lastInsertId();
+            }
+            $respond(true, ['id' => $id]);
+        }
+
+        case 'delete_knowledge_chunk': {
+            $id = (int) ($input['id'] ?? 0);
+            if ($id <= 0) {
+                $respond(false, ['error' => 'invalid id']);
+            }
+            $stmt = $db->prepare("DELETE FROM ai_knowledge_base WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+            $respond(true);
+        }
+
+        case 'sandbox_test_retrieve': {
+            $q = trim((string) ($input['query'] ?? ''));
+            if ($q === '') {
+                $respond(false, ['error' => 'query required']);
+            }
+            require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+            if (function_exists('loadAIChatModule')) {
+                loadAIChatModule();
+            }
+            $mapper = new \Modules\AIChat\Services\SymptomMapper();
+            $codes = $mapper->mapAllConditions($q);
+            $retriever = new \Modules\AIChat\Services\KnowledgeRetriever($db);
+            $chunks = $retriever->retrieve($lineAccountId, $q, $codes, 5);
+            $respond(true, ['data' => $chunks, 'matched_conditions' => $codes]);
+        }
+
         case 'sandbox_recent_sessions': {
             $stmt = $db->prepare(
                 "SELECT id, user_id, current_state, status, triage_level, outcome,
