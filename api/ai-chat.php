@@ -15,23 +15,66 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 session_write_close();
 
-$geminiKey = defined('GEMINI_API_KEY') ? GEMINI_API_KEY : (getenv('GEMINI_API_KEY') ?: '');
-if (!$geminiKey) { echo "data: " . json_encode(['error' => 'GEMINI_API_KEY not configured']) . "\n\n"; flush(); exit; }
-
 $input = json_decode(file_get_contents('php://input'), true);
-$userMessage = trim($input['message'] ?? '');
-$history = $input['history'] ?? [];
+if (!is_array($input)) {
+    $input = [];
+}
+$userMessage = trim((string) ($input['message'] ?? ''));
+$history = is_array($input['history'] ?? null) ? $input['history'] : [];
 
 if (!$userMessage && empty($_SERVER['argv'])) { echo "data: " . json_encode(['error' => 'No message']) . "\n\n"; flush(); exit; }
 if (empty($userMessage)) $userMessage = "test"; // for CLI testing
 
 $db = Database::getInstance()->getConnection();
 
-// --- FAST CONTEXT ---
-$oy = $db->query("SELECT COUNT(*) as total, COALESCE(SUM(amount_total),0) as amount, COUNT(DISTINCT partner_id) as customers FROM odoo_orders WHERE DATE(date_order) = DATE_SUB(CURDATE(),INTERVAL 1 DAY) AND state NOT IN ('cancel')")->fetch();
-$ot = $db->query("SELECT COUNT(*) as total, COALESCE(SUM(amount_total),0) as amount FROM odoo_orders WHERE DATE(date_order) = CURDATE() AND state NOT IN ('cancel')")->fetch();
-$bdoY = $db->query("SELECT COUNT(*) as total, COALESCE(SUM(amount_total),0) as amount, SUM(CASE WHEN state='done' THEN 1 ELSE 0 END) as done FROM odoo_bdos WHERE DATE(created_at)=DATE_SUB(CURDATE(),INTERVAL 1 DAY)")->fetch();
-$admins = $db->query("SELECT COALESCE(au.display_name, CONCAT('Admin ',ma.admin_id)) as name, COUNT(*) as replies, ROUND(AVG(ma.response_time_seconds)/60) as avg_min FROM message_analytics ma LEFT JOIN admin_users au ON au.id = ma.admin_id WHERE ma.admin_id IS NOT NULL AND ma.created_at >= DATE_SUB(NOW(),INTERVAL 7 DAY) GROUP BY ma.admin_id ORDER BY avg_min ASC LIMIT 5")->fetchAll();
+$geminiKey = defined('GEMINI_API_KEY') ? GEMINI_API_KEY : (getenv('GEMINI_API_KEY') ?: '');
+// Fallback: ใช้คีย์จาก ai_settings เหมือนหน้า /ai-settings เมื่อยังไม่ได้ใส่ใน config / env
+if (!$geminiKey) {
+    try {
+        $stmt = $db->query(
+            "SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) != '' ORDER BY line_account_id IS NULL DESC LIMIT 1"
+        );
+        $geminiKey = $stmt ? (string) $stmt->fetchColumn() : '';
+    } catch (Throwable $e) {
+        $geminiKey = '';
+    }
+}
+if (!$geminiKey) { echo "data: " . json_encode(['error' => 'GEMINI_API_KEY not configured']) . "\n\n"; flush(); exit; }
+
+// --- FAST CONTEXT (queries must not fatal — missing tables / SQL errors → defaults) ---
+$oy = ['total' => 0, 'amount' => 0, 'customers' => 0];
+$ot = ['total' => 0, 'amount' => 0];
+$bdoY = ['total' => 0, 'amount' => 0, 'done' => 0];
+$admins = [];
+try {
+    $stmt = $db->query("SELECT COUNT(*) as total, COALESCE(SUM(amount_total),0) as amount, COUNT(DISTINCT partner_id) as customers FROM odoo_orders WHERE DATE(date_order) = DATE_SUB(CURDATE(),INTERVAL 1 DAY) AND state NOT IN ('cancel')");
+    $row = $stmt ? $stmt->fetch(\PDO::FETCH_ASSOC) : false;
+    if ($row) {
+        $oy = array_merge($oy, $row);
+    }
+} catch (\Throwable $e) {
+}
+try {
+    $stmt = $db->query("SELECT COUNT(*) as total, COALESCE(SUM(amount_total),0) as amount FROM odoo_orders WHERE DATE(date_order) = CURDATE() AND state NOT IN ('cancel')");
+    $row = $stmt ? $stmt->fetch(\PDO::FETCH_ASSOC) : false;
+    if ($row) {
+        $ot = array_merge($ot, $row);
+    }
+} catch (\Throwable $e) {
+}
+try {
+    $stmt = $db->query("SELECT COUNT(*) as total, COALESCE(SUM(amount_total),0) as amount, SUM(CASE WHEN state='done' THEN 1 ELSE 0 END) as done FROM odoo_bdos WHERE DATE(created_at)=DATE_SUB(CURDATE(),INTERVAL 1 DAY)");
+    $row = $stmt ? $stmt->fetch(\PDO::FETCH_ASSOC) : false;
+    if ($row) {
+        $bdoY = array_merge($bdoY, $row);
+    }
+} catch (\Throwable $e) {
+}
+try {
+    $stmt = $db->query("SELECT COALESCE(au.display_name, CONCAT('Admin ',ma.admin_id)) as name, COUNT(*) as replies, ROUND(AVG(ma.response_time_seconds)/60) as avg_min FROM message_analytics ma LEFT JOIN admin_users au ON au.id = ma.admin_id WHERE ma.admin_id IS NOT NULL AND ma.created_at >= DATE_SUB(NOW(),INTERVAL 7 DAY) GROUP BY ma.admin_id ORDER BY avg_min ASC LIMIT 5");
+    $admins = $stmt ? $stmt->fetchAll(\PDO::FETCH_ASSOC) : [];
+} catch (\Throwable $e) {
+}
 
 // Top products - use the JSON that the dashboard uses if available, to avoid slow queries
 $prodCache = '/www/wwwroot/cny.re-ya.com/cache/inbox_products_7.json';
