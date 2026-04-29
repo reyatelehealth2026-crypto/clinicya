@@ -65,8 +65,14 @@ try {
                 $params[':q'] = "%$search%";
             }
             if ($drugType !== '') {
-                $where[] = 'p.drug_category = :dt';
-                $params[':dt'] = $drugType;
+                // tolerant — ใช้ drug_category ถ้ามี, ไม่งั้นข้าม filter
+                try {
+                    $check = $db->query("SHOW COLUMNS FROM business_items LIKE 'drug_category'");
+                    if ($check && $check->rowCount() > 0) {
+                        $where[] = 'p.drug_category = :dt';
+                        $params[':dt'] = $drugType;
+                    }
+                } catch (\Throwable $e) {}
             }
             if ($rxOnly === 1) {
                 $where[] = 'p.requires_prescription = 1';
@@ -77,15 +83,32 @@ try {
             $countStmt->execute($params);
             $total = (int) $countStmt->fetchColumn();
 
+            // ตรวจคอลัมน์ที่มีจริงเพื่อรองรับ schema เก่า/ใหม่
+            $cols = [];
+            try {
+                $stmt = $db->query("SHOW COLUMNS FROM business_items");
+                foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $c) { $cols[$c] = true; }
+            } catch (\Throwable $e) { $cols = []; }
+            $colExpr = static function (string $c, string $alias = '', string $default = "''") use ($cols): string {
+                $a = $alias !== '' ? " AS `$alias`" : "";
+                return isset($cols[$c]) ? "p.`$c`" . ($alias ? " AS `$alias`" : "") : "$default" . ($alias ? " AS `$alias`" : " AS `$c`");
+            };
+
+            $selectCols = "p.id, p.name, p.sku, p.price, p.sale_price, p.image_url, p.stock, "
+                . $colExpr('drug_category', 'drug_type', "''") . ', '
+                . $colExpr('requires_prescription', '', '0') . ', '
+                . (isset($cols['is_prescription']) ? "p.`is_prescription`" : "0") . ' AS requires_pharmacist, '
+                . $colExpr('active_ingredient', '', "''") . ', '
+                . $colExpr('strength', '', "''") . ', '
+                . $colExpr('dosage_form', '', "''") . ', '
+                . (isset($cols['ai_recommendable']) ? "COALESCE(p.`ai_recommendable`, 1)" : "1") . ' AS ai_recommendable';
+
+            $orderBy = isset($cols['is_featured']) ? 'COALESCE(p.is_featured,0) DESC, p.id DESC' : 'p.id DESC';
+
             $listStmt = $db->prepare(
-                "SELECT p.id, p.name, p.sku, p.price, p.sale_price, p.image_url,
-                        p.drug_category AS drug_type,
-                        p.requires_prescription,
-                        p.is_prescription AS requires_pharmacist,
-                        p.active_ingredient, p.strength, p.dosage_form, p.stock,
-                        COALESCE(p.ai_recommendable, 1) AS ai_recommendable
+                "SELECT $selectCols
                  $sqlBase
-                 ORDER BY COALESCE(p.is_featured,0) DESC, p.id DESC
+                 ORDER BY $orderBy
                  LIMIT $perPage OFFSET $offset"
             );
             $listStmt->execute($params);
@@ -99,6 +122,13 @@ try {
             if ($productId <= 0) {
                 $respond(false, ['error' => 'invalid product_id']);
             }
+            // ถ้าคอลัมน์ ai_recommendable ยังไม่มี (migration ยังไม่รัน) → สร้างให้อัตโนมัติ
+            try {
+                $check = $db->query("SHOW COLUMNS FROM business_items LIKE 'ai_recommendable'");
+                if (!$check || $check->rowCount() === 0) {
+                    $db->exec("ALTER TABLE business_items ADD COLUMN ai_recommendable TINYINT(1) NOT NULL DEFAULT 1");
+                }
+            } catch (\Throwable $e) {}
             $stmt = $db->prepare("UPDATE business_items SET ai_recommendable = :r WHERE id = :id");
             $stmt->execute([':r' => $recommendable, ':id' => $productId]);
             $respond(true);
@@ -121,10 +151,20 @@ try {
             if ($symptomCode === '') {
                 $respond(false, ['error' => 'symptom_code required']);
             }
+            // tolerant: SELECT เฉพาะคอลัมน์ที่มีจริง
+            $bcols = [];
+            try {
+                $stmt = $db->query("SHOW COLUMNS FROM business_items");
+                foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $c) { $bcols[$c] = true; }
+            } catch (\Throwable $e) { $bcols = []; }
+            $extra = [];
+            $extra[] = isset($bcols['drug_category']) ? 'p.drug_category AS drug_type' : "'' AS drug_type";
+            $extra[] = isset($bcols['active_ingredient']) ? 'p.active_ingredient' : "'' AS active_ingredient";
+            $extra[] = isset($bcols['strength']) ? 'p.strength' : "'' AS strength";
             $sql = "SELECT psm.id, psm.product_id, psm.symptom_code, psm.symptom_label_th,
                            psm.weight, psm.is_first_line, psm.notes,
-                           p.name AS product_name, p.image_url, p.price,
-                           p.drug_category AS drug_type, p.active_ingredient, p.strength
+                           p.name AS product_name, p.image_url, p.price, "
+                    . implode(', ', $extra) . "
                     FROM product_symptom_map psm
                     INNER JOIN business_items p ON p.id = psm.product_id
                     WHERE psm.symptom_code = :sc

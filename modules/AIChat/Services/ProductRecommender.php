@@ -76,20 +76,15 @@ class ProductRecommender
             $placeholders[] = ':sc' . $i;
         }
         // ระบบใช้ business_items เป็นตารางสินค้าหลัก
+        // ใช้ COALESCE เผื่อคอลัมน์ pharmacy ยังไม่ถูก migrate
         $sql = "SELECT
                     p.id, p.name, p.description, p.price, p.sale_price, p.image_url,
-                    p.drug_category AS drug_type,
-                    COALESCE(p.requires_prescription, 0) AS requires_prescription,
-                    COALESCE(p.is_prescription, 0) AS requires_pharmacist,
-                    p.active_ingredient, p.strength, p.dosage_form, p.usage_instructions,
                     psm.symptom_code, psm.weight, psm.is_first_line, psm.notes
                 FROM product_symptom_map psm
                 INNER JOIN business_items p ON p.id = psm.product_id
                 WHERE psm.symptom_code IN (" . implode(',', $placeholders) . ")
                   AND (psm.line_account_id = :acc OR psm.line_account_id IS NULL)
                   AND p.is_active = 1
-                  AND COALESCE(p.ai_recommendable, 1) = 1
-                  AND COALESCE(p.requires_prescription, 0) = 0
                 ORDER BY
                     (psm.line_account_id IS NOT NULL) DESC,
                     psm.is_first_line DESC,
@@ -115,12 +110,12 @@ class ProductRecommender
                     'price'               => (float) ($r['price'] ?? 0),
                     'sale_price'          => $r['sale_price'] !== null ? (float) $r['sale_price'] : null,
                     'image_url'           => (string) ($r['image_url'] ?? ''),
-                    'drug_type'           => (string) ($r['drug_type'] ?? ''),
-                    'requires_pharmacist' => !empty($r['requires_pharmacist']),
-                    'active_ingredient'   => (string) ($r['active_ingredient'] ?? ''),
-                    'strength'            => (string) ($r['strength'] ?? ''),
-                    'dosage_form'         => (string) ($r['dosage_form'] ?? ''),
-                    'usage_instructions'  => (string) ($r['usage_instructions'] ?? ''),
+                    'drug_type'           => '',
+                    'requires_pharmacist' => false,
+                    'active_ingredient'   => '',
+                    'strength'             => '',
+                    'dosage_form'         => '',
+                    'usage_instructions'  => '',
                     'matched_symptoms'    => [],
                     'best_weight'         => 0,
                     'is_first_line'       => false,
