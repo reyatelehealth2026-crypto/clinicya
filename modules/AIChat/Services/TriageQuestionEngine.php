@@ -60,6 +60,9 @@ class TriageQuestionEngine
     private function fetchNextForAccount(?int $lineAccountId, string $conditionCode, array $askedIds): ?array
     {
         $accCondition = $lineAccountId === null ? 'line_account_id IS NULL' : 'line_account_id = :acc';
+
+        // Defensive dedup: ดึง candidates หลายแถวก่อน แล้วใน PHP คัดให้เหลือ
+        // text เดียวต่อ question_th — กันถามซ้ำแม้ DB มี duplicate rows ค้างอยู่
         $sql = "SELECT * FROM triage_questions
                 WHERE $accCondition
                   AND condition_code = :cond
@@ -72,7 +75,7 @@ class TriageQuestionEngine
             }
             $sql .= ' AND id NOT IN (' . implode(',', $placeholders) . ')';
         }
-        $sql .= ' ORDER BY sort_order ASC, id ASC LIMIT 1';
+        $sql .= ' ORDER BY sort_order ASC, id ASC LIMIT 50';
 
         $stmt = $this->pdo->prepare($sql);
         if ($lineAccountId !== null) {
@@ -83,8 +86,60 @@ class TriageQuestionEngine
             $stmt->bindValue(':a' . $i, $qid, \PDO::PARAM_INT);
         }
         $stmt->execute();
-        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        return $row ?: null;
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+        // คัดข้อความที่ถามไปแล้ว (อิงจาก question_th ของ askedIds)
+        // และกันคำถามที่ candidate-set เองมี text ซ้ำกันด้วย — เลือก id เล็กสุดของ text นั้น
+        $askedTexts = $this->fetchAskedTextsByIds($askedIds);
+        $seenTexts = [];
+        foreach ($rows as $row) {
+            $qth = trim((string) ($row['question_th'] ?? ''));
+            $key = $this->normalizeQuestionText($qth);
+            if ($key === '') continue;
+            if (in_array($key, $askedTexts, true)) continue;
+            if (in_array($key, $seenTexts, true)) continue;
+            $seenTexts[] = $key;
+            return $row;
+        }
+        return null;
+    }
+
+    /**
+     * ดึง normalized text ของคำถามที่ id อยู่ใน askedIds
+     * @param list<int> $askedIds
+     * @return list<string>
+     */
+    private function fetchAskedTextsByIds(array $askedIds): array
+    {
+        if (empty($askedIds)) return [];
+        $placeholders = [];
+        foreach ($askedIds as $i => $_) { $placeholders[] = ':b' . $i; }
+        $sql = "SELECT question_th FROM triage_questions WHERE id IN (" . implode(',', $placeholders) . ")";
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            foreach ($askedIds as $i => $qid) {
+                $stmt->bindValue(':b' . $i, (int) $qid, \PDO::PARAM_INT);
+            }
+            $stmt->execute();
+            $texts = $stmt->fetchAll(\PDO::FETCH_COLUMN) ?: [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+        $out = [];
+        foreach ($texts as $t) {
+            $n = $this->normalizeQuestionText((string) $t);
+            if ($n !== '' && !in_array($n, $out, true)) $out[] = $n;
+        }
+        return $out;
+    }
+
+    /** เทียบข้อความแบบ tolerant — strip whitespace, "?" ปลายประโยค, "ไหม" trailing */
+    private function normalizeQuestionText(string $text): string
+    {
+        $t = trim($text);
+        $t = preg_replace('/[\s\?\.\!]+$/u', '', $t) ?? $t;
+        $t = preg_replace('/ไหม$/u', '', $t) ?? $t;
+        return mb_strtolower(trim($t));
     }
 
     /**
