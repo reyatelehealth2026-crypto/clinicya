@@ -28,6 +28,123 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $db = Database::getInstance()->getConnection();
 $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 
+// Auto-bootstrap tables ถ้ายังไม่มี (กันลืมรัน migration manually)
+try {
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS `ai_knowledge_base` (
+          `id` INT(11) NOT NULL AUTO_INCREMENT,
+          `line_account_id` INT(11) DEFAULT NULL,
+          `source` VARCHAR(150) NOT NULL,
+          `title` VARCHAR(255) DEFAULT NULL,
+          `heading_path` VARCHAR(500) DEFAULT NULL,
+          `content` MEDIUMTEXT NOT NULL,
+          `keywords` VARCHAR(1000) DEFAULT NULL,
+          `condition_codes` VARCHAR(500) DEFAULT NULL,
+          `priority` TINYINT(3) UNSIGNED NOT NULL DEFAULT 50,
+          `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+          `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`),
+          KEY `idx_kb_account` (`line_account_id`),
+          KEY `idx_kb_source` (`source`),
+          KEY `idx_kb_active_priority` (`is_active`, `priority`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS `product_symptom_map` (
+          `id` INT(11) NOT NULL AUTO_INCREMENT,
+          `line_account_id` INT(11) DEFAULT NULL,
+          `product_id` INT(11) NOT NULL,
+          `symptom_code` VARCHAR(64) NOT NULL,
+          `symptom_label_th` VARCHAR(255) DEFAULT NULL,
+          `weight` TINYINT(3) UNSIGNED NOT NULL DEFAULT 50,
+          `is_first_line` TINYINT(1) NOT NULL DEFAULT 0,
+          `notes` TEXT DEFAULT NULL,
+          `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `uniq_account_product_symptom` (`line_account_id`, `product_id`, `symptom_code`),
+          KEY `idx_psm_symptom` (`symptom_code`),
+          KEY `idx_psm_product` (`product_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS `triage_questions` (
+          `id` INT(11) NOT NULL AUTO_INCREMENT,
+          `line_account_id` INT(11) DEFAULT NULL,
+          `condition_code` VARCHAR(64) NOT NULL,
+          `parent_question_id` INT(11) DEFAULT NULL,
+          `question_th` TEXT NOT NULL,
+          `question_en` TEXT DEFAULT NULL,
+          `answer_type` ENUM('yes_no','scale_1_10','multi_choice') NOT NULL DEFAULT 'yes_no',
+          `options_json` LONGTEXT DEFAULT NULL,
+          `next_if_yes` INT(11) DEFAULT NULL,
+          `next_if_no` INT(11) DEFAULT NULL,
+          `red_flag_if_yes` TINYINT(1) NOT NULL DEFAULT 0,
+          `recommend_symptom_codes` VARCHAR(500) DEFAULT NULL,
+          `sort_order` INT(11) NOT NULL DEFAULT 0,
+          `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+          `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`),
+          KEY `idx_tq_condition` (`condition_code`),
+          KEY `idx_tq_active_order` (`is_active`, `sort_order`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS `triage_question_responses` (
+          `id` INT(11) NOT NULL AUTO_INCREMENT,
+          `triage_session_id` INT(11) NOT NULL,
+          `question_id` INT(11) NOT NULL,
+          `answer_value` VARCHAR(255) NOT NULL,
+          `answer_text` TEXT DEFAULT NULL,
+          `answered_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`),
+          KEY `idx_tqr_session` (`triage_session_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS `red_flag_symptoms` (
+          `id` INT(11) NOT NULL AUTO_INCREMENT,
+          `symptom_code` VARCHAR(50) NOT NULL,
+          `symptom_name_th` VARCHAR(255) NOT NULL,
+          `symptom_name_en` VARCHAR(255) DEFAULT NULL,
+          `description` TEXT DEFAULT NULL,
+          `severity` ENUM('critical','urgent','warning') DEFAULT 'warning',
+          `action_required` TEXT DEFAULT NULL,
+          `is_active` TINYINT(1) DEFAULT 1,
+          `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `symptom_code` (`symptom_code`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    $db->exec(
+        "CREATE TABLE IF NOT EXISTS `triage_sessions` (
+          `id` INT(11) NOT NULL AUTO_INCREMENT,
+          `line_account_id` INT(11) DEFAULT NULL,
+          `user_id` INT(11) NOT NULL,
+          `current_state` VARCHAR(50) DEFAULT 'greeting',
+          `triage_data` LONGTEXT DEFAULT NULL,
+          `status` ENUM('active','completed','escalated','expired') DEFAULT 'active',
+          `triage_level` ENUM('green','yellow','orange','red') NOT NULL DEFAULT 'green',
+          `chief_complaint` TEXT DEFAULT NULL,
+          `red_flags_detected` LONGTEXT DEFAULT NULL,
+          `ai_recommendation` TEXT DEFAULT NULL,
+          `outcome` ENUM('self_care','otc_recommended','refer_doctor','emergency') DEFAULT 'self_care',
+          `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          `completed_at` TIMESTAMP NULL DEFAULT NULL,
+          PRIMARY KEY (`id`),
+          KEY `idx_triage_user` (`user_id`),
+          KEY `idx_status` (`status`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+    // ALTER business_items แบบ silent — ถ้าคอลัมน์มีอยู่แล้วจะ throw แล้ว catch ทิ้ง
+    try { $db->exec("ALTER TABLE business_items ADD COLUMN ai_recommendable TINYINT(1) NOT NULL DEFAULT 1"); } catch (\Throwable $e) {}
+} catch (\Throwable $e) {
+    // bootstrap failed (e.g. permission) — actions ถัดไปจะ throw error ที่ชัดเจน
+}
+
 $input = json_decode(file_get_contents('php://input'), true);
 if (!is_array($input)) {
     $input = $_POST;
