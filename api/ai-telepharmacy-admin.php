@@ -882,40 +882,127 @@ try {
                 }
             }
 
-            // Auto-classify business_items.ai_recommendable ตามกฎหมายไทย:
-            // - ยาสามัญประจำบ้าน (household, otc) → ai_recommendable=1
-            // - ยาแผนโบราณ (traditional) → ai_recommendable=1 (ส่วนใหญ่เป็น OTC)
-            // - ยาอันตราย (dangerous) / ยาควบคุมพิเศษ (controlled) → ai_recommendable=0
-            // - requires_prescription=1 หรือ is_prescription=1 → ai_recommendable=0
+            // Auto-classify business_items.ai_recommendable ตามกฎหมายไทย
+            // ใช้ category name + cny_code + product name (ไม่พึ่ง drug_type ที่อาจไม่ได้ตั้งค่า)
+            //
+            // ALLOW (ยาสามัญประจำบ้าน + อาหารเสริม + ทาภายนอก):
+            //   - วิตามิน/อาหารเสริม (VIT, supplement)
+            //   - ทาฆ่าเชื้อแผล/topical antiseptic (SKI ทา)
+            //   - ลดไข้/แก้ปวด พาราเซตามอล (ที่ไม่ใช่ NSAIDs ขนาดสูง)
+            //   - ยาแก้แพ้ ลมพิษ (chlorpheniramine, loratadine, cetirizine)
+            //   - ยาแก้หวัด/ไอ (OTC)
+            //   - ผงเกลือแร่/ORS
+            //   - ยาอม/อมเจ็บคอ
+            //   - ยาขับลม/ลดกรด/ระบาย
+            //   - ยาดม/ยาหม่อง
+            //   - เครื่องมือแพทย์ทั่วไป (ผ้าพันแผล, แอลกอฮอล์, betadine)
+            //
+            // BLOCK (ต้องเภสัชกรจ่าย/ใบสั่งแพทย์):
+            //   - ยาปฏิชีวนะกิน (antibiotic oral)
+            //   - ยาหัวใจ/ความดัน/เบาหวาน
+            //   - ยานอนหลับ/ระงับประสาท
+            //   - สเตียรอยด์ที่ใช้ภายใน
+            //   - ยาคุม
+            //   - ยาควบคุมพิเศษ (controlled)
             $aiRecommendUpdated = 0;
             try {
                 $bcols = [];
                 $stmt = $db->query("SHOW COLUMNS FROM business_items");
                 foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $c) { $bcols[$c] = true; }
-
-                $whereParts = ["1=1"];
-                $rxCol = isset($bcols['requires_prescription']) ? 'COALESCE(requires_prescription,0)' : '0';
-                $isRxCol = isset($bcols['is_prescription']) ? 'COALESCE(is_prescription,0)' : '0';
-                $catCol = isset($bcols['drug_category']) ? "COALESCE(drug_category,'')" : "''";
-                $typeCol = isset($bcols['drug_type']) ? "COALESCE(drug_type,'')" : "''";
-
                 if (!isset($bcols['ai_recommendable'])) {
                     $db->exec("ALTER TABLE business_items ADD COLUMN ai_recommendable TINYINT(1) NOT NULL DEFAULT 1");
                 }
 
-                // มาตรฐานกฎหมายไทย: เฉพาะ household/otc/traditional ที่ไม่ต้องใบสั่ง = AI แนะนำได้
-                $sql = "UPDATE business_items SET ai_recommendable = CASE
-                    WHEN $rxCol = 1 THEN 0
-                    WHEN $isRxCol = 1 THEN 0
-                    WHEN $catCol IN ('controlled','dangerous') THEN 0
-                    WHEN $typeCol IN ('controlled','dangerous') THEN 0
-                    WHEN $catCol IN ('household','otc','traditional') THEN 1
-                    WHEN $typeCol IN ('household','traditional') THEN 1
-                    ELSE 0
-                END";
-                $db->exec($sql);
-                $cnt = $db->query("SELECT ROW_COUNT()")->fetchColumn();
-                $aiRecommendUpdated = (int) $cnt;
+                // ตรวจว่ามีตาราง item_categories ไหม
+                $hasItemCat = false;
+                try {
+                    $db->query("SELECT 1 FROM item_categories LIMIT 1");
+                    $hasItemCat = true;
+                } catch (\Throwable $e) {}
+
+                $rxCol = isset($bcols['requires_prescription']) ? 'COALESCE(bi.requires_prescription,0)' : '0';
+                $isRxCol = isset($bcols['is_prescription']) ? 'COALESCE(bi.is_prescription,0)' : '0';
+
+                // keyword sets
+                $blockKws = [
+                    'ปฏิชีวนะ', 'antibiotic', 'amoxicillin', 'cephalexin', 'azithromycin',
+                    'ยาฆ่าเชื้อ', 'ฆ่าเชื้อในลำคอ', 'ยากิน',
+                    'หัวใจ', 'cardiac', 'aspirin 81', 'amlodipine', 'losartan', 'enalapril',
+                    'ความดัน', 'hypertension', 'เบาหวาน', 'metformin', 'glipizide', 'insulin',
+                    'นอนหลับ', 'diazepam', 'alprazolam', 'lorazepam', 'sedat',
+                    'สเตียรอยด์', 'prednisolone', 'dexamethasone',
+                    'ยาคุม', 'contracept', 'ethinyl',
+                    'ควบคุมพิเศษ', 'controlled', 'morphine', 'tramadol',
+                    'warfarin', 'heparin',
+                    'ฉีด', 'injection',
+                ];
+                $allowKws = [
+                    'วิตามิน', 'vitamin', 'อาหารเสริม', 'supplement', 'collagen', 'calcium', 'omega',
+                    'พาราเซตา', 'paracetamol', 'tylenol', 'ลดไข้', 'แก้ปวด',
+                    'ทา', 'ครีม', 'cream', 'ointment', 'gel', 'ยาทา', 'topical',
+                    'ฆ่าเชื้อแผล', 'antiseptic', 'betadine', 'แอลกอฮอล์', 'alcohol', 'iodine',
+                    'แผล', 'ผ้าพันแผล', 'plaster', 'gauze',
+                    'ยาดม', 'ยาหม่อง', 'balm', 'inhaler nasal', 'menthol',
+                    'แก้หวัด', 'แก้ไอ', 'cough', 'dextromethorphan', 'guaifenesin',
+                    'แก้แพ้', 'antihistamine', 'chlorpheniramine', 'loratadine', 'cetirizine',
+                    'ลมพิษ', 'ผื่น',
+                    'ผงเกลือแร่', 'ors', 'electrolyte',
+                    'ระบาย', 'laxative', 'lactulose', 'fiber',
+                    'ขับลม', 'antacid', 'ลดกรด', 'simethicone', 'eno', 'gas',
+                    'อมเจ็บคอ', 'lozenge', 'strepsils', 'ยาอม',
+                    'น้ำเกลือ', 'saline',
+                    'ยาสีฟัน', 'ยาสระผม', 'shampoo', 'soap', 'สบู่',
+                    'ตา', 'eye drop', 'น้ำตาเทียม',
+                    'ทาแก้คัน', 'แก้คัน',
+                    'ทาแก้สิว', 'สิว', 'acne', 'benzoyl',
+                    'น้ำมัน', 'fish oil',
+                ];
+
+                $blockOr = [];
+                $allowOr = [];
+                $bind = [];
+                foreach ($blockKws as $i => $k) {
+                    $bind[":bk$i"] = '%' . $k . '%';
+                    $blockOr[] = "LOWER(name_combo) LIKE LOWER(:bk$i)";
+                }
+                foreach ($allowKws as $i => $k) {
+                    $bind[":ak$i"] = '%' . $k . '%';
+                    $allowOr[] = "LOWER(name_combo) LIKE LOWER(:ak$i)";
+                }
+
+                $catJoin = $hasItemCat
+                    ? "LEFT JOIN item_categories ic ON bi.category_id = ic.id"
+                    : "";
+                $catNameExpr = $hasItemCat
+                    ? "CONCAT_WS(' ', COALESCE(ic.name,''), COALESCE(ic.cny_code,''), COALESCE(ic.name_en,''))"
+                    : "''";
+
+                // build name_combo = category text + product name + active_ingredient (ถ้ามี)
+                $aiCol = isset($bcols['active_ingredient']) ? 'COALESCE(bi.active_ingredient,\'\')' : "''";
+                $nameComboExpr = "CONCAT_WS(' ', $catNameExpr, COALESCE(bi.name,''), $aiCol)";
+
+                // Strategy: UPDATE ในรอบเดียวด้วย CASE
+                $sql = "UPDATE business_items bi
+                        $catJoin
+                        SET bi.ai_recommendable = CASE
+                            WHEN $rxCol = 1 THEN 0
+                            WHEN $isRxCol = 1 THEN 0
+                            WHEN ("
+                                . implode(' OR ', array_map(static fn($e) => str_replace('name_combo', $nameComboExpr, $e), $blockOr))
+                                . ") THEN 0
+                            WHEN ("
+                                . implode(' OR ', array_map(static fn($e) => str_replace('name_combo', $nameComboExpr, $e), $allowOr))
+                                . ") THEN 1
+                            ELSE 0
+                        END
+                        WHERE bi.is_active = 1";
+
+                $stmt = $db->prepare($sql);
+                foreach ($bind as $k => $v) {
+                    $stmt->bindValue($k, $v, \PDO::PARAM_STR);
+                }
+                $stmt->execute();
+                $aiRecommendUpdated = $stmt->rowCount();
             } catch (\Throwable $e) {
                 error_log('seed ai_recommendable update error: ' . $e->getMessage());
             }
@@ -923,39 +1010,65 @@ try {
             // Sample symptom map: เพิ่ม mapping ตัวอย่างถ้ายังไม่มี
             $smCount = 0;
             try {
-                $check = $db->query("SELECT COUNT(*) FROM product_symptom_map");
-                if ((int) $check->fetchColumn() === 0) {
-                    // ดึง business_items ที่ ai_recommendable=1 + match keyword → สร้าง mapping
-                    $matches = [
-                        'fever'         => ['paracetamol', 'พาราเซตามอล', 'ลดไข้', 'tylenol'],
-                        'cough'         => ['dextromethorphan', 'ระงับไอ', 'แก้ไอ', 'ไอ'],
-                        'runny_nose'    => ['chlorpheniramine', 'แก้แพ้', 'น้ำมูก'],
-                        'sore_throat'   => ['อมแก้เจ็บคอ', 'ยาอมเจ็บคอ', 'strepsils'],
-                        'allergy_rhinitis' => ['loratadine', 'cetirizine', 'แก้แพ้'],
-                        'diarrhea'      => ['loperamide', 'ท้องเสีย', 'ผงเกลือแร่', 'ors'],
-                        'indigestion'   => ['antacid', 'แก้กรดไหล', 'ขับลม'],
-                        'headache'      => ['paracetamol', 'พาราเซตามอล', 'ibuprofen'],
-                        'musculoskeletal_pain' => ['ยาทาแก้ปวด', 'น้ำมันมวย', 'counterpain'],
-                        'mouth_ulcer'   => ['kenalog', 'แผลในปาก'],
-                        'constipation'  => ['ยาระบาย', 'fiber', 'lactulose'],
-                        'motion_sickness' => ['dimenhydrinate', 'แก้เมา'],
-                    ];
-                    $smInsert = $db->prepare(
-                        "INSERT IGNORE INTO product_symptom_map
-                         (line_account_id, product_id, symptom_code, symptom_label_th, weight, is_first_line)
-                         VALUES (NULL, :pid, :sc, :lb, :w, :fl)"
-                    );
-                    foreach ($matches as $code => $kws) {
-                        $orParts = [];
-                        $bind = [];
-                        foreach ($kws as $i => $kw) {
-                            $orParts[] = "name LIKE :k$i";
-                            $bind[":k$i"] = "%$kw%";
-                        }
-                        $sql2 = "SELECT id FROM business_items WHERE COALESCE(ai_recommendable,1)=1 AND is_active=1 AND ("
-                            . implode(' OR ', $orParts) . ") LIMIT 5";
+                // Symptom map: รัน INSERT IGNORE ทุกครั้ง (idempotent ผ่าน UNIQUE KEY)
+                // ค้นจาก category name + product name + active_ingredient
+                $hasItemCat = false;
+                try { $db->query("SELECT 1 FROM item_categories LIMIT 1"); $hasItemCat = true; } catch (\Throwable $e) {}
+
+                $matches = [
+                    'fever'           => ['paracetamol', 'พาราเซตามอล', 'ลดไข้', 'tylenol', 'sara'],
+                    'cough'           => ['dextromethorphan', 'ระงับไอ', 'แก้ไอ', 'guaifenesin'],
+                    'runny_nose'      => ['chlorpheniramine', 'แก้แพ้', 'น้ำมูก', 'cpm'],
+                    'sore_throat'     => ['อม', 'เจ็บคอ', 'strepsils', 'lozenge', 'difflam'],
+                    'allergy_rhinitis'=> ['loratadine', 'cetirizine', 'แก้แพ้', 'แอนตี้ฮีสต'],
+                    'diarrhea'        => ['loperamide', 'ท้องเสีย', 'ผงเกลือแร่', 'ors', 'อิเล็กโทรไลต์'],
+                    'indigestion'     => ['antacid', 'ลดกรด', 'ขับลม', 'simethicone', 'eno'],
+                    'headache'        => ['paracetamol', 'พาราเซตามอล', 'ปวดหัว'],
+                    'musculoskeletal_pain' => ['ยาทาแก้ปวด', 'counterpain', 'salonpas', 'capsaicin', 'น้ำมันมวย'],
+                    'mouth_ulcer'     => ['kenalog', 'แผลในปาก', 'sm-33', 'borax'],
+                    'constipation'    => ['ยาระบาย', 'fiber', 'lactulose', 'senna', 'bisacodyl'],
+                    'motion_sickness' => ['dimenhydrinate', 'แก้เมา', 'ดรามามีน'],
+                    'eye_allergy'     => ['น้ำตาเทียม', 'eye drop', 'ตา'],
+                    'skin_infection'  => ['ฆ่าเชื้อแผล', 'betadine', 'iodine', 'antiseptic', 'แอลกอฮอล์'],
+                    'urticaria'       => ['ทาแก้คัน', 'calamine'],
+                    'dermatitis'      => ['ครีม', 'cream', 'lotion', 'โลชั่น'],
+                    'acne'            => ['สิว', 'acne', 'benzoyl'],
+                    'athlete_foot'    => ['เชื้อรา', 'antifungal', 'clotrimazole', 'miconazole'],
+                    'burn_minor'      => ['silver sulfadiazine', 'แผลไหม้', 'burn'],
+                    'eczema'          => ['eczema', 'ผื่น'],
+                    'insomnia'        => ['valerian', 'melatonin'],
+                    'body_ache'       => ['paracetamol', 'แก้ปวด', 'ปวดเมื่อย'],
+                    'nausea'          => ['domperidone', 'แก้คลื่นไส้'],
+                ];
+
+                $smInsert = $db->prepare(
+                    "INSERT IGNORE INTO product_symptom_map
+                     (line_account_id, product_id, symptom_code, symptom_label_th, weight, is_first_line)
+                     VALUES (NULL, :pid, :sc, :lb, :w, :fl)"
+                );
+
+                $catJoin = $hasItemCat ? "LEFT JOIN item_categories ic ON bi.category_id = ic.id" : "";
+                $catFields = $hasItemCat ? "CONCAT_WS(' ', COALESCE(ic.name,''), COALESCE(ic.cny_code,''))" : "''";
+                $aiCol = "COALESCE(bi.active_ingredient,'')";
+
+                foreach ($matches as $code => $kws) {
+                    $orParts = [];
+                    $bind = [];
+                    foreach ($kws as $i => $kw) {
+                        $bind[":k$i"] = "%$kw%";
+                        $orParts[] = "(LOWER(bi.name) LIKE LOWER(:k$i)"
+                            . " OR LOWER($aiCol) LIKE LOWER(:k$i)"
+                            . " OR LOWER($catFields) LIKE LOWER(:k$i))";
+                    }
+                    $sql2 = "SELECT bi.id FROM business_items bi $catJoin
+                             WHERE COALESCE(bi.ai_recommendable,1)=1
+                               AND bi.is_active=1
+                               AND (" . implode(' OR ', $orParts) . ")
+                             LIMIT 5";
+                    try {
                         $stmt2 = $db->prepare($sql2);
-                        $stmt2->execute($bind);
+                        foreach ($bind as $k => $v) { $stmt2->bindValue($k, $v, \PDO::PARAM_STR); }
+                        $stmt2->execute();
                         $ids = $stmt2->fetchAll(\PDO::FETCH_COLUMN);
                         $idx = 0;
                         foreach ($ids as $pid) {
@@ -969,6 +1082,8 @@ try {
                             $smCount += $smInsert->rowCount();
                             $idx++;
                         }
+                    } catch (\Throwable $e) {
+                        error_log("seed map for $code error: " . $e->getMessage());
                     }
                 }
             } catch (\Throwable $e) {
