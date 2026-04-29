@@ -21,6 +21,23 @@ if (!is_array($input)) {
 }
 $userMessage = trim((string) ($input['message'] ?? ''));
 $history = is_array($input['history'] ?? null) ? $input['history'] : [];
+$mode = strtolower(trim((string) ($input['mode'] ?? '')));
+
+/**
+ * เลือก persona ตามแหล่งที่มา:
+ * - mode=consult/customer/clinic/pharmacy หรือมาจากโดเมน clinicya / line-mini-app / liff → ผู้ช่วยเภสัชกร (ตอบอาการ)
+ * - อย่างอื่น (dashboard B2B, AI Settings test, ai-chatbot.php) → REYA Intelligence (วิเคราะห์ออเดอร์/แอดมิน)
+ */
+$origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
+$referer = (string) ($_SERVER['HTTP_REFERER'] ?? '');
+$consultModes = ['consult', 'customer', 'clinic', 'pharmacy'];
+$isConsultMode = in_array($mode, $consultModes, true)
+    || stripos($origin, 'clinicya') !== false
+    || stripos($referer, 'clinicya') !== false
+    || stripos($origin, 'line-mini-app') !== false
+    || stripos($referer, '/shop') !== false
+    || stripos($referer, '/ai-chat-page') !== false
+    || stripos($referer, '/liff') !== false;
 
 /**
  * ตัดข้อความแปลกปลอม (เช่น client แปะ JSON ทั้งก้อนต่อท้ายข้อความ) และจำกัดความยาว
@@ -128,14 +145,26 @@ $ctxJson = json_encode([
     'top_admins_response_time' => $admins,
 ], JSON_UNESCAPED_UNICODE);
 
-$systemPrompt = "คุณเป็น REYA Intelligence AI — ผู้ช่วยบริหารธุรกิจของ REYA ร้านยาส่ง B2B\n" .
-    "คุณมีความรู้เชิง ontology: ลูกค้าเป็นร้านขายยา/เภสัชชุมชน, สินค้าหลักคือยาและอุปกรณ์การแพทย์, ช่องทางขายผ่าน LINE, admin ตอบลูกค้า\n" .
-    "ตอบภาษาไทยเท่านั้น กระชับ ชัดเจน ใช้ข้อมูลจาก context ด้านล่าง\n\n" .
-    "=== ข้อมูล real-time ===\n" .
-    $ctxJson . "\n" .
-    "สินค้าที่ถูกถามเยอะสุด 5 อันดับ (ใช้แทนสินค้าขายดี):\n" . $topProductsStr . "\n" .
-    "===================\n\n" .
-    "กฎเด็ดขาด:\n1. ตอบภาษาไทยเท่านั้น\n2. ตอบทีละคำถาม สั้น 1-4 ประโยค ตรงประเด็น\n3. ห้ามแนะนำตัว ไม่ต้องทวนคำถาม\n4. ถ้าวิเคราะห์ ให้เชื่อมโยงกับ pattern ธุรกิจ B2B (ontology)\n5. ถ้าถามสินค้าขายดี ให้ตอบตามรายชื่อที่ให้ไป\n6. ใช้ตัวเลขจริงจาก context ห้ามแต่งเอง\n7. emoji 1-2 ตัวสูงสุด";
+if ($isConsultMode) {
+    $systemPrompt = "คุณเป็น AI เภสัชกรผู้ช่วยของร้านยา Re-Ya ให้คำแนะนำเบื้องต้นด้านสุขภาพและยาแก่ลูกค้าทั่วไป\n" .
+        "บทบาท: ให้คำแนะนำอาการเบื้องต้น ข้อมูลยาที่ไม่ต้องใช้ใบสั่งแพทย์ วิธีดูแลตัวเองเบื้องต้น และแนะนำให้พบแพทย์เมื่อจำเป็น\n" .
+        "กฎเด็ดขาด:\n" .
+        "1. ตอบภาษาไทยเท่านั้น กระชับ 1-4 ประโยค\n" .
+        "2. ห้ามวินิจฉัยโรคหรือสั่งยา prescription — ให้คำแนะนำเบื้องต้นเท่านั้น\n" .
+        "3. ถ้าอาการรุนแรง/ฉุกเฉิน แนะนำพบแพทย์หรือโทร 1669\n" .
+        "4. ห้ามแนะนำตัว ไม่ต้องทวนคำถาม ตอบตรงประเด็น\n" .
+        "5. emoji 1-2 ตัวสูงสุด\n" .
+        "6. ถ้าถามเรื่องที่ไม่เกี่ยวกับสุขภาพ/ยา ให้บอกอย่างสุภาพว่าตอบได้เฉพาะเรื่องสุขภาพและยา";
+} else {
+    $systemPrompt = "คุณเป็น REYA Intelligence AI — ผู้ช่วยบริหารธุรกิจของ REYA ร้านยาส่ง B2B\n" .
+        "คุณมีความรู้เชิง ontology: ลูกค้าเป็นร้านขายยา/เภสัชชุมชน, สินค้าหลักคือยาและอุปกรณ์การแพทย์, ช่องทางขายผ่าน LINE, admin ตอบลูกค้า\n" .
+        "ตอบภาษาไทยเท่านั้น กระชับ ชัดเจน ใช้ข้อมูลจาก context ด้านล่าง\n\n" .
+        "=== ข้อมูล real-time ===\n" .
+        $ctxJson . "\n" .
+        "สินค้าที่ถูกถามเยอะสุด 5 อันดับ (ใช้แทนสินค้าขายดี):\n" . $topProductsStr . "\n" .
+        "===================\n\n" .
+        "กฎเด็ดขาด:\n1. ตอบภาษาไทยเท่านั้น\n2. ตอบทีละคำถาม สั้น 1-4 ประโยค ตรงประเด็น\n3. ห้ามแนะนำตัว ไม่ต้องทวนคำถาม\n4. ถ้าวิเคราะห์ ให้เชื่อมโยงกับ pattern ธุรกิจ B2B (ontology)\n5. ถ้าถามสินค้าขายดี ให้ตอบตามรายชื่อที่ให้ไป\n6. ใช้ตัวเลขจริงจาก context ห้ามแต่งเอง\n7. emoji 1-2 ตัวสูงสุด";
+}
 
 $contents = [];
 foreach (array_slice($history, -10) as $h) {
