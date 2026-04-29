@@ -142,9 +142,26 @@ foreach (array_slice($history, -10) as $h) {
     if ($turn === '') {
         continue;
     }
-    $contents[] = ['role' => $h['role'] === 'assistant' ? 'model' : 'user', 'parts' => [['text' => $turn]]];
+    $role = ($h['role'] === 'assistant') ? 'model' : 'user';
+    if ($role !== 'user' && $role !== 'model') {
+        $role = 'user';
+    }
+    $contents[] = ['role' => $role, 'parts' => [['text' => $turn]]];
 }
-$contents[] = ['role' => 'user', 'parts' => [['text' => $userMessage]]];
+
+// Gemini: ห้ามขึ้นต้นด้วย role model — ตัดข้อความต้อนรับของ assistant ที่หัวคิว
+while (!empty($contents) && ($contents[0]['role'] ?? '') === 'model') {
+    array_shift($contents);
+}
+
+// ห้าม user ต่อ user (เช่นรอบก่อน AI ไม่ตอบ แต่ client ส่ง history ลงท้ายด้วย user แล้วส่ง message ใหม่)
+if (!empty($contents) && ($contents[count($contents) - 1]['role'] ?? '') === 'user') {
+    $lastIdx = count($contents) - 1;
+    $prev = $contents[$lastIdx]['parts'][0]['text'] ?? '';
+    $contents[$lastIdx]['parts'][0]['text'] = rtrim((string) $prev) . "\n\n" . $userMessage;
+} else {
+    $contents[] = ['role' => 'user', 'parts' => [['text' => $userMessage]]];
+}
 
 $payload = json_encode([
     'system_instruction' => ['parts' => [['text' => $systemPrompt]]],
@@ -163,6 +180,7 @@ $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lat
 $ch = curl_init($url);
 
 $sseBuffer = '';
+$upstreamBody = '';
 $emittedAnyToken = false;
 $streamHadError = false;
 
@@ -228,7 +246,11 @@ curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => false,
     CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_TIMEOUT => 90,
-    CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$sseBuffer, $emitSseDataLine) {
+    CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$sseBuffer, &$upstreamBody, $emitSseDataLine) {
+        $upstreamBody .= $data;
+        if (strlen($upstreamBody) > 98304) {
+            $upstreamBody = substr($upstreamBody, -98304);
+        }
         $sseBuffer .= $data;
         while (($pos = strpos($sseBuffer, "\n")) !== false) {
             $line = substr($sseBuffer, 0, $pos);
@@ -246,9 +268,20 @@ $curlErr = curl_error($ch);
 if ($curlErr !== '') {
     echo 'data: ' . json_encode(['error' => $curlErr], JSON_UNESCAPED_UNICODE) . "\n\n";
 } elseif ($httpCode >= 400 && !$emittedAnyToken && !$streamHadError) {
-    echo 'data: ' . json_encode([
-        'error' => 'Gemini HTTP ' . $httpCode . ' — ตรวจสอบ API Key และโควต้า',
-    ], JSON_UNESCAPED_UNICODE) . "\n\n";
+    $detail = 'Gemini HTTP ' . $httpCode . ' — ตรวจสอบ API Key / โควต้า / รูปแบบคำขอ';
+    $parsed = json_decode($upstreamBody, true);
+    if (is_array($parsed) && isset($parsed['error']['message'])) {
+        $detail = (string) $parsed['error']['message'];
+    } elseif (trim($upstreamBody) !== '') {
+        $snippet = preg_replace('/\s+/', ' ', $upstreamBody);
+        if (is_string($snippet) && strlen($snippet) > 280) {
+            $snippet = substr($snippet, 0, 280) . '…';
+        }
+        if (is_string($snippet) && $snippet !== '') {
+            $detail .= ' | ' . $snippet;
+        }
+    }
+    echo 'data: ' . json_encode(['error' => $detail], JSON_UNESCAPED_UNICODE) . "\n\n";
 }
 
 // เหลือ buffer สุดท้ายที่ไม่มี newline (chunk สุดท้ายจาก curl)
