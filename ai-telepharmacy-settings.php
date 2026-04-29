@@ -179,6 +179,24 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
     <div class="bg-white rounded-xl shadow p-4">
+      <h3 class="font-semibold mb-2">📋 วาง markdown ตรง ๆ (ถ้าไฟล์ docs/ ไม่ได้ถูก deploy)</h3>
+      <p class="text-sm text-gray-600 mb-2">
+        เปิดไฟล์ .md ในเครื่องคุณ → copy ทั้งหมด → paste ลงช่องด้านล่าง → กด Import
+      </p>
+      <div class="flex gap-2 mb-2">
+        <input id="kbPasteSource" placeholder="source label เช่น mims_guidelines"
+               value="custom_paste" class="px-3 py-2 border rounded-lg text-sm w-64" />
+        <button id="kbPasteBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm">
+          Import จากช่อง paste
+        </button>
+      </div>
+      <textarea id="kbPasteContent" rows="10"
+                class="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                placeholder="# Heading 1&#10;&#10;## Heading 2&#10;เนื้อหา..."></textarea>
+      <div id="kbPasteResult" class="mt-2 text-sm"></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-4">
       <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h3 class="font-semibold">📚 Sources</h3>
         <button id="kbReloadBtn" class="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm">โหลด</button>
@@ -597,10 +615,33 @@ document.getElementById('kbImportAllBtn').addEventListener('click', async () => 
   out.innerHTML = '<div class="text-purple-600">⏳ กำลัง import...</div>';
   const r = await adminCall('import_knowledge_md');
   if (!r.success) { out.innerHTML = '<div class="text-red-500">' + (r.error || 'error') + '</div>'; return; }
-  out.innerHTML = '<div class="text-green-600">✅ สำเร็จ — รวม ' + r.total_chunks + ' chunks</div>'
-    + '<ul class="mt-2 text-xs">'
-    + r.data.map((d) => '<li>📄 ' + d.file + ': ' + d.chunks + ' chunks</li>').join('')
-    + '</ul>';
+  const colorClass = r.total_chunks > 0 ? 'text-green-600' : 'text-amber-600';
+  out.innerHTML = '<div class="' + colorClass + '">✅ รวม ' + r.total_chunks + ' chunks</div>'
+    + '<div class="text-xs text-gray-500 mt-1">docs_dir: ' + (r.docs_dir || '-') + '</div>'
+    + '<ul class="mt-2 text-xs space-y-1">'
+    + r.data.map((d) =>
+        '<li>📄 ' + d.file + ': ' + d.chunks + ' chunks'
+        + ' <span class="text-gray-400">(exists=' + d.exists + ', size=' + d.size_bytes + ')</span>'
+        + '</li>'
+      ).join('')
+    + '</ul>'
+    + (r.total_chunks === 0
+        ? '<div class="mt-2 p-2 bg-amber-50 text-amber-700 rounded text-xs">⚠️ ไฟล์ docs/*.md ไม่อยู่บน server — ใช้ "วาง markdown ตรงๆ" ด้านล่างแทน</div>'
+        : '');
+  kbLoadSources();
+  kbLoadChunks('');
+});
+
+document.getElementById('kbPasteBtn').addEventListener('click', async () => {
+  const source = document.getElementById('kbPasteSource').value.trim() || 'custom_paste';
+  const md = document.getElementById('kbPasteContent').value;
+  const out = document.getElementById('kbPasteResult');
+  if (md.trim().length < 50) { out.innerHTML = '<div class="text-red-500">เนื้อหาสั้นเกินไป (>=50 chars)</div>'; return; }
+  out.innerHTML = '<div class="text-purple-600">⏳ กำลัง import...</div>';
+  const r = await adminCall('import_knowledge_paste', { source, markdown: md });
+  if (!r.success) { out.innerHTML = '<div class="text-red-500">' + (r.error || 'error') + '</div>'; return; }
+  out.innerHTML = '<div class="text-green-600">✅ ' + r.source + ': ' + r.chunks_imported + ' chunks</div>';
+  document.getElementById('kbPasteContent').value = '';
   kbLoadSources();
   kbLoadChunks('');
 });

@@ -24,20 +24,29 @@ $history = is_array($input['history'] ?? null) ? $input['history'] : [];
 $mode = strtolower(trim((string) ($input['mode'] ?? '')));
 
 /**
- * เลือก persona ตามแหล่งที่มา:
- * - mode=consult/customer/clinic/pharmacy หรือมาจากโดเมน clinicya / line-mini-app / liff → ผู้ช่วยเภสัชกร (ตอบอาการ)
- * - อย่างอื่น (dashboard B2B, AI Settings test, ai-chatbot.php) → REYA Intelligence (วิเคราะห์ออเดอร์/แอดมิน)
+ * เลือก persona — DEFAULT คือ consult (เภสัชกรผู้ช่วย) เพื่อให้ฝั่งลูกค้าได้ persona ที่ถูก
+ * Admin/B2B mode ต้องมีสัญญาณ explicit เท่านั้น (ห้าม default ไป B2B)
  */
 $origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
 $referer = (string) ($_SERVER['HTTP_REFERER'] ?? '');
-$consultModes = ['consult', 'customer', 'clinic', 'pharmacy'];
-$isConsultMode = in_array($mode, $consultModes, true)
-    || stripos($origin, 'clinicya') !== false
-    || stripos($referer, 'clinicya') !== false
-    || stripos($origin, 'line-mini-app') !== false
-    || stripos($referer, '/shop') !== false
-    || stripos($referer, '/ai-chat-page') !== false
-    || stripos($referer, '/liff') !== false;
+$consultModes = ['consult', 'customer', 'clinic', 'pharmacy', 'pharmacist'];
+$adminModes = ['admin', 'dashboard', 'b2b', 'ops'];
+
+// ลำดับความสำคัญ: explicit mode=consult ชนะทุกอย่าง
+if (in_array($mode, $consultModes, true)) {
+    $isConsultMode = true;
+} elseif (in_array($mode, $adminModes, true)) {
+    $isConsultMode = false;
+} else {
+    // ไม่มี explicit mode → ดู referer (admin pages ต้องมีสัญญาณชัด)
+    $isAdminMode = stripos($referer, 'ai-settings.php') !== false
+        || stripos($referer, 'ai-chatbot.php') !== false
+        || stripos($referer, 'ai-chat.php?tab=') !== false
+        || stripos($referer, '/dashboard') !== false
+        || stripos($referer, '/inbox') !== false
+        || stripos($referer, '/admin') !== false;
+    $isConsultMode = !$isAdminMode;
+}
 
 /**
  * ตัดข้อความแปลกปลอม (เช่น client แปะ JSON ทั้งก้อนต่อท้ายข้อความ) และจำกัดความยาว
@@ -309,15 +318,17 @@ try {
 }
 
 if ($isConsultMode) {
-    $systemPrompt = "คุณเป็น AI เภสัชกรผู้ช่วยของร้านยา Re-Ya ให้คำแนะนำเบื้องต้นด้านสุขภาพและยาแก่ลูกค้าทั่วไป\n" .
-        "บทบาท: ให้คำแนะนำอาการเบื้องต้น ข้อมูลยาที่ไม่ต้องใช้ใบสั่งแพทย์ วิธีดูแลตัวเองเบื้องต้น และแนะนำให้พบแพทย์เมื่อจำเป็น\n" .
-        "กฎเด็ดขาด:\n" .
-        "1. ตอบภาษาไทยเท่านั้น กระชับ 1-4 ประโยค\n" .
-        "2. ห้ามวินิจฉัยโรคหรือสั่งยา prescription — ให้คำแนะนำเบื้องต้นเท่านั้น\n" .
-        "3. ถ้าอาการรุนแรง/ฉุกเฉิน แนะนำพบแพทย์หรือโทร 1669\n" .
+    $systemPrompt = "คุณคือ AI เภสัชกรผู้ช่วยของร้านยา Re-Ya สำหรับลูกค้า/ผู้ป่วยทั่วไป\n" .
+        "บทบาท: ให้คำแนะนำอาการเบื้องต้น ข้อมูลยาสามัญประจำบ้าน วิธีดูแลตัวเอง และแนะนำให้พบแพทย์เมื่อจำเป็น\n\n" .
+        "กฎเด็ดขาด (ห้ามฝ่าฝืน):\n" .
+        "1. ตอบภาษาไทย กระชับ 1-4 ประโยค ไม่อ้อมค้อม\n" .
+        "2. ห้ามวินิจฉัยโรคชี้ชัด ห้ามสั่งยา prescription — แนะนำเบื้องต้นเท่านั้น\n" .
+        "3. อาการรุนแรง/ฉุกเฉิน → แนะนำพบแพทย์ทันทีหรือโทร 1669\n" .
         "4. ห้ามแนะนำตัว ไม่ต้องทวนคำถาม ตอบตรงประเด็น\n" .
-        "5. emoji 1-2 ตัวสูงสุด\n" .
-        "6. ถ้าถามเรื่องที่ไม่เกี่ยวกับสุขภาพ/ยา ให้บอกอย่างสุภาพว่าตอบได้เฉพาะเรื่องสุขภาพและยา"
+        "5. emoji 1-2 ตัวสูงสุด ใช้เภสัชกรน้ำเสียงเป็นมิตร\n" .
+        "6. คำถามที่ไม่ใช่เรื่องสุขภาพ/ยา → ตอบอย่างสุภาพว่าให้คำแนะนำได้เฉพาะเรื่องสุขภาพ\n" .
+        "7. **ห้ามตอบเรื่อง stock/สต็อก, ยอดขาย, ออเดอร์, รายงาน B2B, การวิเคราะห์ธุรกิจ, admin metrics ใด ๆ ทั้งสิ้น** — ถ้าถูกถามให้ตอบว่า 'ส่วนนี้ต้องสอบถามแอดมินครับ/ค่ะ'\n" .
+        "8. ใช้ความรู้ทางคลินิกจาก RAG context ด้านล่าง (ถ้ามี) เป็นหลัก ห้ามแต่งเอง"
         . ($ragContext !== '' ? "\n\n" . $ragContext : '');
 } else {
     $systemPrompt = "คุณเป็น REYA Intelligence AI — ผู้ช่วยบริหารธุรกิจของ REYA ร้านยาส่ง B2B\n" .

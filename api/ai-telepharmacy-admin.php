@@ -414,46 +414,92 @@ try {
 
         case 'import_knowledge_md': {
             $docsDir = realpath(__DIR__ . '/../docs');
-            if ($docsDir === false) {
-                $respond(false, ['error' => 'docs directory not found']);
-            }
+            $fxDir = realpath(__DIR__ . '/../data/aichat-knowledge');
             $allowed = [
-                'ระบบประเมินอาการเบื้องต้น.md',
-                'ข้อมูลโรค.md',
-                'Thailand MIMS Clinical Guidelines.md',
+                // [primary md filename, fallback .md.txt filename, source label]
+                ['ระบบประเมินอาการเบื้องต้น.md', 'symptom_assessment.md.txt',  'ระบบประเมินอาการเบื้องต้น'],
+                ['ข้อมูลโรค.md',                 'disease_info.md.txt',          'ข้อมูลโรค'],
+                ['Thailand MIMS Clinical Guidelines.md', 'mims_guidelines.md.txt', 'Thailand MIMS Clinical Guidelines'],
             ];
-            $relName = trim((string) ($input['filename'] ?? ''));
-            if ($relName === '') {
-                // import all 3 default files
-                require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
-                if (function_exists('loadAIChatModule')) {
-                    loadAIChatModule();
+            $resolveFile = static function (array $row) use ($docsDir, $fxDir): array {
+                $primary = $docsDir ? ($docsDir . DIRECTORY_SEPARATOR . $row[0]) : '';
+                if ($primary !== '' && is_file($primary)) {
+                    return ['path' => $primary, 'source' => $row[2], 'label' => $row[0]];
                 }
-                $retriever = new \Modules\AIChat\Services\KnowledgeRetriever($db);
-                $totalChunks = 0;
-                $report = [];
-                foreach ($allowed as $fname) {
-                    $path = $docsDir . DIRECTORY_SEPARATOR . $fname;
-                    $label = pathinfo($fname, PATHINFO_FILENAME);
-                    $n = $retriever->importMarkdownFile($lineAccountId, $path, $label);
-                    $totalChunks += $n;
-                    $report[] = ['file' => $fname, 'chunks' => $n];
+                $fb = $fxDir ? ($fxDir . DIRECTORY_SEPARATOR . $row[1]) : '';
+                if ($fb !== '' && is_file($fb)) {
+                    return ['path' => $fb, 'source' => $row[2], 'label' => $row[0] . ' (fixture)'];
                 }
-                $respond(true, ['data' => $report, 'total_chunks' => $totalChunks]);
-            }
-
-            if (!in_array($relName, $allowed, true)) {
-                $respond(false, ['error' => 'filename not in allowlist']);
-            }
-            $path = $docsDir . DIRECTORY_SEPARATOR . $relName;
+                return ['path' => '', 'source' => $row[2], 'label' => $row[0]];
+            };
             require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
             if (function_exists('loadAIChatModule')) {
                 loadAIChatModule();
             }
             $retriever = new \Modules\AIChat\Services\KnowledgeRetriever($db);
-            $label = pathinfo($relName, PATHINFO_FILENAME);
-            $n = $retriever->importMarkdownFile($lineAccountId, $path, $label);
-            $respond(true, ['chunks_imported' => $n]);
+
+            $relName = trim((string) ($input['filename'] ?? ''));
+            if ($relName === '') {
+                $totalChunks = 0;
+                $report = [];
+                foreach ($allowed as $row) {
+                    $resolved = $resolveFile($row);
+                    $path = $resolved['path'];
+                    $exists = $path !== '' && is_file($path);
+                    $size = $exists ? filesize($path) : 0;
+                    $n = $exists ? $retriever->importMarkdownFile($lineAccountId, $path, $resolved['source']) : 0;
+                    $totalChunks += $n;
+                    $report[] = [
+                        'file'       => $resolved['label'],
+                        'source'     => $resolved['source'],
+                        'chunks'     => $n,
+                        'path'       => $path,
+                        'exists'     => $exists,
+                        'size_bytes' => $size,
+                    ];
+                }
+                $respond(true, [
+                    'data'          => $report,
+                    'total_chunks'  => $totalChunks,
+                    'docs_dir'      => $docsDir ?: '(not found)',
+                    'fixture_dir'   => $fxDir ?: '(not found)',
+                ]);
+            }
+
+            $matched = null;
+            foreach ($allowed as $row) {
+                if ($row[0] === $relName) { $matched = $row; break; }
+            }
+            if ($matched === null) {
+                $respond(false, ['error' => 'filename not in allowlist']);
+            }
+            $resolved = $resolveFile($matched);
+            $path = $resolved['path'];
+            $exists = $path !== '' && is_file($path);
+            $size = $exists ? filesize($path) : 0;
+            $n = $exists ? $retriever->importMarkdownFile($lineAccountId, $path, $resolved['source']) : 0;
+            $respond(true, [
+                'chunks_imported' => $n,
+                'path'            => $path,
+                'exists'          => $exists,
+                'size_bytes'      => $size,
+                'source'          => $resolved['source'],
+            ]);
+        }
+
+        case 'import_knowledge_paste': {
+            $sourceLabel = trim((string) ($input['source'] ?? 'custom_paste'));
+            $markdown = (string) ($input['markdown'] ?? '');
+            if (mb_strlen(trim($markdown)) < 50) {
+                $respond(false, ['error' => 'markdown too short (need >= 50 chars)']);
+            }
+            require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+            if (function_exists('loadAIChatModule')) {
+                loadAIChatModule();
+            }
+            $retriever = new \Modules\AIChat\Services\KnowledgeRetriever($db);
+            $n = $retriever->importMarkdownText($lineAccountId, $markdown, $sourceLabel);
+            $respond(true, ['chunks_imported' => $n, 'source' => $sourceLabel]);
         }
 
         case 'save_knowledge_chunk': {
