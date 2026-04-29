@@ -721,21 +721,16 @@ try {
                 $rfCount += $rfInsert->rowCount();
             }
 
-            // De-dup triage_questions: ตารางไม่มี UNIQUE KEY → INSERT รอบ 2+ จะซ้ำ
-            // ลบของซ้ำเก่า (เก็บ id เล็กสุดต่อ condition_code+question_th) ก่อน insert
+            // Reset seeded triage_questions (เฉพาะ line_account_id IS NULL = ของระบบ default)
+            // — เลือก reset เพราะ exact-text dedup กันคำถามที่ wording เปลี่ยนไม่ได้
+            //   (เช่น "มีX ไหม?" vs "X?") seed เป็น source of truth, customizations ของร้าน
+            //   ต้องผูกกับ line_account_id เฉพาะของตน → ไม่ถูก reset
             try {
-                $db->exec(
-                    "DELETE tq1 FROM triage_questions tq1
-                     INNER JOIN triage_questions tq2
-                       ON tq2.condition_code = tq1.condition_code
-                      AND tq2.question_th    = tq1.question_th
-                      AND (tq2.line_account_id <=> tq1.line_account_id)
-                      AND tq2.id < tq1.id"
-                );
+                $db->exec("DELETE FROM triage_questions WHERE line_account_id IS NULL");
             } catch (\Throwable $e) {
-                error_log('seed dedup triage_questions error: ' . $e->getMessage());
+                error_log('seed reset triage_questions error: ' . $e->getMessage());
             }
-            // กัน insert ซ้ำในรอบหน้าด้วย UNIQUE KEY (best-effort — ignore ถ้ามีอยู่แล้ว)
+            // Best-effort UNIQUE KEY กันรอบหน้า (ถ้ารองรับ)
             try {
                 $db->exec(
                     "ALTER TABLE triage_questions
@@ -1294,6 +1289,12 @@ try {
                 'business_items_recommend'   => $biRecommend,
                 'kb_chunks_total'            => $kbTotal,
                 'category_pass_inserted'     => $catPassInserted,
+                'category_names_sample'      => (function () use ($db): array {
+                    try {
+                        $stmt = $db->query("SELECT id, name, cny_code FROM item_categories ORDER BY id ASC LIMIT 30");
+                        return $stmt ? ($stmt->fetchAll(\PDO::FETCH_ASSOC) ?: []) : [];
+                    } catch (\Throwable $e) { return []; }
+                })(),
                 'note' => 'AI แนะนำได้ = เฉพาะ household/otc/traditional ที่ไม่ต้องใบสั่งแพทย์ — ตามกฎหมายไทย',
             ]);
         }

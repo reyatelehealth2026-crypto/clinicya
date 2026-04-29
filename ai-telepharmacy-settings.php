@@ -750,6 +750,12 @@ document.getElementById('seedDefaultBtn').addEventListener('click', async () => 
             + (kb === 0 ? ' <span class="text-rose-600">— ยังไม่ได้ import! ใช้แท็บ Knowledge Base</span>' : '')
             + '</div>')
         : '')
+    + (Array.isArray(r.category_names_sample) && r.category_names_sample.length
+        ? '<details class="text-xs mt-2"><summary class="cursor-pointer text-purple-600">📂 ชื่อหมวดสินค้าในระบบ (' + r.category_names_sample.length + ' ตัวอย่าง) — สำหรับขยาย dictionary</summary>'
+          + '<div class="mt-1 max-h-40 overflow-auto bg-white rounded p-2 font-mono text-[10px] text-gray-700">'
+          + r.category_names_sample.map(c => '#' + c.id + ' [' + (c.cny_code || '-') + '] ' + (c.name || '-')).join('<br>')
+          + '</div></details>'
+        : '')
     + '<div class="text-xs italic mt-2">ℹ️ ' + (r.note || '') + '</div>'
     + '</div>';
   loadSymptomCodes();
