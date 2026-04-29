@@ -9,6 +9,9 @@ require_once __DIR__ . '/config/database.php';
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'ตั้งค่า AI (Gemini)';
 
+/** โมเดลคงที่ — ไม่มีตัวเลือกในหน้าตั้งค่า (อัปเดตอัตโนมัติตามช่องทาง Google) */
+const AI_SETTINGS_GEMINI_MODEL = 'gemini-flash-latest';
+
 // Ensure all columns exist
 try {
     $columns = ['gemini_api_key', 'ai_mode', 'business_info', 'product_knowledge', 'sales_prompt', 'auto_load_products', 'product_load_limit'];
@@ -30,9 +33,6 @@ try {
 
 $currentBotId = $_SESSION['current_bot_id'] ?? null;
 
-// Hardcoded model — ใช้ Gemini Flash latest เท่านั้น
-const AI_DEFAULT_MODEL = 'gemini-2.0-flash';
-
 function getAISettings($db, $botId = null) {
     try {
         $stmt = $botId ? $db->prepare("SELECT * FROM ai_settings WHERE line_account_id = ?") : $db->prepare("SELECT * FROM ai_settings WHERE line_account_id IS NULL LIMIT 1");
@@ -49,10 +49,10 @@ function saveAISettings($db, $data, $botId = null) {
         
         if ($existing) {
             $stmt = $db->prepare("UPDATE ai_settings SET is_enabled=?, system_prompt=?, model=?, gemini_api_key=?, ai_mode=?, business_info=?, product_knowledge=?, sales_prompt=?, auto_load_products=?, product_load_limit=? WHERE id=?");
-            $stmt->execute([$data['is_enabled']??0, $data['system_prompt']??'', AI_DEFAULT_MODEL, $data['gemini_api_key']??'', $data['ai_mode']??'sales', $data['business_info']??'', $data['product_knowledge']??'', $data['sales_prompt']??'', $data['auto_load_products']??1, $data['product_load_limit']??50, $existing['id']]);
+            $stmt->execute([$data['is_enabled']??0, $data['system_prompt']??'', AI_SETTINGS_GEMINI_MODEL, $data['gemini_api_key']??'', $data['ai_mode']??'sales', $data['business_info']??'', $data['product_knowledge']??'', $data['sales_prompt']??'', $data['auto_load_products']??1, $data['product_load_limit']??50, $existing['id']]);
         } else {
             $stmt = $db->prepare("INSERT INTO ai_settings (line_account_id, is_enabled, system_prompt, model, gemini_api_key, ai_mode, business_info, product_knowledge, sales_prompt, auto_load_products, product_load_limit) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
-            $stmt->execute([$botId, $data['is_enabled']??0, $data['system_prompt']??'', AI_DEFAULT_MODEL, $data['gemini_api_key']??'', $data['ai_mode']??'sales', $data['business_info']??'', $data['product_knowledge']??'', $data['sales_prompt']??'', $data['auto_load_products']??1, $data['product_load_limit']??50]);
+            $stmt->execute([$botId, $data['is_enabled']??0, $data['system_prompt']??'', AI_SETTINGS_GEMINI_MODEL, $data['gemini_api_key']??'', $data['ai_mode']??'sales', $data['business_info']??'', $data['product_knowledge']??'', $data['sales_prompt']??'', $data['auto_load_products']??1, $data['product_load_limit']??50]);
         }
         return true;
     } catch (Exception $e) { return false; }
@@ -116,6 +116,11 @@ require_once __DIR__ . '/includes/header.php';
                         <input type="password" name="gemini_api_key" id="apiKey" value="<?= htmlspecialchars($geminiApiKey) ?>" class="w-full px-4 py-3 border rounded-lg" placeholder="AIzaSy...">
                         <p class="text-xs text-gray-500 mt-1"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500"><i class="fas fa-external-link-alt mr-1"></i>รับ API Key ฟรี</a></p>
                     </div>
+
+                    <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
+                        <p class="text-sm font-medium text-slate-800 mb-1">โมเดล</p>
+                        <p class="text-sm text-slate-600">ใช้ <code class="text-xs bg-white px-1 py-0.5 rounded border">gemini-flash-latest</code> เท่านั้น (Gemini Flash รุ่นล่าสุดจาก Google — ไม่ต้องเลือกโมเดล)</p>
+                    </div>
                     
                     <div>
                         <label class="block text-sm font-medium mb-2">โหมด AI</label>
@@ -124,7 +129,6 @@ require_once __DIR__ . '/includes/header.php';
                             <option value="support" <?= $aiMode === 'support' ? 'selected' : '' ?>>💬 ซัพพอร์ต</option>
                             <option value="pharmacist" <?= $aiMode === 'pharmacist' ? 'selected' : '' ?>>💊 เภสัชกร</option>
                         </select>
-                        <p class="text-xs text-gray-500 mt-2"><i class="fas fa-bolt text-yellow-500 mr-1"></i>โมเดล: <strong>Gemini 2.0 Flash</strong> (ใช้รุ่นล่าสุดอัตโนมัติ)</p>
                     </div>
                 </div>
             </div>
@@ -180,8 +184,8 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="space-y-3 text-sm">
                     <div class="flex justify-between"><span class="text-gray-500">API Key:</span><span class="<?= $geminiApiKey ? 'text-green-600' : 'text-red-600' ?>"><?= $geminiApiKey ? '✅ ตั้งค่าแล้ว' : '❌ ยังไม่ได้ตั้งค่า' ?></span></div>
                     <div class="flex justify-between"><span class="text-gray-500">สถานะ:</span><span><?= $aiEnabled ? '🟢 เปิด' : '⚪ ปิด' ?></span></div>
-                    <div class="flex justify-between"><span class="text-gray-500">โมเดล:</span><span class="text-blue-600">⚡ Gemini 2.0 Flash</span></div>
                     <div class="flex justify-between"><span class="text-gray-500">โหมด:</span><span class="px-2 py-1 rounded text-xs <?= $aiMode === 'sales' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100' ?>"><?= $aiMode === 'sales' ? '🛒 พนักงานขาย' : ($aiMode === 'pharmacist' ? '💊 เภสัชกร' : '💬 ซัพพอร์ต') ?></span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">โมเดล:</span><span class="text-slate-700 text-xs font-mono">gemini-flash-latest</span></div>
                     <div class="flex justify-between"><span class="text-gray-500">สินค้า:</span><span class="text-blue-600"><?= number_format($productCount) ?> รายการ</span></div>
                 </div>
             </div>
@@ -215,7 +219,7 @@ async function testAPI() {
     if (!key) { r.innerHTML = '<div class="p-2 bg-red-50 text-red-600 rounded text-xs">กรุณากรอก API Key</div>'; return; }
     r.innerHTML = '<div class="p-2 bg-gray-50 rounded text-xs"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังทดสอบ...</div>';
     try {
-        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + key, {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' + key, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: 'ตอบสั้นๆ: สวัสดี' }] }] })
         });

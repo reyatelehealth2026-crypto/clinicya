@@ -5,6 +5,8 @@
  * รองรับ: โหมดขาย/เภสัชกร/ซัพพอร์ต + โหลดสินค้าอัตโนมัติ
  */
 
+defined('AI_SETTINGS_GEMINI_MODEL') || define('AI_SETTINGS_GEMINI_MODEL', 'gemini-flash-latest');
+
 $currentBotId = $_SESSION['current_bot_id'] ?? null;
 
 // Ensure ai_settings columns exist
@@ -75,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['settings_action'] ?? '') =
     try {
         $data = [
             'gemini_api_key' => trim($_POST['gemini_api_key'] ?? ''),
-            'model' => $_POST['ai_model'] ?? 'gemini-2.0-flash',
+            'model' => AI_SETTINGS_GEMINI_MODEL,
             'is_enabled' => isset($_POST['ai_is_enabled']) ? 1 : 0,
             'system_prompt' => trim($_POST['ai_system_prompt'] ?? ''),
             'ai_mode' => $_POST['ai_mode'] ?? 'sales',
@@ -168,7 +170,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['settings_action'] ?? '') =
 // Default values
 $apiKey = $aiSettings['gemini_api_key'] ?? '';
 $isEnabled = ($aiSettings['is_enabled'] ?? 0) == 1;
-$model = $aiSettings['model'] ?? 'gemini-2.0-flash';
 $systemPrompt = $aiSettings['system_prompt'] ?? '';
 $aiMode = $aiSettings['ai_mode'] ?? 'sales';
 $businessInfo = $aiSettings['business_info'] ?? '';
@@ -425,29 +426,21 @@ $senderIcon = $aiSettings['sender_icon'] ?? '';
                                         class="fas fa-external-link-alt mr-1"></i>รับ API Key ฟรี</a></p>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="settings-label">Model</label>
-                                <select name="ai_model" class="settings-input-field">
-                                    <option value="gemini-2.0-flash" <?= $model === 'gemini-2.0-flash' ? 'selected' : '' ?>>⭐ Gemini 2.0 Flash (แนะนำ)</option>
-                                    <option value="gemini-2.0-flash-lite" <?= $model === 'gemini-2.0-flash-lite' ? 'selected' : '' ?>>Gemini 2.0 Flash Lite (เร็ว)</option>
-                                    <option value="gemini-1.5-pro" <?= $model === 'gemini-1.5-pro' ? 'selected' : '' ?>>
-                                        Gemini 1.5 Pro</option>
-                                    <option value="gemini-1.5-flash" <?= $model === 'gemini-1.5-flash' ? 'selected' : '' ?>>Gemini 1.5 Flash</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="settings-label">โหมด AI</label>
-                                <select name="ai_mode" id="aiModeSelect" class="settings-input-field"
-                                    onchange="toggleSalesSection()">
-                                    <option value="sales" <?= $aiMode === 'sales' ? 'selected' : '' ?>>🛒 พนักงานขาย
-                                    </option>
-                                    <option value="support" <?= $aiMode === 'support' ? 'selected' : '' ?>>💬 ซัพพอร์ต
-                                    </option>
-                                    <option value="pharmacist" <?= $aiMode === 'pharmacist' ? 'selected' : '' ?>>💊 เภสัชกร
-                                    </option>
-                                </select>
-                            </div>
+                        <div class="p-4 bg-slate-50 rounded-lg border border-slate-100 mb-4">
+                            <p class="text-sm font-medium text-slate-800 mb-1">โมเดล</p>
+                            <p class="text-sm text-slate-600">ใช้ <code class="text-xs bg-white px-1 py-0.5 rounded border font-mono"><?= htmlspecialchars(AI_SETTINGS_GEMINI_MODEL) ?></code> เท่านั้น (Gemini Flash รุ่นล่าสุด — ไม่ต้องเลือกโมเดล)</p>
+                        </div>
+                        <div>
+                            <label class="settings-label">โหมด AI</label>
+                            <select name="ai_mode" id="aiModeSelect" class="settings-input-field"
+                                onchange="toggleSalesSection()">
+                                <option value="sales" <?= $aiMode === 'sales' ? 'selected' : '' ?>>🛒 พนักงานขาย
+                                </option>
+                                <option value="support" <?= $aiMode === 'support' ? 'selected' : '' ?>>💬 ซัพพอร์ต
+                                </option>
+                                <option value="pharmacist" <?= $aiMode === 'pharmacist' ? 'selected' : '' ?>>💊 เภสัชกร
+                                </option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -556,6 +549,7 @@ $senderIcon = $aiSettings['sender_icon'] ?? '';
                             <div class="flex justify-between"><span class="text-gray-500">โหมด:</span><span
                                     class="px-2 py-1 rounded text-xs <?= $aiMode === 'sales' ? 'bg-emerald-100 text-emerald-700' : ($aiMode === 'pharmacist' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100') ?>"><?= $aiMode === 'sales' ? '🛒 พนักงานขาย' : ($aiMode === 'pharmacist' ? '💊 เภสัชกร' : '💬 ซัพพอร์ต') ?></span>
                             </div>
+                            <div class="flex justify-between"><span class="text-gray-500">โมเดล:</span><span class="text-slate-700 text-xs font-mono"><?= htmlspecialchars(AI_SETTINGS_GEMINI_MODEL) ?></span></div>
                             <div class="flex justify-between"><span class="text-gray-500">สินค้า:</span><span
                                     class="text-blue-600"><?= number_format($productCount) ?> รายการ</span></div>
                         </div>
@@ -667,7 +661,7 @@ $senderIcon = $aiSettings['sender_icon'] ?? '';
         resultDiv.classList.remove('hidden');
 
         try {
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents: [{ parts: [{ text: 'ตอบว่า OK' }] }] })
@@ -711,7 +705,7 @@ $senderIcon = $aiSettings['sender_icon'] ?? '';
             if (productKnowledge) fullPrompt += `ข้อมูลสินค้า: ${productKnowledge}\n\n`;
             fullPrompt += `ลูกค้าถาม: ${message}\n\nตอบสั้นๆ:`;
 
-            const model = document.querySelector('select[name="ai_model"]').value;
+            const model = 'gemini-flash-latest';
 
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
                 method: 'POST',

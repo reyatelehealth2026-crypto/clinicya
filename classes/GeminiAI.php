@@ -40,7 +40,7 @@ class GeminiAI {
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($row) {
                 $this->apiKey = $row['gemini_api_key'] ?? null;
-                $this->model = $row['model'] ?? 'gemini-2.0-flash';
+                $this->model = 'gemini-flash-latest';
                 $this->systemPrompt = $row['system_prompt'] ?? null;
             }
         } catch (Exception $e) {
@@ -135,6 +135,7 @@ class GeminiAI {
 
         // ลอง models ตามลำดับพร้อม API version ที่เหมาะสม
         $modelConfigs = [
+            ['model' => 'gemini-flash-latest', 'version' => 'v1beta'],
             ['model' => 'gemini-2.0-flash', 'version' => 'v1beta'],
             ['model' => 'gemini-1.5-flash', 'version' => 'v1beta'],
             ['model' => 'gemini-1.5-pro', 'version' => 'v1beta'],

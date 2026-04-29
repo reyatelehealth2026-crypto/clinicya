@@ -13,7 +13,7 @@ class GeminiChat
     private $settings;
     private $lineAccountId;
     
-    const DEFAULT_MODEL = 'gemini-2.0-flash';
+    const DEFAULT_MODEL = 'gemini-flash-latest';
     const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
     
     public function __construct($db, $lineAccountId = null)
@@ -43,7 +43,8 @@ class GeminiChat
             'auto_load_products' => 1,
             'product_load_limit' => 50
         ];
-        
+        $this->model = self::DEFAULT_MODEL;
+
         try {
             // Load from ai_settings table first
             $stmt = $this->db->prepare("SELECT * FROM ai_settings WHERE line_account_id = ? LIMIT 1");
@@ -53,7 +54,7 @@ class GeminiChat
             if ($result) {
                 $this->settings = array_merge($this->settings, $result);
                 $this->apiKey = $result['gemini_api_key'] ?? '';
-                $this->model = $result['model'] ?? self::DEFAULT_MODEL;
+                $this->model = self::DEFAULT_MODEL;
                 $this->settings['is_enabled'] = ($result['is_enabled'] == 1);
             }
             
