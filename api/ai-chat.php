@@ -201,6 +201,16 @@ if ($isConsultMode) {
         if ($userId === 0 && !empty($input['line_user_id']) && is_string($input['line_user_id'])) {
             $userId = (int) (crc32(trim($input['line_user_id'])) & 0x7FFFFFFF);
         }
+        // Fallback สำหรับ web (ไม่ใช่ LIFF) — derive จาก IP+UA เพื่อให้ triage ทำงานบน app.re-ya.com ด้วย
+        // ID จะคงที่ต่อ browser/IP เดียวกันในวันเดียวกัน (เพิ่ม date salt กัน session ค้างข้ามวัน)
+        if ($userId === 0) {
+            $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+            $ua = (string) ($_SERVER['HTTP_USER_AGENT'] ?? '');
+            if ($ip !== '' || $ua !== '') {
+                $seed = $ip . '|' . $ua . '|' . date('Y-m-d');
+                $userId = (int) (crc32($seed) & 0x7FFFFFFF);
+            }
+        }
 
         if ($userId > 0 && class_exists(\Modules\AIChat\Services\TriageRouter::class)) {
             $router = new \Modules\AIChat\Services\TriageRouter($db, $geminiKeys, $lineAccountId);
