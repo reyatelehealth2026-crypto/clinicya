@@ -45,6 +45,66 @@ define('NEXTJS_API_URL', 'https://app.re-ya.com');
 // Odoo ERP Integration Configuration
 // ============================================================================
 
+// Master kill-switch for the Odoo integration. Set ODOO_INTEGRATION_ENABLED=0
+// in env (or leave empty) for tenants that do not use Odoo. When false:
+//   - inbound webhook receivers (api/webhook/odoo.php, api/odoo-webhook.php) return 410
+//   - outbound api/odoo-*.php endpoints return 410
+//   - cron/odoo_*.php and cron/sync_odoo_*.php exit early
+//   - per-tenant $isOdooMode (shop_settings.order_data_source) still controls UI separately
+$odooEnabledEnv = getenv('ODOO_INTEGRATION_ENABLED');
+define(
+    'ODOO_INTEGRATION_ENABLED',
+    $odooEnabledEnv !== false
+        ? in_array(strtolower((string) $odooEnabledEnv), ['1', 'true', 'yes', 'on'], true)
+        : false
+);
+
+// --- Global Odoo entry-script kill-switch -------------------------------------
+// When ODOO_INTEGRATION_ENABLED is false, any HTTP request or CLI invocation
+// whose entry script is an Odoo-named file (api/odoo-*, api/webhook/odoo.php,
+// api/admin-odoo-*, api/send-slips-to-odoo.php, cron/odoo_*, cron/sync_odoo_*)
+// is short-circuited here — before any handler logic loads. Non-Odoo callers
+// fall through unchanged.
+if (ODOO_INTEGRATION_ENABLED !== true) {
+    $odooEntryScript = '';
+    if (PHP_SAPI === 'cli') {
+        $odooEntryScript = isset($_SERVER['argv'][0]) ? (string) $_SERVER['argv'][0] : '';
+    } else {
+        $odooEntryScript = isset($_SERVER['SCRIPT_FILENAME']) ? (string) $_SERVER['SCRIPT_FILENAME'] : '';
+    }
+    $odooEntryScript = str_replace('\\', '/', $odooEntryScript);
+
+    $odooEntryPattern = '#(?:^|/)(?:'
+        . 'api/webhook/odoo\.php'
+        . '|api/odoo-[\w.\-]+\.php'
+        . '|api/admin-odoo-[\w.\-]+\.php'
+        . '|api/send-slips-to-odoo\.php'
+        . '|cron/odoo_[\w.\-]+\.php'
+        . '|cron/sync_odoo_[\w.\-]+\.php'
+        . '|odoo\.php'
+        . '|odoo-dashboard\.php'
+        . '|odoo-customer-detail\.php'
+        . ')$#i';
+    if ($odooEntryScript !== '' && preg_match($odooEntryPattern, $odooEntryScript)) {
+        if (PHP_SAPI === 'cli') {
+            fwrite(STDERR, "[odoo-disabled] Skipping {$odooEntryScript} — ODOO_INTEGRATION_ENABLED is false\n");
+            exit(0);
+        }
+
+        if (!headers_sent()) {
+            http_response_code(410);
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo json_encode([
+            'success'    => false,
+            'error'      => 'Odoo integration is not enabled for this tenant',
+            'error_code' => 'ODOO_INTEGRATION_DISABLED'
+        ]);
+        exit;
+    }
+}
+// ------------------------------------------------------------------------------
+
 // Environment: 'staging' or 'production'
 // Force production for cny.re-ya.com
 define('ODOO_ENVIRONMENT', 'production');
@@ -55,9 +115,9 @@ define('ODOO_STAGING_API_KEY', getenv('ODOO_STAGING_API_KEY') ?: '');
 define('ODOO_STAGING_WEBHOOK_SECRET', getenv('ODOO_STAGING_WEBHOOK_SECRET') ?: '');
 
 // Production Configuration
-define('ODOO_PRODUCTION_API_BASE_URL', 'https://erp.cnyrxapp.com');
-define('ODOO_PRODUCTION_API_KEY', getenv('ODOO_PRODUCTION_API_KEY') ?: '5pG-doAH1EEqHXurM3t466WAgKRYemmK7FANAB74o5A');
-define('ODOO_PRODUCTION_WEBHOOK_SECRET', getenv('ODOO_PRODUCTION_WEBHOOK_SECRET') ?: 'cny_reya_webhook_3226e48c7c053b4af44011651f2d3cfb');
+define('ODOO_PRODUCTION_API_BASE_URL', getenv('ODOO_PRODUCTION_API_BASE_URL') ?: '');
+define('ODOO_PRODUCTION_API_KEY', getenv('ODOO_PRODUCTION_API_KEY') ?: '');
+define('ODOO_PRODUCTION_WEBHOOK_SECRET', getenv('ODOO_PRODUCTION_WEBHOOK_SECRET') ?: '');
 
 // Active Configuration (based on environment)
 define(
@@ -137,12 +197,9 @@ define('ODOO_WEBHOOK_TIMEOUT', 5); // seconds - must respond within this time
 define('ODOO_DASHBOARD_STALE_TTL', $odooDashboardStaleEnv !== false ? max(30, (int) $odooDashboardStaleEnv) : 300); // seconds
 
 // Odoo Product API credentials (for /ineco_gc endpoints)
-$defaultCnyOdooApiUser = ODOO_ENVIRONMENT === 'production' ? 'webapi_user2@cny.co' : '';
-$defaultCnyOdooUserToken = ODOO_ENVIRONMENT === 'production'
-    ? '@ewNI*4X*/4t9vgMds2Gzs3j=VG%q%ERYM-1A/utT0#CUZ&UR&$pwvuxj!MNUcruJ@RZ/p7$uN*fdqE6xktQdGxGov%?L0@@CekhyzeROSv2/qmj&%G-vlHq$4V8&AHC/XkxI$Tgkbq3p/6faPvf8wjIP#hfZM7GimVkXbvpvsrfZKOCGk?ldTpL9=5qI-eCVs29xIyr0'
-    : '';
-define('CNY_ODOO_API_USER', getenv('CNY_ODOO_API_USER') ?: (getenv('ODOO_PRODUCTION_API_USER') ?: $defaultCnyOdooApiUser));
-define('CNY_ODOO_USER_TOKEN', getenv('CNY_ODOO_USER_TOKEN') ?: (getenv('ODOO_PRODUCTION_USER_TOKEN') ?: $defaultCnyOdooUserToken));
+// Credentials must come from env vars only — no hardcoded defaults so the codebase is safe to fork to other tenants.
+define('CNY_ODOO_API_USER', getenv('CNY_ODOO_API_USER') ?: (getenv('ODOO_PRODUCTION_API_USER') ?: ''));
+define('CNY_ODOO_USER_TOKEN', getenv('CNY_ODOO_USER_TOKEN') ?: (getenv('ODOO_PRODUCTION_USER_TOKEN') ?: ''));
 
 // Gemini AI Chat
 define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: '');

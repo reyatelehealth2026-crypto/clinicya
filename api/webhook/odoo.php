@@ -13,6 +13,17 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../config/config.php';
 
+// Master kill-switch — return 410 Gone when Odoo integration is disabled for this tenant.
+if (!defined('ODOO_INTEGRATION_ENABLED') || ODOO_INTEGRATION_ENABLED !== true) {
+    http_response_code(410);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Odoo integration is not enabled for this tenant',
+        'error_code' => 'ODOO_INTEGRATION_DISABLED'
+    ]);
+    exit;
+}
+
 // Ensure legacy Database singleton is loaded before wrapper usage
 if (!class_exists('Database', false)) {
     require_once __DIR__ . '/../../config/database.php';

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "Disable Odoo for non-Odoo tenants",
+  "description": "Map of every Odoo touchpoint in this monolith + modern stack, so you can disable the integration cleanly for a tenant that does not use Odoo. Walk it top to bottom — orientation, the per-tenant switch already in place, then the layers (config, classes, API, cron, LIFF, modern backend, retail-api). The closing step lists the concrete kill-switches.",
+  "ref": "main",
+  "steps": [
+    {
+      "title": "Orientation — what is Odoo doing in this repo",
+      "description": "Situation: This codebase has ~65 runtime files referencing Odoo across PHP monolith, Node backend, retail-api, and the legacy LIFF SPA. Mechanism: most are gated behind a per-tenant 'order_data_source' flag stored in shop_settings; a few (cron, webhook receivers, hardcoded config) are NOT gated and will run regardless. Implication: to fully neutralize Odoo for a non-Odoo tenant you must (a) flip the per-tenant flag, AND (b) prevent the always-on layers from firing. Gotcha: just hiding menu items is not enough — API endpoints and cron jobs are still reachable.",
+      "directory": "classes"
+    },
+    {
+      "title": "The per-tenant switch — already designed for this",
+      "description": "Situation: shop_settings.order_data_source per line_account_id is the canonical switch. Mechanism: getShopOrderDataSource() returns 'shop' or 'odoo'; default is 'shop'. Implication: For your new tenant, either insert a shop_settings row with order_data_source='shop' or leave the column unset — the normalizer at line 11 collapses anything non-'odoo' to 'shop'. Gotcha: the column is auto-added if missing (line 21), so a fresh DB will not break.",
+      "file": "includes/shop-data-source.php",
+      "selection": {
+        "start": { "line": 7, "character": 0 },
+        "end": { "line": 51, "character": 0 }
+      }
+    },
+    {
+      "title": "UI gating — every menu/dashboard branch tied to $isOdooMode",
+      "description": "Situation: includes/header.php derives $isOdooMode at line 176 from the per-tenant value, and every Odoo menu / button / dashboard shortcut is wrapped in that flag. Mechanism: line 254 hides 'จัดการลูกค้า Odoo', lines 368-370 skip the Odoo Dashboard / Odoo Webhooks supply menus, lines 384/386 hide the Odoo overview submenu. Implication: tenants with order_data_source='shop' never see Odoo UI. Gotcha: the URLs (/odoo-dashboard, /odoo-webhooks-dashboard) are still reachable by direct hit if the underlying PHP files exist — UI hide ≠ access control.",
+      "file": "includes/header.php",
+      "selection": {
+        "start": { "line": 175, "character": 0 },
+        "end": { "line": 180, "character": 0 }
+      }
+    },
+    {
+      "title": "Hardcoded credentials in config/config.php",
+      "description": "Situation: config/config.php carries a hardcoded production Odoo API key (line 59) and webhook secret (line 60) as fallbacks when env vars are not set. Mechanism: ODOO_API_KEY / ODOO_WEBHOOK_SECRET are define()'d unconditionally for every request — even tenants that do not use Odoo. Implication: forking this code to another tenant ships CNY's production secrets unless you scrub these defaults. Gotcha: OdooAPIClient throws 'MISSING_API_KEY' only when the constant is empty (see next step) — leaving a stale key in is worse than leaving it blank, because it lets requests escape to CNY's Odoo.",
+      "file": "config/config.php",
+      "selection": {
+        "start": { "line": 44, "character": 0 },
+        "end": { "line": 156, "character": 0 }
+      }
+    },
+    {
+      "title": "OdooAPIClient — the choke point that throws when key is missing",
+      "description": "Situation: OdooAPIClient::__construct reads ODOO_API_KEY at line 65 and throws 'MISSING_API_KEY' if empty (lines 71-73). Mechanism: every consumer (api/odoo-*.php, cron, slip-match-orders.php, send-slips-to-odoo.php) instantiates this class. Implication: scrubbing ODOO_PRODUCTION_API_KEY in config.php (and not setting the env var) makes every Odoo call fail fast with a Thai-language error — no network egress to CNY's Odoo. Gotcha: this is a per-call failure, not a global gate — callers still log the exception and may show partial UI; pair this with the menu hide and endpoint disable steps.",
+      "file": "classes/OdooAPIClient.php",
+      "selection": {
+        "start": { "line": 14, "character": 0 },
+        "end": { "line": 75, "character": 0 }
+      }
+    },
+    {
+      "title": "Inbound webhook receivers — Odoo → us",
+      "description": "Situation: two webhook entrypoints accept POSTs from Odoo: api/webhook/odoo.php (current) and api/odoo-webhook.php (legacy, contains its own embedded handler class). Mechanism: api/webhook/odoo.php at line 60 instantiates OdooWebhookHandler and registers receipts on every incoming POST regardless of tenant flag. Implication: even if your tenant never enables Odoo, the URL is publicly reachable and will write to odoo_webhooks_log / odoo_orders / odoo_invoices tables. Gotcha: blocking should be done at the webserver (nginx location deny) OR by short-circuiting these two files with a 410 Gone at the top — do not rely on the per-tenant flag for inbound webhooks.",
+      "file": "api/webhook/odoo.php",
+      "selection": {
+        "start": { "line": 1, "character": 0 },
+        "end": { "line": 80, "character": 0 }
+      }
+    },
+    {
+      "title": "Always-on cron jobs — server-side, ungated",
+      "description": "Situation: cron/odoo_daily_summary_auto.php and cron/sync_odoo_dashboard_cache.php run on schedule and read straight from odoo_* tables, then call OdooAPIClient. Mechanism: these are wired into your crontab outside the PHP request/tenant context; line 71 of odoo_daily_summary_auto pulls in api/odoo-webhooks-dashboard.php internals. Implication: removing the cron entries (or guarding the top of each file) is a separate, mandatory step from the per-tenant flag — the flag does NOT stop these. Gotcha: cron/dashboard_realtime_updates.php and cron/cleanup-dlq.php also reference odoo_* tables; check your full crontab for any 'odoo' jobs and remove them for the new tenant's host.",
+      "file": "cron/odoo_daily_summary_auto.php",
+      "line": 71
+    },
+    {
+      "title": "Outbound API endpoints — direct-URL exposure",
+      "description": "Situation: 18 files under api/ named odoo-*.php (and api/send-slips-to-odoo.php, api/admin-odoo-unlink.php) are reachable by any client that knows the URL. Mechanism: each one instantiates OdooAPIClient or OdooWebhookHandler and talks to CNY's Odoo. Implication: the menu hide does NOT secure these — a curl POST will still fire. To disable for a non-Odoo tenant: either delete these files in the tenant fork, or have a single guard (e.g., at the top of each, check if order_data_source for the requested tenant is 'odoo' and 410 if not). Gotcha: api/odoo-dashboard-api.php is large (4700+ lines) and contains many handlers; treat it as one unit.",
+      "directory": "api"
+    },
+    {
+      "title": "Slip pipeline — quietly calls Odoo even from 'shop' code paths",
+      "description": "Situation: api/slip-match-orders.php at lines 187, 410, 586 instantiates OdooAPIClient inside what looks like a generic slip-matching endpoint. Mechanism: the slip pipeline tries to mark orders paid in Odoo when an order looks Odoo-sourced; in non-Odoo tenants this branch is dead code but the require_once still loads the class. Implication: removing config keys is enough to neutralize behavior, but if you want a clean codebase, gate these blocks with `if ($isOdooMode)`. Gotcha: easy to miss because filename does not say 'odoo' — search for `new OdooAPIClient` to enumerate.",
+      "file": "api/slip-match-orders.php",
+      "pattern": "new OdooAPIClient"
+    },
+    {
+      "title": "Modern backend — Fastify health and dashboard wiring",
+      "description": "Situation: backend/src/routes/health.ts imports OdooService and includes Odoo as a first-class health check. Mechanism: line 44 instantiates OdooService(prisma); line 54 calls checkOdoo() in parallel; result shows up in /health response and circuit-breaker stats. Implication: a non-Odoo tenant will get a perpetually 'unhealthy' or 'degraded' /health response unless you (a) remove the odoo branch from the parallel checks (lines 54, 59, 77-80, 96), and (b) drop the field from the response shape at line 22. Gotcha: DashboardService.ts (lines 166, 177) and CustomerService.ts (lines 344, 353) read from prisma.odooOrders / odoo_orders SQL — those tables can simply stay empty in the new tenant DB; no code change strictly required, but queries will return nothing.",
+      "file": "backend/src/routes/health.ts",
+      "selection": {
+        "start": { "line": 1, "character": 0 },
+        "end": { "line": 100, "character": 0 }
+      }
+    },
+    {
+      "title": "OdooService.ts — already self-disables when env is empty",
+      "description": "Situation: OdooService constructor at lines 43-51 reads config.ODOO_API_URL / ODOO_API_KEY and only logs a warning when missing — it does not throw. Mechanism: subsequent calls go through CircuitBreaker; with no baseUrl they fail and the breaker opens. Implication: simply NOT setting ODOO_API_URL / ODOO_API_KEY env vars in the new tenant's backend container is enough to keep the modern backend safe — no code changes required for this layer. Gotcha: health.ts will still surface 'odoo: unhealthy' until you remove that branch (previous step).",
+      "file": "backend/src/services/OdooService.ts",
+      "selection": {
+        "start": { "line": 37, "character": 0 },
+        "end": { "line": 65, "character": 0 }
+      }
+    },
+    {
+      "title": "Legacy LIFF Odoo pages",
+      "description": "Situation: liff/odoo-*.php (7 files) and line-mini-app/src/types/odoo-*.ts exist. Mechanism: liff/index.php is the old LIFF SPA — per CLAUDE.md it's read-only reference; the active LIFF is line-mini-app/. Implication: for a new tenant you can safely delete the entire liff/odoo-*.php set; for line-mini-app only TYPE files mention odoo, no runtime calls — they are inert. Gotcha: liff/assets/js/router.js may still route to /liff/odoo-* paths; if you keep the legacy SPA at all, scrub those routes too.",
+      "directory": "liff"
+    },
+    {
+      "title": "retail-api — separate service, separate Odoo client",
+      "description": "Situation: retail-api/ has its own routing, schema, and OdooRetailClient (retail-api/classes/OdooRetailClient.php). Mechanism: retail-api/webhook/odoo-status.php and cron/sync-retail-products.php (line 55) call it independently of the main monolith. Implication: if your new tenant does not run the retail-api at all, just do not deploy retail-api/. If you do deploy it, repeat the same kill steps inside retail-api: scrub config, gate the webhook, drop the cron. Gotcha: retail-api has its own database/schema.sql and seed.sql — check those for hardcoded Odoo references when forking.",
+      "file": "retail-api/classes/OdooRetailClient.php",
+      "line": 1
+    },
+    {
+      "title": "Kill-switch summary — what to actually change",
+      "description": "Concrete checklist for a non-Odoo tenant fork:\n\n1. DB: ensure shop_settings.order_data_source = 'shop' (or NULL) for every line_account_id row.\n2. Secrets: scrub the hardcoded production fallbacks in config/config.php lines 59-60, 142 (set to ''); rely on env vars only. Do NOT ship CNY's keys.\n3. Cron: remove every `odoo_*` and `sync_odoo_*` entry from the tenant host's crontab (cron/odoo_daily_summary_auto.php, cron/sync_odoo_dashboard_cache.php).\n4. Webhook URLs: at nginx/server level, return 410 for /api/webhook/odoo.php and /api/odoo-webhook.php (or add a top-of-file `http_response_code(410); exit;` guard).\n5. Direct API endpoints: choose ONE of (a) delete api/odoo-*.php, api/admin-odoo-unlink.php, api/send-slips-to-odoo.php OR (b) add a shared guard helper that 410s when the request's line_account_id is not in 'odoo' mode.\n6. Modern backend: do not set ODOO_API_URL / ODOO_API_KEY env in the tenant's backend container; remove the odoo branch from backend/src/routes/health.ts (lines 22, 44, 54, 59, 77-80, 96, 163, 246+).\n7. retail-api (only if deployed): scrub retail-api config, remove cron/sync-retail-products.php from tenant cron, 410 the retail-api/webhook/odoo-status.php endpoint.\n8. Legacy LIFF: delete liff/odoo-*.php (7 files) if you keep the legacy SPA at all; line-mini-app/ is safe as-is.\n\nOnce done: hit /odoo-dashboard, /api/odoo-orders.php, /api/webhook/odoo.php in the new tenant — all should be inaccessible, and /health should report green without an odoo branch."
+    }
+  ]
+}
