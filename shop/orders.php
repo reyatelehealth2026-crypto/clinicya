@@ -20,7 +20,9 @@ if (session_status() === PHP_SESSION_NONE) {
 
 $currentBotId = $_SESSION['current_bot_id'] ?? 1;
 $orderDataSource = getShopOrderDataSource($db, $currentBotId);
-$isOdooMode = $orderDataSource === 'odoo';
+$isOdooMode = ($orderDataSource === 'odoo')
+    && defined('ODOO_INTEGRATION_ENABLED')
+    && ODOO_INTEGRATION_ENABLED === true;
 
 if ($isOdooMode) {
     $statusFilter = strtolower(trim($_GET['status'] ?? ''));

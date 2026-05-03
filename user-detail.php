@@ -945,6 +945,7 @@ if ($lineUserId) {
             <?php endif; ?>
         </div>
 
+        <?php if (defined('ODOO_INTEGRATION_ENABLED') && ODOO_INTEGRATION_ENABLED === true): ?>
         <!-- Odoo ERP Section -->
         <div class="bg-white rounded-xl shadow p-6">
             <div class="flex justify-between items-center mb-4">
@@ -1460,6 +1461,7 @@ if ($lineUserId) {
         }
         </script>
         <?php endif; ?>
+        <?php endif; /* ODOO_INTEGRATION_ENABLED */ ?>
 
         <!-- LINE Info -->
         <div class="bg-white rounded-xl shadow p-6">

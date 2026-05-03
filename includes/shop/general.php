@@ -115,6 +115,7 @@ $bankAccounts = json_decode($settings['bank_accounts'] ?? '{"banks":[]}', true)[
                         <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
                     </label>
                 </div>
+                <?php if (defined('ODOO_INTEGRATION_ENABLED') && ODOO_INTEGRATION_ENABLED === true): ?>
                 <div class="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
                     <label class="block text-sm font-medium mb-2 text-indigo-900">แหล่งข้อมูลคำสั่งซื้อ/ยอดขาย</label>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -134,6 +135,7 @@ $bankAccounts = json_decode($settings['bank_accounts'] ?? '{"banks":[]}', true)[
                         </label>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
         

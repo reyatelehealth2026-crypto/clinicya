@@ -884,6 +884,18 @@ try {
         echo json_encode(['success' => false, 'error' => 'Method not allowed']);
         exit;
     }
+
+    // Master kill-switch — return 410 Gone when Odoo integration is disabled for this tenant.
+    // (Class definition above is still loadable via require_once for cron retry workers.)
+    if (!defined('ODOO_INTEGRATION_ENABLED') || ODOO_INTEGRATION_ENABLED !== true) {
+        http_response_code(410);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Odoo integration is not enabled for this tenant',
+            'error_code' => 'ODOO_INTEGRATION_DISABLED'
+        ]);
+        exit;
+    }
     
     // Get headers
     $signature = $_SERVER['HTTP_X_ODOO_SIGNATURE'] ?? '';

@@ -267,10 +267,12 @@
                         <span class="text-gray-500">Database</span>
                         <span class="badge badge-green">Connected</span>
                     </div>
+                    <?php if (defined('ODOO_INTEGRATION_ENABLED') && ODOO_INTEGRATION_ENABLED === true): ?>
                     <div class="flex justify-between">
                         <span class="text-gray-500">Odoo Sync</span>
                         <span class="badge badge-green">Active</span>
                     </div>
+                    <?php endif; ?>
                     <div class="flex justify-between">
                         <span class="text-gray-500">LINE OA</span>
                         <span class="badge badge-green">Online</span>

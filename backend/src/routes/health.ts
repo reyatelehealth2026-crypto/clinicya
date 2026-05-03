@@ -19,7 +19,7 @@ interface HealthCheckResponse {
   checks: {
     database: HealthCheck;
     redis: HealthCheck;
-    odoo: HealthCheck;
+    odoo?: HealthCheck;
     memory: HealthCheck;
     websocket: HealthCheck;
     disk?: HealthCheck;
@@ -27,7 +27,7 @@ interface HealthCheckResponse {
   performance: {
     responseTime: number;
     cacheHitRate: number;
-    circuitBreakerStats: any;
+    circuitBreakerStats?: any;
     websocketConnections?: any;
   };
 }
@@ -41,22 +41,26 @@ interface HealthCheck {
 
 export default async function healthRoutes(fastify: FastifyInstance) {
   const cacheService = new CacheService(fastify);
-  const odooService = new OdooService(prisma);
+  // Gate Odoo wiring: only instantiate when env credentials are configured.
+  // Tenants that do not use Odoo simply leave ODOO_API_URL / ODOO_API_KEY unset.
+  const odooEnabled = Boolean(process.env['ODOO_API_URL'] && process.env['ODOO_API_KEY']);
+  const odooService = odooEnabled ? new OdooService(prisma) : null;
 
   // Comprehensive health check
   fastify.get('/health', async (_request: FastifyRequest, reply: FastifyReply) => {
     const startTime = Date.now();
-    
+
     try {
-      const checks = await Promise.allSettled([
+      const baseChecks = [
         checkDatabase(),
         checkRedis(fastify),
-        checkOdoo(odooService),
         checkMemory(),
         checkWebSocket(fastify),
-      ]);
+      ];
+      const odooCheck = odooService ? checkOdoo(odooService) : null;
 
-      const [databaseResult, redisResult, odooResult, memoryResult, websocketResult] = checks;
+      const settled = await Promise.allSettled(odooCheck ? [...baseChecks, odooCheck] : baseChecks);
+      const [databaseResult, redisResult, memoryResult, websocketResult, odooResult] = settled;
 
       const healthResponse: HealthCheckResponse = {
         status: 'healthy',
@@ -74,11 +78,6 @@ export default async function healthRoutes(fastify: FastifyInstance) {
             message: 'Redis check failed',
             details: redisResult.status === 'rejected' ? redisResult.reason : undefined,
           },
-          odoo: odooResult.status === 'fulfilled' ? odooResult.value : {
-            status: 'error',
-            message: 'Odoo check failed',
-            details: odooResult.status === 'rejected' ? odooResult.reason : undefined,
-          },
           memory: memoryResult.status === 'fulfilled' ? memoryResult.value : {
             status: 'error',
             message: 'Memory check failed',
@@ -89,11 +88,20 @@ export default async function healthRoutes(fastify: FastifyInstance) {
             message: 'WebSocket check failed',
             details: websocketResult.status === 'rejected' ? websocketResult.reason : undefined,
           },
+          ...(odooResult
+            ? {
+                odoo: odooResult.status === 'fulfilled' ? odooResult.value : {
+                  status: 'error',
+                  message: 'Odoo check failed',
+                  details: odooResult.status === 'rejected' ? odooResult.reason : undefined,
+                },
+              }
+            : {}),
         },
         performance: {
           responseTime: Date.now() - startTime,
           cacheHitRate: cacheService.getStats().hitRate,
-          circuitBreakerStats: odooService.getCircuitBreakerStats(),
+          ...(odooService ? { circuitBreakerStats: odooService.getCircuitBreakerStats() } : {}),
           websocketConnections: fastify.webSocketService?.getConnectionStats() || null,
         },
       };
@@ -160,7 +168,7 @@ export default async function healthRoutes(fastify: FastifyInstance) {
   fastify.get('/metrics', async (_request: FastifyRequest, reply: FastifyReply) => {
     const memUsage = process.memoryUsage();
     const cacheStats = cacheService.getStats();
-    const circuitBreakerStats = odooService.getCircuitBreakerStats();
+    const circuitBreakerStats = odooService ? odooService.getCircuitBreakerStats() : null;
 
     reply.send({
       timestamp: new Date().toISOString(),

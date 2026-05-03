@@ -18,7 +18,9 @@ $currentBotId = $_SESSION['current_bot_id'] ?? 1;
 $shop = new UnifiedShop($db, null, $currentBotId);
 $settings = $shop->getSettings();
 $orderDataSource = getShopOrderDataSource($db, $currentBotId);
-$isOdooMode = $orderDataSource === 'odoo';
+$isOdooMode = ($orderDataSource === 'odoo')
+    && defined('ODOO_INTEGRATION_ENABLED')
+    && ODOO_INTEGRATION_ENABLED === true;
 
 // Get statistics
 $stats = [

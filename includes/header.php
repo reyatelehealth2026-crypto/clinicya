@@ -173,7 +173,11 @@ try {
 
 $currentBotId = $currentBot['id'] ?? null;
 $orderDataSource = getShopOrderDataSource($db, $currentBotId);
-$isOdooMode = $orderDataSource === 'odoo';
+// Per-tenant Odoo mode is force-disabled when the master ODOO_INTEGRATION_ENABLED
+// flag is off, so non-Odoo tenants never render Odoo menus / dashboards / shortcuts.
+$isOdooMode = ($orderDataSource === 'odoo')
+    && defined('ODOO_INTEGRATION_ENABLED')
+    && ODOO_INTEGRATION_ENABLED === true;
 $ordersMenuLabel = $isOdooMode ? 'ออเดอร์ (Odoo)' : 'ออเดอร์';
 $dashboardMenuLabel = $isOdooMode ? 'จัดการลูกค้า Odoo' : 'แดชบอร์ดผู้บริหาร';
 $dashboardDefaultHref = $isOdooMode ? '/odoo-dashboard' : '/dashboard?tab=executive';
