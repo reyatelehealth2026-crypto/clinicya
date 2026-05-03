@@ -241,6 +241,7 @@ $odooEventOptions = [
                     <p class="text-sm text-gray-500 mb-4">ตั้งค่า Telegram Bot ได้ที่แท็บ "Telegram"</p>
                 </div>
 
+                <?php if (defined('ODOO_INTEGRATION_ENABLED') && ODOO_INTEGRATION_ENABLED === true): ?>
                 <!-- Odoo LIFF Notifications -->
                 <div class="notify-setting-card p-6">
                     <div class="flex items-center justify-between mb-4">
@@ -384,6 +385,7 @@ $odooEventOptions = [
                         <i class="fas fa-paper-plane mr-2"></i>ส่งข้อความทดสอบ
                     </button>
                 </div>
+                <?php endif; /* ODOO_INTEGRATION_ENABLED */ ?>
 
                 <!-- Notification Recipients -->
                 <div class="notify-setting-card p-6">

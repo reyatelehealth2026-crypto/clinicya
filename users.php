@@ -25,8 +25,10 @@ $page = isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1;
 $perPage = 20;
 $offset = ($page - 1) * $perPage;
 
+$odooUiEnabled = defined('ODOO_INTEGRATION_ENABLED') && ODOO_INTEGRATION_ENABLED === true;
 $activeTab = $_GET['tab'] ?? 'line';
-if (!in_array($activeTab, ['line', 'odoo'], true)) {
+$allowedUserTabs = $odooUiEnabled ? ['line', 'odoo'] : ['line'];
+if (!in_array($activeTab, $allowedUserTabs, true)) {
     $activeTab = 'line';
 }
 
@@ -573,9 +575,11 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
         <?php endif; ?>
     </div>
     <div class="flex items-center gap-2">
+        <?php if ($odooUiEnabled): ?>
         <a href="odoo-dashboard.php" class="px-3 py-2 bg-gray-900 text-white rounded-lg text-sm hover:bg-black">
             <i class="fas fa-chart-line mr-1"></i>Odoo Dashboard
         </a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -584,10 +588,12 @@ $odooTabUrl = '?' . http_build_query(array_merge($_GET, ['tab' => 'odoo', 'odoo_
         class="px-4 py-2 rounded-lg text-sm font-medium <?= $activeTab === 'line' ? 'bg-green-500 text-white' : 'bg-white border hover:bg-gray-50' ?>">
         <i class="fab fa-line mr-1"></i>LINE Users
     </a>
+    <?php if ($odooUiEnabled): ?>
     <a href="<?= $odooTabUrl ?>"
         class="px-4 py-2 rounded-lg text-sm font-medium <?= $activeTab === 'odoo' ? 'bg-indigo-600 text-white' : 'bg-white border hover:bg-gray-50' ?>">
         <i class="fas fa-link mr-1"></i>Odoo Customers
     </a>
+    <?php endif; ?>
 </div>
 
 <?php if ($activeTab === 'odoo'): ?>
