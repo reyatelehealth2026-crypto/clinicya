@@ -272,10 +272,12 @@ if (!function_exists('buildStorefrontQuery')) {
                     class="px-4 py-2 rounded-lg text-sm font-medium">
                 <i class="fas fa-pills mr-1"></i>ปิดชนิดยาที่เลือก
             </button>
+            <?php if (defined('ODOO_INTEGRATION_ENABLED') && ODOO_INTEGRATION_ENABLED === true): ?>
             <button type="button" @click="bulkDisableOdooInactive()"
                     class="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 text-sm font-medium">
                 <i class="fas fa-eye-slash mr-1"></i>ปิดสินค้าที่ Odoo inactive
             </button>
+            <?php endif; ?>
         </div>
         <div class="text-xs text-gray-500 mt-2">
             <i class="fas fa-info-circle mr-1"></i>ทุกปุ่มจะ dry-run ก่อน เพื่อดูจำนวนที่จะโดนปิด แล้วยืนยันก่อนทำจริง

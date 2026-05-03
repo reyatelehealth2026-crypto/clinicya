@@ -31,7 +31,9 @@ if ($period === 'today') {
 $db = Database::getInstance()->getConnection();
 $lineAccountId = $_SESSION['current_bot_id'] ?? null;
 $orderDataSource = getShopOrderDataSource($db, $lineAccountId);
-$isOdooMode = $orderDataSource === 'odoo';
+$isOdooMode = ($orderDataSource === 'odoo')
+    && defined('ODOO_INTEGRATION_ENABLED')
+    && ODOO_INTEGRATION_ENABLED === true;
 
 try {
     if (!$isOdooMode) {

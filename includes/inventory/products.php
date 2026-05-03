@@ -18,7 +18,9 @@ if (file_exists(__DIR__ . '/../shop-data-source.php')) {
 
 $currentBotId = $_SESSION['current_bot_id'] ?? 1;
 $orderDataSource = function_exists('getShopOrderDataSource') ? getShopOrderDataSource($db, $currentBotId) : 'shop';
-$isOdooMode = $orderDataSource === 'odoo';
+$isOdooMode = ($orderDataSource === 'odoo')
+    && defined('ODOO_INTEGRATION_ENABLED')
+    && ODOO_INTEGRATION_ENABLED === true;
 
 if ($isOdooMode) {
     $cacheTable = 'odoo_products_cache';
