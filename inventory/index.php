@@ -60,6 +60,14 @@ $tabTitles = [
     'reports' => 'รายงานคลังสินค้า',
     'wms' => 'WMS - Pick Pack Ship',
 ];
+// Hide the "โหลดจาก Odoo" tab when the Odoo integration is disabled for this tenant.
+if (!defined('ODOO_INTEGRATION_ENABLED') || ODOO_INTEGRATION_ENABLED !== true) {
+    unset($tabs['catalog-sync'], $tabTitles['catalog-sync']);
+    if ($activeTab === 'catalog-sync') {
+        $activeTab = 'storefront';
+    }
+}
+
 $pageTitle = $tabTitles[$activeTab] ?? 'จัดการคลังสินค้า';
 
 require_once __DIR__ . '/../includes/header.php';
