@@ -76,6 +76,8 @@ bash deploy_testry_branch.sh
 | `liff/` | **Oldest legacy LIFF bundle** (`liff/index.php`, `liff/assets/js/liff-app.js`). Not used for routine production. |
 | `api/*.php` | ~60 REST API endpoints |
 | Root `*.php` files | Admin panel pages (104 files) |
+| `inbox-v2.php` + `api/inbox-v2.php` | **Active admin inbox** — CRM HUD panel, dispense modal, cursor-paginated conversation list. Same-page POST AJAX (`X-Requested-With` header) co-exists with the cursor API in `api/inbox-v2.php`. |
+| `messages.php` | Older parallel inbox UI; AJAX endpoint is `chat.php`. New inbox features should be added to `inbox-v2.php` and ported back only if needed. |
 | `cron/*.php` | ~30 scheduled background tasks |
 | `index.php` | Public landing page |
 | `backend/src/server.ts` | Modern Fastify + Prisma API (dashboard modernisation layer) |
@@ -143,11 +145,20 @@ Role hierarchy: `super_admin` → `admin` → `pharmacist` / `marketing` / `tech
 
 ### Key Integrations
 
-- **LINE API** — `classes/LineAPI.php`. Always pass token + secret from the `line_accounts` DB row, not from constants.
+- **LINE API** — `classes/LineAPI.php`. Always pass token + secret from the `line_accounts` DB row, not from constants. For pharmacist-side outgoing messages, prefer `LineAPI::sendMessage()` (checks `reply_token` first to avoid push-message quota) and fall back to `pushMessage()` only when `sendMessage` is unavailable.
+- **Flex medicine label** — `classes/FlexTemplates.php` exposes `medicineLabel()`, `medicineLabelsCarousel()`, `toMessage()`. Used by the dispense flow in `inbox-v2.php` and `messages.php`. Carousel is automatically used when `count($items) > 1`.
 - **Odoo ERP** — `classes/OdooAPIClient.php` (JSON-RPC 2.0, circuit breaker + exponential backoff). Sync flow: Odoo webhook → `api/odoo-webhook.php` → `OdooSyncService` → cache tables (`odoo_orders`, `odoo_invoices`, `odoo_bdos`). Use `OdooAPIPool.php` for parallel fan-out queries.
 - **AI** — `classes/GeminiAI.php` (primary), `classes/OpenAI.php`. Settings per `line_account_id` in `ai_settings` table.
 - **Notifications** — `classes/NotificationRouter.php` fans out to LINE, Telegram, email.
 - **Real-time** — Node.js + Socket.io WebSocket server (`websocket-server.js`).
+
+### Conversation List Pagination (inbox-v2)
+
+`InboxService::getConversationsDelta($lineAccountId, $since, $cursor, $limit, $search, $filters)` returns `['conversations' => [], 'next_cursor' => string|null, 'has_more' => bool]`. Cursor is the last conversation's `last_message_at` (sorted DESC). The page initially server-renders `$conversationLimit = 200` rows then a `ConversationLoader` IIFE auto-loads more in batches via `GET api/inbox-v2.php?action=getConversations&cursor=...&limit=200`. The API caps `limit` at 500 and defaults to 200. Do not lower these without checking that customer-visibility complaints have been resolved.
+
+### Dispense System (ระบบจ่ายยา)
+
+Cross-cutting flow shared by `messages.php` and `inbox-v2.php`. Action handler key: `action=dispense` (POST). Writes `dispensing_records` (auto-created if missing), then either decrements `business_items.stock` (cash/credit) or seeds `cart` + creates a pending `transactions` row referencing `dispense_id` via `delivery_info` JSON (transfer/later). Always sends a Flex medicine-label message via `FlexTemplates` and persists it to `messages` with `sent_by='system:dispense'`.
 
 ## Commit Convention
 
@@ -168,4 +179,8 @@ Examples from this repo: `fix(checkout): …`, `feat(line-mini-app): …`, `feat
 - **Cron jobs** — New reminder/broadcast jobs go in `cron/` as separate files. Do not add to `scheduled.php` (admin-triggered only).
 - **Tests** — Property-based; each test generates 100+ random cases per property. Bootstrap: `tests/bootstrap.php`.
 - **Database schema** — 223 tables. Main migration: `database/install_complete_latest.sql`. Incremental changes go in `database/migration_*.sql`.
+- **Migration whitelist** — `.gitignore` ignores `database/*.sql` by default and re-includes specific migrations with `!database/migration_*.sql` lines. When adding a new incremental migration, append a matching `!` line so the file is actually committed.
+- **Odoo kill-switch** — Per-tenant Odoo UI is gated by the `ODOO_INTEGRATION_ENABLED` flag (config + DB). Pages check `$isOdooMode` (set in `config/config.php`) before rendering Odoo widgets, dashboard tiles, inventory sync UI, etc. New Odoo-touching UI must respect this gate so non-Odoo tenants don't see broken integrations.
+- **Same-page admin AJAX** — Many admin pages (`inbox-v2.php`, `messages.php`, `chat.php`) handle their own POST AJAX at the top of the file, gated on `$_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WITH'])`. Add new actions as a `case` inside the existing `switch ($action)` block; do not split into a separate API file unless the endpoint is shared across pages.
+- **Auto-create tables** — Some legacy admin pages auto-create their feature tables on page load via `SHOW TABLES LIKE` + `CREATE TABLE IF NOT EXISTS` (e.g. `dispensing_records`, `user_notes`, `user_tag_assignments`). For new features, prefer a versioned `database/migration_*.sql` file plus a whitelist entry, not page-load auto-create.
 - **Server path** — `/home/zrismpsz/public_html/cny.re-ya.com` on production.
