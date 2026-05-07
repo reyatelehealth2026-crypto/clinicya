@@ -3551,6 +3551,14 @@ function formatThaiDateTime($datetime)
                                 </div>
                             </div>
 
+                            <!-- Dispense (จ่ายยา) — ported from messages.php 2026-05-08 -->
+                            <div class="crm-section" style="padding: 12px;">
+                                <button onclick="openDispenseModal()" class="quick-edit-btn" style="background: linear-gradient(135deg, #A855F7 0%, #7E22CE 100%); color: white; border: none;">
+                                    <i class="fas fa-prescription-bottle-alt"></i>
+                                    จ่ายยา
+                                </button>
+                            </div>
+
                             <!-- Quick Edit Button -->
                             <div class="crm-section" style="padding: 12px;">
                                 <button class="quick-edit-btn" onclick="HUDMode.openUserDetail()">
