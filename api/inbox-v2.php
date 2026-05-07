@@ -2705,7 +2705,7 @@ try {
 
             $since = (int) ($_GET['since'] ?? 0);
             $cursor = $_GET['cursor'] ?? null;
-            $limit = (int) ($_GET['limit'] ?? 50);
+            $limit = (int) ($_GET['limit'] ?? 200);
 
             // Search and filter parameters
             $search = isset($_GET['search']) ? trim($_GET['search']) : null;
@@ -2729,9 +2729,9 @@ try {
                 $filters['platform'] = $_GET['platform'];
             }
 
-            // Validate limit
-            if ($limit < 1 || $limit > 100) {
-                $limit = 50;
+            // Validate limit (bumped 2026-05-08 for old-customer visibility)
+            if ($limit < 1 || $limit > 500) {
+                $limit = 200;
             }
 
             try {

@@ -155,6 +155,29 @@ $inboxService = new InboxService($db, $currentBotId);
 $analyticsService = new AnalyticsService($db, $currentBotId);
 $templateService = new TemplateService($db, $currentBotId);
 
+// Auto-create dispensing_records table if not exists (ported from messages.php 2026-05-08)
+try {
+    $stmt = $db->query("SHOW TABLES LIKE 'dispensing_records'");
+    if ($stmt->rowCount() == 0) {
+        $db->exec("CREATE TABLE IF NOT EXISTS `dispensing_records` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `line_account_id` INT DEFAULT NULL,
+            `user_id` int(11) NOT NULL,
+            `pharmacist_id` int(11) DEFAULT NULL,
+            `order_number` varchar(50) NOT NULL,
+            `items` JSON,
+            `total_amount` decimal(10,2) DEFAULT 0,
+            `payment_method` varchar(50) DEFAULT 'cash',
+            `payment_status` varchar(20) DEFAULT 'paid',
+            `notes` text,
+            `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `user_id` (`user_id`),
+            KEY `order_number` (`order_number`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+} catch (Exception $e) {}
+
 // Get all tags for filter dropdown
 $allTagsForFilter = [];
 try {
@@ -392,6 +415,187 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 ]);
 
                 echo json_encode(['success' => true]);
+                break;
+
+            // ============================================
+            // DISPENSE — ระบบจ่ายยา (ported from messages.php 2026-05-08)
+            // ============================================
+            case 'dispense':
+                require_once __DIR__ . '/classes/FlexTemplates.php';
+
+                $userId = intval($_POST['user_id'] ?? 0);
+                if (!$userId) {
+                    throw new Exception('User ID is required');
+                }
+
+                $items = $_POST['items'] ?? '[]';
+                $totalAmount = floatval($_POST['total_amount'] ?? 0);
+                $paymentMethod = $_POST['payment_method'] ?? 'cash';
+                $notes = trim($_POST['notes'] ?? '');
+                $shopNameInput = trim($_POST['shop_name'] ?? '');
+                $pharmacistName = trim($_POST['pharmacist_name'] ?? '');
+                $pharmacistId = $_SESSION['admin_id'] ?? ($_SESSION['admin_user']['id'] ?? null);
+                $orderNumber = 'DIS' . date('ymdHis') . rand(100, 999);
+
+                // Validate items
+                $itemsArr = json_decode($items, true);
+                if (!is_array($itemsArr) || count($itemsArr) === 0) {
+                    throw new Exception('No items to dispense');
+                }
+
+                // Get user info with reply token
+                $stmt = $db->prepare("SELECT line_user_id, line_account_id, display_name, reply_token, reply_token_expires FROM users WHERE id = ?");
+                $stmt->execute([$userId]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$user) {
+                    throw new Exception('User not found');
+                }
+
+                // Get shop info — pharmacist input wins, fall back to line_accounts + shop_settings
+                $shopInfo = ['name' => 'ร้านยา', 'address' => '', 'phone' => '', 'open_hours' => '08:00-24:00 น.', 'pharmacist' => $pharmacistName];
+                try {
+                    $stmt = $db->prepare("SELECT * FROM line_accounts WHERE id = ?");
+                    $stmt->execute([$user['line_account_id']]);
+                    $lineAccount = $stmt->fetch(PDO::FETCH_ASSOC);
+                    if ($lineAccount) {
+                        $shopInfo['name'] = $lineAccount['display_name'] ?? $lineAccount['channel_name'] ?? 'ร้านยา';
+                    }
+                    $stmt = $db->prepare("SELECT * FROM shop_settings WHERE line_account_id = ?");
+                    $stmt->execute([$user['line_account_id']]);
+                    $shopSettings = $stmt->fetch(PDO::FETCH_ASSOC);
+                    if ($shopSettings) {
+                        $shopInfo['address'] = $shopSettings['address'] ?? '';
+                        $shopInfo['phone'] = $shopSettings['phone'] ?? '';
+                    }
+                } catch (Exception $e) {}
+                if (!empty($shopNameInput)) {
+                    $shopInfo['name'] = $shopNameInput;
+                }
+
+                // Save dispense record
+                $stmt = $db->prepare("INSERT INTO dispensing_records (line_account_id, user_id, pharmacist_id, order_number, items, total_amount, payment_method, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$currentBotId, $userId, $pharmacistId, $orderNumber, $items, $totalAmount, $paymentMethod, $notes]);
+                $dispenseId = $db->lastInsertId();
+
+                // Pay-later / transfer → push to cart + create transaction (settle later)
+                if ($paymentMethod === 'later' || $paymentMethod === 'transfer') {
+                    try {
+                        $stmt = $db->prepare("DELETE FROM cart WHERE user_id = ? AND line_account_id = ?");
+                        $stmt->execute([$userId, $currentBotId]);
+                    } catch (Exception $e) {}
+
+                    foreach ($itemsArr as $item) {
+                        try {
+                            $stmt = $db->prepare("INSERT INTO cart (line_account_id, user_id, product_id, quantity, created_at) VALUES (?, ?, ?, ?, NOW())");
+                            $stmt->execute([$currentBotId, $userId, $item['product_id'] ?? null, $item['qty'] ?? 1]);
+                        } catch (Exception $e) {
+                            error_log("Dispense: failed to add to cart: " . $e->getMessage());
+                        }
+                    }
+
+                    $txnOrderNumber = 'TXN' . date('YmdHis') . rand(100, 999);
+                    try {
+                        $deliveryInfo = json_encode(['type' => 'pickup', 'dispense_id' => $dispenseId]);
+                        $stmt = $db->prepare("INSERT INTO transactions (line_account_id, user_id, order_number, transaction_type, status, payment_status, subtotal, grand_total, delivery_info, notes, created_at) VALUES (?, ?, ?, 'purchase', 'pending', 'pending', ?, ?, ?, ?, NOW())");
+                        $stmt->execute([$currentBotId, $userId, $txnOrderNumber, $totalAmount, $totalAmount, $deliveryInfo, 'จ่ายยา: ' . $orderNumber]);
+                        $transactionId = $db->lastInsertId();
+
+                        foreach ($itemsArr as $item) {
+                            $stmt = $db->prepare("INSERT INTO transaction_items (transaction_id, product_id, product_name, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?, ?)");
+                            $subtotal = ($item['price'] ?? 0) * ($item['qty'] ?? 1);
+                            $stmt->execute([$transactionId, $item['product_id'] ?? null, $item['name'] ?? '', $item['qty'] ?? 1, $item['price'] ?? 0, $subtotal]);
+                        }
+                    } catch (Exception $e) {
+                        error_log("Dispense: failed to create transaction: " . $e->getMessage());
+                    }
+                } else {
+                    // Cash payment — decrement stock immediately
+                    foreach ($itemsArr as $item) {
+                        if (!empty($item['product_id']) && !empty($item['qty'])) {
+                            $stmt = $db->prepare("UPDATE business_items SET stock = stock - ? WHERE id = ? AND stock >= ?");
+                            $stmt->execute([$item['qty'], $item['product_id'], $item['qty']]);
+                        }
+                    }
+                }
+
+                // Send LINE Flex Message (medicine label) to customer
+                if (!empty($user['line_user_id'])) {
+                    try {
+                        $lineManager = new LineAccountManager($db);
+                        $line = $lineManager->getLineAPI($user['line_account_id']);
+
+                        // Build checkout URL (LIFF if available)
+                        $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
+                        $checkoutUrl = $baseUrl . '/liff-checkout.php';
+                        try {
+                            $stmt = $db->prepare("SELECT liff_checkout FROM liff_apps WHERE line_account_id = ?");
+                            $stmt->execute([$user['line_account_id']]);
+                            $liffApp = $stmt->fetch(PDO::FETCH_ASSOC);
+                            if ($liffApp && !empty($liffApp['liff_checkout'])) {
+                                $checkoutUrl = 'https://liff.line.me/' . $liffApp['liff_checkout'];
+                            }
+                        } catch (Exception $e) {}
+
+                        // Hydrate item images from business_items
+                        foreach ($itemsArr as &$item) {
+                            if (!empty($item['product_id']) && empty($item['image'])) {
+                                try {
+                                    $stmt = $db->prepare("SELECT image_url FROM business_items WHERE id = ?");
+                                    $stmt->execute([$item['product_id']]);
+                                    $product = $stmt->fetch(PDO::FETCH_ASSOC);
+                                    if ($product && !empty($product['image_url'])) {
+                                        $item['image'] = $product['image_url'];
+                                    }
+                                } catch (Exception $e) {}
+                            }
+                        }
+                        unset($item);
+
+                        $needCheckout = ($paymentMethod === 'later' || $paymentMethod === 'transfer');
+                        if (count($itemsArr) > 1) {
+                            $flexContents = FlexTemplates::medicineLabelsCarousel($itemsArr, $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
+                        } else {
+                            $flexContents = FlexTemplates::medicineLabel($itemsArr[0], $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
+                        }
+                        $flexMessage = FlexTemplates::toMessage($flexContents, '💊 รายการจ่ายยา #' . $orderNumber);
+
+                        if (method_exists($line, 'sendMessage')) {
+                            $line->sendMessage($user['line_user_id'], [$flexMessage], $user['reply_token'] ?? null, $user['reply_token_expires'] ?? null, $db, $userId);
+                        } else {
+                            $line->pushMessage($user['line_user_id'], [$flexMessage]);
+                        }
+
+                        // Persist outgoing flex message in chat history
+                        $hasSentBy = false;
+                        try {
+                            $checkCol = $db->query("SHOW COLUMNS FROM messages LIKE 'sent_by'");
+                            $hasSentBy = $checkCol->rowCount() > 0;
+                        } catch (Exception $e) {}
+                        $msgContent = json_encode($flexMessage);
+                        if ($hasSentBy) {
+                            $stmt = $db->prepare("INSERT INTO messages (line_account_id, user_id, direction, message_type, content, sent_by, created_at, is_read) VALUES (?, ?, 'outgoing', 'flex', ?, 'system:dispense', NOW(), 1)");
+                            $stmt->execute([$user['line_account_id'], $userId, $msgContent]);
+                        } else {
+                            $stmt = $db->prepare("INSERT INTO messages (line_account_id, user_id, direction, message_type, content, created_at, is_read) VALUES (?, ?, 'outgoing', 'flex', ?, NOW(), 1)");
+                            $stmt->execute([$user['line_account_id'], $userId, $msgContent]);
+                        }
+                    } catch (Exception $e) {
+                        error_log("Dispense: failed to send LINE flex: " . $e->getMessage());
+                    }
+                }
+
+                if (isset($activityLogger)) {
+                    try {
+                        $activityLogger->logData(ActivityLogger::ACTION_CREATE, 'จ่ายยา #' . $orderNumber, [
+                            'user_id' => $userId,
+                            'entity_type' => 'dispense',
+                            'entity_id' => $dispenseId,
+                            'new_value' => ['order_number' => $orderNumber, 'total' => $totalAmount, 'items' => count($itemsArr)]
+                        ]);
+                    } catch (Exception $e) {}
+                }
+
+                echo json_encode(['success' => true, 'order_number' => $orderNumber, 'dispense_id' => $dispenseId]);
                 break;
 
             case 'send_image':
@@ -643,7 +847,8 @@ $hideAiChatWidget = true;
 require_once 'includes/header.php';
 
 // Progressive Loading Configuration
-$conversationLimit = 50; // Initial load limit (can be adjusted)
+// Bumped 2026-05-08: เดิม 50 ทำให้ดูลูกค้าเก่าๆ ไม่เห็น ต้องรอ JS auto-load
+$conversationLimit = 200; // Initial load limit (can be adjusted)
 $hasMoreConversations = false;
 $totalConversations = 0;
 
@@ -3480,6 +3685,15 @@ function formatThaiDateTime($datetime)
                                             </div>
                                         </div>
                                 <?php endif; ?>
+
+                                <!-- Dispense Action — ระบบจ่ายยา (ported from messages.php 2026-05-08) -->
+                                <div class="hud-widget" id="dispenseWidget" style="background: linear-gradient(135deg, #F3E8FF 0%, #E9D5FF 100%); border: 2px solid #C084FC;">
+                                    <div class="hud-widget-body" style="padding: 10px;">
+                                        <button onclick="openDispenseModal()" class="w-full bg-purple-500 hover:bg-purple-600 text-white text-xs py-2.5 rounded-lg font-medium">
+                                            <i class="fas fa-prescription-bottle-alt mr-1"></i>จ่ายยา
+                                        </button>
+                                    </div>
+                                </div>
 
                                 <!-- Drug Info Widget - Requirements: 4.2 -->
                                 <div class="hud-widget drug-info-widget" id="drugInfoWidget">
@@ -6723,7 +6937,7 @@ function formatThaiDateTime($datetime)
                     const status = document.getElementById('filterStatus')?.value || '';
 
                     // Build URL with search and filters
-                    let url = `/api/inbox-v2.php?action=getConversations&limit=50&search=${encodeURIComponent(query)}`;
+                    let url = `/api/inbox-v2.php?action=getConversations&limit=200&search=${encodeURIComponent(query)}`;
                     if (chatStatus) url += `&chatStatus=${encodeURIComponent(chatStatus)}`;
                     if (tagId) url += `&tagId=${encodeURIComponent(tagId)}`;
                     if (assigneeId) url += `&assigneeId=${encodeURIComponent(assigneeId)}`;
@@ -10366,7 +10580,7 @@ function formatThaiDateTime($datetime)
                 console.log(`[Progressive Load] Loading batch ${batchCount}...`);
 
                 try {
-                    const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=50`);
+                    const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200`);
                     const data = await response.json();
 
                     console.log('[Progressive Load] API response:', data.success, 'has_more:', data.data?.has_more, 'count:', data.data?.conversations?.length);
@@ -10453,7 +10667,7 @@ function formatThaiDateTime($datetime)
             this.showLoadingSpinner();
 
             try {
-                const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=50`);
+                const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200`);
                 const data = await response.json();
 
                 if (data.success && data.data && data.data.conversations) {
@@ -11079,6 +11293,499 @@ function formatThaiDateTime($datetime)
 <script src="assets/js/performance-tracker.js?v=<?= time() ?>"></script>
 
 </script>
+
+<?php if ($selectedUser): ?>
+<!-- ============================================================
+     Dispense Modals — ระบบจ่ายยา (ported from messages.php 2026-05-08)
+     ============================================================ -->
+<div id="dispenseModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-2">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[95vh] flex flex-col">
+        <div class="p-3 border-b flex justify-between items-center bg-purple-50 flex-shrink-0">
+            <h3 class="font-bold text-sm text-purple-700"><i class="fas fa-prescription-bottle-alt mr-1"></i>จ่ายยา - <?= htmlspecialchars($selectedUser['display_name'] ?? '') ?></h3>
+            <button onclick="closeDispenseModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+
+        <?php if (!empty($selectedUser['drug_allergies'])): ?>
+        <div class="bg-red-100 border-b border-red-200 px-4 py-2 text-xs text-red-700">
+            <i class="fas fa-exclamation-triangle mr-1"></i><strong>⚠️ แพ้ยา:</strong> <?= htmlspecialchars($selectedUser['drug_allergies']) ?>
+        </div>
+        <?php endif; ?>
+
+        <div class="flex-1 overflow-y-auto p-4">
+            <div class="grid grid-cols-2 gap-3 mb-3 p-3 bg-green-50 rounded-lg">
+                <div>
+                    <label class="block text-xs font-medium text-green-700 mb-1"><i class="fas fa-store mr-1"></i>ชื่อร้าน</label>
+                    <input type="text" id="dispenseShopName" class="w-full border border-green-200 rounded-lg px-2 py-1.5 text-sm focus:ring-1 focus:ring-green-500 outline-none" placeholder="ชื่อร้านยา..." value="<?= htmlspecialchars($_SESSION['shop_name'] ?? 'ร้านยา') ?>">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-green-700 mb-1"><i class="fas fa-user-md mr-1"></i>ผู้จ่ายยา</label>
+                    <input type="text" id="dispensePharmacist" class="w-full border border-green-200 rounded-lg px-2 py-1.5 text-sm focus:ring-1 focus:ring-green-500 outline-none" placeholder="ชื่อเภสัชกร..." value="<?= htmlspecialchars($_SESSION['admin_name'] ?? $_SESSION['username'] ?? ($_SESSION['admin_user']['display_name'] ?? '')) ?>">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <input type="text" id="dispenseProductSearch" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-purple-500 outline-none" placeholder="🔍 ค้นหายา (ชื่อ, SKU, บาร์โค้ด)..." oninput="dispenseSearchProducts(this.value)">
+                <div id="dispenseProductResults" class="mt-1 border rounded-lg max-h-32 overflow-y-auto hidden"></div>
+            </div>
+
+            <div class="border rounded-lg overflow-hidden mb-3">
+                <div class="bg-gray-50 px-3 py-2 text-xs font-medium text-gray-600 border-b flex justify-between">
+                    <span>รายการยา</span>
+                    <span id="dispenseItemCount">0 รายการ</span>
+                </div>
+                <div id="dispenseItemsList" class="divide-y max-h-[50vh] overflow-y-auto">
+                    <div class="p-4 text-center text-gray-400 text-xs">
+                        <i class="fas fa-pills text-2xl mb-2"></i><br>
+                        ยังไม่มีรายการ - ค้นหาและเลือกยาด้านบน
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 mb-3">
+                <div class="flex-1">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">ชำระเงิน</label>
+                    <select id="dispensePaymentMethod" class="w-full border rounded-lg px-2 py-2 text-sm">
+                        <option value="cash">💵 เงินสด</option>
+                        <option value="transfer">📱 โอนเงิน</option>
+                        <option value="credit">💳 บัตรเครดิต</option>
+                        <option value="later">⏰ จ่ายทีหลัง</option>
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">ยอดรวม</label>
+                    <div class="text-2xl font-bold text-purple-600" id="dispenseTotal">฿0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-3 border-t bg-gray-50 flex-shrink-0">
+            <button type="button" onclick="dispenseSubmit()" class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-lg font-medium text-sm">
+                <i class="fas fa-check mr-1"></i>ยืนยันจ่ายยา
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="medicineDetailModal" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-2">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="p-3 border-b bg-green-50 flex justify-between items-center flex-shrink-0">
+            <h3 class="font-bold text-sm text-green-700"><i class="fas fa-pills mr-1"></i>รายละเอียดสินค้า</h3>
+            <button onclick="closeMedicineDetail()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div class="p-4 overflow-y-auto flex-1">
+            <input type="hidden" id="medEditingItemIndex">
+
+            <div class="mb-3 p-3 bg-green-50 rounded-lg">
+                <p class="text-xs text-gray-500">ชื่อสินค้า</p>
+                <p class="font-bold text-green-700" id="medDetailName">-</p>
+            </div>
+
+            <div class="mb-3 p-3 bg-blue-50 rounded-lg">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="medIsMedicine" checked onchange="medToggleMedicineFields()" class="w-5 h-5 text-blue-500 rounded">
+                    <span class="text-sm font-medium text-blue-700">💊 เป็นยา (แสดงรายละเอียดการใช้ยา)</span>
+                </label>
+            </div>
+
+            <div id="medMedicineFields">
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-1">ข้อบ่งใช้ (Indication)</label>
+                    <input type="text" id="medIndication" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="เช่น แก้ปวด, ลดไข้, แก้อักเสบ">
+                </div>
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">รับประทานครั้งละ</label>
+                        <input type="number" id="medDosage" class="w-full border rounded-lg px-3 py-2 text-sm text-center" value="1" min="0.5" step="0.5">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">หน่วย</label>
+                        <select id="medDosageUnit" class="w-full border rounded-lg px-2 py-2 text-sm">
+                            <option value="เม็ด">เม็ด</option>
+                            <option value="แคปซูล">แคปซูล</option>
+                            <option value="ช้อนชา">ช้อนชา</option>
+                            <option value="ช้อนโต๊ะ">ช้อนโต๊ะ</option>
+                            <option value="มล.">มล.</option>
+                            <option value="ซอง">ซอง</option>
+                            <option value="หยด">หยด</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">วันละ</label>
+                        <select id="medFrequency" class="w-full border rounded-lg px-2 py-2 text-sm">
+                            <option value="1">1 ครั้ง</option>
+                            <option value="2">2 ครั้ง</option>
+                            <option value="3" selected>3 ครั้ง</option>
+                            <option value="4">4 ครั้ง</option>
+                            <option value="prn">เมื่อมีอาการ</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-2">เวลารับประทาน</label>
+                    <div class="flex gap-2">
+                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="medMealTiming" value="before" class="text-green-500"><span class="text-xs">ก่อนอาหาร</span>
+                        </label>
+                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="medMealTiming" value="after" checked class="text-green-500"><span class="text-xs">หลังอาหาร</span>
+                        </label>
+                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="medMealTiming" value="with" class="text-green-500"><span class="text-xs">พร้อมอาหาร</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-2">มื้อที่รับประทาน</label>
+                    <div class="grid grid-cols-4 gap-2">
+                        <label class="flex flex-col items-center p-2 border rounded-lg cursor-pointer hover:bg-yellow-50 has-[:checked]:bg-yellow-100 has-[:checked]:border-yellow-400">
+                            <span class="text-xl">🌅</span><input type="checkbox" name="medTimeOfDay" value="morning" checked class="mt-1"><span class="text-xs">เช้า</span>
+                        </label>
+                        <label class="flex flex-col items-center p-2 border rounded-lg cursor-pointer hover:bg-orange-50 has-[:checked]:bg-orange-100 has-[:checked]:border-orange-400">
+                            <span class="text-xl">☀️</span><input type="checkbox" name="medTimeOfDay" value="noon" checked class="mt-1"><span class="text-xs">กลางวัน</span>
+                        </label>
+                        <label class="flex flex-col items-center p-2 border rounded-lg cursor-pointer hover:bg-blue-50 has-[:checked]:bg-blue-100 has-[:checked]:border-blue-400">
+                            <span class="text-xl">🌆</span><input type="checkbox" name="medTimeOfDay" value="evening" checked class="mt-1"><span class="text-xs">เย็น</span>
+                        </label>
+                        <label class="flex flex-col items-center p-2 border rounded-lg cursor-pointer hover:bg-purple-50 has-[:checked]:bg-purple-100 has-[:checked]:border-purple-400">
+                            <span class="text-xl">🌙</span><input type="checkbox" name="medTimeOfDay" value="bedtime" class="mt-1"><span class="text-xs">ก่อนนอน</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-2">ประเภทการใช้</label>
+                    <div class="flex gap-2">
+                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="medUsageType" value="internal" checked class="text-green-500"><span class="text-xs">💊 ยาใช้ภายใน</span>
+                        </label>
+                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                            <input type="radio" name="medUsageType" value="external" class="text-green-500"><span class="text-xs">🧴 ยาใช้ภายนอก</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3" id="medSpecialInstSection">
+                <label class="block text-xs font-medium text-gray-600 mb-2">คำแนะนำพิเศษ</label>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="before_meal_30"><span>ก่อนอาหาร 30 นาที</span></label>
+                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="after_meal_immediately"><span>หลังอาหารทันที</span></label>
+                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="take_until_finish"><span>ทานยาติดต่อกันจนหมด</span></label>
+                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="drink_water"><span>ดื่มน้ำตามมากๆ</span></label>
+                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="drowsiness"><span>⚠️ ยานี้อาจทำให้ง่วงซึม</span></label>
+                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="no_alcohol"><span>⚠️ ห้ามดื่มแอลกอฮอล์</span></label>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-600 mb-1">จำนวนที่จ่าย</label>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="medAdjustQty(-1)" class="w-10 h-10 bg-gray-100 rounded-lg hover:bg-gray-200 text-lg">-</button>
+                    <input type="number" id="medQuantity" class="w-20 border rounded-lg px-3 py-2 text-center text-lg font-bold" value="1" min="1">
+                    <button type="button" onclick="medAdjustQty(1)" class="w-10 h-10 bg-gray-100 rounded-lg hover:bg-gray-200 text-lg">+</button>
+                    <span class="text-sm text-gray-500" id="medUnitLabel">ชิ้น</span>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-600 mb-1" id="medNotesLabel">คำแนะนำการใช้</label>
+                <textarea id="medNotes" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="คำแนะนำการใช้งาน..."></textarea>
+            </div>
+        </div>
+
+        <div class="p-3 border-t bg-gray-50 flex gap-2">
+            <button onclick="closeMedicineDetail()" class="flex-1 py-2 border rounded-lg hover:bg-gray-100 text-sm">ยกเลิก</button>
+            <button onclick="medSaveDetail()" class="flex-1 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm font-medium">
+                <i class="fas fa-check mr-1"></i>บันทึก
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===== Dispense System (ported from messages.php 2026-05-08) =====
+(function() {
+    const dispenseUserId = <?= (int) $selectedUser['id'] ?>;
+    let dispenseItems = [];
+    let dispenseSearchTimeout = null;
+
+    function escHtml(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    window.openDispenseModal = function () {
+        document.getElementById('dispenseModal').classList.remove('hidden');
+        dispenseItems = [];
+        renderDispenseUI();
+    };
+    window.closeDispenseModal = function () {
+        document.getElementById('dispenseModal').classList.add('hidden');
+    };
+
+    window.dispenseSearchProducts = function (query) {
+        clearTimeout(dispenseSearchTimeout);
+        const resultsDiv = document.getElementById('dispenseProductResults');
+        if (!query || query.length < 1) { resultsDiv.classList.add('hidden'); return; }
+
+        dispenseSearchTimeout = setTimeout(async () => {
+            try {
+                resultsDiv.innerHTML = '<div class="p-2 text-gray-400 text-xs text-center"><i class="fas fa-spinner fa-spin mr-1"></i>กำลังค้นหา...</div>';
+                resultsDiv.classList.remove('hidden');
+
+                let products = [];
+                try {
+                    const res = await fetch(`api/ajax_handler.php?action=search_products&q=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    if (data.success && data.products) products = data.products;
+                } catch (e) {}
+
+                try {
+                    const res2 = await fetch(`api/cny_sync.php?action=find_local&sku=${encodeURIComponent(query)}`);
+                    const data2 = await res2.json();
+                    if (data2.found && data2.product && !products.find(p => p.id === data2.product.id)) {
+                        products.unshift(data2.product);
+                    }
+                } catch (e) {}
+
+                if (products.length > 0) {
+                    resultsDiv.innerHTML = products.slice(0, 8).map(p => `
+                        <div class="p-2 hover:bg-purple-50 cursor-pointer text-xs border-b last:border-0"
+                             onclick="dispenseAddItem(${p.id}, ${JSON.stringify(p.name || '')}, ${Number(p.price || 0)}, ${JSON.stringify(p.unit || 'ชิ้น')})">
+                            <div class="font-medium text-gray-800">${escHtml(p.name)}</div>
+                            <div class="text-gray-500 flex gap-2">
+                                ${p.sku ? `<span>${escHtml(p.sku)}</span>` : ''}
+                                <span class="text-green-600 font-medium">฿${Number(p.price || 0).toLocaleString()}</span>
+                                <span>คงเหลือ: ${p.stock ?? '-'}</span>
+                            </div>
+                        </div>`).join('');
+                } else {
+                    resultsDiv.innerHTML = '<div class="p-3 text-gray-400 text-xs text-center"><i class="fas fa-search mr-1"></i>ไม่พบสินค้า "' + escHtml(query) + '"</div>';
+                }
+            } catch (err) {
+                console.error(err);
+                resultsDiv.innerHTML = '<div class="p-2 text-red-400 text-xs text-center">เกิดข้อผิดพลาด</div>';
+            }
+        }, 200);
+    };
+
+    window.dispenseAddItem = function (productId, name, price, unit) {
+        const existing = dispenseItems.find(i => i.product_id === productId);
+        if (existing) {
+            openMedicineDetail(dispenseItems.indexOf(existing));
+        } else {
+            dispenseItems.push({
+                product_id: productId, name, price, unit: unit || 'ชิ้น', qty: 1,
+                isMedicine: true, indication: '', dosage: 1, dosageUnit: 'เม็ด',
+                frequency: '3', mealTiming: 'after',
+                timeOfDay: ['morning', 'noon', 'evening'],
+                usageType: 'internal', specialInstructions: [], notes: ''
+            });
+            openMedicineDetail(dispenseItems.length - 1);
+        }
+        document.getElementById('dispenseProductSearch').value = '';
+        document.getElementById('dispenseProductResults').classList.add('hidden');
+    };
+
+    window.medToggleMedicineFields = function () {
+        const isMed = document.getElementById('medIsMedicine').checked;
+        document.getElementById('medMedicineFields').style.display = isMed ? 'block' : 'none';
+        document.getElementById('medSpecialInstSection').style.display = isMed ? 'block' : 'none';
+        document.getElementById('medNotesLabel').textContent = isMed ? 'หมายเหตุเพิ่มเติม' : 'คำแนะนำการใช้';
+        document.getElementById('medNotes').placeholder = isMed ? 'คำแนะนำอื่นๆ...' : 'คำแนะนำการใช้งาน...';
+    };
+
+    function openMedicineDetail(index) {
+        const item = dispenseItems[index];
+        document.getElementById('medEditingItemIndex').value = index;
+        document.getElementById('medDetailName').textContent = item.name;
+        document.getElementById('medIndication').value = item.indication || '';
+        document.getElementById('medDosage').value = item.dosage || 1;
+        document.getElementById('medDosageUnit').value = item.dosageUnit || 'เม็ด';
+        document.getElementById('medFrequency').value = item.frequency || '3';
+        document.getElementById('medQuantity').value = item.qty || 1;
+        document.getElementById('medUnitLabel').textContent = item.unit || 'ชิ้น';
+        document.getElementById('medNotes').value = item.notes || '';
+        document.getElementById('medIsMedicine').checked = item.isMedicine !== false;
+        window.medToggleMedicineFields();
+
+        document.querySelectorAll('input[name="medMealTiming"]').forEach(r => r.checked = r.value === (item.mealTiming || 'after'));
+        document.querySelectorAll('input[name="medTimeOfDay"]').forEach(cb => cb.checked = (item.timeOfDay || ['morning','noon','evening']).includes(cb.value));
+        document.querySelectorAll('input[name="medUsageType"]').forEach(r => r.checked = r.value === (item.usageType || 'internal'));
+        document.querySelectorAll('input[name="medSpecialInst"]').forEach(cb => cb.checked = (item.specialInstructions || []).includes(cb.value));
+
+        document.getElementById('medicineDetailModal').classList.remove('hidden');
+    }
+    window.openMedicineDetail = openMedicineDetail;
+
+    window.closeMedicineDetail = function () {
+        document.getElementById('medicineDetailModal').classList.add('hidden');
+    };
+
+    window.medAdjustQty = function (delta) {
+        const input = document.getElementById('medQuantity');
+        let val = parseInt(input.value) || 1;
+        input.value = Math.max(1, val + delta);
+    };
+
+    window.medSaveDetail = function () {
+        const index = parseInt(document.getElementById('medEditingItemIndex').value);
+        const item = dispenseItems[index];
+        if (!item) return;
+        item.isMedicine = document.getElementById('medIsMedicine').checked;
+        item.qty = parseInt(document.getElementById('medQuantity').value) || 1;
+        item.notes = document.getElementById('medNotes').value;
+
+        if (item.isMedicine) {
+            item.indication = document.getElementById('medIndication').value;
+            item.dosage = parseFloat(document.getElementById('medDosage').value) || 1;
+            item.dosageUnit = document.getElementById('medDosageUnit').value;
+            item.frequency = document.getElementById('medFrequency').value;
+            item.mealTiming = document.querySelector('input[name="medMealTiming"]:checked')?.value || 'after';
+            item.timeOfDay = Array.from(document.querySelectorAll('input[name="medTimeOfDay"]:checked')).map(cb => cb.value);
+            item.usageType = document.querySelector('input[name="medUsageType"]:checked')?.value || 'internal';
+            item.specialInstructions = Array.from(document.querySelectorAll('input[name="medSpecialInst"]:checked')).map(cb => cb.value);
+        } else {
+            item.indication = ''; item.dosage = null; item.dosageUnit = null;
+            item.frequency = null; item.mealTiming = null; item.timeOfDay = [];
+            item.usageType = null; item.specialInstructions = [];
+        }
+        window.closeMedicineDetail();
+        renderDispenseUI();
+    };
+
+    window.dispenseRemoveItem = function (index) {
+        dispenseItems.splice(index, 1);
+        renderDispenseUI();
+    };
+
+    function timeIcons(t) { const m={morning:'🌅',noon:'☀️',evening:'🌆',bedtime:'🌙'}; return (t||[]).map(x=>m[x]||'').join(' '); }
+    function mealText(m) { return ({before:'ก่อนอาหาร',after:'หลังอาหาร',with:'พร้อมอาหาร'})[m] || m; }
+    function freqText(f) { return f === 'prn' ? 'เมื่อมีอาการ' : (f + ' ครั้ง/วัน'); }
+
+    function renderDispenseUI() {
+        const container = document.getElementById('dispenseItemsList');
+        if (dispenseItems.length === 0) {
+            container.innerHTML = `<div class="p-4 text-center text-gray-400 text-xs"><i class="fas fa-pills text-2xl mb-2"></i><br>ยังไม่มีรายการ - ค้นหาและเลือกสินค้าด้านบน</div>`;
+        } else {
+            container.innerHTML = dispenseItems.map((item, i) => {
+                const isMed = item.isMedicine !== false;
+                if (isMed) {
+                    return `<div class="p-3 hover:bg-gray-50 border-b">
+                        <div class="flex items-start gap-2">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium text-sm text-gray-800">${escHtml(item.name)}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded ${item.usageType === 'external' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
+                                        ${item.usageType === 'external' ? '🧴 ภายนอก' : '💊 ภายใน'}
+                                    </span>
+                                </div>
+                                ${item.indication ? `<div class="text-xs text-gray-500 mt-1">ข้อบ่งใช้: ${escHtml(item.indication)}</div>` : ''}
+                                <div class="flex flex-wrap gap-2 mt-2 text-xs">
+                                    <span class="px-2 py-1 bg-purple-50 text-purple-700 rounded">${item.dosage} ${escHtml(item.dosageUnit)} × ${freqText(item.frequency)}</span>
+                                    <span class="px-2 py-1 bg-yellow-50 text-yellow-700 rounded">${mealText(item.mealTiming)}</span>
+                                    <span class="px-2 py-1 bg-blue-50 text-blue-700 rounded">${timeIcons(item.timeOfDay)}</span>
+                                </div>
+                                ${item.specialInstructions && item.specialInstructions.length > 0 ? `
+                                <div class="mt-2 text-xs text-orange-600">
+                                    ${item.specialInstructions.includes('drowsiness') ? '⚠️ อาจทำให้ง่วงซึม ' : ''}
+                                    ${item.specialInstructions.includes('take_until_finish') ? '📌 ทานจนหมด ' : ''}
+                                    ${item.specialInstructions.includes('drink_water') ? '💧 ดื่มน้ำมากๆ ' : ''}
+                                </div>` : ''}
+                                ${item.notes ? `<div class="mt-1 text-xs text-gray-500 italic">📝 ${escHtml(item.notes)}</div>` : ''}
+                            </div>
+                            <div class="text-right flex-shrink-0">
+                                <div class="text-sm font-bold text-purple-600">฿${(item.price * item.qty).toLocaleString()}</div>
+                                <div class="text-xs text-gray-500">${item.qty} ${escHtml(item.unit)}</div>
+                                <div class="flex gap-1 mt-2">
+                                    <button onclick="openMedicineDetail(${i})" class="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200"><i class="fas fa-edit"></i></button>
+                                    <button onclick="dispenseRemoveItem(${i})" class="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+                return `<div class="p-3 hover:bg-gray-50 border-b">
+                    <div class="flex items-start gap-2">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium text-sm text-gray-800">${escHtml(item.name)}</span>
+                                <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">📦 สินค้าทั่วไป</span>
+                            </div>
+                            ${item.notes ? `<div class="mt-2 text-xs text-gray-600">📝 คำแนะนำ: ${escHtml(item.notes)}</div>` : ''}
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-sm font-bold text-purple-600">฿${(item.price * item.qty).toLocaleString()}</div>
+                            <div class="text-xs text-gray-500">${item.qty} ${escHtml(item.unit)}</div>
+                            <div class="flex gap-1 mt-2">
+                                <button onclick="openMedicineDetail(${i})" class="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200"><i class="fas fa-edit"></i></button>
+                                <button onclick="dispenseRemoveItem(${i})" class="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+        document.getElementById('dispenseItemCount').textContent = dispenseItems.length + ' รายการ';
+        const total = dispenseItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        document.getElementById('dispenseTotal').textContent = '฿' + total.toLocaleString();
+    }
+
+    window.dispenseSubmit = async function () {
+        if (dispenseItems.length === 0) { alert('กรุณาเลือกรายการสินค้า'); return; }
+
+        const missingIndication = dispenseItems.filter(i => i.isMedicine !== false && !i.indication);
+        if (missingIndication.length > 0 &&
+            !confirm(`มี ${missingIndication.length} รายการยาที่ยังไม่ได้ระบุข้อบ่งใช้ ต้องการดำเนินการต่อหรือไม่?`)) return;
+
+        if (!confirm('ยืนยันการจ่ายสินค้า?')) return;
+
+        const total = dispenseItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        try {
+            const formData = new FormData();
+            formData.append('action', 'dispense');
+            formData.append('user_id', dispenseUserId);
+            formData.append('items', JSON.stringify(dispenseItems));
+            formData.append('total_amount', total);
+            formData.append('payment_method', document.getElementById('dispensePaymentMethod')?.value || 'cash');
+            formData.append('shop_name', document.getElementById('dispenseShopName')?.value || 'ร้านยา');
+            formData.append('pharmacist_name', document.getElementById('dispensePharmacist')?.value || '');
+
+            const res = await fetch(window.location.pathname, {
+                method: 'POST', body: formData,
+                headers: {'X-Requested-With': 'XMLHttpRequest'}
+            });
+            const text = await res.text();
+            let data;
+            try { data = JSON.parse(text); }
+            catch (e) { console.error('JSON parse error:', e, text); alert('เกิดข้อผิดพลาด: ไม่สามารถอ่านข้อมูลจากเซิร์ฟเวอร์'); return; }
+
+            if (data.success) {
+                alert('จ่ายยาสำเร็จ! เลขที่: ' + data.order_number);
+                window.closeDispenseModal();
+                dispenseItems = [];
+                renderDispenseUI();
+            } else {
+                alert('เกิดข้อผิดพลาด: ' + (data.error || 'Unknown'));
+            }
+        } catch (err) {
+            console.error('Dispense fetch error:', err);
+            alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        }
+    };
+
+    document.getElementById('dispenseModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'dispenseModal') window.closeDispenseModal();
+    });
+    document.getElementById('medicineDetailModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'medicineDetailModal') window.closeMedicineDetail();
+    });
+})();
+</script>
+<?php endif; ?>
+
 <?php endif; ?>
 
 <?php if ($currentTab === 'analytics'): ?>
