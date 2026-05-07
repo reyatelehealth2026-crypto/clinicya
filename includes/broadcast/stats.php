@@ -40,32 +40,98 @@ if ($campaignId) {
     }
 }
 
-// Get all campaigns for selection
+// Get all campaigns for selection.
+// Phase A bridge: until `broadcasts` is fully migrated into `broadcast_campaigns`,
+// surface BOTH tables in the picker so quick-send broadcasts also appear in Stats.
+// `kind` discriminator drives the deep-link target (carousel detail vs quick history).
 $allCampaigns = [];
 try {
-    $stmt = $db->prepare("SELECT id, name, status, created_at FROM broadcast_campaigns WHERE (line_account_id = ? OR line_account_id IS NULL) ORDER BY created_at DESC LIMIT 50");
-    $stmt->execute([$currentBotId]);
+    $sql = "
+        SELECT id, name, status, created_at, sent_count, 'campaign' AS kind
+          FROM broadcast_campaigns
+         WHERE line_account_id = ? OR line_account_id IS NULL
+        UNION ALL
+        SELECT id, title AS name, status,
+               COALESCE(sent_at, created_at) AS created_at,
+               sent_count,
+               'quick' AS kind
+          FROM broadcasts
+         WHERE line_account_id = ? OR line_account_id IS NULL
+        ORDER BY created_at DESC
+         LIMIT 50";
+    $stmt = $db->prepare($sql);
+    $stmt->execute([$currentBotId, $currentBotId]);
     $allCampaigns = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {}
+} catch (Exception $e) {
+    // Fallback when `broadcasts` table doesn't exist on a fresh install.
+    try {
+        $stmt = $db->prepare("SELECT id, name, status, created_at, sent_count, 'campaign' AS kind
+                              FROM broadcast_campaigns
+                              WHERE line_account_id = ? OR line_account_id IS NULL
+                              ORDER BY created_at DESC LIMIT 50");
+        $stmt->execute([$currentBotId]);
+        $allCampaigns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e2) {}
+}
 
-// Get overall stats
+// Get overall stats (combines both broadcast_campaigns and broadcasts)
 $overallStats = [
     'total_campaigns' => 0,
     'sent_campaigns' => 0,
-    'total_clicks' => 0
+    'total_clicks' => 0,
+    'total_sent_users' => 0,
 ];
 
 try {
     $stmt = $db->prepare("SELECT COUNT(*) FROM broadcast_campaigns WHERE line_account_id = ? OR line_account_id IS NULL");
     $stmt->execute([$currentBotId]);
-    $overallStats['total_campaigns'] = $stmt->fetchColumn() ?: 0;
-    
+    $totalCampaigns = (int)($stmt->fetchColumn() ?: 0);
+
     $stmt = $db->prepare("SELECT COUNT(*) FROM broadcast_campaigns WHERE (line_account_id = ? OR line_account_id IS NULL) AND status = 'sent'");
     $stmt->execute([$currentBotId]);
-    $overallStats['sent_campaigns'] = $stmt->fetchColumn() ?: 0;
+    $sentCampaigns = (int)($stmt->fetchColumn() ?: 0);
+
+    // Add legacy `broadcasts` rows so totals reflect quick-send broadcasts too.
+    try {
+        $stmt = $db->prepare("SELECT COUNT(*) FROM broadcasts WHERE line_account_id = ? OR line_account_id IS NULL");
+        $stmt->execute([$currentBotId]);
+        $totalCampaigns += (int)($stmt->fetchColumn() ?: 0);
+
+        $stmt = $db->prepare("SELECT COUNT(*) FROM broadcasts WHERE (line_account_id = ? OR line_account_id IS NULL) AND status = 'sent'");
+        $stmt->execute([$currentBotId]);
+        $sentCampaigns += (int)($stmt->fetchColumn() ?: 0);
+
+        // Total recipients delivered across both tables (best-effort).
+        $stmt = $db->prepare("
+            SELECT
+              COALESCE((SELECT SUM(sent_count) FROM broadcast_campaigns
+                        WHERE (line_account_id = ? OR line_account_id IS NULL) AND status='sent'), 0)
+            + COALESCE((SELECT SUM(sent_count) FROM broadcasts
+                        WHERE (line_account_id = ? OR line_account_id IS NULL) AND status='sent'), 0)
+              AS total_sent_users");
+        $stmt->execute([$currentBotId, $currentBotId]);
+        $overallStats['total_sent_users'] = (int)($stmt->fetchColumn() ?: 0);
+    } catch (Exception $e) {
+        // `broadcasts` table absent — keep campaign-only totals.
+    }
+
+    $overallStats['total_campaigns'] = $totalCampaigns;
+    $overallStats['sent_campaigns']  = $sentCampaigns;
     
-    $stmt = $db->query("SELECT COUNT(*) FROM broadcast_clicks");
-    $overallStats['total_clicks'] = $stmt->fetchColumn() ?: 0;
+    // Tenant-scoped click count. Prefer broadcast_clicks.line_account_id when
+    // backfilled (Phase A migration); fall back to JOIN on broadcast_campaigns
+    // for installations that haven't run the migration yet.
+    try {
+        $stmt = $db->prepare("SELECT COUNT(*) FROM broadcast_clicks WHERE line_account_id = ?");
+        $stmt->execute([$currentBotId]);
+        $overallStats['total_clicks'] = $stmt->fetchColumn() ?: 0;
+    } catch (Exception $e) {
+        $stmt = $db->prepare("SELECT COUNT(*) FROM broadcast_clicks bc
+                              JOIN broadcast_campaigns bcm ON bcm.id = bc.broadcast_id
+                              WHERE bcm.line_account_id = ? OR bcm.line_account_id IS NULL");
+        $stmt->execute([$currentBotId]);
+        $overallStats['total_clicks'] = $stmt->fetchColumn() ?: 0;
+    }
 } catch (Exception $e) {}
 ?>
 
@@ -75,14 +141,18 @@ try {
     <h3 class="font-semibold mb-4"><i class="fas fa-chart-bar text-blue-500 mr-2"></i>เลือก Campaign เพื่อดูสถิติ</h3>
     
     <!-- Overall Stats -->
-    <div class="grid grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="bg-blue-50 rounded-lg p-4 text-center">
             <p class="text-3xl font-bold text-blue-600"><?= number_format($overallStats['total_campaigns']) ?></p>
-            <p class="text-gray-500 text-sm">Campaigns ทั้งหมด</p>
+            <p class="text-gray-500 text-sm">Broadcasts ทั้งหมด</p>
         </div>
         <div class="bg-green-50 rounded-lg p-4 text-center">
             <p class="text-3xl font-bold text-green-600"><?= number_format($overallStats['sent_campaigns']) ?></p>
             <p class="text-gray-500 text-sm">ส่งแล้ว</p>
+        </div>
+        <div class="bg-amber-50 rounded-lg p-4 text-center">
+            <p class="text-3xl font-bold text-amber-600"><?= number_format($overallStats['total_sent_users']) ?></p>
+            <p class="text-gray-500 text-sm">ผู้รับสะสม</p>
         </div>
         <div class="bg-purple-50 rounded-lg p-4 text-center">
             <p class="text-3xl font-bold text-purple-600"><?= number_format($overallStats['total_clicks']) ?></p>
@@ -98,15 +168,30 @@ try {
     </div>
     <?php else: ?>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <?php foreach ($allCampaigns as $c): ?>
-        <a href="broadcast.php?tab=stats&id=<?= $c['id'] ?>" class="block p-4 border rounded-lg hover:bg-gray-50 transition">
+        <?php foreach ($allCampaigns as $c):
+            $kind = $c['kind'] ?? 'campaign';
+            // 'quick' rows live in `broadcasts` and have no per-item click tracking yet,
+            // so route them to the Send tab history instead of the carousel detail view.
+            $href = $kind === 'quick'
+                ? 'broadcast.php?tab=send'
+                : 'broadcast.php?tab=stats&id=' . (int)$c['id'];
+            $kindLabel = $kind === 'quick' ? 'Quick Send' : 'Catalog/Carousel';
+            $kindCls   = $kind === 'quick' ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700';
+        ?>
+        <a href="<?= $href ?>" class="block p-4 border rounded-lg hover:bg-gray-50 transition">
             <div class="flex items-center justify-between mb-2">
                 <h4 class="font-medium truncate"><?= htmlspecialchars($c['name']) ?></h4>
                 <span class="px-2 py-1 text-xs rounded-full <?= $c['status'] === 'sent' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700' ?>">
                     <?= $c['status'] === 'sent' ? 'ส่งแล้ว' : 'รอส่ง' ?>
                 </span>
             </div>
-            <p class="text-xs text-gray-500"><?= date('d/m/Y H:i', strtotime($c['created_at'])) ?></p>
+            <div class="flex items-center justify-between text-xs text-gray-500">
+                <span><?= date('d/m/Y H:i', strtotime($c['created_at'])) ?></span>
+                <span class="px-2 py-0.5 rounded <?= $kindCls ?>"><?= $kindLabel ?></span>
+            </div>
+            <?php if (!empty($c['sent_count'])): ?>
+                <p class="text-xs text-gray-400 mt-1"><i class="fas fa-users mr-1"></i><?= number_format((int)$c['sent_count']) ?> คน</p>
+            <?php endif; ?>
         </a>
         <?php endforeach; ?>
     </div>

@@ -1,0 +1,849 @@
+
+
+# Comprehensive Clinical Practice Guidelines Collection for Thailand: RAG-Ready Multidisciplinary Dataset
+
+## 1. Executive Summary & Strategic Framework
+
+### 1.1 Primary Objective
+
+#### 1.1.1 Build comprehensive RAG dataset from Thailand-optimized CPG sources
+
+The fundamental purpose of this initiative is to construct a **comprehensive, Thailand-optimized Retrieval-Augmented Generation (RAG) dataset** derived from authoritative Clinical Practice Guidelines (CPG) sources. This endeavor addresses the critical need for evidence-based, structured medical knowledge systems that can power next-generation clinical decision support tools specifically tailored to the Thai healthcare context. Unlike generic international guideline compilations, this project prioritizes **local adaptation**—accounting for Thailand's distinctive disease epidemiology (including tropical infectious diseases with persistent burden alongside rising non-communicable diseases), medication availability within the National List of Essential Medicines and universal health coverage schemes, healthcare infrastructure variations between Bangkok-centric tertiary centers and rural primary care facilities, and cultural considerations affecting patient-provider communication and treatment adherence.
+
+The dataset construction follows a **three-phase methodology**: systematic discovery and retrieval from multiple validated sources; sophisticated content structuring with hierarchical decomposition and rich metadata annotation; and optimized vector database integration enabling semantic search and natural language query response. This architecture ensures that the resulting RAG system retrieves **precisely relevant, evidence-grounded recommendations** with full traceability to source documents, version information, and evidence grades—essential requirements for clinical accountability and regulatory compliance in healthcare AI applications.
+
+#### 1.1.2 Prioritize MIMS Thailand as flagship platform with diagnostic/treatment algorithms
+
+**MIMS Thailand emerges as the flagship platform** for this initiative based on its established position as the most comprehensive collection of clinical practice guidelines in the region, its sophisticated integration of diagnostic algorithms with medication reference data, and its trusted reputation among Thai healthcare professionals. The platform's **disease algorithm format**—presenting stepwise diagnostic and therapeutic pathways as visually structured decision trees—provides immediate clinical utility while facilitating automated extraction for RAG construction. MIMS Thailand's **50+ years of operation across 17 Asia-Pacific countries**  demonstrates sustained investment in content quality and technological infrastructure, with its Thailand-specific iteration reflecting deep localization for local prescribing patterns, formulary constraints, and disease priorities.
+
+The prioritization of MIMS is strategically grounded in **practical clinical adoption**: Thai physicians already rely on this platform for point-of-care decision support, ensuring smoother integration of RAG-enhanced applications into existing workflows. The platform's **mobile application with 40,000+ active users**  and **2 million+ healthcare professional reach across Asia**  indicates successful penetration of the target market. Unlike academic guideline repositories that may lag in update frequency or medication integration, MIMS Thailand combines **current evidence synthesis with immediate prescribing practicality**—a combination essential for real-world clinical impact.
+
+#### 1.1.3 Ensure multidisciplinary coverage across 15 medical specialties
+
+The scope encompasses **complete specialty coverage** spanning: **Cardiology, Dermatology, Endocrinology, Gastroenterology, Hepatology, Infectious Diseases, Neurology, Obstetrics & Gynaecology, Oncology, Ophthalmology, Paediatrics, Psychiatry, Respirology, Rheumatology, and Urology**. This taxonomy reflects both traditional medical departmental structures and Thailand's specific disease burden priorities, ensuring that the RAG dataset can support clinical decision-making across the full spectrum of patient presentations—from common ambulatory complaints to complex, multi-system diseases requiring coordinated specialist care.
+
+The multidisciplinary architecture explicitly accommodates **natural specialty overlaps** (such as Endocrinology-Cardiology intersection in metabolic syndrome management, or Infectious Diseases-Hepatology integration in viral hepatitis care) through cross-referencing mechanisms rather than rigid categorical separation. This design supports **holistic patient care** in an era of increasing multimorbidity, where single-disease guidelines may provide inadequate guidance for complex, real-world patients.
+
+### 1.2 Core Value Proposition
+
+#### 1.2.1 High-quality patient care guidance through evidence-based algorithms
+
+The first pillar ensures that every retrieved recommendation is **grounded in systematic evidence review** and **graded according to established hierarchies of evidence**. MIMS Thailand exemplifies this commitment through its **specialty-specific Honorary Editorial Advisory Boards** that review and validate algorithm content—such as the MIMS Cardiology Honorary Editorial Advisory Board's oversight of heart failure and hypertension protocols , or the MIMS Dermatology Honorary Editorial Advisory Board's review of atopic dermatitis management pathways . These governance structures ensure that algorithms reflect **current scientific consensus** rather than opinion-based approaches, with explicit "Last updated" timestamps enabling currency assessment.
+
+The **evidence-based algorithm format** addresses well-documented variations in clinical practice that compromise patient outcomes. By encoding stepwise pathways—from presenting complaint through differential diagnosis, confirmatory testing, severity stratification, treatment selection, and monitoring protocols—the dataset provides **decision support that reduces cognitive load** while maintaining appropriate flexibility for individual patient circumstances. This standardization proves particularly valuable in Thailand's heterogeneous healthcare landscape, where provider training and resource availability vary substantially between tertiary academic centers and provincial hospitals.
+
+#### 1.2.2 Practitioner-ready compilation with structured diagnostic pathways
+
+The second pillar addresses the **implementation gap** that has historically limited guideline impact. Traditional CPG dissemination through journal publication or society website posting suffers from **poor discoverability, format inconsistency, and absence of workflow integration**. MIMS Thailand transcends these limitations through its **standardized tripartite content structure**: Disease Algorithm (visual flowcharts with branching decision logic), Disease Guidelines (narrative evidence-based recommendations with supporting rationale), and Medication Reference (integrated prescribing information with Thai-specific availability and cost data) .
+
+This **practitioner-ready design** enables rapid information retrieval during time-pressured clinical encounters. The hierarchical organization—**Overview → History and Physical Examination → Diagnosis/Diagnostic Criteria → Laboratory Tests and Ancillaries → Imaging → Differential Diagnosis → Evaluation Principles of Therapy → Pharmacological therapy → Nonpharmacological interventions → Surgery → Monitoring**—mirrors clinical reasoning patterns while supporting both **quick reference** (for experienced practitioners) and **comprehensive review** (for complex cases or educational purposes). The integration of medication reference data eliminates friction between "what to prescribe" and "how to prescribe it"—a critical efficiency gain in busy practice settings.
+
+#### 1.2.3 Scalable vector database integration for AI-powered clinical decision support
+
+The third pillar positions the dataset for **next-generation healthcare AI applications**. The transformation of structured CPG content into **semantically rich vector embeddings** with preserved metadata enables novel interaction modalities: **natural language querying** ("What is the recommended antihypertensive regimen for a diabetic patient with albuminuria?"), **similarity-based retrieval** of analogous case management approaches, and **contextual augmentation** of large language model outputs with authoritative medical knowledge. This represents a paradigm shift from **passive guideline publication** to **active, context-aware clinical intelligence**.
+
+The technical architecture employs **medical domain-specific embedding models** (PubMedBERT, BioBERT) with **512-token chunking and 128-token overlap**, **hybrid dense-sparse indexing** for precise terminology matching, and **hierarchical metadata tagging** (specialty → disease → algorithm step → recommendation with evidence grade, version, and source URL). This infrastructure supports **sub-second retrieval latency** at scale, with explicit **provenance preservation** that maintains clinical accountability and enables continuous quality improvement through outcome tracking.
+
+---
+
+## 2. MIMS Thailand: Primary CPG Platform Architecture
+
+### 2.1 Platform Capabilities
+
+#### 2.1.1 Disease-specific clinical practice guidelines with treatment algorithms
+
+MIMS Thailand's **disease algorithm module** represents its most distinctive capability for RAG applications. These algorithms present **stepwise diagnostic and therapeutic pathways** as visual flowcharts with explicit decision nodes, enabling practitioners to navigate from presenting complaint through definitive management with systematic precision. The **Chronic Coronary Syndromes algorithm**, for instance, incorporates the **Canadian Cardiovascular Society Angina Classification (Classes I-IV)** and **2024 European Society of Cardiology chronic coronary syndrome categories**, progressing through risk stratification, diagnostic confirmation, and evidence-based pharmacological management with specific medication class recommendations .
+
+The algorithmic structure encodes **clinical reasoning logic** that translates readily into machine-actionable knowledge graphs: nodes representing clinical states (e.g., "stable angina with CCS Class II symptoms"), edges representing decision criteria (e.g., "stress imaging positive for ischemia"), and terminal actions (e.g., "initiate high-intensity statin plus aspirin, refer for coronary angiography"). This **explicit procedural knowledge** contrasts with narrative guidelines that require substantial interpretation for implementation, reducing variability in clinical application and supporting quality standardization.
+
+The **temporal currency** of algorithm content is ensured through systematic review cycles with **explicit update timestamps**—such as the **26 January 2026 update for Hypertension** , **11 December 2025 for Chronic Coronary Syndromes** , and **16 March 2026 for Dyspepsia** —enabling automated surveillance for content refresh and version control in RAG deployments.
+
+#### 2.1.2 Multidisciplinary specialty navigation (Cardiology through Urology)
+
+The platform's **specialty navigation architecture** organizes content across fifteen distinct medical disciplines through multiple access pathways: **alphabetical disease index**, **body system taxonomy**, **specialty-specific landing pages** with "See More +" expansion controls, and **intelligent search with medical term autocomplete** . This pluralistic organization accommodates diverse user mental models—whether a cardiologist accessing content through their specialty portal or an emergency physician searching directly by presenting complaint.
+
+The specialty coverage demonstrates **strategic alignment with Thai disease priorities**:
+
+| Specialty | Verified High-Priority Conditions | Update Recency | Editorial Governance |
+|-----------|-----------------------------------|--------------|----------------------|
+| **Cardiology** | Heart Failure - Chronic, Hypertension, Hypertrophic Cardiomyopathy, Hypertensive Crisis, Pulmonary Arterial Hypertension, MI-STEMI | Feb 2026  | MIMS Cardiology Honorary Editorial Advisory Board  |
+| **Respirology** | Asthma, COPD, Bronchiectasis, Acute Bronchitis, Pneumonia, Sleep Apnea | Dec 2025-Mar 2026  | MIMS Respirology Honorary Editorial Advisory Board  |
+| **Gastroenterology** | GERD, Dyspepsia, IBD, IBS, Acute Pancreatitis | Nov 2025-Mar 2026  | MIMS Gastroenterology Honorary Editorial Advisory Board  |
+| **Hepatology** | Hepatitis C, Hepatitis B, MASLD/NAFLD, Alcohol-Related Liver Disease, HCC | Nov 2024-Dec 2025  | MIMS Hepatology Honorary Editorial Advisory Board  |
+| **Infectious Diseases** | COVID-19, Influenza, Dengue, Malaria, UTI-complicated, Infectious Arthritis | Jan 2026  | Integrated with national surveillance |
+| **Rheumatology** | Rheumatoid Arthritis, SLE, Gout, Osteoarthritis | Jul 2025  | MIMS Rheumatology Honorary Editorial Advisory Board  |
+| **Endocrinology** | Diabetes Mellitus, Hypothyroidism, Growth Hormone Deficiency, Obesity | Nov 2024-Feb 2026  | MIMS Endocrinology Honorary Editorial Advisory Board  |
+| **Dermatology** | Atopic Dermatitis, Contact Dermatitis, Warts, Alopecia Areata, Psoriasis | Nov 2024  | MIMS Dermatology Honorary Editorial Advisory Board  |
+| **Neurology** | Epilepsy, Stroke, Migraine, Parkinson's Disease | Via society guidelines  | Thai Neurological Society coordination |
+| **Obstetrics & Gynaecology** | Hypertension in Pregnancy, Infertility, Menopause, Cervical Cancer Screening | Nov 2024  | MIMS Obstetrics & Gynecology Honorary Editorial Advisory Board  |
+| **Oncology** | Breast Cancer, Lung Cancer, Gastric Cancer, Renal Cancer, NHL | Jul 2025-Feb 2026  | National Cancer Institute Thailand protocols |
+| **Ophthalmology** | Glaucoma, Cataract, AMD, Diabetic Retinopathy, Dry Eye Syndrome | Jan 2026  | MIMS Ophthalmology Honorary Editorial Advisory Board  |
+| **Paediatrics** | Growth Disorders, Vaccination, Common Infections, Developmental Milestones, Bronchiolitis | Dec 2025  | Thai Pediatric Society integration |
+| **Psychiatry** | Depression, Anxiety, Insomnia, Bipolar Disorder, Schizophrenia, ADHD | Nov 2024-Feb 2026  | Royal College of Psychiatrists of Thailand  |
+| **Urology** | BPH, Prostate Cancer, Kidney Stones, UTIs, Erectile Dysfunction | Feb 2026  | Thai Urological Association guidelines |
+
+This matrix reveals **strategic prioritization of high-burden conditions** with active editorial governance ensuring content currency. The **update frequency**—ranging from quarterly to annually depending on evidence evolution—demonstrates responsive maintenance that balances stability with currency.
+
+#### 2.1.3 Integrated medication reference with prescribing information
+
+The **medication reference integration** distinguishes MIMS Thailand from standalone guideline repositories by embedding **immediately actionable prescribing guidance** within treatment pathways. For cardiovascular conditions, this includes organized presentation of **ACE Inhibitors, Angiotensin II Antagonists, Antiplatelet Agents, Beta-Blockers, Calcium Antagonists, Cardiac Drugs, and Nitrate formulations** with Thai-specific product availability, dosing, and cost data . For gastroenterology, **Antacids, H2-Receptor Antagonists, Proton Pump Inhibitors, and specialized agents like Cholagogues and Hepatic Protectors** are similarly integrated .
+
+This **"closed-loop" decision support** enables practitioners to progress from diagnostic reasoning to therapeutic implementation without platform switching—a critical efficiency gain that addresses the **fragmentation pain point** in clinical workflow. The medication data encompasses: **indications and contraindications** with Thai regulatory status; **dosing regimens** with renal/hepatic adjustment and special population considerations; **adverse effect profiles** with monitoring requirements; **drug-drug interactions** relevant to common Thai co-prescribing patterns; **pregnancy/lactation safety** with Thai FDA categorizations; and **cost information** relevant to Thailand's three universal health coverage schemes (Universal Coverage Scheme, Social Security Scheme, Civil Servant Medical Benefit Scheme).
+
+### 2.2 Specialty Coverage Matrix
+
+#### 2.2.1 Cardiovascular: Heart Failure, Hypertension, Hypertrophic Cardiomyopathy, Hypertensive Crisis
+
+The **cardiovascular portfolio** addresses Thailand's **leading cause of mortality** with substantial depth and currency. The **Heart Failure - Chronic** algorithm (updated 27 February 2026)  provides comprehensive staging and management guidance, distinguishing **HFrEF, HFmrEF, and HFpEF phenotypes** with phenotype-specific therapeutic pathways. The content integrates **2020 Heart Failure Society of Singapore clinical practice guidelines**  with Thai adaptation for medication availability, emphasizing **four foundational drug classes** (ARNI/ACE inhibitors, evidence-based beta-blockers, mineralocorticoid receptor antagonists, and SGLT2 inhibitors) with explicit up-titration targets to "maximum recommended dose or the highest dose that the patient can tolerate" .
+
+The **Hypertension** algorithm (updated 26 January 2026)  aligns with **2024 Thai Hypertension Society guidelines** , maintaining **office blood pressure diagnostic threshold of 140/90 mmHg** while advocating for **out-of-office measurement confirmation** through home blood pressure monitoring or ambulatory blood pressure monitoring. Treatment targets are **age-stratified**: 120-130/70-79 mmHg for patients aged 18-65 years, and 130-139/70-79 mmHg for patients over 65 years . The algorithm emphasizes **dual antihypertensive initiation** for most patients, with preference for **single-pill combinations** to improve adherence, and explicit **resistant hypertension evaluation protocols** with secondary cause assessment and specialist referral triggers.
+
+The **Hypertrophic Cardiomyopathy** and **Hypertensive Crisis** algorithms address **high-stakes, less common presentations** where appropriate management requires specific expertise. These entries include **prominent red-flag identification**, **immediate stabilization protocols**, and **clear criteria for emergent versus urgent versus routine specialist referral**—supporting appropriate triage and resource utilization across Thailand's tiered healthcare system.
+
+#### 2.2.2 Dermatology: Atopic Dermatitis, Contact Dermatitis, Warts-Cutaneous, Alopecia Areata
+
+The **dermatology collection** addresses **high-prevalence conditions** with significant quality-of-life impact and healthcare utilization. The **Atopic Dermatitis** algorithm (reviewed by MIMS Dermatology Honorary Editorial Advisory Board, 15 November 2024)  provides **stepped-care topical and systemic management** with explicit vehicle selection guidance (ointments for dry skin, creams for weeping lesions, lotions for hair-bearing areas), **topical corticosteroid potency matching** to disease severity and anatomical site, **calcineurin inhibitor positioning** for sensitive areas and steroid-sparing indications, and **biologic therapy criteria** (dupilumab, lebrikizumab) for refractory moderate-to-severe disease with response assessment timelines.
+
+The **Contact Dermatitis** algorithm distinguishes **irritant versus allergic mechanisms** with **patch testing indications and interpretation**, **occupational dermatology considerations** relevant to Thailand's agricultural and industrial workforce, and **avoidance counseling** with practical implementation guidance. The **Warts-Cutaneous** and **Alopecia Areata** entries, while seemingly minor, address conditions that **drive substantial healthcare seeking** and benefit from evidence-based management that prevents inappropriate or harmful interventions.
+
+#### 2.2.3 Endocrinology: Growth Hormone Deficiency, Diabetes Mellitus, Thyroid Disorders
+
+The **endocrinology portfolio** spans the **full complexity of hormonal disorders** with particular emphasis on **diabetes mellitus as Thailand's most pressing metabolic challenge**. The **Diabetes Mellitus** algorithm  integrates **American Diabetes Association Standards of Care 2024**, **Diabetes Canada Clinical Practice Guidelines**, and **Malaysian Endocrine and Metabolic Society recommendations** with Thai-specific adaptation. The pharmacologic management section provides **detailed drug class guidance**:
+
+| Drug Class | Key Agents | Thai-Specific Considerations |
+|------------|-----------|------------------------------|
+| **Biguanides** | Metformin | First-line with vitamin B12 monitoring for long-term use |
+| **DPP-4 Inhibitors** | Sitagliptin, Saxagliptin, Linagliptin, Alogliptin | Cardiovascular outcome data: TECOS (sitagliptin-neutral), SAVOR-TIMI 58 (saxagliptin-heart failure signal), EXAMINE (alogliptin-heart failure signal)  |
+| **GLP-1 Receptor Agonists** | Liraglutide, Dulaglutide, Semaglutide | Weight benefits, gastrointestinal tolerability, cardiovascular outcome trial integration |
+| **SGLT2 Inhibitors** | Dapagliflozin, Empagliflozin, Canagliflozin | Cardiovascular and renal outcome data, genital mycotic infection counseling |
+| **Sulfonylureas** | Glibenclamide, Gliclazide, Glimepiride | Hypoglycemia risk, weight gain, cost-effectiveness for resource-limited settings |
+| **Insulins** | Basal (glargine U-100/U-300, degludec U-100/U-200), Prandial (lispro, aspart, glulisine), Premixed | Concentrated formulations for high-dose requirements, U-500 regular for severe insulin resistance  |
+
+The **Growth Hormone Deficiency** algorithm addresses **pediatric and adult presentations** with diagnostic stimulation testing protocols, therapy initiation criteria, and long-term monitoring for efficacy and adverse effects. **Thyroid Disorder** coverage encompasses hypothyroidism with levothyroxine optimization, hyperthyroidism with antithyroid drug and radioiodine selection, and thyroid nodule evaluation with **fine needle aspiration criteria** adapted from international guidelines.
+
+#### 2.2.4 Gastroenterology: GERD, IBD, IBS, Liver Disease protocols
+
+The **gastroenterology collection** addresses **high-prevalence digestive disorders** with substantial Thai disease burden. The **GERD** algorithm (updated 25 November 2025)  provides **lifestyle modification guidance** with Thai dietary pattern considerations, **proton pump inhibitor step-up/step-down protocols**, **refractory disease evaluation** with pH-impedance testing indications, and **surgical fundoplication criteria**. The **Dyspepsia** algorithm (updated 16 March 2026)  emphasizes **alarm feature recognition** (weight loss, dysphagia, GI bleeding, anemia) mandating early endoscopy, **H. pylori test-and-treat strategies** with local antibiotic resistance patterns, and **functional dyspepsia management** with neuromodulator considerations.
+
+The **IBD** algorithm addresses **increasingly recognized Crohn's disease and ulcerative colitis** in Asian populations, with **biologic therapy selection** (anti-TNF, vedolizumab, ustekinumab) and **tuberculosis screening requirements** given Thai prevalence. **IBS** management incorporates **subtype-specific approaches** (IBS-D, IBS-C, IBS-M) with dietetic (low-FODMAP), pharmacological, and psychological interventions.
+
+#### 2.2.5 Hepatology: Hepatitis B, Hepatitis C, NAFLD, Cirrhosis management
+
+The **hepatology portfolio** addresses **conditions of extraordinary Thai public health significance**, given the historical hepatitis B burden and ongoing viral hepatitis elimination program. The **Hepatitis C** algorithm (updated 11 December 2025)  incorporates **direct-acting antiviral (DAA) pangenotypic regimens** with cure monitoring, reflecting Thailand's **national hepatitis C elimination strategy** and **generic DAA availability** that has transformed treatment access. The **MASLD/NAFLD** algorithm (updated 13 November 2024)  addresses the **metabolic liver disease epidemic** with fibrosis risk stratification using non-invasive tests (FIB-4, NAFLD fibrosis score, elastography) and **lifestyle intervention protocols** with weight reduction targets.
+
+The **Cirrhosis** and **Hepatocellular Carcinoma** algorithms provide **decompensation prevention** (variceal screening and prophylaxis, ascites management, hepatic encephalopathy prevention) and **surveillance protocols** (ultrasonography every 6 months with AFP) for at-risk populations, with **transplantation evaluation triggers** for appropriate candidates.
+
+#### 2.2.6 Infectious Diseases: COVID-19, Malaria, UTI, Invasive Fungal Infections, Immunosuppression in Transplantation
+
+The **infectious diseases module** demonstrates **particular strength in tropical and emerging infections** with substantial Thai relevance. The **COVID-19** algorithm  integrates **Department of Disease Control, Ministry of Public Health protocols** with rapid update cycles reflecting **variant emergence and therapeutic evolution**—including antiviral therapy selection (favipiravir, remdesivir, molnupiravir, nirmatrelvir/ritonavir) based on disease severity, timing, and risk factors for progression . **Pediatric-specific recommendations** acknowledge distinctive severity patterns in children .
+
+The **Malaria** algorithm addresses **species-differentiated treatment** with **artemisinin resistance considerations** in the Greater Mekong Subregion, **severe malaria management** with parenteral artesunate, and **radical cure for P. vivax** with G6PD deficiency screening given Thai population prevalence. The **UTI-complicated** algorithm  incorporates **antimicrobial stewardship principles** with urine culture-directed therapy, **resistance surveillance data**, and **recurrence prevention strategies**.
+
+The **Invasive Fungal Infections** and **Immunosuppression in Transplantation** algorithms address **specialized, high-mortality scenarios** requiring rapid diagnosis and targeted therapy—reflecting Thailand's **developing solid organ and hematopoietic stem cell transplantation programs** and the **critical infection prevention challenges** in immunocompromised hosts .
+
+#### 2.2.7 Neurology: Epilepsy, Stroke, Migraine, Parkinson's Disease
+
+The **neurology coverage** addresses **high-prevalence, high-disability conditions** where appropriate management substantially impacts quality of life and healthcare utilization. The **Epilepsy** algorithm integrates **Thailand Epilepsy Society CPG (2024)**  with **ILAE 2017 seizure and epilepsy classification**, **antiepileptic drug selection by syndrome and comorbidity profile**, **women-specific considerations** (contraception, pregnancy planning, teratogenicity), and **surgical evaluation criteria** for drug-resistant epilepsy. Notably, the **Regional CPG for Epilepsy for multidisciplinary medical teams in the Northeast**  demonstrates **sophisticated adaptation for resource-limited settings** with modified protocols for personnel limitations, antiepileptic drug availability, and treatment equipment constraints—an innovative **implementation science approach** that could inform adaptation strategies for other conditions and regions.
+
+The **Stroke** algorithm addresses **time-critical acute management** with **thrombolysis and thrombectomy decision frameworks**, **door-to-needle time optimization**, and **secondary prevention protocols** with risk factor modification targets. The **Migraine** and **Parkinson's Disease** algorithms provide **chronic disease management guidance** with preventive and symptomatic therapy optimization, and **advanced therapy timing** (deep brain stimulation) for appropriate candidates.
+
+#### 2.2.8 Obstetrics & Gynaecology: Hypertension in Pregnancy, Infertility, Menopause, Cervical Cancer Screening
+
+The **obstetrics and gynaecology portfolio** spans **the full reproductive lifecycle** with particular attention to **conditions with high maternal-fetal impact**. The **Hypertension in Pregnancy** algorithm (updated 24 February 2026)  provides **severe feature recognition** (blood pressure ≥160/110 mmHg, thrombocytopenia, impaired liver function, renal insufficiency, pulmonary edema, cerebral/visual symptoms), **magnesium sulfate neuroprotection** for eclampsia prevention, and **delivery timing decisions** balancing maternal and fetal risks.
+
+The **Infertility** algorithm addresses **growing demand for assisted reproductive technology** in Thailand with **diagnostic evaluation protocols**, **ovulation induction algorithms**, **intrauterine insemination and in vitro fertilization candidacy assessment**, and **multiple pregnancy prevention strategies**. The **Menopause** algorithm incorporates **evolving cardiovascular and breast cancer risk evidence** with **individualized hormone therapy counseling**, while **Cervical Cancer Screening** protocols align with **national program implementation** including HPV testing integration and colposcopy referral criteria.
+
+#### 2.2.9 Oncology: Breast Cancer, Lung Cancer, Colorectal Cancer, Prostate Cancer protocols
+
+The **oncology collection** addresses **Thailand's increasing cancer burden** with **site-specific, stage-appropriate protocols**. The **Breast Cancer** algorithm (updated 13 February 2026)  encompasses **screening with mammography and ultrasound**, **diagnostic workup with biopsy and biomarker assessment** (ER, PR, HER2, Ki-67), **staging-appropriate multimodality treatment** (surgery, radiation, chemotherapy, endocrine therapy, anti-HER2 therapy), and **survivorship care**. The **Lung Cancer** algorithm (updated 23 July 2025)  emphasizes **histology-directed treatment** with **molecular profiling for targetable alterations** (EGFR, ALK, ROS1, BRAF, MET, RET, KRAS) and **immunotherapy integration** with PD-L1 testing.
+
+The **Colorectal Cancer**, **Gastric Cancer**, **Renal Cancer**, and **Non-Hodgkin's Lymphoma** algorithms provide **comprehensive staging and treatment sequencing guidance** with **palliative care integration** and **clinical trial participation encouragement** where appropriate.
+
+#### 2.2.10 Ophthalmology: Glaucoma, Cataract, AMD, Diabetic Retinopathy
+
+The **ophthalmology portfolio** addresses **vision-threatening conditions with high prevalence in aging and diabetic populations**. The **Primary Open-Angle Glaucoma** algorithm (updated 19 February 2026)  provides **intraocular pressure target setting** based on disease severity and progression risk, **medical therapy escalation** with prostaglandin analog first-line preference, **laser trabeculoplasty** and **surgical options** for refractory cases. The **Cataract** algorithm  addresses **surgical timing decisions**, **intraocular lens selection** (monofocal, multifocal, toric), and **postoperative care protocols**.
+
+The **Age-Related Macular Degeneration** (updated 21 January 2026)  and **Diabetic Retinopathy** algorithms emphasize **screening interval optimization** and **anti-VEGF therapy** with treatment extension strategies. The **Dry Eye Syndrome**  and **Allergic Conjunctivitis**  algorithms address **high-prevalence, quality-of-life-impacting conditions** with stepwise therapeutic escalation.
+
+#### 2.2.11 Paediatrics: Growth Disorders, Vaccination, Common Infections, Developmental Milestones
+
+The **paediatrics coverage** addresses **child health from newborn through adolescence** with **developmental-appropriate care pathways**. The **Growth Disorders** algorithm provides **growth velocity assessment**, **endocrine evaluation criteria** for short stature, and **growth hormone therapy** protocols with monitoring. The **Vaccination** content aligns with **Thailand's Expanded Program on Immunization** with **catch-up schedules** for under-immunized children and **special considerations for immunocompromised patients**.
+
+The **Common Infections** algorithms address **age-appropriate antimicrobial selection** with **dosing adjustments** and **resistance pattern awareness**. The **Bronchiolitis** algorithm (updated 11 December 2025)  provides **respiratory syncytial virus management** with **supportive care and escalation criteria**. **Developmental Milestones** guidance supports **early identification of delays** with **early intervention referral triggers**.
+
+#### 2.2.12 Psychiatry: Depression, Anxiety, Bipolar Disorder, Schizophrenia
+
+The **psychiatry portfolio** addresses **mental health conditions with increasing recognition** in Thai healthcare. Verified content includes **Depression** (updated 27 February 2026), **Insomnia** (13 February 2026), **Anxiety** (11 December 2025), **Alzheimer's Disease & Dementia** (25 November 2025), **Bipolar Disorder**, **Schizophrenia**, **ADHD**, and **Tourette's Syndrome** . These algorithms emphasize **screening tool integration** (PHQ-9, GAD-7), **stepped-care treatment** with pharmacotherapy and psychotherapy coordination, and **long-term management** with relapse prevention—while addressing **Thai Mental Health Act implications** for involuntary treatment and **traditional medicine interaction awareness**.
+
+#### 2.2.13 Respirology: Asthma, COPD, Sleep Apnea, Lung Cancer, Pneumonia
+
+The **respirology collection** demonstrates **particular organizational maturity with active editorial governance**. The **Asthma** algorithm  provides **sophisticated control assessment** with structured tables distinguishing **controlled, partly controlled, and uncontrolled disease** across four domains (daytime symptoms, activity limitation, nocturnal symptoms, reliever use), and **stepwise pharmacological management** with **ICS-formoterol as preferred reliever-controller combination** per **GINA 2024** . Age-stratified recommendations (6-11 years versus adolescents/adults) address **developmental pharmacology considerations**.
+
+The **COPD** algorithm encompasses **diagnostic confirmation with spirometry**, **symptom assessment with CAT or mMRC**, **exacerbation risk stratification**, and **pharmacological escalation** with **LAMA/LABA combination therapy** and **inhaled corticosteroid integration** for frequent exacerbators. **Sleep Apnea**, **Lung Cancer screening**, and **Pneumonia severity assessment** algorithms complete comprehensive respiratory coverage.
+
+#### 2.2.14 Rheumatology: Rheumatoid Arthritis, SLE, Gout, Osteoarthritis
+
+The **rheumatology portfolio** addresses **autoimmune and degenerative joint diseases** with **substantial prevalence and disability impact**. The **Rheumatoid Arthritis** algorithm (updated 14 July 2025)  provides **2010 ACR/EULAR classification criteria application**, **treat-to-target management** with **DMARD sequencing** (methotrexate first-line, sulfasalazine, leflunomide, hydroxychloroquine), **biologic and targeted synthetic DMARD selection** with **tuberculosis screening** given Thai prevalence, and **monitoring protocols** for disease activity and adverse effects.
+
+The **SLE** algorithm addresses **multi-system involvement** with **organ-specific management** and **flare prevention strategies**. **Gout** management encompasses **acute attack treatment** with **anti-inflammatory therapy** and **urate-lowering therapy titration** with **treat-to-target serum urate <6 mg/dL**. **Osteoarthritis** provides **multimodal non-surgical optimization** with **surgical referral triggers**.
+
+#### 2.2.15 Urology: BPH, Prostate Cancer, Kidney Stones, UTIs, Erectile Dysfunction
+
+The **urology collection** addresses **genitourinary conditions affecting both genders** with **particular emphasis on male urological diseases**. The **BPH** algorithm provides **symptom assessment with IPSS**, **medical therapy** (alpha-blockers, 5-alpha reductase inhibitors, combination), and **surgical intervention thresholds** (TURP, laser enucleation). The **Prostate Cancer** algorithm addresses **screening controversy navigation** with **PSA interpretation**, **active surveillance criteria** for low-risk disease, and **treatment selection** for localized and advanced disease.
+
+**Kidney Stone** management encompasses **acute pain control**, **metabolic evaluation** for recurrence prevention, and **procedural selection** (extracorporeal shock wave lithotripsy, ureteroscopy, percutaneous nephrolithotomy) based on stone size and location. **UTI** and **Erectile Dysfunction** algorithms provide **comprehensive evaluation and management guidance** with **cardiovascular risk assessment integration** for the latter.
+
+### 2.3 Content Structure per Disease Entry
+
+#### 2.3.1 Disease Algorithm: Stepwise diagnostic and therapeutic pathways
+
+The **Disease Algorithm** component presents **visual, interactive flowcharts** that encode clinical decision logic in immediately comprehensible formats. These algorithms typically follow a **standardized progression**:
+
+| Stage | Content Elements | Example: Asthma Management  |
+|-------|----------------|-----------------------------------|
+| **Initial Assessment** | Presenting symptoms, risk factors, baseline measurements | Daytime symptoms, activity limitation, nocturnal symptoms, reliever use frequency |
+| **Control Evaluation** | Structured scoring systems, severity stratification | Controlled/partly controlled/uncontrolled classification across four domains |
+| **Diagnostic Confirmation** | Objective testing, differential diagnosis exclusion | Spirometry with bronchodilator reversibility, alternative diagnosis evaluation |
+| **Treatment Initiation** | First-line therapy selection by severity/control level | Step 2: Low-dose ICS-formoterol maintenance and reliever |
+| **Monitoring & Adjustment** | Response assessment, step-up/step-down criteria | Review every 3-6 months, escalate if uncontrolled, de-escalate if well-controlled ≥3 months |
+| **Specialist Referral** | Red flags, refractory disease, complex comorbidity | Severe asthma, diagnostic uncertainty, frequent exacerbations despite Step 4 |
+
+This **explicit procedural structure** enables both **human clinical application** and **machine-actionable extraction** for RAG dataset construction, with natural decision boundaries supporting coherent chunking.
+
+#### 2.3.2 Disease Guidelines: Evidence-based management recommendations
+
+The **Disease Guidelines** component provides **narrative depth** supplementing algorithmic structure, including: **epidemiological context** with Thai-specific prevalence data where available; **pathophysiological mechanisms** informing therapeutic rationale; **diagnostic criteria** with validation studies; **treatment alternatives** with comparative effectiveness; **special population considerations** (pregnancy, elderly, renal/hepatic impairment); and **follow-up protocols** with monitoring parameters. This content layer enables **practitioner understanding of recommendation rationale** and **appropriate adaptation when patient circumstances deviate from typical presentations**.
+
+#### 2.3.3 Medication Reference: Drug information integrated with prescribing guidance
+
+The **Medication Reference** component ensures **immediate implementability** of algorithm recommendations through **integrated pharmaceutical information**. This encompasses: **mechanism of action** supporting therapeutic understanding; **pharmacokinetic parameters** informing dosing interval and special population adjustment; **available products in Thai market** with brand/generic names and formulations; **dosing regimens** with initiation, titration, and maintenance protocols; **adverse effect profiles** with frequency, severity, and monitoring requirements; **drug-drug interactions** with clinical significance assessment; **contraindications and precautions** with absolute versus relative distinctions; **pregnancy/lactation safety** with Thai FDA categorizations; and **cost information** relevant to Thailand's insurance scheme coverage and patient out-of-pocket burden.
+
+---
+
+## 3. Royal College of Physicians of Thailand (RCPT) CPG Repository
+
+### 3.1 Institutional Partnership Framework
+
+#### 3.1.1 RCPT as central coordinating body for Thai medical specialty societies
+
+The **Royal College of Physicians of Thailand (RCPT)** serves as the **central coordinating body for clinical practice guideline development** across the Thai medical landscape, functioning through a **sophisticated partnership framework** that integrates expertise from **specialty societies, academic medical centers, and the Ministry of Public Health** . This institutional architecture ensures that RCPT-endorsed guidelines achieve both **scientific rigor** and **practical implementability** within Thailand's heterogeneous healthcare system—which spans **primary care units in rural districts through quaternary referral centers in Bangkok**.
+
+The RCPT's coordinating role addresses the **fragmentation risk** inherent in specialty-siloed guideline development, where inconsistent recommendations for multimorbid patients create implementation challenges. By establishing **clear scope delineation** and **formal collaboration mechanisms** with subspecialty societies, RCPT supports **coherent guideline ecosystems** with standardized methodologies for **evidence synthesis, recommendation formulation, and external review**. This coordination extends to **strategic prioritization** of guideline development resources toward conditions with **highest population health impact**.
+
+#### 3.1.2 Collaborative CPG development with Ministry of Public Health
+
+The **Ministry of Public Health collaboration** ensures **alignment between professional guideline recommendations and national health policy** . This partnership enables: **benefit package determination** for Thailand's universal health coverage schemes; **quality indicator selection** for healthcare performance monitoring; **healthcare workforce planning** with training curriculum integration; and **outbreak response coordination** with rapid guideline development for emerging threats. The **COVID-19 pandemic** demonstrated this mechanism's effectiveness, with RCPT participating in **rapid guideline development** that achieved remarkable consistency between professional recommendations and government operational protocols .
+
+The collaborative development process typically involves: **multidisciplinary working groups** with systematic literature review; **stakeholder consultation** with practicing clinicians and patient representatives; **pilot implementation** in selected healthcare settings; and **iterative refinement** based on feedback and emerging evidence. This **resource-intensive but quality-assuring approach** produces guidelines with **enhanced applicability to Thai population characteristics, healthcare resource constraints, and medication availability**.
+
+#### 3.1.3 Annual guideline updates with version control and evidence grading
+
+The RCPT maintains **systematic processes for guideline version control and scheduled review**, ensuring that practitioners can **identify current guidance and understand recommendation evolution** . The **annual update cycle** balances **responsiveness to new evidence** with **stability for implementation planning**; **urgent updates** may be issued between scheduled cycles when **safety-critical new information emerges**. The **2025 Guideline Development Manual** establishes standardized approaches for **literature search, evidence synthesis, recommendation formulation, and external review** .
+
+The **evidence grading system**—typically employing **modified GRADE methodology** or **Class I/II/III with Level A/B/C classification**—enables transparent assessment of recommendation strength:
+
+| Classification | Definition | Clinical Implication |
+|--------------|-----------|-------------------|
+| **Class I** | Evidence and/or general agreement that treatment is beneficial, useful, effective | Should be performed/administered |
+| **Class IIa** | Conflicting evidence, but weight of evidence favors benefit | Reasonable to perform |
+| **Class IIb** | Conflicting evidence, usefulness/efficacy less well established | May be considered |
+| **Class III** | Evidence and/or general agreement that treatment is not useful/effective and may be harmful | Should not be performed |
+| **Level A** | Multiple randomized clinical trials or meta-analyses | High certainty |
+| **Level B** | Single randomized trial or non-randomized studies | Moderate certainty |
+| **Level C** | Expert opinion, case studies, standard of care | Limited certainty |
+
+This **granular grading system** enables **RAG retrieval prioritization** by evidence strength and **appropriate confidence calibration** in clinical decision support applications.
+
+### 3.2 Key Guideline Publications (2024-2026)
+
+#### 3.2.1 Cardiovascular: 2024 RCPT Clinical Practice Guideline on Management of Dyslipidemia
+
+The **2024 RCPT Clinical Practice Guideline on Management of Dyslipidemia for Atherosclerotic Cardiovascular Disease Prevention**  represents a **flagship publication** formally launched at the **40th Annual Meeting of the Royal College of Physicians of Thailand in April 2024**. This guideline addresses **Thailand's leading cause of mortality** through:
+
+- **Thai-specific risk prediction**: Incorporation of **Thai CV Risk Score** derived from the **Electricity Generating Authority of Thailand (EGAT) Heart Study cohort** 
+- **Cost-conscious therapeutic selection**: Prioritization of **generic statins from National List of Essential Medicines**, with clear escalation pathways to **non-NLEM agents** when treatment targets not achieved
+- **Statin intensity categorization** aligned with available products and pricing tiers
+- **Special population considerations**: Familial hypercholesterolemia, statin intolerance management, and combination therapy indications
+
+The guideline explicitly addresses **implementation feasibility within Thailand's universal health coverage system**, recognizing that **recommendations that are not supported by policy and resource allocation are unlikely to achieve intended practice change**.
+
+#### 3.2.2 Infectious Diseases: Adult Vaccination Guidelines, COVID-19 Management, Malaria Treatment Protocols
+
+The **infectious diseases portfolio** demonstrates **responsive, evidence-adaptive guideline development**:
+
+| Guideline | Key Content | Update Characteristics |
+|-----------|-----------|----------------------|
+| **Adult Vaccination Guidelines** | Age and risk-factor-based immunization schedules; catch-up protocols; special populations (immunocompromised, pregnancy) | Annual review with emerging vaccine incorporation |
+| **COVID-19 Management**  | Variant-specific protocols; antiviral therapy selection (favipiravir, remdesivir, molnupiravir, nirmatrelvir/ritonavir); pediatric dosing; corticosteroid administration by severity | Rapid iteration with 21 March 2022 DDC update; explicit severity stratification with respiratory rate thresholds by age |
+| **Malaria Treatment Protocols** | Species-differentiated therapy (P. falciparum, P. vivax, P. ovale, P. malariae); artemisinin resistance adaptation; severe malaria management with parenteral artesunate; radical cure with G6PD screening | Ongoing resistance surveillance integration |
+
+The **COVID-19 guideline development** exemplifies **emergency response capability**, with **Department of Disease Control, Ministry of Public Health, Thailand** publishing updated CPG for healthcare workers with **specific pediatric patient management protocols** including **Favipiravir dosing recommendations** (day 1: 30-40 mg/kg/day divided BID; day 2-5: 15-20 mg/kg/day divided BID) and **corticosteroid administration criteria** (respiratory rate >30/min in adults, >40/min in children 2-5 years, >30/min in children >5 years) .
+
+#### 3.2.3 Dermatology: Onychomycosis Management, Alopecia Areata Care Pathways
+
+The **dermatology guidelines** address **high-prevalence conditions with substantial quality-of-life impact**:
+
+- **Onychomycosis Management**: Diagnostic confirmation requirements (KOH preparation, culture, histopathology) before systemic therapy; **topical versus oral treatment selection** based on disease extent and patient factors; **terbinafine and itraconazole protocols** with hepatotoxicity monitoring; **refractory case management** with combination approaches
+- **Alopecia Areata Care Pathways**: **Topical and intralesional corticosteroid first-line**; **systemic immunosuppression** for extensive disease; **emerging JAK inhibitor therapy** (tofacitinib, ruxolitinib) with cost-effectiveness considerations for Thailand's insurance systems
+
+#### 3.2.4 Respiratory: Thai Asthma Management Guidelines for Adults
+
+The **Thai Asthma Management Guidelines for Adults**  provide **comprehensive, GINA-aligned guidance** with **Thai-specific adaptations**:
+
+- **Inhaler device selection** considering cost and availability of different formulations in Thailand
+- **Air pollution (PM2.5) recognition** as exacerbation trigger with management modifications during high pollution episodes
+- **National health screening program integration** for case detection
+- **Stepwise controller therapy** with ICS-formoterol as preferred reliever-controller combination
+- **Biologic therapy selection** for severe eosinophilic asthma with anti-IgE, anti-IL5/IL5R, and anti-IL4Rα options
+
+#### 3.2.5 Transplantation: Immunosuppressive Therapy and Infection Prevention Protocols
+
+The **transplantation medicine guidelines**  address **complex, high-stakes management** at the intersection of **surgical technique, immunosuppressive pharmacology, and infection prevention**:
+
+| Domain | Key Content |
+|--------|-------------|
+| **Induction Therapy** | Basiliximab, rabbit anti-thymocyte globulin selection by donor-recipient matching and rejection risk |
+| **Maintenance Immunosuppression** | Tacrolimus, mycophenolate, steroid protocols with therapeutic drug monitoring targets |
+| **Infection Prophylaxis** | Pneumocystis (trimethoprim-sulfamethoxazole), cytomegalovirus (valganciclovir), fungal (fluconazole/posaconazole) risk-stratified protocols |
+| **Vaccination** | Pre- and post-transplant schedules with live vaccine contraindications |
+| **Rejection Surveillance** | Protocol biopsies, donor-derived cell-free DNA, functional monitoring |
+
+These protocols reflect **Thailand's growing solid organ transplantation programs** and the **specialized infectious diseases expertise** required for immunocompromised host management.
+
+### 3.3 Access and Integration Pathways
+
+#### 3.3.1 Direct PDF download from RCPT official portal
+
+The **primary access mechanism** is **direct PDF download from www2.rcpt.org** , providing **complete guideline documents** with full reference lists, appendices, and implementation tools. This distribution model ensures **broad accessibility** for Thai-speaking practitioners, though **member authentication requirements** for some documents may limit reach.
+
+#### 3.3.2 Thai-language primary documents with English abstracts
+
+The **bilingual presentation**—**Thai-language primary text with English executive summaries**—serves **domestic professional needs** while **facilitating international discoverability and collaboration** . For RAG dataset construction, this structure requires **careful handling**: optimal approaches include **parallel indexing of Thai full-text and English abstracts**, or **machine translation preprocessing with quality validation**.
+
+#### 3.3.3 Evidence grading: Class I/II/III, Level A/B/C classification
+
+The **standardized evidence grading** enables **rapid assessment of recommendation reliability** and **facilitates shared decision-making conversations with patients**. This classification system's **preservation in RAG metadata** supports **retrieval filtering by evidence strength** and **appropriate confidence framing** in clinical decision support outputs.
+
+---
+
+## 4. Specialty Society CPG Ecosystem
+
+### 4.1 Cardiology
+
+#### 4.1.1 Thai Hypertension Society: 2024 Hypertension Management Guidelines
+
+The **Thai Hypertension Society's 2024 Hypertension Management Guidelines**  represent **current national consensus** addressing:
+
+- **Home and ambulatory blood pressure monitoring protocols** for diagnosis confirmation and white coat hypertension identification
+- **Resistant hypertension evaluation** with secondary cause assessment (primary aldosteronism, renal artery stenosis, obstructive sleep apnea)
+- **Combination therapy selection** with preference for single-pill combinations to improve adherence
+- **Age-stratified treatment targets**: 120-130/70-79 mmHg (18-65 years), 130-139/70-79 mmHg (>65 years) 
+
+#### 4.1.2 Heart Association of Thailand: Heart Failure, Arrhythmia protocols
+
+The **Heart Association of Thailand** provides **complementary coverage** for:
+
+- **Heart Failure**: Comprehensive staging with **HFrEF/HFmrEF/HFpEF phenotyping**, **device therapy indications** (ICD, CRT), and **palliative care integration**
+- **Arrhythmia Management**: **Atrial fibrillation stroke prevention** with **Thai-specific warfarin dosing and monitoring** (given distinct bleeding risk in Asian populations), **direct oral anticoagulant selection**, and **catheter ablation candidacy**
+
+#### 4.1.3 Integration with ACC/AHA and ESC international standards
+
+Thai cardiology guidelines maintain **explicit alignment with ACC/AHA and ESC international standards** through: **structured adaptation processes** with systematic evaluation of local applicability; **participation in international guideline development** through committee membership; and **documentation of Thai-specific modifications** for population characteristics, medication availability, and healthcare system structure.
+
+### 4.2 Endocrinology & Metabolism
+
+#### 4.2.1 Thai Endocrine Society: Diabetes, Thyroid, Osteoporosis guidelines
+
+The **Thai Endocrine Society** provides **comprehensive, ADA/EASD-aligned guidance** :
+
+| Condition | Key Guideline Content |
+|-----------|----------------------|
+| **Diabetes Mellitus** | Individualized glycemic targets; pharmacotherapy algorithms with SGLT2 inhibitor and GLP-1 RA cardiovascular/renal outcome integration; complication screening protocols; insulin intensification pathways |
+| **Thyroid Disorders** | Hypothyroidism with levothyroxine optimization; hyperthyroidism with antithyroid drug/radioiodine selection; thyroid nodule evaluation with FNA criteria; thyroid cancer staging-appropriate treatment |
+| **Osteoporosis** | FRAX tool adaptation with Thai fracture risk data; pharmacotherapy selection (bisphosphonate, denosumab, teriparatide) with renal function considerations; monitoring and treatment duration |
+
+#### 4.2.2 Thai Pediatric Endocrine Society: Growth disorders, Puberty disorders
+
+The **pediatric endocrine extension** addresses **developmental-specific management**: **growth hormone deficiency** with stimulation testing and therapy optimization; **precocious and delayed puberty** with bone age assessment and intervention timing; **congenital adrenal hyperplasia** with emergency management protocols; and **pediatric diabetes** with intensive insulin therapy and continuous glucose monitoring integration where available.
+
+#### 4.2.3 Alignment with ADA, Endocrine Society international frameworks
+
+Thai endocrine guidelines maintain **explicit ADA and Endocrine Society alignment** with **1-2 year adaptation cycles** that incorporate: **accumulating Thai implementation experience**; **cost-effectiveness data for local healthcare system**; and **medication availability evolution** (particularly for emerging therapies like SGLT2 inhibitors and GLP-1 receptor agonists).
+
+### 4.3 Obstetrics & Gynaecology
+
+#### 4.3.1 Royal Thai College of Obstetricians and Gynaecologists (RTCOG)
+
+The **RTCOG** serves as **primary authoritative source for women's health** in Thailand , with **comprehensive guideline portfolio** spanning the **reproductive lifecycle**.
+
+#### 4.3.2 Infertility Management Guidelines, Menopause Hormone Therapy
+
+| Domain | Key Content |
+|--------|-------------|
+| **Infertility Management**  | Diagnostic evaluation with ovarian reserve assessment (AMH, AFC); treatment algorithms stratified by age and prognosis factors; ovulation induction (clomiphene, letrozole, gonadotropin); IUI and IVF candidacy with multiple pregnancy prevention; Buddhist ethical perspectives on embryo disposition |
+| **Menopause Hormone Therapy** | Individualized risk-benefit assessment with cardiovascular and breast cancer risk stratification; transdermal estrogen for metabolic benefits; progestogen selection by route and tolerance; treatment duration counseling with periodic reassessment |
+
+#### 4.3.3 Cervical Cancer Screening and Prevention Protocols
+
+The **cervical cancer guidelines** align with **national screening program implementation**: **HPV testing integration** with cytology triage; **screening interval optimization** (5-year HPV primary, 3-year co-testing); **colposcopy referral criteria** and quality standards; and **treatment of precancerous lesions** with excisional and ablative modalities. The **HPV vaccination program integration** creates evolving screening paradigms with consideration of **test-negative interval extension for vaccinated cohorts**.
+
+### 4.4 Oncology
+
+#### 4.4.1 National Cancer Institute Thailand: Site-specific treatment protocols
+
+The **National Cancer Institute Thailand** produces **authoritative, stage-appropriate protocols** for priority malignancies: **breast cancer** with screening, diagnostic workup, multimodality treatment, and survivorship care; **lung cancer** with histology-directed therapy and molecular profiling; **colorectal cancer** with surgical and systemic therapy integration; **liver/bile duct cancer** reflecting Thailand's high chronic hepatitis burden; and **cervical cancer** with screening program linkage.
+
+#### 4.4.2 Thai Society of Clinical Oncology: Chemotherapy, Immunotherapy guidelines
+
+The **Thai Society of Clinical Oncology** addresses **systemic therapy administration**: **chemotherapy regimen specifications** with supportive care protocols; **immunotherapy toxicity management** with immune-related adverse event recognition and corticosteroid escalation; and **targeted therapy selection** with companion diagnostic requirements.
+
+#### 4.4.3 Palliative Care and Pain Management Standards
+
+The **palliative care integration** encompasses: **pain assessment and opioid therapy** with regulatory navigation for Thai controlled substance prescribing; **symptom management** for dyspnea, nausea, cachexia; and **end-of-life care** with family involvement and Buddhist cultural considerations.
+
+### 4.5 Neurology
+
+#### 4.5.1 Thailand Epilepsy Society: Thai CPG for Epilepsy (2024)
+
+The **Thailand Epilepsy Society's Thai CPG for Epilepsy**  exemplifies **sophisticated local guideline development with international alignment**:
+
+- **ILAE 2017 seizure and epilepsy classification implementation**
+- **Antiepileptic drug selection by syndrome and comorbidity profile**
+- **Women-specific considerations**: contraception, pregnancy planning, teratogenicity counseling
+- **Surgical evaluation criteria** for drug-resistant epilepsy
+
+Notably, the **Regional CPG for Epilepsy for multidisciplinary medical teams in the Northeast**  demonstrates **implementation science innovation**—acknowledging that "treatment of the northeastern epileptic patients cannot totally follow the Thai Clinical Practice Guidelines (CPG) for Epilepsy due to a number of constraints" and developing **adapted protocols** for personnel limitations, antiepileptic drug availability, and treatment equipment constraints. This includes: **guidelines for interviewing patient's history and physical examination**; **care protocols for first and recurrence seizures**; **antiepileptic drug management**; **mental health integration**; **epilepsy clinic models**; **drug distribution systems**; and **therapeutic drug monitoring** with blood specimen collection logistics.
+
+#### 4.5.2 Thai Stroke Society: Acute Stroke Management, Secondary Prevention
+
+The **Thai Stroke Society** addresses **Thailand's leading cause of death and disability** with: **thrombolysis and thrombectomy decision frameworks** with time-window optimization; **stroke-ready hospital network development** with tiered capability standards; **secondary prevention protocols** with antiplatelet/anticoagulant selection and risk factor modification targets; and **rehabilitation integration** for functional recovery optimization.
+
+#### 4.5.3 Thai Parkinson's Disease and Movement Disorders Society
+
+The **movement disorders specialty** provides: **levodopa optimization** with motor complication management; **dopamine agonist and MAO-B inhibitor sequencing**; **deep brain stimulation candidacy evaluation** and referral pathways; and **non-motor symptom management** for cognitive impairment, autonomic dysfunction, and sleep disorders.
+
+### 4.6 Additional Specialty Societies
+
+#### 4.6.1 Thai Society of Gastroenterology: IBD, GERD, Liver Disease
+
+The **Thai Society of Gastroenterology** addresses **increasingly recognized digestive diseases**: **IBD** with biologic therapy selection and tuberculosis screening ; **GERD** with PPI optimization and refractory disease evaluation; and **functional GI disorders** with Rome criteria application.
+
+#### 4.6.2 Thai Association for the Study of the Liver: Hepatitis B/C, NAFLD
+
+The **hepatology specialty society** focuses on **viral hepatitis elimination and metabolic liver disease**: **hepatitis B** with antiviral therapy and HCC surveillance; **hepatitis C** with DAA pangenotypic regimens and cure monitoring; and **NAFLD/NASH** with fibrosis risk stratification and lifestyle intervention.
+
+#### 4.6.3 Thai Society of Nephrology: CKD, Dialysis, Transplantation
+
+The **nephrology coverage** encompasses: **CKD staging and progression prevention** with RAAS inhibition and SGLT2 inhibitor integration; **dialysis modality selection** (hemodialysis, peritoneal dialysis) with adequacy targets; and **transplantation evaluation and immunosuppression management**.
+
+#### 4.6.4 Thai Rheumatism Association: RA, SLE, Vasculitis management
+
+The **rheumatology society** provides: **treat-to-target management** with DMARD and biologic sequencing; **disease activity monitoring** with validated indices; and **infection risk mitigation** with tuberculosis screening for biologic therapy.
+
+#### 4.6.5 Thai Psychiatric Association: Mood disorders, Psychosis, Anxiety disorders
+
+The **psychiatry specialty** addresses: **depression and anxiety** with screening integration and stepped-care treatment; **severe mental illness** with antipsychotic optimization and long-acting injectable therapy; and **cultural adaptation** with traditional medicine interaction awareness and family involvement in care.
+
+---
+
+## 5. International Guideline Adaptations for Thailand
+
+### 5.1 Global-to-Local Translation Framework
+
+#### 5.1.1 WHO Guidelines: Infectious diseases, NCDs, Emergency protocols
+
+**WHO Guidelines serve as foundational references** for conditions with **global health security implications** and **normative international consensus**. Thailand's **Ministry of Public Health engagement with WHO guideline development processes** ensures early awareness of evolving recommendations and facilitates **timely national adaptation**. Implementation pathways include: **direct policy adoption** for public health imperative conditions (pandemic influenza, antimicrobial resistance containment); **RCPT and specialty society adaptation** for clinical management guidance; and **hospital network operational protocol development** for service delivery standards.
+
+The **COVID-19 pandemic** demonstrated both **WHO guideline value and limitations**—initial infection prevention and clinical management guidance provided **critical early standardization**, but **rapid evidence evolution necessitated frequent updates** that sometimes lagged behind emerging Thai clinical experience, prompting **parallel national guideline development** .
+
+#### 5.1.2 NICE Guidelines: Health technology assessment adaptations
+
+**NICE Guidelines** provide **methodological models for health technology assessment and economic evaluation** that influence Thai HTA development . The **NICE evidence-to-decision framework**, with explicit consideration of **clinical effectiveness, cost-effectiveness, and implementation feasibility**, offers structured approaches adapted for Thai economic conditions. However, **direct NICE recommendation adoption is limited** by: **healthcare system structure differences**; **medication pricing and availability variations**; and **population characteristic distinctions** requiring local adaptation or de novo analysis.
+
+#### 5.1.3 SIGN Guidelines: Evidence-based methodology adoption
+
+**SIGN Guidelines** contribute **methodological rigor for evidence synthesis and recommendation transparency**, with Thai guideline development groups frequently adopting **SIGN-derived protocols for systematic review conduct and expert consensus processes**. The **SIGN graded recommendation structure** and **explicit evidence linkage** influence RCPT methodological standards.
+
+### 5.2 Regional Asia-Pacific Sources
+
+#### 5.2.1 Singapore Ministry of Health: Adaptable protocols for tropical diseases
+
+**Singapore's Ministry of Health** provides **particularly relevant comparators** given **similar tropical disease burdens, developing healthcare systems, and explicit attention to cost-effectiveness**. Singapore's **dengue management guidelines** offer readily adaptable models for Thailand's substantial dengue burden with **similar vector ecology and clinical presentation patterns**. The **Singapore approach to chronic disease management in multi-ethnic populations** provides models applicable to Thailand's diverse demographic composition.
+
+#### 5.2.2 Royal Australasian Colleges: Specialist training-aligned guidelines
+
+The **Royal Australasian Colleges** (RACP, RACS, RANZCP, etc.) provide **specialist training-aligned guidelines** that influence Thai medical education given **substantial Thai physician training in Australian programs**. These guidelines often address **conditions with similar clinical presentation patterns** but may require adaptation for **Thailand's more resource-constrained practice environments**.
+
+#### 5.2.3 ASEAN Network for NCDs: Regional chronic disease management standards
+
+The **ASEAN Network for Non-Communicable Diseases** promotes **regional chronic disease management standardization** with particular attention to: **cross-border healthcare and workforce mobility**; **shared pharmaceutical procurement**; and **collaborative research on region-specific risk factors**. Thailand's **active participation** positions its guidelines for **regional influence and harmonization**.
+
+### 5.3 Specialty International Standards
+
+| International Source | Thai Adaptation Domain | Key Adaptation Considerations |
+|---------------------|------------------------|------------------------------|
+| **ACC/AHA/ESC**  | Cardiovascular disease management | Asian population risk prediction (lower BMI thresholds); medication response variations; healthcare system referral structure |
+| **ADA/EASD**  | Diabetes care standards | Carbohydrate-rich traditional diets; medication access evolution; complication screening feasibility |
+| **NCCN/ESMO**  | Oncology treatment protocols | Health technology assessment for expensive therapies; generic availability timelines; palliative care integration |
+| **GOLD/GINA**  | Respiratory disease management | Air pollution exacerbation (PM2.5); inhaler device availability; indoor biomass exposure |
+| **ACR/EULAR**  | Rheumatology disease activity and treatment | Tuberculosis screening for biologic therapy; methotrexate prescribing patterns; traditional medicine interactions |
+
+---
+
+## 6. RAG Dataset Construction Methodology
+
+### 6.1 Data Acquisition Pipeline
+
+#### 6.1.1 Automated scraping: MIMS Thailand disease pages with algorithm extraction
+
+The **automated scraping pipeline** for MIMS Thailand targets the **structured disease algorithm pages** with **predictable URL patterns** (`https://www.mims.com/thailand/disease/{condition}/{section}`) . Technical requirements include:
+
+| Component | Specification | Rationale |
+|-----------|-------------|-----------|
+| **Browser automation** | Selenium/Playwright with JavaScript execution | Dynamic content rendering for algorithm visualizations |
+| **Respectful rate limiting** | ≤1 request/second with exponential backoff | Service continuity and terms of service compliance |
+| **Structured extraction** | XPath/CSS selectors for algorithm steps, decision nodes, medication tables | Preservation of hierarchical clinical logic |
+| **Error handling** | Fallback parsing for page structure variations; manual review queue for extraction failures | Dataset completeness assurance |
+| **Version detection** | Timestamp and editorial board metadata capture | Currency tracking and update triggering |
+
+The **algorithm-specific extraction** targets: **visual flowchart elements** (decision diamonds, action rectangles, terminal nodes); **branching condition text** with threshold values and clinical criteria; **sequential step numbering** preserving procedural order; and **cross-reference links** to medication and guideline sections.
+
+#### 6.1.2 PDF processing: RCPT and specialty society guideline documents
+
+**PDF processing** addresses **heterogeneous document formats** with **adaptive pipeline architecture**:
+
+| Document Type | Processing Approach | Output Structure |
+|-------------|---------------------|----------------|
+| **Born-digital PDFs** | Direct text extraction with layout preservation; heading hierarchy identification | Structured sections with metadata (title, version, authors, date) |
+| **Scanned documents** | OCR with Thai-English language detection; figure and table segmentation | Searchable text with confidence scoring; manual verification queue for low-confidence regions |
+| **Mixed-format documents** | Hybrid approach with zone-based processing; human-in-the-loop for complex layouts | Best-effort extraction with explicit uncertainty flags |
+
+**Critical preservation targets**: **evidence grading annotations** (Class I/II/III, Level A/B/C); **algorithm flowcharts** with vector graphic extraction or alternative text generation; **medication dosing tables** with structured row-column relationships; and **reference citations** with PubMed ID resolution where possible.
+
+#### 6.1.3 API integration: PubMed, Cochrane for evidence linkage
+
+**API integration** enables **provenance enrichment and living guideline functionality**:
+
+- **PubMed E-utilities**: Citation resolution from guideline reference lists; abstract and metadata retrieval for supporting studies; MeSH term extraction for semantic enrichment
+- **Cochrane Library**: Systematic review identification for guideline evidence base; intervention effect size data for outcome prediction
+- **CrossRef**: DOI resolution and forward citation tracking for evidence update detection
+
+This integration supports **"evidence-aware" RAG retrieval** that surfaces both **the Thai guideline recommendation** and its **supporting primary research** when users query about specific interventions.
+
+### 6.2 Content Structuring & Chunking
+
+#### 6.2.1 Hierarchical decomposition: Specialty → Disease → Algorithm Step → Recommendation
+
+The **four-level hierarchical decomposition** enables **retrieval granularity matching query specificity**:
+
+| Level | Typical Content Scope | Chunk Size | Retrieval Application |
+|-------|----------------------|-----------|----------------------|
+| **Specialty** | Disease prevalence, health system organization, screening programs | 1024-2048 tokens | Broad context queries; health policy questions; continuing medical education |
+| **Disease** | Epidemiology, pathophysiology, classification systems, overview algorithms | 512-1024 tokens | Diagnostic framework questions; patient education material generation |
+| **Algorithm Step** | Single decision node with conditions, actions, alternatives; complete pathway segment | 256-512 tokens | Specific clinical scenario queries; point-of-care decision support |
+| **Recommendation** | Evidence-graded guidance statement with rationale, special populations, implementation notes | 128-256 tokens | Precise therapeutic questions; drug interaction checking; medicolegal documentation |
+
+**Boundary preservation strategies**: **algorithm step integrity** (avoid splitting conditional logic across chunks); **medication information cohesion** (dosing, monitoring, interactions in proximate chunks); and **evidence grade-context association** (recommendation statement with its supporting rationale and citations).
+
+#### 6.2.2 Metadata tagging: Version, evidence grade, source URL, publication date
+
+**Comprehensive metadata schema** for each chunk:
+
+| Metadata Category | Specific Fields | Clinical Utility |
+|-------------------|---------------|----------------|
+| **Provenance** | Source platform (MIMS Thailand, RCPT, specific society); document URL; document version; chunk creation timestamp | Citation verification; update detection; accountability documentation |
+| **Clinical Context** | Specialty; disease/condition; ICD-10 codes; SNOMED CT concepts; patient population tags (adult, pediatric, pregnant, elderly) | Query filtering; relevance ranking; contraindication checking |
+| **Evidence Quality** | Evidence class (I/II/III); evidence level (A/B/C); guideline section type (algorithm, narrative, medication) | Confidence calibration; quality filtering; shared decision-making support |
+| **International Correlation** | Source international guideline (ACC/AHA, ESC, ADA, etc.); adaptation notes; divergence rationale | Cross-reference retrieval; guideline harmonization assessment |
+
+#### 6.2.3 Cross-reference mapping: International guideline correlations
+
+**Bidirectional cross-reference mapping** documents relationships between **Thai guidelines and international sources**: explicit citation links (Thai guideline references international source); semantic similarity (algorithm step corresponds to international recommendation); and adaptation annotations (Thai modification with documented rationale). This mapping enables **retrieval augmentation** that presents **both local recommendation and international context** when users query about guideline provenance or potential practice variation.
+
+### 6.3 Vector Database Optimization
+
+#### 6.3.1 Embedding model selection: Medical domain-specific (PubMedBERT, BioBERT)
+
+| Model | Training Corpus | Strengths for Thai CPG | Deployment Considerations |
+|-------|---------------|------------------------|--------------------------|
+| **PubMedBERT**  | 14 million PubMed abstracts | Superior biomedical terminology capture; strong baseline for medical QA | English-only; requires Thai content translation or parallel processing |
+| **BioBERT**  | PubMed abstracts + PMC full-text + clinical notes (MIMIC-III) | Rich clinical concept relationships; procedure and medication understanding | Similar English limitation; v1.1 with multi-domain pretraining recommended |
+| **mBERT/XLM-R** | Multilingual Wikipedia + web crawl | Native Thai processing; cross-lingual transfer potential | Less medical-specific; fine-tuning on Thai medical corpus recommended |
+| **Thai-specific fine-tuned** | Thai medical literature + MIMS/RCPT corpus | Optimal Thai medical semantic capture; local terminology and abbreviations | Requires substantial training data; ongoing maintenance for vocabulary evolution |
+
+**Recommended architecture**: **English content** (international guideline adaptations, primary research abstracts) → **PubMedBERT/BioBERT**; **Thai content** (RCPT primary documents, MIMS Thai-language sections) → **XLM-R fine-tuned on Thai medical corpus** or **parallel indexing with translation verification**.
+
+#### 6.3.2 Chunk size optimization: 512 tokens with 128-token overlap
+
+The **512-token chunk size with 128-token overlap** represents **empirical optimization** balancing:
+
+| Factor | 512-Token Configuration | Alternative Considerations |
+|--------|------------------------|---------------------------|
+| **Semantic coherence** | Preserves complete algorithm steps or recommendation statements with context | Smaller chunks (256) for precise retrieval; larger (1024) for complex multi-step reasoning |
+| **Embedding quality** | Within typical model maximum sequence lengths; avoids truncation artifacts | Some models support 1024+ tokens with quality trade-offs |
+| **Retrieval precision** | Enables fine-grained matching to specific query intents | Overlap ensures boundary-spanning content remains retrievable |
+| **Storage efficiency** | Moderate index size with acceptable redundancy | Overlap increases storage ~25% but improves boundary coverage |
+
+**Adaptive chunking** for **algorithm-specific structures**: preserve **complete decision branches** (condition + action + alternative) even if exceeding nominal token limit; use **hierarchical chunking** with summary parent and detail children for complex multi-step pathways.
+
+#### 6.3.3 Retrieval augmentation: Hybrid dense-sparse indexing for algorithm precision
+
+| Index Type | Query Type Optimization | Implementation |
+|------------|------------------------|----------------|
+| **Dense (neural embedding)** | Conceptual similarity; paraphrased queries; symptom-to-disease mapping | FAISS/Annoy with cosine similarity; approximate nearest neighbors for scale |
+| **Sparse (BM25/TF-IDF)** | Exact terminology matching; medication names; diagnostic criteria thresholds; numeric values | Inverted index with BM25 scoring; field-weighted for title/heading emphasis |
+| **Metadata filtering** | Specialty restriction; evidence grade minimum; date range; patient population | Pre-filtered candidate set before similarity ranking |
+| **Hybrid fusion** | Combined semantic + lexical relevance with learned weights | Linear combination or RRF (Reciprocal Rank Fusion); query-type adaptive weighting |
+
+**Algorithm-specific retrieval enhancement**: **structured query parsing** to identify decision point type (diagnosis, treatment, monitoring); **pathway-aware ranking** that prioritizes sequential algorithm steps when prior context is known; and **contraindication surfacing** that retrieves precautionary content even for seemingly unrelated queries.
+
+### 6.4 Quality Assurance & Validation
+
+#### 6.4.1 Clinical expert review: Thai physician validation of extracted content
+
+**Multi-specialty expert panel structure**:
+
+| Review Domain | Expertise Required | Validation Focus |
+|-------------|-------------------|----------------|
+| **Content accuracy** | Specialty board-certified practitioners | Correct interpretation of algorithm logic; appropriate clinical thresholds; medication dosing verification |
+| **Extraction fidelity** | Medical informatics specialists | Structural preservation in chunking; metadata tag accuracy; cross-reference completeness |
+| **Thai language quality** | Native-speaking clinicians and linguists | Appropriate terminology; avoidance of harmful translation errors; cultural sensitivity |
+| **Implementation feasibility** | Primary care and tertiary center representatives | Resource-appropriate guidance; referral pathway realism; workflow integration potential |
+
+**Review sampling strategy**: **stratified random sample** across specialties, conditions, and algorithm complexity levels; **priority review** for high-stakes conditions (cardiovascular emergencies, cancer treatment, pediatric dosing); and **adversarial testing** with deliberately challenging queries to identify retrieval failures.
+
+#### 6.4.2 Version control system: Automated update detection and changelog
+
+| Component | Function | Technical Implementation |
+|-----------|----------|------------------------|
+| **Source monitoring** | Detect new publications and updates | RSS feed aggregation; scheduled web crawling with change detection; API polling for structured sources |
+| **Change classification** | Distinguish cosmetic from substantive updates | Diff analysis with clinical NLP; expert triage for ambiguous changes; automated flagging of medication/algorithm modifications |
+| **Update propagation** | Trigger re-extraction and re-indexing | Workflow orchestration with dependency management; A/B index switching for zero-downtime updates |
+| **Changelog generation** | Document modifications for user transparency | Structured diff summarization; natural language generation of change descriptions; impact assessment for practice-critical updates |
+
+#### 6.4.3 Evidence grading preservation: Class/Level metadata for recommendation strength
+
+**Evidence grade-aware retrieval strategies**:
+
+| User Scenario | Retrieval Behavior | Example Implementation |
+|-------------|-------------------|------------------------|
+| **Initial decision support** | Prioritize Class I, Level A recommendations | Filtered retrieval with grade threshold; explicit confidence indication |
+| **Complex or refractory case** | Include Class IIa/IIb with uncertainty framing | Expanded retrieval with grade-appropriate caution language; specialist referral suggestion |
+| **Shared decision-making** | Present evidence spectrum with patient-friendly explanation | Multi-grade retrieval with comparative presentation; visual evidence quality indicator |
+| **Quality measurement** | Identify guideline-concordant care opportunities | Automated protocol adherence checking against Class I recommendations |
+
+---
+
+## 7. Implementation & Access Considerations
+
+### 7.1 Licensing & Copyright Framework
+
+#### 7.1.1 MIMS Thailand: Terms of use for educational/clinical decision support
+
+MIMS Thailand operates under **commercial terms of service** that require careful review for RAG dataset construction and deployment . Key considerations include: **educational and clinical decision support use** is typically permitted for individual practitioners; **systematic extraction and derivative dataset creation** may require explicit licensing; **enterprise integration** in hospital information systems or commercial products necessitates contractual negotiation; and **attribution requirements** for MIMS content used in RAG outputs. **Recommended approach**: direct engagement with MIMS (Pte) Ltd for **authorized API access or data licensing agreement** that ensures sustainable, permissioned integration while respecting commercial interests.
+
+#### 7.1.2 RCPT/Society guidelines: Open access policies with attribution requirements
+
+RCPT and specialty society guidelines generally adopt **open access policies** that encourage widespread dissemination for quality improvement . Typical terms include: **free download and use** for educational and clinical purposes; **explicit attribution** in any derivative works or presentations; **non-commercial preference** with commercial use requiring notification or permission; and **prohibition of misrepresentation** or alteration of recommendation meaning. These terms are **readily compatible with academic and public sector RAG deployment**, with appropriate citation preservation in retrieval outputs.
+
+#### 7.1.3 International adaptations: License compatibility for derivative works
+
+International guideline adaptations present **complex license compatibility** when Thai modifications create derivative works from copyrighted source guidelines. **Best practices**: explicit documentation of adaptation methodology and divergence points; preservation of original source attribution; verification that machine learning model training on guideline content falls within permitted transformative use; and legal review for commercial deployment scenarios. **Creative Commons-licensed international guidelines** (increasingly common for WHO and some specialty society content) provide clearer permission frameworks.
+
+### 7.2 Technical Infrastructure
+
+#### 7.2.1 Local deployment option: On-premise vector database for hospital systems
+
+| Aspect | Specification | Rationale |
+|--------|-------------|-----------|
+| **Hardware** | GPU-enabled servers for embedding generation; SSD storage for vector index; redundant configuration for availability | Latency minimization; data sovereignty; integration with hospital information systems |
+| **Software** | FAISS/Pinecone/Weaviate for vector search; PostgreSQL/MongoDB for metadata and document storage; Kubernetes for orchestration | Production reliability; horizontal scaling; operational familiarity |
+| **Security** | Network isolation from public internet; role-based access control; audit logging of all queries and retrievals | Patient data protection; compliance with Thai Personal Data Protection Act; accountability |
+| **Integration** | HL7 FHIR APIs for EHR connectivity; SMART on FHIR for embedded decision support; mobile SDK for point-of-care access | Workflow integration; user experience optimization; reach across care settings |
+
+#### 7.2.2 Cloud-based API: Scalable RAG-as-a-service for telemedicine platforms
+
+**Cloud deployment advantages**: **elastic scaling** for variable demand patterns without capital investment; **global accessibility** for telemedicine and cross-border healthcare; **managed infrastructure** reducing operational burden for smaller organizations; and **rapid deployment** enabling proof-of-concept and iterative refinement. **Critical requirements**: **Thai data residency options** addressing sovereignty concerns; **service level agreements** with availability and latency guarantees appropriate for clinical use; **comprehensive security certification** (ISO 27001, SOC 2, HIPAA/HITRUST alignment); and **transparent pricing** predictable for healthcare budget planning.
+
+#### 7.2.3 Offline capability: Compressed model for resource-limited settings
+
+| Compression Technique | Size Reduction | Quality Impact | Application Scenario |
+|----------------------|--------------|--------------|----------------------|
+| **Quantization (INT8)** | 4x | Minimal for retrieval tasks | Edge deployment; mobile applications |
+| **Knowledge distillation** | 10-100x | Moderate; task-specific evaluation required | Rural health facilities; emergency response |
+| **Pruning + quantization** | 100-1000x | Significant; careful validation needed | Ultra-resource-limited; intermittent connectivity |
+| **On-device fine-tuning** | Baseline model + small adapter | Maintained with domain adaptation | Personalized institutional guidance |
+
+**Offline deployment scenarios**: **rural primary care** with unreliable internet; **disaster response** with infrastructure disruption; **international deployment** with data export restrictions; and **cost-sensitive settings** with limited connectivity pricing.
+
+### 7.3 Continuous Update Mechanisms
+
+#### 7.3.1 Automated monitoring: New guideline publication alerts
+
+| Source Type | Monitoring Mechanism | Alert Frequency | Priority Classification |
+|-------------|---------------------|---------------|------------------------|
+| **MIMS Thailand** | Scheduled page crawling with timestamp comparison; API webhook if available | Daily | High: medication/algorithm changes; Medium: new disease coverage; Low: cosmetic updates |
+| **RCPT portal** | RSS feed monitoring; email alert subscription; scheduled PDF repository scanning | Weekly | High: new guideline release; existing guideline revision |
+| **Specialty societies** | Mailing list monitoring; conference proceeding tracking; journal table of contents alerts | Variable by society | Context-dependent by condition prevalence and practice impact |
+| **International sources** | PubMed search alerts; guideline repository APIs (GIN, MAGIC); society newsletter monitoring | Weekly to monthly | High: practice-changing trial publication; safety signal emergence |
+
+#### 7.3.2 Quarterly review cycles: Expert panel validation of algorithm changes
+
+**Structured quarterly review process**:
+
+| Week | Activity | Participants | Output |
+|------|----------|-----------|--------|
+| **1-2** | Accumulated change summary compilation; preliminary impact assessment | Medical informatics team; literature surveillance specialists | Prioritized review agenda with clinical significance scoring |
+| **3-4** | Specialty-specific expert panel review; clinical feasibility evaluation | Board-certified specialists from relevant fields; primary care representatives | Validated update recommendations; implementation guidance notes |
+| **5-6** | Cross-specialty harmonization; resource impact assessment; health technology evaluation if indicated | Multi-specialty panel; health economists; policy representatives | Integrated update plan with feasibility confirmation |
+| **7-8** | Dataset integration and testing; user communication preparation; training material update | Technical implementation team; clinical education specialists | Deployed update with documentation; user notification |
+
+#### 7.3.3 User feedback integration: Clinical outcome tracking for guideline effectiveness
+
+**Feedback collection mechanisms**: **explicit rating** of RAG response helpfulness; **structured reporting** of discrepancies between retrieved guidance and local practice or patient outcomes; **voluntary narrative feedback** on implementation challenges or successes; and **automated outcome correlation** where EHR integration enables guideline adherence tracking with clinical results. **Quality improvement cycle**: aggregated feedback analysis → priority issue identification → expert panel review → guideline or algorithm refinement → update deployment → effectiveness reassessment.
+
+---
+
+## 8. Disease-Specific Algorithm Priorities for RAG Enrichment
+
+### 8.1 High-Burden Non-Communicable Diseases
+
+#### 8.1.1 Cardiovascular: Hypertension, Heart Failure, Dyslipidemia, CAD
+
+**Priority rationale**: Cardiovascular diseases account for **approximately 30% of Thai mortality**, with substantial **preventable burden** through guideline-concordant care. **RAG enrichment focus**:
+
+| Condition | Algorithm Enhancement Priority | Specific Content Targets |
+|-----------|------------------------------|------------------------|
+| **Hypertension** | Very High | Home/ambulatory BP monitoring integration; resistant hypertension evaluation; combination therapy selection with single-pill preference; age-stratified targets  |
+| **Heart Failure** | Very High | Phenotype-specific therapy (HFrEF/HFmrEF/HFpEF); four-drug foundational regimen up-titration; device therapy candidacy; decompensation prevention  |
+| **Dyslipidemia** | Very High | Thai CV Risk Score application; statin intensity by risk category; non-statin addition criteria; familial hypercholesterolemia identification  |
+| **Coronary Artery Disease** | High | Acute coronary syndrome pathway differentiation; revascularization timing; secondary prevention intensity; chronic coronary syndrome follow-up  |
+
+#### 8.1.2 Metabolic: Type 2 Diabetes, Obesity, Metabolic Syndrome
+
+**Priority rationale**: Thailand's **diabetes prevalence (~10-12% of adults)** and **accelerating obesity epidemic** create extraordinary healthcare burden with **proven intervention effectiveness**. **RAG enrichment focus**: **glycemic target individualization** by age and comorbidity; **pharmacotherapy sequencing** with cardiovascular/renal outcome trial integration; **insulin intensification** with analog selection and monitoring; **complication screening** with retinal, renal, and cardiovascular surveillance protocols; and **weight management** with lifestyle, pharmacotherapy, and surgical options .
+
+#### 8.1.3 Oncology: Breast, Lung, Colorectal, Liver, Cervical Cancer
+
+**Priority rationale**: These **five sites represent majority of Thai cancer incidence and mortality**, with **rapidly evolving therapeutic landscape** requiring current guidance. **RAG enrichment focus**: **screening eligibility and interval optimization**; **staging-appropriate multimodality treatment sequencing**; **molecular profiling and targeted therapy selection**; **immunotherapy toxicity management**; **palliative care integration**; and **survivorship care planning** .
+
+#### 8.1.4 Respiratory: COPD, Asthma, Lung Cancer screening
+
+**Priority rationale**: **High prevalence, substantial symptom burden, and proven intervention underutilization** create quality improvement opportunity. **RAG enrichment focus**: **asthma control assessment with stepwise adjustment** ; **COPD diagnosis confirmation and exacerbation prevention**; **inhaler technique and adherence optimization**; **air pollution exacerbation management**; and **lung cancer screening eligibility with low-dose CT implementation** .
+
+### 8.2 Priority Infectious Diseases
+
+#### 8.2.1 Tropical/Neglected: Malaria, Dengue, Leptospirosis, Melioidosis
+
+**Priority rationale**: These **region-endemic conditions** have **limited international guideline coverage** but **substantial Thai expertise and disease burden**. **RAG enrichment focus**: **species-differentiated and resistance-adapted malaria treatment** with artemisinin combination therapy optimization ; **dengue severity grading with fluid management** and warning sign recognition ; **leptospirosis early antibiotic therapy** with doxycycline or azithromycin; and **melioidosis prolonged eradication therapy** with Burkholderia pseudomallei-specific protocols.
+
+#### 8.2.2 Emerging: COVID-19 variants, Influenza pandemic preparedness
+
+**Priority rationale**: **Demonstrated pandemic impact and ongoing evolution** requires **rapidly updatable guidance infrastructure**. **RAG enrichment focus**: **variant-specific clinical characteristics and therapeutic adjustments**; **antiviral therapy selection by timing and risk factors** ; **vaccination strategy integration**; and **preparedness protocols for novel pathogen emergence** with scalable rapid guideline development.
+
+#### 8.2.3 Antimicrobial Resistance: Stewardship protocols, Resistance surveillance
+
+**Priority rationale**: **Thailand's substantial resistance burden** and **global health security imperative** demand **guideline-concordant prescribing**. **RAG enrichment focus**: **diagnostic stewardship with culture-directed therapy**; **empirical therapy selection by site and severity with local resistance data** ; **de-escalation and duration optimization**; and **infection prevention and control integration**.
+
+### 8.3 Maternal-Child Health
+
+#### 8.3.1 Obstetric emergencies: Pre-eclampsia, Eclampsia, Postpartum hemorrhage
+
+**Priority rationale**: **Time-critical, high-mortality conditions** where **protocol-guided management improves outcomes**. **RAG enrichment focus**: **severe feature recognition with magnesium sulfate neuroprotection** ; **blood pressure emergency management** with appropriate antihypertensive selection; **eclampsia seizure control and delivery timing**; and **postpartum hemorrhage escalating intervention** with uterotonics, tamponade, and surgical options.
+
+#### 8.3.2 Neonatal care: Birth asphyxia, Sepsis, Jaundice management
+
+**Priority rationale**: **Early intervention in critical window** with **lifetime impact**. **RAG enrichment focus**: **resuscitation with positive pressure ventilation and chest compression protocols**; **therapeutic hypothermia for moderate-severe hypoxic-ischemic encephalopathy**; **early-onset sepsis risk stratification and empirical antibiotics**; and **hyperbilirubinemia risk assessment with phototherapy and exchange transfusion thresholds** .
+
+#### 8.3.3 Pediatric development: Growth monitoring, Vaccination schedules, Developmental delays
+
+**Priority rationale**: **Preventive and early intervention opportunities** with **substantial lifetime health impact**. **RAG enrichment focus**: **growth velocity assessment with nutritional and endocrine evaluation triggers**; **national immunization schedule with catch-up protocols**; **developmental milestone surveillance with early intervention referral**; and **common pediatric infections with age-appropriate antimicrobial selection**.
+
+### 8.4 Mental Health & Neurology
+
+#### 8.4.1 Common disorders: Depression, Anxiety, Insomnia screening and management
+
+**Priority rationale**: **High prevalence, substantial disability, and frequently suboptimal recognition/treatment** in primary care. **RAG enrichment focus**: **screening tool integration (PHQ-9, GAD-7, ISI)** with appropriate cutoff interpretation; **stepped-care treatment with pharmacotherapy and psychotherapy coordination** ; **first-line agent selection with side effect counseling**; and **referral triggers for specialist involvement**.
+
+#### 8.4.2 Severe mental illness: Schizophrenia, Bipolar disorder long-term care
+
+**Priority rationale**: **Chronic conditions requiring sustained engagement** with **medication adherence challenges**. **RAG enrichment focus**: **antipsychotic selection with metabolic monitoring**; **long-acting injectable therapy for adherence optimization**; **mood stabilizer optimization with level monitoring**; **relapse prevention and early intervention**; and **family involvement and psychosocial support integration**.
+
+#### 8.4.3 Neurological emergencies: Stroke thrombolysis, Status epilepticus, Meningitis
+
+**Priority rationale**: **Time-critical conditions with outcome-dependent rapid intervention**. **RAG enrichment focus**: **thrombolysis eligibility with time-window and contraindication assessment** ; **thrombectomy candidacy and transfer protocols**; **status epilepticus benzodiazepine escalation and anesthetic management**; and **meningitis empirical antibiotics by age and immune status with rapid diagnostic testing integration**.
+
+---
+
+## 9. Comparative Platform Analysis
+
+### 9.1 MIMS Thailand vs. MIMS Philippines/Regional
+
+#### 9.1.1 Structural similarity: Multidisciplinary specialty organization
+
+The **MIMS platform family demonstrates substantial structural consistency** across Southeast Asian markets, with **identical core messaging** ("MIMS has the most comprehensive collection Clinical Practice Guidelines") , **shared specialty taxonomy** (15 disciplines with "See More +" expansion), and **tripartite content architecture** (algorithms, guidelines, medication reference). This consistency enables: **unified RAG construction methodologies** adaptable across markets; **healthcare professional mobility** with familiar interface patterns; and **regional content harmonization** where appropriate.
+
+#### 9.1.2 Localization differences: Thai disease prevalence, medication availability
+
+| Dimension | Thai Localization | Philippine Localization | Implication for RAG |
+|-----------|-----------------|------------------------|---------------------|
+| **Disease priority** | Higher tropical disease emphasis (malaria, melioidosis, dengue); emerging NCD epidemic | Higher metabolic syndrome prevalence; different infectious disease pattern | Market-specific content weighting; cross-training for regional deployment |
+| **Medication availability** | National List of Essential Medicines; three insurance schemes with varying formularies | PhilHealth formulary; private insurance dominance | Formulary-aware therapeutic guidance; cost-conscious algorithm branching |
+| **Healthcare structure** | Universal coverage with district health system; tertiary concentration in Bangkok | Mixed public-private; geographic archipelago challenges | Referral pathway realism; telemedicine integration emphasis |
+| **Regulatory framework** | Thai FDA; Ministry of Public Health central coordination | FDA Philippines; decentralized implementation | Adverse event reporting; indication-specific guidance |
+
+#### 9.1.3 Algorithm depth: Stepwise detail level for clinical decision points
+
+**Comparative assessment**: Both platforms provide **similar stepwise granularity** for common conditions, with **Thai content frequently demonstrating greater elaboration of primary care-appropriate pathways** reflecting the **extensive rural health center network**. **Medication integration depth** is comparable, with **local formulary and pricing information** substituting appropriately.
+
+### 9.2 RCPT vs. International Society Guidelines
+
+#### 9.2.1 Evidence base: Local population data vs. global clinical trials
+
+| Aspect | RCPT/Thai Society Guidelines | International Society Guidelines | Integration Strategy |
+|--------|---------------------------|--------------------------------|----------------------|
+| **Primary evidence** | Thai cohort studies (EGAT Heart Study, Thai Diabetes Registry) where available; systematic review of international trials | Large-scale RCTs, predominantly Western populations | Explicit local validation; subgroup analysis when Asian representation adequate |
+| **Risk prediction** | Thai-specific tools (Thai CV Risk Score, Thai FRAX adaptation) | Western-derived calculators with known calibration limitations | Preference for validated local tools; recalibration guidance for international tools |
+| **Treatment response** | Emerging Thai pharmacogenomic data; local effectiveness studies | Trial efficacy estimates with known efficacy-effectiveness gap | Effectiveness monitoring; pragmatic trial integration |
+| **Safety profile** | Thai adverse event surveillance; herbal medicine interaction data | Trial safety with post-marketing surveillance | Enhanced pharmacovigilance; traditional medicine integration |
+
+#### 9.2.2 Resource adaptation: Cost-effectiveness for Thai healthcare system
+
+**RCPT guidelines explicitly address cost-effectiveness** through: **health technology assessment integration** with HITAP evaluation for expensive interventions; **generic prioritization** where bioequivalence established; **stepped-care protocols** that reserve expensive options for refractory cases; and **implementation feasibility assessment** for resource-limited settings. **International guidelines** increasingly incorporate cost considerations but may assume **resource availability inconsistent with Thai practice**.
+
+#### 9.2.3 Implementation feasibility: Primary care vs. tertiary center protocols
+
+**RCPT guideline strength**: **stratified recommendations by care setting capability**, with explicit **primary care-appropriate pathways** and **clear specialist referral triggers**. This **pragmatic approach** contrasts with **international guidelines that may assume specialist-managed care** or provide **less explicit primary care guidance**.
+
+### 9.3 Integration Opportunities
+
+#### 9.3.1 Cross-mapping: MIMS algorithms with RCPT evidence grades
+
+**Synergistic integration strategy**: **MIMS algorithm steps** as **primary retrieval units** with **RCPT evidence grade enrichment** where corresponding recommendations exist; **RCPT detailed rationale** as **supplementary content** for complex decision points; and **cross-reference validation** identifying areas of concordance and divergence with explicit documentation.
+
+#### 9.3.2 Gap analysis: Missing specialty coverage identification
+
+| Identified Gap | Current Coverage | Enrichment Strategy |
+|--------------|----------------|---------------------|
+| **Geriatric medicine** | Fragmented across specialties; no dedicated geriatric guidelines | Develop frailty assessment, polypharmacy reduction, dementia care protocols |
+| **Palliative care** | Oncology-focused; limited non-malignant coverage | Expand symptom management, advance care planning, end-of-life decision-making |
+| **Precision medicine** | Emerging in oncology; limited pharmacogenomic guidance | Develop genotype-guided therapy selection, biomarker interpretation protocols |
+| **Allergy/immunology** | Limited beyond asthma and atopic dermatitis | Expand food allergy, drug allergy, primary immunodeficiency coverage |
+
+#### 9.3.3 Harmonization: Redundant guideline reconciliation
+
+**Reconciliation framework**: **identify overlapping coverage** through systematic cross-mapping; **assess evidence quality and currency** to prioritize authoritative source; **document divergence rationale** where recommendations differ; and **explicit harmonization notes** in RAG retrieval when multiple sources address identical clinical scenarios.
+
+---
+
+## 10. Future Expansion & Sustainability
+
+### 10.1 Emerging Specialty Coverage
+
+#### 10.1.1 Geriatric Medicine: Frailty, Polypharmacy, Dementia care
+
+**Rationale**: Thailand's **rapid population aging** (projected >20% aged ≥65 by 2030) creates **extraordinary demand for geriatric expertise** currently fragmented across specialties. **Development priorities**: **frailty assessment with intervention thresholds** (Fried phenotype, FRAIL scale, clinical frailty scale); **comprehensive geriatric assessment integration**; **polypharmacy reduction with deprescribing protocols**; **dementia care with behavioral and pharmacological management**; and **age-friendly care environment standards**.
+
+#### 10.1.2 Palliative Care: Pain management, End-of-life decision making
+
+**Rationale**:
