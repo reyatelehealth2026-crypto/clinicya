@@ -7,6 +7,53 @@
 class BroadcastHelper
 {
     /**
+     * Rewrite all http(s) URLs inside an array of LINE messages (text/image/flex)
+     * to tracked redirect URLs scoped to $campaignId. Idempotent: messages without
+     * URLs pass through unchanged. Errors fall back to the original messages so a
+     * tracker outage never blocks a send.
+     *
+     * @param PDO   $db
+     * @param array $messages   LINE message objects (array form)
+     * @param int   $campaignId broadcast_campaigns.id OR broadcasts.id
+     * @return array            Rewritten messages
+     */
+    public static function rewriteMessages(PDO $db, array $messages, int $campaignId): array
+    {
+        if ($campaignId <= 0 || empty($messages)) {
+            return $messages;
+        }
+        $trackerFile = __DIR__ . '/BroadcastLinkTracker.php';
+        if (!file_exists($trackerFile)) {
+            return $messages;
+        }
+        require_once $trackerFile;
+
+        try {
+            $tracker = new BroadcastLinkTracker($db);
+        } catch (Exception $e) {
+            error_log('rewriteMessages: tracker init failed: ' . $e->getMessage());
+            return $messages;
+        }
+
+        foreach ($messages as &$msg) {
+            if (!is_array($msg) || !isset($msg['type'])) {
+                continue;
+            }
+            try {
+                if ($msg['type'] === 'text' && !empty($msg['text'])) {
+                    $msg['text'] = $tracker->rewriteText((string)$msg['text'], $campaignId);
+                } elseif ($msg['type'] === 'flex' && !empty($msg['contents']) && is_array($msg['contents'])) {
+                    $msg['contents'] = $tracker->rewriteFlex($msg['contents'], $campaignId);
+                }
+            } catch (Exception $e) {
+                error_log('rewriteMessages: rewrite failed for type=' . $msg['type'] . ': ' . $e->getMessage());
+            }
+        }
+        unset($msg);
+        return $messages;
+    }
+
+    /**
      * Get unique LINE user IDs from multiple tags
      */
     public static function getUserIdsByTags(AdvancedCRM $crm, array $tagIds): array

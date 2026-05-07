@@ -95,6 +95,20 @@ try {
     
     <!-- Center: Bubble Builder -->
     <div class="xl:col-span-5 space-y-4">
+        <!-- Draft Bar -->
+        <div class="bg-white rounded-xl shadow p-3 flex items-center gap-2 flex-wrap">
+            <input type="text" id="draftName" placeholder="ชื่อ Draft (เช่น โปรเดือนพ.ค.)"
+                class="flex-1 min-w-[160px] px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
+            <input type="hidden" id="draftId" value="">
+            <button type="button" onclick="saveDraft()" class="px-3 py-2 bg-purple-500 text-white rounded-lg text-sm hover:bg-purple-600">
+                <i class="fas fa-save mr-1"></i>บันทึก Draft
+            </button>
+            <button type="button" onclick="openDraftPicker()" class="px-3 py-2 border rounded-lg text-sm hover:bg-gray-50">
+                <i class="fas fa-folder-open mr-1"></i>เปิด Draft
+            </button>
+            <span id="draftStatus" class="text-xs text-gray-400"></span>
+        </div>
+
         <div class="bg-white rounded-xl shadow p-4">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="font-semibold"><i class="fas fa-layer-group text-purple-500 mr-2"></i>Bubble Builder</h2>
@@ -103,6 +117,19 @@ try {
                 </button>
             </div>
             <div id="bubblesContainer" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <!-- Draft Picker Modal -->
+    <div id="draftPickerModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-full max-w-lg mx-4 shadow-xl">
+            <div class="p-4 border-b flex items-center justify-between">
+                <h3 class="font-semibold">📂 Drafts ที่บันทึกไว้</h3>
+                <button onclick="closeDraftPicker()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="draftPickerList" class="p-4 max-h-96 overflow-y-auto divide-y">
+                <p class="text-gray-400 text-center py-4">กำลังโหลด…</p>
+            </div>
         </div>
     </div>
     
@@ -434,6 +461,174 @@ function buildFlexFromData(bubblesData) {
     });
     return flexBubbles.length === 1 ? flexBubbles[0] : { type: 'carousel', contents: flexBubbles };
 }
+
+// ── Draft Save/Load (Phase D.1) ─────────────────────────────────────
+function setDraftStatus(text, isError) {
+    const el = document.getElementById('draftStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'text-xs ' + (isError ? 'text-red-500' : 'text-green-600');
+    if (text && !isError) {
+        setTimeout(() => { el.textContent = ''; }, 3000);
+    }
+}
+
+function collectDraftPayload() {
+    return {
+        bubbles: getBubblesData(),
+        layout: currentLayout,
+        theme: currentTheme,
+        savedAt: new Date().toISOString(),
+    };
+}
+
+async function saveDraft() {
+    const name = (document.getElementById('draftName').value || '').trim();
+    if (!name) {
+        alert('กรุณาตั้งชื่อ Draft ก่อน');
+        return;
+    }
+    const id = parseInt(document.getElementById('draftId').value, 10) || 0;
+    const payload = collectDraftPayload();
+    if (!payload.bubbles.length) {
+        if (!confirm('ยังไม่มีสินค้าใน Bubble — บันทึกเป็น Draft ว่างหรือไม่?')) return;
+    }
+
+    setDraftStatus('กำลังบันทึก…', false);
+    try {
+        const res = await fetch('api/broadcast_drafts.php?action=save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'save', id, name, payload, source: 'catalog' }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Save failed');
+        document.getElementById('draftId').value = data.id;
+        setDraftStatus('บันทึกแล้ว ✓', false);
+    } catch (e) {
+        setDraftStatus('บันทึกไม่สำเร็จ: ' + e.message, true);
+    }
+}
+
+async function openDraftPicker() {
+    document.getElementById('draftPickerModal').classList.remove('hidden');
+    document.getElementById('draftPickerModal').classList.add('flex');
+    await refreshDraftList();
+}
+
+function closeDraftPicker() {
+    document.getElementById('draftPickerModal').classList.add('hidden');
+    document.getElementById('draftPickerModal').classList.remove('flex');
+}
+
+async function refreshDraftList() {
+    const listEl = document.getElementById('draftPickerList');
+    listEl.innerHTML = '<p class="text-gray-400 text-center py-4">กำลังโหลด…</p>';
+    try {
+        const res = await fetch('api/broadcast_drafts.php?action=list');
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to list');
+        if (!data.drafts || !data.drafts.length) {
+            listEl.innerHTML = '<p class="text-gray-400 text-center py-6">ยังไม่มี Draft ที่บันทึกไว้</p>';
+            return;
+        }
+        listEl.innerHTML = data.drafts.map(d => `
+            <div class="flex items-center justify-between py-2">
+                <div class="flex-1 min-w-0">
+                    <div class="font-medium text-sm truncate">${escapeHtml(d.name)}</div>
+                    <div class="text-xs text-gray-400">${escapeHtml(d.updated_at || d.created_at || '')}</div>
+                </div>
+                <div class="flex gap-2 shrink-0">
+                    <button onclick="loadDraft(${d.id})" class="px-3 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600">
+                        <i class="fas fa-folder-open mr-1"></i>โหลด
+                    </button>
+                    <button onclick="deleteDraft(${d.id})" class="px-3 py-1 border border-red-300 text-red-500 text-xs rounded hover:bg-red-50">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        listEl.innerHTML = `<p class="text-red-500 text-center py-4">${escapeHtml(e.message)}</p>`;
+    }
+}
+
+async function loadDraft(id) {
+    try {
+        const res = await fetch('api/broadcast_drafts.php?action=load&id=' + encodeURIComponent(id));
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Load failed');
+        applyDraftPayload(data.draft);
+        closeDraftPicker();
+        setDraftStatus('โหลด Draft แล้ว ✓', false);
+    } catch (e) {
+        alert('โหลดไม่สำเร็จ: ' + e.message);
+    }
+}
+
+async function deleteDraft(id) {
+    if (!confirm('ลบ Draft นี้?')) return;
+    try {
+        const res = await fetch('api/broadcast_drafts.php?action=delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', id }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Delete failed');
+        await refreshDraftList();
+    } catch (e) {
+        alert('ลบไม่สำเร็จ: ' + e.message);
+    }
+}
+
+function applyDraftPayload(draft) {
+    const p = draft.payload || {};
+    document.getElementById('draftId').value = draft.id;
+    document.getElementById('draftName').value = draft.name || '';
+
+    // Reset bubbles
+    document.getElementById('bubblesContainer').innerHTML = '';
+    bubbleIdCounter = 0;
+
+    if (p.layout && layoutConfig[p.layout]) setLayout(p.layout);
+    if (p.theme) {
+        currentTheme = p.theme;
+        const cc = document.getElementById('customColor');
+        if (cc) cc.value = p.theme;
+    }
+
+    const bubbles = Array.isArray(p.bubbles) ? p.bubbles : [];
+    if (!bubbles.length) {
+        addBubble();
+        updatePreview();
+        return;
+    }
+
+    bubbles.forEach(b => {
+        addBubble();
+        const card = document.querySelectorAll('.bubble-card');
+        const last = card[card.length - 1];
+        if (b.title) last.querySelector('.bubble-title').value = b.title;
+        const zone = last.querySelector('[data-bubble-zone]');
+        const bubbleId = zone.dataset.bubbleZone;
+        (b.products || []).forEach(prod => {
+            zone.appendChild(createBubbleProduct(prod));
+        });
+        updateBubbleInfo(bubbleId);
+    });
+    updatePreview();
+}
+
+function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, ch => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[ch]));
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeDraftPicker();
+});
 
 async function sendBroadcast() {
     const data = getBubblesData();

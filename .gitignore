@@ -125,6 +125,8 @@ database/*.sql
 !database/migration_additional_indexes.sql
 !database/migration_fix_indexes.sql
 !database/migration_transactions_payment_status.sql
+!database/migration_2026-04-28_broadcast_variants.sql
+!database/migration_2026-05-04_unified_broadcast.sql
 *.png
 DB_CONNECTION.md
 *.md
@@ -137,3 +139,7 @@ DB_CONNECTION.md
 *.bak*
 *.bak-*
 line-mini-app/
+
+# Local Claude Code / OMC tooling state
+.omc/
+*.tsbuildinfo
