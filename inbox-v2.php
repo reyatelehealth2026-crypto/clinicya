@@ -11559,16 +11559,33 @@ function formatThaiDateTime($datetime)
                 } catch (e) {}
 
                 if (products.length > 0) {
-                    resultsDiv.innerHTML = products.slice(0, 8).map(p => `
-                        <div class="p-2 hover:bg-purple-50 cursor-pointer text-xs border-b last:border-0"
-                             onclick="dispenseAddItem(${p.id}, ${JSON.stringify(p.name || '')}, ${Number(p.price || 0)}, ${JSON.stringify(p.unit || 'ชิ้น')})">
-                            <div class="font-medium text-gray-800">${escHtml(p.name)}</div>
+                    resultsDiv.innerHTML = products.slice(0, 8).map(p => {
+                        const pid = Number(p.id) || 0;
+                        const pname = escHtml(p.name || '');
+                        const pprice = Number(p.price || 0);
+                        const punit = escHtml(p.unit || 'ชิ้น');
+                        const psku = escHtml(p.sku || '');
+                        return `<div class="p-2 hover:bg-purple-50 cursor-pointer text-xs border-b last:border-0 dispense-result-item"
+                                     data-id="${pid}" data-name="${pname}" data-price="${pprice}" data-unit="${punit}">
+                            <div class="font-medium text-gray-800">${pname}</div>
                             <div class="text-gray-500 flex gap-2">
-                                ${p.sku ? `<span>${escHtml(p.sku)}</span>` : ''}
-                                <span class="text-green-600 font-medium">฿${Number(p.price || 0).toLocaleString()}</span>
+                                ${psku ? `<span>${psku}</span>` : ''}
+                                <span class="text-green-600 font-medium">฿${pprice.toLocaleString()}</span>
                                 <span>คงเหลือ: ${p.stock ?? '-'}</span>
                             </div>
-                        </div>`).join('');
+                        </div>`;
+                    }).join('');
+                    // Click delegation — avoids embedding JSON strings in onclick attribute
+                    resultsDiv.querySelectorAll('.dispense-result-item').forEach(el => {
+                        el.addEventListener('click', () => {
+                            window.dispenseAddItem(
+                                Number(el.dataset.id),
+                                el.dataset.name,
+                                Number(el.dataset.price),
+                                el.dataset.unit
+                            );
+                        });
+                    });
                 } else {
                     resultsDiv.innerHTML = '<div class="p-3 text-gray-400 text-xs text-center"><i class="fas fa-search mr-1"></i>ไม่พบสินค้า "' + escHtml(query) + '"</div>';
                 }
