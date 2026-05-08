@@ -7653,7 +7653,7 @@ function formatThaiDateTime($datetime)
                 const footer = bubble.footer ? renderFlexBox(bubble.footer) : '';
 
                 return `
-                    <div class="flex-bubble" style="width: 100%; max-width: 200px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1); background: white; font-size: 10px; transform: scale(0.85); transform-origin: top left;">
+                    <div class="flex-bubble" style="width: 100%; max-width: 200px; max-height: 280px; border-radius: 8px; overflow: hidden; overflow-y: auto; box-shadow: 0 1px 4px rgba(0,0,0,0.1); background: white; font-size: 10px; transform: scale(0.85); transform-origin: top left; scrollbar-width: thin;">
                         ${header}
                         ${hero}
                         ${body}
