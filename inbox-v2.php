@@ -7557,6 +7557,8 @@ function formatThaiDateTime($datetime)
              * Render messages in chat box
              */
             function renderMessages(messages) {
+                console.log('[renderMessages] Called with', messages?.length || 0, 'messages');
+                
                 const chatBox = document.getElementById('chatBox');
                 if (!chatBox) return;
 
