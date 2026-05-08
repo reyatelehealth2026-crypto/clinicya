@@ -7579,6 +7579,209 @@ function formatThaiDateTime($datetime)
             }
 
             /**
+             * Render Flex Message as live preview
+             */
+            function renderFlexMessage(flexData) {
+                try {
+                    // Extract flex contents from LINE message format
+                    let contents = flexData;
+                    if (flexData.type === 'flex' && flexData.contents) {
+                        contents = flexData.contents;
+                    }
+
+                    // Handle bubble container
+                    if (contents.type === 'bubble') {
+                        return renderFlexBubble(contents);
+                    }
+
+                    // Handle carousel container
+                    if (contents.type === 'carousel' && contents.contents) {
+                        return renderFlexCarousel(contents);
+                    }
+
+                    // Fallback
+                    return `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message</div>`;
+                } catch (e) {
+                    console.error('Flex render error:', e);
+                    return `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message</div>`;
+                }
+            }
+
+            /**
+             * Render Flex Bubble
+             */
+            function renderFlexBubble(bubble) {
+                const styles = bubble.styles || {};
+                const header = bubble.header ? renderFlexBox(bubble.header) : '';
+                const hero = bubble.hero ? renderFlexComponent(bubble.hero) : '';
+                const body = bubble.body ? renderFlexBox(bubble.body) : '';
+                const footer = bubble.footer ? renderFlexBox(bubble.footer) : '';
+
+                return `
+                    <div class="flex-bubble" style="max-width: 300px; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); background: white;">
+                        ${header}
+                        ${hero}
+                        ${body}
+                        ${footer}
+                    </div>
+                `;
+            }
+
+            /**
+             * Render Flex Carousel
+             */
+            function renderFlexCarousel(carousel) {
+                const bubbles = carousel.contents.map(bubble => renderFlexBubble(bubble)).join('');
+                return `
+                    <div class="flex-carousel" style="display: flex; gap: 8px; overflow-x: auto; max-width: 100%; padding: 4px;">
+                        ${bubbles}
+                    </div>
+                `;
+            }
+
+            /**
+             * Render Flex Box
+             */
+            function renderFlexBox(box) {
+                const layout = box.layout || 'vertical';
+                const spacing = box.spacing || 'md';
+                const margin = box.margin || 'none';
+                const paddingAll = box.paddingAll || '0px';
+                const backgroundColor = box.backgroundColor || 'transparent';
+                
+                const flexDirection = layout === 'horizontal' ? 'row' : 'column';
+                const gap = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[spacing] || '12px';
+                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
+
+                const contents = (box.contents || []).map(comp => renderFlexComponent(comp)).join('');
+
+                return `
+                    <div style="display: flex; flex-direction: ${flexDirection}; gap: ${gap}; margin-top: ${marginValue}; padding: ${paddingAll}; background-color: ${backgroundColor};">
+                        ${contents}
+                    </div>
+                `;
+            }
+
+            /**
+             * Render Flex Component (text, image, button, separator, etc.)
+             */
+            function renderFlexComponent(comp) {
+                if (!comp || !comp.type) return '';
+
+                switch (comp.type) {
+                    case 'text':
+                        return renderFlexText(comp);
+                    case 'image':
+                        return renderFlexImage(comp);
+                    case 'button':
+                        return renderFlexButton(comp);
+                    case 'separator':
+                        return renderFlexSeparator(comp);
+                    case 'spacer':
+                        return renderFlexSpacer(comp);
+                    case 'box':
+                        return renderFlexBox(comp);
+                    case 'filler':
+                        return '<div style="flex: 1;"></div>';
+                    default:
+                        return '';
+                }
+            }
+
+            /**
+             * Render Flex Text
+             */
+            function renderFlexText(text) {
+                const size = text.size || 'md';
+                const weight = text.weight || 'regular';
+                const color = text.color || '#000000';
+                const align = text.align || 'start';
+                const wrap = text.wrap !== false;
+                const maxLines = text.maxLines || 0;
+                const margin = text.margin || 'none';
+                const flex = text.flex || 0;
+
+                const fontSize = { xxs: '10px', xs: '12px', sm: '14px', md: '16px', lg: '18px', xl: '20px', xxl: '24px', '3xl': '28px', '4xl': '32px', '5xl': '36px' }[size] || '16px';
+                const fontWeight = { regular: '400', bold: '700' }[weight] || '400';
+                const textAlign = { start: 'left', center: 'center', end: 'right' }[align] || 'left';
+                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
+
+                let style = `font-size: ${fontSize}; font-weight: ${fontWeight}; color: ${color}; text-align: ${textAlign}; margin-top: ${marginValue};`;
+                if (!wrap) style += ' white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+                if (maxLines > 0) style += ` display: -webkit-box; -webkit-line-clamp: ${maxLines}; -webkit-box-orient: vertical; overflow: hidden;`;
+                if (flex > 0) style += ` flex: ${flex};`;
+
+                return `<div style="${style}">${escapeHtmlLocal(text.text || '')}</div>`;
+            }
+
+            /**
+             * Render Flex Image
+             */
+            function renderFlexImage(image) {
+                const url = image.url || '';
+                const size = image.size || 'md';
+                const aspectRatio = image.aspectRatio || '1:1';
+                const aspectMode = image.aspectMode || 'fit';
+                const margin = image.margin || 'none';
+
+                const sizeMap = { xxs: '24px', xs: '40px', sm: '64px', md: '96px', lg: '128px', xl: '160px', xxl: '192px', '3xl': '224px', '4xl': '256px', '5xl': '288px', full: '100%' };
+                const width = sizeMap[size] || '96px';
+                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
+                const objectFit = aspectMode === 'cover' ? 'cover' : 'contain';
+
+                return `<img src="${url}" style="width: ${width}; object-fit: ${objectFit}; border-radius: 8px; margin-top: ${marginValue};" loading="lazy">`;
+            }
+
+            /**
+             * Render Flex Button
+             */
+            function renderFlexButton(button) {
+                const style = button.style || 'primary';
+                const color = button.color || '#17C950';
+                const margin = button.margin || 'none';
+                const height = button.height || 'md';
+
+                const bgColor = style === 'primary' ? color : 'transparent';
+                const textColor = style === 'primary' ? '#FFFFFF' : color;
+                const border = style === 'link' ? 'none' : `1px solid ${color}`;
+                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
+                const heightValue = { sm: '32px', md: '40px' }[height] || '40px';
+
+                const action = button.action || {};
+                let onclick = '';
+                if (action.type === 'uri' && action.uri) {
+                    onclick = `onclick="window.open('${action.uri}', '_blank')"`;
+                }
+
+                return `
+                    <button ${onclick} style="background: ${bgColor}; color: ${textColor}; border: ${border}; border-radius: 4px; padding: 0 16px; height: ${heightValue}; margin-top: ${marginValue}; cursor: pointer; font-size: 14px; font-weight: 500;">
+                        ${escapeHtmlLocal(button.action?.label || 'Button')}
+                    </button>
+                `;
+            }
+
+            /**
+             * Render Flex Separator
+             */
+            function renderFlexSeparator(separator) {
+                const margin = separator.margin || 'none';
+                const color = separator.color || '#E0E0E0';
+                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
+
+                return `<div style="height: 1px; background: ${color}; margin-top: ${marginValue};"></div>`;
+            }
+
+            /**
+             * Render Flex Spacer
+             */
+            function renderFlexSpacer(spacer) {
+                const size = spacer.size || 'md';
+                const sizeValue = { xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[size] || '12px';
+
+                return `<div style="height: ${sizeValue};"></div>`;
+            }
+
+            /**
              * Render a single message
              */
             function renderSingleMessage(msg, isMe) {
@@ -7608,6 +7811,15 @@ function formatThaiDateTime($datetime)
                             messageContent = `<img src="https://stickershop.line-scdn.net/stickershop/v1/sticker/${stickerId}/android/sticker.png" class="w-20">`;
                         } else {
                             messageContent = `<div class="bg-white rounded-lg border p-2 text-xs text-gray-500">😊 Sticker</div>`;
+                        }
+                        break;
+                    case 'flex':
+                        try {
+                            const flexData = JSON.parse(rawContent);
+                            messageContent = renderFlexMessage(flexData);
+                        } catch (e) {
+                            console.error('Failed to parse flex message:', e);
+                            messageContent = `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message</div>`;
                         }
                         break;
                     case 'file':
