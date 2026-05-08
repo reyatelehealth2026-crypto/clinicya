@@ -7653,7 +7653,7 @@ function formatThaiDateTime($datetime)
                 const footer = bubble.footer ? renderFlexBox(bubble.footer) : '';
 
                 return `
-                    <div class="flex-bubble" style="max-width: 300px; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); background: white;">
+                    <div class="flex-bubble" style="width: 100%; max-width: 280px; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); background: white; font-size: 13px;">
                         ${header}
                         ${hero}
                         ${body}
@@ -7668,7 +7668,7 @@ function formatThaiDateTime($datetime)
             function renderFlexCarousel(carousel) {
                 const bubbles = carousel.contents.map(bubble => renderFlexBubble(bubble)).join('');
                 return `
-                    <div class="flex-carousel" style="display: flex; gap: 8px; overflow-x: auto; max-width: 100%; padding: 4px;">
+                    <div class="flex-carousel" style="display: flex; gap: 8px; overflow-x: auto; max-width: 100%; padding: 4px; scrollbar-width: thin;">
                         ${bubbles}
                     </div>
                 `;
@@ -7681,12 +7681,12 @@ function formatThaiDateTime($datetime)
                 const layout = box.layout || 'vertical';
                 const spacing = box.spacing || 'md';
                 const margin = box.margin || 'none';
-                const paddingAll = box.paddingAll || '0px';
+                const paddingAll = box.paddingAll || '12px';
                 const backgroundColor = box.backgroundColor || 'transparent';
                 
                 const flexDirection = layout === 'horizontal' ? 'row' : 'column';
-                const gap = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[spacing] || '12px';
-                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
+                const gap = { none: '0', xs: '2px', sm: '4px', md: '8px', lg: '12px', xl: '16px', xxl: '20px' }[spacing] || '8px';
+                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '8px', lg: '12px', xl: '16px', xxl: '20px' }[margin] || '0';
 
                 const contents = (box.contents || []).map(comp => renderFlexComponent(comp)).join('');
 
@@ -7736,12 +7736,12 @@ function formatThaiDateTime($datetime)
                 const margin = text.margin || 'none';
                 const flex = text.flex || 0;
 
-                const fontSize = { xxs: '10px', xs: '12px', sm: '14px', md: '16px', lg: '18px', xl: '20px', xxl: '24px', '3xl': '28px', '4xl': '32px', '5xl': '36px' }[size] || '16px';
+                const fontSize = { xxs: '9px', xs: '10px', sm: '11px', md: '12px', lg: '14px', xl: '16px', xxl: '18px', '3xl': '20px', '4xl': '24px', '5xl': '28px' }[size] || '12px';
                 const fontWeight = { regular: '400', bold: '700' }[weight] || '400';
                 const textAlign = { start: 'left', center: 'center', end: 'right' }[align] || 'left';
-                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
+                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[margin] || '0';
 
-                let style = `font-size: ${fontSize}; font-weight: ${fontWeight}; color: ${color}; text-align: ${textAlign}; margin-top: ${marginValue};`;
+                let style = `font-size: ${fontSize}; font-weight: ${fontWeight}; color: ${color}; text-align: ${textAlign}; margin-top: ${marginValue}; line-height: 1.4;`;
                 if (!wrap) style += ' white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
                 if (maxLines > 0) style += ` display: -webkit-box; -webkit-line-clamp: ${maxLines}; -webkit-box-orient: vertical; overflow: hidden;`;
                 if (flex > 0) style += ` flex: ${flex};`;
@@ -7759,12 +7759,12 @@ function formatThaiDateTime($datetime)
                 const aspectMode = image.aspectMode || 'fit';
                 const margin = image.margin || 'none';
 
-                const sizeMap = { xxs: '24px', xs: '40px', sm: '64px', md: '96px', lg: '128px', xl: '160px', xxl: '192px', '3xl': '224px', '4xl': '256px', '5xl': '288px', full: '100%' };
-                const width = sizeMap[size] || '96px';
-                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
+                const sizeMap = { xxs: '20px', xs: '32px', sm: '48px', md: '64px', lg: '96px', xl: '128px', xxl: '160px', '3xl': '192px', '4xl': '224px', '5xl': '256px', full: '100%' };
+                const width = sizeMap[size] || '64px';
+                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[margin] || '0';
                 const objectFit = aspectMode === 'cover' ? 'cover' : 'contain';
 
-                return `<img src="${url}" style="width: ${width}; object-fit: ${objectFit}; border-radius: 8px; margin-top: ${marginValue};" loading="lazy">`;
+                return `<img src="${url}" style="width: ${width}; max-width: 100%; object-fit: ${objectFit}; border-radius: 4px; margin-top: ${marginValue};" loading="lazy">`;
             }
 
             /**
@@ -7779,8 +7779,8 @@ function formatThaiDateTime($datetime)
                 const bgColor = style === 'primary' ? color : 'transparent';
                 const textColor = style === 'primary' ? '#FFFFFF' : color;
                 const border = style === 'link' ? 'none' : `1px solid ${color}`;
-                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
-                const heightValue = { sm: '32px', md: '40px' }[height] || '40px';
+                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[margin] || '0';
+                const heightValue = { sm: '28px', md: '36px' }[height] || '36px';
 
                 const action = button.action || {};
                 let onclick = '';
@@ -7789,7 +7789,7 @@ function formatThaiDateTime($datetime)
                 }
 
                 return `
-                    <button ${onclick} style="background: ${bgColor}; color: ${textColor}; border: ${border}; border-radius: 4px; padding: 0 16px; height: ${heightValue}; margin-top: ${marginValue}; cursor: pointer; font-size: 14px; font-weight: 500;">
+                    <button ${onclick} style="background: ${bgColor}; color: ${textColor}; border: ${border}; border-radius: 4px; padding: 0 12px; height: ${heightValue}; margin-top: ${marginValue}; cursor: pointer; font-size: 12px; font-weight: 500; width: 100%;">
                         ${escapeHtmlLocal(button.action?.label || 'Button')}
                     </button>
                 `;
@@ -7801,7 +7801,7 @@ function formatThaiDateTime($datetime)
             function renderFlexSeparator(separator) {
                 const margin = separator.margin || 'none';
                 const color = separator.color || '#E0E0E0';
-                const marginValue = { none: '0', xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[margin] || '0';
+                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[margin] || '0';
 
                 return `<div style="height: 1px; background: ${color}; margin-top: ${marginValue};"></div>`;
             }
@@ -7811,7 +7811,7 @@ function formatThaiDateTime($datetime)
              */
             function renderFlexSpacer(spacer) {
                 const size = spacer.size || 'md';
-                const sizeValue = { xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px', xxl: '24px' }[size] || '12px';
+                const sizeValue = { xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[size] || '6px';
 
                 return `<div style="height: ${sizeValue};"></div>`;
             }
