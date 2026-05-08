@@ -3093,18 +3093,30 @@ function formatThaiDateTime($datetime)
                                                     (function() {
                                                         const container = document.currentScript.previousElementSibling;
                                                         const flexJson = container.getAttribute('data-flex-content');
-                                                        try {
-                                                            const flexData = JSON.parse(flexJson);
-                                                            if (typeof renderFlexMessage === 'function') {
-                                                                container.innerHTML = renderFlexMessage(flexData);
-                                                            } else {
-                                                                console.error('[Flex] renderFlexMessage function not found');
-                                                                container.innerHTML = '<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message</div>';
+                                                        
+                                                        function tryRenderFlex() {
+                                                            try {
+                                                                const flexData = JSON.parse(flexJson);
+                                                                if (typeof renderFlexMessage === 'function') {
+                                                                    container.innerHTML = renderFlexMessage(flexData);
+                                                                    console.log('[Flex PHP] Rendered successfully');
+                                                                } else {
+                                                                    // Function not loaded yet, wait for DOMContentLoaded
+                                                                    if (document.readyState === 'loading') {
+                                                                        document.addEventListener('DOMContentLoaded', tryRenderFlex);
+                                                                    } else {
+                                                                        // Still not available, show fallback
+                                                                        console.error('[Flex PHP] renderFlexMessage function not found');
+                                                                        container.innerHTML = '<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message</div>';
+                                                                    }
+                                                                }
+                                                            } catch (e) {
+                                                                console.error('[Flex PHP] Failed to render:', e);
+                                                                container.innerHTML = '<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message (Error)</div>';
                                                             }
-                                                        } catch (e) {
-                                                            console.error('[Flex] Failed to render:', e);
-                                                            container.innerHTML = '<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message (Error)</div>';
                                                         }
+                                                        
+                                                        tryRenderFlex();
                                                     })();
                                                     </script>
                                             <?php elseif ($type === 'file'): ?>
