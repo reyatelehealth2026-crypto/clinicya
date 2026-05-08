@@ -3086,6 +3086,27 @@ function formatThaiDateTime($datetime)
                                                             </audio>
                                                         </div>
                                                     </div>
+                                            <?php elseif ($type === 'flex'): ?>
+                                                    <!-- Flex Message - Render with JavaScript -->
+                                                    <div class="flex-message-container" data-flex-content='<?= htmlspecialchars($content, ENT_QUOTES) ?>'></div>
+                                                    <script>
+                                                    (function() {
+                                                        const container = document.currentScript.previousElementSibling;
+                                                        const flexJson = container.getAttribute('data-flex-content');
+                                                        try {
+                                                            const flexData = JSON.parse(flexJson);
+                                                            if (typeof renderFlexMessage === 'function') {
+                                                                container.innerHTML = renderFlexMessage(flexData);
+                                                            } else {
+                                                                console.error('[Flex] renderFlexMessage function not found');
+                                                                container.innerHTML = '<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message</div>';
+                                                            }
+                                                        } catch (e) {
+                                                            console.error('[Flex] Failed to render:', e);
+                                                            container.innerHTML = '<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message (Error)</div>';
+                                                        }
+                                                    })();
+                                                    </script>
                                             <?php elseif ($type === 'file'): ?>
                                                     <?php
                                                     $fileData = json_decode($content, true);
