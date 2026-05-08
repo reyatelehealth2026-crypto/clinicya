@@ -7815,11 +7815,14 @@ function formatThaiDateTime($datetime)
                         break;
                     case 'flex':
                         try {
+                            console.log('[Flex] Rendering flex message, raw:', rawContent);
                             const flexData = JSON.parse(rawContent);
+                            console.log('[Flex] Parsed flex data:', flexData);
                             messageContent = renderFlexMessage(flexData);
+                            console.log('[Flex] Rendered successfully');
                         } catch (e) {
-                            console.error('Failed to parse flex message:', e);
-                            messageContent = `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message</div>`;
+                            console.error('[Flex] Failed to parse/render flex message:', e);
+                            messageContent = `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message (Error: ${e.message})</div>`;
                         }
                         break;
                     case 'file':
