@@ -3095,15 +3095,24 @@ try {
                 $tagsStmt->execute([$userId]);
                 $tags = $tagsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-                // Get assignees
-                $assignStmt = $db->prepare("
-                    SELECT cma.admin_id, au.username, au.display_name
-                    FROM conversation_multi_assignees cma
-                    LEFT JOIN admin_users au ON cma.admin_id = au.id
-                    WHERE cma.user_id = ? AND cma.status = 'active'
-                ");
-                $assignStmt->execute([$userId]);
-                $assignees = $assignStmt->fetchAll(PDO::FETCH_ASSOC);
+                // Get assignees (check if table exists first)
+                $assignees = [];
+                try {
+                    $tableCheck = $db->query("SHOW TABLES LIKE 'conversation_multi_assignees'");
+                    if ($tableCheck->rowCount() > 0) {
+                        $assignStmt = $db->prepare("
+                            SELECT cma.admin_id, au.username, au.display_name
+                            FROM conversation_multi_assignees cma
+                            LEFT JOIN admin_users au ON cma.admin_id = au.id
+                            WHERE cma.user_id = ? AND cma.status = 'active'
+                        ");
+                        $assignStmt->execute([$userId]);
+                        $assignees = $assignStmt->fetchAll(PDO::FETCH_ASSOC);
+                    }
+                } catch (Exception $e) {
+                    // Table doesn't exist, continue with empty assignees
+                    $assignees = [];
+                }
 
                 // Mark messages as read
                 $updateStmt = $db->prepare("
