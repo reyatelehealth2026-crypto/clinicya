@@ -8000,6 +8000,8 @@ function formatThaiDateTime($datetime)
 
             // Initialize on page load
             document.addEventListener('DOMContentLoaded', function () {
+                console.log('[Inbox V2] Version: 2026-05-08-flex-preview');
+                
                 // Restore filters from URL parameters first
                 restoreFiltersFromURL();
 
