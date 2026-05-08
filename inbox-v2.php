@@ -7785,14 +7785,15 @@ function formatThaiDateTime($datetime)
              * Render a single message
              */
             function renderSingleMessage(msg, isMe) {
+                console.log('[renderSingleMessage] Type:', msg.message_type, 'Direction:', msg.direction, 'Content preview:', (msg.content || '').substring(0, 50));
+                
                 const content = escapeHtmlLocal(msg.content || '');
                 const time = formatThaiTimeLocal(msg.created_at);
                 const sentBy = msg.sent_by ? `<span class="text-[10px] text-gray-400">${escapeHtmlLocal(msg.sent_by)}</span>` : '';
 
                 // Handle different message types
                 let messageContent = '';
-                const rawContent = msg.conte
-                nt || '';
+                const rawContent = msg.content || '';
 
                 switch (msg.message_type) {
                     case 'image':
