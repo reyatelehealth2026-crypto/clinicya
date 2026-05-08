@@ -7653,7 +7653,7 @@ function formatThaiDateTime($datetime)
                 const footer = bubble.footer ? renderFlexBox(bubble.footer) : '';
 
                 return `
-                    <div class="flex-bubble" style="width: 100%; max-width: 280px; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); background: white; font-size: 13px;">
+                    <div class="flex-bubble" style="width: 100%; max-width: 200px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.1); background: white; font-size: 10px; transform: scale(0.85); transform-origin: top left;">
                         ${header}
                         ${hero}
                         ${body}
@@ -7681,12 +7681,12 @@ function formatThaiDateTime($datetime)
                 const layout = box.layout || 'vertical';
                 const spacing = box.spacing || 'md';
                 const margin = box.margin || 'none';
-                const paddingAll = box.paddingAll || '12px';
+                const paddingAll = box.paddingAll || '8px';
                 const backgroundColor = box.backgroundColor || 'transparent';
                 
                 const flexDirection = layout === 'horizontal' ? 'row' : 'column';
-                const gap = { none: '0', xs: '2px', sm: '4px', md: '8px', lg: '12px', xl: '16px', xxl: '20px' }[spacing] || '8px';
-                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '8px', lg: '12px', xl: '16px', xxl: '20px' }[margin] || '0';
+                const gap = { none: '0', xs: '1px', sm: '2px', md: '4px', lg: '6px', xl: '8px', xxl: '10px' }[spacing] || '4px';
+                const marginValue = { none: '0', xs: '1px', sm: '2px', md: '4px', lg: '6px', xl: '8px', xxl: '10px' }[margin] || '0';
 
                 const contents = (box.contents || []).map(comp => renderFlexComponent(comp)).join('');
 
@@ -7736,12 +7736,12 @@ function formatThaiDateTime($datetime)
                 const margin = text.margin || 'none';
                 const flex = text.flex || 0;
 
-                const fontSize = { xxs: '9px', xs: '10px', sm: '11px', md: '12px', lg: '14px', xl: '16px', xxl: '18px', '3xl': '20px', '4xl': '24px', '5xl': '28px' }[size] || '12px';
+                const fontSize = { xxs: '7px', xs: '8px', sm: '9px', md: '10px', lg: '11px', xl: '12px', xxl: '14px', '3xl': '16px', '4xl': '18px', '5xl': '20px' }[size] || '10px';
                 const fontWeight = { regular: '400', bold: '700' }[weight] || '400';
                 const textAlign = { start: 'left', center: 'center', end: 'right' }[align] || 'left';
-                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[margin] || '0';
+                const marginValue = { none: '0', xs: '1px', sm: '2px', md: '3px', lg: '4px', xl: '6px', xxl: '8px' }[margin] || '0';
 
-                let style = `font-size: ${fontSize}; font-weight: ${fontWeight}; color: ${color}; text-align: ${textAlign}; margin-top: ${marginValue}; line-height: 1.4;`;
+                let style = `font-size: ${fontSize}; font-weight: ${fontWeight}; color: ${color}; text-align: ${textAlign}; margin-top: ${marginValue}; line-height: 1.3;`;
                 if (!wrap) style += ' white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
                 if (maxLines > 0) style += ` display: -webkit-box; -webkit-line-clamp: ${maxLines}; -webkit-box-orient: vertical; overflow: hidden;`;
                 if (flex > 0) style += ` flex: ${flex};`;
@@ -7759,12 +7759,12 @@ function formatThaiDateTime($datetime)
                 const aspectMode = image.aspectMode || 'fit';
                 const margin = image.margin || 'none';
 
-                const sizeMap = { xxs: '20px', xs: '32px', sm: '48px', md: '64px', lg: '96px', xl: '128px', xxl: '160px', '3xl': '192px', '4xl': '224px', '5xl': '256px', full: '100%' };
-                const width = sizeMap[size] || '64px';
-                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[margin] || '0';
+                const sizeMap = { xxs: '16px', xs: '24px', sm: '32px', md: '48px', lg: '64px', xl: '80px', xxl: '96px', '3xl': '112px', '4xl': '128px', '5xl': '144px', full: '100%' };
+                const width = sizeMap[size] || '48px';
+                const marginValue = { none: '0', xs: '1px', sm: '2px', md: '3px', lg: '4px', xl: '6px', xxl: '8px' }[margin] || '0';
                 const objectFit = aspectMode === 'cover' ? 'cover' : 'contain';
 
-                return `<img src="${url}" style="width: ${width}; max-width: 100%; object-fit: ${objectFit}; border-radius: 4px; margin-top: ${marginValue};" loading="lazy">`;
+                return `<img src="${url}" style="width: ${width}; max-width: 100%; object-fit: ${objectFit}; border-radius: 3px; margin-top: ${marginValue};" loading="lazy">`;
             }
 
             /**
@@ -7779,8 +7779,8 @@ function formatThaiDateTime($datetime)
                 const bgColor = style === 'primary' ? color : 'transparent';
                 const textColor = style === 'primary' ? '#FFFFFF' : color;
                 const border = style === 'link' ? 'none' : `1px solid ${color}`;
-                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[margin] || '0';
-                const heightValue = { sm: '28px', md: '36px' }[height] || '36px';
+                const marginValue = { none: '0', xs: '1px', sm: '2px', md: '3px', lg: '4px', xl: '6px', xxl: '8px' }[margin] || '0';
+                const heightValue = { sm: '20px', md: '24px' }[height] || '24px';
 
                 const action = button.action || {};
                 let onclick = '';
@@ -7789,7 +7789,7 @@ function formatThaiDateTime($datetime)
                 }
 
                 return `
-                    <button ${onclick} style="background: ${bgColor}; color: ${textColor}; border: ${border}; border-radius: 4px; padding: 0 12px; height: ${heightValue}; margin-top: ${marginValue}; cursor: pointer; font-size: 12px; font-weight: 500; width: 100%;">
+                    <button ${onclick} style="background: ${bgColor}; color: ${textColor}; border: ${border}; border-radius: 3px; padding: 0 8px; height: ${heightValue}; margin-top: ${marginValue}; cursor: pointer; font-size: 9px; font-weight: 500; width: 100%;">
                         ${escapeHtmlLocal(button.action?.label || 'Button')}
                     </button>
                 `;
@@ -7801,7 +7801,7 @@ function formatThaiDateTime($datetime)
             function renderFlexSeparator(separator) {
                 const margin = separator.margin || 'none';
                 const color = separator.color || '#E0E0E0';
-                const marginValue = { none: '0', xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[margin] || '0';
+                const marginValue = { none: '0', xs: '1px', sm: '2px', md: '3px', lg: '4px', xl: '6px', xxl: '8px' }[margin] || '0';
 
                 return `<div style="height: 1px; background: ${color}; margin-top: ${marginValue};"></div>`;
             }
@@ -7811,7 +7811,7 @@ function formatThaiDateTime($datetime)
              */
             function renderFlexSpacer(spacer) {
                 const size = spacer.size || 'md';
-                const sizeValue = { xs: '2px', sm: '4px', md: '6px', lg: '8px', xl: '12px', xxl: '16px' }[size] || '6px';
+                const sizeValue = { xs: '1px', sm: '2px', md: '3px', lg: '4px', xl: '6px', xxl: '8px' }[size] || '3px';
 
                 return `<div style="height: ${sizeValue};"></div>`;
             }
