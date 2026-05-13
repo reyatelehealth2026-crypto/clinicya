@@ -18,6 +18,10 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once 'config/config.php';
 require_once 'config/database.php';
 require_once 'includes/components/tabs.php';
+require_once __DIR__ . '/includes/components/form-section.php';
+require_once __DIR__ . '/includes/components/field.php';
+require_once __DIR__ . '/includes/components/toggle.php';
+require_once __DIR__ . '/includes/components/sticky-save-bar.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'Scheduled';
@@ -55,8 +59,12 @@ require_once 'includes/header.php';
         </div>
     </div>
     
-    <!-- Tab Styles -->
+    <!-- Component Styles -->
     <?= getTabsStyles() ?>
+    <?= getFormSectionStyles() ?>
+    <?= getFieldStyles() ?>
+    <?= getToggleStyles() ?>
+    <?= getStickySaveBarStyles() ?>
     
     <!-- Tab Navigation -->
     <?= renderTabs($tabs, $activeTab) ?>

@@ -16,6 +16,7 @@
 require_once 'config/config.php';
 require_once 'config/database.php';
 require_once 'includes/components/tabs.php';
+require_once 'includes/components/period-selector.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'สถิติรวม';
@@ -47,30 +48,27 @@ require_once 'includes/header.php';
             <h2 class="text-xl font-bold text-gray-800">📊 สถิติรวม</h2>
             <p class="text-sm text-gray-500">ภาพรวมข้อมูลลูกค้า ข้อความ และการตลาด</p>
         </div>
-        
+
         <?php if ($activeTab === 'overview'): ?>
         <!-- Period Filter (only for overview tab) -->
         <div class="flex flex-wrap items-center gap-2">
-            <div class="flex bg-white rounded-lg border overflow-hidden">
-                <a href="?tab=overview&period=7" class="px-3 py-2 text-sm <?= $period == '7' ? 'bg-purple-600 text-white' : 'hover:bg-gray-50' ?>">7 วัน</a>
-                <a href="?tab=overview&period=30" class="px-3 py-2 text-sm <?= $period == '30' ? 'bg-purple-600 text-white' : 'hover:bg-gray-50' ?>">30 วัน</a>
-                <a href="?tab=overview&period=90" class="px-3 py-2 text-sm <?= $period == '90' ? 'bg-purple-600 text-white' : 'hover:bg-gray-50' ?>">90 วัน</a>
-            </div>
+            <?= renderPeriodSelector((string)$period, ['7' => '7 วัน', '30' => '30 วัน', '90' => '90 วัน'], 'period', ['tab' => 'overview']) ?>
             <form class="flex items-center gap-2">
                 <input type="hidden" name="tab" value="overview">
                 <input type="date" name="start" value="<?= $startDate ?>" class="px-3 py-2 border rounded-lg text-sm">
                 <span class="text-gray-400">-</span>
                 <input type="date" name="end" value="<?= $endDate ?>" class="px-3 py-2 border rounded-lg text-sm">
-                <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">
+                <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
                     <i class="fas fa-search"></i>
                 </button>
             </form>
         </div>
         <?php endif; ?>
     </div>
-    
+
     <!-- Tab Styles -->
     <?= getTabsStyles() ?>
+    <?= getPeriodSelectorStyles() ?>
     
     <!-- Tab Navigation -->
     <?= renderTabs($tabs, $activeTab, ['preserveParams' => ['period', 'start', 'end', 'days', 'account_id', 'date_from', 'date_to']]) ?>

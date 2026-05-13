@@ -16,6 +16,8 @@
 require_once 'config/config.php';
 require_once 'config/database.php';
 require_once 'includes/components/tabs.php';
+require_once __DIR__ . '/includes/components/page-header.php';
+require_once __DIR__ . '/includes/components/toast.php';
 
 if (!isset($_SESSION['admin_user']['id'])) {
     header('Location: /auth/login.php');
@@ -37,47 +39,40 @@ $tabs = [
 $activeTab = getActiveTab($tabs, 'chat');
 
 require_once 'includes/header.php';
+echo getPageHeaderStyles();
+echo getToastStyles();
+echo getTabsStyles();
 ?>
 
-<div class="content-area">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div>
-            <h2 class="text-xl font-bold text-gray-800">🤖 Medical Copilot AI</h2>
-            <p class="text-sm text-gray-500">AI ช่วยเหลือสำหรับร้านยาและธุรกิจ</p>
-        </div>
-    </div>
-    
-    <!-- Tab Styles -->
-    <?= getTabsStyles() ?>
-    
-    <!-- Tab Navigation -->
-    <?= renderTabs($tabs, $activeTab) ?>
-    
-    <!-- Tab Content -->
-    <div class="tab-content">
-        <div class="tab-panel">
-            <?php
-            switch ($activeTab) {
-                case 'chatbot':
-                    include 'includes/ai-chat/chatbot.php';
-                    break;
-                    
-                case 'settings':
-                    include 'includes/ai-chat/settings.php';
-                    break;
-                    
-                case 'studio':
-                    include 'includes/ai-chat/studio.php';
-                    break;
-                    
-                case 'chat':
-                default:
-                    include 'includes/ai-chat/chat.php';
-                    break;
-            }
-            ?>
-        </div>
+<?= renderToastContainer() ?>
+<?= renderPageHeader('Medical Copilot AI', 'AI ช่วยเหลือสำหรับร้านยาและธุรกิจ', null, [['label' => 'หน้าหลัก', 'href' => '/'], ['label' => 'Medical Copilot AI', 'href' => null]]) ?>
+
+<!-- Tab Navigation -->
+<?= renderTabs($tabs, $activeTab) ?>
+
+<!-- Tab Content -->
+<div class="tab-content">
+    <div class="tab-panel">
+        <?php
+        switch ($activeTab) {
+            case 'chatbot':
+                include 'includes/ai-chat/chatbot.php';
+                break;
+
+            case 'settings':
+                include 'includes/ai-chat/settings.php';
+                break;
+
+            case 'studio':
+                include 'includes/ai-chat/studio.php';
+                break;
+
+            case 'chat':
+            default:
+                include 'includes/ai-chat/chat.php';
+                break;
+        }
+        ?>
     </div>
 </div>
 

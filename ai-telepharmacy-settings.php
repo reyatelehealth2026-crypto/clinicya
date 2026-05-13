@@ -4,28 +4,45 @@
  *   Tab 1: Products (inline list + AI recommendable toggle)
  *   Tab 2: Symptom -> Product map
  *   Tab 3: Red Flag + Triage Questions
- *   Tab 4: Sandbox preview
+ *   Tab 4: Knowledge (RAG)
+ *   Tab 5: Sandbox preview
  *
  * Backend CRUD: api/ai-telepharmacy-admin.php
  */
 
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/components/tabs.php';
+require_once __DIR__ . '/includes/components/form-section.php';
+require_once __DIR__ . '/includes/components/field.php';
+require_once __DIR__ . '/includes/components/toggle.php';
+require_once __DIR__ . '/includes/components/sticky-save-bar.php';
 
 $pageTitle = 'AI Telepharmacy — ตั้งค่าครบชุด';
 $currentBotId = $_SESSION['current_bot_id'] ?? null;
 
+// Tab configuration — mirrors the original .tabbtn order
+$telepharmacyTabs = [
+    'products'  => ['label' => 'สินค้า (AI แนะนำได้)',   'icon' => 'fas fa-box-open'],
+    'map'       => ['label' => 'อาการ → สินค้า',         'icon' => 'fas fa-link'],
+    'triage'    => ['label' => 'Red Flag & คำถาม Yes/No', 'icon' => 'fas fa-stethoscope'],
+    'knowledge' => ['label' => 'Knowledge (RAG)',         'icon' => 'fas fa-book'],
+    'sandbox'   => ['label' => 'Sandbox',                'icon' => 'fas fa-flask'],
+];
+$activeTelepharmacyTab = getActiveTab($telepharmacyTabs, 'products');
+
 require_once __DIR__ . '/includes/header.php';
+echo getTabsStyles();
+echo getFormSectionStyles();
+echo getFieldStyles();
+echo getToggleStyles();
+echo getStickySaveBarStyles();
 ?>
 
 <style>
-.tabbtn { padding: 0.75rem 1rem; border-bottom: 2px solid transparent; cursor: pointer; font-weight: 500; }
-.tabbtn.active { border-color: #7c3aed; color: #7c3aed; }
-.tabpane { display: none; }
-.tabpane.active { display: block; }
-.severity-critical { background-color: #fee2e2; color: #b91c1c; }
-.severity-urgent   { background-color: #fef3c7; color: #b45309; }
-.severity-warning  { background-color: #dbeafe; color: #1e40af; }
+.severity-critical { background-color: var(--color-rose-100,    #fee2e2); color: var(--color-rose-700,    #b91c1c); }
+.severity-urgent   { background-color: var(--color-amber-100,   #fef3c7); color: var(--color-amber-700,   #b45309); }
+.severity-warning  { background-color: var(--color-primary-100, #e0e7ff); color: var(--color-primary-700, #4338ca); }
 .product-row.dimmed { opacity: 0.4; }
 </style>
 
@@ -47,16 +64,10 @@ require_once __DIR__ . '/includes/header.php';
   </div>
   <div id="seedResult" class="mb-4 text-sm"></div>
 
-  <div class="flex gap-1 border-b mb-6">
-    <div class="tabbtn active" data-tab="products">📦 สินค้า (AI แนะนำได้)</div>
-    <div class="tabbtn" data-tab="map">🔗 อาการ → สินค้า</div>
-    <div class="tabbtn" data-tab="triage">🩺 Red Flag &amp; คำถาม Yes/No</div>
-    <div class="tabbtn" data-tab="knowledge">📚 Knowledge (RAG)</div>
-    <div class="tabbtn" data-tab="sandbox">🧪 Sandbox</div>
-  </div>
+  <?= renderTabs($telepharmacyTabs, $activeTelepharmacyTab) ?>
 
   <!-- TAB 1: PRODUCTS -->
-  <section id="tab-products" class="tabpane active">
+  <section id="tab-products" class="<?= $activeTelepharmacyTab === 'products' ? '' : 'hidden' ?>">
     <div class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap items-center gap-3">
       <input id="prodSearch" type="search" placeholder="ค้นหาชื่อ / SKU / ตัวยา"
              class="flex-1 min-w-[200px] px-3 py-2 border rounded-lg text-sm" />
@@ -93,7 +104,7 @@ require_once __DIR__ . '/includes/header.php';
   </section>
 
   <!-- TAB 2: SYMPTOM MAP -->
-  <section id="tab-map" class="tabpane">
+  <section id="tab-map" class="<?= $activeTelepharmacyTab === 'map' ? '' : 'hidden' ?>">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="bg-white rounded-xl shadow p-4">
         <h3 class="font-semibold mb-3">อาการ (symptom_code)</h3>
@@ -127,7 +138,7 @@ require_once __DIR__ . '/includes/header.php';
   </section>
 
   <!-- TAB 3: RED FLAG + TRIAGE QUESTIONS -->
-  <section id="tab-triage" class="tabpane space-y-6">
+  <section id="tab-triage" class="space-y-6 <?= $activeTelepharmacyTab === 'triage' ? '' : 'hidden' ?>">
     <div class="bg-white rounded-xl shadow p-4">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold">🚨 Red Flag Symptoms</h3>
@@ -174,8 +185,8 @@ require_once __DIR__ . '/includes/header.php';
     </div>
   </section>
 
-  <!-- TAB 5: KNOWLEDGE (RAG) -->
-  <section id="tab-knowledge" class="tabpane space-y-4">
+  <!-- TAB 4: KNOWLEDGE (RAG) -->
+  <section id="tab-knowledge" class="space-y-4 <?= $activeTelepharmacyTab === 'knowledge' ? '' : 'hidden' ?>">
     <div class="bg-white rounded-xl shadow p-4">
       <h3 class="font-semibold mb-2">📥 Import จาก docs/*.md</h3>
       <p class="text-sm text-gray-600 mb-3">
@@ -259,8 +270,8 @@ require_once __DIR__ . '/includes/header.php';
     </div>
   </section>
 
-  <!-- TAB 4: SANDBOX -->
-  <section id="tab-sandbox" class="tabpane">
+  <!-- TAB 5: SANDBOX -->
+  <section id="tab-sandbox" class="<?= $activeTelepharmacyTab === 'sandbox' ? '' : 'hidden' ?>">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="bg-white rounded-xl shadow p-4">
         <h3 class="font-semibold mb-3">🧪 ทดลอง Recommend</h3>
@@ -306,15 +317,6 @@ async function adminCall(action, params = {}) {
   });
   return res.json();
 }
-
-document.querySelectorAll('.tabbtn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tabbtn').forEach((b) => b.classList.remove('active'));
-    document.querySelectorAll('.tabpane').forEach((p) => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-  });
-});
 
 let prodPage = 1;
 const PROD_PER_PAGE = 50;

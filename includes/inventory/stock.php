@@ -4,6 +4,11 @@
  * Tab content for inventory/index.php
  */
 
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/toolbar.php';
+require_once __DIR__ . '/../components/data-table.php';
+require_once __DIR__ . '/../components/empty-state.php';
+
 // Get products with stock info
 $products = [];
 $totalStock = 0;
@@ -54,7 +59,73 @@ try {
     $products = [];
     $categories = [];
 }
+
+// Build category select options for renderToolbar
+$categoryOptions = [];
+foreach ($categories as $cat) {
+    $categoryOptions[] = ['value' => $cat, 'label' => $cat];
+}
+
+// Build columns for renderDataTable
+$stockColumns = [
+    [
+        'key' => 'name', 'label' => 'สินค้า', 'align' => 'left',
+        'render' => function ($p) {
+            $html = '<div style="font-weight:500;">' . htmlspecialchars($p['name']) . '</div>';
+            if ($p['category']) {
+                $html .= '<div style="font-size:12px;color:var(--color-dark-500);">' . htmlspecialchars($p['category']) . '</div>';
+            }
+            return $html;
+        },
+    ],
+    [
+        'key' => 'sku', 'label' => 'SKU', 'align' => 'center',
+        'render' => fn($p) => '<span style="font-family:var(--font-mono);font-size:13px;">' . htmlspecialchars($p['sku'] ?? '-') . '</span>',
+    ],
+    [
+        'key' => 'barcode', 'label' => 'Barcode', 'align' => 'center',
+        'render' => fn($p) => '<span style="font-family:var(--font-mono);font-size:13px;">' . htmlspecialchars($p['barcode'] ?? '-') . '</span>',
+    ],
+    [
+        'key' => 'stock', 'label' => 'สต็อก', 'align' => 'center',
+        'render' => function ($p) {
+            $rop = $p['reorder_point'] ?? 5;
+            $status = $p['stock'] <= 0 ? 'out' : ($p['stock'] <= $rop ? 'low' : 'ok');
+            $color = $status === 'out' ? 'var(--color-rose-600)' : ($status === 'low' ? 'var(--color-amber-600)' : 'inherit');
+            return '<span style="font-weight:700;color:' . $color . ';">' . number_format($p['stock']) . '</span>';
+        },
+    ],
+    [
+        'key' => 'rop', 'label' => 'ROP', 'align' => 'center',
+        'render' => fn($p) => '<span style="color:var(--color-dark-500);">' . ($p['reorder_point'] ?? 5) . '</span>',
+    ],
+    [
+        'key' => 'cost', 'label' => 'ต้นทุน', 'align' => 'right',
+        'render' => fn($p) => '฿' . number_format($p['cost_price'] ?? 0, 2),
+    ],
+    [
+        'key' => 'value', 'label' => 'มูลค่า', 'align' => 'right',
+        'render' => fn($p) => '<span style="font-weight:500;">฿' . number_format($p['value'], 2) . '</span>',
+    ],
+    [
+        'key' => 'status', 'label' => 'สถานะ', 'align' => 'center',
+        'render' => function ($p) {
+            $rop = $p['reorder_point'] ?? 5;
+            $status = $p['stock'] <= 0 ? 'out' : ($p['stock'] <= $rop ? 'low' : 'ok');
+            $statusColors = ['out' => 'red', 'low' => 'yellow', 'ok' => 'green'];
+            $statusLabels = ['out' => 'หมด', 'low' => 'ใกล้หมด', 'ok' => 'ปกติ'];
+            return '<span class="px-2 py-1 bg-' . $statusColors[$status] . '-100 text-' . $statusColors[$status] . '-700 rounded text-xs">' . $statusLabels[$status] . '</span>';
+        },
+    ],
+];
+
+$stockEmpty = renderEmptyState('fas fa-boxes', 'ไม่พบข้อมูล', 'ลองปรับตัวกรองหรือเพิ่มสินค้าใหม่');
 ?>
+
+<?= getPageHeaderStyles() ?>
+<?= getToolbarStyles() ?>
+<?= getDataTableStyles() ?>
+<?= getEmptyStateStyles() ?>
 
 <div class="space-y-6">
     <!-- Summary Cards -->
@@ -72,92 +143,28 @@ try {
             <p class="text-3xl font-bold">฿<?= number_format($totalValue, 2) ?></p>
         </div>
     </div>
-    
+
     <!-- Filters -->
-    <div class="bg-white rounded-xl shadow p-4">
-        <form method="GET" class="flex flex-wrap gap-4 items-end">
-            <input type="hidden" name="tab" value="stock">
-            <div class="flex-1 min-w-[200px]">
-                <label class="block text-sm font-medium mb-1">ค้นหา</label>
-                <input type="text" name="search" value="<?= htmlspecialchars($_GET['search'] ?? '') ?>" 
-                       placeholder="ชื่อสินค้า, SKU, Barcode..." 
-                       class="w-full px-3 py-2 border rounded-lg">
-            </div>
-            <div>
-                <label class="block text-sm font-medium mb-1">หมวดหมู่</label>
-                <select name="category" class="px-3 py-2 border rounded-lg">
-                    <option value="">-- ทั้งหมด --</option>
-                    <?php foreach ($categories as $cat): ?>
-                    <option value="<?= htmlspecialchars($cat) ?>" <?= ($category === $cat) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($cat) ?>
-                    </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                <i class="fas fa-search mr-1"></i>ค้นหา
-            </button>
-            <?php if ($search || $category): ?>
-            <a href="?tab=stock" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">ล้างตัวกรอง</a>
-            <?php endif; ?>
-        </form>
-    </div>
-    
+    <?= renderToolbar([
+        'method' => 'GET',
+        'hiddenFields' => ['tab' => 'stock'],
+        'search' => [
+            'name' => 'search',
+            'value' => $_GET['search'] ?? '',
+            'placeholder' => 'ชื่อสินค้า, SKU, Barcode...',
+        ],
+        'selects' => [
+            [
+                'name' => 'category',
+                'value' => $category,
+                'placeholder' => '-- ทั้งหมด --',
+                'options' => $categoryOptions,
+            ],
+        ],
+        'resetHref' => ($search || $category) ? '?tab=stock' : null,
+        'meta' => '<i class="fas fa-boxes" style="margin-right:6px;color:var(--color-primary-500);"></i>รายการสต็อกสินค้า · ' . count($products) . ' รายการ',
+    ]) ?>
+
     <!-- Stock Table -->
-    <div class="bg-white rounded-xl shadow">
-        <div class="p-4 border-b flex justify-between items-center">
-            <h2 class="font-semibold"><i class="fas fa-boxes mr-2 text-blue-500"></i>รายการสต็อกสินค้า</h2>
-            <span class="text-sm text-gray-500"><?= count($products) ?> รายการ</span>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500">สินค้า</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">SKU</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">Barcode</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">สต็อก</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">ROP</th>
-                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500">ต้นทุน</th>
-                        <th class="px-4 py-3 text-right text-xs font-medium text-gray-500">มูลค่า</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500">สถานะ</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y">
-                    <?php if (empty($products)): ?>
-                    <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">ไม่พบข้อมูล</td></tr>
-                    <?php else: ?>
-                    <?php foreach ($products as $p): 
-                        $rop = $p['reorder_point'] ?? 5;
-                        $status = $p['stock'] <= 0 ? 'out' : ($p['stock'] <= $rop ? 'low' : 'ok');
-                        $statusColors = ['out' => 'red', 'low' => 'yellow', 'ok' => 'green'];
-                        $statusLabels = ['out' => 'หมด', 'low' => 'ใกล้หมด', 'ok' => 'ปกติ'];
-                    ?>
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3">
-                            <div class="font-medium"><?= htmlspecialchars($p['name']) ?></div>
-                            <?php if ($p['category']): ?>
-                            <div class="text-xs text-gray-500"><?= htmlspecialchars($p['category']) ?></div>
-                            <?php endif; ?>
-                        </td>
-                        <td class="px-4 py-3 text-center font-mono text-sm"><?= htmlspecialchars($p['sku'] ?? '-') ?></td>
-                        <td class="px-4 py-3 text-center font-mono text-sm"><?= htmlspecialchars($p['barcode'] ?? '-') ?></td>
-                        <td class="px-4 py-3 text-center font-bold <?= $status === 'out' ? 'text-red-600' : ($status === 'low' ? 'text-yellow-600' : '') ?>">
-                            <?= number_format($p['stock']) ?>
-                        </td>
-                        <td class="px-4 py-3 text-center text-gray-500"><?= $rop ?></td>
-                        <td class="px-4 py-3 text-right">฿<?= number_format($p['cost_price'] ?? 0, 2) ?></td>
-                        <td class="px-4 py-3 text-right font-medium">฿<?= number_format($p['value'], 2) ?></td>
-                        <td class="px-4 py-3 text-center">
-                            <span class="px-2 py-1 bg-<?= $statusColors[$status] ?>-100 text-<?= $statusColors[$status] ?>-700 rounded text-xs">
-                                <?= $statusLabels[$status] ?>
-                            </span>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
+    <?= renderDataTable($stockColumns, $products, ['emptyContent' => $stockEmpty]) ?>
 </div>

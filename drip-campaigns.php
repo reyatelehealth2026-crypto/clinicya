@@ -10,6 +10,11 @@ require_once 'config/config.php';
 require_once 'config/database.php';
 require_once 'classes/CRMManager.php';
 require_once 'classes/DripCampaignService.php';
+require_once __DIR__ . '/includes/components/page-header.php';
+require_once __DIR__ . '/includes/components/data-table.php';
+require_once __DIR__ . '/includes/components/empty-state.php';
+require_once __DIR__ . '/includes/components/modal.php';
+require_once __DIR__ . '/includes/components/toast.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'Drip Campaigns';
@@ -112,306 +117,405 @@ if ($editCampaignId) {
 }
 ?>
 
-<div class="flex justify-between items-center mb-6">
-    <div>
-        <h2 class="text-2xl font-bold">📧 Drip Campaigns</h2>
-        <p class="text-gray-600">ส่งข้อความอัตโนมัติตามลำดับเวลา</p>
-    </div>
-    <button onclick="openCreateModal()" class="btn-primary">
-        <i class="fas fa-plus mr-2"></i>สร้าง Campaign
-    </button>
-</div>
+<?= getPageHeaderStyles() ?>
+<?= getDataTableStyles() ?>
+<?= getEmptyStateStyles() ?>
+<?= getModalStyles() ?>
+<?= getToastStyles() ?>
+
+<style>
+.drip-info-box {
+    background: var(--color-primary-50);
+    border: 1px solid var(--color-primary-100);
+    border-radius: var(--radius-lg, 16px);
+    padding: var(--space-4, 16px);
+    margin-top: var(--space-6, 24px);
+}
+.drip-info-box h4 { font-weight: 600; color: var(--color-primary-800, #3730a3); margin-bottom: var(--space-2, 8px); }
+.drip-info-box p, .drip-info-box li { font-size: var(--text-sm, 14px); color: var(--color-primary-700, #4338ca); }
+.drip-info-box ul { margin-top: var(--space-2, 8px); padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.step-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 48px; height: 48px; border-radius: var(--radius-full, 9999px);
+    background: var(--color-emerald-100); color: var(--color-emerald-700);
+    font-weight: 700; font-size: var(--text-base, 16px); flex-shrink: 0;
+}
+.step-card {
+    background: #ffffff; border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-md, 12px); padding: var(--space-4, 16px);
+    position: relative;
+}
+.step-connector {
+    position: absolute; left: 24px; top: 100%;
+    width: 2px; height: 16px; background: var(--color-slate-300);
+}
+.step-preview {
+    background: var(--color-slate-50); border-radius: var(--radius-sm, 8px);
+    padding: var(--space-3, 12px); font-size: var(--text-sm, 14px);
+    color: var(--color-dark-700); margin-top: var(--space-2, 8px);
+}
+.dc-settings-panel {
+    background: var(--color-slate-50); border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-lg, 16px); padding: var(--space-4, 16px);
+}
+.dc-settings-panel h4 { font-weight: 600; font-size: var(--text-base, 16px); color: var(--color-dark-800); margin-bottom: var(--space-4, 16px); }
+.dc-field { margin-bottom: var(--space-4, 16px); }
+.dc-field label { display: block; font-size: var(--text-sm, 14px); font-weight: 500; color: var(--color-dark-800); margin-bottom: 6px; }
+.dc-input {
+    width: 100%; padding: 10px var(--space-3, 12px); border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-md, 12px); font-size: var(--text-sm, 14px); color: var(--color-dark-800);
+    background: #ffffff; transition: all var(--transition-fast, 150ms ease); box-sizing: border-box;
+}
+.dc-input:focus { outline: none; border-color: var(--color-primary-400); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+.dc-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 10px var(--space-4, 16px);
+    border-radius: var(--radius-md, 12px); font-size: var(--text-sm, 14px); font-weight: 600;
+    cursor: pointer; border: 1px solid var(--color-slate-200); background: #ffffff; color: var(--color-dark-700);
+    transition: all var(--transition-fast, 150ms ease);
+}
+.dc-btn:hover { background: var(--color-slate-50); }
+.dc-btn-primary { background: var(--color-emerald-500); border-color: var(--color-emerald-500); color: #ffffff; width: 100%; justify-content: center; }
+.dc-btn-primary:hover { background: var(--color-emerald-600); border-color: var(--color-emerald-600); }
+.dc-btn-blue { background: var(--color-primary-600); border-color: var(--color-primary-600); color: #ffffff; }
+.dc-btn-blue:hover { background: var(--color-primary-700); }
+.status-pill {
+    display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+    border-radius: var(--radius-full, 9999px); font-size: var(--text-xs, 12px); font-weight: 600;
+    border: none; cursor: pointer; transition: all var(--transition-fast, 150ms ease);
+}
+.status-pill-active { background: var(--color-emerald-100); color: var(--color-emerald-700); }
+.status-pill-paused { background: var(--color-slate-100); color: var(--color-dark-600); }
+.edit-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-4, 16px) var(--space-5, 20px);
+    border-bottom: 1px solid var(--color-slate-200);
+    background: var(--color-slate-50);
+    position: sticky; top: 0; z-index: 10;
+    border-radius: var(--radius-lg, 16px) var(--radius-lg, 16px) 0 0;
+}
+.edit-panel-header h3 { font-size: var(--text-lg, 18px); font-weight: 600; color: var(--color-dark-800); margin: 0; }
+.edit-panel-header p { font-size: var(--text-sm, 14px); color: var(--color-dark-500); margin: 2px 0 0 0; }
+.close-btn {
+    width: 32px; height: 32px; border-radius: var(--radius-sm, 8px); border: none;
+    background: transparent; color: var(--color-dark-500); cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all var(--transition-fast, 150ms ease);
+}
+.close-btn:hover { background: var(--color-slate-200); color: var(--color-dark-800); }
+.edit-grid { display: grid; grid-template-columns: 1fr 2fr; gap: var(--space-6, 24px); padding: var(--space-5, 20px); }
+@media (max-width: 768px) { .edit-grid { grid-template-columns: 1fr; } }
+/* Dark mode */
+.dark .drip-info-box { background: rgba(79,70,229,0.08); border-color: rgba(99,102,241,0.2); }
+.dark .drip-info-box h4 { color: var(--color-primary-300); }
+.dark .drip-info-box p, .dark .drip-info-box li { color: var(--color-primary-200); }
+.dark .step-card { background: var(--color-dark-800); border-color: var(--color-dark-700); }
+.dark .step-preview { background: var(--color-dark-900); color: var(--color-slate-300); }
+.dark .dc-settings-panel { background: var(--color-dark-900); border-color: var(--color-dark-700); }
+.dark .dc-settings-panel h4 { color: var(--color-slate-100); }
+.dark .dc-input { background: var(--color-dark-800); border-color: var(--color-dark-700); color: var(--color-slate-100); }
+.dark .dc-btn { background: var(--color-dark-700); border-color: var(--color-dark-600); color: var(--color-slate-300); }
+.dark .edit-panel-header { background: var(--color-dark-900); border-color: var(--color-dark-700); }
+.dark .edit-panel-header h3 { color: var(--color-slate-100); }
+.dark .close-btn { color: var(--color-slate-400); }
+.dark .close-btn:hover { background: var(--color-dark-700); color: var(--color-slate-100); }
+</style>
+
+<?= renderPageHeader(
+    'Drip Campaigns',
+    'ส่งข้อความอัตโนมัติตามลำดับเวลา',
+    [
+        'label'   => 'สร้าง Campaign',
+        'icon'    => 'fas fa-plus',
+        'onclick' => 'openCreateModal()',
+        'variant' => 'success',
+    ],
+    [
+        ['label' => 'Marketing', 'href' => null],
+        ['label' => 'Drip Campaigns', 'href' => null],
+    ]
+) ?>
 
 <?php if (isset($_GET['success'])): ?>
-<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-    <i class="fas fa-check-circle mr-2"></i>บันทึกสำเร็จ!
+<div style="background:var(--color-emerald-50);border:1px solid var(--color-emerald-200);color:var(--color-emerald-700);padding:12px 16px;border-radius:var(--radius-md,12px);margin-bottom:var(--space-4,16px);font-size:var(--text-sm,14px);">
+    <i class="fas fa-check-circle" style="margin-right:8px;"></i>บันทึกสำเร็จ!
 </div>
 <?php endif; ?>
 
-<div class="bg-white rounded-xl shadow overflow-hidden">
-    <table class="w-full">
-        <thead class="bg-gray-50">
-            <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Campaign</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trigger</th>
-                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Steps</th>
-                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Active Users</th>
-                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y">
-            <?php foreach ($campaigns as $campaign): ?>
-            <tr class="hover:bg-gray-50">
-                <td class="px-6 py-4">
-                    <button onclick="openEditModal(<?= $campaign['id'] ?>)" class="font-medium text-blue-600 hover:text-blue-800">
-                        <?= htmlspecialchars($campaign['name']) ?>
-                    </button>
-                </td>
-                <td class="px-6 py-4">
-                    <?php
-                    $triggerIcons = [
-                        'follow' => '👋 Follow',
-                        'tag_added' => '🏷️ Tag Added',
-                        'purchase' => '🛒 Purchase',
-                        'no_purchase' => '❌ No Purchase',
-                        'inactivity' => '😴 Inactivity'
-                    ];
-                    echo $triggerIcons[$campaign['trigger_type']] ?? $campaign['trigger_type'];
-                    ?>
-                </td>
-                <td class="px-6 py-4 text-center"><?= $campaign['step_count'] ?></td>
-                <td class="px-6 py-4 text-center"><?= number_format($campaign['active_users']) ?></td>
-                <td class="px-6 py-4 text-center">
-                    <form method="POST" class="inline">
-                        <input type="hidden" name="action" value="toggle_campaign">
-                        <input type="hidden" name="campaign_id" value="<?= $campaign['id'] ?>">
-                        <button type="submit" class="px-3 py-1 rounded-full text-sm <?= $campaign['is_active'] ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' ?>">
-                            <?= $campaign['is_active'] ? '✅ Active' : '⏸️ Paused' ?>
-                        </button>
-                    </form>
-                </td>
-                <td class="px-6 py-4 text-center">
-                    <button onclick="openEditModal(<?= $campaign['id'] ?>)" class="text-blue-500 hover:text-blue-700 mr-3">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <form method="POST" class="inline" onsubmit="return confirm('ลบ Campaign นี้?')">
-                        <input type="hidden" name="action" value="delete_campaign">
-                        <input type="hidden" name="campaign_id" value="<?= $campaign['id'] ?>">
-                        <button type="submit" class="text-red-500 hover:text-red-700">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </form>
-                </td>
-            </tr>
-            <?php endforeach; ?>
-            
-            <?php if (empty($campaigns)): ?>
-            <tr>
-                <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-                    <i class="fas fa-mail-bulk text-5xl text-gray-300 mb-4"></i>
-                    <p>ยังไม่มี Drip Campaign</p>
-                </td>
-            </tr>
-            <?php endif; ?>
-        </tbody>
-    </table>
-</div>
+<?php
+$triggerIcons = [
+    'follow'      => '👋 Follow',
+    'tag_added'   => '🏷️ Tag Added',
+    'purchase'    => '🛒 Purchase',
+    'no_purchase' => '❌ No Purchase',
+    'inactivity'  => '😴 Inactivity',
+];
+
+$columns = [
+    [
+        'key'    => 'name',
+        'label'  => 'Campaign',
+        'align'  => 'left',
+        'render' => function ($row) {
+            return '<button onclick="openEditModal(' . (int)$row['id'] . ')" style="font-weight:600;color:var(--color-primary-600);background:none;border:none;cursor:pointer;font-size:var(--text-sm,14px);padding:0;text-align:left;">'
+                . htmlspecialchars($row['name']) . '</button>';
+        },
+    ],
+    [
+        'key'    => 'trigger_type',
+        'label'  => 'Trigger',
+        'align'  => 'left',
+        'render' => function ($row) use ($triggerIcons) {
+            return htmlspecialchars($triggerIcons[$row['trigger_type']] ?? $row['trigger_type']);
+        },
+    ],
+    [
+        'key'    => 'step_count',
+        'label'  => 'Steps',
+        'align'  => 'center',
+        'render' => function ($row) { return (int)$row['step_count']; },
+    ],
+    [
+        'key'    => 'active_users',
+        'label'  => 'Active Users',
+        'align'  => 'center',
+        'render' => function ($row) { return number_format($row['active_users']); },
+    ],
+    [
+        'key'    => 'is_active',
+        'label'  => 'Status',
+        'align'  => 'center',
+        'render' => function ($row) {
+            $cls = $row['is_active'] ? 'status-pill-active' : 'status-pill-paused';
+            $label = $row['is_active'] ? 'Active' : 'Paused';
+            return '<form method="POST" class="inline">'
+                . '<input type="hidden" name="action" value="toggle_campaign">'
+                . '<input type="hidden" name="campaign_id" value="' . (int)$row['id'] . '">'
+                . '<button type="submit" class="status-pill ' . $cls . '">' . htmlspecialchars($label) . '</button>'
+                . '</form>';
+        },
+    ],
+    [
+        'key'    => 'actions',
+        'label'  => 'Actions',
+        'align'  => 'center',
+        'render' => function ($row) {
+            return '<div class="data-table-row-actions">'
+                . '<button onclick="openEditModal(' . (int)$row['id'] . ')" class="data-table-row-action" title="แก้ไข"><i class="fas fa-edit"></i></button>'
+                . '<form method="POST" class="inline" onsubmit="return confirm(\'ลบ Campaign นี้?\')">'
+                . '<input type="hidden" name="action" value="delete_campaign">'
+                . '<input type="hidden" name="campaign_id" value="' . (int)$row['id'] . '">'
+                . '<button type="submit" class="data-table-row-action data-table-row-action-danger" title="ลบ"><i class="fas fa-trash"></i></button>'
+                . '</form>'
+                . '</div>';
+        },
+    ],
+];
+
+$emptyHtml = renderEmptyState(
+    'fas fa-mail-bulk',
+    'ยังไม่มี Drip Campaign',
+    'สร้าง Campaign แรกเพื่อเริ่มส่งข้อความอัตโนมัติ',
+    ['label' => 'สร้าง Campaign', 'icon' => 'fas fa-plus', 'onclick' => 'openCreateModal()']
+);
+
+echo renderDataTable($columns, $campaigns, ['emptyContent' => $emptyHtml]);
+?>
 
 <!-- Create Campaign Modal -->
-<div id="createModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        <div class="p-6 border-b">
-            <h3 class="text-xl font-semibold">📧 สร้าง Drip Campaign</h3>
-        </div>
-        <form method="POST" class="p-6">
-            <input type="hidden" name="action" value="create_campaign">
-            
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">ชื่อ Campaign</label>
-                <input type="text" name="name" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500" placeholder="เช่น Welcome Series, Re-engagement">
-            </div>
-            
-            <div class="mb-6">
-                <label class="block text-sm font-medium mb-2">Trigger (เริ่มเมื่อ)</label>
-                <select name="trigger_type" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
-                    <option value="follow">👋 ผู้ใช้ Follow</option>
-                    <option value="tag_added">🏷️ ได้รับ Tag</option>
-                    <option value="purchase">🛒 ซื้อสินค้า</option>
-                    <option value="no_purchase">❌ ทักแต่ไม่ซื้อ</option>
-                    <option value="inactivity">😴 ไม่มี Activity</option>
-                </select>
-            </div>
-            
-            <div class="flex gap-3">
-                <button type="button" onclick="closeCreateModal()" class="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50">ยกเลิก</button>
-                <button type="submit" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">สร้าง</button>
-            </div>
-        </form>
-    </div>
+<?php
+$createBody = '
+<div class="dc-field">
+    <label>ชื่อ Campaign</label>
+    <input type="text" name="name" required class="dc-input" placeholder="เช่น Welcome Series, Re-engagement">
 </div>
+<div class="dc-field" style="margin-bottom:0">
+    <label>Trigger (เริ่มเมื่อ)</label>
+    <select name="trigger_type" class="dc-input">
+        <option value="follow">👋 ผู้ใช้ Follow</option>
+        <option value="tag_added">🏷️ ได้รับ Tag</option>
+        <option value="purchase">🛒 ซื้อสินค้า</option>
+        <option value="no_purchase">❌ ทักแต่ไม่ซื้อ</option>
+        <option value="inactivity">😴 ไม่มี Activity</option>
+    </select>
+</div>';
 
-<!-- Edit Campaign Modal -->
-<div id="editModal" class="fixed inset-0 bg-black/50 z-50 <?= $editCampaign ? 'flex' : 'hidden' ?> items-center justify-center overflow-y-auto">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 my-8 max-h-[90vh] overflow-y-auto">
-        <?php if ($editCampaign): ?>
-        <div class="p-6 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+$createFooter = '
+<button type="button" onclick="closeModalShell(\'createCampaignModal\')" class="dc-btn">ยกเลิก</button>
+<button type="submit" class="dc-btn dc-btn-primary" style="flex:1;"><i class="fas fa-plus"></i>สร้าง</button>';
+
+echo renderModal(
+    'createCampaignModal',
+    'สร้าง Drip Campaign',
+    $createBody,
+    $createFooter,
+    [
+        'size'      => 'sm',
+        'formOpen'  => '<form method="POST"><input type="hidden" name="action" value="create_campaign">',
+        'formClose' => '</form>',
+    ]
+);
+?>
+
+<!-- Edit Campaign Panel (shown when $editCampaign is set) -->
+<?php if ($editCampaign): ?>
+<div id="editModal" class="modal-shell" role="dialog" aria-modal="true" style="display:flex;">
+    <div class="modal-shell-backdrop" onclick="closeEditModal()"></div>
+    <div class="modal-shell-panel modal-shell-xl" style="max-height:95vh;overflow-y:auto;">
+        <div class="edit-panel-header">
             <div>
-                <h3 class="text-xl font-semibold">📝 แก้ไข Campaign</h3>
-                <p class="text-sm text-gray-500"><?= htmlspecialchars($editCampaign['name']) ?></p>
+                <h3>แก้ไข Campaign</h3>
+                <p><?= htmlspecialchars($editCampaign['name']) ?></p>
             </div>
-            <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">
-                <i class="fas fa-times text-xl"></i>
-            </button>
+            <button onclick="closeEditModal()" class="close-btn" aria-label="Close"><i class="fas fa-times"></i></button>
         </div>
-        
-        <div class="p-6">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Campaign Settings -->
-                <div class="lg:col-span-1">
-                    <div class="bg-gray-50 rounded-xl p-6">
-                        <h4 class="font-semibold text-lg mb-4">⚙️ Campaign Settings</h4>
-                        <form method="POST">
-                            <input type="hidden" name="action" value="update_campaign">
-                            <input type="hidden" name="campaign_id" value="<?= $editCampaign['id'] ?>">
-                            
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-2">ชื่อ</label>
-                                <input type="text" name="name" value="<?= htmlspecialchars($editCampaign['name']) ?>" required class="w-full px-4 py-2 border rounded-lg">
-                            </div>
-                            
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-2">Trigger</label>
-                                <select name="trigger_type" class="w-full px-4 py-2 border rounded-lg">
-                                    <option value="follow" <?= $editCampaign['trigger_type'] === 'follow' ? 'selected' : '' ?>>👋 Follow</option>
-                                    <option value="tag_added" <?= $editCampaign['trigger_type'] === 'tag_added' ? 'selected' : '' ?>>🏷️ Tag Added</option>
-                                    <option value="purchase" <?= $editCampaign['trigger_type'] === 'purchase' ? 'selected' : '' ?>>🛒 Purchase</option>
-                                    <option value="no_purchase" <?= $editCampaign['trigger_type'] === 'no_purchase' ? 'selected' : '' ?>>❌ No Purchase</option>
-                                    <option value="inactivity" <?= $editCampaign['trigger_type'] === 'inactivity' ? 'selected' : '' ?>>😴 Inactivity</option>
-                                </select>
-                            </div>
-                            
-                            <button type="submit" class="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
-                                บันทึก
-                            </button>
-                        </form>
+
+        <div class="edit-grid">
+            <!-- Campaign Settings -->
+            <div class="dc-settings-panel">
+                <h4><i class="fas fa-cog" style="margin-right:8px;"></i>Campaign Settings</h4>
+                <form method="POST">
+                    <input type="hidden" name="action" value="update_campaign">
+                    <input type="hidden" name="campaign_id" value="<?= $editCampaign['id'] ?>">
+                    <div class="dc-field">
+                        <label>ชื่อ</label>
+                        <input type="text" name="name" value="<?= htmlspecialchars($editCampaign['name']) ?>" required class="dc-input">
                     </div>
+                    <div class="dc-field">
+                        <label>Trigger</label>
+                        <select name="trigger_type" class="dc-input">
+                            <option value="follow" <?= $editCampaign['trigger_type'] === 'follow' ? 'selected' : '' ?>>👋 Follow</option>
+                            <option value="tag_added" <?= $editCampaign['trigger_type'] === 'tag_added' ? 'selected' : '' ?>>🏷️ Tag Added</option>
+                            <option value="purchase" <?= $editCampaign['trigger_type'] === 'purchase' ? 'selected' : '' ?>>🛒 Purchase</option>
+                            <option value="no_purchase" <?= $editCampaign['trigger_type'] === 'no_purchase' ? 'selected' : '' ?>>❌ No Purchase</option>
+                            <option value="inactivity" <?= $editCampaign['trigger_type'] === 'inactivity' ? 'selected' : '' ?>>😴 Inactivity</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="dc-btn dc-btn-primary"><i class="fas fa-save"></i>บันทึก</button>
+                </form>
+            </div>
+
+            <!-- Steps -->
+            <div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4,16px);">
+                    <h4 style="font-weight:600;font-size:var(--text-base,16px);color:var(--color-dark-800);margin:0;">Message Steps</h4>
+                    <button onclick="openAddStepModal()" class="dc-btn dc-btn-blue">
+                        <i class="fas fa-plus"></i>เพิ่ม Step
+                    </button>
                 </div>
 
-                <!-- Steps -->
-                <div class="lg:col-span-2">
-                    <div class="bg-gray-50 rounded-xl p-6">
-                        <div class="flex justify-between items-center mb-4">
-                            <h4 class="font-semibold text-lg">📝 Message Steps</h4>
-                            <button onclick="openAddStepModal()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm">
-                                <i class="fas fa-plus mr-1"></i>เพิ่ม Step
-                            </button>
-                        </div>
-                        
-                        <?php if (empty($editSteps)): ?>
-                        <div class="text-center py-8 text-gray-500">
-                            <i class="fas fa-list-ol text-4xl text-gray-300 mb-3"></i>
-                            <p>ยังไม่มี Steps</p>
-                            <button onclick="openAddStepModal()" class="mt-3 text-blue-600 hover:text-blue-700">
-                                <i class="fas fa-plus mr-1"></i>เพิ่ม Step แรก
-                            </button>
-                        </div>
-                        <?php else: ?>
-                        <div class="space-y-4">
-                            <?php foreach ($editSteps as $index => $step): ?>
-                            <div class="bg-white border rounded-lg p-4 relative">
-                                <!-- Timeline connector -->
-                                <?php if ($index < count($editSteps) - 1): ?>
-                                <div class="absolute left-8 top-full w-0.5 h-4 bg-gray-300"></div>
-                                <?php endif; ?>
-                                
-                                <div class="flex items-start gap-4">
-                                    <div class="w-12 h-12 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold flex-shrink-0">
-                                        <?= $step['step_order'] ?>
-                                    </div>
-                                    <div class="flex-1">
-                                        <div class="flex items-center gap-2 mb-2">
-                                            <span class="text-sm text-gray-500">
-                                                <i class="fas fa-clock mr-1"></i>
-                                                <?php
-                                                $delay = $step['delay_minutes'];
-                                                if ($delay === 0) echo 'ทันที';
-                                                elseif ($delay < 60) echo "{$delay} นาที";
-                                                elseif ($delay < 1440) echo floor($delay / 60) . ' ชั่วโมง';
-                                                else echo floor($delay / 1440) . ' วัน';
-                                                ?>
-                                            </span>
-                                            <span class="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                                                <?= $step['message_type'] ?>
-                                            </span>
-                                        </div>
-                                        <div class="bg-gray-50 rounded-lg p-3 text-sm">
-                                            <?php if ($step['message_type'] === 'flex'): ?>
-                                            <span class="text-purple-600"><i class="fas fa-cube mr-1"></i>Flex Message</span>
-                                            <?php else: ?>
-                                            <?= nl2br(htmlspecialchars(mb_substr($step['message_content'], 0, 200))) ?>
-                                            <?php if (mb_strlen($step['message_content']) > 200): ?>...<?php endif; ?>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                    <form method="POST" onsubmit="return confirm('ลบ Step นี้?')">
-                                        <input type="hidden" name="action" value="delete_step">
-                                        <input type="hidden" name="campaign_id" value="<?= $editCampaign['id'] ?>">
-                                        <input type="hidden" name="step_id" value="<?= $step['id'] ?>">
-                                        <button type="submit" class="text-red-500 hover:text-red-700">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </form>
+                <?php if (empty($editSteps)): ?>
+                <?= renderEmptyState(
+                    'fas fa-list-ol',
+                    'ยังไม่มี Steps',
+                    'เพิ่ม Step แรกเพื่อกำหนดข้อความ',
+                    ['label' => 'เพิ่ม Step แรก', 'icon' => 'fas fa-plus', 'onclick' => 'openAddStepModal()']
+                ) ?>
+                <?php else: ?>
+                <div style="display:flex;flex-direction:column;gap:var(--space-3,12px);">
+                    <?php foreach ($editSteps as $index => $step): ?>
+                    <div class="step-card">
+                        <?php if ($index < count($editSteps) - 1): ?>
+                        <div class="step-connector"></div>
+                        <?php endif; ?>
+                        <div style="display:flex;align-items:flex-start;gap:var(--space-3,12px);">
+                            <div class="step-badge"><?= $step['step_order'] ?></div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2,8px);">
+                                    <span style="font-size:var(--text-xs,12px);color:var(--color-dark-500);">
+                                        <i class="fas fa-clock" style="margin-right:4px;"></i>
+                                        <?php
+                                        $delay = $step['delay_minutes'];
+                                        if ($delay === 0) echo 'ทันที';
+                                        elseif ($delay < 60) echo "{$delay} นาที";
+                                        elseif ($delay < 1440) echo floor($delay / 60) . ' ชั่วโมง';
+                                        else echo floor($delay / 1440) . ' วัน';
+                                        ?>
+                                    </span>
+                                    <span style="padding:2px 8px;background:var(--color-slate-100);color:var(--color-dark-600);border-radius:var(--radius-full,9999px);font-size:var(--text-xs,12px);">
+                                        <?= htmlspecialchars($step['message_type']) ?>
+                                    </span>
+                                </div>
+                                <div class="step-preview">
+                                    <?php if ($step['message_type'] === 'flex'): ?>
+                                    <span style="color:var(--color-violet-600);"><i class="fas fa-cube" style="margin-right:4px;"></i>Flex Message</span>
+                                    <?php else: ?>
+                                    <?= nl2br(htmlspecialchars(mb_substr($step['message_content'], 0, 200))) ?>
+                                    <?php if (mb_strlen($step['message_content']) > 200): ?>...<?php endif; ?>
+                                    <?php endif; ?>
                                 </div>
                             </div>
-                            <?php endforeach; ?>
+                            <form method="POST" onsubmit="return confirm('ลบ Step นี้?')">
+                                <input type="hidden" name="action" value="delete_step">
+                                <input type="hidden" name="campaign_id" value="<?= $editCampaign['id'] ?>">
+                                <input type="hidden" name="step_id" value="<?= $step['id'] ?>">
+                                <button type="submit" class="data-table-row-action data-table-row-action-danger"><i class="fas fa-trash"></i></button>
+                            </form>
                         </div>
-                        <?php endif; ?>
                     </div>
+                    <?php endforeach; ?>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
-        <?php else: ?>
-        <div class="p-6 text-center text-gray-500">
-            <p>ไม่พบ Campaign</p>
-        </div>
-        <?php endif; ?>
     </div>
 </div>
+<?php else: ?>
+<div id="editModal" class="modal-shell" role="dialog" aria-modal="true" hidden></div>
+<?php endif; ?>
 
 <!-- Add Step Modal -->
-<div id="addStepModal" class="fixed inset-0 bg-black/50 z-[60] hidden items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
-        <div class="p-6 border-b">
-            <h3 class="text-xl font-semibold">📝 เพิ่ม Step</h3>
-        </div>
-        <form method="POST" class="p-6">
-            <input type="hidden" name="action" value="add_step">
-            <input type="hidden" name="campaign_id" value="<?= $editCampaignId ?>">
-            <input type="hidden" name="step_order" value="<?= $nextStepOrder ?>">
-            
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">ส่งหลังจาก Step ก่อนหน้า</label>
-                <div class="flex gap-2">
-                    <input type="number" name="delay_value" value="0" min="0" class="w-24 px-4 py-2 border rounded-lg">
-                    <select name="delay_unit" id="delayUnit" class="px-4 py-2 border rounded-lg" onchange="updateDelayMinutes()">
-                        <option value="0">ทันที</option>
-                        <option value="1">นาที</option>
-                        <option value="60">ชั่วโมง</option>
-                        <option value="1440">วัน</option>
-                    </select>
-                    <input type="hidden" name="delay_minutes" id="delayMinutes" value="0">
-                </div>
-            </div>
-            
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">ประเภทข้อความ</label>
-                <select name="message_type" class="w-full px-4 py-2 border rounded-lg">
-                    <option value="text">Text</option>
-                    <option value="flex">Flex Message (JSON)</option>
-                </select>
-            </div>
-            
-            <div class="mb-6">
-                <label class="block text-sm font-medium mb-2">เนื้อหา</label>
-                <textarea name="content" rows="5" required class="w-full px-4 py-2 border rounded-lg" placeholder="พิมพ์ข้อความ หรือวาง Flex JSON"></textarea>
-            </div>
-            
-            <div class="flex gap-3">
-                <button type="button" onclick="closeAddStepModal()" class="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50">ยกเลิก</button>
-                <button type="submit" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">เพิ่ม Step</button>
-            </div>
-        </form>
+<?php
+$addStepBody = '
+<div class="dc-field">
+    <label>ส่งหลังจาก Step ก่อนหน้า</label>
+    <div style="display:flex;gap:var(--space-2,8px);">
+        <input type="number" name="delay_value" value="0" min="0" class="dc-input" style="width:80px;">
+        <select name="delay_unit" id="delayUnit" class="dc-input" style="width:auto;" onchange="updateDelayMinutes()">
+            <option value="0">ทันที</option>
+            <option value="1">นาที</option>
+            <option value="60">ชั่วโมง</option>
+            <option value="1440">วัน</option>
+        </select>
+        <input type="hidden" name="delay_minutes" id="delayMinutes" value="0">
     </div>
 </div>
+<div class="dc-field">
+    <label>ประเภทข้อความ</label>
+    <select name="message_type" class="dc-input">
+        <option value="text">Text</option>
+        <option value="flex">Flex Message (JSON)</option>
+    </select>
+</div>
+<div class="dc-field" style="margin-bottom:0;">
+    <label>เนื้อหา</label>
+    <textarea name="content" rows="5" required class="dc-input" placeholder="พิมพ์ข้อความ หรือวาง Flex JSON"></textarea>
+</div>';
+
+$addStepFooter = '
+<button type="button" onclick="closeModalShell(\'addStepModal\')" class="dc-btn">ยกเลิก</button>
+<button type="submit" class="dc-btn dc-btn-primary" style="flex:1;"><i class="fas fa-plus"></i>เพิ่ม Step</button>';
+
+echo renderModal(
+    'addStepModal',
+    'เพิ่ม Step',
+    $addStepBody,
+    $addStepFooter,
+    [
+        'size'      => 'md',
+        'formOpen'  => '<form method="POST">'
+            . '<input type="hidden" name="action" value="add_step">'
+            . '<input type="hidden" name="campaign_id" value="' . $editCampaignId . '">'
+            . '<input type="hidden" name="step_order" value="' . $nextStepOrder . '">',
+        'formClose' => '</form>',
+    ]
+);
+?>
 
 <!-- Info Box -->
-<div class="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
-    <h4 class="font-semibold text-blue-800 mb-2">💡 Drip Campaign คืออะไร?</h4>
-    <p class="text-blue-700 text-sm">
-        Drip Campaign คือการส่งข้อความอัตโนมัติตามลำดับเวลา เช่น:
-    </p>
-    <ul class="text-blue-700 text-sm mt-2 space-y-1">
+<div class="drip-info-box">
+    <h4><i class="fas fa-lightbulb" style="margin-right:8px;"></i>Drip Campaign คืออะไร?</h4>
+    <p>Drip Campaign คือการส่งข้อความอัตโนมัติตามลำดับเวลา เช่น:</p>
+    <ul>
         <li>• <strong>Welcome Series:</strong> ส่งข้อความต้อนรับ → 1 ชม. ส่งแนะนำสินค้า → 1 วัน ส่งคูปอง</li>
         <li>• <strong>Re-engagement:</strong> ลูกค้าไม่ทักมา 7 วัน → ส่งข้อความถามไถ่ → 3 วัน ส่งโปรโมชั่น</li>
         <li>• <strong>Post-Purchase:</strong> ซื้อสินค้า → 3 วัน ถามความพอใจ → 7 วัน ขอรีวิว</li>
@@ -420,12 +524,7 @@ if ($editCampaignId) {
 
 <script>
 function openCreateModal() {
-    document.getElementById('createModal').classList.remove('hidden');
-    document.getElementById('createModal').classList.add('flex');
-}
-function closeCreateModal() {
-    document.getElementById('createModal').classList.add('hidden');
-    document.getElementById('createModal').classList.remove('flex');
+    openModalShell('createCampaignModal');
 }
 
 function openEditModal(campaignId) {
@@ -436,35 +535,24 @@ function closeEditModal() {
 }
 
 function openAddStepModal() {
-    document.getElementById('addStepModal').classList.remove('hidden');
-    document.getElementById('addStepModal').classList.add('flex');
-}
-function closeAddStepModal() {
-    document.getElementById('addStepModal').classList.add('hidden');
-    document.getElementById('addStepModal').classList.remove('flex');
+    openModalShell('addStepModal');
 }
 
 function updateDelayMinutes() {
-    const value = parseInt(document.querySelector('[name="delay_value"]').value) || 0;
-    const unit = parseInt(document.getElementById('delayUnit').value) || 0;
-    document.getElementById('delayMinutes').value = value * unit;
+    var valueInput = document.querySelector('[name="delay_value"]');
+    var unitEl = document.getElementById('delayUnit');
+    var minutesEl = document.getElementById('delayMinutes');
+    if (!valueInput || !unitEl || !minutesEl) return;
+    var value = parseInt(valueInput.value) || 0;
+    var unit = parseInt(unitEl.value) || 0;
+    minutesEl.value = value * unit;
 }
 
-// Add event listener for delay value input
-const delayValueInput = document.querySelector('[name="delay_value"]');
-if (delayValueInput) {
-    delayValueInput.addEventListener('input', updateDelayMinutes);
-}
-
-// Close modals on outside click
-document.getElementById('createModal').addEventListener('click', function(e) {
-    if (e.target === this) closeCreateModal();
-});
-document.getElementById('editModal').addEventListener('click', function(e) {
-    if (e.target === this) closeEditModal();
-});
-document.getElementById('addStepModal').addEventListener('click', function(e) {
-    if (e.target === this) closeAddStepModal();
+document.addEventListener('DOMContentLoaded', function () {
+    var delayValueInput = document.querySelector('[name="delay_value"]');
+    if (delayValueInput) {
+        delayValueInput.addEventListener('input', updateDelayMinutes);
+    }
 });
 </script>
 

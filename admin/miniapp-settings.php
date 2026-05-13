@@ -10,6 +10,10 @@ require_once ADMIN_BASE_PATH . 'config/config.php';
 require_once ADMIN_BASE_PATH . 'config/database.php';
 require_once ADMIN_BASE_PATH . 'includes/auth_check.php';
 require_once ADMIN_BASE_PATH . 'includes/components/tabs.php';
+require_once ADMIN_BASE_PATH . 'includes/components/form-section.php';
+require_once ADMIN_BASE_PATH . 'includes/components/field.php';
+require_once ADMIN_BASE_PATH . 'includes/components/toggle.php';
+require_once ADMIN_BASE_PATH . 'includes/components/sticky-save-bar.php';
 require_once ADMIN_BASE_PATH . 'classes/MiniAppContentService.php';
 
 $db = Database::getInstance()->getConnection();
@@ -118,6 +122,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 require_once ADMIN_BASE_PATH . 'includes/header.php';
 echo getTabsStyles();
+echo getFormSectionStyles();
+echo getFieldStyles();
+echo getToggleStyles();
+echo getStickySaveBarStyles();
 ?>
 
 <style>

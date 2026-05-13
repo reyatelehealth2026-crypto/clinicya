@@ -17,6 +17,8 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth_check.php';
 require_once __DIR__ . '/includes/components/tabs.php';
+require_once __DIR__ . '/includes/components/page-header.php';
+require_once __DIR__ . '/includes/components/toast.php';
 
 $db = Database::getInstance()->getConnection();
 $currentBotId = $_SESSION['current_bot_id'] ?? null;
@@ -72,8 +74,13 @@ if (isset($_GET['error'])) {
 }
 
 require_once __DIR__ . '/includes/header.php';
+echo getPageHeaderStyles();
+echo getToastStyles();
 echo getTabsStyles();
 ?>
+
+<?= renderToastContainer() ?>
+<?= renderPageHeader('ระบบบัญชี', $tabTitles[$activeTab] ?? '', null, [['label' => 'หน้าหลัก', 'href' => '/'], ['label' => 'ระบบบัญชี', 'href' => null]]) ?>
 
 <?php if (!$tableExists): ?>
 <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">

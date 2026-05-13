@@ -11,7 +11,7 @@ $db = Database::getInstance()->getConnection();
 $pageTitle = 'สินค้า - ร้านยา';
 
 // Check if table exists
-$tableExists = false;
+$tableExists   = false;
 $productsTable = 'business_items';
 try {
     $db->query("SELECT 1 FROM {$productsTable} LIMIT 1");
@@ -20,7 +20,7 @@ try {
     // Try legacy products table
     try {
         $db->query("SELECT 1 FROM products LIMIT 1");
-        $tableExists = true;
+        $tableExists   = true;
         $productsTable = 'products';
     } catch (PDOException $e2) {
         // No table
@@ -28,24 +28,23 @@ try {
 }
 
 if (!$tableExists) {
+    require_once __DIR__ . '/../includes/components/page-header.php';
     require_once __DIR__ . '/../includes/header.php';
+    echo getPageHeaderStyles();
+    echo renderPageHeader('สินค้าร้านยา', '', null,
+        [['label' => 'ร้านค้า', 'href' => null], ['label' => 'สินค้า', 'href' => null]]);
     ?>
-    <div class="max-w-4xl mx-auto px-4 py-6">
-        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-6 rounded-lg">
-            <h2 class="text-xl font-bold text-yellow-800 mb-4">
-                <i class="fas fa-exclamation-triangle mr-2"></i>
-                ยังไม่ได้ติดตั้งระบบสินค้า
-            </h2>
-            <p class="text-yellow-700 mb-4">
-                กรุณารันคำสั่งต่อไปนี้เพื่อสร้างตาราง:
-            </p>
-            <div class="bg-gray-900 text-green-400 p-4 rounded font-mono text-sm mb-4">
-                php install/install_fresh.php
-            </div>
-            <a href="../" class="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                <i class="fas fa-arrow-left mr-2"></i>กลับหน้าหลัก
-            </a>
+    <div style="background:var(--color-amber-50);border-left:4px solid var(--color-amber-500);padding:var(--space-6);border-radius:var(--radius-lg);">
+        <h2 style="font-size:var(--text-xl);font-weight:700;color:var(--color-amber-800);margin:0 0 var(--space-4);">
+            <i class="fas fa-exclamation-triangle" style="margin-right:var(--space-2);"></i>ยังไม่ได้ติดตั้งระบบสินค้า
+        </h2>
+        <p style="color:var(--color-amber-700);margin:0 0 var(--space-4);">กรุณารันคำสั่งต่อไปนี้เพื่อสร้างตาราง:</p>
+        <div style="background:var(--color-dark-900);color:#4ade80;padding:var(--space-4);border-radius:var(--radius-md);font-family:var(--font-mono);font-size:var(--text-sm);margin-bottom:var(--space-4);">
+            php install/install_fresh.php
         </div>
+        <a href="../" style="display:inline-flex;align-items:center;gap:var(--space-2);padding:10px var(--space-4);background:var(--color-primary-600);color:#fff;border-radius:var(--radius-md);font-size:var(--text-sm);font-weight:600;text-decoration:none;">
+            <i class="fas fa-arrow-left"></i>กลับหน้าหลัก
+        </a>
     </div>
     <?php
     require_once __DIR__ . '/../includes/footer.php';
@@ -53,37 +52,37 @@ if (!$tableExists) {
 }
 
 // Check available columns
-$hasPhotoPath = false;
-$hasProductPrice = false;
-$hasEnable = false;
-$hasGenericName = false;
+$hasPhotoPath         = false;
+$hasProductPrice      = false;
+$hasEnable            = false;
+$hasGenericName       = false;
 $hasUsageInstructions = false;
-$hasPropertiesOther = false;
-$hasNameEn = false;
+$hasPropertiesOther   = false;
+$hasNameEn            = false;
 
 try {
     $stmt = $db->query("SHOW COLUMNS FROM {$productsTable}");
     while ($col = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        if ($col['Field'] === 'photo_path') $hasPhotoPath = true;
-        if ($col['Field'] === 'product_price') $hasProductPrice = true;
-        if ($col['Field'] === 'enable') $hasEnable = true;
-        if ($col['Field'] === 'generic_name') $hasGenericName = true;
-        if ($col['Field'] === 'usage_instructions') $hasUsageInstructions = true;
-        if ($col['Field'] === 'properties_other') $hasPropertiesOther = true;
-        if ($col['Field'] === 'name_en') $hasNameEn = true;
+        if ($col['Field'] === 'photo_path')         $hasPhotoPath         = true;
+        if ($col['Field'] === 'product_price')       $hasProductPrice      = true;
+        if ($col['Field'] === 'enable')              $hasEnable            = true;
+        if ($col['Field'] === 'generic_name')        $hasGenericName       = true;
+        if ($col['Field'] === 'usage_instructions')  $hasUsageInstructions = true;
+        if ($col['Field'] === 'properties_other')    $hasPropertiesOther   = true;
+        if ($col['Field'] === 'name_en')             $hasNameEn            = true;
     }
 } catch (Exception $e) {}
 
 // Get filters
-$search = $_GET['search'] ?? '';
-$category = $_GET['category'] ?? '';
+$search      = $_GET['search'] ?? '';
+$category    = $_GET['category'] ?? '';
 $stockFilter = $_GET['stock'] ?? '';
-$page = max(1, (int)($_GET['page'] ?? 1));
-$perPage = 24;
-$offset = ($page - 1) * $perPage;
+$page        = max(1, (int)($_GET['page'] ?? 1));
+$perPage     = 24;
+$offset      = ($page - 1) * $perPage;
 
 // Build query
-$where = ["1=1"];
+$where  = ["1=1"];
 $params = [];
 
 // Active filter - use enable if available, otherwise is_active
@@ -96,7 +95,7 @@ if ($hasEnable) {
 if ($search) {
     $searchFields = ["name LIKE :search1", "sku LIKE :search2"];
     if ($hasNameEn) $searchFields[] = "name_en LIKE :search3";
-    $where[] = "(" . implode(" OR ", $searchFields) . ")";
+    $where[]    = "(" . implode(" OR ", $searchFields) . ")";
     $searchTerm = "%{$search}%";
     $params[':search1'] = $searchTerm;
     $params[':search2'] = $searchTerm;
@@ -104,7 +103,7 @@ if ($search) {
 }
 
 if ($category) {
-    $where[] = "category_id = :category";
+    $where[]             = "category_id = :category";
     $params[':category'] = (int)$category;
 }
 
@@ -122,13 +121,13 @@ $whereClause = implode(' AND ', $where);
 $countStmt = $db->prepare("SELECT COUNT(*) FROM {$productsTable} WHERE {$whereClause}");
 $countStmt->execute($params);
 $totalProducts = $countStmt->fetchColumn();
-$totalPages = ceil($totalProducts / $perPage);
+$totalPages    = ceil($totalProducts / $perPage);
 
 // Get products for current page
 $imageCol = $hasPhotoPath ? "COALESCE(photo_path, image_url) as display_image" : "image_url as display_image";
 $stmt = $db->prepare("
     SELECT *, {$imageCol}
-    FROM {$productsTable} 
+    FROM {$productsTable}
     WHERE {$whereClause}
     ORDER BY name
     LIMIT {$perPage} OFFSET {$offset}
@@ -141,7 +140,7 @@ $categories = [];
 try {
     $catTable = 'product_categories';
     $db->query("SELECT 1 FROM {$catTable} LIMIT 1");
-    $catStmt = $db->query("SELECT id, name FROM {$catTable} WHERE is_active = 1 ORDER BY sort_order, name");
+    $catStmt    = $db->query("SELECT id, name FROM {$catTable} WHERE is_active = 1 ORDER BY sort_order, name");
     $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
@@ -152,233 +151,248 @@ try {
     $lastSync = $syncStmt->fetchColumn();
 } catch (Exception $e) {}
 
+require_once __DIR__ . '/../includes/components/page-header.php';
+require_once __DIR__ . '/../includes/components/toolbar.php';
+require_once __DIR__ . '/../includes/components/empty-state.php';
+require_once __DIR__ . '/../includes/components/pagination.php';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<div class="max-w-7xl mx-auto px-4 py-6">
-    <!-- Header -->
-    <div class="mb-6 flex flex-wrap justify-between items-start gap-4">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-800 mb-2">
-                <i class="fas fa-pills text-blue-500 mr-2"></i>
-                สินค้าร้านยา
-            </h1>
-            <p class="text-gray-600">
-                ทั้งหมด <?= number_format($totalProducts) ?> รายการ
-                <?php if ($lastSync): ?>
-                <span class="text-xs text-gray-500 ml-2">
-                    (Sync ล่าสุด: <?= date('d/m/Y H:i', strtotime($lastSync)) ?>)
-                </span>
-                <?php endif; ?>
-            </p>
-        </div>
-        <div class="flex gap-2">
-            <a href="/inventory?tab=products" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                <i class="fas fa-table mr-2"></i>มุมมองตาราง
-            </a>
-            <a href="/admin/setup-cny.php" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
-                <i class="fas fa-sync mr-2"></i>Sync จาก CNY
-            </a>
-        </div>
-    </div>
+<?= getPageHeaderStyles() ?>
+<?= getToolbarStyles() ?>
+<?= getEmptyStateStyles() ?>
+<?= getPaginationStyles() ?>
 
-    <!-- Filters -->
-    <div class="bg-white rounded-xl shadow p-4 mb-6">
-        <form method="GET" class="flex flex-wrap gap-3">
-            <div class="flex-1 min-w-[200px]">
-                <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" 
-                       placeholder="ค้นหาชื่อยา, SKU..." 
-                       class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-            </div>
-            <?php if (!empty($categories)): ?>
-            <select name="category" class="px-4 py-2 border rounded-lg">
-                <option value="">ทุกหมวดหมู่</option>
-                <?php foreach ($categories as $cat): ?>
-                <option value="<?= $cat['id'] ?>" <?= $category == $cat['id'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($cat['name']) ?>
-                </option>
-                <?php endforeach; ?>
-            </select>
-            <?php endif; ?>
-            <select name="stock" class="px-4 py-2 border rounded-lg">
-                <option value="">สต็อกทั้งหมด</option>
-                <option value="in" <?= $stockFilter === 'in' ? 'selected' : '' ?>>มีสินค้า</option>
-                <option value="low" <?= $stockFilter === 'low' ? 'selected' : '' ?>>ใกล้หมด (≤5)</option>
-                <option value="out" <?= $stockFilter === 'out' ? 'selected' : '' ?>>หมดสต็อก</option>
-            </select>
-            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                <i class="fas fa-search mr-2"></i>ค้นหา
-            </button>
-            <?php if ($search || $category || $stockFilter): ?>
-            <a href="?" class="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                <i class="fas fa-times mr-2"></i>ล้าง
-            </a>
-            <?php endif; ?>
-        </form>
-    </div>
+<style>
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-6);
+    margin-bottom: var(--space-6);
+}
+.product-card {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
+    transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+.product-card:hover {
+    box-shadow: var(--shadow-glass-md);
+    transform: translateY(-2px);
+}
+.product-card-img {
+    position: relative;
+    aspect-ratio: 1/1;
+    background: var(--color-slate-100);
+    overflow: hidden;
+}
+.product-card-img img {
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform var(--transition-slow);
+}
+.product-card:hover .product-card-img img { transform: scale(1.05); }
+.product-card-placeholder {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 64px; color: var(--color-slate-300);
+}
+.stock-badge {
+    position: absolute; top: var(--space-2); right: var(--space-2);
+    padding: 4px 10px; border-radius: var(--radius-full);
+    font-size: var(--text-xs); font-weight: 600; color: #fff;
+}
+.stock-in  { background: var(--color-emerald-500); }
+.stock-low { background: var(--color-amber-500); }
+.stock-out { background: var(--color-rose-500); }
+.edit-badge {
+    position: absolute; top: var(--space-2); left: var(--space-2);
+    padding: 4px 10px; border-radius: var(--radius-full);
+    font-size: var(--text-xs); font-weight: 500;
+    background: rgba(255,255,255,0.85); color: var(--color-dark-700);
+    text-decoration: none; opacity: 0; transition: opacity var(--transition-fast);
+}
+.product-card:hover .edit-badge { opacity: 1; }
+.product-card-body { padding: var(--space-4); }
+.product-card-sku  { font-size: var(--text-xs); color: var(--color-dark-500); margin-bottom: 4px; }
+.product-card-name {
+    font-weight: 600; color: var(--color-dark-800); font-size: var(--text-sm);
+    line-height: 1.4; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; min-height: 40px; margin-bottom: var(--space-2);
+}
+.product-card-generic {
+    font-size: var(--text-xs); color: var(--color-primary-600);
+    margin-bottom: var(--space-3);
+}
+.product-card-meta {
+    display: flex; align-items: center;
+    justify-content: space-between; margin-bottom: var(--space-3);
+}
+.product-price { font-size: var(--text-2xl); font-weight: 700; color: var(--color-primary-600); }
+.btn-detail {
+    display: block; width: 100%; text-align: center;
+    padding: 10px; border-radius: var(--radius-md);
+    background: var(--color-primary-600); color: #fff;
+    font-size: var(--text-sm); font-weight: 600; text-decoration: none;
+    transition: background var(--transition-fast);
+    box-sizing: border-box;
+}
+.btn-detail:hover { background: var(--color-primary-700); }
+@media (max-width: 1280px) { .products-grid { grid-template-columns: repeat(3,1fr); } }
+@media (max-width: 768px)  { .products-grid { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 480px)  { .products-grid { grid-template-columns: 1fr; } }
+.dark .product-card { background: var(--color-dark-800); border-color: var(--color-dark-700); }
+.dark .product-card-img { background: var(--color-dark-700); }
+.dark .product-card-name { color: var(--color-slate-100); }
+.dark .product-card-sku  { color: var(--color-slate-400); }
+.dark .edit-badge { background: rgba(30,41,59,0.85); color: var(--color-slate-200); }
+</style>
 
-    <!-- Products Grid -->
-    <?php if (empty($products)): ?>
-    <div class="bg-white rounded-xl shadow p-12 text-center">
-        <i class="fas fa-box-open text-gray-300 text-6xl mb-4"></i>
-        <p class="text-gray-500 text-lg">ไม่พบสินค้า</p>
-        <?php if ($totalProducts == 0): ?>
-        <p class="text-gray-400 text-sm mt-2">
-            <a href="/admin/setup-cny.php" class="text-blue-600 hover:underline">Sync สินค้าจาก CNY API</a>
-            หรือ <a href="/inventory?tab=products" class="text-blue-600 hover:underline">เพิ่มสินค้าใหม่</a>
-        </p>
-        <?php endif; ?>
-    </div>
-    <?php else: ?>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6">
-        <?php foreach ($products as $product): 
-            // Get price - from product_price JSON or price column
-            $price = 0;
-            $unit = '';
-            if ($hasProductPrice && !empty($product['product_price'])) {
-                $priceData = is_string($product['product_price']) 
-                    ? json_decode($product['product_price'], true) 
-                    : $product['product_price'];
-                if (is_array($priceData) && !empty($priceData[0])) {
-                    $price = (float)($priceData[0]['price'] ?? 0);
-                    $unit = $priceData[0]['unit'] ?? '';
-                }
+<?php
+$subtitleParts = ['ทั้งหมด ' . number_format($totalProducts) . ' รายการ'];
+if ($lastSync) {
+    $subtitleParts[] = 'Sync ล่าสุด: ' . date('d/m/Y H:i', strtotime($lastSync));
+}
+
+echo renderPageHeader(
+    'สินค้าร้านยา',
+    implode(' · ', $subtitleParts),
+    null,
+    [['label' => 'ร้านค้า', 'href' => null], ['label' => 'สินค้า', 'href' => null]]
+);
+
+$categoryOptions = array_map(fn($c) => ['value' => $c['id'], 'label' => $c['name']], $categories);
+$selects = array_values(array_filter([
+    !empty($categories) ? [
+        'name'        => 'category',
+        'value'       => $category,
+        'placeholder' => 'ทุกหมวดหมู่',
+        'options'     => $categoryOptions,
+    ] : null,
+    [
+        'name'        => 'stock',
+        'value'       => $stockFilter,
+        'placeholder' => 'สต็อกทั้งหมด',
+        'options'     => [
+            ['value' => 'in',  'label' => 'มีสินค้า'],
+            ['value' => 'low', 'label' => 'ใกล้หมด (≤5)'],
+            ['value' => 'out', 'label' => 'หมดสต็อก'],
+        ],
+    ],
+]));
+
+echo renderToolbar([
+    'search'    => ['name' => 'search', 'value' => $search, 'placeholder' => 'ค้นหาชื่อยา, SKU…'],
+    'selects'   => $selects,
+    'resetHref' => ($search || $category || $stockFilter) ? '?' : null,
+    'chips'     => [
+        ['href' => '/inventory?tab=products', 'icon' => 'fas fa-table', 'label' => 'มุมมองตาราง', 'tone' => 'neutral'],
+        ['href' => '/admin/setup-cny.php',    'icon' => 'fas fa-sync',  'label' => 'Sync จาก CNY',  'tone' => 'success'],
+    ],
+    'meta'      => 'พบ ' . number_format($totalProducts) . ' รายการ',
+]);
+?>
+
+<!-- Products Grid -->
+<?php if (empty($products)): ?>
+<?= renderEmptyState(
+    'fas fa-box-open',
+    'ไม่พบสินค้า',
+    $totalProducts == 0 ? 'Sync สินค้าจาก CNY API หรือเพิ่มสินค้าใหม่' : 'ลองปรับตัวกรองหรือค้นหาใหม่'
+) ?>
+<?php else: ?>
+<div class="products-grid">
+    <?php foreach ($products as $product):
+        // Get price - from product_price JSON or price column
+        $price = 0;
+        $unit  = '';
+        if ($hasProductPrice && !empty($product['product_price'])) {
+            $priceData = is_string($product['product_price'])
+                ? json_decode($product['product_price'], true)
+                : $product['product_price'];
+            if (is_array($priceData) && !empty($priceData[0])) {
+                $price = (float)($priceData[0]['price'] ?? 0);
+                $unit  = $priceData[0]['unit'] ?? '';
             }
-            if ($price == 0) {
-                $price = (float)($product['price'] ?? 0);
-            }
-            
-            $stock = (int)($product['stock'] ?? 0);
-            $inStock = $stock > 0;
-            $imageUrl = $product['display_image'] ?? '';
-        ?>
-        <div class="bg-white rounded-xl shadow hover:shadow-lg transition overflow-hidden group">
-            <!-- Product Image -->
-            <div class="relative aspect-square bg-gray-100">
-                <?php if (!empty($imageUrl)): ?>
-                <img src="<?= htmlspecialchars($imageUrl) ?>" 
-                     alt="<?= htmlspecialchars($product['name']) ?>"
-                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                     loading="lazy"
-                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 200%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%239ca3af%22 font-size=%2220%22%3ENo Image%3C/text%3E%3C/svg%3E'">
-                <?php else: ?>
-                <div class="w-full h-full flex items-center justify-center">
-                    <i class="fas fa-pills text-gray-300 text-6xl"></i>
-                </div>
-                <?php endif; ?>
-                
-                <!-- Stock Badge -->
-                <div class="absolute top-2 right-2">
-                    <?php if ($inStock): ?>
-                        <?php if ($stock <= 5): ?>
-                        <span class="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full">
-                            <i class="fas fa-exclamation mr-1"></i>เหลือ <?= $stock ?>
-                        </span>
-                        <?php else: ?>
-                        <span class="px-2 py-1 bg-green-500 text-white text-xs rounded-full">
-                            <i class="fas fa-check mr-1"></i>มีสินค้า
-                        </span>
-                        <?php endif; ?>
-                    <?php else: ?>
-                    <span class="px-2 py-1 bg-red-500 text-white text-xs rounded-full">
-                        <i class="fas fa-times mr-1"></i>หมด
-                    </span>
+        }
+        if ($price == 0) {
+            $price = (float)($product['price'] ?? 0);
+        }
+
+        $stock    = (int)($product['stock'] ?? 0);
+        $inStock  = $stock > 0;
+        $imageUrl = $product['display_image'] ?? '';
+
+        if (!$inStock) {
+            $badgeClass = 'stock-out';
+            $badgeLabel = '<i class="fas fa-times" style="margin-right:4px;"></i>หมด';
+            $stockColor = 'var(--color-rose-600)';
+        } elseif ($stock <= 5) {
+            $badgeClass = 'stock-low';
+            $badgeLabel = '<i class="fas fa-exclamation" style="margin-right:4px;"></i>เหลือ ' . $stock;
+            $stockColor = 'var(--color-amber-600)';
+        } else {
+            $badgeClass = 'stock-in';
+            $badgeLabel = '<i class="fas fa-check" style="margin-right:4px;"></i>มีสินค้า';
+            $stockColor = 'var(--color-emerald-600)';
+        }
+    ?>
+    <div class="product-card">
+        <div class="product-card-img">
+            <?php if (!empty($imageUrl)): ?>
+            <img src="<?= htmlspecialchars($imageUrl) ?>"
+                 alt="<?= htmlspecialchars($product['name']) ?>"
+                 loading="lazy"
+                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 200%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%239ca3af%22 font-size=%2220%22%3ENo Image%3C/text%3E%3C/svg%3E'">
+            <?php else: ?>
+            <div class="product-card-placeholder"><i class="fas fa-pills"></i></div>
+            <?php endif; ?>
+            <span class="stock-badge <?= $badgeClass ?>"><?= $badgeLabel ?></span>
+            <a href="/inventory?tab=products&search=<?= urlencode($product['sku'] ?? $product['name']) ?>"
+               class="edit-badge">
+                <i class="fas fa-edit" style="margin-right:4px;"></i>แก้ไข
+            </a>
+        </div>
+
+        <div class="product-card-body">
+            <?php if (!empty($product['sku'])): ?>
+            <div class="product-card-sku">SKU: <?= htmlspecialchars($product['sku']) ?></div>
+            <?php endif; ?>
+
+            <div class="product-card-name"><?= htmlspecialchars($product['name']) ?></div>
+
+            <?php if ($hasGenericName && !empty($product['generic_name'])): ?>
+            <div class="product-card-generic"><?= htmlspecialchars($product['generic_name']) ?></div>
+            <?php endif; ?>
+
+            <div class="product-card-meta">
+                <div>
+                    <div class="product-price">฿<?= number_format($price, 2) ?></div>
+                    <?php if ($unit): ?>
+                    <div style="font-size:var(--text-xs);color:var(--color-dark-500);"><?= htmlspecialchars($unit) ?></div>
                     <?php endif; ?>
                 </div>
-                
-                <!-- Edit Button (Admin) -->
-                <a href="/inventory?tab=products&search=<?= urlencode($product['sku'] ?? $product['name']) ?>" 
-                   class="absolute top-2 left-2 px-2 py-1 bg-white/80 text-gray-700 text-xs rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                    <i class="fas fa-edit mr-1"></i>แก้ไข
-                </a>
-            </div>
-
-            <!-- Product Info -->
-            <div class="p-4">
-                <?php if (!empty($product['sku'])): ?>
-                <div class="text-xs text-gray-500 mb-1">SKU: <?= htmlspecialchars($product['sku']) ?></div>
-                <?php endif; ?>
-                
-                <h3 class="font-semibold text-gray-800 mb-2 line-clamp-2 min-h-[3rem]">
-                    <?= htmlspecialchars($product['name']) ?>
-                </h3>
-                
-                <?php if ($hasGenericName && !empty($product['generic_name'])): ?>
-                <p class="text-xs text-blue-600 mb-2 line-clamp-1">
-                    <?= htmlspecialchars($product['generic_name']) ?>
-                </p>
-                <?php endif; ?>
-
-                <div class="flex items-center justify-between mb-3">
-                    <div>
-                        <div class="text-2xl font-bold text-blue-600">฿<?= number_format($price, 2) ?></div>
-                        <?php if ($unit): ?>
-                        <div class="text-xs text-gray-500"><?= htmlspecialchars($unit) ?></div>
-                        <?php endif; ?>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-sm text-gray-600">คงเหลือ</div>
-                        <div class="font-bold <?= $inStock ? ($stock <= 5 ? 'text-yellow-600' : 'text-green-600') : 'text-red-600' ?>">
-                            <?= number_format($stock) ?>
-                        </div>
-                    </div>
+                <div style="text-align:right;">
+                    <div style="font-size:var(--text-xs);color:var(--color-dark-500);">คงเหลือ</div>
+                    <div style="font-weight:700;font-size:var(--text-sm);color:<?= $stockColor ?>;"><?= number_format($stock) ?></div>
                 </div>
-
-                <a href="product-detail.php?id=<?= $product['id'] ?>" 
-                   class="block w-full text-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                    <i class="fas fa-eye mr-2"></i>ดูรายละเอียด
-                </a>
             </div>
+
+            <a href="product-detail.php?id=<?= $product['id'] ?>" class="btn-detail">
+                <i class="fas fa-eye" style="margin-right:var(--space-2);"></i>ดูรายละเอียด
+            </a>
         </div>
-        <?php endforeach; ?>
     </div>
-
-    <!-- Pagination -->
-    <?php if ($totalPages > 1): ?>
-    <div class="flex justify-center gap-2">
-        <?php if ($page > 1): ?>
-        <a href="?<?= http_build_query(array_merge($_GET, ['page' => $page - 1])) ?>" 
-           class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">
-            <i class="fas fa-chevron-left"></i>
-        </a>
-        <?php endif; ?>
-
-        <?php 
-        $startPage = max(1, $page - 2);
-        $endPage = min($totalPages, $page + 2);
-        
-        if ($startPage > 1): ?>
-        <a href="?<?= http_build_query(array_merge($_GET, ['page' => 1])) ?>" 
-           class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">1</a>
-        <?php if ($startPage > 2): ?>
-        <span class="px-2 py-2 text-gray-400">...</span>
-        <?php endif; ?>
-        <?php endif; ?>
-
-        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-        <a href="?<?= http_build_query(array_merge($_GET, ['page' => $i])) ?>" 
-           class="px-4 py-2 rounded-lg <?= $i === $page ? 'bg-blue-600 text-white' : 'bg-white border hover:bg-gray-50' ?>">
-            <?= $i ?>
-        </a>
-        <?php endfor; ?>
-
-        <?php if ($endPage < $totalPages): ?>
-        <?php if ($endPage < $totalPages - 1): ?>
-        <span class="px-2 py-2 text-gray-400">...</span>
-        <?php endif; ?>
-        <a href="?<?= http_build_query(array_merge($_GET, ['page' => $totalPages])) ?>" 
-           class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50"><?= $totalPages ?></a>
-        <?php endif; ?>
-
-        <?php if ($page < $totalPages): ?>
-        <a href="?<?= http_build_query(array_merge($_GET, ['page' => $page + 1])) ?>" 
-           class="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">
-            <i class="fas fa-chevron-right"></i>
-        </a>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
-    <?php endif; ?>
+    <?php endforeach; ?>
 </div>
+
+<!-- Pagination -->
+<?php if ($totalPages > 1):
+    $baseUrl = '?' . http_build_query(array_diff_key($_GET, ['page' => ''])) . '&';
+    echo renderPagination($page, $totalPages, $perPage, $baseUrl, ['total' => $totalProducts]);
+endif; ?>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

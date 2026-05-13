@@ -6,6 +6,8 @@
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth_check.php';
+require_once __DIR__ . '/includes/components/kpi-card.php';
+require_once __DIR__ . '/includes/components/section-card.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'Triage Analytics';
@@ -113,9 +115,9 @@ try {
 require_once __DIR__ . '/includes/header.php';
 ?>
 
+<?= getKpiCardStyles() ?>
+<?= getSectionCardStyles() ?>
 <style>
-.stat-card { transition: all 0.3s; }
-.stat-card:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
 .chart-container { height: 300px; }
 </style>
 
@@ -124,19 +126,19 @@ require_once __DIR__ . '/includes/header.php';
     <div class="flex items-center justify-between mb-8">
         <div>
             <h1 class="text-2xl font-bold text-gray-800">
-                <i class="fas fa-chart-pie text-purple-500 mr-2"></i>Triage Analytics
+                <i class="fas fa-chart-pie text-indigo-500 mr-2"></i>Triage Analytics
             </h1>
             <p class="text-gray-500 mt-1">สถิติการซักประวัติและปรึกษาเภสัชกร</p>
         </div>
-        
+
         <!-- Date Filter -->
         <form class="flex items-center gap-3">
-            <input type="date" name="start" value="<?= $startDate ?>" 
-                   class="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+            <input type="date" name="start" value="<?= $startDate ?>"
+                   class="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
             <span class="text-gray-400">ถึง</span>
-            <input type="date" name="end" value="<?= $endDate ?>" 
-                   class="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
-            <button type="submit" class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600">
+            <input type="date" name="end" value="<?= $endDate ?>"
+                   class="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
                 <i class="fas fa-filter mr-2"></i>กรอง
             </button>
         </form>
@@ -144,65 +146,36 @@ require_once __DIR__ . '/includes/header.php';
 
     <!-- Stats Cards -->
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-8">
-        <div class="stat-card bg-white rounded-xl shadow p-4">
-            <div class="text-3xl font-bold text-gray-800"><?= number_format($stats['total_sessions']) ?></div>
-            <div class="text-sm text-gray-500">Session ทั้งหมด</div>
-        </div>
-        
-        <div class="stat-card bg-white rounded-xl shadow p-4">
-            <div class="text-3xl font-bold text-green-600"><?= number_format($stats['completed']) ?></div>
-            <div class="text-sm text-gray-500">เสร็จสมบูรณ์</div>
-        </div>
-        
-        <div class="stat-card bg-white rounded-xl shadow p-4">
-            <div class="text-3xl font-bold text-gray-600"><?= number_format($stats['in_progress'] ?? 0) ?></div>
-            <div class="text-sm text-gray-500">กำลังดำเนินการ</div>
-        </div>
-        
-        <div class="stat-card bg-white rounded-xl shadow p-4">
-            <div class="text-3xl font-bold text-yellow-600"><?= number_format($stats['escalated']) ?></div>
-            <div class="text-sm text-gray-500">ส่งต่อเภสัชกร</div>
-        </div>
-        
-        <div class="stat-card bg-white rounded-xl shadow p-4">
-            <div class="text-3xl font-bold text-red-600"><?= number_format($stats['urgent_cases']) ?></div>
-            <div class="text-sm text-gray-500">เคสเร่งด่วน</div>
-        </div>
-        
-        <div class="stat-card bg-white rounded-xl shadow p-4">
-            <div class="text-3xl font-bold text-blue-600"><?= $completionRate ?>%</div>
-            <div class="text-sm text-gray-500">อัตราสำเร็จ</div>
-        </div>
-        
-        <div class="stat-card bg-white rounded-xl shadow p-4">
-            <div class="text-3xl font-bold text-purple-600"><?= $stats['avg_completion_time'] ?></div>
-            <div class="text-sm text-gray-500">นาที/เคส (เฉลี่ย)</div>
-        </div>
+        <?= renderKpiCard('indigo',  'Session ทั้งหมด', number_format($stats['total_sessions']), null, 'fas fa-clipboard-list') ?>
+        <?= renderKpiCard('emerald', 'เสร็จสมบูรณ์',   number_format($stats['completed']),      null, 'fas fa-check-circle') ?>
+        <?= renderKpiCard('indigo',  'กำลังดำเนินการ', number_format($stats['in_progress'] ?? 0), null, 'fas fa-spinner') ?>
+        <?= renderKpiCard('amber',   'ส่งต่อเภสัชกร',  number_format($stats['escalated']),      null, 'fas fa-user-md') ?>
+        <?php
+            $urgentAccent = ($stats['urgent_cases'] > 0) ? 'amber' : 'emerald';
+            echo renderKpiCard($urgentAccent, 'เคสเร่งด่วน', number_format($stats['urgent_cases']), null, 'fas fa-exclamation-triangle');
+        ?>
+        <?= renderKpiCard('violet',  'อัตราสำเร็จ',    $completionRate . '%',                   null, 'fas fa-chart-line') ?>
+        <?= renderKpiCard('violet',  'นาที/เคส',       (string)$stats['avg_completion_time'],   'เฉลี่ย', 'fas fa-stopwatch') ?>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <!-- Daily Chart -->
-        <div class="bg-white rounded-xl shadow p-6">
-            <h3 class="font-semibold text-gray-800 mb-4">
-                <i class="fas fa-chart-line text-blue-500 mr-2"></i>Session รายวัน
-            </h3>
-            <div class="chart-container">
-                <canvas id="dailyChart"></canvas>
-            </div>
-        </div>
+        <?php
+        ob_start(); ?>
+            <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+        <?php
+        echo renderSectionCard('Session รายวัน', 'fas fa-chart-line', ob_get_clean(), null, 'indigo');
 
-        <!-- Top Symptoms -->
-        <div class="bg-white rounded-xl shadow p-6">
-            <h3 class="font-semibold text-gray-800 mb-4">
-                <i class="fas fa-stethoscope text-green-500 mr-2"></i>อาการที่พบบ่อย
-            </h3>
-            <?php if (empty($topSymptoms)): ?>
-            <p class="text-gray-400 text-center py-8">ยังไม่มีข้อมูล</p>
-            <?php else: ?>
+        ob_start();
+        if (empty($topSymptoms)): ?>
+            <div class="sc-empty">
+                <div class="sc-empty__circle"><i class="fas fa-stethoscope" aria-hidden="true"></i></div>
+                <p class="sc-empty__title">ยังไม่มีข้อมูล</p>
+            </div>
+        <?php else: ?>
             <div class="space-y-3">
-                <?php 
+                <?php
                 $maxCount = max($topSymptoms);
-                foreach ($topSymptoms as $symptom => $count): 
+                foreach ($topSymptoms as $symptom => $count):
                     $percentage = ($count / $maxCount) * 100;
                 ?>
                 <div>
@@ -211,31 +184,25 @@ require_once __DIR__ . '/includes/header.php';
                         <span class="text-gray-500"><?= $count ?> ครั้ง</span>
                     </div>
                     <div class="w-full bg-gray-200 rounded-full h-2">
-                        <div class="bg-green-500 h-2 rounded-full" style="width: <?= $percentage ?>%"></div>
+                        <div class="bg-emerald-500 h-2 rounded-full" style="width: <?= $percentage ?>%"></div>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
-            <?php endif; ?>
-        </div>
+        <?php endif;
+        echo renderSectionCard('อาการที่พบบ่อย', 'fas fa-stethoscope', ob_get_clean(), null, 'emerald');
+        ?>
     </div>
 
     <!-- Status Distribution -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white rounded-xl shadow p-6">
-            <h3 class="font-semibold text-gray-800 mb-4">
-                <i class="fas fa-chart-pie text-purple-500 mr-2"></i>สถานะ Session
-            </h3>
-            <div class="chart-container">
-                <canvas id="statusChart"></canvas>
-            </div>
-        </div>
+        <?php
+        ob_start(); ?>
+            <div class="chart-container"><canvas id="statusChart"></canvas></div>
+        <?php
+        echo renderSectionCard('สถานะ Session', 'fas fa-chart-pie', ob_get_clean(), null, 'violet');
 
-        <!-- Recent Sessions -->
-        <div class="bg-white rounded-xl shadow p-6">
-            <h3 class="font-semibold text-gray-800 mb-4">
-                <i class="fas fa-history text-orange-500 mr-2"></i>Session ล่าสุด
-            </h3>
+        ob_start(); ?>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
@@ -251,11 +218,11 @@ require_once __DIR__ . '/includes/header.php';
                         <tr class="border-b">
                             <td class="py-2"><?= date('d/m', strtotime($day['date'])) ?></td>
                             <td class="py-2"><?= $day['total'] ?></td>
-                            <td class="py-2 text-green-600"><?= $day['completed'] ?></td>
+                            <td class="py-2 text-emerald-600"><?= $day['completed'] ?></td>
                             <td class="py-2">
                                 <?php $rate = $day['total'] > 0 ? round(($day['completed'] / $day['total']) * 100) : 0; ?>
-                                <span class="px-2 py-0.5 bg-<?= $rate >= 70 ? 'green' : ($rate >= 50 ? 'yellow' : 'red') ?>-100 
-                                             text-<?= $rate >= 70 ? 'green' : ($rate >= 50 ? 'yellow' : 'red') ?>-700 rounded-full text-xs">
+                                <span class="px-2 py-0.5 bg-<?= $rate >= 70 ? 'emerald' : ($rate >= 50 ? 'yellow' : 'red') ?>-100
+                                             text-<?= $rate >= 70 ? 'emerald' : ($rate >= 50 ? 'yellow' : 'red') ?>-700 rounded-full text-xs">
                                     <?= $rate ?>%
                                 </span>
                             </td>
@@ -264,7 +231,9 @@ require_once __DIR__ . '/includes/header.php';
                     </tbody>
                 </table>
             </div>
-        </div>
+        <?php
+        echo renderSectionCard('Session ล่าสุด', 'fas fa-history', ob_get_clean(), null, 'amber');
+        ?>
     </div>
 </div>
 
@@ -280,8 +249,8 @@ new Chart(document.getElementById('dailyChart'), {
             {
                 label: 'ทั้งหมด',
                 data: dailyData.map(d => d.total),
-                borderColor: '#3B82F6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
                 fill: true,
                 tension: 0.4
             },

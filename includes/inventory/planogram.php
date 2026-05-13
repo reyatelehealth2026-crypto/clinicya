@@ -10,6 +10,8 @@
  */
 
 require_once __DIR__ . '/../../classes/LocationService.php';
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
 
 $locationService = new LocationService($db, $lineAccountId);
 
@@ -96,6 +98,14 @@ function getCellStatus($location, $products) {
     return ['status' => 'occupied', 'color' => 'blue-100', 'text' => 'มีสินค้า', 'border' => 'blue-400'];
 }
 ?>
+
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'Planogram',
+    'ผังชั้นวางสินค้าแบบ Visual พร้อมสถานะแบบสี'
+) ?>
 
 <div class="space-y-6">
     <!-- Zone Selector -->
@@ -248,10 +258,12 @@ function getCellStatus($location, $products) {
     </div>
     
     <?php else: ?>
-    <div class="bg-white rounded-xl shadow p-8 text-center text-gray-500">
-        <i class="fas fa-warehouse text-4xl mb-3"></i>
-        <p>ไม่พบข้อมูลตำแหน่งจัดเก็บ</p>
-        <p class="text-sm mt-2">กรุณาสร้างตำแหน่งใน tab "ตำแหน่งจัดเก็บ" ก่อน</p>
+    <div class="bg-white rounded-xl shadow">
+        <?= renderEmptyState(
+            'fas fa-warehouse',
+            'ไม่พบข้อมูลตำแหน่งจัดเก็บ',
+            'กรุณาสร้างตำแหน่งใน tab "ตำแหน่งจัดเก็บ" ก่อน'
+        ) ?>
     </div>
     <?php endif; ?>
 </div>

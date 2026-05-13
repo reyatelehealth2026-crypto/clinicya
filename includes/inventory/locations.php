@@ -11,6 +11,8 @@
  */
 
 require_once __DIR__ . '/../../classes/LocationService.php';
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
 
 $locationService = new LocationService($db, $lineAccountId);
 
@@ -77,6 +79,20 @@ function getUtilizationColor($percent) {
     return 'blue';
 }
 ?>
+
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'ตำแหน่งจัดเก็บ',
+    'จัดการตำแหน่งโซน/ชั้น/ช่อง พร้อม Heat Map การใช้งาน',
+    [
+        'label' => 'เพิ่มตำแหน่ง',
+        'icon' => 'fas fa-plus',
+        'variant' => 'success',
+        'onclick' => 'openCreateLocationModal()',
+    ]
+) ?>
 
 <div class="space-y-6">
     <!-- Summary Cards -->

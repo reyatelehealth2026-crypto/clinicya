@@ -20,6 +20,7 @@
 if (file_exists(__DIR__ . '/../../classes/OdooProductService.php')) {
     require_once __DIR__ . '/../../classes/OdooProductService.php';
 }
+require_once __DIR__ . '/../components/page-header.php';
 
 $currentBotId = (int) ($_SESSION['current_bot_id'] ?? 1);
 $cacheTable   = 'odoo_products_cache';
@@ -302,6 +303,13 @@ $fmtDate = function ($v) {
 $catalogSyncChunkUrl = '../api/catalog-sync-chunk.php';
 $catalogSyncFormAction = htmlspecialchars($_SERVER['SCRIPT_NAME'] ?? '/inventory/index.php', ENT_QUOTES, 'UTF-8');
 ?>
+<?= getPageHeaderStyles() ?>
+
+<?= renderPageHeader(
+    'โหลดรายการสินค้าหลัก',
+    'ซิงค์ catalog จาก Odoo ลง cache โดย admin overrides ไม่ถูกทับ'
+) ?>
+
 <div class="space-y-4">
     <!-- ─── Migration warning ─────────────────────────────────────────────── -->
     <?php if (!$hasStorefrontCol || !$hasDrugTypeCol): ?>

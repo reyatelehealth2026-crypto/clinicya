@@ -5,6 +5,10 @@
  */
 require_once 'config/config.php';
 require_once 'config/database.php';
+require_once __DIR__ . '/includes/components/page-header.php';
+require_once __DIR__ . '/includes/components/empty-state.php';
+require_once __DIR__ . '/includes/components/toast.php';
+require_once __DIR__ . '/includes/components/modal.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'User Tags';
@@ -56,103 +60,244 @@ require_once 'includes/header.php';
 $colors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280', '#06C755', '#14B8A6', '#F97316'];
 ?>
 
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+<?= getModalStyles() ?>
+<?= getToastStyles() ?>
+
+<style>
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-4, 16px);
+    margin-bottom: var(--space-6, 24px);
+}
+.stat-tile {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-lg, 16px);
+    padding: var(--space-4, 16px);
+    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3, 12px);
+    transition: box-shadow var(--transition-fast, 150ms ease);
+}
+.stat-tile:hover { box-shadow: 0 4px 12px rgba(15,23,42,0.10); }
+.stat-tile-icon {
+    width: 48px; height: 48px; border-radius: var(--radius-md, 12px);
+    display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;
+}
+.stat-tile-value { font-size: var(--text-2xl, 24px); font-weight: 700; color: var(--color-dark-800); line-height: 1; }
+.stat-tile-label { font-size: var(--text-xs, 12px); color: var(--color-dark-500); margin-top: 4px; }
+.tags-panel {
+    background: #ffffff;
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
+    overflow: hidden;
+}
+.tags-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-4, 16px);
+    border-bottom: 1px solid var(--color-slate-200);
+}
+.tags-panel-title { font-weight: 600; font-size: var(--text-base, 16px); color: var(--color-dark-800); }
+.tags-grid-inner {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-4, 16px);
+    padding: var(--space-4, 16px);
+}
+.tag-card {
+    border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-lg, 16px);
+    padding: var(--space-4, 16px);
+    transition: box-shadow var(--transition-fast, 150ms ease);
+}
+.tag-card:hover { box-shadow: 0 4px 12px rgba(15,23,42,0.10); }
+.tag-card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: var(--space-3, 12px);
+}
+.tag-color-dot {
+    width: 20px; height: 20px; border-radius: var(--radius-full, 9999px);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15); flex-shrink: 0;
+}
+.tag-card-name { font-weight: 600; font-size: var(--text-sm, 14px); color: var(--color-dark-800); }
+.tag-card-desc {
+    font-size: var(--text-sm, 14px); color: var(--color-dark-500);
+    margin-bottom: var(--space-3, 12px);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.tag-card-footer { display: flex; align-items: center; justify-content: space-between; }
+.tag-users-link { font-size: var(--text-sm, 14px); color: var(--color-primary-600); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.tag-users-link:hover { color: var(--color-primary-700); }
+.tag-auto-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: var(--radius-full, 9999px);
+    font-size: var(--text-xs, 12px); font-weight: 500;
+    background: rgba(124,58,237,0.08); color: var(--color-violet-600);
+}
+/* modal form */
+.tf-field { margin-bottom: var(--space-4, 16px); }
+.tf-field label { display: block; font-size: var(--text-sm, 14px); font-weight: 500; color: var(--color-dark-800); margin-bottom: 6px; }
+.tf-input {
+    width: 100%; padding: 10px var(--space-3, 12px); border: 1px solid var(--color-slate-200);
+    border-radius: var(--radius-md, 12px); font-size: var(--text-sm, 14px); color: var(--color-dark-800);
+    background: var(--color-slate-50); transition: all var(--transition-fast, 150ms ease); box-sizing: border-box;
+}
+.tf-input:focus { outline: none; background: #ffffff; border-color: var(--color-primary-400); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+.tf-btn {
+    flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px var(--space-4, 16px); border-radius: var(--radius-md, 12px);
+    font-size: var(--text-sm, 14px); font-weight: 600; cursor: pointer;
+    border: 1px solid var(--color-slate-200); background: #ffffff; color: var(--color-dark-700);
+    transition: all var(--transition-fast, 150ms ease);
+}
+.tf-btn:hover { background: var(--color-slate-50); }
+.tf-btn-primary { background: var(--color-emerald-500); border-color: var(--color-emerald-500); color: #ffffff; }
+.tf-btn-primary:hover { background: var(--color-emerald-600); }
+.tf-btn-danger { background: var(--color-rose-500); border-color: var(--color-rose-500); color: #ffffff; }
+.tf-btn-danger:hover { background: var(--color-rose-600); }
+.color-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.color-swatch-label { cursor: pointer; }
+.color-swatch-label input[type="radio"] { display: none; }
+.color-swatch {
+    width: 32px; height: 32px; border-radius: var(--radius-full, 9999px);
+    transition: transform var(--transition-fast, 150ms ease);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch-label input:checked + .color-swatch {
+    outline: 2px solid var(--color-dark-700); outline-offset: 2px;
+}
+.tf-error {
+    padding: var(--space-3, 12px); background: var(--color-rose-50);
+    border: 1px solid var(--color-rose-200); color: var(--color-rose-700);
+    border-radius: var(--radius-md, 12px); font-size: var(--text-sm, 14px);
+    margin-top: var(--space-3, 12px);
+}
+.delete-confirm-icon {
+    width: 64px; height: 64px; border-radius: var(--radius-full, 9999px);
+    background: var(--color-rose-100); display: flex; align-items: center; justify-content: center;
+    margin: 0 auto var(--space-4, 16px);
+    font-size: 24px; color: var(--color-rose-600);
+}
+/* Dark mode */
+.dark .stat-tile { background: var(--color-dark-800); border-color: var(--color-dark-700); }
+.dark .stat-tile-value { color: var(--color-slate-100); }
+.dark .stat-tile-label { color: var(--color-slate-400); }
+.dark .tags-panel { background: var(--color-dark-800); border-color: var(--color-dark-700); }
+.dark .tags-panel-header { border-color: var(--color-dark-700); }
+.dark .tags-panel-title { color: var(--color-slate-100); }
+.dark .tag-card { border-color: var(--color-dark-700); }
+.dark .tag-card-name { color: var(--color-slate-100); }
+.dark .tag-card-desc { color: var(--color-slate-400); }
+.dark .tf-input { background: var(--color-dark-900); border-color: var(--color-dark-700); color: var(--color-slate-100); }
+.dark .tf-input:focus { background: var(--color-dark-800); border-color: var(--color-primary-400); }
+.dark .tf-btn { background: var(--color-dark-700); border-color: var(--color-dark-600); color: var(--color-slate-300); }
+</style>
+
+<?= renderPageHeader(
+    'User Tags',
+    'จัดการ Tags สำหรับจัดกลุ่มลูกค้า',
+    [
+        'label'   => 'สร้าง Tag',
+        'icon'    => 'fas fa-plus',
+        'onclick' => 'openCreateModal()',
+        'variant' => 'success',
+    ],
+    [
+        ['label' => 'Customers', 'href' => null],
+        ['label' => 'User Tags', 'href' => null],
+    ]
+) ?>
+
 <!-- Stats -->
-<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-    <div class="bg-white rounded-xl shadow p-4">
-        <div class="flex items-center">
-            <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <i class="fas fa-tags text-blue-500 text-xl"></i>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm text-gray-500">Total Tags</p>
-                <p class="text-2xl font-bold"><?= count($tags) ?></p>
-            </div>
+<div class="stats-grid">
+    <div class="stat-tile">
+        <div class="stat-tile-icon" style="background:var(--color-primary-50);color:var(--color-primary-600);">
+            <i class="fas fa-tags"></i>
+        </div>
+        <div>
+            <div class="stat-tile-value"><?= count($tags) ?></div>
+            <div class="stat-tile-label">Total Tags</div>
         </div>
     </div>
-    <div class="bg-white rounded-xl shadow p-4">
-        <div class="flex items-center">
-            <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <i class="fas fa-users text-green-500 text-xl"></i>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm text-gray-500">Tagged Users</p>
-                <p class="text-2xl font-bold"><?= number_format(array_sum(array_column($tags, 'user_count'))) ?></p>
-            </div>
+    <div class="stat-tile">
+        <div class="stat-tile-icon" style="background:var(--color-emerald-50);color:var(--color-emerald-600);">
+            <i class="fas fa-users"></i>
+        </div>
+        <div>
+            <div class="stat-tile-value"><?= number_format(array_sum(array_column($tags, 'user_count'))) ?></div>
+            <div class="stat-tile-label">Tagged Users</div>
         </div>
     </div>
-    <div class="bg-white rounded-xl shadow p-4">
-        <div class="flex items-center">
-            <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <i class="fas fa-magic text-purple-500 text-xl"></i>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm text-gray-500">Auto Tags</p>
-                <p class="text-2xl font-bold"><?= count(array_filter($tags, fn($t) => !empty($t['auto_assign_rules']))) ?></p>
-            </div>
+    <div class="stat-tile">
+        <div class="stat-tile-icon" style="background:rgba(124,58,237,0.08);color:var(--color-violet-600);">
+            <i class="fas fa-magic"></i>
+        </div>
+        <div>
+            <div class="stat-tile-value"><?= count(array_filter($tags, fn($t) => !empty($t['auto_assign_rules']))) ?></div>
+            <div class="stat-tile-label">Auto Tags</div>
         </div>
     </div>
-    <div class="bg-white rounded-xl shadow p-4 cursor-pointer hover:shadow-lg transition" onclick="openCreateModal()">
-        <div class="flex items-center">
-            <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
-                <i class="fas fa-plus text-white text-xl"></i>
-            </div>
-            <div class="ml-4">
-                <p class="text-sm text-gray-500">Quick Action</p>
-                <p class="text-lg font-bold text-green-600">สร้าง Tag ใหม่</p>
-            </div>
+    <div class="stat-tile" style="cursor:pointer;" onclick="openCreateModal()">
+        <div class="stat-tile-icon" style="background:var(--color-emerald-500);color:#ffffff;">
+            <i class="fas fa-plus"></i>
+        </div>
+        <div>
+            <div class="stat-tile-label">Quick Action</div>
+            <div style="font-size:var(--text-base,16px);font-weight:700;color:var(--color-emerald-600);margin-top:2px;">สร้าง Tag ใหม่</div>
         </div>
     </div>
 </div>
 
-<!-- Tags Grid -->
-<div class="bg-white rounded-xl shadow">
-    <div class="p-4 border-b flex justify-between items-center">
-        <h3 class="font-semibold">🏷️ Tags ทั้งหมด</h3>
-        <button onclick="openCreateModal()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
-            <i class="fas fa-plus mr-2"></i>สร้าง Tag
+<!-- Tags Panel -->
+<div class="tags-panel">
+    <div class="tags-panel-header">
+        <span class="tags-panel-title"><i class="fas fa-tags" style="margin-right:8px;color:var(--color-primary-500);"></i>Tags ทั้งหมด</span>
+        <button onclick="openCreateModal()" class="page-header-action page-header-action-success">
+            <i class="fas fa-plus"></i><span>สร้าง Tag</span>
         </button>
     </div>
-    
-    <div id="tagsContainer" class="p-4">
+
+    <div id="tagsContainer">
         <?php if (empty($tags)): ?>
-        <div class="text-center py-12 text-gray-400">
-            <i class="fas fa-tags text-5xl mb-4"></i>
-            <p class="text-lg">ยังไม่มี Tags</p>
-            <button onclick="openCreateModal()" class="mt-4 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
-                <i class="fas fa-plus mr-2"></i>สร้าง Tag แรก
-            </button>
-        </div>
+        <?= renderEmptyState(
+            'fas fa-tags',
+            'ยังไม่มี Tags',
+            'สร้าง Tag แรกเพื่อเริ่มจัดกลุ่มลูกค้า',
+            ['label' => 'สร้าง Tag แรก', 'icon' => 'fas fa-plus', 'onclick' => 'openCreateModal()']
+        ) ?>
         <?php else: ?>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="tags-grid-inner">
             <?php foreach ($tags as $tag): ?>
-            <div id="tag-<?= $tag['id'] ?>" class="tag-card border rounded-xl p-4 hover:shadow-md transition">
-                <div class="flex items-center justify-between mb-3">
-                    <div class="flex items-center gap-3">
-                        <div class="w-5 h-5 rounded-full shadow-sm" style="background-color: <?= htmlspecialchars($tag['color']) ?>"></div>
-                        <h4 class="font-semibold"><?= htmlspecialchars($tag['name']) ?></h4>
+            <div id="tag-<?= $tag['id'] ?>" class="tag-card">
+                <div class="tag-card-head">
+                    <div style="display:flex;align-items:center;gap:var(--space-3,12px);">
+                        <div class="tag-color-dot" style="background-color:<?= htmlspecialchars($tag['color']) ?>"></div>
+                        <span class="tag-card-name"><?= htmlspecialchars($tag['name']) ?></span>
                     </div>
-                    <div class="flex items-center gap-1">
-                        <button onclick="openEditModal(<?= htmlspecialchars(json_encode($tag)) ?>)" class="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg" title="แก้ไข">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <button onclick="openEditModal(<?= htmlspecialchars(json_encode($tag)) ?>)" class="data-table-row-action" title="แก้ไข">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button onclick="deleteTag(<?= $tag['id'] ?>, '<?= htmlspecialchars(addslashes($tag['name'])) ?>')" class="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="ลบ">
+                        <button onclick="deleteTag(<?= $tag['id'] ?>, '<?= htmlspecialchars(addslashes($tag['name'])) ?>')" class="data-table-row-action data-table-row-action-danger" title="ลบ">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </div>
-                
                 <?php if ($tag['description']): ?>
-                <p class="text-gray-500 text-sm mb-3 line-clamp-2"><?= htmlspecialchars($tag['description']) ?></p>
+                <div class="tag-card-desc"><?= htmlspecialchars($tag['description']) ?></div>
                 <?php endif; ?>
-                
-                <div class="flex items-center justify-between">
-                    <a href="users.php?tag=<?= $tag['id'] ?>" class="text-sm text-blue-500 hover:text-blue-600">
-                        <i class="fas fa-users mr-1"></i><?= number_format($tag['user_count']) ?> คน
+                <div class="tag-card-footer">
+                    <a href="users.php?tag=<?= $tag['id'] ?>" class="tag-users-link">
+                        <i class="fas fa-users"></i><?= number_format($tag['user_count']) ?> คน
                     </a>
                     <?php if (!empty($tag['auto_assign_rules'])): ?>
-                    <span class="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">
-                        <i class="fas fa-magic mr-1"></i>Auto
-                    </span>
+                    <span class="tag-auto-badge"><i class="fas fa-magic"></i>Auto</span>
                     <?php endif; ?>
                 </div>
             </div>
@@ -162,133 +307,107 @@ $colors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#6
     </div>
 </div>
 
-<!-- Create/Edit Modal -->
-<div id="tagModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        <div class="p-4 border-b flex justify-between items-center">
-            <h3 id="modalTitle" class="text-lg font-semibold">🏷️ สร้าง Tag ใหม่</h3>
-            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        
-        <form id="tagForm" onsubmit="return saveTag(event)">
-            <input type="hidden" id="tagId" value="">
-            
-            <div class="p-4 space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-2">ชื่อ Tag *</label>
-                    <input type="text" id="tagName" required class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none" placeholder="เช่น VIP, New Customer">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium mb-2">สี</label>
-                    <div class="flex flex-wrap gap-2">
-                        <?php foreach ($colors as $c): ?>
-                        <label class="cursor-pointer">
-                            <input type="radio" name="tagColor" value="<?= $c ?>" class="hidden peer" <?= $c === '#3B82F6' ? 'checked' : '' ?>>
-                            <div class="w-8 h-8 rounded-full peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-gray-400 hover:scale-110 transition" style="background-color: <?= $c ?>"></div>
-                        </label>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium mb-2">คำอธิบาย</label>
-                    <textarea id="tagDescription" rows="2" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none" placeholder="อธิบายว่า Tag นี้ใช้สำหรับอะไร"></textarea>
-                </div>
-                
-                <div id="errorMessage" class="hidden p-3 bg-red-100 text-red-700 rounded-lg text-sm"></div>
-            </div>
-            
-            <div class="p-4 border-t flex gap-3">
-                <button type="button" onclick="closeModal()" class="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50">ยกเลิก</button>
-                <button type="submit" id="saveBtn" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
-                    <span id="saveBtnText">บันทึก</span>
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
+<?php
+/* ── Create/Edit Modal ── */
+$colorSwatches = '';
+foreach ($colors as $c) {
+    $checked = $c === '#3B82F6' ? ' checked' : '';
+    $colorSwatches .= '<label class="color-swatch-label">'
+        . '<input type="radio" name="tagColor" value="' . htmlspecialchars($c) . '"' . $checked . '>'
+        . '<div class="color-swatch" style="background-color:' . htmlspecialchars($c) . '"></div>'
+        . '</label>';
+}
 
-<!-- Delete Confirm Modal -->
-<div id="deleteModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4">
-        <div class="p-6 text-center">
-            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i class="fas fa-trash text-red-500 text-2xl"></i>
-            </div>
-            <h3 class="text-lg font-semibold mb-2">ลบ Tag?</h3>
-            <p class="text-gray-500 mb-4">คุณต้องการลบ Tag "<span id="deleteTagName" class="font-medium"></span>" หรือไม่?</p>
-            <p class="text-sm text-red-500 mb-4">การลบจะยกเลิก Tag จากผู้ใช้ทั้งหมด</p>
-            
-            <input type="hidden" id="deleteTagId">
-            
-            <div class="flex gap-3">
-                <button onclick="closeDeleteModal()" class="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50">ยกเลิก</button>
-                <button onclick="executeDeleteTag()" id="deleteBtn" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
-                    <span id="deleteBtnText">ลบ</span>
-                </button>
-            </div>
-        </div>
-    </div>
+$tagModalBody = '
+<input type="hidden" id="tagId" value="">
+<div class="tf-field">
+    <label>ชื่อ Tag *</label>
+    <input type="text" id="tagName" required class="tf-input" placeholder="เช่น VIP, New Customer">
 </div>
+<div class="tf-field">
+    <label>สี</label>
+    <div class="color-swatches">' . $colorSwatches . '</div>
+</div>
+<div class="tf-field" style="margin-bottom:0;">
+    <label>คำอธิบาย</label>
+    <textarea id="tagDescription" rows="2" class="tf-input" placeholder="อธิบายว่า Tag นี้ใช้สำหรับอะไร"></textarea>
+</div>
+<div id="errorMessage" class="tf-error" style="display:none;"></div>';
 
-<!-- Toast -->
-<div id="toast" class="fixed bottom-4 right-4 z-50 hidden transform transition-transform duration-300">
-    <div class="bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
-        <i id="toastIcon" class="fas fa-check-circle text-green-400"></i>
-        <span id="toastMessage"></span>
-    </div>
-</div>
+$tagModalFooter = '
+<button type="button" onclick="closeModal()" class="tf-btn">ยกเลิก</button>
+<button type="submit" id="saveBtn" class="tf-btn tf-btn-primary"><span id="saveBtnText">บันทึก</span></button>';
+
+echo renderModal(
+    'tagModal',
+    'สร้าง Tag ใหม่',
+    $tagModalBody,
+    $tagModalFooter,
+    ['size' => 'sm', 'formOpen' => '<form id="tagForm" onsubmit="return saveTag(event)">', 'formClose' => '</form>']
+);
+
+/* ── Delete Confirm Modal ── */
+$deleteBody = '
+<div class="delete-confirm-icon"><i class="fas fa-trash"></i></div>
+<h3 style="font-size:var(--text-lg,18px);font-weight:600;color:var(--color-dark-800);text-align:center;margin:0 0 8px;">ลบ Tag?</h3>
+<p style="font-size:var(--text-sm,14px);color:var(--color-dark-500);text-align:center;margin:0 0 8px;">คุณต้องการลบ Tag "<span id="deleteTagName" style="font-weight:600;"></span>" หรือไม่?</p>
+<p style="font-size:var(--text-sm,14px);color:var(--color-rose-600);text-align:center;margin:0;">การลบจะยกเลิก Tag จากผู้ใช้ทั้งหมด</p>
+<input type="hidden" id="deleteTagId">';
+
+$deleteFooter = '
+<button onclick="closeDeleteModal()" class="tf-btn">ยกเลิก</button>
+<button onclick="executeDeleteTag()" id="deleteBtn" class="tf-btn tf-btn-danger"><span id="deleteBtnText">ลบ</span></button>';
+
+echo renderModal('deleteModal', 'ยืนยันการลบ', $deleteBody, $deleteFooter, ['size' => 'sm']);
+?>
+
+<?= renderToastContainer() ?>
 
 <script>
 const API_URL = 'api/ajax_handler.php';
 
 // Modal functions
 function openCreateModal() {
-    document.getElementById('modalTitle').textContent = '🏷️ สร้าง Tag ใหม่';
+    document.querySelector('#tagModal .modal-shell-title').textContent = 'สร้าง Tag ใหม่';
     document.getElementById('tagId').value = '';
     document.getElementById('tagForm').reset();
-    document.querySelector('input[name="tagColor"][value="#3B82F6"]').checked = true;
+    var defaultColor = document.querySelector('input[name="tagColor"][value="#3B82F6"]');
+    if (defaultColor) defaultColor.checked = true;
     hideError();
     openModal();
 }
 
 function openEditModal(tag) {
-    document.getElementById('modalTitle').textContent = '✏️ แก้ไข Tag';
+    document.querySelector('#tagModal .modal-shell-title').textContent = 'แก้ไข Tag';
     document.getElementById('tagId').value = tag.id;
     document.getElementById('tagName').value = tag.name;
     document.getElementById('tagDescription').value = tag.description || '';
-    
-    const colorInput = document.querySelector(`input[name="tagColor"][value="${tag.color}"]`);
+    var colorInput = document.querySelector('input[name="tagColor"][value="' + tag.color + '"]');
     if (colorInput) colorInput.checked = true;
-    
     hideError();
     openModal();
 }
 
 function openModal() {
-    document.getElementById('tagModal').classList.remove('hidden');
-    document.getElementById('tagModal').classList.add('flex');
-    document.getElementById('tagName').focus();
+    openModalShell('tagModal');
+    setTimeout(function() {
+        var n = document.getElementById('tagName');
+        if (n) n.focus();
+    }, 50);
 }
 
 function closeModal() {
-    document.getElementById('tagModal').classList.add('hidden');
-    document.getElementById('tagModal').classList.remove('flex');
+    closeModalShell('tagModal');
 }
 
 function deleteTag(id, name) {
     document.getElementById('deleteTagId').value = id;
     document.getElementById('deleteTagName').textContent = name;
-    document.getElementById('deleteModal').classList.remove('hidden');
-    document.getElementById('deleteModal').classList.add('flex');
+    openModalShell('deleteModal');
 }
 
 function closeDeleteModal() {
-    document.getElementById('deleteModal').classList.add('hidden');
-    document.getElementById('deleteModal').classList.remove('flex');
+    closeModalShell('deleteModal');
 }
 
 // API functions
@@ -386,50 +505,9 @@ function hideError() {
     document.getElementById('errorMessage').classList.add('hidden');
 }
 
-function showToast(message, type = 'success') {
-    const toast = document.getElementById('toast');
-    const icon = document.getElementById('toastIcon');
-    const msg = document.getElementById('toastMessage');
-    
-    msg.textContent = message;
-    icon.className = type === 'success' 
-        ? 'fas fa-check-circle text-green-400' 
-        : 'fas fa-exclamation-circle text-red-400';
-    
-    toast.classList.remove('hidden');
-    toast.classList.add('translate-y-0');
-    
-    setTimeout(() => {
-        toast.classList.add('hidden');
-    }, 3000);
+function showToast(message, type) {
+    fireToast(message, type || 'success');
 }
-
-// Keyboard shortcuts
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-        closeModal();
-        closeDeleteModal();
-    }
-});
-
-// Close on backdrop click
-document.getElementById('tagModal').addEventListener('click', e => {
-    if (e.target === document.getElementById('tagModal')) closeModal();
-});
-
-document.getElementById('deleteModal').addEventListener('click', e => {
-    if (e.target === document.getElementById('deleteModal')) closeDeleteModal();
-});
 </script>
-
-<style>
-.tag-card { transition: all 0.3s ease; }
-.line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-</style>
 
 <?php require_once 'includes/footer.php'; ?>

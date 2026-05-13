@@ -5,6 +5,8 @@
  */
 
 require_once __DIR__ . '/../odoo-order-analytics.php';
+require_once __DIR__ . '/../components/kpi-card.php';
+require_once __DIR__ . '/../components/section-card.php';
 
 $currentBotId = $_SESSION['current_bot_id'] ?? null;
 
@@ -128,13 +130,16 @@ try {
 }
 ?>
 
+<?= getKpiCardStyles() ?>
+<?= getSectionCardStyles() ?>
+
 <div class="space-y-6">
     <div class="flex items-center justify-between">
         <div>
             <h2 class="text-xl font-semibold text-gray-800">Odoo Overview</h2>
             <p class="text-sm text-gray-500">ภาพรวมตามโหมด Odoo (อ่านอย่างเดียว)</p>
         </div>
-        <a href="/shop/orders" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
+        <a href="/shop/orders" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">
             ดูคำสั่งซื้อ Odoo
         </a>
     </div>
@@ -151,62 +156,53 @@ try {
     <?php endif; ?>
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="text-sm text-gray-500">ออเดอร์วันนี้</div>
-            <div class="text-3xl font-bold text-gray-900"><?= number_format($overview['orders_today']) ?></div>
-            <div class="text-xs text-gray-500 mt-1">รวมทั้งหมด <?= number_format($overview['orders_total']) ?></div>
-        </div>
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="text-sm text-gray-500">ยอดขายวันนี้</div>
-            <div class="text-3xl font-bold text-emerald-600">฿<?= number_format($overview['revenue_today'], 2) ?></div>
-            <div class="text-xs text-gray-500 mt-1">เดือนนี้ ฿<?= number_format($overview['revenue_month'], 2) ?></div>
-        </div>
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="text-sm text-gray-500">ลูกค้า</div>
-            <div class="text-3xl font-bold text-blue-600"><?= number_format($overview['customers_total']) ?></div>
-            <div class="text-xs text-gray-500 mt-1">ใหม่วันนี้ <?= number_format($overview['customers_new_today']) ?></div>
-        </div>
-        <div class="bg-white rounded-xl shadow p-4">
-            <div class="text-sm text-gray-500">ใบแจ้งหนี้ (จาก API logs)</div>
-            <div class="text-3xl font-bold text-orange-600"><?= number_format($overview['invoices_open']) ?></div>
-            <div class="text-xs text-gray-500 mt-1">เครดิตสถานะ (hit) <?= number_format($overview['invoices_paid']) ?></div>
-        </div>
+        <?= renderKpiCard('indigo',  'ออเดอร์วันนี้',  number_format($overview['orders_today']),
+            'รวมทั้งหมด ' . number_format($overview['orders_total']), 'fas fa-shopping-cart') ?>
+        <?= renderKpiCard('emerald', 'ยอดขายวันนี้',  '฿' . number_format($overview['revenue_today'], 2),
+            'เดือนนี้ ฿' . number_format($overview['revenue_month'], 2), 'fas fa-baht-sign') ?>
+        <?= renderKpiCard('violet',  'ลูกค้า',         number_format($overview['customers_total']),
+            'ใหม่วันนี้ ' . number_format($overview['customers_new_today']), 'fas fa-users') ?>
+        <?= renderKpiCard('amber',   'ใบแจ้งหนี้',     number_format($overview['invoices_open']),
+            'เครดิตสถานะ (hit) ' . number_format($overview['invoices_paid']), 'fas fa-file-invoice') ?>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div class="bg-white rounded-xl shadow p-4 lg:col-span-1">
-            <h3 class="font-semibold text-gray-800 mb-3">คลังสินค้า</h3>
+        <?php
+        ob_start(); ?>
             <div class="space-y-2 text-sm">
                 <div class="flex justify-between"><span>สินค้าทั้งหมด</span><strong><?= number_format($overview['products_total']) ?></strong></div>
                 <div class="flex justify-between"><span>สินค้าใกล้หมด</span><strong class="text-yellow-600"><?= number_format($overview['products_low_stock']) ?></strong></div>
                 <div class="flex justify-between"><span>สินค้าหมด</span><strong class="text-red-600"><?= number_format($overview['products_out_of_stock']) ?></strong></div>
             </div>
-            <a href="/inventory?tab=products" class="inline-block mt-4 text-sm text-green-600 hover:underline">ไปที่จัดการสินค้า</a>
-        </div>
+            <a href="/inventory?tab=products" class="inline-block mt-4 text-sm text-indigo-600 hover:underline">ไปที่จัดการสินค้า</a>
+        <?php
+        echo '<div class="lg:col-span-1">' . renderSectionCard('คลังสินค้า', 'fas fa-boxes', ob_get_clean(), null, 'amber') . '</div>';
 
-        <div class="bg-white rounded-xl shadow lg:col-span-2">
-            <div class="p-4 border-b flex items-center justify-between">
-                <h3 class="font-semibold text-gray-800">ออเดอร์ล่าสุดจาก Odoo</h3>
-                <a href="/shop/orders" class="text-sm text-green-600 hover:underline">ดูทั้งหมด</a>
+        ob_start();
+        if (empty($recentOrders)): ?>
+            <div class="sc-empty">
+                <div class="sc-empty__circle"><i class="fas fa-receipt" aria-hidden="true"></i></div>
+                <p class="sc-empty__title">ยังไม่มีข้อมูลออเดอร์จาก Odoo</p>
             </div>
+        <?php else: ?>
             <div class="divide-y">
-                <?php if (empty($recentOrders)): ?>
-                <div class="p-6 text-center text-gray-400">ยังไม่มีข้อมูลออเดอร์จาก Odoo</div>
-                <?php else: ?>
-                    <?php foreach ($recentOrders as $order): ?>
-                    <div class="p-4 flex items-center justify-between gap-3">
-                        <div class="min-w-0">
-                            <div class="font-medium text-gray-800 truncate">#<?= htmlspecialchars($order['order_number']) ?></div>
-                            <div class="text-xs text-gray-500 truncate"><?= htmlspecialchars($order['customer_name'] ?: '-') ?></div>
-                        </div>
-                        <div class="text-right">
-                            <div class="font-semibold text-emerald-600">฿<?= number_format((float) ($order['total_amount'] ?? 0), 2) ?></div>
-                            <div class="text-xs text-gray-500"><?= htmlspecialchars((string) ($order['status'] ?? '-')) ?></div>
-                        </div>
+                <?php foreach ($recentOrders as $order): ?>
+                <div class="p-4 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="font-medium text-gray-800 truncate">#<?= htmlspecialchars($order['order_number']) ?></div>
+                        <div class="text-xs text-gray-500 truncate"><?= htmlspecialchars($order['customer_name'] ?: '-') ?></div>
                     </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+                    <div class="text-right">
+                        <div class="font-semibold text-emerald-600">฿<?= number_format((float) ($order['total_amount'] ?? 0), 2) ?></div>
+                        <div class="text-xs text-gray-500"><?= htmlspecialchars((string) ($order['status'] ?? '-')) ?></div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
             </div>
-        </div>
+        <?php endif;
+        $ordersBody = ob_get_clean();
+        $ordersAction = renderSectionActionLink('/shop/orders', 'ดูทั้งหมด');
+        echo '<div class="lg:col-span-2">' . renderSectionCardFlush('ออเดอร์ล่าสุดจาก Odoo', 'fas fa-receipt', $ordersBody, $ordersAction, 'indigo') . '</div>';
+        ?>
     </div>
 </div>

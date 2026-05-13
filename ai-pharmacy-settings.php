@@ -6,6 +6,12 @@
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth_check.php';
+require_once __DIR__ . '/includes/components/page-header.php';
+require_once __DIR__ . '/includes/components/form-section.php';
+require_once __DIR__ . '/includes/components/field.php';
+require_once __DIR__ . '/includes/components/toggle.php';
+require_once __DIR__ . '/includes/components/sticky-save-bar.php';
+require_once __DIR__ . '/includes/components/toast.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'ตั้งค่า AI เภสัชออนไลน์';
@@ -109,209 +115,77 @@ $pharmacyName = $settings['pharmacy_name'] ?? '';
 $pharmacyLicense = $settings['pharmacy_license'] ?? '';
 
 require_once __DIR__ . '/includes/header.php';
+echo getPageHeaderStyles();
+echo getFormSectionStyles();
+echo getFieldStyles();
+echo getToggleStyles();
+echo getStickySaveBarStyles();
+echo getToastStyles();
 ?>
 
-<style>
-.setting-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; transition: all 0.3s; }
-.setting-card:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
-.toggle-switch { position: relative; width: 52px; height: 28px; }
-.toggle-switch input { opacity: 0; width: 0; height: 0; }
-.toggle-slider { position: absolute; cursor: pointer; inset: 0; background: #e2e8f0; border-radius: 28px; transition: 0.3s; }
-.toggle-slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.toggle-switch input:checked + .toggle-slider { background: linear-gradient(135deg, #10b981, #059669); }
-.toggle-switch input:checked + .toggle-slider:before { transform: translateX(24px); }
-.feature-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
-.input-field { width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 14px; transition: all 0.2s; }
-.input-field:focus { outline: none; border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); }
-</style>
+<?= renderToastContainer() ?>
 
-<div class="max-w-5xl mx-auto py-6 px-4">
-    <?php if ($success): ?>
-    <div class="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-center gap-3">
-        <i class="fas fa-check-circle text-xl"></i>
-        <span><?= htmlspecialchars($success) ?></span>
-    </div>
-    <?php endif; ?>
-    
-    <?php if ($error): ?>
-    <div class="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-3">
-        <i class="fas fa-exclamation-circle text-xl"></i>
-        <span><?= htmlspecialchars($error) ?></span>
-    </div>
-    <?php endif; ?>
+<?php if ($success): ?>
+<script>document.addEventListener('DOMContentLoaded',function(){ fireToast(<?= json_encode($success) ?>,'success'); });</script>
+<?php endif; ?>
+<?php if ($error): ?>
+<script>document.addEventListener('DOMContentLoaded',function(){ fireToast(<?= json_encode($error) ?>,'error'); });</script>
+<?php endif; ?>
 
-    <!-- Header -->
-    <div class="mb-8">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-800">
-                    <i class="fas fa-clinic-medical text-emerald-500 mr-2"></i>ตั้งค่า AI เภสัชออนไลน์
-                </h1>
-                <p class="text-gray-500 mt-1">กำหนดค่าระบบ Triage และการแนะนำยาอัตโนมัติ</p>
-            </div>
-            <a href="pharmacist-dashboard.php" class="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600">
-                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
-            </a>
-        </div>
-    </div>
+<?= renderPageHeader(
+    'ตั้งค่า AI เภสัชออนไลน์',
+    'กำหนดค่าระบบ Triage และการแนะนำยาอัตโนมัติ',
+    ['label' => 'Dashboard', 'icon' => 'fas fa-tachometer-alt', 'type' => 'link', 'href' => 'pharmacist-dashboard.php', 'variant' => 'success'],
+    [['label' => 'หน้าหลัก', 'href' => '/'], ['label' => 'ตั้งค่า AI เภสัชออนไลน์', 'href' => null]]
+) ?>
 
-    <form method="POST">
+<div class="max-w-5xl mx-auto">
+    <form method="POST" id="aiPharmacyForm">
         <input type="hidden" name="action" value="save_settings">
-        
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Main Settings -->
-            <div class="lg:col-span-2 space-y-6">
-                
-                <!-- Pharmacy Info -->
-                <div class="setting-card p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                        <div class="feature-icon bg-blue-100">
-                            <i class="fas fa-store-alt text-blue-500"></i>
-                        </div>
-                        ข้อมูลร้านยา
-                    </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600 mb-2">ชื่อร้านยา</label>
-                            <input type="text" name="pharmacy_name" value="<?= htmlspecialchars($pharmacyName) ?>" 
-                                   class="input-field" placeholder="เช่น ร้านยา ABC">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600 mb-2">เลขที่ใบอนุญาต</label>
-                            <input type="text" name="pharmacy_license" value="<?= htmlspecialchars($pharmacyLicense) ?>" 
-                                   class="input-field" placeholder="เช่น ข.ย. 12345">
-                        </div>
-                    </div>
-                </div>
+            <div class="lg:col-span-2">
+                <?php
+                // --- Section: Pharmacy Info ---
+                $pharmacyBody  = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+                $pharmacyBody .= renderField('pharmacy_name', 'ชื่อร้านยา', 'text', $pharmacyName, ['placeholder' => 'เช่น ร้านยา ABC']);
+                $pharmacyBody .= renderField('pharmacy_license', 'เลขที่ใบอนุญาต', 'text', $pharmacyLicense, ['placeholder' => 'เช่น ข.ย. 12345']);
+                $pharmacyBody .= '</div>';
+                echo renderFormSection('ข้อมูลร้านยา', 'fas fa-store-alt', '', $pharmacyBody);
 
-                <!-- Triage Settings -->
-                <div class="setting-card p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                        <div class="feature-icon bg-emerald-100">
-                            <i class="fas fa-stethoscope text-emerald-500"></i>
-                        </div>
-                        ระบบซักประวัติ (Triage)
-                    </h3>
-                    
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                            <div>
-                                <p class="font-medium text-gray-800">เปิดใช้งานระบบซักประวัติ</p>
-                                <p class="text-sm text-gray-500">AI จะซักประวัติอาการเป็นขั้นตอนก่อนแนะนำยา</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" name="triage_enabled" <?= $triageEnabled ? 'checked' : '' ?>>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        
-                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                            <div>
-                                <p class="font-medium text-gray-800">ตรวจจับอาการฉุกเฉิน (Red Flag)</p>
-                                <p class="text-sm text-gray-500">แจ้งเตือนเมื่อพบอาการที่ต้องพบแพทย์ทันที</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" name="red_flag_enabled" <?= $redFlagEnabled ? 'checked' : '' ?>>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        
-                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                            <div>
-                                <p class="font-medium text-gray-800">แนะนำยาอัตโนมัติ</p>
-                                <p class="text-sm text-gray-500">AI จะแนะนำยาจากคลังสินค้าตามอาการ</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" name="auto_recommend" <?= $autoRecommend ? 'checked' : '' ?>>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        
-                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                            <div>
-                                <p class="font-medium text-gray-800">ต้องให้เภสัชกรอนุมัติ</p>
-                                <p class="text-sm text-gray-500">ลูกค้าต้องรอเภสัชกรยืนยันก่อนสั่งซื้อยา</p>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" name="require_pharmacist_approval" <?= $requireApproval ? 'checked' : '' ?>>
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
+                // --- Section: Triage ---
+                $triageBody  = renderToggle('triage_enabled', 'เปิดใช้งานระบบซักประวัติ', (bool)$triageEnabled, 'AI จะซักประวัติอาการเป็นขั้นตอนก่อนแนะนำยา', ['color' => 'emerald']);
+                $triageBody .= renderToggle('red_flag_enabled', 'ตรวจจับอาการฉุกเฉิน (Red Flag)', (bool)$redFlagEnabled, 'แจ้งเตือนเมื่อพบอาการที่ต้องพบแพทย์ทันที', ['color' => 'emerald']);
+                $triageBody .= renderToggle('auto_recommend', 'แนะนำยาอัตโนมัติ', (bool)$autoRecommend, 'AI จะแนะนำยาจากคลังสินค้าตามอาการ', ['color' => 'emerald']);
+                $triageBody .= renderToggle('require_pharmacist_approval', 'ต้องให้เภสัชกรอนุมัติ', (bool)$requireApproval, 'ลูกค้าต้องรอเภสัชกรยืนยันก่อนสั่งซื้อยา', ['color' => 'emerald']);
+                echo renderFormSection('ระบบซักประวัติ (Triage)', 'fas fa-stethoscope', '', $triageBody);
 
-                <!-- Video Call Settings -->
-                <div class="setting-card p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                        <div class="feature-icon bg-purple-100">
-                            <i class="fas fa-video text-purple-500"></i>
-                        </div>
-                        Video Call / Telecare
-                    </h3>
-                    
-                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl mb-4">
-                        <div>
-                            <p class="font-medium text-gray-800">เปิดใช้งาน Video Call</p>
-                            <p class="text-sm text-gray-500">ลูกค้าสามารถ Video Call ปรึกษาเภสัชกรได้</p>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="video_call_enabled" <?= $videoCallEnabled ? 'checked' : '' ?>>
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600 mb-2">เวลาเปิดให้บริการ</label>
-                            <input type="time" name="working_hours_start" value="<?= htmlspecialchars($workingStart) ?>" 
-                                   class="input-field">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600 mb-2">เวลาปิดให้บริการ</label>
-                            <input type="time" name="working_hours_end" value="<?= htmlspecialchars($workingEnd) ?>" 
-                                   class="input-field">
-                        </div>
-                    </div>
-                </div>
+                // --- Section: Video Call ---
+                $videoBody  = renderToggle('video_call_enabled', 'เปิดใช้งาน Video Call', (bool)$videoCallEnabled, 'ลูกค้าสามารถ Video Call ปรึกษาเภสัชกรได้', ['color' => 'indigo']);
+                $videoBody .= '<div class="grid grid-cols-2 gap-4 mt-4">';
+                $videoBody .= renderField('working_hours_start', 'เวลาเปิดให้บริการ', 'text', $workingStart, ['class' => 'field-time']);
+                $videoBody .= renderField('working_hours_end', 'เวลาปิดให้บริการ', 'text', $workingEnd, ['class' => 'field-time']);
+                $videoBody .= '</div>';
+                echo renderFormSection('Video Call / Telecare', 'fas fa-video', '', $videoBody);
 
-                <!-- Notification Settings -->
-                <div class="setting-card p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                        <div class="feature-icon bg-yellow-100">
-                            <i class="fas fa-bell text-yellow-500"></i>
-                        </div>
-                        การแจ้งเตือน
-                    </h3>
-                    
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600 mb-2">Email แจ้งเตือน</label>
-                            <input type="email" name="notification_email" value="<?= htmlspecialchars($notificationEmail) ?>" 
-                                   class="input-field" placeholder="pharmacist@example.com">
-                            <p class="text-xs text-gray-400 mt-1">รับแจ้งเตือนเมื่อมีคำขอปรึกษาใหม่</p>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600 mb-2">เบอร์ฉุกเฉิน</label>
-                            <input type="text" name="emergency_contact" value="<?= htmlspecialchars($emergencyContact) ?>" 
-                                   class="input-field" placeholder="เช่น 02-xxx-xxxx">
-                            <p class="text-xs text-gray-400 mt-1">แสดงให้ลูกค้าเมื่อพบอาการฉุกเฉิน</p>
-                        </div>
-                    </div>
-                </div>
+                // --- Section: Notifications ---
+                $notifBody  = renderField('notification_email', 'Email แจ้งเตือน', 'email', $notificationEmail, [
+                    'placeholder' => 'pharmacist@example.com',
+                    'help'        => 'รับแจ้งเตือนเมื่อมีคำขอปรึกษาใหม่',
+                ]);
+                $notifBody .= renderField('emergency_contact', 'เบอร์ฉุกเฉิน', 'text', $emergencyContact, [
+                    'placeholder' => 'เช่น 02-xxx-xxxx',
+                    'help'        => 'แสดงให้ลูกค้าเมื่อพบอาการฉุกเฉิน',
+                ]);
+                echo renderFormSection('การแจ้งเตือน', 'fas fa-bell', '', $notifBody);
+                ?>
             </div>
 
             <!-- Sidebar -->
             <div class="space-y-6">
-                <!-- Save Button -->
-                <div class="setting-card p-6">
-                    <button type="submit" class="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-semibold hover:opacity-90 transition-all">
-                        <i class="fas fa-save mr-2"></i>บันทึกการตั้งค่า
-                    </button>
-                </div>
-
                 <!-- Quick Links -->
-                <div class="setting-card p-6">
+                <div class="bg-white rounded-xl shadow p-6">
                     <h4 class="font-semibold text-gray-800 mb-4">
                         <i class="fas fa-link text-gray-400 mr-2"></i>ลิงก์ด่วน
                     </h4>
@@ -336,77 +210,43 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
 
                 <!-- Features Info -->
-                <div class="setting-card p-6">
+                <div class="bg-white rounded-xl shadow p-6">
                     <h4 class="font-semibold text-gray-800 mb-4">
                         <i class="fas fa-info-circle text-blue-400 mr-2"></i>ฟีเจอร์ระบบ
                     </h4>
                     <ul class="space-y-3 text-sm text-gray-600">
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
-                            <span>ซักประวัติอาการอัตโนมัติ</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
-                            <span>ตรวจจับอาการฉุกเฉิน (Red Flag)</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
-                            <span>ตรวจสอบยาตีกัน</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
-                            <span>ตรวจสอบการแพ้ยา</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
-                            <span>แนะนำยาจากคลังสินค้า</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
-                            <span>Video Call กับเภสัชกร</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check-circle text-emerald-500 mt-0.5"></i>
-                            <span>บันทึกประวัติการรักษา</span>
-                        </li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-emerald-500 mt-0.5"></i><span>ซักประวัติอาการอัตโนมัติ</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-emerald-500 mt-0.5"></i><span>ตรวจจับอาการฉุกเฉิน (Red Flag)</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-emerald-500 mt-0.5"></i><span>ตรวจสอบยาตีกัน</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-emerald-500 mt-0.5"></i><span>ตรวจสอบการแพ้ยา</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-emerald-500 mt-0.5"></i><span>แนะนำยาจากคลังสินค้า</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-emerald-500 mt-0.5"></i><span>Video Call กับเภสัชกร</span></li>
+                        <li class="flex items-start gap-2"><i class="fas fa-check-circle text-emerald-500 mt-0.5"></i><span>บันทึกประวัติการรักษา</span></li>
                     </ul>
                 </div>
 
                 <!-- Flow Diagram -->
-                <div class="setting-card p-6">
+                <div class="bg-white rounded-xl shadow p-6">
                     <h4 class="font-semibold text-gray-800 mb-4">
                         <i class="fas fa-project-diagram text-purple-400 mr-2"></i>Flow การทำงาน
                     </h4>
                     <div class="space-y-2 text-xs">
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">1</span>
-                            <span class="text-gray-600">ลูกค้าบอกอาการ</span>
-                        </div>
+                        <div class="flex items-center gap-2"><span class="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold">1</span><span class="text-gray-600">ลูกค้าบอกอาการ</span></div>
                         <div class="w-0.5 h-4 bg-gray-200 ml-3"></div>
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center font-bold">2</span>
-                            <span class="text-gray-600">AI ซักประวัติเพิ่มเติม</span>
-                        </div>
+                        <div class="flex items-center gap-2"><span class="w-6 h-6 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center font-bold">2</span><span class="text-gray-600">AI ซักประวัติเพิ่มเติม</span></div>
                         <div class="w-0.5 h-4 bg-gray-200 ml-3"></div>
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center font-bold">3</span>
-                            <span class="text-gray-600">ตรวจ Red Flag / แพ้ยา</span>
-                        </div>
+                        <div class="flex items-center gap-2"><span class="w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center font-bold">3</span><span class="text-gray-600">ตรวจ Red Flag / แพ้ยา</span></div>
                         <div class="w-0.5 h-4 bg-gray-200 ml-3"></div>
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold">4</span>
-                            <span class="text-gray-600">แนะนำยา + รอเภสัชยืนยัน</span>
-                        </div>
+                        <div class="flex items-center gap-2"><span class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold">4</span><span class="text-gray-600">แนะนำยา + รอเภสัชยืนยัน</span></div>
                         <div class="w-0.5 h-4 bg-gray-200 ml-3"></div>
-                        <div class="flex items-center gap-2">
-                            <span class="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold">5</span>
-                            <span class="text-gray-600">สั่งซื้อ / Video Call</span>
-                        </div>
+                        <div class="flex items-center gap-2"><span class="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold">5</span><span class="text-gray-600">สั่งซื้อ / Video Call</span></div>
                     </div>
                 </div>
             </div>
         </div>
     </form>
+
+    <?= renderStickySaveBar('aiPharmacyForm', 'บันทึกการตั้งค่า') ?>
 </div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
