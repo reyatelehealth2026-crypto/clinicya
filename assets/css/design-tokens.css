@@ -62,7 +62,19 @@
   --color-dark-700: #334155;
   --color-dark-600: #475569;
   --color-dark-500: #64748b;
-  
+
+  /* Light Theme Slate (completes the Tailwind slate scale for light-theme admin UI;
+     --color-dark-500..900 already alias slate-500..900) */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+
+  /* Supplementary badge / accent colors used by shared components */
+  --color-blue-500: #3b82f6;
+  --color-violet-600: #7c3aed;
+
   /* ========================================
      GLASSMORPHISM TOKENS
      ======================================== */

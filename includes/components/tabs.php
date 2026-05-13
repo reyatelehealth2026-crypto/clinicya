@@ -92,7 +92,8 @@ function renderTabs($tabs, $activeTab, $options = []) {
 function getTabsStyles() {
     return <<<CSS
 <style>
-/* Tab Component Styles */
+/* Tab Component Styles — uses design-tokens.css custom properties.
+   Light theme uses indigo-primary; dark theme overrides at the bottom. */
 .tabs-component {
     margin-bottom: 24px;
 }
@@ -102,7 +103,7 @@ function getTabsStyles() {
     flex-wrap: wrap;
     gap: 8px;
     padding: 4px;
-    background: #f1f5f9;
+    background: var(--color-slate-100);
     border-radius: 12px;
 }
 
@@ -115,20 +116,20 @@ function getTabsStyles() {
     border-radius: 8px;
     font-size: 14px;
     font-weight: 500;
-    color: #64748b;
+    color: var(--color-dark-500);
     text-decoration: none;
     transition: all 0.2s ease;
     white-space: nowrap;
 }
 
 .tabs-pills .tab-item:hover {
-    color: #1e293b;
+    color: var(--color-dark-800);
     background: rgba(255, 255, 255, 0.5);
 }
 
 .tabs-pills .tab-item.active {
-    background: white;
-    color: #7c3aed;
+    background: #ffffff;
+    color: var(--color-primary-600);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -140,7 +141,7 @@ function getTabsStyles() {
 /* Underline Style */
 .tabs-underline {
     background: transparent;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 2px solid var(--color-slate-200);
     border-radius: 0;
     padding: 0;
     gap: 0;
@@ -153,7 +154,7 @@ function getTabsStyles() {
     padding: 12px 20px;
     font-size: 14px;
     font-weight: 500;
-    color: #64748b;
+    color: var(--color-dark-500);
     text-decoration: none;
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
@@ -161,12 +162,12 @@ function getTabsStyles() {
 }
 
 .tabs-underline .tab-item:hover {
-    color: #7c3aed;
+    color: var(--color-primary-600);
 }
 
 .tabs-underline .tab-item.active {
-    color: #7c3aed;
-    border-bottom-color: #7c3aed;
+    color: var(--color-primary-600);
+    border-bottom-color: var(--color-primary-600);
 }
 
 /* Size Variants */
@@ -201,15 +202,15 @@ function getTabsStyles() {
     font-size: 11px;
     font-weight: 600;
     border-radius: 10px;
-    color: white;
+    color: #ffffff;
 }
 
-.badge-red { background: #ef4444; }
-.badge-yellow { background: #f59e0b; }
-.badge-green { background: #22c55e; }
-.badge-blue { background: #3b82f6; }
-.badge-purple { background: #7c3aed; }
-.badge-gray { background: #64748b; }
+.badge-red    { background: var(--color-rose-500); }
+.badge-yellow { background: var(--color-amber-500); }
+.badge-green  { background: var(--color-emerald-500); }
+.badge-blue   { background: var(--color-blue-500); }
+.badge-purple { background: var(--color-violet-600); }
+.badge-gray   { background: var(--color-dark-500); }
 
 /* Responsive */
 @media (max-width: 640px) {
@@ -220,23 +221,23 @@ function getTabsStyles() {
         scrollbar-width: none;
         -ms-overflow-style: none;
     }
-    
+
     .tabs-nav::-webkit-scrollbar {
         display: none;
     }
-    
+
     .tab-item {
         flex-shrink: 0;
     }
-    
+
     .tab-label {
         display: none;
     }
-    
+
     .tab-item .tab-icon {
         margin-right: 0;
     }
-    
+
     /* Show label on active tab */
     .tab-item.active .tab-label {
         display: inline;
@@ -245,7 +246,7 @@ function getTabsStyles() {
 
 /* Tab Content Container */
 .tab-content {
-    background: white;
+    background: #ffffff;
     border-radius: 12px;
     padding: 24px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -265,6 +266,51 @@ function getTabsStyles() {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* ========================================
+   DARK MODE OVERRIDES
+   Triggered by `.dark` body class (toggled in includes/header.php)
+   ======================================== */
+.dark .tabs-nav {
+    background: var(--color-dark-800);
+}
+
+.dark .tabs-pills .tab-item {
+    color: var(--color-slate-400);
+}
+
+.dark .tabs-pills .tab-item:hover {
+    color: var(--color-slate-100);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dark .tabs-pills .tab-item.active {
+    background: var(--color-dark-700);
+    color: var(--color-primary-400);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dark .tabs-underline {
+    border-bottom-color: var(--color-dark-700);
+}
+
+.dark .tabs-underline .tab-item {
+    color: var(--color-slate-400);
+}
+
+.dark .tabs-underline .tab-item:hover {
+    color: var(--color-primary-400);
+}
+
+.dark .tabs-underline .tab-item.active {
+    color: var(--color-primary-400);
+    border-bottom-color: var(--color-primary-400);
+}
+
+.dark .tab-content {
+    background: var(--color-dark-800);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 </style>
 CSS;
