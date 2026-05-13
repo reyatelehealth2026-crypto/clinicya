@@ -1,18 +1,16 @@
 <?php
 /**
  * Tab: storefront — Storefront Catalog Manager
- * Ref: docs/ODOO_PRODUCT_SYNC_PHP.md §12.1
  *
- * หน้าจัดการสินค้าที่ **วางขายหน้าร้านจริง** (curated subset ของ Odoo cache)
+ * หน้าจัดการสินค้าที่ **วางขายหน้าร้านจริง** (curated subset ของตารางสินค้า)
  *   - Filter: search, category, drug_type, storefront_status, price range, stock
  *   - Bulk ops:
  *       A. Row-based   — checkbox + ปิด/เปิด storefront
- *       B. Filter-based — shortcut: ปิดราคา 0, ปิด category, ปิด drug_type, ปิด Odoo-inactive
+ *       B. Filter-based — shortcut: ปิดราคา 0, ปิด category, ปิด drug_type, ปิดสินค้าที่ถูกปิดในระบบหลัก
  *   - Inline toggle `storefront_enabled` (call api/storefront-bulk.php)
  *   - Pagination
  *
  * Scope: ใช้ line_account_id จาก session (`current_bot_id`)
- * Table: odoo_products_cache (+ columns จาก migration_storefront_split.sql)
  */
 
 $currentBotId = (int) ($_SESSION['current_bot_id'] ?? 1);
@@ -34,7 +32,7 @@ try {
  * รวมค่า admin_overrides (JSON) เข้ากับค่าจาก sync
  * Return:
  *   - effective: ค่าที่ใช้แสดง
- *   - sync: ค่าเดิมจาก Odoo (สำหรับ tooltip "ค่าจาก sync")
+ *   - sync: ค่าเดิมจาก sync (สำหรับ tooltip "ค่าจาก sync")
  *   - overridden: map ว่า field ไหนถูก admin override
  */
 function mergeOverrides(array $row): array
@@ -70,7 +68,7 @@ if (!$migrationReady) {
         <h3 class="text-lg font-semibold text-yellow-800 mb-2">
             <i class="fas fa-database mr-2"></i>ต้อง run migration ก่อน
         </h3>
-        <p class="text-yellow-700 mb-3">Tab นี้ต้องการคอลัมน์ <code>storefront_enabled</code> ใน <code>odoo_products_cache</code></p>
+        <p class="text-yellow-700 mb-3">Tab นี้ต้องการคอลัมน์ <code>storefront_enabled</code> ในตารางสินค้า</p>
         <div class="bg-white rounded-lg p-3 font-mono text-sm text-gray-700">
             mysql -u &lt;user&gt; -p &lt;db&gt; &lt; database/migration_storefront_split.sql
         </div>
@@ -78,6 +76,83 @@ if (!$migrationReady) {
     <?php
     return;
 }
+
+// ─── Inline create handler — "เพิ่มสินค้า" button on storefront tab ──────────
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'storefront_quick_create') {
+    try {
+        $cacheTable = 'odoo_products_cache';
+        // Best-effort ensure extra columns exist (idempotent with products.php migration block)
+        $extraCols = [
+            'image_url'   => "ADD COLUMN image_url VARCHAR(500) DEFAULT NULL",
+            'description' => "ADD COLUMN description TEXT DEFAULT NULL",
+            'manufacturer'=> "ADD COLUMN manufacturer VARCHAR(255) DEFAULT NULL",
+            'unit'        => "ADD COLUMN unit VARCHAR(50) DEFAULT NULL",
+            'base_unit'   => "ADD COLUMN base_unit VARCHAR(50) DEFAULT NULL",
+            'name_en'     => "ADD COLUMN name_en VARCHAR(255) DEFAULT NULL",
+            'sale_price'  => "ADD COLUMN sale_price DECIMAL(12,2) DEFAULT NULL",
+            'is_local'    => "ADD COLUMN is_local TINYINT(1) DEFAULT 0",
+        ];
+        try {
+            $present = [];
+            foreach ($db->query("SHOW COLUMNS FROM {$cacheTable}")->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                $present[$c['Field']] = true;
+            }
+            foreach ($extraCols as $name => $sql) {
+                if (!isset($present[$name])) {
+                    try { $db->exec("ALTER TABLE {$cacheTable} {$sql}"); } catch (Exception $e) {}
+                }
+            }
+        } catch (Exception $e) { /* non-fatal */ }
+
+        $productCode = trim((string) ($_POST['product_code'] ?? ''));
+        if ($productCode === '') {
+            $sku = trim((string) ($_POST['sku'] ?? ''));
+            $productCode = $sku !== '' ? $sku : ('LOC-' . time() . '-' . random_int(100, 999));
+        }
+        $listPrice   = (float) ($_POST['price'] ?? 0);
+        $salePrice   = ($_POST['sale_price'] ?? '') !== '' ? (float) $_POST['sale_price'] : null;
+        $onlinePrice = $salePrice !== null ? $salePrice : 0;
+
+        $fields = [
+            'line_account_id'    => (int) $currentBotId,
+            'product_code'       => $productCode,
+            'sku'                => $_POST['sku'] ?? null,
+            'name'               => $_POST['name'] ?? '',
+            'name_en'            => $_POST['name_en'] ?? null,
+            'generic_name'       => $_POST['generic_name'] ?? null,
+            'barcode'            => $_POST['barcode'] ?? null,
+            'category'           => $_POST['category'] ?? null,
+            'manufacturer'       => $_POST['manufacturer'] ?? null,
+            'description'        => $_POST['description'] ?? null,
+            'image_url'          => $_POST['image_url'] ?? null,
+            'list_price'         => $listPrice,
+            'online_price'       => $onlinePrice,
+            'sale_price'         => $salePrice,
+            'saleable_qty'       => (float) ($_POST['stock'] ?? 0),
+            'base_unit'          => $_POST['base_unit'] ?? null,
+            'unit'               => $_POST['unit'] ?? null,
+            'is_active'          => 1,
+            'storefront_enabled' => 1, // added FROM storefront tab → publish immediately
+            'is_local'           => 1,
+        ];
+        $cols = array_keys($fields);
+        $placeholders = implode(',', array_fill(0, count($cols), '?'));
+        $sql = "INSERT INTO {$cacheTable} (" . implode(',', $cols) . ") VALUES ({$placeholders})";
+        $stmt = $db->prepare($sql);
+        $stmt->execute(array_values($fields));
+        $_SESSION['storefront_message'] = 'สร้างสินค้าใหม่และเผยแพร่บนหน้าร้านสำเร็จ';
+    } catch (Exception $e) {
+        $_SESSION['storefront_error'] = 'บันทึกไม่สำเร็จ: ' . $e->getMessage();
+    }
+    $redirect = array_merge($_GET, ['tab' => 'storefront']);
+    unset($redirect['_']);
+    echo "<script>window.location.href='?" . http_build_query($redirect) . "';</script>";
+    exit;
+}
+
+$storefrontMessage = $_SESSION['storefront_message'] ?? null;
+$storefrontError   = $_SESSION['storefront_error']   ?? null;
+unset($_SESSION['storefront_message'], $_SESSION['storefront_error']);
 
 // ─── Filter parameters ─────────────────────────────────────────────────────────
 $search         = trim((string) ($_GET['search']          ?? ''));
@@ -226,6 +301,23 @@ if (!function_exists('buildStorefrontQuery')) {
 }
 ?>
 <div class="space-y-4" x-data="storefrontTab()">
+    <?php if (!empty($storefrontMessage)): ?>
+        <div class="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700"><?= htmlspecialchars($storefrontMessage) ?></div>
+    <?php endif; ?>
+    <?php if (!empty($storefrontError)): ?>
+        <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700"><?= htmlspecialchars($storefrontError) ?></div>
+    <?php endif; ?>
+
+    <!-- ─── Quick action: เพิ่มสินค้า ──────────────────────────────────────── -->
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-white rounded-xl shadow p-4">
+        <div class="text-sm text-gray-700">
+            <i class="fas fa-store text-blue-500 mr-1"></i>เพิ่มสินค้าใหม่ลงหน้าร้านทันที (จะถูกตั้งให้เผยแพร่อัตโนมัติ)
+        </div>
+        <button type="button" onclick="openStorefrontProductModal()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
+            <i class="fas fa-plus mr-1"></i>เพิ่มสินค้า
+        </button>
+    </div>
+
     <!-- ─── Stats bar ─────────────────────────────────────────────────────── -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="bg-white rounded-xl shadow p-4">
@@ -275,7 +367,7 @@ if (!function_exists('buildStorefrontQuery')) {
             <?php if (defined('ODOO_INTEGRATION_ENABLED') && ODOO_INTEGRATION_ENABLED === true): ?>
             <button type="button" @click="bulkDisableOdooInactive()"
                     class="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 text-sm font-medium">
-                <i class="fas fa-eye-slash mr-1"></i>ปิดสินค้าที่ Odoo inactive
+                <i class="fas fa-eye-slash mr-1"></i>ปิดสินค้าที่ถูกปิดในระบบหลัก
             </button>
             <?php endif; ?>
         </div>
@@ -416,7 +508,7 @@ if (!function_exists('buildStorefrontQuery')) {
                         <th class="px-3 py-3 text-left">ชนิดยา</th>
                         <th class="px-3 py-3 text-right">ราคา</th>
                         <th class="px-3 py-3 text-center">สต็อก</th>
-                        <th class="px-3 py-3 text-center">Odoo</th>
+                        <th class="px-3 py-3 text-center">สถานะระบบ</th>
                         <th class="px-3 py-3 text-center">หน้าร้าน</th>
                         <th class="px-3 py-3 text-center w-14">แก้ไข</th>
                     </tr>
@@ -631,7 +723,7 @@ if (!function_exists('buildStorefrontQuery')) {
                         <i class="fas fa-info-circle mr-1"></i>
                         ค่าที่แก้ไขจะถูกเก็บเป็น <b>admin override</b> —
                         <b>การ sync ครั้งถัดไปจะไม่เขียนทับ</b> ค่านี้
-                        (กดปุ่ม <i class="fas fa-undo text-amber-600"></i> เพื่อกลับไปใช้ค่าจาก Odoo)
+                        (กดปุ่ม <i class="fas fa-undo text-amber-600"></i> เพื่อกลับไปใช้ค่าจาก sync)
                     </div>
 
                     <!-- Text fields: name -->
@@ -964,8 +1056,8 @@ function storefrontTab() {
         async bulkDisableOdooInactive() {
             const dry = await this.apiCall('bulk_disable_by_odoo_inactive', { dry_run: 1 });
             if (!dry.success) return alert('Error: ' + (dry.error || 'unknown'));
-            if (dry.affected === 0) return alert('ไม่มีสินค้า Odoo inactive ที่ยังเปิดขายอยู่');
-            if (!confirm(`ปิดการขาย ${dry.affected} รายการที่ Odoo inactive — ยืนยัน?`)) return;
+            if (dry.affected === 0) return alert('ไม่มีสินค้าที่ถูกปิดในระบบหลักที่ยังเปิดขายอยู่');
+            if (!confirm(`ปิดการขาย ${dry.affected} รายการที่ถูกปิดในระบบหลัก — ยืนยัน?`)) return;
             const res = await this.apiCall('bulk_disable_by_odoo_inactive');
             alert(res.success ? `ปิดแล้ว ${res.affected} รายการ` : 'Error: ' + res.error);
             if (res.success) location.reload();
@@ -1000,5 +1092,117 @@ function storefrontTab() {
             }
         },
     };
+}
+</script>
+
+<!-- Storefront Quick-Add Product Modal -->
+<div id="storefrontProductModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl w-full max-w-5xl mx-4 max-h-[95vh] overflow-hidden flex flex-col">
+        <form method="POST" id="storefrontProductForm">
+            <input type="hidden" name="action" value="storefront_quick_create">
+
+            <div class="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white flex justify-between items-center">
+                <h3 class="text-lg font-semibold">เพิ่มสินค้าใหม่ลงหน้าร้าน</h3>
+                <button type="button" onclick="closeStorefrontProductModal()" class="text-white hover:text-blue-200 text-2xl"><i class="fas fa-times"></i></button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">รหัสสินค้า</label>
+                                <input type="text" name="product_code" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="เว้นว่างจะ auto-generate">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">SKU</label>
+                                <input type="text" name="sku" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">บาร์โค้ด</label>
+                            <input type="text" name="barcode" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">ชื่อสินค้า *</label>
+                            <input type="text" name="name" required class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">ชื่อภาษาอังกฤษ</label>
+                            <input type="text" name="name_en" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">ชื่อสามัญ / Generic Name</label>
+                            <input type="text" name="generic_name" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">หมวดหมู่</label>
+                                <input type="text" name="category" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ผู้ผลิต</label>
+                                <input type="text" name="manufacturer" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">รายละเอียด</label>
+                            <textarea name="description" rows="2" class="w-full px-2 py-1.5 border rounded-lg text-sm"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">URL รูปภาพ</label>
+                            <input type="url" name="image_url" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="https://...">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ราคา (list_price) *</label>
+                                <input type="number" name="price" required min="0" step="0.01" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ราคาออนไลน์/ลด</label>
+                                <input type="number" name="sale_price" min="0" step="0.01" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Stock</label>
+                                <input type="number" name="stock" value="0" step="0.01" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">หน่วยนับ</label>
+                                <input type="text" name="base_unit" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="ขวด, กล่อง">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">หน่วยจำนวน</label>
+                                <input type="text" name="unit" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                        </div>
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+                            <i class="fas fa-info-circle mr-1"></i>สินค้าที่สร้างจากที่นี่จะถูกตั้ง <b>เผยแพร่บนหน้าร้านทันที</b> (storefront_enabled = 1)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-4 py-3 border-t flex justify-end space-x-2">
+                <button type="button" onclick="closeStorefrontProductModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm">ยกเลิก</button>
+                <button type="submit" class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"><i class="fas fa-save mr-1"></i>บันทึก</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openStorefrontProductModal() {
+    const m = document.getElementById('storefrontProductModal');
+    m.classList.remove('hidden'); m.classList.add('flex');
+    document.getElementById('storefrontProductForm').reset();
+}
+function closeStorefrontProductModal() {
+    const m = document.getElementById('storefrontProductModal');
+    m.classList.add('hidden'); m.classList.remove('flex');
 }
 </script>

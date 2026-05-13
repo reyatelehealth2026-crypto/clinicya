@@ -489,8 +489,8 @@ if ($isOdooMode) {
     <div class="space-y-4">
         <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 flex items-start justify-between gap-3 flex-wrap">
             <div>
-                <div class="font-semibold">โหมด Odoo (Sync + Local CRUD)</div>
-                <div class="mt-1">ข้อมูลสินค้าหลัก sync จาก Odoo (cache) สามารถ <b>เพิ่ม/แก้ไข/ลบ</b> สินค้าได้โดยตรงจากระบบนี้ในตาราง cache</div>
+                <div class="font-semibold">จัดการคลังสินค้า</div>
+                <div class="mt-1">สามารถ <b>เพิ่ม/แก้ไข/ลบ</b> สินค้าได้โดยตรงจากระบบนี้ และยังรองรับการ sync จากระบบหลักเพื่อ refresh ข้อมูลตามรอบ</div>
                 <div class="mt-1 text-xs">ข้อมูลล่าสุด sync เมื่อ: <b><?= htmlspecialchars($lastSyncedText) ?></b></div>
                 <div class="mt-1 text-xs">Incremental ล่าสุด: <b><?= htmlspecialchars($lastIncrementalSyncedText) ?></b> | รอบถัดไปเริ่มรหัส: <b><?= number_format($nextIncrementalOffset) ?></b></div>
             </div>
@@ -513,7 +513,7 @@ if ($isOdooMode) {
 
         <?php if ($odooError): ?>
             <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-                ไม่สามารถโหลดข้อมูลสินค้า Odoo ได้: <?= htmlspecialchars($odooError) ?>
+                ไม่สามารถโหลดข้อมูลสินค้าได้: <?= htmlspecialchars($odooError) ?>
             </div>
         <?php endif; ?>
 
@@ -742,7 +742,7 @@ if ($isOdooMode) {
         <?php endif; ?>
     </div>
 
-    <!-- Odoo Local Product Modal (same fields as local mode, saved to odoo_products_cache) -->
+    <!-- Product Modal -->
     <div id="odooProductModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
         <div class="bg-white rounded-xl w-full max-w-5xl mx-4 max-h-[95vh] overflow-hidden flex flex-col">
             <form method="POST" id="odooProductForm">
@@ -1017,7 +1017,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tablesExist) {
             isset($_POST['is_active']) ? 1 : 0
         ];
         
-        // Extended fields for CNY API compatibility
+        // Extended product fields
         $cols = array_merge($cols, ['barcode', 'manufacturer', 'generic_name', 'usage_instructions', 'unit', 'name_en', 'base_unit']);
         $data = array_merge($data, [
             $_POST['barcode'] ?: null,
