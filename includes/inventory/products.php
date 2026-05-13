@@ -58,6 +58,36 @@ if ($isOdooMode) {
             last_incremental_sync_at DATETIME DEFAULT NULL,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+        // Idempotent schema extensions so locally-created items can use the same form fields.
+        $extraColumns = [
+            "image_url"          => "ADD COLUMN image_url VARCHAR(500) DEFAULT NULL",
+            "photo_path"         => "ADD COLUMN photo_path VARCHAR(500) DEFAULT NULL",
+            "description"        => "ADD COLUMN description TEXT DEFAULT NULL",
+            "manufacturer"       => "ADD COLUMN manufacturer VARCHAR(255) DEFAULT NULL",
+            "usage_instructions" => "ADD COLUMN usage_instructions TEXT DEFAULT NULL",
+            "unit"               => "ADD COLUMN unit VARCHAR(50) DEFAULT NULL",
+            "base_unit"          => "ADD COLUMN base_unit VARCHAR(50) DEFAULT NULL",
+            "name_en"            => "ADD COLUMN name_en VARCHAR(255) DEFAULT NULL",
+            "sale_price"         => "ADD COLUMN sale_price DECIMAL(12,2) DEFAULT NULL",
+            "is_featured"        => "ADD COLUMN is_featured TINYINT(1) DEFAULT 0",
+            "is_flash_sale"      => "ADD COLUMN is_flash_sale TINYINT(1) DEFAULT 0",
+            "is_choice"          => "ADD COLUMN is_choice TINYINT(1) DEFAULT 0",
+            "flash_sale_end"     => "ADD COLUMN flash_sale_end DATETIME DEFAULT NULL",
+            "is_local"           => "ADD COLUMN is_local TINYINT(1) DEFAULT 0",
+        ];
+        try {
+            $existing = [];
+            $colStmt = $db->query("SHOW COLUMNS FROM {$cacheTable}");
+            foreach ($colStmt->fetchAll(PDO::FETCH_ASSOC) as $c) {
+                $existing[$c['Field']] = true;
+            }
+            foreach ($extraColumns as $name => $sql) {
+                if (!isset($existing[$name])) {
+                    try { $db->exec("ALTER TABLE {$cacheTable} {$sql}"); } catch (Exception $e) {}
+                }
+            }
+        } catch (Exception $e) { /* non-fatal */ }
     } catch (Exception $e) {
         $odooError = 'ไม่สามารถเตรียมตาราง cache ได้: ' . $e->getMessage();
     }
@@ -183,6 +213,110 @@ if ($isOdooMode) {
             'sync_max_code' => $syncMaxCode,
             'page' => 1,
         ]);
+        unset($redirectParams['_']);
+        echo "<script>window.location.href='?" . http_build_query($redirectParams) . "';</script>";
+        exit;
+    }
+
+    // Local CRUD on odoo_products_cache (allows creating/editing items directly using the same form)
+    if (
+        $_SERVER['REQUEST_METHOD'] === 'POST'
+        && in_array(($_POST['action'] ?? ''), ['local_create', 'local_update', 'local_delete', 'local_toggle', 'local_bulk_activate', 'local_bulk_deactivate', 'local_bulk_delete'], true)
+        && !$odooError
+    ) {
+        $localAction = $_POST['action'];
+        try {
+            if ($localAction === 'local_create' || $localAction === 'local_update') {
+                $productCode = trim((string) ($_POST['product_code'] ?? ''));
+                if ($productCode === '') {
+                    $sku = trim((string) ($_POST['sku'] ?? ''));
+                    $productCode = $sku !== '' ? $sku : ('LOC-' . time() . '-' . random_int(100, 999));
+                }
+
+                $fields = [
+                    'line_account_id'    => (int) $currentBotId,
+                    'product_code'       => $productCode,
+                    'sku'                => $_POST['sku'] ?? null,
+                    'name'               => $_POST['name'] ?? '',
+                    'name_en'            => $_POST['name_en'] ?? null,
+                    'generic_name'       => $_POST['generic_name'] ?? null,
+                    'barcode'            => $_POST['barcode'] ?? null,
+                    'category'           => $_POST['category'] ?? null,
+                    'manufacturer'       => $_POST['manufacturer'] ?? null,
+                    'description'        => $_POST['description'] ?? null,
+                    'usage_instructions' => $_POST['usage_instructions'] ?? null,
+                    'image_url'          => $_POST['image_url'] ?? null,
+                    'list_price'         => (float) ($_POST['price'] ?? 0),
+                    'online_price'       => $_POST['sale_price'] !== '' && $_POST['sale_price'] !== null ? (float) $_POST['sale_price'] : 0,
+                    'sale_price'         => $_POST['sale_price'] !== '' && $_POST['sale_price'] !== null ? (float) $_POST['sale_price'] : null,
+                    'saleable_qty'       => (float) ($_POST['stock'] ?? 0),
+                    'base_unit'          => $_POST['base_unit'] ?? null,
+                    'unit'               => $_POST['unit'] ?? null,
+                    'is_active'          => isset($_POST['is_active']) ? 1 : 0,
+                    'is_featured'        => isset($_POST['is_featured']) ? 1 : 0,
+                    'is_flash_sale'      => isset($_POST['is_flash_sale']) ? 1 : 0,
+                    'is_choice'          => isset($_POST['is_choice']) ? 1 : 0,
+                    'flash_sale_end'     => !empty($_POST['flash_sale_end']) ? $_POST['flash_sale_end'] : null,
+                    'is_local'           => 1,
+                ];
+
+                if ($localAction === 'local_create') {
+                    $cols = array_keys($fields);
+                    $placeholders = implode(',', array_fill(0, count($cols), '?'));
+                    $sql = "INSERT INTO {$cacheTable} (" . implode(',', $cols) . ") VALUES ({$placeholders})";
+                    $stmt = $db->prepare($sql);
+                    $stmt->execute(array_values($fields));
+                    $_SESSION['odoo_sync_message'] = 'สร้างสินค้าใหม่สำเร็จ';
+                } else {
+                    $id = (int) ($_POST['id'] ?? 0);
+                    if ($id > 0) {
+                        unset($fields['line_account_id']); // don't change owner on update
+                        $sets = implode('=?, ', array_keys($fields)) . '=?';
+                        $sql = "UPDATE {$cacheTable} SET {$sets} WHERE id=? AND line_account_id=?";
+                        $stmt = $db->prepare($sql);
+                        $params = array_values($fields);
+                        $params[] = $id;
+                        $params[] = (int) $currentBotId;
+                        $stmt->execute($params);
+                        $_SESSION['odoo_sync_message'] = 'แก้ไขสินค้าสำเร็จ';
+                    }
+                }
+            } elseif ($localAction === 'local_delete') {
+                $id = (int) ($_POST['id'] ?? 0);
+                if ($id > 0) {
+                    $stmt = $db->prepare("DELETE FROM {$cacheTable} WHERE id=? AND line_account_id=?");
+                    $stmt->execute([$id, (int) $currentBotId]);
+                    $_SESSION['odoo_sync_message'] = 'ลบสินค้าสำเร็จ';
+                }
+            } elseif ($localAction === 'local_toggle') {
+                $id = (int) ($_POST['id'] ?? 0);
+                if ($id > 0) {
+                    $stmt = $db->prepare("UPDATE {$cacheTable} SET is_active = NOT is_active WHERE id=? AND line_account_id=?");
+                    $stmt->execute([$id, (int) $currentBotId]);
+                }
+            } elseif (in_array($localAction, ['local_bulk_activate', 'local_bulk_deactivate', 'local_bulk_delete'], true)) {
+                $ids = $_POST['selected_ids'] ?? [];
+                $ids = array_values(array_filter(array_map('intval', is_array($ids) ? $ids : []), function ($v) { return $v > 0; }));
+                if (!empty($ids)) {
+                    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                    if ($localAction === 'local_bulk_delete') {
+                        $sql = "DELETE FROM {$cacheTable} WHERE id IN ({$placeholders}) AND line_account_id=?";
+                    } else {
+                        $val = $localAction === 'local_bulk_activate' ? 1 : 0;
+                        $sql = "UPDATE {$cacheTable} SET is_active={$val} WHERE id IN ({$placeholders}) AND line_account_id=?";
+                    }
+                    $stmt = $db->prepare($sql);
+                    $params = $ids;
+                    $params[] = (int) $currentBotId;
+                    $stmt->execute($params);
+                    $_SESSION['odoo_sync_message'] = 'อัปเดตสินค้าที่เลือกสำเร็จ (' . count($ids) . ' รายการ)';
+                }
+            }
+        } catch (Exception $e) {
+            $_SESSION['odoo_sync_error'] = 'บันทึกไม่สำเร็จ: ' . $e->getMessage();
+        }
+
+        $redirectParams = array_merge($_GET, ['tab' => 'products']);
         unset($redirectParams['_']);
         echo "<script>window.location.href='?" . http_build_query($redirectParams) . "';</script>";
         exit;
@@ -353,11 +487,16 @@ if ($isOdooMode) {
 
     ?>
     <div class="space-y-4">
-        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-            <div class="font-semibold">โหมด Odoo (Read-only)</div>
-            <div class="mt-1">หน้านี้ใช้ข้อมูลสินค้า Odoo จากฐานข้อมูล cache เพื่อให้โหลดเร็วขึ้น และยังไม่รองรับการเพิ่ม/แก้ไข/ลบจากระบบนี้</div>
-            <div class="mt-1 text-xs">ข้อมูลล่าสุด sync เมื่อ: <b><?= htmlspecialchars($lastSyncedText) ?></b></div>
-            <div class="mt-1 text-xs">Incremental ล่าสุด: <b><?= htmlspecialchars($lastIncrementalSyncedText) ?></b> | รอบถัดไปเริ่มรหัส: <b><?= number_format($nextIncrementalOffset) ?></b></div>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 flex items-start justify-between gap-3 flex-wrap">
+            <div>
+                <div class="font-semibold">โหมด Odoo (Sync + Local CRUD)</div>
+                <div class="mt-1">ข้อมูลสินค้าหลัก sync จาก Odoo (cache) สามารถ <b>เพิ่ม/แก้ไข/ลบ</b> สินค้าได้โดยตรงจากระบบนี้ในตาราง cache</div>
+                <div class="mt-1 text-xs">ข้อมูลล่าสุด sync เมื่อ: <b><?= htmlspecialchars($lastSyncedText) ?></b></div>
+                <div class="mt-1 text-xs">Incremental ล่าสุด: <b><?= htmlspecialchars($lastIncrementalSyncedText) ?></b> | รอบถัดไปเริ่มรหัส: <b><?= number_format($nextIncrementalOffset) ?></b></div>
+            </div>
+            <button type="button" onclick="openOdooProductModal()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm whitespace-nowrap">
+                <i class="fas fa-plus mr-1"></i>เพิ่มสินค้า
+            </button>
         </div>
 
         <?php if ($odooSyncMessage): ?>
@@ -497,6 +636,14 @@ if ($isOdooMode) {
                                 <?php endif; ?>
                                 <span class="text-xs text-gray-400">Sync: <?= !empty($product['last_synced_at']) ? htmlspecialchars(date('d/m H:i', strtotime($product['last_synced_at']))) : '-' ?></span>
                             </div>
+                            <div class="flex items-center gap-1 mt-3 pt-3 border-t">
+                                <button type="button" onclick='editOdooProduct(<?= json_encode($product, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>)' class="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"><i class="fas fa-edit mr-1"></i>แก้ไข</button>
+                                <form method="POST" class="inline" onsubmit="return confirm('ลบสินค้านี้?')">
+                                    <input type="hidden" name="action" value="local_delete">
+                                    <input type="hidden" name="id" value="<?= (int) ($product['id'] ?? 0) ?>">
+                                    <button type="submit" class="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded"><i class="fas fa-trash mr-1"></i>ลบ</button>
+                                </form>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -516,25 +663,31 @@ if ($isOdooMode) {
                         <th class="px-3 py-3 text-right"><a class="hover:text-blue-600" href="?<?= buildOdooCacheQuery(['sort' => 'online_price', 'dir' => ($sortBy === 'online_price' && $sortDir === 'ASC') ? 'DESC' : 'ASC', 'page' => 1]) ?>">Online Price</a></th>
                         <th class="px-3 py-3 text-center"><a class="hover:text-blue-600" href="?<?= buildOdooCacheQuery(['sort' => 'saleable_qty', 'dir' => ($sortBy === 'saleable_qty' && $sortDir === 'ASC') ? 'DESC' : 'ASC', 'page' => 1]) ?>">คงเหลือ</a></th>
                         <th class="px-3 py-3 text-center">สถานะ</th>
+                        <th class="px-3 py-3 text-center">จัดการ</th>
                     </tr>
                     </thead>
                     <tbody class="divide-y">
                     <?php if (empty($odooProducts)): ?>
                         <tr>
-                            <td colspan="8" class="px-4 py-8 text-center text-gray-400">ยังไม่มีข้อมูลใน cache กรุณากด Sync รายการ</td>
+                            <td colspan="10" class="px-4 py-8 text-center text-gray-400">ยังไม่มีข้อมูลใน cache กรุณากด Sync รายการ หรือกด "เพิ่มสินค้า"</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($odooProducts as $product): ?>
                             <tr class="hover:bg-gray-50">
                                 <td class="px-3 py-2 text-center">
-                                    <?php $ph = $product['photo_path'] ?? ''; if ($ph): ?>
+                                    <?php $ph = $product['photo_path'] ?? $product['image_url'] ?? ''; if ($ph): ?>
                                         <img src="<?= htmlspecialchars($ph) ?>" class="w-10 h-10 object-contain rounded" loading="lazy" onerror="this.outerHTML='<span class=\'text-gray-300\'><i class=\'fas fa-capsules\'></i></span>'">
                                     <?php else: ?>
                                         <span class="text-gray-300"><i class="fas fa-capsules"></i></span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="px-3 py-2 font-mono text-xs"><?= htmlspecialchars((string) ($product['sku'] ?? '-')) ?></td>
-                                <td class="px-3 py-2"><?= htmlspecialchars((string) ($product['product_code'] ?? '-')) ?></td>
+                                <td class="px-3 py-2">
+                                    <?= htmlspecialchars((string) ($product['product_code'] ?? '-')) ?>
+                                    <?php if (!empty($product['is_local'])): ?>
+                                        <span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded">local</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="px-3 py-2"><?= htmlspecialchars((string) ($product['name'] ?? '-')) ?></td>
                                 <td class="px-3 py-2"><?= htmlspecialchars((string) ($product['category'] ?? '-')) ?></td>
                                 <td class="px-3 py-2 text-right">฿<?= number_format((float) ($product['list_price'] ?? 0), 2) ?></td>
@@ -546,6 +699,19 @@ if ($isOdooMode) {
                                     <?php else: ?>
                                         <span class="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">inactive</span>
                                     <?php endif; ?>
+                                </td>
+                                <td class="px-3 py-2 text-center whitespace-nowrap">
+                                    <button type="button" onclick='editOdooProduct(<?= json_encode($product, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>)' class="p-1.5 text-blue-500 hover:bg-blue-50 rounded" title="แก้ไข"><i class="fas fa-edit"></i></button>
+                                    <form method="POST" class="inline">
+                                        <input type="hidden" name="action" value="local_toggle">
+                                        <input type="hidden" name="id" value="<?= (int) ($product['id'] ?? 0) ?>">
+                                        <button type="submit" class="p-1.5 text-gray-500 hover:bg-gray-100 rounded" title="<?= !empty($product['is_active']) ? 'ปิดขาย' : 'เปิดขาย' ?>"><i class="fas <?= !empty($product['is_active']) ? 'fa-eye-slash' : 'fa-eye' ?>"></i></button>
+                                    </form>
+                                    <form method="POST" class="inline" onsubmit="return confirm('ลบสินค้านี้ออกจาก cache?')">
+                                        <input type="hidden" name="action" value="local_delete">
+                                        <input type="hidden" name="id" value="<?= (int) ($product['id'] ?? 0) ?>">
+                                        <button type="submit" class="p-1.5 text-red-500 hover:bg-red-50 rounded" title="ลบ"><i class="fas fa-trash"></i></button>
+                                    </form>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -575,6 +741,192 @@ if ($isOdooMode) {
             </div>
         <?php endif; ?>
     </div>
+
+    <!-- Odoo Local Product Modal (same fields as local mode, saved to odoo_products_cache) -->
+    <div id="odooProductModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-full max-w-5xl mx-4 max-h-[95vh] overflow-hidden flex flex-col">
+            <form method="POST" id="odooProductForm">
+                <input type="hidden" name="action" id="odooFormAction" value="local_create">
+                <input type="hidden" name="id" id="odooFormId">
+
+                <div class="px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white flex justify-between items-center">
+                    <h3 class="text-lg font-semibold" id="odooModalTitle">เพิ่มสินค้า</h3>
+                    <button type="button" onclick="closeOdooProductModal()" class="text-white hover:text-blue-200 text-2xl"><i class="fas fa-times"></i></button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Left Column -->
+                        <div class="space-y-3">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">รหัสสินค้า (product_code)</label>
+                                    <input type="text" name="product_code" id="odoo_product_code" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="เว้นว่างจะใช้ SKU หรือ auto LOC-...">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">SKU</label>
+                                    <input type="text" name="sku" id="odoo_sku" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">บาร์โค้ด</label>
+                                <input type="text" name="barcode" id="odoo_barcode" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ชื่อสินค้า *</label>
+                                <input type="text" name="name" id="odoo_name" required class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ชื่อภาษาอังกฤษ</label>
+                                <input type="text" name="name_en" id="odoo_name_en" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="English name">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">ชื่อสามัญ / Generic Name</label>
+                                <input type="text" name="generic_name" id="odoo_generic_name" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="เช่น IBUPROFEN 100 MG/5 ML">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">หมวดหมู่</label>
+                                    <input type="text" name="category" id="odoo_category" list="odooCategoryList" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="พิมพ์หรือเลือก">
+                                    <datalist id="odooCategoryList">
+                                        <?php foreach ($categories as $catName): ?>
+                                            <option value="<?= htmlspecialchars((string) $catName) ?>"></option>
+                                        <?php endforeach; ?>
+                                    </datalist>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">ผู้ผลิต</label>
+                                    <input type="text" name="manufacturer" id="odoo_manufacturer" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">รายละเอียด / สรรพคุณ</label>
+                                <textarea name="description" id="odoo_description" rows="2" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="สรรพคุณ, คุณสมบัติ"></textarea>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">วิธีใช้</label>
+                                <textarea name="usage_instructions" id="odoo_usage_instructions" rows="2" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="วิธีรับประทาน, ขนาดยา"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">URL รูปภาพ</label>
+                                <input type="url" name="image_url" id="odoo_image_url" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="https://...">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">ราคา (list_price) *</label>
+                                    <input type="number" name="price" id="odoo_price" required min="0" step="0.01" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">ราคาออนไลน์/ลด</label>
+                                    <input type="number" name="sale_price" id="odoo_sale_price" min="0" step="0.01" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Stock (saleable_qty)</label>
+                                    <input type="number" name="stock" id="odoo_stock" value="0" step="0.01" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">หน่วยนับ</label>
+                                    <input type="text" name="base_unit" id="odoo_base_unit" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="ขวด, กล่อง">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">หน่วยจำนวน</label>
+                                    <input type="text" name="unit" id="odoo_unit" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="ขวด[ 60ML ]">
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2 py-2">
+                                <input type="checkbox" name="is_active" id="odoo_is_active" checked class="w-4 h-4 text-green-500">
+                                <label for="odoo_is_active" class="text-sm">เปิดขาย</label>
+                            </div>
+
+                            <div class="p-3 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg border border-orange-200">
+                                <h4 class="text-xs font-semibold text-orange-700 mb-2"><i class="fas fa-star mr-1"></i>ตั้งค่าโปรโมชั่น</h4>
+                                <div class="space-y-2">
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" name="is_featured" id="odoo_is_featured" class="w-4 h-4 text-orange-500">
+                                        <label for="odoo_is_featured" class="text-xs"><i class="fas fa-thumbs-up text-orange-500 mr-1"></i>สินค้าแนะนำ</label>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" name="is_flash_sale" id="odoo_is_flash_sale" class="w-4 h-4 text-red-500">
+                                        <label for="odoo_is_flash_sale" class="text-xs"><i class="fas fa-bolt text-red-500 mr-1"></i>Flash Sale</label>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="checkbox" name="is_choice" id="odoo_is_choice" class="w-4 h-4 text-blue-500">
+                                        <label for="odoo_is_choice" class="text-xs"><i class="fas fa-award text-blue-500 mr-1"></i>Choice</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-4 py-3 border-t flex justify-end space-x-2">
+                    <button type="button" onclick="closeOdooProductModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-50 text-sm">ยกเลิก</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"><i class="fas fa-save mr-1"></i>บันทึก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    function openOdooProductModal() {
+        const m = document.getElementById('odooProductModal');
+        m.classList.remove('hidden'); m.classList.add('flex');
+        document.getElementById('odooFormAction').value = 'local_create';
+        document.getElementById('odooFormId').value = '';
+        document.getElementById('odooModalTitle').textContent = 'เพิ่มสินค้า';
+        document.getElementById('odooProductForm').reset();
+        document.getElementById('odoo_is_active').checked = true;
+        document.getElementById('odoo_stock').value = 0;
+    }
+    function closeOdooProductModal() {
+        const m = document.getElementById('odooProductModal');
+        m.classList.add('hidden'); m.classList.remove('flex');
+    }
+    function editOdooProduct(p) {
+        const m = document.getElementById('odooProductModal');
+        m.classList.remove('hidden'); m.classList.add('flex');
+        document.getElementById('odooFormAction').value = 'local_update';
+        document.getElementById('odooFormId').value = p.id || '';
+        document.getElementById('odooModalTitle').textContent = 'แก้ไขสินค้า';
+
+        document.getElementById('odoo_product_code').value = p.product_code || '';
+        document.getElementById('odoo_sku').value = p.sku || '';
+        document.getElementById('odoo_barcode').value = p.barcode || '';
+        document.getElementById('odoo_name').value = p.name || '';
+        document.getElementById('odoo_name_en').value = p.name_en || '';
+        document.getElementById('odoo_generic_name').value = p.generic_name || '';
+        document.getElementById('odoo_category').value = p.category || '';
+        document.getElementById('odoo_manufacturer').value = p.manufacturer || '';
+        document.getElementById('odoo_description').value = p.description || '';
+        document.getElementById('odoo_usage_instructions').value = p.usage_instructions || '';
+        document.getElementById('odoo_image_url').value = p.image_url || '';
+        document.getElementById('odoo_price').value = p.list_price || '';
+        document.getElementById('odoo_sale_price').value = (p.sale_price != null ? p.sale_price : (p.online_price || ''));
+        document.getElementById('odoo_stock').value = p.saleable_qty != null ? p.saleable_qty : 0;
+        document.getElementById('odoo_base_unit').value = p.base_unit || '';
+        document.getElementById('odoo_unit').value = p.unit || '';
+        document.getElementById('odoo_is_active').checked = String(p.is_active) === '1' || p.is_active === 1 || p.is_active === true;
+        document.getElementById('odoo_is_featured').checked = String(p.is_featured) === '1' || p.is_featured === 1;
+        document.getElementById('odoo_is_flash_sale').checked = String(p.is_flash_sale) === '1' || p.is_flash_sale === 1;
+        document.getElementById('odoo_is_choice').checked = String(p.is_choice) === '1' || p.is_choice === 1;
+    }
+    </script>
     <?php
     return;
 }
