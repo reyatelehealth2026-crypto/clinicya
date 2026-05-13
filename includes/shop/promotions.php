@@ -190,7 +190,7 @@ $promoSettings = [
 </div>
 
 <!-- Custom Settings -->
-<form method="POST">
+<form method="POST" id="settings-promotions-form">
     <input type="hidden" name="tab" value="promotions">
     <input type="hidden" name="promo_action" value="save_custom">
     
@@ -350,6 +350,8 @@ $promoSettings = [
         </div>
     </div>
 </form>
+
+<?= renderStickySaveBar('settings-promotions-form', 'บันทึกธีม', 'settings.php?tab=promotions') ?>
 
 <script>
 // Sync color inputs

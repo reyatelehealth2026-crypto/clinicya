@@ -59,53 +59,50 @@ $tabMeta = [
     'crm' => ['icon' => 'fa-users-cog', 'desc' => 'ศูนย์กลางจัดการลูกค้าและ Automation'],
 ];
 
-$extraStyles = '
-<link rel="stylesheet" href="assets/css/design-tokens.css">
-<link rel="stylesheet" href="assets/css/components.css">
+// Load Archetype B partials — styles emitted via get*Styles() calls below
+require_once __DIR__ . '/includes/components/kpi-card.php';
+require_once __DIR__ . '/includes/components/section-card.php';
+require_once __DIR__ . '/includes/components/period-selector.php';
+
+$extraStyles = '<link rel="stylesheet" href="assets/css/design-tokens.css">
+<link rel="stylesheet" href="assets/css/components.css">'
+    . getKpiCardStyles()
+    . getSectionCardStyles()
+    . getPeriodSelectorStyles()
+    . '
 <style>
+/* ── Dashboard shell layout ──────────────────────────────────────── */
 .db-shell {
     max-width: 1440px;
     margin: 0 auto;
 }
 
-.db-section {
-    background: #ffffff;
-    border: 1px solid #d1d9e6;
-    border-radius: 16px;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 6px 16px rgba(15, 23, 42, 0.04);
-    overflow: hidden;
+/* ── Alert modifiers for new archetype components ────────────────── */
+.kpi-card--alert {
+    border-color: #fca5a5 !important;
+    background: #fff5f5 !important;
+}
+.dark .kpi-card--alert {
+    border-color: rgba(244,63,94,.4) !important;
+    background: rgba(244,63,94,.07) !important;
+}
+.section-card--alert {
+    border-color: #fca5a5 !important;
+}
+.section-card--alert .section-card__head {
+    background: #fef2f2 !important;
+}
+.section-card--alert .section-card__head::after {
+    background: linear-gradient(90deg, #fecaca, transparent) !important;
+}
+.dark .section-card--alert {
+    border-color: rgba(244,63,94,.4) !important;
+}
+.dark .section-card--alert .section-card__head {
+    background: rgba(244,63,94,.07) !important;
 }
 
-.db-section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 20px;
-    border-bottom: 1px solid #e2e8f0;
-    background: #f8fafc;
-}
-
-.db-section-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 14px;
-    font-weight: 700;
-    color: #1e293b;
-    letter-spacing: -0.01em;
-}
-
-.db-section-title i {
-    width: 30px;
-    height: 30px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 9px;
-    font-size: 13px;
-}
-
+/* ── Section-badge (used by executive.php problem count) ─────────── */
 .db-section-badge {
     display: inline-flex;
     align-items: center;
@@ -117,183 +114,31 @@ $extraStyles = '
     border: 1px solid;
 }
 
-.db-section-body {
-    padding: 20px;
-}
-
-.db-section-body-flush {
-    padding: 0;
-}
-
-.db-kpi {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 18px 20px;
-    background: #ffffff;
-    border: 1px solid #d1d9e6;
-    border-radius: 14px;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04);
-    transition: all 0.18s ease;
-}
-
-.db-kpi:hover {
-    border-color: #94a3b8;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.08);
-    transform: translateY(-1px);
-}
-
-.db-kpi-icon {
-    width: 46px;
-    height: 46px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 19px;
-    flex-shrink: 0;
-}
-
-.db-kpi-copy {
-    min-width: 0;
-    flex: 1;
-}
-
-.db-kpi-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: #64748b;
-    margin-bottom: 2px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-
-.db-kpi-value {
-    font-size: 24px;
-    font-weight: 800;
-    color: #0f172a;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
-}
-
-.db-kpi-meta {
-    font-size: 11px;
-    color: #64748b;
-    margin-top: 2px;
-    font-weight: 500;
-}
-
-.db-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 36px 16px;
-    color: #94a3b8;
-    text-align: center;
-}
-
-.db-empty i {
-    font-size: 28px;
-    color: #cbd5e1;
-}
-
-.db-empty p {
-    font-size: 13px;
-    font-weight: 500;
-}
-
-.db-list-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 20px;
-    border-bottom: 1px solid #f1f5f9;
-    transition: background 0.12s ease;
-}
-
-.db-list-item:last-child {
-    border-bottom: none;
-}
-
-.db-list-item:hover {
-    background: #f8fafc;
-}
-
-.db-action-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #0f766e;
-    background: #f0fdfa;
-    border: 1px solid #99f6e4;
-    text-decoration: none;
-    transition: all 0.15s ease;
-}
-
-.db-action-link:hover {
-    background: #ccfbf1;
-    border-color: #5eead4;
-}
-
-.db-tab-strip {
-    display: inline-flex;
-    gap: 4px;
-    padding: 4px;
-    background: #e2e8f0;
-    border-radius: 12px;
-    border: 1px solid #cbd5e1;
-}
-
-.db-tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 18px;
-    border-radius: 9px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #64748b;
-    text-decoration: none;
-    transition: all 0.15s ease;
-    border: 1px solid transparent;
-}
-
-.db-tab:hover {
-    color: #334155;
-    background: rgba(255,255,255,0.5);
-}
-
-.db-tab.active {
-    background: #ffffff;
-    color: #0f766e;
-    border-color: #cbd5e1;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
-    font-weight: 700;
-}
-
-.db-tab i {
-    font-size: 14px;
-}
-
-.db-kpi--alert {
-    border-color: #fca5a5 !important;
-    background: #fff5f5 !important;
-}
-
-.db-section--alert {
-    border-color: #fca5a5 !important;
-}
-
-.db-section--alert .db-section-header {
-    background: #fef2f2 !important;
-    border-bottom-color: #fecaca !important;
-}
+/* ── Legacy db-* shim — 30-day deprecation grace period ──────────── */
+.db-section { background:#fff; border:1px solid var(--color-slate-200); border-radius:var(--radius-lg); box-shadow:0 1px 3px rgba(15,23,42,.06),0 6px 16px rgba(15,23,42,.04); overflow:hidden; }
+.db-section-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 20px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+.db-section-title { display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; color:#1e293b; letter-spacing:-0.01em; }
+.db-section-title i { width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; border-radius:9px; font-size:13px; }
+.db-section-body { padding:20px; }
+.db-section-body-flush { padding:0; }
+.db-kpi { display:flex; align-items:center; gap:14px; padding:18px 20px; background:#fff; border:1px solid #d1d9e6; border-radius:14px; box-shadow:0 1px 3px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.04); transition:all .18s ease; }
+.db-kpi:hover { border-color:#94a3b8; box-shadow:0 1px 3px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.08); transform:translateY(-1px); }
+.db-kpi-icon { width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:19px; flex-shrink:0; }
+.db-kpi-copy { min-width:0; flex:1; }
+.db-kpi-label { font-size:12px; font-weight:600; color:#64748b; margin-bottom:2px; text-transform:uppercase; letter-spacing:.03em; }
+.db-kpi-value { font-size:24px; font-weight:800; color:#0f172a; line-height:1.2; letter-spacing:-0.02em; }
+.db-kpi-meta { font-size:11px; color:#64748b; margin-top:2px; font-weight:500; }
+.db-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:36px 16px; color:#94a3b8; text-align:center; }
+.db-empty i { font-size:28px; color:#cbd5e1; }
+.db-empty p { font-size:13px; font-weight:500; }
+.db-list-item { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #f1f5f9; transition:background .12s ease; }
+.db-list-item:last-child { border-bottom:none; }
+.db-list-item:hover { background:#f8fafc; }
+.db-action-link { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; color:#0f766e; background:#f0fdfa; border:1px solid #99f6e4; text-decoration:none; transition:all .15s ease; }
+.db-action-link:hover { background:#ccfbf1; border-color:#5eead4; }
+.db-kpi--alert { border-color:#fca5a5 !important; background:#fff5f5 !important; }
+.db-section--alert { border-color:#fca5a5 !important; }
+.db-section--alert .db-section-header { background:#fef2f2 !important; border-bottom-color:#fecaca !important; }
 </style>
 ';
 
@@ -302,18 +147,24 @@ require_once 'includes/header.php';
 
 <div class="db-shell space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-4">
-        <div class="db-tab-strip">
-            <?php foreach ($validTabs as $tabKey):
-                $meta = $tabMeta[$tabKey] ?? [];
-                $title = $pageTitles[$tabKey] ?? ucfirst($tabKey);
-                $isActive = $activeTab === $tabKey;
-            ?>
-                <a href="?tab=<?= $tabKey ?>" class="db-tab <?= $isActive ? 'active' : '' ?>">
-                    <i class="fas <?= $meta['icon'] ?? 'fa-circle' ?>"></i>
-                    <?= htmlspecialchars($title) ?>
-                </a>
-            <?php endforeach; ?>
-        </div>
+        <?php
+        $tabOptions = [];
+        foreach ($validTabs as $tabKey) {
+            $meta  = $tabMeta[$tabKey] ?? [];
+            $label = ($pageTitles[$tabKey] ?? ucfirst($tabKey));
+            $icon  = $meta['icon'] ?? 'fa-circle';
+            $tabOptions[$tabKey] = '<i class="fas ' . htmlspecialchars($icon) . '" aria-hidden="true" style="margin-right:6px;font-size:13px;"></i>' . htmlspecialchars($label);
+        }
+        // Build tab strip manually using period-selector markup so styling is consistent
+        echo '<div class="period-selector" role="tablist" aria-label="Dashboard tabs">';
+        foreach ($tabOptions as $tabKey => $tabInner) {
+            $isActive = ($activeTab === $tabKey);
+            $cls  = 'period-chip' . ($isActive ? ' period-chip--active' : '');
+            $aria = $isActive ? ' aria-current="true"' : '';
+            echo '<a href="?tab=' . urlencode($tabKey) . '" class="' . $cls . '"' . $aria . '>' . $tabInner . '</a>';
+        }
+        echo '</div>';
+        ?>
     </div>
 
     <?php
