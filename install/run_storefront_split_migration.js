@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Standalone Node.js migration runner
  * Idempotent version of install/run_storefront_split_migration.php
@@ -74,17 +74,17 @@ async function tableExists(conn, table) {
         c.info('');
 
         // ─── Step 1: prerequisite ────────────────────────────────────────────
-        c.info('─── Step 1: ตรวจสอบตาราง odoo_products_cache ───');
-        if (!(await tableExists(conn, 'odoo_products_cache'))) {
-            c.err('❌ ไม่พบตาราง odoo_products_cache — ต้องมีก่อนรัน migration นี้');
+        c.info('─── Step 1: ตรวจสอบตาราง shop_products ───');
+        if (!(await tableExists(conn, 'shop_products'))) {
+            c.err('❌ ไม่พบตาราง shop_products — ต้องมีก่อนรัน migration นี้');
             c.info('   ให้เปิด /inventory/?tab=catalog-sync ครั้งเดียวก่อนเพื่อ auto-create');
             process.exit(2);
         }
-        c.ok('✓ ตาราง odoo_products_cache มีอยู่');
+        c.ok('✓ ตาราง shop_products มีอยู่');
         c.info('');
 
         // ─── Step 2: add columns ─────────────────────────────────────────────
-        c.info('─── Step 2: เพิ่ม column ใน odoo_products_cache ───');
+        c.info('─── Step 2: เพิ่ม column ใน shop_products ───');
         const columnsToAdd = [
             ['storefront_enabled', "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1=แสดงบนหน้าร้านจริง, 0=ซ่อน' AFTER `is_active`"],
             ['drug_type',          "VARCHAR(64) NULL DEFAULT NULL COMMENT 'OTC/Rx/Controlled/Supplement/Cosmetic/Other' AFTER `category`"],
@@ -92,10 +92,10 @@ async function tableExists(conn, table) {
             ['admin_overrides',    "JSON NULL DEFAULT NULL COMMENT 'admin override ต่อ field — sync ไม่แตะ' AFTER `featured_order`"],
         ];
         for (const [col, def] of columnsToAdd) {
-            if (await columnExists(conn, 'odoo_products_cache', col)) {
+            if (await columnExists(conn, 'shop_products', col)) {
                 c.skip(`  ↷ SKIP   column \`${col}\` มีอยู่แล้ว`);
             } else {
-                await conn.query(`ALTER TABLE \`odoo_products_cache\` ADD COLUMN \`${col}\` ${def}`);
+                await conn.query(`ALTER TABLE \`shop_products\` ADD COLUMN \`${col}\` ${def}`);
                 c.ok(`  ✓ ADDED  column \`${col}\``);
                 actions.push(`added column ${col}`);
             }
@@ -110,10 +110,10 @@ async function tableExists(conn, table) {
             ['idx_featured_order', '(`line_account_id`, `featured_order`)'],
         ];
         for (const [idx, cols] of indexesToAdd) {
-            if (await indexExists(conn, 'odoo_products_cache', idx)) {
+            if (await indexExists(conn, 'shop_products', idx)) {
                 c.skip(`  ↷ SKIP   index \`${idx}\` มีอยู่แล้ว`);
             } else {
-                await conn.query(`ALTER TABLE \`odoo_products_cache\` ADD INDEX \`${idx}\` ${cols}`);
+                await conn.query(`ALTER TABLE \`shop_products\` ADD INDEX \`${idx}\` ${cols}`);
                 c.ok(`  ✓ ADDED  index \`${idx}\``);
                 actions.push(`added index ${idx}`);
             }
@@ -185,7 +185,7 @@ async function tableExists(conn, table) {
             `SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT
              FROM information_schema.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = 'odoo_products_cache'
+               AND TABLE_NAME = 'shop_products'
                AND COLUMN_NAME IN ('storefront_enabled', 'drug_type', 'featured_order')
              ORDER BY ORDINAL_POSITION`
         );

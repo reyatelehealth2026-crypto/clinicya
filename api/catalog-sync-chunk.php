@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * JSON API — ซิงค์ Odoo catalog ทีละขั้น (progress bar ใน inventory/?tab=catalog-sync)
  *
@@ -49,7 +49,7 @@ require_once __DIR__ . '/../classes/OdooProductService.php';
 
 $db = Database::getInstance()->getConnection();
 $currentBotId = (int) ($_SESSION['current_bot_id'] ?? 1);
-$cacheTable = 'odoo_products_cache';
+$cacheTable = 'shop_products';
 $stateTable = 'odoo_products_sync_state';
 
 $hasDrugTypeCol = false;

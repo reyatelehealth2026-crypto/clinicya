@@ -1,10 +1,10 @@
-<?php
+﻿<?php
 /**
  * Shop Products API
  * สำหรับโหลดสินค้าแบบ pagination ใน LIFF Shop
  *
  * แหล่งข้อมูล:
- *   - shop_settings.order_data_source = 'odoo' → odoo_products_cache (storefront_enabled = 1)
+ *   - shop_settings.order_data_source = 'odoo' → shop_products (storefront_enabled = 1)
  *   - อื่น ๆ → business_items (เดิม)
  * รูปสินค้า (Odoo): MANAGER_PRODUCT_PHOTO_BASE_URL + /uploads/product_photo/{code}.jpg
  */
@@ -20,14 +20,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../includes/odoo-storefront-catalog.php';
+require_once __DIR__ . '/../includes/shop-storefront-catalog.php';
 
 $db = Database::getInstance()->getConnection();
 
 $useCnyProducts = false;
 
 $lineAccountId = (int) ($_GET['account'] ?? $_GET['line_account_id'] ?? 0);
-$useOdoo = useOdooStorefrontCatalog($db, $lineAccountId);
+$useOdoo = useShopProductCatalog($db, $lineAccountId);
 
 // Action handler
 $action = $_GET['action'] ?? 'products';
@@ -51,7 +51,7 @@ if ($action === 'categories') {
             }, $categories, array_keys($categories));
         } elseif ($useOdoo) {
             $stmt = $db->prepare(
-                "SELECT DISTINCT category FROM odoo_products_cache
+                "SELECT DISTINCT category FROM shop_products
                  WHERE line_account_id = ?
                    AND storefront_enabled = 1
                    AND is_active = 1
@@ -152,18 +152,18 @@ if ($productId || $productSku) {
                 echo json_encode(['success' => false, 'error' => 'Product not found']);
             }
         } elseif ($useOdoo) {
-            $hasOverrides = schema_table_has_column($db, 'odoo_products_cache', 'admin_overrides');
+            $hasOverrides = schema_table_has_column($db, 'shop_products', 'admin_overrides');
             $extra = $hasOverrides ? ', admin_overrides' : '';
             if ($productSku) {
                 $stmt = $db->prepare(
-                    "SELECT *{$extra} FROM odoo_products_cache
+                    "SELECT *{$extra} FROM shop_products
                      WHERE line_account_id = ? AND sku = ?
                        AND storefront_enabled = 1 AND is_active = 1 LIMIT 1"
                 );
                 $stmt->execute([$lineAccountId, $productSku]);
             } else {
                 $stmt = $db->prepare(
-                    "SELECT *{$extra} FROM odoo_products_cache
+                    "SELECT *{$extra} FROM shop_products
                      WHERE line_account_id = ? AND id = ?
                        AND storefront_enabled = 1 AND is_active = 1 LIMIT 1"
                 );
@@ -171,7 +171,7 @@ if ($productId || $productSku) {
             }
             $product = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($product) {
-                $out = formatOdooProductForLiff($product);
+                $out = formatShopProductForLiff($product);
                 echo json_encode(['success' => true, 'product' => $out], JSON_UNESCAPED_UNICODE);
             } else {
                 echo json_encode(['success' => false, 'error' => 'Product not found']);
@@ -302,8 +302,8 @@ try {
             ];
         }, $products);
     } elseif ($useOdoo) {
-        $hasOverrides = schema_table_has_column($db, 'odoo_products_cache', 'admin_overrides');
-        $hasFeatured = schema_table_has_column($db, 'odoo_products_cache', 'featured_order');
+        $hasOverrides = schema_table_has_column($db, 'shop_products', 'admin_overrides');
+        $hasFeatured = schema_table_has_column($db, 'shop_products', 'featured_order');
         $extra = $hasOverrides ? ', admin_overrides' : '';
 
         $where = ['line_account_id = ?', 'storefront_enabled = 1', 'is_active = 1'];
@@ -347,19 +347,19 @@ try {
                 }
         }
 
-        $countSql = "SELECT COUNT(*) FROM odoo_products_cache WHERE {$whereClause}";
+        $countSql = "SELECT COUNT(*) FROM shop_products WHERE {$whereClause}";
         $stmt = $db->prepare($countSql);
         $stmt->execute($params);
         $total = (int) $stmt->fetchColumn();
 
-        $sql = "SELECT *{$extra} FROM odoo_products_cache WHERE {$whereClause} ORDER BY {$orderBy} LIMIT {$limit} OFFSET {$offset}";
+        $sql = "SELECT *{$extra} FROM shop_products WHERE {$whereClause} ORDER BY {$orderBy} LIMIT {$limit} OFFSET {$offset}";
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $formattedProducts = [];
         foreach ($products as $p) {
-            $formattedProducts[] = formatOdooProductForLiff($p);
+            $formattedProducts[] = formatShopProductForLiff($p);
         }
     } else {
         $where = ['is_active = 1'];
@@ -440,7 +440,7 @@ try {
     $totalPages = ceil($total / $limit);
     $hasMore = $page < $totalPages;
 
-    $source = $useCnyProducts ? 'cny_products' : ($useOdoo ? 'odoo_products_cache' : 'business_items');
+    $source = $useCnyProducts ? 'cny_products' : ($useOdoo ? 'shop_products' : 'business_items');
 
     echo json_encode([
         'success' => true,

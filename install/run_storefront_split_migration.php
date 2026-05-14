@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Run migration: Storefront Split (Two-Page Architecture)
  * Ref: docs/ODOO_PRODUCT_SYNC_PHP.md §12-15
@@ -9,7 +9,7 @@
  * Idempotent — ถ้า column/index/table มีอยู่แล้ว จะ skip
  *
  * สิ่งที่ทำ:
- *   1. ALTER odoo_products_cache — เพิ่ม storefront_enabled, drug_type, featured_order
+ *   1. ALTER shop_products — เพิ่ม storefront_enabled, drug_type, featured_order
  *   2. ADD INDEX idx_storefront, idx_drug_type, idx_featured_order
  *   3. CREATE TABLE drug_type_rules + seed 11 default rules (ถ้า table ว่าง)
  */
@@ -106,19 +106,19 @@ $errors    = [];
 try {
     $db = Database::getInstance()->getConnection();
 
-    // ─── 1. Check prerequisite: odoo_products_cache must exist ────────────────
-    out('─── Step 1: ตรวจสอบตาราง odoo_products_cache ───', 'info');
-    if (!tableExists($db, 'odoo_products_cache')) {
-        out('❌ ไม่พบตาราง odoo_products_cache — ต้องมีก่อนรัน migration นี้', 'error');
+    // ─── 1. Check prerequisite: shop_products must exist ────────────────
+    out('─── Step 1: ตรวจสอบตาราง shop_products ───', 'info');
+    if (!tableExists($db, 'shop_products')) {
+        out('❌ ไม่พบตาราง shop_products — ต้องมีก่อนรัน migration นี้', 'error');
         out('   ให้เปิดหน้า /inventory/?tab=catalog-sync ครั้งเดียว หรือรัน migration หลักก่อน', 'info');
-        $errors[] = 'missing table: odoo_products_cache';
+        $errors[] = 'missing table: shop_products';
         throw new RuntimeException('Prerequisite missing');
     }
-    out('✓ ตาราง odoo_products_cache มีอยู่', 'success');
+    out('✓ ตาราง shop_products มีอยู่', 'success');
 
-    // ─── 2. ALTER odoo_products_cache: เพิ่ม column ──────────────────────────
+    // ─── 2. ALTER shop_products: เพิ่ม column ──────────────────────────
     out('', 'info');
-    out('─── Step 2: เพิ่ม column ใน odoo_products_cache ───', 'info');
+    out('─── Step 2: เพิ่ม column ใน shop_products ───', 'info');
 
     $columnsToAdd = [
         'storefront_enabled' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1=แสดงบนหน้าร้านจริง, 0=ซ่อน' AFTER `is_active`",
@@ -127,10 +127,10 @@ try {
         'admin_overrides'    => "JSON NULL DEFAULT NULL COMMENT 'admin override ต่อ field เช่น {\"list_price\":100,\"name\":\"...\"} — sync ไม่แตะ' AFTER `featured_order`",
     ];
     foreach ($columnsToAdd as $col => $def) {
-        if (columnExists($db, 'odoo_products_cache', $col)) {
+        if (columnExists($db, 'shop_products', $col)) {
             out("  ↷ SKIP   column `{$col}` มีอยู่แล้ว", 'skip');
         } else {
-            $db->exec("ALTER TABLE `odoo_products_cache` ADD COLUMN `{$col}` {$def}");
+            $db->exec("ALTER TABLE `shop_products` ADD COLUMN `{$col}` {$def}");
             out("  ✓ ADDED  column `{$col}`", 'success');
             $actions[] = "added column {$col}";
         }
@@ -146,10 +146,10 @@ try {
         'idx_featured_order' => '(`line_account_id`, `featured_order`)',
     ];
     foreach ($indexesToAdd as $idx => $cols) {
-        if (indexExists($db, 'odoo_products_cache', $idx)) {
+        if (indexExists($db, 'shop_products', $idx)) {
             out("  ↷ SKIP   index `{$idx}` มีอยู่แล้ว", 'skip');
         } else {
-            $db->exec("ALTER TABLE `odoo_products_cache` ADD INDEX `{$idx}` {$cols}");
+            $db->exec("ALTER TABLE `shop_products` ADD INDEX `{$idx}` {$cols}");
             out("  ✓ ADDED  index `{$idx}`", 'success');
             $actions[] = "added index {$idx}";
         }
@@ -230,7 +230,7 @@ try {
         "SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT
          FROM information_schema.COLUMNS
          WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = 'odoo_products_cache'
+           AND TABLE_NAME = 'shop_products'
            AND COLUMN_NAME IN ('storefront_enabled', 'drug_type', 'featured_order')
          ORDER BY ORDINAL_POSITION"
     );

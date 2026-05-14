@@ -1,4 +1,4 @@
-import { apiUrl, appConfig } from '@/lib/config'
+﻿import { apiUrl, appConfig } from '@/lib/config'
 
 const CHECKOUT_URL = apiUrl('/api/checkout.php')
 
@@ -10,7 +10,7 @@ export type ShopProductBadge = {
 export type ProductSort = 'latest' | 'discount' | 'price_asc' | 'price_desc' | 'name_asc'
 
 export type ShopCategory = {
-  /** Numeric id (`business_items`) or category label string (`odoo_products_cache`) */
+  /** Numeric id (`business_items`) or category label string (`shop_products`) */
   id: number | string
   name: string
   icon_url?: string | null
@@ -48,7 +48,7 @@ export type ShopProduct = {
   catalog_visible?: boolean | number | null
   catalog_bucket?: string | null
   /** Set when catalog is served from Odoo cache (`api/checkout.php` / `shop-products.php`) */
-  product_source?: 'odoo_products_cache' | 'business_items'
+  product_source?: 'shop_products' | 'business_items'
 }
 
 export type TransferBankRow = {
@@ -80,7 +80,7 @@ export type ProductsResponse = {
   transfer_info?: TransferInfo
   message?: string
   /** Present when `action=products` uses Odoo storefront rows */
-  product_catalog_source?: 'odoo_products_cache' | 'business_items'
+  product_catalog_source?: 'shop_products' | 'business_items'
   category_id_is_string?: boolean
 }
 

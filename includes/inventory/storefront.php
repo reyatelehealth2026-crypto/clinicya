@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Tab: storefront — Storefront Catalog Manager
  *
@@ -19,9 +19,9 @@ $currentBotId = (int) ($_SESSION['current_bot_id'] ?? 1);
 $migrationReady = false;
 $hasOverridesCol = false;
 try {
-    $check = $db->query("SHOW COLUMNS FROM odoo_products_cache LIKE 'storefront_enabled'");
+    $check = $db->query("SHOW COLUMNS FROM shop_products LIKE 'storefront_enabled'");
     $migrationReady = $check && $check->rowCount() > 0;
-    $check2 = $db->query("SHOW COLUMNS FROM odoo_products_cache LIKE 'admin_overrides'");
+    $check2 = $db->query("SHOW COLUMNS FROM shop_products LIKE 'admin_overrides'");
     $hasOverridesCol = $check2 && $check2->rowCount() > 0;
 } catch (Exception $e) {
     $migrationReady = false;
@@ -80,7 +80,7 @@ if (!$migrationReady) {
 // ─── Inline create handler — "เพิ่มสินค้า" button on storefront tab ──────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'storefront_quick_create') {
     try {
-        $cacheTable = 'odoo_products_cache';
+        $cacheTable = 'shop_products';
         // Best-effort ensure extra columns exist (idempotent with products.php migration block)
         $extraCols = [
             'image_url'          => "ADD COLUMN image_url VARCHAR(500) DEFAULT NULL",
@@ -239,7 +239,7 @@ if ($stockFilter === 'in') {
 $whereSql = implode(' AND ', $where);
 
 // ─── Query data ────────────────────────────────────────────────────────────────
-$countStmt = $db->prepare("SELECT COUNT(*) FROM odoo_products_cache WHERE {$whereSql}");
+$countStmt = $db->prepare("SELECT COUNT(*) FROM shop_products WHERE {$whereSql}");
 $countStmt->execute($params);
 $total = (int) $countStmt->fetchColumn();
 
@@ -250,7 +250,7 @@ $listStmt = $db->prepare(
     "SELECT id, product_code, sku, name, generic_name, category, drug_type,
             list_price, online_price, saleable_qty, is_active, storefront_enabled,
             featured_order, last_synced_at{$overridesSelect}
-     FROM odoo_products_cache
+     FROM shop_products
      WHERE {$whereSql}
      ORDER BY storefront_enabled DESC,
               featured_order IS NULL,
@@ -266,7 +266,7 @@ $categories = [];
 try {
     $catStmt = $db->prepare(
         "SELECT category, COUNT(*) AS n
-         FROM odoo_products_cache
+         FROM shop_products
          WHERE line_account_id = ? AND category IS NOT NULL AND category <> ''
          GROUP BY category
          ORDER BY n DESC, category ASC"
@@ -281,7 +281,7 @@ $drugTypes = [];
 try {
     $dtStmt = $db->prepare(
         "SELECT drug_type, COUNT(*) AS n
-         FROM odoo_products_cache
+         FROM shop_products
          WHERE line_account_id = ? AND drug_type IS NOT NULL AND drug_type <> ''
          GROUP BY drug_type
          ORDER BY n DESC, drug_type ASC"
@@ -300,7 +300,7 @@ $statStmt = $db->prepare(
         SUM(storefront_enabled = 1 AND (online_price IS NULL OR online_price = 0)
                                     AND (list_price   IS NULL OR list_price   = 0)) AS enabled_zero_cnt,
         COUNT(*) AS total_cnt
-     FROM odoo_products_cache
+     FROM shop_products
      WHERE line_account_id = ?"
 );
 $statStmt->execute([$currentBotId]);

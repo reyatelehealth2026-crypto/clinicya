@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Inventory Products Tab - จัดการสินค้า/บริการ
  * Tab content for inventory/index.php
@@ -332,7 +332,7 @@ CSS;
 }
 
 if ($isOdooMode) {
-    $cacheTable = 'odoo_products_cache';
+    $cacheTable = 'shop_products';
     $syncStateTable = 'odoo_products_sync_state';
     $odooError = null;
 
@@ -527,7 +527,7 @@ if ($isOdooMode) {
         exit;
     }
 
-    // Local CRUD on odoo_products_cache (allows creating/editing items directly using the same form)
+    // Local CRUD on shop_products (allows creating/editing items directly using the same form)
     if (
         $_SERVER['REQUEST_METHOD'] === 'POST'
         && in_array(($_POST['action'] ?? ''), ['local_create', 'local_update', 'local_delete', 'local_toggle', 'local_bulk_activate', 'local_bulk_deactivate', 'local_bulk_delete'], true)

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Checkout API for LIFF
  * Handles cart, order creation, and slip upload
@@ -16,7 +16,7 @@ require_once '../config/config.php';
 require_once '../config/database.php';
 require_once '../includes/manager-product-photo.php';
 require_once '../includes/shop-data-source.php';
-require_once '../includes/odoo-storefront-catalog.php';
+require_once '../includes/shop-storefront-catalog.php';
 require_once '../classes/ActivityLogger.php';
 require_once '../classes/AccountReceivableService.php';
 
@@ -130,7 +130,7 @@ function ensureCartProductSourceSupport(PDO $db): void
     $done = true;
     try {
         if (!hasTableColumn('cart_items', 'product_source')) {
-            $db->exec("ALTER TABLE cart_items ADD COLUMN product_source VARCHAR(32) NOT NULL DEFAULT 'business_items' COMMENT 'business_items|odoo_products_cache' AFTER product_id");
+            $db->exec("ALTER TABLE cart_items ADD COLUMN product_source VARCHAR(32) NOT NULL DEFAULT 'business_items' COMMENT 'business_items|shop_products' AFTER product_id");
         }
     } catch (Exception $e) {
         error_log('[checkout] cart product_source column: ' . $e->getMessage());
@@ -166,7 +166,7 @@ function resolveCartProductSource(?string $raw): string
 {
     $s = strtolower(trim((string) $raw));
 
-    return $s === 'odoo_products_cache' ? 'odoo_products_cache' : 'business_items';
+    return $s === 'shop_products' ? 'shop_products' : 'business_items';
 }
 
 /**
@@ -181,7 +181,7 @@ function resolveCartProductSourceWithShopDefault(PDO $db, ?string $raw, int $lin
     }
 
     return getShopOrderDataSource($db, $lineAccountId) === 'odoo'
-        ? 'odoo_products_cache'
+        ? 'shop_products'
         : 'business_items';
 }
 
@@ -220,7 +220,7 @@ function loadCheckoutCartLinesFromDb(PDO $db, int $userId, ?int $lineAccountId):
 {
     ensureCartProductSourceSupport($db);
 
-    if (hasTableColumn('cart_items', 'product_source') && tableExists('odoo_products_cache')) {
+    if (hasTableColumn('cart_items', 'product_source') && tableExists('shop_products')) {
         $stmt = $db->prepare(
             'SELECT c.*,
                     p.name AS bi_name,
@@ -238,9 +238,9 @@ function loadCheckoutCartLinesFromDb(PDO $db, int $userId, ?int $lineAccountId):
              LEFT JOIN business_items p
                ON c.product_id = p.id
               AND IFNULL(NULLIF(c.product_source, \'\'), \'business_items\') = \'business_items\'
-             LEFT JOIN odoo_products_cache o
+             LEFT JOIN shop_products o
                ON c.product_id = o.id
-              AND c.product_source = \'odoo_products_cache\'
+              AND c.product_source = \'shop_products\'
               AND o.line_account_id = ?
              WHERE c.user_id = ?'
         );
@@ -260,7 +260,7 @@ function loadCheckoutCartLinesFromDb(PDO $db, int $userId, ?int $lineAccountId):
     $out = [];
     foreach ($raw as $item) {
         $src = resolveCartProductSource($item['product_source'] ?? null);
-        if ($src === 'odoo_products_cache') {
+        if ($src === 'shop_products') {
             $name = $item['o_name'] ?? '';
             if ($name === '') {
                 continue;
@@ -283,7 +283,7 @@ function loadCheckoutCartLinesFromDb(PDO $db, int $userId, ?int $lineAccountId):
                 'price' => $price,
                 'sale_price' => $sale,
                 'quantity' => (int) $item['quantity'],
-                'product_source' => 'odoo_products_cache',
+                'product_source' => 'shop_products',
                 '_unit' => $unit,
             ];
         } else {
@@ -518,9 +518,9 @@ function checkoutBuildOdooProductSortClause(string $sort, bool $hasFeatured): st
 }
 
 /**
- * Odoo storefront product list — same source as api/shop-products.php (odoo_products_cache).
+ * Odoo storefront product list — same source as api/shop-products.php (shop_products).
  */
-function checkoutHandleGetProductsOdoo(int $lineAccountId): void
+function checkoutHandleGetShopProducts(int $lineAccountId): void
 {
     global $db;
 
@@ -532,9 +532,9 @@ function checkoutHandleGetProductsOdoo(int $lineAccountId): void
     $offset = max(0, (int) ($_GET['offset'] ?? 0));
 
     try {
-        $hasOverrides = schema_table_has_column($db, 'odoo_products_cache', 'admin_overrides');
-        $hasFeatured = schema_table_has_column($db, 'odoo_products_cache', 'featured_order');
-        $hasManufacturer = schema_table_has_column($db, 'odoo_products_cache', 'manufacturer');
+        $hasOverrides = schema_table_has_column($db, 'shop_products', 'admin_overrides');
+        $hasFeatured = schema_table_has_column($db, 'shop_products', 'featured_order');
+        $hasManufacturer = schema_table_has_column($db, 'shop_products', 'manufacturer');
         $extra = $hasOverrides ? ', admin_overrides' : '';
 
         $where = ['line_account_id = ?', 'storefront_enabled = 1', 'is_active = 1'];
@@ -563,7 +563,7 @@ function checkoutHandleGetProductsOdoo(int $lineAccountId): void
                 'limit' => $limit,
                 'total' => 0,
                 'has_more' => false,
-                'product_catalog_source' => 'odoo_products_cache',
+                'product_catalog_source' => 'shop_products',
                 'category_id_is_string' => true,
             ]);
 
@@ -573,12 +573,12 @@ function checkoutHandleGetProductsOdoo(int $lineAccountId): void
         $whereClause = implode(' AND ', $where);
         $orderBy = checkoutBuildOdooProductSortClause($sort, $hasFeatured);
 
-        $countSql = "SELECT COUNT(*) FROM odoo_products_cache WHERE {$whereClause}";
+        $countSql = "SELECT COUNT(*) FROM shop_products WHERE {$whereClause}";
         $stmt = $db->prepare($countSql);
         $stmt->execute($params);
         $total = (int) $stmt->fetchColumn();
 
-        $sql = "SELECT *{$extra} FROM odoo_products_cache WHERE {$whereClause} ORDER BY {$orderBy} LIMIT ? OFFSET ?";
+        $sql = "SELECT *{$extra} FROM shop_products WHERE {$whereClause} ORDER BY {$orderBy} LIMIT ? OFFSET ?";
         $stmt = $db->prepare($sql);
         $pi = 1;
         foreach ($params as $p) {
@@ -591,13 +591,13 @@ function checkoutHandleGetProductsOdoo(int $lineAccountId): void
 
         $products = [];
         foreach ($rows as $row) {
-            $p = formatOdooProductForLiff($row);
+            $p = formatShopProductForLiff($row);
             normalizeShopProductRow($p);
             $products[] = $p;
         }
 
         $catStmt = $db->prepare(
-            "SELECT DISTINCT category FROM odoo_products_cache
+            "SELECT DISTINCT category FROM shop_products
              WHERE line_account_id = ?
                AND storefront_enabled = 1
                AND is_active = 1
@@ -617,7 +617,7 @@ function checkoutHandleGetProductsOdoo(int $lineAccountId): void
 
         $brands = [];
         if ($hasManufacturer) {
-            $brandSql = "SELECT DISTINCT manufacturer FROM odoo_products_cache
+            $brandSql = "SELECT DISTINCT manufacturer FROM shop_products
                          WHERE line_account_id = ?
                            AND storefront_enabled = 1
                            AND is_active = 1
@@ -644,7 +644,7 @@ function checkoutHandleGetProductsOdoo(int $lineAccountId): void
             'limit' => $limit,
             'total' => $total,
             'has_more' => $offset + $limit < $total,
-            'product_catalog_source' => 'odoo_products_cache',
+            'product_catalog_source' => 'shop_products',
             'category_id_is_string' => true,
         ]);
     } catch (Exception $e) {
@@ -667,12 +667,12 @@ function handleGetProductDetail() {
     }
 
     $lineAccountInt = ($lineAccountId !== null && $lineAccountId !== '') ? (int) $lineAccountId : 0;
-    if ($lineAccountInt > 0 && useOdooStorefrontCatalog($db, $lineAccountInt)) {
+    if ($lineAccountInt > 0 && useShopProductCatalog($db, $lineAccountInt)) {
         try {
-            $hasOverrides = schema_table_has_column($db, 'odoo_products_cache', 'admin_overrides');
+            $hasOverrides = schema_table_has_column($db, 'shop_products', 'admin_overrides');
             $extra = $hasOverrides ? ', admin_overrides' : '';
             $stmt = $db->prepare(
-                "SELECT *{$extra} FROM odoo_products_cache
+                "SELECT *{$extra} FROM shop_products
                  WHERE line_account_id = ? AND id = ?
                    AND storefront_enabled = 1 AND is_active = 1 LIMIT 1"
             );
@@ -681,7 +681,7 @@ function handleGetProductDetail() {
             if (!$row) {
                 jsonResponse(false, 'Product not found');
             }
-            $product = formatOdooProductForLiff($row);
+            $product = formatShopProductForLiff($row);
             normalizeShopProductRow($product);
             jsonResponse(true, '', ['product' => $product]);
         } catch (Exception $e) {
@@ -828,8 +828,8 @@ function handleGetProducts() {
 
     $lineAccountId = $_GET['line_account_id'] ?? null;
     $lineAccountInt = ($lineAccountId !== null && $lineAccountId !== '') ? (int) $lineAccountId : 0;
-    if ($lineAccountInt > 0 && useOdooStorefrontCatalog($db, $lineAccountInt)) {
-        checkoutHandleGetProductsOdoo($lineAccountInt);
+    if ($lineAccountInt > 0 && useShopProductCatalog($db, $lineAccountInt)) {
+        checkoutHandleGetShopProducts($lineAccountInt);
 
         return;
     }
@@ -1016,17 +1016,17 @@ function handleAddToCart($data) {
 
     $productSource = resolveCartProductSourceWithShopDefault($db, $data['product_source'] ?? null, (int) $lineAccountId);
 
-    if ($productSource === 'odoo_products_cache' && !hasTableColumn('cart_items', 'product_source')) {
+    if ($productSource === 'shop_products' && !hasTableColumn('cart_items', 'product_source')) {
         jsonResponse(false, 'Cart migration required (product_source)');
     }
 
-    if ($productSource === 'odoo_products_cache') {
-        if (!tableExists('odoo_products_cache')) {
+    if ($productSource === 'shop_products') {
+        if (!tableExists('shop_products')) {
             jsonResponse(false, 'Product not found');
         }
         $stmt = $db->prepare(
             "SELECT id, name, list_price, online_price, saleable_qty
-             FROM odoo_products_cache
+             FROM shop_products
              WHERE id = ? AND line_account_id = ?
                AND storefront_enabled = 1 AND is_active = 1"
         );
@@ -1155,9 +1155,9 @@ function handleUpdateCart($data) {
         $stmt = $db->prepare("DELETE FROM cart_items WHERE user_id = ? AND product_id = ?{$whereExtra}");
         $stmt->execute($whereParams);
     } else {
-        if ($productSource === 'odoo_products_cache' && tableExists('odoo_products_cache')) {
+        if ($productSource === 'shop_products' && tableExists('shop_products')) {
             $stmt = $db->prepare(
-                'SELECT saleable_qty FROM odoo_products_cache WHERE id = ? AND line_account_id = ? AND storefront_enabled = 1 AND is_active = 1'
+                'SELECT saleable_qty FROM shop_products WHERE id = ? AND line_account_id = ? AND storefront_enabled = 1 AND is_active = 1'
             );
             $stmt->execute([$productId, $lineAccountId]);
             $stock = $stmt->fetchColumn();
@@ -1304,7 +1304,7 @@ function handleGetCart() {
 
     ensureCartProductSourceSupport($db);
 
-    if (hasTableColumn('cart_items', 'product_source') && tableExists('odoo_products_cache')) {
+    if (hasTableColumn('cart_items', 'product_source') && tableExists('shop_products')) {
         $stmt = $db->prepare(
             'SELECT c.*,
                     p.name AS bi_name,
@@ -1322,9 +1322,9 @@ function handleGetCart() {
              LEFT JOIN business_items p
                ON c.product_id = p.id
               AND IFNULL(NULLIF(c.product_source, \'\'), \'business_items\') = \'business_items\'
-             LEFT JOIN odoo_products_cache o
+             LEFT JOIN shop_products o
                ON c.product_id = o.id
-              AND c.product_source = \'odoo_products_cache\'
+              AND c.product_source = \'shop_products\'
               AND o.line_account_id = ?
              WHERE c.user_id = ?'
         );
@@ -1348,7 +1348,7 @@ function handleGetCart() {
     $filteredOut = [];
     foreach ($allItems as $item) {
         $src = resolveCartProductSource($item['product_source'] ?? null);
-        if ($src === 'odoo_products_cache') {
+        if ($src === 'shop_products') {
             $name = $item['o_name'] ?? null;
             $unit = odooCartLineUnitPrice([
                 'o_list' => $item['o_list'] ?? 0,
@@ -1364,7 +1364,7 @@ function handleGetCart() {
             }
             $item['image_url'] = buildManagerProductPhotoUrl($item['o_pc'] ?? '', $item['o_sku'] ?? '');
             $item['is_active'] = isset($item['o_is_active']) ? (int) $item['o_is_active'] : 1;
-            $item['product_source'] = 'odoo_products_cache';
+            $item['product_source'] = 'shop_products';
             $lineSubtotal = $unit * (int) $item['quantity'];
             $item['subtotal'] = $lineSubtotal;
         } else {
@@ -1688,9 +1688,9 @@ function handleCreateOrder($data) {
                 $itemSubtotal,
             ]);
 
-            if ($src === 'odoo_products_cache' && tableExists('odoo_products_cache')) {
+            if ($src === 'shop_products' && tableExists('shop_products')) {
                 $stmt = $db->prepare(
-                    'UPDATE odoo_products_cache SET saleable_qty = saleable_qty - ?, updated_at = NOW()
+                    'UPDATE shop_products SET saleable_qty = saleable_qty - ?, updated_at = NOW()
                      WHERE id = ? AND line_account_id = ? AND saleable_qty >= ?'
                 );
                 $stmt->execute([(int) $item['quantity'], (int) $item['product_id'], (int) $lineAccountId, (int) $item['quantity']]);

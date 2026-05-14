@@ -1,7 +1,11 @@
 <?php
 /**
- * Shared Odoo storefront catalog helpers (odoo_products_cache + shop_settings.order_data_source).
+ * Shared shop storefront catalog helpers (shop_products + shop_settings.order_data_source).
  * Used by api/shop-products.php and api/checkout.php.
+ *
+ * NOTE: historical name was `odoo_products_cache` because the table was first
+ * populated by an Odoo sync job. The table now powers any admin-managed shop
+ * catalog, whether or not Odoo is the upstream source.
  */
 
 require_once __DIR__ . '/shop-data-source.php';
@@ -27,23 +31,29 @@ if (!function_exists('schema_table_has_column')) {
     }
 }
 
-if (!function_exists('useOdooStorefrontCatalog')) {
+if (!function_exists('useShopProductCatalog')) {
     /**
-     * Odoo storefront mode: cache table + storefront column + shop_settings
+     * Storefront mode: shop_products table + storefront column + shop_settings.
+     * Returns true when the mini-app shop should query the managed catalog
+     * (shop_products) instead of falling back to legacy business_items.
+     *
+     * `getShopOrderDataSource() === 'odoo'` is the historical enum value for
+     * "use the managed cache table" and is preserved for backward compat with
+     * existing shop_settings rows.
      *
      * @return bool
      */
-    function useOdooStorefrontCatalog(PDO $db, int $lineAccountId)
+    function useShopProductCatalog(PDO $db, int $lineAccountId)
     {
         if ($lineAccountId <= 0) {
             return false;
         }
         try {
-            $db->query('SELECT 1 FROM odoo_products_cache LIMIT 1');
+            $db->query('SELECT 1 FROM shop_products LIMIT 1');
         } catch (Exception $e) {
             return false;
         }
-        if (!schema_table_has_column($db, 'odoo_products_cache', 'storefront_enabled')) {
+        if (!schema_table_has_column($db, 'shop_products', 'storefront_enabled')) {
             return false;
         }
 
@@ -51,7 +61,7 @@ if (!function_exists('useOdooStorefrontCatalog')) {
     }
 }
 
-if (!function_exists('odooEffectiveFields')) {
+if (!function_exists('shopEffectiveFields')) {
     /**
      * Merge admin_overrides JSON (same fields as inventory storefront).
      * Admin-supplied non-empty values win over the synced cache row.
@@ -70,7 +80,7 @@ if (!function_exists('odooEffectiveFields')) {
      *   image_gallery: string
      * }
      */
-    function odooEffectiveFields(array $row)
+    function shopEffectiveFields(array $row)
     {
         $overrides = [];
         if (!empty($row['admin_overrides'])) {
@@ -108,13 +118,13 @@ if (!function_exists('odooEffectiveFields')) {
     }
 }
 
-if (!function_exists('formatOdooProductForLiff')) {
+if (!function_exists('formatShopProductForLiff')) {
     /**
      * @return array<string, mixed>
      */
-    function formatOdooProductForLiff(array $row)
+    function formatShopProductForLiff(array $row)
     {
-        $eff = odooEffectiveFields($row);
+        $eff = shopEffectiveFields($row);
         $list = (float) $eff['list_price'];
         $online = (float) $eff['online_price'];
         if ($list <= 0 && $online > 0) {

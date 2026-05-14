@@ -1,10 +1,10 @@
-<?php
+﻿<?php
 /**
  * Tab: catalog-sync — โหลดรายการสินค้าหลัก
  * Ref: docs/ODOO_PRODUCT_SYNC_PHP.md §12.2
  *
  * Workbench-style page สำหรับโหลด/อัพเดตรายการสินค้าหลักจาก Odoo (`ineco_gc/get_product`)
- * ลง cache `odoo_products_cache`
+ * ลง cache `shop_products`
  *
  * Panels:
  *   1. สถานะการเชื่อมต่อ    — test connection
@@ -23,7 +23,7 @@ if (file_exists(__DIR__ . '/../../classes/OdooProductService.php')) {
 require_once __DIR__ . '/../components/page-header.php';
 
 $currentBotId = (int) ($_SESSION['current_bot_id'] ?? 1);
-$cacheTable   = 'odoo_products_cache';
+$cacheTable   = 'shop_products';
 $stateTable   = 'odoo_products_sync_state';
 
 // ─── Ensure cache tables exist ────────────────────────────────────────────────
@@ -321,7 +321,7 @@ $catalogSyncFormAction = htmlspecialchars($_SERVER['SCRIPT_NAME'] ?? '/inventory
                 ยังไม่พบคอลัมน์ <?= !$hasStorefrontCol ? '<code>storefront_enabled</code>' : '' ?>
                 <?= (!$hasStorefrontCol && !$hasDrugTypeCol) ? ', ' : '' ?>
                 <?= !$hasDrugTypeCol ? '<code>drug_type</code>' : '' ?>
-                ใน <code>odoo_products_cache</code>
+                ใน <code>shop_products</code>
             </div>
             <div class="mt-2 bg-white rounded px-3 py-2 font-mono text-xs text-gray-700 inline-block">
                 mysql -u &lt;user&gt; -p &lt;db&gt; &lt; database/migration_storefront_split.sql

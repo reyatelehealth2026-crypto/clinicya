@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Inbox Product Intelligence API
  * 
@@ -67,7 +67,7 @@ function getTodayMessages(PDO $db, int $days = 1): array {
 }
 
 /**
- * ค้นหาชื่อสินค้าจากข้อความ โดย match กับ cny_products + odoo_products_cache
+ * ค้นหาชื่อสินค้าจากข้อความ โดย match กับ cny_products + shop_products
  */
 function findMentionedProducts(PDO $db, array $messages): array {
     if (empty($messages)) return [];
@@ -85,7 +85,7 @@ function findMentionedProducts(PDO $db, array $messages): array {
             COALESCE(o.online_price, 0) AS online_price,
             c.enable
         FROM cny_products c
-        LEFT JOIN odoo_products_cache o ON o.product_code = c.sku
+        LEFT JOIN shop_products o ON o.product_code = c.sku
         WHERE c.enable = '1' OR c.enable = 1
         ORDER BY c.qty ASC
     ");
@@ -181,12 +181,12 @@ function checkStockFromOdoo($odooApi, PDO $db, array $productCodes, int $cacheHo
     $cacheExpiry = $now - ($cacheHours * 3600);
 
     foreach ($productCodes as $code) {
-        $stmt = $db->prepare("SELECT product_code, last_synced_at FROM odoo_products_cache WHERE product_code = ? AND line_account_id = 3 AND last_synced_at >= FROM_UNIXTIME(?)");
+        $stmt = $db->prepare("SELECT product_code, last_synced_at FROM shop_products WHERE product_code = ? AND line_account_id = 3 AND last_synced_at >= FROM_UNIXTIME(?)");
         $stmt->execute([$code, $cacheExpiry]);
         $cached = $stmt->fetch();
         if ($cached) {
             // Already fresh in cache, get full data
-            $full = $db->prepare("SELECT * FROM odoo_products_cache WHERE product_code = ? AND line_account_id = 3");
+            $full = $db->prepare("SELECT * FROM shop_products WHERE product_code = ? AND line_account_id = 3");
             $full->execute([$code]);
             $row = $full->fetch();
             if ($row) {
@@ -226,7 +226,7 @@ function checkStockFromOdoo($odooApi, PDO $db, array $productCodes, int $cacheHo
                     ];
 
                     $stmtUp = $db->prepare("
-                        INSERT INTO odoo_products_cache (line_account_id, product_id, product_code, sku, name, generic_name, barcode, category, list_price, online_price, saleable_qty, is_active, last_synced_at)
+                        INSERT INTO shop_products (line_account_id, product_id, product_code, sku, name, generic_name, barcode, category, list_price, online_price, saleable_qty, is_active, last_synced_at)
                         VALUES (3, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                         ON DUPLICATE KEY UPDATE
                             product_id=VALUES(product_id), sku=VALUES(sku), name=VALUES(name),

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Storefront Bulk Operations API
  * --------------------------------------------------
@@ -97,7 +97,7 @@ function logBulkOp(
         'Storefront bulk: ' . $action . ' (affected=' . $affected . ')',
         [
             'admin_id'        => $adminId,
-            'entity_type'     => 'odoo_products_cache',
+            'entity_type'     => 'shop_products',
             'new_value'       => array_merge(['affected' => $affected], $meta),
             'line_account_id' => $lineAccountId,
             'extra_data'      => $meta,
@@ -124,7 +124,7 @@ try {
             // Guard: เปิด storefront ต้องไม่มีของราคา 0
             if ($enabled === 1) {
                 $checkStmt = $db->prepare(
-                    "SELECT COUNT(*) FROM odoo_products_cache
+                    "SELECT COUNT(*) FROM shop_products
                      WHERE line_account_id = ?
                        AND id IN ($placeholders)
                        AND (online_price IS NULL OR online_price = 0)
@@ -143,7 +143,7 @@ try {
 
             if ($dryRun) {
                 $cntStmt = $db->prepare(
-                    "SELECT COUNT(*) FROM odoo_products_cache
+                    "SELECT COUNT(*) FROM shop_products
                      WHERE line_account_id = ? AND id IN ($placeholders)"
                 );
                 $cntStmt->execute(array_merge([$lineAccountId], $ids));
@@ -156,7 +156,7 @@ try {
             }
 
             $stmt = $db->prepare(
-                "UPDATE odoo_products_cache
+                "UPDATE shop_products
                  SET storefront_enabled = ?, updated_at = NOW()
                  WHERE line_account_id = ? AND id IN ($placeholders)"
             );
@@ -184,7 +184,7 @@ try {
                          )";
 
             if ($dryRun) {
-                $cntStmt = $db->prepare("SELECT COUNT(*) FROM odoo_products_cache WHERE {$whereSql}");
+                $cntStmt = $db->prepare("SELECT COUNT(*) FROM shop_products WHERE {$whereSql}");
                 $cntStmt->execute([$lineAccountId]);
                 jsonResponse([
                     'success'  => true,
@@ -193,7 +193,7 @@ try {
                 ]);
             }
 
-            $stmt = $db->prepare("UPDATE odoo_products_cache
+            $stmt = $db->prepare("UPDATE shop_products
                 SET storefront_enabled = 0, updated_at = NOW()
                 WHERE {$whereSql}");
             $stmt->execute([$lineAccountId]);
@@ -213,7 +213,7 @@ try {
             $whereSql = "line_account_id = ? AND storefront_enabled = 1 AND category = ?";
 
             if ($dryRun) {
-                $cntStmt = $db->prepare("SELECT COUNT(*) FROM odoo_products_cache WHERE {$whereSql}");
+                $cntStmt = $db->prepare("SELECT COUNT(*) FROM shop_products WHERE {$whereSql}");
                 $cntStmt->execute([$lineAccountId, $cat]);
                 jsonResponse([
                     'success'  => true,
@@ -223,7 +223,7 @@ try {
                 ]);
             }
 
-            $stmt = $db->prepare("UPDATE odoo_products_cache
+            $stmt = $db->prepare("UPDATE shop_products
                 SET storefront_enabled = 0, updated_at = NOW()
                 WHERE {$whereSql}");
             $stmt->execute([$lineAccountId, $cat]);
@@ -247,7 +247,7 @@ try {
             $whereSql = "line_account_id = ? AND storefront_enabled = 1 AND drug_type = ?";
 
             if ($dryRun) {
-                $cntStmt = $db->prepare("SELECT COUNT(*) FROM odoo_products_cache WHERE {$whereSql}");
+                $cntStmt = $db->prepare("SELECT COUNT(*) FROM shop_products WHERE {$whereSql}");
                 $cntStmt->execute([$lineAccountId, $type]);
                 jsonResponse([
                     'success'   => true,
@@ -257,7 +257,7 @@ try {
                 ]);
             }
 
-            $stmt = $db->prepare("UPDATE odoo_products_cache
+            $stmt = $db->prepare("UPDATE shop_products
                 SET storefront_enabled = 0, updated_at = NOW()
                 WHERE {$whereSql}");
             $stmt->execute([$lineAccountId, $type]);
@@ -276,7 +276,7 @@ try {
             $whereSql = "line_account_id = ? AND storefront_enabled = 1 AND is_active = 0";
 
             if ($dryRun) {
-                $cntStmt = $db->prepare("SELECT COUNT(*) FROM odoo_products_cache WHERE {$whereSql}");
+                $cntStmt = $db->prepare("SELECT COUNT(*) FROM shop_products WHERE {$whereSql}");
                 $cntStmt->execute([$lineAccountId]);
                 jsonResponse([
                     'success'  => true,
@@ -285,7 +285,7 @@ try {
                 ]);
             }
 
-            $stmt = $db->prepare("UPDATE odoo_products_cache
+            $stmt = $db->prepare("UPDATE shop_products
                 SET storefront_enabled = 0, updated_at = NOW()
                 WHERE {$whereSql}");
             $stmt->execute([$lineAccountId]);
@@ -305,7 +305,7 @@ try {
 
             // Guard: ห้ามเปิดถ้ามีของราคา 0
             $checkStmt = $db->prepare(
-                "SELECT COUNT(*) FROM odoo_products_cache
+                "SELECT COUNT(*) FROM shop_products
                  WHERE line_account_id = ?
                    AND id IN ($placeholders)
                    AND (online_price IS NULL OR online_price = 0)
@@ -323,7 +323,7 @@ try {
 
             if ($dryRun) {
                 $cntStmt = $db->prepare(
-                    "SELECT COUNT(*) FROM odoo_products_cache
+                    "SELECT COUNT(*) FROM shop_products
                      WHERE line_account_id = ? AND id IN ($placeholders) AND storefront_enabled = 0"
                 );
                 $cntStmt->execute(array_merge([$lineAccountId], $ids));
@@ -335,7 +335,7 @@ try {
             }
 
             $stmt = $db->prepare(
-                "UPDATE odoo_products_cache
+                "UPDATE shop_products
                  SET storefront_enabled = 1, updated_at = NOW()
                  WHERE line_account_id = ? AND id IN ($placeholders)"
             );
@@ -387,7 +387,7 @@ try {
             // Read current row + current overrides
             $rowStmt = $db->prepare(
                 "SELECT id, admin_overrides, name, list_price, online_price
-                 FROM odoo_products_cache
+                 FROM shop_products
                  WHERE line_account_id = ? AND id = ?"
             );
             $rowStmt->execute([$lineAccountId, $id]);
@@ -415,7 +415,7 @@ try {
             $encoded = empty($overrides) ? null : json_encode($overrides, JSON_UNESCAPED_UNICODE);
 
             $updateStmt = $db->prepare(
-                "UPDATE odoo_products_cache
+                "UPDATE shop_products
                  SET admin_overrides = ?, updated_at = NOW()
                  WHERE line_account_id = ? AND id = ?"
             );
@@ -456,7 +456,7 @@ try {
             }
 
             $rowStmt = $db->prepare(
-                "SELECT admin_overrides FROM odoo_products_cache
+                "SELECT admin_overrides FROM shop_products
                  WHERE line_account_id = ? AND id = ?"
             );
             $rowStmt->execute([$lineAccountId, $id]);
@@ -484,7 +484,7 @@ try {
             $encoded = empty($overrides) ? null : json_encode($overrides, JSON_UNESCAPED_UNICODE);
 
             $updateStmt = $db->prepare(
-                "UPDATE odoo_products_cache
+                "UPDATE shop_products
                  SET admin_overrides = ?, updated_at = NOW()
                  WHERE line_account_id = ? AND id = ?"
             );
@@ -511,7 +511,7 @@ try {
                 jsonResponse(['success' => false, 'error' => 'id required'], 400);
             }
             $updateStmt = $db->prepare(
-                "UPDATE odoo_products_cache
+                "UPDATE shop_products
                  SET admin_overrides = NULL, updated_at = NOW()
                  WHERE line_account_id = ? AND id = ?"
             );
@@ -532,7 +532,7 @@ try {
             }
 
             $stmt = $db->prepare(
-                "UPDATE odoo_products_cache
+                "UPDATE shop_products
                  SET featured_order = ?, updated_at = NOW()
                  WHERE line_account_id = ? AND id = ?"
             );
