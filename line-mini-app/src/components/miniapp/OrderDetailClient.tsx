@@ -134,12 +134,6 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
                   <dd className="font-medium text-slate-700">{paymentMethodLabel(order.payment_method)}</dd>
                 </div>
               ) : null}
-              {order.transaction_type ? (
-                <div className="flex justify-between gap-3">
-                  <dt>ประเภทรายการ</dt>
-                  <dd className="font-medium text-slate-700">{order.transaction_type}</dd>
-                </div>
-              ) : null}
             </dl>
 
             {/* Money breakdown */}
