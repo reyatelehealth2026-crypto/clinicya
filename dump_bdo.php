@@ -1,7 +1,7 @@
 <?php
-require '/www/wwwroot/cny.re-ya.com/config/config.php';
-require '/www/wwwroot/cny.re-ya.com/modules/Core/Database.php';
-require '/www/wwwroot/cny.re-ya.com/classes/OdooAPIClient.php';
+require __DIR__ . '/config/config.php';
+require __DIR__ . '/modules/Core/Database.php';
+require __DIR__ . '/classes/OdooAPIClient.php';
 use Modules\Core\Database;
 $db = Database::getInstance()->getConnection();
 $api = new OdooAPIClient($db);

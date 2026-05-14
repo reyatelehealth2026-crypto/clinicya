@@ -6,7 +6,7 @@
  * ตอน PHP-FPM start แล้ว share ให้ทุก worker ใช้ร่วมกัน — ไม่ต้อง parse ซ้ำ
  *
  * ติดตั้ง: เพิ่มใน php.ini หรือ opcache.ini:
- *   opcache.preload = /www/wwwroot/cny.re-ya.com/config/preload.php
+ *   opcache.preload = /home/zrismpsz/public_html/config/preload.php
  *   opcache.preload_user = www
  *
  * ⚠️ ใช้เฉพาะ PHP-FPM (ไม่ทำงานกับ CLI หรือ Apache mod_php)

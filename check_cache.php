@@ -1,5 +1,5 @@
 <?php
-require '/www/wwwroot/cny.re-ya.com/config/config.php';
+require __DIR__ . '/config/config.php';
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 $query = "SELECT c.financial_summary_json FROM odoo_bdo_context c 
              JOIN odoo_bdos b ON c.bdo_id = b.id 
