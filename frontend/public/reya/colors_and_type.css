@@ -1,0 +1,288 @@
+/* =========================================================================
+   Clinicya — Colors & Type Tokens
+   Source of truth for color and typographic styles across LINE Mini App,
+   Admin Dashboard, and any new Clinicya-branded artifact.
+   ========================================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+/* ───── LINE Seed Sans TH — primary brand font (Thai + Latin) ─────────── */
+@font-face {
+  font-family: "LINE Seed Sans TH";
+  src: url("./fonts/LINESeedSansTH_Th.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "LINE Seed Sans TH";
+  src: url("./fonts/LINESeedSansTH_Rg.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "LINE Seed Sans TH";
+  src: url("./fonts/LINESeedSansTH_Bd.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "LINE Seed Sans TH";
+  src: url("./fonts/LINESeedSansTH_XBd.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "LINE Seed Sans TH";
+  src: url("./fonts/LINESeedSansTH_He.ttf") format("truetype");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("./fonts/GeistVF.woff") format("woff");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMonoVF.woff") format("woff");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ───── Brand — Clinicya Green (primary) ─────────────────────────────── */
+  --line:           #2c7656;
+  --line-dark:      #235e45;
+  --line-soft:      #e8f1ec;
+  --line-muted:     #a8c8b8;
+
+  --brand-50:       #eef5f1;
+  --brand-100:      #d6ebe0;
+  --brand-200:      #aed6c2;
+  --brand-300:      #7eb89c;
+  --brand-400:      #4d9876;
+  --brand-500:      #2c7656;
+  --brand-600:      #235e45;
+  --brand-700:      #1c4d39;
+  --brand-800:      #163d2d;
+  --brand-900:      #0f2c20;
+
+  /* ───── Sub-brand — Sky (Admin Dashboard primary) ───────────────────── */
+  --sky-50:         #f0f9ff;
+  --sky-100:        #e0f2fe;
+  --sky-200:        #bae6fd;
+  --sky-300:        #7dd3fc;
+  --sky-400:        #38bdf8;
+  --sky-500:        #0ea5e9;
+  --sky-600:        #0284c7;
+  --sky-700:        #0369a1;
+  --sky-800:        #075985;
+  --sky-900:        #0c4a6e;
+
+  /* ───── Neutrals — Slate ─────────────────────────────────────────────── */
+  --slate-50:       #f8fafc;
+  --slate-100:      #f1f5f9;
+  --slate-200:      #e2e8f0;
+  --slate-300:      #cbd5e1;
+  --slate-400:      #94a3b8;
+  --slate-500:      #64748b;
+  --slate-600:      #475569;
+  --slate-700:      #334155;
+  --slate-800:      #1e293b;
+  --slate-900:      #0f172a;
+
+  /* ───── Semantic foreground / background ─────────────────────────────── */
+  --bg:             #f8fafc;     /* page (Mini App)            */
+  --bg-flat:        #f5f5f5;     /* page (Mini App, alt)       */
+  --surface:        #ffffff;     /* cards                      */
+  --surface-2:      #f8fafc;     /* sunken / alt cards         */
+  --surface-3:      #f1f5f9;     /* hover, pill backgrounds    */
+  --fg-1:           #0f172a;     /* body text, headings        */
+  --fg-2:           #475569;     /* secondary text             */
+  --fg-3:           #94a3b8;     /* tertiary, captions         */
+  --fg-on-brand:    #ffffff;
+  --divider:        #f1f5f9;
+  --border:         #e2e8f0;
+
+  /* ───── Status ───────────────────────────────────────────────────────── */
+  --success:        #16a34a;
+  --success-bg:     #ecfdf5;
+  --success-fg:     #047857;
+  --warning:        #f59e0b;
+  --warning-bg:     #fffbeb;
+  --warning-fg:     #b45309;
+  --danger:         #dc2626;
+  --danger-bg:      #fef2f2;
+  --danger-fg:      #b91c1c;
+  --info:           #1565c0;
+  --info-bg:        #e0f2fe;
+  --info-fg:        #0369a1;
+
+  /* ───── Brand gradient (member hero) ────────────────────────────────── */
+  --brand-gradient: linear-gradient(135deg, #3a9170 0%, #2c7656 50%, #235e45 100%);
+
+  /* ───── Type families ───────────────────────────────────────────────── */
+  /* LINE Seed Sans TH covers both Thai and Latin glyphs and is the
+     canonical brand font across Mini App + Admin. Inter remains as a
+     Latin-only fallback. */
+  --font-sans:      'LINE Seed Sans TH', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display:   'LINE Seed Sans TH', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:      'Geist Mono', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --font-thai:      'LINE Seed Sans TH', 'Inter', sans-serif;
+
+  /* ───── Type scale (px) ─────────────────────────────────────────────── */
+  --text-9:    9px;     /* badge micro             */
+  --text-10:  10px;     /* nav label, micro caption */
+  --text-11:  11px;     /* meta, helper             */
+  --text-12:  12px;     /* small body, badge        */
+  --text-13:  13px;     /* dense body               */
+  --text-14:  14px;     /* body / button            */
+  --text-15:  15px;     /* section title            */
+  --text-16:  16px;     /* base                     */
+  --text-18:  18px;     /* h4                       */
+  --text-20:  20px;     /* h3                       */
+  --text-24:  24px;     /* h2                       */
+  --text-30:  30px;     /* h1                       */
+  --text-36:  36px;     /* display                  */
+
+  /* ───── Spacing (4-px base) ─────────────────────────────────────────── */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px;
+
+  /* ───── Radii ───────────────────────────────────────────────────────── */
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;     /* button (Mini App), card (Admin) */
+  --radius-2xl: 20px;     /* card (Mini App)               */
+  --radius-3xl: 24px;     /* hero card                     */
+  --radius-4xl: 32px;     /* member card                   */
+  --radius-pill: 9999px;
+
+  /* ───── Shadow system (Mini App canonical) ──────────────────────────── */
+  --shadow-soft:        0 2px 16px rgba(15, 23, 42, 0.06);
+  --shadow-card:        0 4px 24px rgba(15, 23, 42, 0.08);
+  --shadow-glow:        0 0 20px rgba(44, 118, 86, 0.15);
+  --shadow-inner-soft:  inset 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-sm:          0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md:          0 4px 6px rgba(15, 23, 42, 0.07);
+  --shadow-lg:          0 10px 15px rgba(15, 23, 42, 0.1);
+
+  /* ───── Motion ──────────────────────────────────────────────────────── */
+  --ease-out:     cubic-bezier(0.33, 1, 0.68, 1);
+  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast:   150ms;
+  --duration-base:   250ms;
+  --duration-slow:   350ms;
+}
+
+/* =========================================================================
+   Semantic typographic styles — apply to elements directly
+   ========================================================================= */
+
+html, body {
+  font-family: var(--font-sans);
+  color: var(--fg-1);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'rlig' 1, 'calt' 1;
+}
+
+h1, .h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-30);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--fg-1);
+}
+h2, .h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-24);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--fg-1);
+}
+h3, .h3 {
+  font-size: var(--text-20);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--fg-1);
+}
+h4, .h4 {
+  font-size: var(--text-18);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--fg-1);
+}
+h5, .h5 {
+  font-size: var(--text-16);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--fg-1);
+}
+
+p, .body {
+  font-size: var(--text-14);
+  line-height: 1.55;
+  color: var(--fg-1);
+}
+.body-sm {
+  font-size: var(--text-12);
+  line-height: 1.5;
+  color: var(--fg-2);
+}
+.body-lg {
+  font-size: var(--text-16);
+  line-height: 1.55;
+  color: var(--fg-1);
+}
+
+.eyebrow, .section-title {
+  font-size: var(--text-12);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--fg-3);
+}
+
+.caption {
+  font-size: var(--text-11);
+  color: var(--fg-3);
+  line-height: 1.4;
+}
+
+.price {
+  font-size: var(--text-16);
+  font-weight: 800;
+  color: var(--danger);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.price-strike {
+  font-size: var(--text-11);
+  color: var(--fg-3);
+  text-decoration: line-through;
+  font-variant-numeric: tabular-nums;
+}
+
+code, kbd, pre, samp, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.thai {
+  font-family: var(--font-thai);
+}

@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>REYA Dashboard — Overview</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #eef2ef; }
+  body {
+    font-family: var(--font-sans);
+    color: var(--fg-1);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 48px 32px 64px;
+  }
+
+  .hero {
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    padding: 0 0 36px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 36px;
+  }
+  .hero .mark {
+    width: 72px; height: 72px; border-radius: 18px;
+    background: var(--brand-gradient);
+    color: #fff;
+    display: grid; place-items: center;
+    font-size: 36px; font-weight: 800;
+    box-shadow: var(--shadow-glow);
+    flex-shrink: 0;
+  }
+  .hero h1 {
+    font-size: 40px; font-weight: 800;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .hero h1 .tail {
+    color: var(--brand-600);
+    font-weight: 600;
+  }
+  .hero .lede {
+    font-size: 15px; color: var(--fg-2);
+    line-height: 1.5;
+    max-width: 640px;
+    margin: 0;
+  }
+  .hero .open-btn {
+    margin-left: auto;
+    background: var(--brand-500); color: #fff;
+    border: 0;
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-family: inherit; font-size: 14px; font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex; align-items: center; gap: 8px;
+    box-shadow: var(--shadow-glow);
+    transition: transform 200ms var(--ease-spring);
+  }
+  .hero .open-btn:hover { transform: translateY(-2px); }
+
+  .toc {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 36px;
+  }
+  .toc a {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fg-1);
+    text-decoration: none;
+    display: flex; align-items: center; gap: 10px;
+    transition: all 150ms;
+  }
+  .toc a:hover {
+    border-color: var(--brand-400);
+    background: var(--line-soft);
+    color: var(--brand-700);
+    transform: translateY(-1px);
+  }
+  .toc a .num {
+    width: 24px; height: 24px;
+    border-radius: 7px;
+    background: var(--line-soft);
+    color: var(--brand-600);
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 800;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+  }
+
+  .page-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 36px;
+    scroll-margin-top: 24px;
+  }
+
+  .page-card .meta {
+    display: flex; align-items: center;
+    gap: 16px;
+    padding: 22px 28px 18px 28px;
+    border-bottom: 1px solid var(--divider);
+  }
+  .page-card .meta .num {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: var(--brand-gradient);
+    color: #fff;
+    display: grid; place-items: center;
+    font-size: 16px; font-weight: 800;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+  }
+  .page-card .meta .titles { flex: 1; min-width: 0; }
+  .page-card .meta h2 {
+    font-size: 22px; font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .page-card .meta .lede {
+    font-size: 13px; color: var(--fg-2);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+  .page-card .meta .tags {
+    display: flex; gap: 6px;
+    flex-wrap: wrap;
+  }
+  .page-card .meta .tag {
+    background: var(--line-soft);
+    color: var(--brand-700);
+    font-size: 11px; font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 9999px;
+  }
+  .page-card .meta .tag.info { background: var(--info-bg); color: var(--info-fg); }
+  .page-card .meta .tag.warn { background: var(--warning-bg); color: var(--warning-fg); }
+  .page-card .meta .tag.success { background: var(--success-bg); color: var(--success-fg); }
+
+  .page-card .shot {
+    background: #f3f6f4;
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+  }
+  .page-card .shot img {
+    width: 100%;
+    max-width: 1200px;
+    height: auto;
+    display: block;
+    border-radius: 10px;
+    box-shadow: 0 12px 36px rgba(15,23,42,0.14), 0 0 0 1px rgba(15,23,42,0.06);
+  }
+
+  .page-card .footer {
+    padding: 16px 28px 22px 28px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+  }
+  .page-card .feature {
+    display: flex; align-items: flex-start; gap: 10px;
+    flex: 1;
+    min-width: 200px;
+  }
+  .page-card .feature .ic {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: var(--line-soft);
+    color: var(--brand-600);
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+  .page-card .feature .body { flex: 1; }
+  .page-card .feature .h {
+    font-size: 12px; font-weight: 700;
+    color: var(--fg-1);
+    margin-bottom: 2px;
+  }
+  .page-card .feature .d {
+    font-size: 11px; color: var(--fg-2);
+    line-height: 1.45;
+  }
+
+  .footer-note {
+    margin-top: 48px;
+    text-align: center;
+    color: var(--fg-3);
+    font-size: 12px;
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+  }
+  .footer-note b { color: var(--brand-600); }
+
+  @media (max-width: 900px) {
+    .hero { flex-direction: column; align-items: flex-start; }
+    .hero .open-btn { margin-left: 0; }
+    .toc { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <header class="hero">
+      <div class="mark">R</div>
+      <div>
+        <h1>REYA <span class="tail">— Pharmacy OS</span></h1>
+        <p class="lede">Interactive prototype สำหรับเภสัชกร — รวมการสนทนาลูกค้า, AI Co-Pilot, จัดการสินค้า, telepharmacy และ analytics ในที่เดียว สำรวจตัวอย่างทุกหน้าด้านล่าง หรือเข้าไปกดเล่นจริง</p>
+      </div>
+      <a class="open-btn" href="REYA Dashboard.html">เปิด Prototype →</a>
+    </header>
+
+    <nav class="toc">
+      <a href="#dashboard"><span class="num">01</span> แดชบอร์ด</a>
+      <a href="#inbox"><span class="num">02</span> Inbox + AI Co-Pilot</a>
+      <a href="#customers"><span class="num">03</span> ลูกค้า CRM</a>
+      <a href="#orders"><span class="num">04</span> ออเดอร์</a>
+      <a href="#products"><span class="num">05</span> สินค้า</a>
+      <a href="#rewards"><span class="num">06</span> ของรางวัล</a>
+      <a href="#analytics"><span class="num">07</span> Analytics</a>
+      <a href="#telepharmacy"><span class="num">08</span> Telepharmacy</a>
+      <a href="#ai-copilot"><span class="num">09</span> AI Co-Pilot Center</a>
+    </nav>
+
+    <!-- ============ Dashboard ============ -->
+    <section class="page-card" id="dashboard">
+      <div class="meta">
+        <div class="num">01</div>
+        <div class="titles">
+          <h2>แดชบอร์ด</h2>
+          <div class="lede">ภาพรวมร้านยาวันนี้ — รายได้, ออเดอร์, ลูกค้าใหม่, AI usage</div>
+        </div>
+        <div class="tags">
+          <span class="tag">KPIs</span>
+          <span class="tag info">Charts</span>
+          <span class="tag warn">Tasks</span>
+        </div>
+      </div>
+      <div class="shot"><img src="screenshots/01-dashboard.png" alt="Dashboard page" /></div>
+      <div class="footer">
+        <div class="feature">
+          <div class="ic">📊</div>
+          <div class="body"><div class="h">4 KPI ด่วน + sparklines</div><div class="d">รายได้ ฿42,180 · ออเดอร์ 38 · ลูกค้าใหม่ 12 · AI 184</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">📈</div>
+          <div class="body"><div class="h">รายได้ 30 วัน + เทียบเดือนก่อน</div><div class="d">Area chart พร้อม data points รายวัน</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">⚡</div>
+          <div class="body"><div class="h">ออเดอร์ล่าสุด, Activity, VIP, Tasks</div><div class="d">ทุกอย่างที่ต้องรู้ใน 30 วินาที</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Inbox ============ -->
+    <section class="page-card" id="inbox">
+      <div class="meta">
+        <div class="num">02</div>
+        <div class="titles">
+          <h2>Inbox + AI Co-Pilot</h2>
+          <div class="lede">การสนทนา LINE ของลูกค้า + AI ช่วยร่างคำตอบ + เตือนแพ้ยา + customer info ครบในจอเดียว</div>
+        </div>
+        <div class="tags">
+          <span class="tag">★ Hero</span>
+          <span class="tag info">Realtime AI</span>
+          <span class="tag warn">Drug warning</span>
+        </div>
+      </div>
+      <div class="shot"><img src="screenshots/02-inbox.png" alt="Inbox + AI Co-Pilot" /></div>
+      <div class="footer">
+        <div class="feature">
+          <div class="ic">💬</div>
+          <div class="body"><div class="h">4-column layout</div><div class="d">Sidebar · Inbox list · Chat · AI Co-Pilot</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">✨</div>
+          <div class="body"><div class="h">AI suggest แบบ inline + panel</div><div class="d">คลิก "ใช้คำตอบนี้" เพื่อส่งทันที</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">⚠️</div>
+          <div class="body"><div class="h">Drug interaction warning</div><div class="d">เตือนเมื่อลูกค้ามีประวัติแพ้ยา</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">📱</div>
+          <div class="body"><div class="h">มุมมองลูกค้า (iPhone)</div><div class="d">ดู LINE Mini App แบบ live preview</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Customers CRM ============ -->
+    <section class="page-card" id="customers">
+      <div class="meta">
+        <div class="num">03</div>
+        <div class="titles">
+          <h2>ลูกค้า CRM</h2>
+          <div class="lede">รายชื่อลูกค้าทั้งหมด พร้อมระดับสมาชิก, แต้ม, LTV, ประวัติการสั่ง</div>
+        </div>
+        <div class="tags">
+          <span class="tag">Tier system</span>
+          <span class="tag info">Filters</span>
+        </div>
+      </div>
+      <div class="shot"><img src="screenshots/03-customers.png" alt="Customers CRM" /></div>
+      <div class="footer">
+        <div class="feature">
+          <div class="ic">👥</div>
+          <div class="body"><div class="h">2,847 ลูกค้า · 412 VIP</div><div class="d">filter ตาม Gold / Silver / Bronze</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">💰</div>
+          <div class="body"><div class="h">Avg LTV ฿2,180</div><div class="d">เห็นมูลค่าลูกค้าทุกราย</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">🟢</div>
+          <div class="body"><div class="h">Online indicators</div><div class="d">เห็นทันทีว่าใครเปิดแอปอยู่</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Orders ============ -->
+    <section class="page-card" id="orders">
+      <div class="meta">
+        <div class="num">04</div>
+        <div class="titles">
+          <h2>ออเดอร์</h2>
+          <div class="lede">รายการสั่งซื้อทั้งหมด — รอชำระ / ชำระแล้ว / จัดส่ง / ยกเลิก</div>
+        </div>
+        <div class="tags">
+          <span class="tag">5 statuses</span>
+          <span class="tag info">PromptPay · CC</span>
+        </div>
+      </div>
+      <div class="shot"><img src="screenshots/04-orders.png" alt="Orders" /></div>
+      <div class="footer">
+        <div class="feature">
+          <div class="ic">📦</div>
+          <div class="body"><div class="h">5 KPI สถานะ</div><div class="d">เห็นภาพรวม pending / paid / shipped</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">🔍</div>
+          <div class="body"><div class="h">ค้นหา + filter</div><div class="d">หาออเดอร์ตามชื่อลูกค้า, ID</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">💳</div>
+          <div class="body"><div class="h">Payment method tracking</div><div class="d">PromptPay, TrueMoney, CC ****1234</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Products ============ -->
+    <section class="page-card" id="products">
+      <div class="meta">
+        <div class="num">05</div>
+        <div class="titles">
+          <h2>สินค้า</h2>
+          <div class="lede">คลังสินค้า 16 SKU พร้อม stock badges (ใกล้หมด / หมด / ในสต็อก) และ filter หมวด</div>
+        </div>
+        <div class="tags">
+          <span class="tag">Inventory</span>
+          <span class="tag warn">Low stock alerts</span>
+        </div>
+      </div>
+      <div class="shot"><img src="screenshots/05-products.png" alt="Products" /></div>
+      <div class="footer">
+        <div class="feature">
+          <div class="ic">💊</div>
+          <div class="body"><div class="h">16 SKU จาก 5 หมวด</div><div class="d">ยา, วิตามิน, ความงาม, แม่และเด็ก, อุปกรณ์</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">🟡</div>
+          <div class="body"><div class="h">Stock indicators แบบเข้าใจง่าย</div><div class="d">เขียว/เหลือง/แดง = สบาย/ใกล้หมด/หมด</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">💰</div>
+          <div class="body"><div class="h">มูลค่าสต็อก ฿1.2M</div><div class="d">รู้ทันทีว่าสต็อกเงินติดอยู่เท่าไหร่</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Rewards ============ -->
+    <section class="page-card" id="rewards">
+      <div class="meta">
+        <div class="num">06</div>
+        <div class="titles">
+          <h2>ของรางวัล · Loyalty</h2>
+          <div class="lede">ตั้งค่า + ติดตามการแลกของรางวัล — เปิด/ปิดได้ทันที, เห็นยอดแลกของแต่ละชิ้น</div>
+        </div>
+        <div class="tags">
+          <span class="tag">Toggleable</span>
+          <span class="tag success">Repeat rate 68%</span>
+        </div>
+      </div>
+      <div class="shot"><img src="screenshots/06-rewards.png" alt="Rewards admin" /></div>
+      <div class="footer">
+        <div class="feature">
+          <div class="ic">🎁</div>
+          <div class="body"><div class="h">1,248 แลกในเดือนนี้</div><div class="d">+18.2% MoM · 182k แต้มที่ใช้</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">🔁</div>
+          <div class="body"><div class="h">Repeat rate 68%</div><div class="d">ลูกค้าแลกซ้ำ — สัญญาณ engagement ดี</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">🔘</div>
+          <div class="body"><div class="h">Toggle เปิด/ปิดทันที</div><div class="d">ไม่ต้องลบ — ซ่อนจากลูกค้าได้ชั่วคราว</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Analytics ============ -->
+    <section class="page-card" id="analytics">
+      <div class="meta">
+        <div class="num">07</div>
+        <div class="titles">
+          <h2>Analytics</h2>
+          <div class="lede">รายงานเชิงลึก — รายได้, หมวดขายดี, traffic sources, เวลาที่ลูกค้ามากสุด, NPS</div>
+        </div>
+        <div class="tags">
+          <span class="tag">Powered by Odoo</span>
+          <span class="tag info">30/90 days</span>
+        </div>
+      </div>
+      <div class="shot"><img src="screenshots/07-analytics.png" alt="Analytics" /></div>
+      <div class="footer">
+        <div class="feature">
+          <div class="ic">📈</div>
+          <div class="body"><div class="h">รายได้ ฿1.24M · 30 วัน</div><div class="d">+14.8% YoY พร้อมเทียบเดือนก่อน</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">⏰</div>
+          <div class="body"><div class="h">Hourly heatmap</div><div class="d">14:00 = เวลาทองของร้าน</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">⭐</div>
+          <div class="body"><div class="h">NPS +68 · 4.8 ★</div><div class="d">จากรีวิวจริง 247 รายการ</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Telepharmacy ============ -->
+    <section class="page-card" id="telepharmacy">
+      <div class="meta">
+        <div class="num">08</div>
+        <div class="titles">
+          <h2>Telepharmacy</h2>
+          <div class="lede">นัดวิดีโอคอลกับลูกค้า — calendar รายสัปดาห์, นัดที่กำลังจะถึง, ประวัติเสร็จสิ้น</div>
+        </div>
+        <div class="tags">
+          <span class="tag">Video consult</span>
+          <span class="tag success">4.9 ★ · 142 รีวิว</span>
+        </div>
+      </div>
+      <div class="shot"><img src="screenshots/08-telepharmacy.png" alt="Telepharmacy" /></div>
+      <div class="footer">
+        <div class="feature">
+          <div class="ic">📅</div>
+          <div class="body"><div class="h">ตารางสัปดาห์ 7×9</div><div class="d">7 วัน × 9 ช่วงเวลา · highlight วันนี้</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">🎥</div>
+          <div class="body"><div class="h">Join ปุ่มเดียวเริ่มได้</div><div class="d">ลดเวลา onboard ลูกค้า</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">⏱️</div>
+          <div class="body"><div class="h">เฉลี่ย 18 น./นัด</div><div class="d">ลดจาก 20 น. = workflow ดีขึ้น</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ AI Co-Pilot Center ============ -->
+    <section class="page-card" id="ai-copilot">
+      <div class="meta">
+        <div class="num">09</div>
+        <div class="titles">
+          <h2>AI Co-Pilot Center <span style="background:var(--brand-500);color:#fff;font-size:10px;padding:2px 8px;border-radius:9999px;font-weight:800;letter-spacing:0.04em;vertical-align:middle;margin-left:6px">BETA</span></h2>
+          <div class="lede">ปรับแต่งและติดตามผล AI — accept rate, time saved, knowledge sources, suggestion log</div>
+        </div>
+        <div class="tags">
+          <span class="tag">Claude Haiku 4.5</span>
+          <span class="tag success">87% accept</span>
+        </div>
+      </div>
+      <div class="shot"><img src="screenshots/09-ai-copilot.png" alt="AI Co-Pilot Center" /></div>
+      <div class="footer">
+        <div class="feature">
+          <div class="ic">✨</div>
+          <div class="body"><div class="h">2,184 suggestions เดือนนี้</div><div class="d">+18.4% สัปดาห์นี้ · 184 วันนี้</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">✅</div>
+          <div class="body"><div class="h">87% accept rate</div><div class="d">เภสัชกรยอมรับ AI suggest · เป้า 90%</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">⏰</div>
+          <div class="body"><div class="h">ประหยัด 142 ชม. · ฿38.2k</div><div class="d">เดือนนี้</div></div>
+        </div>
+        <div class="feature">
+          <div class="ic">📚</div>
+          <div class="body"><div class="h">4 Knowledge sources</div><div class="d">TPC, Drug DB, Catalog, CRM</div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer-note">
+      <b>REYA Dashboard</b> · Interactive Prototype · Built on Clinicya Design System<br/>
+      กดที่ภาพหรือเปิด <a href="REYA Dashboard.html" style="color:var(--brand-600);font-weight:700">prototype ตัวจริง</a> เพื่อทดลองใช้งาน
+    </div>
+  </div>
+</body>
+</html>
