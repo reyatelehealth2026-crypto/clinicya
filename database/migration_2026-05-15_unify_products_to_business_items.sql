@@ -67,11 +67,16 @@ INSERT INTO `business_items` (
 )
 SELECT
     sp.line_account_id,
-    'product'                                          AS item_type,
+    -- business_items.item_type is enum('physical','digital','service',
+    -- 'booking','content'); 'physical' is the right bucket for shop SKUs.
+    'physical'                                         AS item_type,
+    -- business_categories.name uses utf8mb4_general_ci and shop_products.category
+    -- uses utf8mb4_unicode_ci; force the join to one collation so MySQL doesn't
+    -- complain about "Illegal mix of collations" on the equality test.
     (
         SELECT bc.id
         FROM business_categories bc
-        WHERE bc.name = sp.category
+        WHERE bc.name COLLATE utf8mb4_unicode_ci = sp.category
           AND (bc.line_account_id = sp.line_account_id OR bc.line_account_id IS NULL)
         ORDER BY (bc.line_account_id = sp.line_account_id) DESC
         LIMIT 1
@@ -106,5 +111,5 @@ WHERE NOT EXISTS (
     SELECT 1
     FROM business_items bi
     WHERE bi.line_account_id = sp.line_account_id
-      AND bi.sku = sp.product_code
+      AND bi.sku COLLATE utf8mb4_unicode_ci = sp.product_code
 );
