@@ -1,0 +1,297 @@
+/* =========================================================================
+   REYA theme overlay
+   Loaded after the legacy inline CSS in includes/header.php so its tokens
+   win the cascade. Source of truth: Claude Design "REYA DEMO" handoff
+   (REYA Dashboard.html). Brand color = emerald #2c7656.
+   ========================================================================= */
+
+/* ----- LINE Seed Sans TH + Geist (REYA brand typefaces) ----- */
+@font-face {
+  font-family: "LINESeedSansTH";
+  font-weight: 300;
+  font-display: swap;
+  src: url("/assets/fonts/reya/LINESeedSansTH_Th.ttf") format("truetype");
+}
+@font-face {
+  font-family: "LINESeedSansTH";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/reya/LINESeedSansTH_Rg.ttf") format("truetype");
+}
+@font-face {
+  font-family: "LINESeedSansTH";
+  font-weight: 600;
+  font-display: swap;
+  src: url("/assets/fonts/reya/LINESeedSansTH_Bd.ttf") format("truetype");
+}
+@font-face {
+  font-family: "LINESeedSansTH";
+  font-weight: 700;
+  font-display: swap;
+  src: url("/assets/fonts/reya/LINESeedSansTH_XBd.ttf") format("truetype");
+}
+@font-face {
+  font-family: "LINESeedSansTH";
+  font-weight: 800;
+  font-display: swap;
+  src: url("/assets/fonts/reya/LINESeedSansTH_He.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Geist";
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/assets/fonts/reya/GeistVF.woff") format("woff");
+}
+@font-face {
+  font-family: "GeistMono";
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/assets/fonts/reya/GeistMonoVF.woff") format("woff");
+}
+
+/* ----- REYA brand tokens (override LINE-green legacy defaults) ----- */
+:root {
+  /* Emerald scale used by chart strokes, badges, focus rings, etc. */
+  --reya-emerald-50:  #ecfaf3;
+  --reya-emerald-100: #d6f1e3;
+  --reya-emerald-200: #aedfc4;
+  --reya-emerald-300: #79c79f;
+  --reya-emerald-400: #4dad7e;
+  --reya-emerald-500: #2c7656;   /* hero brand */
+  --reya-emerald-600: #235e45;
+  --reya-emerald-700: #1b4a36;
+  --reya-emerald-800: #143527;
+  --reya-emerald-900: #0d2418;
+
+  /* Legacy primary tokens — re-pointed to emerald so existing components
+     that read --primary inherit the rebrand without selector churn. */
+  --primary:       #2c7656;
+  --primary-dark:  #235e45;
+  --primary-light: #3a9170;
+
+  /* ERP accent tokens used across executive/analytics dashboards. */
+  --erp-accent:        #2c7656;
+  --erp-accent-soft:   rgba(44, 118, 86, 0.10);
+  --erp-accent-strong: #1b4a36;
+
+  /* Sidebar accent + active state shift to emerald. */
+  --sidebar-active-bg: linear-gradient(
+    90deg,
+    rgba(44, 118, 86, 0.12) 0%,
+    rgba(44, 118, 86, 0.04) 100%
+  );
+  --sidebar-active-text:   #143527;
+  --sidebar-active-border: #2c7656;
+
+  /* Primary-* numeric palette used by the dark sidebar variants. */
+  --color-primary-50:  #ecfaf3;
+  --color-primary-100: #d6f1e3;
+  --color-primary-200: #aedfc4;
+  --color-primary-300: #79c79f;
+  --color-primary-400: #4dad7e;
+  --color-primary-500: #2c7656;
+  --color-primary-600: #235e45;
+  --color-primary-700: #1b4a36;
+  --color-primary-800: #143527;
+  --color-primary-900: #0d2418;
+
+  /* Typography swap — REYA brand fonts with Inter / Noto Sans Thai fallback
+     so we never go font-less if the TTFs miss a glyph. */
+  --font-sans: "LINESeedSansTH", "Inter", "Noto Sans Thai",
+               -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Geist", "LINESeedSansTH", "Inter", sans-serif;
+  --font-mono: "GeistMono", "JetBrains Mono", "Fira Code", monospace;
+
+  /* Surface + shadow polish from REYA design system. */
+  --reya-surface:       #ffffff;
+  --reya-surface-muted: #f4f7f5;
+  --reya-border:        #d9e6df;
+  --reya-shadow-card:   0 6px 18px rgba(20, 53, 39, 0.08);
+  --reya-radius:        14px;
+}
+
+/* ----- Body + base ----- */
+body {
+  font-family: var(--font-sans) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(44, 118, 86, 0.07), transparent 32%),
+    radial-gradient(circle at 100% 100%, rgba(44, 118, 86, 0.05), transparent 36%),
+    linear-gradient(180deg, #f5f9f6 0%, #eef3f0 100%);
+}
+
+/* Display-weight surfaces (page titles, KPI numerals, brand mark). */
+h1, h2, h3, .reya-display, .page-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* ----- Sidebar brand mark — emerald gradient + "R" wordmark overlay ----- */
+.sidebar-brand .w-10.h-10 {
+  background: linear-gradient(135deg, #3a9170 0%, #2c7656 50%, #235e45 100%) !important;
+  position: relative;
+  box-shadow: 0 6px 14px rgba(20, 53, 39, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.sidebar-brand .w-10.h-10 i {
+  opacity: 0;
+}
+.sidebar-brand .w-10.h-10::after {
+  content: "R";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 2px rgba(20, 53, 39, 0.35);
+}
+
+/* Brand sublabel — swap "Admin Workspace" to a REYA-flavoured tag. */
+.sidebar-brand .text-xs.text-gray-400 {
+  color: var(--reya-emerald-600) !important;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+/* Sidebar nav active accent uses emerald instead of teal. */
+.sidebar a.active,
+.sidebar a[aria-current="page"],
+.sidebar .nav-item.active {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text);
+  box-shadow: inset 3px 0 0 var(--sidebar-active-border);
+}
+
+/* ----- Buttons / pills — emerald tint for primary actions ----- */
+.btn-primary,
+button.btn-primary,
+.bg-primary,
+.bg-green-600,
+.bg-emerald-600 {
+  background: linear-gradient(135deg, #3a9170 0%, #2c7656 100%) !important;
+  border-color: #235e45 !important;
+  color: #fff !important;
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #2c7656 0%, #1b4a36 100%) !important;
+}
+.text-primary,
+.text-green-600,
+.text-emerald-600 {
+  color: var(--reya-emerald-500) !important;
+}
+.border-primary {
+  border-color: var(--reya-emerald-500) !important;
+}
+
+/* ----- KPI card polish (Wongnai-POS style, mirrors REYA prototype) ----- */
+.reya-kpi {
+  background: var(--reya-surface);
+  border: 1px solid var(--reya-border);
+  border-radius: var(--reya-radius);
+  padding: 18px 20px;
+  box-shadow: var(--reya-shadow-card);
+  position: relative;
+  overflow: hidden;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.reya-kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(20, 53, 39, 0.12);
+}
+.reya-kpi .label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5e7a6c;
+}
+.reya-kpi .value {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--reya-emerald-700);
+  margin-top: 4px;
+  letter-spacing: -0.02em;
+}
+.reya-kpi .delta-up   { color: var(--reya-emerald-500); }
+.reya-kpi .delta-down { color: #c2410c; }
+
+/* ----- AI Co-Pilot panel skeleton (used by inbox-v2 follow-up commit) ----- */
+.reya-copilot {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbf8 100%);
+  border-left: 1px solid var(--reya-border);
+  width: 340px;
+  flex: 0 0 340px;
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+.reya-copilot .copilot-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.reya-copilot .copilot-head .mark {
+  width: 36px; height: 36px; border-radius: 12px;
+  background: linear-gradient(135deg, #3a9170, #2c7656);
+  display: grid; place-items: center;
+  color: #fff; font-family: var(--font-display); font-weight: 800;
+  position: relative;
+}
+.reya-copilot .copilot-head .mark::after {
+  content: ""; position: absolute; inset: -6px;
+  border-radius: 16px; border: 2px solid rgba(44, 118, 86, 0.45);
+  animation: reya-ring 2.4s ease-out infinite;
+}
+@keyframes reya-ring {
+  0%   { transform: scale(0.92); opacity: 0.7; }
+  100% { transform: scale(1.18); opacity: 0;   }
+}
+.reya-copilot .copilot-card {
+  background: var(--reya-surface);
+  border: 1px solid var(--reya-border);
+  border-radius: var(--reya-radius);
+  padding: 14px;
+  box-shadow: var(--reya-shadow-card);
+  margin-bottom: 12px;
+}
+.reya-copilot .copilot-card h4 {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: #5e7a6c; margin: 0 0 8px;
+}
+.reya-copilot .copilot-card .confidence {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(44, 118, 86, 0.10);
+  color: var(--reya-emerald-700);
+  font-size: 11px; font-weight: 700;
+}
+
+/* ----- Subtle motion (mesh drift) — opt-in via .reya-mesh on body ----- */
+body.reya-mesh::before {
+  content: "";
+  position: fixed; inset: -10%;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(44, 118, 86, 0.10), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(58, 145, 112, 0.08), transparent 40%);
+  filter: blur(40px);
+  z-index: -1;
+  animation: reya-drift 22s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes reya-drift {
+  0%   { transform: translate(0, 0) scale(1);   }
+  100% { transform: translate(2%, -2%) scale(1.04); }
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  body.reya-mesh::before,
+  .reya-copilot .copilot-head .mark::after {
+    animation: none;
+  }
+  .reya-kpi { transition: none; }
+}
