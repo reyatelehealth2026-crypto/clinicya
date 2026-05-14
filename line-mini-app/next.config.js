@@ -6,6 +6,10 @@ const nextConfig = {
   // CDN, etc.). The 3 former proxy routes (api/checkout, api/checkout-slip,
   // api/miniapp-home) now call PHP directly via NEXT_PUBLIC_PHP_API_BASE_URL.
   output: 'export',
+  // The app is deployed under https://re-ya.com/miniapp/ so all asset URLs
+  // and Link hrefs need this prefix baked into the HTML.
+  basePath: '/miniapp',
+  assetPrefix: '/miniapp/',
   // Monorepo: parent folder has another package-lock.json; trace this app only
   outputFileTracingRoot: path.join(__dirname),
   // next/image optimizer needs a Node server; for static export we serve
