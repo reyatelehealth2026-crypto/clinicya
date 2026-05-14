@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import Image from 'next/image'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ImageUp, Package } from 'lucide-react'
+import { ImageUp, Package, MapPin, Truck, NotebookPen } from 'lucide-react'
 import Link from 'next/link'
 import { AppShell } from '@/components/miniapp/AppShell'
 import { VerifiedOnlyNotice } from '@/components/miniapp/VerifiedOnlyNotice'
@@ -11,6 +11,12 @@ import { useLineContext } from '@/components/providers'
 import { fetchOrderDetail, promptPayQrSrc, uploadPaymentSlip, type OrderDetailApiResponse } from '@/lib/shop-api'
 import { TransferBankInfo } from '@/components/miniapp/TransferBankInfo'
 import { useToast } from '@/lib/toast'
+import {
+  orderStatusTheme,
+  paymentStatusTheme,
+  paymentMethodLabel,
+  formatThaiDateTime,
+} from '@/lib/order-status'
 
 function needsSlipUpload(order: NonNullable<OrderDetailApiResponse['order']>) {
   const method = (order.payment_method || '').toLowerCase()
@@ -94,20 +100,131 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <Package size={16} />
               <span>{order.order_number}</span>
+              {order.created_at ? (
+                <span className="ml-auto text-xs text-slate-400">{formatThaiDateTime(order.created_at)}</span>
+              ) : null}
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-              สถานะคำสั่งซื้อ: {order.status} · การชำระเงิน: {order.payment_status}
-            </p>
-            {order.payment_method ? (
-              <p className="mt-1 text-xs text-slate-500">ช่องทาง: {order.payment_method}</p>
-            ) : null}
-            <p className="mt-2 text-lg font-bold text-slate-900">
-              ฿
-              {(order.grand_total ?? 0).toLocaleString(undefined, {
-                minimumFractionDigits: 2
-              })}
+
+            {/* Status pills — mirror admin shop/order-detail.php */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(() => {
+                const t = orderStatusTheme(order.status)
+                return (
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${t.pill}`}>
+                    <span aria-hidden>{t.icon}</span>
+                    {t.label}
+                  </span>
+                )
+              })()}
+              {(() => {
+                const t = paymentStatusTheme(order.payment_status)
+                return (
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${t.pill}`}>
+                    <span aria-hidden>{t.icon}</span>
+                    {t.label}
+                  </span>
+                )
+              })()}
+            </div>
+
+            <dl className="mt-3 grid grid-cols-1 gap-y-1.5 text-xs text-slate-500">
+              {order.payment_method ? (
+                <div className="flex justify-between gap-3">
+                  <dt>ช่องทางชำระเงิน</dt>
+                  <dd className="font-medium text-slate-700">{paymentMethodLabel(order.payment_method)}</dd>
+                </div>
+              ) : null}
+              {order.transaction_type ? (
+                <div className="flex justify-between gap-3">
+                  <dt>ประเภทรายการ</dt>
+                  <dd className="font-medium text-slate-700">{order.transaction_type}</dd>
+                </div>
+              ) : null}
+            </dl>
+
+            {/* Money breakdown */}
+            <dl className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+              {order.total_amount != null ? (
+                <div className="flex justify-between py-0.5">
+                  <dt>ยอดสินค้า</dt>
+                  <dd>฿{Number(order.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</dd>
+                </div>
+              ) : null}
+              {order.shipping_fee != null && Number(order.shipping_fee) > 0 ? (
+                <div className="flex justify-between py-0.5">
+                  <dt>ค่าจัดส่ง</dt>
+                  <dd>฿{Number(order.shipping_fee).toLocaleString(undefined, { minimumFractionDigits: 2 })}</dd>
+                </div>
+              ) : null}
+              {order.discount_amount != null && Number(order.discount_amount) > 0 ? (
+                <div className="flex justify-between py-0.5 text-rose-600">
+                  <dt>ส่วนลด</dt>
+                  <dd>-฿{Number(order.discount_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</dd>
+                </div>
+              ) : null}
+              {order.points_discount != null && Number(order.points_discount) > 0 ? (
+                <div className="flex justify-between py-0.5 text-rose-600">
+                  <dt>ใช้คะแนน {order.points_used ?? 0} แต้ม</dt>
+                  <dd>-฿{Number(order.points_discount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</dd>
+                </div>
+              ) : null}
+            </dl>
+
+            <p className="mt-3 flex items-baseline justify-between border-t border-slate-100 pt-3">
+              <span className="text-xs text-slate-500">ยอดสุทธิ</span>
+              <span className="text-lg font-bold text-slate-900">
+                ฿{(order.grand_total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
             </p>
           </div>
+
+          {/* Shipping section — visible when shipping fields are populated */}
+          {order.shipping_name || order.shipping_phone || order.shipping_address || order.shipping_tracking ? (
+            <div className="rounded-3xl bg-white p-4 shadow-soft">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <MapPin size={16} className="text-emerald-600" />
+                ที่อยู่จัดส่ง
+              </div>
+              <div className="mt-2 space-y-0.5 text-sm text-slate-700">
+                {order.shipping_name ? <p className="font-medium">{order.shipping_name}</p> : null}
+                {order.shipping_phone ? <p className="text-xs text-slate-500">{order.shipping_phone}</p> : null}
+                {order.shipping_address ? (
+                  <p className="whitespace-pre-wrap text-xs text-slate-600">{order.shipping_address}</p>
+                ) : null}
+              </div>
+              {order.shipping_tracking ? (
+                <div className="mt-3 flex items-center gap-2 rounded-2xl bg-violet-50 px-3 py-2 text-xs text-violet-700">
+                  <Truck size={14} />
+                  <span>
+                    เลขพัสดุ {order.shipping_provider ? `(${order.shipping_provider})` : ''}{' '}
+                    <span className="font-mono font-semibold">{order.shipping_tracking}</span>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Notes — show only when admin has communicated something */}
+          {order.admin_note || order.note ? (
+            <div className="rounded-3xl bg-white p-4 shadow-soft">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <NotebookPen size={16} className="text-emerald-600" />
+                หมายเหตุ
+              </div>
+              {order.admin_note ? (
+                <div className="mt-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">จากร้าน</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-700">{order.admin_note}</p>
+                </div>
+              ) : null}
+              {order.note ? (
+                <div className="mt-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">โน้ตของลูกค้า</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-700">{order.note}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {showSlip && q.data?.transfer_info ? (
             <TransferBankInfo info={q.data.transfer_info} />

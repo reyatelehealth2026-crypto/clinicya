@@ -379,8 +379,24 @@ export type OrderDetailApiResponse = {
     status?: string
     payment_status?: string
     payment_method?: string
+    /** Sub-total before shipping/discount — matches `transactions.total_amount` */
+    total_amount?: number
+    shipping_fee?: number
+    discount_amount?: number
+    points_used?: number
+    points_discount?: number
     grand_total?: number
+    shipping_name?: string | null
+    shipping_phone?: string | null
+    shipping_address?: string | null
+    shipping_tracking?: string | null
+    shipping_provider?: string | null
+    note?: string | null
+    admin_note?: string | null
+    transaction_type?: string | null
     created_at?: string
+    updated_at?: string
+    delivery_info?: Record<string, unknown> | null
     items?: Array<{
       product_name?: string
       quantity: number
