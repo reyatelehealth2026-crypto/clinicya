@@ -130,6 +130,7 @@ database/*.sql
 !database/migration_2026-05-15_fix_autoincrement.sql
 !database/migration_2026-05-15_restore_pk_all_tables.sql
 !database/migration_2026-05-15_restore_pk_compound_keys.sql
+!database/migration_2026-05-15_fix_mojibake_business_categories.sql
 *.png
 DB_CONNECTION.md
 *.md
