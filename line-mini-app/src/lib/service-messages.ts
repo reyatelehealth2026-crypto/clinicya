@@ -1,8 +1,10 @@
-import { appConfig } from '@/lib/config'
+import { apiUrl, appConfig } from '@/lib/config'
 
-/** Uses same-origin Next.js proxy (`/api/member-notifications`) to avoid browser CORS against PHP. */
+const NOTIFICATIONS_URL = apiUrl('/api/member-notifications.php')
+
+/** PHP member-notifications.php sends CORS headers, so we call it directly from the browser. */
 export async function saveNotificationPreference(lineUserId: string, enabled: boolean) {
-  const response = await fetch('/api/member-notifications', {
+  const response = await fetch(NOTIFICATIONS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
