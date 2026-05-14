@@ -15,6 +15,8 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth_check.php';
 require_once __DIR__ . '/includes/components/tabs.php';
+require_once __DIR__ . '/includes/components/page-header.php';
+require_once __DIR__ . '/includes/components/toast.php';
 require_once __DIR__ . '/classes/ActivityLogger.php';
 
 $db = Database::getInstance()->getConnection();
@@ -63,22 +65,21 @@ switch ($activeTab) {
 $tabContent = ob_get_clean();
 
 require_once __DIR__ . '/includes/header.php';
+echo getPageHeaderStyles();
+echo getToastStyles();
 echo getTabsStyles();
 ?>
 
+<?= renderToastContainer() ?>
+
 <?php if ($success): ?>
-<div class="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-center gap-3">
-    <i class="fas fa-check-circle text-xl"></i>
-    <span><?= htmlspecialchars($success) ?></span>
-</div>
+<script>document.addEventListener('DOMContentLoaded',function(){ fireToast(<?= json_encode($success) ?>,'success'); });</script>
+<?php endif; ?>
+<?php if ($error): ?>
+<script>document.addEventListener('DOMContentLoaded',function(){ fireToast(<?= json_encode($error) ?>,'error'); });</script>
 <?php endif; ?>
 
-<?php if ($error): ?>
-<div class="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-3">
-    <i class="fas fa-exclamation-circle text-xl"></i>
-    <span><?= htmlspecialchars($error) ?></span>
-</div>
-<?php endif; ?>
+<?= renderPageHeader('Pharmacy Management', 'จัดการเภสัชกรรม, ยาตีกัน และการจ่ายยา', null, [['label' => 'หน้าหลัก', 'href' => '/'], ['label' => 'Pharmacy', 'href' => null]]) ?>
 
 <!-- Tab Navigation -->
 <?= renderTabs($tabs, $activeTab, ['preserveParams' => ['session_id']]) ?>

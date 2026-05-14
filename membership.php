@@ -19,6 +19,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/components/tabs.php';
+require_once __DIR__ . '/includes/components/page-header.php';
 
 // Initialize database and session variables
 $db = Database::getInstance()->getConnection();
@@ -356,13 +357,17 @@ switch ($activeTab) {
 require_once __DIR__ . '/includes/header.php';
 ?>
 
-<!-- Page Header -->
-<div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">
-        <i class="fas fa-id-card text-purple-600 mr-2"></i><?= $pageTitle ?>
-    </h1>
-    <p class="text-gray-500 mt-1">จัดการสมาชิก รางวัล และระบบแต้มสะสม</p>
-</div>
+<?= getPageHeaderStyles() ?>
+
+<?= renderPageHeader(
+    $pageTitle,
+    'จัดการสมาชิก รางวัล และระบบแต้มสะสม',
+    null,
+    [
+        ['label' => 'Membership', 'href' => null],
+        ['label' => $pageTitle, 'href' => null],
+    ]
+) ?>
 
 <?php
 // Output tab styles

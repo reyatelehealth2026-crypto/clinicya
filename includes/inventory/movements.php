@@ -11,6 +11,9 @@
  * Requirements: 6.3
  */
 
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
+
 $inventoryService = new InventoryService($db, $lineAccountId);
 
 // Filters
@@ -36,6 +39,14 @@ try {
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 ?>
+
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'ประวัติการเคลื่อนไหวสต็อก',
+    'ดูประวัติการรับเข้า/ขาย/ปรับ/ทำลาย พร้อมการติดตามมูลค่า'
+) ?>
 
 <div class="space-y-6">
     <!-- Filters -->

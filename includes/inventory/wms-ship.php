@@ -5,6 +5,9 @@
  * Requirements: 5.1, 5.2, 5.4
  */
 
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
+
 // Get ship queue (orders with status 'packed' or 'ready_to_ship')
 $shipQueue = [];
 try {
@@ -42,6 +45,14 @@ $carriers = [
 ];
 ?>
 
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'Ship Queue',
+    'รายการออเดอร์รอจัดส่งและจัดส่งล่าสุด'
+) ?>
+
 <div class="space-y-6">
     <!-- Ship Queue -->
     <div class="bg-white rounded-xl shadow">
@@ -56,10 +67,7 @@ $carriers = [
         </div>
         
         <?php if (empty($shipQueue)): ?>
-        <div class="p-8 text-center text-gray-400">
-            <i class="fas fa-inbox text-4xl mb-3"></i>
-            <p>ไม่มีออเดอร์รอจัดส่ง</p>
-        </div>
+        <?= renderEmptyState('fas fa-inbox', 'ไม่มีออเดอร์รอจัดส่ง', 'เมื่อมีออเดอร์ที่แพ็คเสร็จจะแสดงที่นี่') ?>
         <?php else: ?>
         <div class="overflow-x-auto">
             <table class="w-full">
@@ -133,10 +141,7 @@ $carriers = [
         </div>
         
         <?php if (empty($recentlyShipped)): ?>
-        <div class="p-8 text-center text-gray-400">
-            <i class="fas fa-truck text-4xl mb-3"></i>
-            <p>ยังไม่มีการจัดส่ง</p>
-        </div>
+        <?= renderEmptyState('fas fa-truck', 'ยังไม่มีการจัดส่ง', 'รายการจัดส่งล่าสุดจะแสดงที่นี่') ?>
         <?php else: ?>
         <div class="overflow-x-auto">
             <table class="w-full">

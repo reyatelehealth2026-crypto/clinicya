@@ -5,6 +5,9 @@
  * Requirements: 9.4, 9.5
  */
 
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
+
 // Get exception orders
 $exceptionOrders = [];
 try {
@@ -21,6 +24,14 @@ $statusOptions = [
 ];
 ?>
 
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'Exceptions',
+    'จัดการออเดอร์ที่มีปัญหา / พักไว้'
+) ?>
+
 <div class="space-y-6">
     <!-- Exception Orders -->
     <div class="bg-white rounded-xl shadow">
@@ -35,10 +46,7 @@ $statusOptions = [
         </div>
         
         <?php if (empty($exceptionOrders)): ?>
-        <div class="p-8 text-center text-gray-400">
-            <i class="fas fa-check-circle text-4xl mb-3 text-green-400"></i>
-            <p>ไม่มีออเดอร์ที่มีปัญหา</p>
-        </div>
+        <?= renderEmptyState('fas fa-check-circle', 'ไม่มีออเดอร์ที่มีปัญหา', 'ทุกออเดอร์ดำเนินการได้ปกติ') ?>
         <?php else: ?>
         <div class="divide-y">
             <?php foreach ($exceptionOrders as $order): ?>
@@ -180,10 +188,7 @@ $statusOptions = [
             ?>
             
             <?php if (empty($activities)): ?>
-            <div class="text-center text-gray-400 py-8">
-                <i class="fas fa-clipboard-list text-4xl mb-3"></i>
-                <p>ยังไม่มีกิจกรรม</p>
-            </div>
+            <?= renderEmptyState('fas fa-clipboard-list', 'ยังไม่มีกิจกรรม', 'กิจกรรมที่เกี่ยวข้องกับ exception จะแสดงที่นี่') ?>
             <?php else: ?>
             <div class="space-y-3 max-h-96 overflow-y-auto">
                 <?php foreach ($activities as $activity): 

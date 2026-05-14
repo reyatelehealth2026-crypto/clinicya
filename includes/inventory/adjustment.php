@@ -4,6 +4,8 @@
  * Tab content for inventory/index.php
  */
 
+require_once __DIR__ . '/../components/page-header.php';
+
 $inventoryService = new InventoryService($db, $lineAccountId);
 $adminId = $_SESSION['admin_user']['id'] ?? null;
 
@@ -18,6 +20,13 @@ try {
 // Get adjustments
 $adjustments = $inventoryService->getAdjustments(['limit' => 50]);
 ?>
+
+<?= getPageHeaderStyles() ?>
+
+<?= renderPageHeader(
+    'ปรับสต็อก',
+    'สร้างรายการปรับสต็อกตามการนับจริง พร้อมยืนยันรายการล่าสุด'
+) ?>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <!-- Create Adjustment -->

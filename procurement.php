@@ -13,6 +13,8 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/components/tabs.php';
+require_once __DIR__ . '/includes/components/page-header.php';
+require_once __DIR__ . '/includes/components/toast.php';
 
 $db = Database::getInstance()->getConnection();
 $lineAccountId = $_SESSION['current_bot_id'] ?? null;
@@ -85,8 +87,13 @@ $pageTitle = $tabTitles[$activeTab] ?? 'จัดการการจัดซ�
 
 require_once __DIR__ . '/includes/header.php';
 
-// Output tab styles
+echo getPageHeaderStyles();
+echo getToastStyles();
 echo getTabsStyles();
+?>
+<?= renderToastContainer() ?>
+<?= renderPageHeader('จัดการการจัดซื้อ', $tabTitles[$activeTab] ?? '', null, [['label' => 'หน้าหลัก', 'href' => '/'], ['label' => 'จัดการการจัดซื้อ', 'href' => null]]) ?>
+<?php
 
 // Check if procurement is installed
 if (!$tableExists):

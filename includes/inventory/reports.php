@@ -4,6 +4,9 @@
  * Tab content for inventory/index.php
  */
 
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
+
 $inventoryService = new InventoryService($db, $lineAccountId);
 
 // Get report type
@@ -78,6 +81,14 @@ if ($reportType === 'purchase') {
     } catch (Exception $e) {}
 }
 ?>
+
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'รายงานคลังสินค้า',
+    'รายงานมูลค่าสต็อก, การเคลื่อนไหว และการสั่งซื้อ'
+) ?>
 
 <div class="space-y-6">
     <!-- Report Selection -->
@@ -172,7 +183,7 @@ if ($reportType === 'purchase') {
         </div>
         <div class="p-4">
             <?php if (empty($movementSummary)): ?>
-            <p class="text-center text-gray-500 py-8">ไม่พบข้อมูลในช่วงเวลาที่เลือก</p>
+            <?= renderEmptyState('fas fa-exchange-alt', 'ไม่พบข้อมูลในช่วงเวลาที่เลือก', 'ลองปรับช่วงวันที่เพื่อดูการเคลื่อนไหวสต็อก') ?>
             <?php else: ?>
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <?php 

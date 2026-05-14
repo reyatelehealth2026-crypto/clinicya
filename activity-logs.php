@@ -6,6 +6,7 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth_check.php';
 require_once __DIR__ . '/classes/ActivityLogger.php';
+require_once __DIR__ . '/includes/components/section-card.php';
 
 $db = Database::getInstance()->getConnection();
 $logger = ActivityLogger::getInstance($db);
@@ -65,6 +66,7 @@ $pageTitle = 'Activity Logs';
 include __DIR__ . '/includes/header.php';
 ?>
 
+<?= getSectionCardStyles() ?>
 <style>
 .log-card {
     background: white;
@@ -128,12 +130,12 @@ include __DIR__ . '/includes/header.php';
 .filter-group select:focus,
 .filter-group input:focus {
     outline: none;
-    border-color: #06C755;
-    box-shadow: 0 0 0 3px rgba(6, 199, 85, 0.1);
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 .filter-btn {
     padding: 8px 16px;
-    background: #06C755;
+    background: #6366f1;
     color: white;
     border: none;
     border-radius: 8px;
@@ -145,7 +147,7 @@ include __DIR__ . '/includes/header.php';
     gap: 6px;
 }
 .filter-btn:hover {
-    background: #05a648;
+    background: #4f46e5;
 }
 .log-table {
     width: 100%;
@@ -215,7 +217,7 @@ include __DIR__ . '/includes/header.php';
     margin-top: 2px;
 }
 .log-admin {
-    color: #06C755;
+    color: #6366f1;
     font-weight: 500;
 }
 .log-ip {
@@ -242,7 +244,7 @@ include __DIR__ . '/includes/header.php';
     background: #e5e7eb;
 }
 .pagination .active {
-    background: #06C755;
+    background: #6366f1;
     color: white;
 }
 .empty-state {

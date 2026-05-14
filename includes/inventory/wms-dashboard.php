@@ -5,6 +5,9 @@
  * Requirements: 6.1, 6.2, 6.3, 6.4
  */
 
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
+
 // Get dashboard stats (already loaded in parent)
 $stats = $dashboardStats;
 $statusCounts = $stats['status_counts'] ?? [];
@@ -28,6 +31,14 @@ $statusConfig = [
     'on_hold' => ['label' => 'พักไว้', 'color' => 'red', 'icon' => 'fa-pause-circle'],
 ];
 ?>
+
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'WMS Dashboard',
+    'ภาพรวมสถานะออเดอร์, เมตริกวันนี้ และออเดอร์เกิน SLA'
+) ?>
 
 <div class="space-y-6">
     <!-- Status Cards Grid -->
@@ -143,10 +154,7 @@ $statusConfig = [
             </h3>
             
             <?php if (empty($overdueOrders)): ?>
-            <div class="text-center py-8 text-gray-400">
-                <i class="fas fa-check-circle text-4xl mb-2 text-green-400"></i>
-                <p>ไม่มีออเดอร์เกิน SLA</p>
-            </div>
+            <?= renderEmptyState('fas fa-check-circle', 'ไม่มีออเดอร์เกิน SLA', 'ทุกออเดอร์อยู่ในช่วงเวลาที่กำหนด') ?>
             <?php else: ?>
             <div class="space-y-2 max-h-64 overflow-y-auto">
                 <?php foreach (array_slice($overdueOrders, 0, 10) as $order): ?>

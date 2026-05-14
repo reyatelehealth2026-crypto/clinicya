@@ -5,6 +5,9 @@
  * Requirements: 1.2, 1.3, 1.4, 1.5
  */
 
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
+
 // Get pick queue
 $pickQueue = [];
 $pickingOrders = [];
@@ -52,6 +55,14 @@ if ($viewOrderId) {
     }
 }
 ?>
+
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'Pick Queue',
+    'รายการออเดอร์รอหยิบและกำลังหยิบ'
+) ?>
 
 <div class="space-y-6">
     <?php if ($viewOrder): ?>
@@ -226,10 +237,7 @@ if ($viewOrderId) {
         </div>
         
         <?php if (empty($pickQueue)): ?>
-        <div class="p-8 text-center text-gray-400">
-            <i class="fas fa-inbox text-4xl mb-3"></i>
-            <p>ไม่มีออเดอร์รอหยิบ</p>
-        </div>
+        <?= renderEmptyState('fas fa-inbox', 'ไม่มีออเดอร์รอหยิบ', 'เมื่อมีออเดอร์ใหม่จะแสดงที่นี่') ?>
         <?php else: ?>
         <div class="overflow-x-auto">
             <table class="w-full">

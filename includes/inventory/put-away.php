@@ -14,6 +14,8 @@
 require_once __DIR__ . '/../../classes/PutAwayService.php';
 require_once __DIR__ . '/../../classes/LocationService.php';
 require_once __DIR__ . '/../../classes/BatchService.php';
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
 
 $putAwayService = new PutAwayService($db, $lineAccountId);
 $locationService = new LocationService($db, $lineAccountId);
@@ -69,6 +71,20 @@ $zoneTypeLabels = [
     'hazardous' => ['label' => 'วัตถุอันตราย', 'color' => 'orange']
 ];
 ?>
+
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'Put Away',
+    'จัดเก็บสินค้าเข้าตำแหน่งตาม ABC Analysis และโซน',
+    [
+        'label' => 'Run Analysis',
+        'icon' => 'fas fa-sync-alt',
+        'variant' => 'primary',
+        'onclick' => 'runABCAnalysis()',
+    ]
+) ?>
 
 <div class="space-y-6">
     <!-- ABC Analysis Summary -->

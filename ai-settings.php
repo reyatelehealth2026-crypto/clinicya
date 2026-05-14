@@ -5,6 +5,12 @@
  */
 require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/components/page-header.php';
+require_once __DIR__ . '/includes/components/form-section.php';
+require_once __DIR__ . '/includes/components/field.php';
+require_once __DIR__ . '/includes/components/toggle.php';
+require_once __DIR__ . '/includes/components/sticky-save-bar.php';
+require_once __DIR__ . '/includes/components/toast.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'ตั้งค่า AI (Gemini)';
@@ -91,12 +97,26 @@ $productCount = 0;
 try { $stmt = $db->prepare("SELECT COUNT(*) FROM business_items WHERE is_active=1 AND (line_account_id=? OR line_account_id IS NULL)"); $stmt->execute([$currentBotId]); $productCount = $stmt->fetchColumn(); } catch (Exception $e) {}
 
 require_once __DIR__ . '/includes/header.php';
+echo getPageHeaderStyles();
+echo getFormSectionStyles();
+echo getFieldStyles();
+echo getToggleStyles();
+echo getStickySaveBarStyles();
+echo getToastStyles();
 ?>
 
-<div class="max-w-5xl mx-auto">
-    <?php if ($success): ?><div class="mb-4 p-4 bg-green-100 text-green-700 rounded-lg"><i class="fas fa-check-circle mr-2"></i><?= $success ?></div><?php endif; ?>
-    <?php if ($error): ?><div class="mb-4 p-4 bg-red-100 text-red-700 rounded-lg"><i class="fas fa-exclamation-circle mr-2"></i><?= $error ?></div><?php endif; ?>
+<?= renderToastContainer() ?>
 
+<?php if ($success): ?>
+<script>document.addEventListener('DOMContentLoaded',function(){ fireToast(<?= json_encode($success) ?>,'success'); });</script>
+<?php endif; ?>
+<?php if ($error): ?>
+<script>document.addEventListener('DOMContentLoaded',function(){ fireToast(<?= json_encode($error) ?>,'error'); });</script>
+<?php endif; ?>
+
+<?= renderPageHeader('ตั้งค่า AI (Gemini)', 'กำหนดค่า Gemini API, โหมด AI และข้อมูลธุรกิจ', null, [['label' => 'หน้าหลัก', 'href' => '/'], ['label' => 'ตั้งค่า AI', 'href' => null]]) ?>
+
+<div class="max-w-5xl mx-auto">
     <a href="/ai-telepharmacy-settings.php" class="block mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-xl hover:shadow-md transition">
         <div class="flex items-center justify-between">
             <div>
@@ -107,87 +127,68 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </a>
 
-    <form method="POST">
+    <form method="POST" id="aiSettingsForm">
     <input type="hidden" name="action" value="save_settings">
-    
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="lg:col-span-2 space-y-6">
-            <!-- API Settings -->
-            <div class="bg-white rounded-xl shadow">
-                <div class="p-4 border-b"><h3 class="font-semibold"><i class="fas fa-key text-yellow-500 mr-2"></i>ตั้งค่า Gemini API</h3></div>
-                <div class="p-6 space-y-4">
-                    <label class="flex items-center p-4 bg-gray-50 rounded-lg cursor-pointer">
-                        <input type="checkbox" name="ai_enabled" value="1" <?= $aiEnabled ? 'checked' : '' ?> class="w-5 h-5 text-green-500 rounded mr-3">
-                        <div><span class="font-medium">เปิดใช้งาน AI</span><p class="text-sm text-gray-500">เปิดใช้งานฟีเจอร์ AI ในระบบ</p></div>
-                    </label>
-                    
-                    <div>
-                        <label class="block text-sm font-medium mb-2">Gemini API Key *</label>
-                        <input type="password" name="gemini_api_key" id="apiKey" value="<?= htmlspecialchars($geminiApiKey) ?>" class="w-full px-4 py-3 border rounded-lg" placeholder="AIzaSy...">
-                        <p class="text-xs text-gray-500 mt-1"><a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500"><i class="fas fa-external-link-alt mr-1"></i>รับ API Key ฟรี</a></p>
-                    </div>
 
-                    <div class="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                        <p class="text-sm font-medium text-slate-800 mb-1">โมเดล</p>
-                        <p class="text-sm text-slate-600">ใช้ <code class="text-xs bg-white px-1 py-0.5 rounded border">gemini-flash-latest</code> เท่านั้น (Gemini Flash รุ่นล่าสุดจาก Google — ไม่ต้องเลือกโมเดล)</p>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium mb-2">โหมด AI</label>
-                        <select name="ai_mode" id="aiMode" class="w-full px-4 py-3 border rounded-lg" onchange="toggleSales()">
-                            <option value="sales" <?= $aiMode === 'sales' ? 'selected' : '' ?>>🛒 พนักงานขาย</option>
-                            <option value="support" <?= $aiMode === 'support' ? 'selected' : '' ?>>💬 ซัพพอร์ต</option>
-                            <option value="pharmacist" <?= $aiMode === 'pharmacist' ? 'selected' : '' ?>>💊 เภสัชกร</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Business Info -->
-            <div class="bg-white rounded-xl shadow">
-                <div class="p-4 border-b"><h3 class="font-semibold"><i class="fas fa-store text-blue-500 mr-2"></i>ข้อมูลธุรกิจ</h3></div>
-                <div class="p-6 space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium mb-2">ข้อมูลร้าน/ธุรกิจ</label>
-                        <textarea name="business_info" rows="4" class="w-full px-4 py-3 border rounded-lg" placeholder="ชื่อร้าน: ...&#10;ที่อยู่: ...&#10;เวลาทำการ: ..."><?= htmlspecialchars($businessInfo) ?></textarea>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-2">System Prompt (บทบาทหลัก)</label>
-                        <textarea name="system_prompt" rows="3" class="w-full px-4 py-3 border rounded-lg" placeholder="คุณคือพนักงานขายของร้าน..."><?= htmlspecialchars($systemPrompt) ?></textarea>
-                    </div>
-                    <div id="salesSection" class="<?= $aiMode !== 'sales' ? 'hidden' : '' ?>">
-                        <label class="block text-sm font-medium mb-2">คำแนะนำสำหรับการขาย</label>
-                        <textarea name="sales_prompt" rows="3" class="w-full px-4 py-3 border rounded-lg" placeholder="เน้นแนะนำโปรโมชั่น..."><?= htmlspecialchars($salesPrompt) ?></textarea>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Product Knowledge -->
-            <div class="bg-white rounded-xl shadow">
-                <div class="p-4 border-b flex justify-between items-center">
-                    <h3 class="font-semibold"><i class="fas fa-box text-emerald-500 mr-2"></i>ข้อมูลสินค้า</h3>
-                    <span class="text-sm text-gray-500"><?= number_format($productCount) ?> รายการ</span>
-                </div>
-                <div class="p-6 space-y-4">
-                    <label class="flex items-center justify-between p-4 bg-emerald-50 rounded-lg cursor-pointer">
-                        <div class="flex items-center">
-                            <input type="checkbox" name="auto_load_products" value="1" <?= $autoLoadProducts ? 'checked' : '' ?> class="w-5 h-5 text-emerald-500 rounded mr-3">
-                            <div><span class="font-medium text-emerald-800">โหลดสินค้าอัตโนมัติ</span><p class="text-sm text-emerald-600">AI จะดึงข้อมูลสินค้าจากระบบ</p></div>
-                        </div>
-                        <input type="number" name="product_load_limit" value="<?= $productLoadLimit ?>" min="10" max="200" class="w-20 px-3 py-2 border rounded-lg text-center">
-                    </label>
-                    <div>
-                        <label class="block text-sm font-medium mb-2">ข้อมูลสินค้าเพิ่มเติม</label>
-                        <textarea name="product_knowledge" rows="4" class="w-full px-4 py-3 border rounded-lg font-mono text-sm" placeholder="โปรโมชั่นพิเศษ:&#10;- สินค้า A ลด 20%&#10;- ส่งฟรีเมื่อซื้อครบ 500 บาท"><?= htmlspecialchars($productKnowledge) ?></textarea>
-                    </div>
-                </div>
-            </div>
-            
-            <button type="submit" class="w-full py-4 bg-green-500 text-white rounded-xl hover:bg-green-600 font-medium text-lg">
-                <i class="fas fa-save mr-2"></i>บันทึกการตั้งค่า
-            </button>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2">
+            <?php
+            // --- Section: API Settings ---
+            $apiBody  = renderToggle('ai_enabled', 'เปิดใช้งาน AI', $aiEnabled, 'เปิดใช้งานฟีเจอร์ AI ในระบบ');
+            $apiBody .= renderField('gemini_api_key', 'Gemini API Key', 'password', $geminiApiKey, [
+                'id'          => 'apiKey',
+                'placeholder' => 'AIzaSy...',
+                'required'    => true,
+                'help'        => '<a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500"><i class="fas fa-external-link-alt mr-1"></i>รับ API Key ฟรี</a>',
+            ]);
+            $apiBody .= '<div class="p-4 bg-slate-50 rounded-lg border border-slate-100 mb-4">'
+                      . '<p class="text-sm font-medium text-slate-800 mb-1">โมเดล</p>'
+                      . '<p class="text-sm text-slate-600">ใช้ <code class="text-xs bg-white px-1 py-0.5 rounded border">gemini-flash-latest</code> เท่านั้น (Gemini Flash รุ่นล่าสุดจาก Google — ไม่ต้องเลือกโมเดล)</p>'
+                      . '</div>';
+            $apiBody .= renderField('ai_mode', 'โหมด AI', 'select', $aiMode, [
+                'choices' => [
+                    'sales'      => '🛒 พนักงานขาย',
+                    'support'    => '💬 ซัพพอร์ต',
+                    'pharmacist' => '💊 เภสัชกร',
+                ],
+                'id' => 'aiMode',
+                'class' => 'onchange-toggle-sales',
+            ]);
+            echo renderFormSection('ตั้งค่า Gemini API', 'fas fa-key', '', $apiBody);
+
+            // --- Section: Business Info ---
+            $bizBody  = renderField('business_info', 'ข้อมูลร้าน/ธุรกิจ', 'textarea', $businessInfo, [
+                'rows'        => 4,
+                'placeholder' => 'ชื่อร้าน: ...' . "\n" . 'ที่อยู่: ...' . "\n" . 'เวลาทำการ: ...',
+            ]);
+            $bizBody .= renderField('system_prompt', 'System Prompt (บทบาทหลัก)', 'textarea', $systemPrompt, [
+                'rows'        => 3,
+                'placeholder' => 'คุณคือพนักงานขายของร้าน...',
+            ]);
+            $bizBody .= '<div id="salesSection"' . ($aiMode !== 'sales' ? ' style="display:none"' : '') . '>'
+                      . renderField('sales_prompt', 'คำแนะนำสำหรับการขาย', 'textarea', $salesPrompt, [
+                            'rows'        => 3,
+                            'placeholder' => 'เน้นแนะนำโปรโมชั่น...',
+                        ])
+                      . '</div>';
+            echo renderFormSection('ข้อมูลธุรกิจ', 'fas fa-store', '', $bizBody);
+
+            // --- Section: Product Knowledge ---
+            $prodBody  = renderToggle('auto_load_products', 'โหลดสินค้าอัตโนมัติ', $autoLoadProducts, 'AI จะดึงข้อมูลสินค้าจากระบบ (' . number_format($productCount) . ' รายการ)');
+            $prodBody .= renderField('product_load_limit', 'จำนวนสินค้าสูงสุด', 'number', $productLoadLimit, [
+                'min'  => '10',
+                'max'  => '200',
+                'help' => 'จำนวนสินค้าที่ AI จะโหลดต่อครั้ง (10–200)',
+            ]);
+            $prodBody .= renderField('product_knowledge', 'ข้อมูลสินค้าเพิ่มเติม', 'textarea', $productKnowledge, [
+                'rows'        => 4,
+                'placeholder' => 'โปรโมชั่นพิเศษ:' . "\n" . '- สินค้า A ลด 20%' . "\n" . '- ส่งฟรีเมื่อซื้อครบ 500 บาท',
+                'class'       => 'font-mono text-sm',
+            ]);
+            echo renderFormSection('ข้อมูลสินค้า', 'fas fa-box', number_format($productCount) . ' รายการ', $prodBody);
+            ?>
         </div>
-        
+
         <div class="space-y-6">
             <div class="bg-white rounded-xl shadow p-6">
                 <h4 class="font-semibold mb-4"><i class="fas fa-info-circle text-gray-500 mr-2"></i>สถานะ</h4>
@@ -199,7 +200,7 @@ require_once __DIR__ . '/includes/header.php';
                     <div class="flex justify-between"><span class="text-gray-500">สินค้า:</span><span class="text-blue-600"><?= number_format($productCount) ?> รายการ</span></div>
                 </div>
             </div>
-            
+
             <div class="bg-white rounded-xl shadow p-6">
                 <h4 class="font-semibold mb-4"><i class="fas fa-robot text-purple-500 mr-2"></i>โหมด AI</h4>
                 <div class="space-y-3 text-sm">
@@ -208,7 +209,7 @@ require_once __DIR__ . '/includes/header.php';
                     <div class="p-3 bg-blue-50 rounded-lg"><div class="font-medium text-blue-700">💊 เภสัชกร</div><p class="text-blue-600 text-xs">ซักประวัติ แนะนำยา</p></div>
                 </div>
             </div>
-            
+
             <div class="bg-white rounded-xl shadow p-6">
                 <h4 class="font-semibold mb-4"><i class="fas fa-flask text-purple-500 mr-2"></i>ทดสอบ API</h4>
                 <button type="button" onclick="testAPI()" class="w-full px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 text-sm"><i class="fas fa-play mr-2"></i>ทดสอบ</button>
@@ -217,12 +218,14 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </div>
     </form>
+
+    <?= renderStickySaveBar('aiSettingsForm', 'บันทึกการตั้งค่า') ?>
 </div>
 
 <script>
-function toggleSales() {
-    document.getElementById('salesSection').classList.toggle('hidden', document.getElementById('aiMode').value !== 'sales');
-}
+document.getElementById('aiMode').addEventListener('change', function() {
+    document.getElementById('salesSection').style.display = this.value === 'sales' ? '' : 'none';
+});
 async function testAPI() {
     const key = document.getElementById('apiKey').value;
     const r = document.getElementById('testResult');

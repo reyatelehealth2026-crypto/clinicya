@@ -4,6 +4,10 @@
  */
 require_once 'config/config.php';
 require_once 'config/database.php';
+require_once __DIR__ . '/includes/components/form-section.php';
+require_once __DIR__ . '/includes/components/field.php';
+require_once __DIR__ . '/includes/components/toggle.php';
+require_once __DIR__ . '/includes/components/sticky-save-bar.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'ข้อความต้อนรับ';
@@ -11,6 +15,10 @@ $pageTitle = 'ข้อความต้อนรับ';
 require_once 'includes/header.php';
 ?>
 <script src="assets/js/flex-preview.js"></script>
+<?= getFormSectionStyles() ?>
+<?= getFieldStyles() ?>
+<?= getToggleStyles() ?>
+<?= getStickySaveBarStyles() ?>
 <?php
 
 // Handle save
@@ -109,74 +117,73 @@ if (empty($settings['flex_content'])) {
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <!-- Settings Form -->
-    <div class="bg-white rounded-xl shadow p-6">
-        <h3 class="text-lg font-semibold mb-4 flex items-center">
-            <i class="fas fa-hand-wave text-green-500 mr-2"></i>
-            ตั้งค่าข้อความต้อนรับ
-        </h3>
-        
+    <div>
         <form method="POST" id="welcomeForm">
             <input type="hidden" name="action" value="save">
-            
-            <!-- Enable/Disable -->
-            <div class="mb-6">
-                <label class="flex items-center cursor-pointer">
-                    <input type="checkbox" name="is_enabled" <?= $settings['is_enabled'] ? 'checked' : '' ?> class="w-5 h-5 text-green-500 rounded mr-3">
-                    <span class="font-medium">เปิดใช้งานข้อความต้อนรับ</span>
-                </label>
-                <p class="text-sm text-gray-500 mt-1 ml-8">ส่งข้อความอัตโนมัติเมื่อมีคนเพิ่มเพื่อน</p>
-            </div>
-            
-            <!-- Message Type -->
-            <div class="mb-6">
-                <label class="block text-sm font-medium mb-2">ประเภทข้อความ</label>
-                <div class="flex space-x-4">
-                    <label class="flex items-center px-4 py-3 border rounded-lg cursor-pointer hover:bg-gray-50 has-[:checked]:bg-green-50 has-[:checked]:border-green-500">
-                        <input type="radio" name="message_type" value="text" <?= $settings['message_type'] === 'text' ? 'checked' : '' ?> class="mr-2" onchange="toggleMessageType()">
-                        <i class="fas fa-font mr-2 text-gray-500"></i>
-                        <span>ข้อความธรรมดา</span>
-                    </label>
-                    <label class="flex items-center px-4 py-3 border rounded-lg cursor-pointer hover:bg-gray-50 has-[:checked]:bg-green-50 has-[:checked]:border-green-500">
-                        <input type="radio" name="message_type" value="flex" <?= $settings['message_type'] === 'flex' ? 'checked' : '' ?> class="mr-2" onchange="toggleMessageType()">
-                        <i class="fas fa-puzzle-piece mr-2 text-gray-500"></i>
-                        <span>Flex Message</span>
-                    </label>
-                </div>
-            </div>
-            
-            <!-- Text Content -->
-            <div id="textSection" class="mb-6 <?= $settings['message_type'] !== 'text' ? 'hidden' : '' ?>">
-                <label class="block text-sm font-medium mb-2">ข้อความต้อนรับ</label>
-                <textarea name="text_content" id="textContent" rows="6" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="พิมพ์ข้อความต้อนรับ..."><?= htmlspecialchars($settings['text_content']) ?></textarea>
-                <p class="text-xs text-gray-500 mt-1">รองรับ Emoji และขึ้นบรรทัดใหม่ได้</p>
-            </div>
-            
-            <!-- Flex Content -->
-            <div id="flexSection" class="mb-6 <?= $settings['message_type'] !== 'flex' ? 'hidden' : '' ?>">
-                <div class="flex justify-between items-center mb-2">
-                    <label class="block text-sm font-medium">Flex Message JSON</label>
-                    <div class="space-x-2">
-                        <button type="button" onclick="loadTemplate('welcome')" class="text-sm text-green-600 hover:underline">โหลด Template</button>
-                        <a href="flex-builder.php" target="_blank" class="text-sm text-blue-600 hover:underline">Flex Builder →</a>
-                    </div>
-                </div>
-                <textarea name="flex_content" id="flexContent" rows="15" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm"><?= htmlspecialchars($settings['flex_content']) ?></textarea>
-                <p class="text-xs text-gray-500 mt-1">ใส่ JSON ของ Flex Message (bubble หรือ carousel)</p>
-            </div>
-            
-            <button type="submit" class="w-full py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">
-                <i class="fas fa-save mr-2"></i>บันทึกการตั้งค่า
-            </button>
+
+            <?php
+            // --- Section: ตั้งค่าข้อความต้อนรับ ---
+            ob_start();
+            echo renderToggle(
+                'is_enabled',
+                'เปิดใช้งานข้อความต้อนรับ',
+                (bool) $settings['is_enabled'],
+                'ส่งข้อความอัตโนมัติเมื่อมีคนเพิ่มเพื่อน',
+                ['color' => 'emerald']
+            );
+
+            // Message type radio buttons (raw — no renderField equivalent for radio groups)
+            echo '<div class="field-group">';
+            echo '<label class="field-label">ประเภทข้อความ</label>';
+            echo '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+            echo '<label class="toggle-label-row" style="flex:1;min-width:140px;cursor:pointer;">';
+            echo '<div class="toggle-text"><span class="toggle-label"><i class="fas fa-font" style="margin-right:6px;"></i>ข้อความธรรมดา</span></div>';
+            echo '<input type="radio" name="message_type" value="text" ' . ($settings['message_type'] === 'text' ? 'checked' : '') . ' class="toggle-input sr-only" onchange="toggleMessageType()">';
+            echo '<span class="toggle-thumb" aria-hidden="true"></span></label>';
+            echo '<label class="toggle-label-row" style="flex:1;min-width:140px;cursor:pointer;">';
+            echo '<div class="toggle-text"><span class="toggle-label"><i class="fas fa-puzzle-piece" style="margin-right:6px;"></i>Flex Message</span></div>';
+            echo '<input type="radio" name="message_type" value="flex" ' . ($settings['message_type'] === 'flex' ? 'checked' : '') . ' class="toggle-input sr-only" onchange="toggleMessageType()">';
+            echo '<span class="toggle-thumb" aria-hidden="true"></span></label>';
+            echo '</div></div>';
+
+            // Text content section
+            echo '<div id="textSection"' . ($settings['message_type'] !== 'text' ? ' style="display:none"' : '') . '>';
+            echo renderField('text_content', 'ข้อความต้อนรับ', 'textarea', $settings['text_content'], [
+                'id'          => 'textContent',
+                'placeholder' => 'พิมพ์ข้อความต้อนรับ...',
+                'rows'        => 6,
+                'help'        => 'รองรับ Emoji และขึ้นบรรทัดใหม่ได้',
+            ]);
+            echo '</div>';
+
+            // Flex content section
+            echo '<div id="flexSection"' . ($settings['message_type'] !== 'flex' ? ' style="display:none"' : '') . '>';
+            echo '<div class="field-group">';
+            echo '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+            echo '<label class="field-label" style="margin-bottom:0">Flex Message JSON</label>';
+            echo '<div style="display:flex;gap:12px;font-size:var(--text-sm);">';
+            echo '<button type="button" onclick="loadTemplate(\'welcome\')" style="color:var(--color-emerald-600);background:none;border:none;cursor:pointer;text-decoration:underline;">โหลด Template</button>';
+            echo '<a href="flex-builder.php" target="_blank" style="color:var(--color-primary-600);">Flex Builder →</a>';
+            echo '</div></div>';
+            echo '<textarea name="flex_content" id="flexContent" rows="15" class="field-input" style="font-family:var(--font-mono);font-size:var(--text-sm);">' . htmlspecialchars($settings['flex_content']) . '</textarea>';
+            echo '<p class="field-help">ใส่ JSON ของ Flex Message (bubble หรือ carousel)</p>';
+            echo '</div></div>';
+
+            $sectionBody = ob_get_clean();
+            echo renderFormSection('ตั้งค่าข้อความต้อนรับ', 'fas fa-hand-sparkles', '', $sectionBody);
+            ?>
+
+            <?= renderStickySaveBar('welcomeForm', 'บันทึกการตั้งค่า') ?>
         </form>
     </div>
-    
+
     <!-- Preview -->
     <div class="bg-white rounded-xl shadow p-6">
         <h3 class="text-lg font-semibold mb-4 flex items-center">
             <i class="fas fa-eye text-blue-500 mr-2"></i>
             ตัวอย่างข้อความ
         </h3>
-        
+
         <div class="bg-gray-100 rounded-lg p-4 min-h-[400px]">
             <!-- Chat Preview -->
             <div class="max-w-sm mx-auto">
@@ -184,7 +191,7 @@ if (empty($settings['flex_content'])) {
                 <div class="text-center mb-4">
                     <span class="text-xs bg-gray-300 text-gray-600 px-3 py-1 rounded-full">ผู้ใช้เพิ่มเพื่อน</span>
                 </div>
-                
+
                 <!-- Bot message -->
                 <div id="previewArea" class="flex justify-start">
                     <div class="max-w-[280px]">
@@ -199,7 +206,7 @@ if (empty($settings['flex_content'])) {
                 </div>
             </div>
         </div>
-        
+
         <!-- Test Button -->
         <div class="mt-4">
             <p class="text-sm text-gray-500 mb-2">ทดสอบส่งข้อความต้อนรับไปยังตัวเอง</p>
@@ -211,26 +218,25 @@ if (empty($settings['flex_content'])) {
 </div>
 
 <!-- Flex Templates -->
-<div class="mt-6 bg-white rounded-xl shadow p-6">
-    <h3 class="text-lg font-semibold mb-4">
-        <i class="fas fa-palette text-purple-500 mr-2"></i>
-        Template สำเร็จรูป
-    </h3>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button type="button" onclick="loadTemplate('simple')" class="p-4 border rounded-lg hover:bg-gray-50 text-left">
-            <div class="font-medium mb-1">🎉 แบบเรียบง่าย</div>
-            <p class="text-sm text-gray-500">ข้อความต้อนรับพื้นฐาน</p>
-        </button>
-        <button type="button" onclick="loadTemplate('shop')" class="p-4 border rounded-lg hover:bg-gray-50 text-left">
-            <div class="font-medium mb-1">🛒 แบบร้านค้า</div>
-            <p class="text-sm text-gray-500">มีปุ่มดูสินค้า</p>
-        </button>
-        <button type="button" onclick="loadTemplate('service')" class="p-4 border rounded-lg hover:bg-gray-50 text-left">
-            <div class="font-medium mb-1">💼 แบบบริการ</div>
-            <p class="text-sm text-gray-500">แนะนำบริการ</p>
-        </button>
-    </div>
-</div>
+<?php
+ob_start();
+echo '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">';
+echo '<button type="button" onclick="loadTemplate(\'simple\')" class="toggle-label-row" style="flex-direction:column;align-items:flex-start;padding:16px;cursor:pointer;text-align:left;">';
+echo '<span class="toggle-label">🎉 แบบเรียบง่าย</span>';
+echo '<span class="toggle-desc">ข้อความต้อนรับพื้นฐาน</span>';
+echo '</button>';
+echo '<button type="button" onclick="loadTemplate(\'shop\')" class="toggle-label-row" style="flex-direction:column;align-items:flex-start;padding:16px;cursor:pointer;text-align:left;">';
+echo '<span class="toggle-label">🛒 แบบร้านค้า</span>';
+echo '<span class="toggle-desc">มีปุ่มดูสินค้า</span>';
+echo '</button>';
+echo '<button type="button" onclick="loadTemplate(\'service\')" class="toggle-label-row" style="flex-direction:column;align-items:flex-start;padding:16px;cursor:pointer;text-align:left;">';
+echo '<span class="toggle-label">💼 แบบบริการ</span>';
+echo '<span class="toggle-desc">แนะนำบริการ</span>';
+echo '</button>';
+echo '</div>';
+$templatesBody = ob_get_clean();
+echo renderFormSection('Template สำเร็จรูป', 'fas fa-palette', '', $templatesBody);
+?>
 
 <script>
 const templates = {

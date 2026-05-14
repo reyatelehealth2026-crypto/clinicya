@@ -12,6 +12,8 @@
  */
 
 require_once __DIR__ . '/../../classes/BatchService.php';
+require_once __DIR__ . '/../components/page-header.php';
+require_once __DIR__ . '/../components/empty-state.php';
 
 $batchService = new BatchService($db, $lineAccountId);
 
@@ -100,6 +102,20 @@ function formatExpiryCountdown($days) {
     return 'อีก ' . $days . ' วัน';
 }
 ?>
+
+<?= getPageHeaderStyles() ?>
+<?= getEmptyStateStyles() ?>
+
+<?= renderPageHeader(
+    'Batch / Lot',
+    'จัดการ Batch ตามวันหมดอายุ FIFO/FEFO',
+    [
+        'label' => 'เพิ่ม Batch',
+        'icon' => 'fas fa-plus',
+        'variant' => 'success',
+        'onclick' => 'openCreateBatchModal()',
+    ]
+) ?>
 
 <div class="space-y-6">
     <!-- Summary Cards -->

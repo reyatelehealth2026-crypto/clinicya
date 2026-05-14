@@ -13,6 +13,10 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/classes/AdminAuth.php';
 require_once __DIR__ . '/classes/LineAccountManager.php';
 require_once __DIR__ . '/classes/ActivityLogger.php';
+require_once __DIR__ . '/includes/components/page-header.php';
+require_once __DIR__ . '/includes/components/form-section.php';
+require_once __DIR__ . '/includes/components/field.php';
+require_once __DIR__ . '/includes/components/toggle.php';
 
 $db = Database::getInstance()->getConnection();
 $auth = new AdminAuth($db);
@@ -316,23 +320,23 @@ foreach ($admins as $admin) {
 }
 
 require_once 'includes/header.php';
+echo getPageHeaderStyles();
+echo getFormSectionStyles();
+echo getFieldStyles();
+echo getToggleStyles();
 ?>
 
 <div class="space-y-6">
-    <!-- Page Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-800">
-                <i class="fas fa-users-cog text-purple-500 mr-2"></i>จัดการบุคลากร & สิทธิ์
-            </h1>
-            <p class="text-gray-500 text-sm mt-1">จัดการผู้ดูแลระบบและกำหนดสิทธิ์การเข้าถึง</p>
-        </div>
-        <?php if ($currentUser['role'] === 'super_admin'): ?>
-        <button onclick="showCreateModal()" class="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl text-sm font-medium hover:from-green-600 hover:to-green-700 shadow-lg shadow-green-500/25 transition-all">
-            <i class="fas fa-plus mr-2"></i>เพิ่มผู้ดูแลใหม่
-        </button>
-        <?php endif; ?>
-    </div>
+    <?php
+    $primaryAction = ($currentUser['role'] === 'super_admin')
+        ? ['label' => 'เพิ่มผู้ดูแลใหม่', 'icon' => 'fas fa-plus', 'onclick' => 'showCreateModal()', 'variant' => 'success']
+        : null;
+    echo renderPageHeader(
+        'จัดการบุคลากร & สิทธิ์',
+        'จัดการผู้ดูแลระบบและกำหนดสิทธิ์การเข้าถึง',
+        $primaryAction
+    );
+    ?>
 
     <?php if ($error): ?>
     <div class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center">

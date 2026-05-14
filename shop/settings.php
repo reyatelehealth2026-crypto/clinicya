@@ -11,6 +11,10 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/components/tabs.php';
+require_once __DIR__ . '/../includes/components/form-section.php';
+require_once __DIR__ . '/../includes/components/field.php';
+require_once __DIR__ . '/../includes/components/toggle.php';
+require_once __DIR__ . '/../includes/components/sticky-save-bar.php';
 require_once __DIR__ . '/../includes/shop-data-source.php';
 
 $db = Database::getInstance()->getConnection();
@@ -329,6 +333,10 @@ require_once __DIR__ . '/../includes/header.php';
 ?>
 
 <?= getTabsStyles() ?>
+<?= getFormSectionStyles() ?>
+<?= getFieldStyles() ?>
+<?= getToggleStyles() ?>
+<?= getStickySaveBarStyles() ?>
 
 <?php if (isset($_GET['saved'])): ?>
     <div class="mb-4 p-4 bg-green-100 text-green-700 rounded-lg">

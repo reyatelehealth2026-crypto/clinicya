@@ -547,7 +547,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             --primary-dark: #00A000;
             --primary-light: #00C300;
             --sidebar-width: 260px;
-            --sidebar-bg: #f8fafc;
+            --sidebar-bg: var(--color-slate-50);
             --surface-muted: #f3f6fb;
             --surface-subtle: #eef2f7;
             --sidebar-border: #d9e2ec;
@@ -557,20 +557,20 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             --sidebar-active-bg: linear-gradient(90deg, rgba(3, 105, 161, 0.08) 0%, rgba(16, 185, 129, 0.05) 100%);
             --sidebar-active-text: #114b5f;
             --sidebar-active-border: #1f8f77;
-            --erp-ink: #0f172a;
-            --erp-ink-soft: #334155;
+            --erp-ink: var(--color-dark-900);
+            --erp-ink-soft: var(--color-dark-700);
             --erp-panel: rgba(255, 255, 255, 0.94);
             --erp-panel-strong: #ffffff;
             --erp-panel-muted: #f7f9fc;
-            --erp-border-strong: #cbd5e1;
+            --erp-border-strong: var(--color-slate-300);
             --erp-shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.06);
             --erp-shadow-medium: 0 18px 40px rgba(15, 23, 42, 0.10);
             --erp-header-tint: rgba(248, 250, 252, 0.88);
             --erp-accent: #0f766e;
             --erp-accent-soft: rgba(15, 118, 110, 0.10);
             --erp-accent-strong: #14532d;
-            --erp-navy: #1e293b;
-            --erp-navy-soft: #334155;
+            --erp-navy: var(--color-dark-800);
+            --erp-navy-soft: var(--color-dark-700);
         }
         
         body { 
@@ -593,8 +593,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         /* Scrollbar */
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        ::-webkit-scrollbar-thumb { background: var(--color-slate-300); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--color-slate-400); }
         
         /* Sidebar - Clean White Theme (inbox-master style) */
         .sidebar {
@@ -740,11 +740,11 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             font-size: 9px;
             font-weight: 700;
             border-radius: 8px;
-            background: #9f1239;
+            background: var(--color-rose-800);
             color: white;
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
         }
-        
+
         .menu-badge.yellow { background: #a16207; }
         .menu-badge.blue { background: #1d4ed8; }
         .menu-badge.green { background: #166534; }
@@ -1058,20 +1058,20 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             font-size: 10px;
             font-weight: 700;
             border-radius: 9px;
-            background: #9f1239;
+            background: var(--color-rose-800);
             color: white;
             display: flex;
             align-items: center;
             justify-content: center;
             box-shadow: 0 6px 12px rgba(136, 19, 55, 0.28);
         }
-        
+
         .quick-badge.yellow { background: #a16207; box-shadow: 0 6px 12px rgba(161,98,7,0.25); }
 
         .recent-nav-section {
             margin-top: 12px;
             padding-top: 12px;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid var(--color-slate-200);
         }
 
         .recent-nav-list {
@@ -1088,7 +1088,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             padding: 8px 10px;
             border-radius: 10px;
             text-decoration: none;
-            color: #475569;
+            color: var(--color-dark-600);
             font-size: 12px;
             background: rgba(255, 255, 255, 0.74);
             border: 1px solid rgba(203, 213, 225, 0.5);
@@ -1097,8 +1097,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
 
         .recent-nav-item:hover {
             background: #ffffff;
-            border-color: #cbd5e1;
-            color: #0f172a;
+            border-color: var(--color-slate-300);
+            color: var(--color-dark-900);
         }
 
         .recent-nav-icon {
@@ -1123,7 +1123,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
 
         .recent-nav-title {
-            color: #1e293b;
+            color: var(--color-dark-800);
             font-weight: 600;
             white-space: nowrap;
             overflow: hidden;
@@ -1131,7 +1131,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
 
         .recent-nav-meta {
-            color: #94a3b8;
+            color: var(--color-slate-400);
             font-size: 10px;
             white-space: nowrap;
             overflow: hidden;
@@ -1205,7 +1205,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         .top-header {
             background: var(--erp-header-tint);
             padding: 14px 24px;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid var(--color-slate-200);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -1293,7 +1293,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             justify-content: space-between;
             gap: 12px;
             padding: 0 14px;
-            color: #64748b;
+            color: var(--color-dark-500);
             cursor: pointer;
             transition: all 0.15s ease;
             box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
@@ -1363,13 +1363,13 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
 
         .header-btn.erp-ai-btn {
-            background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+            background: linear-gradient(135deg, var(--color-dark-700) 0%, var(--color-dark-800) 100%);
             border-color: rgba(15, 23, 42, 0.12);
             color: white;
         }
 
         .header-btn.erp-odoo-btn {
-            background: linear-gradient(135deg, #334155 0%, #0f172a 100%);
+            background: linear-gradient(135deg, var(--color-dark-700) 0%, var(--color-dark-900) 100%);
             border-color: rgba(15, 23, 42, 0.2);
             color: white;
             box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
@@ -1413,7 +1413,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             width: 32px;
             height: 32px;
             border-radius: 8px;
-            background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+            background: linear-gradient(135deg, var(--color-dark-700) 0%, var(--color-dark-800) 100%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1463,7 +1463,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             align-items: center;
             gap: 12px;
             padding: 16px 18px;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid var(--color-slate-200);
         }
 
         .command-palette-input input {
@@ -1472,7 +1472,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             outline: none;
             font-size: 15px;
             font-weight: 500;
-            color: #0f172a;
+            color: var(--color-dark-900);
             background: transparent;
         }
 
@@ -1482,10 +1482,10 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             justify-content: space-between;
             gap: 8px;
             padding: 10px 18px;
-            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            background: linear-gradient(180deg, var(--color-slate-50) 0%, var(--color-slate-100) 100%);
             color: #5f7286;
             font-size: 12px;
-            border-bottom: 1px solid #e2e8f0;
+            border-bottom: 1px solid var(--color-slate-200);
         }
 
         .command-palette-results {
@@ -1504,12 +1504,12 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             text-decoration: none;
             border: 1px solid transparent;
             transition: all 0.15s ease;
-            color: #334155;
+            color: var(--color-dark-700);
         }
 
         .command-result:hover,
         .command-result.is-selected {
-            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            background: linear-gradient(180deg, var(--color-slate-50) 0%, var(--color-slate-100) 100%);
             border-color: #d7e0ea;
         }
 
@@ -1535,13 +1535,13 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
 
         .command-result-title {
-            color: #0f172a;
+            color: var(--color-dark-900);
             font-weight: 600;
             font-size: 13px;
         }
 
         .command-result-meta {
-            color: #64748b;
+            color: var(--color-dark-500);
             font-size: 11px;
             white-space: nowrap;
             overflow: hidden;
@@ -1553,7 +1553,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             padding: 3px 8px;
             border-radius: 999px;
             background: #fce7f3;
-            color: #9f1239;
+            color: var(--color-rose-800);
             font-size: 11px;
             font-weight: 700;
             flex-shrink: 0;
@@ -1563,7 +1563,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         .command-result-empty {
             padding: 28px 16px;
             text-align: center;
-            color: #94a3b8;
+            color: var(--color-slate-400);
             font-size: 13px;
         }
         
@@ -1826,6 +1826,345 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                 }
             }
         }
+        /* ========================================
+           DARK MODE OVERRIDES
+           Triggered by `.dark` body class (toggled via window.toggleTheme)
+           ======================================== */
+
+        /* Sidebar */
+        .dark .sidebar {
+            background: var(--color-dark-900);
+            border-right-color: var(--color-dark-700);
+        }
+
+        .dark .sidebar-brand {
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.92) 100%);
+            border-bottom-color: var(--color-dark-700);
+        }
+
+        .dark .bot-selector {
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.92) 100%);
+            border-bottom-color: var(--color-dark-700);
+        }
+
+        .dark .bot-card {
+            background: linear-gradient(180deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%);
+            border-color: var(--color-dark-700);
+        }
+
+        .dark .bot-card:hover {
+            background: var(--color-dark-700);
+            border-color: var(--color-dark-600);
+        }
+
+        /* Menu items */
+        .dark .menu-item {
+            color: var(--color-slate-300);
+        }
+
+        .dark .menu-item:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--color-slate-100);
+        }
+
+        .dark .menu-item:hover .menu-icon {
+            color: var(--color-slate-200);
+        }
+
+        .dark .menu-item.active {
+            background: linear-gradient(90deg, rgba(99, 102, 241, 0.18) 0%, rgba(99, 102, 241, 0.06) 100%);
+            color: var(--color-primary-400);
+        }
+
+        .dark .menu-item.active .menu-icon {
+            color: var(--color-primary-400);
+        }
+
+        .dark .menu-icon {
+            color: var(--color-dark-500);
+        }
+
+        .dark .menu-section-title {
+            color: var(--color-dark-500);
+        }
+
+        /* Group / collapsible headers */
+        .dark .menu-parent {
+            color: var(--color-slate-300);
+        }
+
+        .dark .menu-parent:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--color-slate-100);
+            border-color: var(--color-dark-700);
+        }
+
+        .dark .menu-section.is-open .menu-parent {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: var(--color-dark-700);
+        }
+
+        .dark .menu-section.has-active .menu-parent {
+            background: linear-gradient(90deg, rgba(99, 102, 241, 0.14) 0%, rgba(30, 41, 59, 0.9) 100%);
+            border-color: rgba(99, 102, 241, 0.3);
+            color: var(--color-primary-400);
+        }
+
+        .dark .menu-arrow {
+            color: var(--color-dark-500);
+        }
+
+        /* Nested menu */
+        .dark .nested-menu-parent {
+            color: var(--color-dark-500);
+        }
+
+        .dark .nested-menu-parent:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--color-slate-200);
+        }
+
+        .dark .nested-menu-group.has-active > .nested-menu-parent {
+            color: var(--color-primary-400);
+            background: rgba(99, 102, 241, 0.10);
+        }
+
+        .dark .nested-menu-item {
+            color: var(--color-dark-500);
+        }
+
+        .dark .nested-menu-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--color-slate-200);
+        }
+
+        .dark .nested-menu-item.active {
+            background: linear-gradient(90deg, rgba(99, 102, 241, 0.14) 0%, rgba(30, 41, 59, 0.94) 100%);
+            color: var(--color-primary-400);
+            box-shadow: inset 3px 0 0 var(--color-primary-500);
+        }
+
+        .dark .nested-menu-note,
+        .dark .nested-arrow {
+            color: var(--color-dark-600);
+        }
+
+        /* Group badge */
+        .dark .group-badge {
+            background: rgba(51, 65, 85, 0.8);
+            color: var(--color-slate-400);
+            border-color: var(--color-dark-700);
+        }
+
+        .dark .menu-section.has-active .group-badge {
+            background: rgba(99, 102, 241, 0.18);
+            color: var(--color-primary-400);
+        }
+
+        /* Quick access */
+        .dark .quick-access-section {
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.94) 0%, rgba(15, 23, 42, 0.98) 100%);
+            border-color: var(--color-dark-700);
+        }
+
+        .dark .quick-item {
+            background: linear-gradient(180deg, rgba(51, 65, 85, 0.8) 0%, rgba(30, 41, 59, 0.95) 100%);
+            border-color: var(--color-dark-700);
+        }
+
+        .dark .quick-item:hover {
+            border-color: var(--color-dark-600);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .dark .quick-label {
+            color: var(--color-slate-300);
+        }
+
+        /* Recent nav */
+        .dark .recent-nav-section {
+            border-top-color: var(--color-dark-700);
+        }
+
+        .dark .recent-nav-item {
+            background: rgba(30, 41, 59, 0.74);
+            border-color: rgba(51, 65, 85, 0.5);
+            color: var(--color-slate-400);
+        }
+
+        .dark .recent-nav-item:hover {
+            background: var(--color-dark-800);
+            border-color: var(--color-dark-600);
+            color: var(--color-slate-100);
+        }
+
+        .dark .recent-nav-icon {
+            background: linear-gradient(180deg, var(--color-dark-700) 0%, var(--color-dark-800) 100%);
+            color: var(--color-slate-400);
+            border-color: rgba(71, 85, 105, 0.7);
+        }
+
+        .dark .recent-nav-title {
+            color: var(--color-slate-200);
+        }
+
+        .dark .recent-nav-meta {
+            color: var(--color-dark-500);
+        }
+
+        /* Sidebar footer */
+        .dark .sidebar-footer {
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.94) 0%, rgba(15, 23, 42, 0.96) 100%);
+            border-top-color: var(--color-dark-700);
+        }
+
+        .dark .sidebar-brand-pill {
+            background: rgba(51, 65, 85, 0.88);
+            border-color: var(--color-dark-700);
+            color: var(--color-slate-400);
+        }
+
+        /* Top header */
+        .dark .top-header {
+            background: rgba(15, 23, 42, 0.92);
+            border-bottom-color: var(--color-dark-700);
+        }
+
+        .dark .header-kicker {
+            color: var(--color-dark-500);
+        }
+
+        .dark .page-title {
+            color: var(--color-slate-100);
+        }
+
+        .dark .page-subtitle {
+            color: var(--color-dark-500);
+        }
+
+        .dark .workspace-chip {
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--color-primary-400);
+            border-color: rgba(99, 102, 241, 0.2);
+        }
+
+        /* Command launcher (search bar in topbar) */
+        .dark .command-launcher {
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%);
+            border-color: var(--color-dark-700);
+            color: var(--color-dark-500);
+        }
+
+        .dark .command-launcher:hover {
+            border-color: var(--color-dark-600);
+            color: var(--color-slate-300);
+        }
+
+        .dark .command-shortcut {
+            background: linear-gradient(180deg, var(--color-dark-700) 0%, var(--color-dark-800) 100%);
+            color: var(--color-slate-400);
+            border-color: rgba(71, 85, 105, 0.85);
+        }
+
+        /* Header action buttons */
+        .dark .header-btn {
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.96) 100%);
+            border-color: var(--color-dark-700);
+            color: var(--color-slate-400);
+        }
+
+        .dark .header-btn:hover {
+            background: var(--color-dark-800);
+            color: var(--color-slate-200);
+            border-color: var(--color-dark-600);
+        }
+
+        /* User menu */
+        .dark .user-menu {
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.96) 100%);
+            border-color: var(--color-dark-700);
+        }
+
+        .dark .user-menu:hover {
+            background: var(--color-dark-800);
+            border-color: var(--color-dark-600);
+        }
+
+        /* Command palette */
+        .dark .command-palette-dialog {
+            background: rgba(15, 23, 42, 0.98);
+            border-color: var(--color-dark-700);
+        }
+
+        .dark .command-palette-input {
+            border-bottom-color: var(--color-dark-700);
+        }
+
+        .dark .command-palette-input input {
+            color: var(--color-slate-100);
+        }
+
+        .dark .command-palette-meta {
+            background: linear-gradient(180deg, var(--color-dark-900) 0%, var(--color-dark-800) 100%);
+            color: var(--color-dark-500);
+            border-bottom-color: var(--color-dark-700);
+        }
+
+        .dark .command-result {
+            color: var(--color-slate-300);
+        }
+
+        .dark .command-result:hover,
+        .dark .command-result.is-selected {
+            background: linear-gradient(180deg, var(--color-dark-800) 0%, var(--color-dark-700) 100%);
+            border-color: var(--color-dark-600);
+        }
+
+        .dark .command-result-icon {
+            background: linear-gradient(135deg, var(--color-dark-700) 0%, var(--color-dark-800) 100%);
+            color: var(--color-slate-300);
+            border-color: rgba(71, 85, 105, 0.8);
+        }
+
+        .dark .command-result-title {
+            color: var(--color-slate-100);
+        }
+
+        .dark .command-result-meta {
+            color: var(--color-dark-500);
+        }
+
+        .dark .command-result-badge {
+            background: rgba(159, 18, 57, 0.2);
+            color: var(--color-rose-400);
+            border-color: rgba(159, 18, 57, 0.25);
+        }
+
+        .dark .command-result-empty {
+            color: var(--color-dark-500);
+        }
+
+        /* Dropdown (bot selector) */
+        .dark .dropdown-menu {
+            background: rgba(15, 23, 42, 0.98);
+            border-color: var(--color-dark-700);
+        }
+
+        .dark .dropdown-item:hover {
+            background: rgba(51, 65, 85, 0.6);
+        }
+
+        .dark .dropdown-item.active {
+            background: rgba(99, 102, 241, 0.12);
+        }
+
+        /* Body background */
+        .dark body,
+        body.dark {
+            background: radial-gradient(circle at top left, rgba(99, 102, 241, 0.06), transparent 28%),
+                        linear-gradient(180deg, var(--color-dark-900) 0%, var(--color-dark-800) 100%);
+        }
+
     </style>
     <?php if (isset($extraStyles)) echo $extraStyles; ?>
     <script>

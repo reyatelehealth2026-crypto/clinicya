@@ -5,6 +5,8 @@
  */
 
 require_once __DIR__ . '/../../classes/SupplierService.php';
+require_once __DIR__ . '/../components/data-table.php';
+require_once __DIR__ . '/../components/empty-state.php';
 
 $inventoryService = new InventoryService($db, $lineAccountId);
 $supplierService = new SupplierService($db, $lineAccountId);

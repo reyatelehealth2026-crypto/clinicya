@@ -21,6 +21,7 @@ require_once 'config/database.php';
 require_once 'classes/LineAPI.php';
 require_once 'classes/LineAccountManager.php';
 require_once 'includes/components/tabs.php';
+require_once __DIR__ . '/includes/components/page-header.php';
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'Rich Menu';
@@ -45,41 +46,43 @@ $activeTab = getActiveTab($tabs, 'static');
 require_once 'includes/header.php';
 ?>
 
-<div class="content-area">
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div>
-            <h2 class="text-xl font-bold text-gray-800">🎨 Rich Menu</h2>
-            <p class="text-sm text-gray-500">สร้างและจัดการ Rich Menu สำหรับ LINE Official Account</p>
-        </div>
-    </div>
-    
-    <!-- Tab Styles -->
-    <?= getTabsStyles() ?>
-    
-    <!-- Tab Navigation -->
-    <?= renderTabs($tabs, $activeTab) ?>
-    
-    <!-- Tab Content -->
-    <div class="tab-content">
-        <div class="tab-panel">
-            <?php
-            switch ($activeTab) {
-                case 'dynamic':
-                    include 'includes/rich-menu/dynamic.php';
-                    break;
-                    
-                case 'switch':
-                    include 'includes/rich-menu/switch.php';
-                    break;
-                    
-                case 'static':
-                default:
-                    include 'includes/rich-menu/static.php';
-                    break;
-            }
-            ?>
-        </div>
+<?= getPageHeaderStyles() ?>
+
+<?= renderPageHeader(
+    'Rich Menu',
+    'สร้างและจัดการ Rich Menu สำหรับ LINE Official Account',
+    null,
+    [
+        ['label' => 'Marketing', 'href' => null],
+        ['label' => 'Rich Menu', 'href' => null],
+    ]
+) ?>
+
+<!-- Tab Styles -->
+<?= getTabsStyles() ?>
+
+<!-- Tab Navigation -->
+<?= renderTabs($tabs, $activeTab) ?>
+
+<!-- Tab Content -->
+<div class="tab-content">
+    <div class="tab-panel">
+        <?php
+        switch ($activeTab) {
+            case 'dynamic':
+                include 'includes/rich-menu/dynamic.php';
+                break;
+
+            case 'switch':
+                include 'includes/rich-menu/switch.php';
+                break;
+
+            case 'static':
+            default:
+                include 'includes/rich-menu/static.php';
+                break;
+        }
+        ?>
     </div>
 </div>
 
