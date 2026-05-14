@@ -37,6 +37,13 @@ export default function Home() {
           >
             กลับหน้าเว็บไซต์
           </a>
+          <Link
+            href="/reya"
+            prefetch={false}
+            className="inline-flex min-h-12 items-center justify-center rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-3 font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
+          >
+            ดูตัวอย่าง REYA Dashboard
+          </Link>
         </div>
         <p className="mt-5 text-xs text-secondary-500">
           หมายเหตุ: ตั้งค่า `ENABLE_DEMO_DASHBOARD=true` เฉพาะสภาพแวดล้อมทดสอบเท่านั้น

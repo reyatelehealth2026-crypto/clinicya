@@ -1,0 +1,417 @@
+/* =========================================================================
+   REYA — Wongnai POS-inspired polish layer
+   Bigger numbers, photo-rich cards, more vibrant accents, cleaner hierarchy
+   ========================================================================= */
+
+:root {
+  /* POS-style accent — sits alongside the emerald primary */
+  --pos-accent: #ED1C24;
+  --pos-accent-dark: #B8141A;
+  --pos-accent-bg: #FEE7E8;
+  --pos-amber: #FF9F1C;
+  --pos-amber-bg: #FFF4DB;
+}
+
+/* ───── Sidebar — friendlier, branded top, larger touch targets ────── */
+.side {
+  padding: 18px 12px 14px 12px;
+  background: linear-gradient(180deg, #fafdfb 0%, #ffffff 30%);
+  border-right: 1px solid var(--border);
+}
+.side .brand {
+  padding: 8px 10px 22px 10px;
+  margin-bottom: 4px;
+}
+.side .brand .mk {
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  font-size: 20px;
+  box-shadow: 0 6px 16px rgba(44, 118, 86, 0.25);
+}
+.side .brand .name { font-size: 16px; letter-spacing: -0.005em; }
+.side .brand .sub { font-size: 9px; }
+
+.side .group {
+  font-size: 9px;
+  padding: 16px 12px 8px 12px;
+  color: var(--fg-3);
+}
+
+.side a {
+  padding: 10px 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  gap: 12px;
+}
+.side a .badge {
+  min-width: 20px; height: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  display: grid; place-items: center;
+}
+.side a.active { font-weight: 700; }
+
+.side .pharmacist-card {
+  margin-top: auto;
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--brand-50), #ffffff);
+  border: 1px solid var(--brand-100);
+}
+.side .pharmacist-card .av {
+  width: 38px; height: 38px;
+  border-radius: 11px;
+  font-size: 14px;
+}
+.side .pharmacist-card .nm { font-size: 13px; }
+.side .pharmacist-card .rl { font-size: 10px; }
+
+/* ───── Page head — bigger title, breathing room ───────────────────── */
+.page-head {
+  padding: 22px 28px 18px 28px;
+}
+.page-head h1 {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+.page-head .sub {
+  font-size: 13px;
+  margin-top: 6px;
+}
+.page-head .actions .btn {
+  padding: 9px 14px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+.page-head .actions .btn.brand {
+  box-shadow: 0 4px 12px rgba(44, 118, 86, 0.25);
+}
+.page-head .actions .seg {
+  padding: 3px;
+  border-radius: 10px;
+}
+.page-head .actions .seg button {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 7px;
+}
+
+/* ───── KPIs — Wongnai-sized big numbers, photo accent ──────────────── */
+.kpi {
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.kpi .top {
+  font-size: 11px;
+  gap: 9px;
+  font-weight: 700;
+}
+.kpi .top .ic {
+  width: 28px; height: 28px;
+  border-radius: 9px;
+}
+.kpi .val {
+  font-size: 32px;
+  font-weight: 800;
+  margin-top: 10px;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+.kpi .delta {
+  font-size: 12px;
+  margin-top: 6px;
+  font-weight: 600;
+}
+.kpi .spark {
+  width: 100px; height: 50px;
+  opacity: 0.7;
+}
+
+/* Featured KPI — Wongnai-style hero stat with vibrant fill */
+.kpi.hero {
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-700));
+  color: #fff;
+  border-color: transparent;
+}
+.kpi.hero .top, .kpi.hero .top .ic {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+.kpi.hero .top { background: transparent; }
+.kpi.hero .val { color: #fff; -webkit-text-fill-color: #fff; background: none; }
+.kpi.hero .delta { color: #d6ebe0; }
+
+/* ───── Panels — softer rounded, cleaner head ──────────────────────── */
+.panel {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+.panel-head {
+  padding: 16px 20px 14px 20px;
+}
+.panel-head h3 {
+  font-size: 15px;
+  font-weight: 800;
+  gap: 9px;
+}
+.panel-head .sub {
+  margin-top: 3px;
+  font-size: 12px;
+}
+.panel-head .more {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ───── Tables — POS-style row sizing ───────────────────────────────── */
+.tbl th {
+  font-size: 10px;
+  padding: 12px 16px;
+  background: var(--slate-50);
+  color: var(--fg-2);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.tbl td {
+  padding: 14px 16px;
+  font-size: 13.5px;
+}
+.tbl .cust .av {
+  width: 32px; height: 32px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.tbl .cust .nm { font-size: 13.5px; font-weight: 700; }
+.tbl .cust .sub { font-size: 11px; }
+.tbl .pill {
+  padding: 3px 10px;
+  font-size: 11px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+/* ───── Products — Wongnai menu card style ──────────────────────────── */
+.product-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.prod-card {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: all 200ms var(--ease-out);
+}
+.prod-card .img {
+  aspect-ratio: 1/1;
+  background: linear-gradient(135deg, #fafdfb, var(--line-soft));
+  font-size: 0;
+  position: relative;
+}
+.prod-card .img::after {
+  /* Wongnai-style category color stripe at top */
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--brand-500);
+  z-index: 1;
+}
+.prod-card .img > svg,
+.prod-card .img > .lic,
+.prod-card .img > span:not(.stock-badge) {
+  font-size: initial;
+}
+.prod-card .stock-badge {
+  top: 12px; left: 12px;
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(8px);
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.08);
+}
+.prod-card .body { padding: 14px; }
+.prod-card .sku {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.prod-card .nm {
+  font-size: 14px;
+  font-weight: 700;
+  margin-top: 4px;
+  height: 38px;
+  -webkit-line-clamp: 2;
+  letter-spacing: -0.005em;
+}
+.prod-card .meta {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+}
+.prod-card .price {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.prod-card .stock {
+  font-size: 11px;
+  background: var(--slate-50);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+/* Stock-out card has reddish accent stripe */
+.prod-card:has(.stock-badge.out) .img::after { background: var(--danger); }
+.prod-card:has(.stock-badge.low) .img::after { background: var(--warning); }
+
+/* Big icon inside card */
+.prod-card .img .lic {
+  background: var(--brand-300);
+  width: 64px !important;
+  height: 64px !important;
+  opacity: 0.55;
+}
+
+/* ───── Activity / Top lists — Wongnai card row ─────────────────────── */
+.activity-list {
+  padding: 8px 14px;
+  gap: 6px;
+}
+.activity-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  transition: background 150ms;
+  gap: 12px;
+}
+.activity-item:hover { background: var(--slate-50); }
+.activity-item .av {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+}
+.activity-item .txt { font-size: 13px; line-height: 1.5; }
+.activity-item .when { font-size: 11px; margin-top: 4px; }
+
+/* ───── Top lists (VIP / best sellers) — generous rows ─────────────── */
+.panel .panel-body[style*="padding: 0"] > div,
+.panel > div > div[style*="padding:'10px 18px'"] {
+  padding: 12px 20px !important;
+}
+
+/* ───── Sidebar nav — softer pill, more breath ─────────────────────── */
+.inbox-head { padding: 16px 18px 12px 18px; }
+.inbox-head h2 { font-size: 16px; letter-spacing: -0.01em; }
+
+.inbox-item { padding: 12px; border-radius: 12px; }
+.inbox-item .av { width: 44px; height: 44px; font-size: 15px; }
+.inbox-item .nm { font-size: 13.5px; }
+
+/* ───── Composer — Wongnai-flat, larger send ───────────────────────── */
+.composer { padding: 14px 18px 16px 18px; }
+.composer .input-row { padding: 5px 5px 5px 16px; border-radius: 12px; }
+.composer input { font-size: 13.5px; padding: 11px 0; }
+.composer .send { width: 40px; height: 40px; border-radius: 12px; }
+
+/* ───── AI Co-Pilot panel — softer, friendlier ─────────────────────── */
+.copilot-head { padding: 16px 20px 14px 20px; }
+.copilot-head h3 { font-size: 14px; letter-spacing: 0.02em; }
+.copilot-section { padding: 16px 20px; }
+.copilot-section .label { font-size: 10px; margin-bottom: 10px; }
+
+.suggested-reply {
+  border-radius: 14px;
+  padding: 14px;
+}
+.suggested-reply .text { font-size: 13.5px; line-height: 1.6; }
+.suggested-reply button {
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 9px;
+}
+
+.quick-action {
+  padding: 12px;
+  border-radius: 11px;
+  font-size: 12px;
+  gap: 10px;
+}
+.quick-action .ic {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+}
+
+/* ───── Customer info — cleaner rows ────────────────────────────────── */
+.cust-info { border-radius: 12px; padding: 14px; }
+.cust-info .row { font-size: 12.5px; padding: 5px 0; }
+
+/* ───── KPIs grid — let them breathe ────────────────────────────────── */
+.kpis { gap: 14px; }
+
+/* ───── Page body padding ─────────────────────────────────────────── */
+.page-body { padding: 24px 28px 32px 28px; }
+.grid-2, .grid-3 { gap: 18px; margin-top: 18px; }
+
+/* ───── Bigger, more vibrant top action button ──────────────────────── */
+.page-head .actions .btn.brand::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.2), transparent);
+  opacity: 0;
+  transition: opacity 200ms;
+  border-radius: inherit;
+}
+.page-head .actions .btn.brand:hover::before { opacity: 1; }
+
+/* ───── Filter bar — fresher pills ──────────────────────────────────── */
+.filter-bar { padding: 14px 18px; gap: 10px; }
+.filter-bar .search-input input {
+  padding: 9px 14px 9px 36px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+.filter-bar .pills button {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 9px;
+}
+
+/* ───── Subtle hover lift on inbox + cards ──────────────────────────── */
+.inbox-item:hover { background: var(--slate-50); }
+.inbox-item.active {
+  background: var(--line-soft);
+  box-shadow: inset 3px 0 0 var(--brand-500);
+}
+
+/* ───── Bigger reward cards (admin) ─────────────────────────────────── */
+.reward-admin {
+  border-radius: 14px;
+}
+.reward-admin .img { aspect-ratio: 1.6/1; }
+.reward-admin .body { padding: 14px 16px; }
+.reward-admin .nm { font-size: 14px; font-weight: 700; }
+.reward-admin .pts { font-size: 16px; }
+
+/* ───── Toast — softer, more elevated ───────────────────────────────── */
+.toast {
+  background: var(--fg-1);
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 13px;
+  box-shadow: 0 12px 28px rgba(15,23,42,0.25), 0 0 0 1px rgba(255,255,255,0.05) inset;
+}
+
+/* ───── Schedule slots — bigger, more readable ──────────────────────── */
+.schedule .h { padding: 12px 8px; }
+.schedule .h .d { font-size: 18px; }
+.schedule .slot { padding: 6px 8px; font-size: 11px; border-radius: 6px; border-left-width: 3px; }

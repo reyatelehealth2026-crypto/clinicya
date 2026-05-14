@@ -2166,6 +2166,12 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         }
 
     </style>
+    <!-- REYA design system (loaded globally so every admin page picks up the
+         emerald rebrand + LINE Seed Sans TH + Geist typefaces). Order matters:
+         design-tokens.css supplies --color-primary-* used by other components,
+         and reya-theme.css then repoints those tokens to REYA emerald. -->
+    <link rel="stylesheet" href="/assets/css/design-tokens.css?v=reya-1">
+    <link rel="stylesheet" href="/assets/css/reya-theme.css?v=reya-1">
     <?php if (isset($extraStyles)) echo $extraStyles; ?>
     <script>
         (function () {
@@ -2197,7 +2203,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                     </div>
                     <div class="ml-3 flex-1 min-w-0">
                         <div class="font-bold text-gray-800 text-sm truncate"><?= APP_NAME ?></div>
-                        <div class="text-xs text-gray-400">Admin Workspace</div>
+                        <div class="text-xs text-gray-400">REYA · Pharmacy Admin</div>
                     </div>
                     <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-gray-700">
                         <i class="fas fa-times"></i>

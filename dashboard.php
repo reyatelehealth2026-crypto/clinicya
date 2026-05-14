@@ -134,8 +134,8 @@ $extraStyles = '<link rel="stylesheet" href="assets/css/design-tokens.css">
 .db-list-item { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid #f1f5f9; transition:background .12s ease; }
 .db-list-item:last-child { border-bottom:none; }
 .db-list-item:hover { background:#f8fafc; }
-.db-action-link { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; color:#0f766e; background:#f0fdfa; border:1px solid #99f6e4; text-decoration:none; transition:all .15s ease; }
-.db-action-link:hover { background:#ccfbf1; border-color:#5eead4; }
+.db-action-link { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; color:#235e45; background:#ecfaf3; border:1px solid #aedfc4; text-decoration:none; transition:all .15s ease; }
+.db-action-link:hover { background:#d6f1e3; border-color:#79c79f; }
 .db-kpi--alert { border-color:#fca5a5 !important; background:#fff5f5 !important; }
 .db-section--alert { border-color:#fca5a5 !important; }
 .db-section--alert .db-section-header { background:#fef2f2 !important; border-bottom-color:#fecaca !important; }

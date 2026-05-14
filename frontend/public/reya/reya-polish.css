@@ -1,0 +1,409 @@
+/* =========================================================================
+   REYA — Motion & polish layer
+   Animated backgrounds, hover lifts, page transitions, mesh, glow
+   ========================================================================= */
+
+/* ───── Animated mesh background (subtle) ───────────────────────────── */
+.stage::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(circle at 15% 18%, rgba(44,118,86,0.10), transparent 55%),
+    radial-gradient(circle at 88% 12%, rgba(125,211,252,0.08), transparent 50%),
+    radial-gradient(circle at 50% 90%, rgba(173,214,194,0.12), transparent 55%);
+  pointer-events: none;
+  z-index: 0;
+  animation: mesh-shift 24s ease-in-out infinite alternate;
+}
+.stage > * { position: relative; z-index: 1; }
+@keyframes mesh-shift {
+  from { transform: translate(-2%, -1%) scale(1); }
+  to   { transform: translate(2%, 1%) scale(1.03); }
+}
+
+/* ───── Brand mark — gradient drift ────────────────────────────────── */
+.side .brand .mk,
+.copilot-head .badge,
+.peek-customer .ic,
+.mini-header .logo,
+.member-card-r .top,
+.miniapp-header .logo {
+  background-size: 200% 200%;
+  animation: gradient-drift 8s ease-in-out infinite alternate;
+}
+@keyframes gradient-drift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
+/* ───── AI badge — softer pulsing ring ────────────────────────────── */
+.copilot-head .badge {
+  position: relative;
+}
+.copilot-head .badge::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 14px;
+  border: 1.5px solid var(--brand-400);
+  opacity: 0;
+  animation: ai-ring 2.4s cubic-bezier(0.33, 1, 0.68, 1) infinite;
+}
+@keyframes ai-ring {
+  0%   { transform: scale(0.85); opacity: 0; }
+  35%  { opacity: 0.7; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+/* ───── Online dot — stronger pulse ────────────────────────────────── */
+.inbox-item .av.online::after,
+.thread-head .dot-on {
+  animation: dot-pulse 2s var(--ease-out) infinite;
+}
+@keyframes dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.6); }
+  60%      { box-shadow: 0 0 0 6px rgba(22,163,74,0); }
+}
+
+/* ───── Card hover — lift + glow ───────────────────────────────────── */
+.kpi, .panel, .prod-card, .reward-admin {
+  transition: transform 240ms var(--ease-out),
+              box-shadow 240ms var(--ease-out),
+              border-color 240ms var(--ease-out);
+}
+.kpi:hover, .panel:hover, .reward-admin:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(15,23,42,0.08);
+  border-color: var(--brand-300);
+}
+.prod-card:hover { box-shadow: 0 14px 32px rgba(44,118,86,0.18); }
+
+/* KPI sheen on hover */
+.kpi { position: relative; overflow: hidden; }
+.kpi::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 40%, rgba(255,255,255,0.5) 50%, transparent 60%);
+  transform: translateX(-100%);
+  transition: transform 600ms var(--ease-out);
+  pointer-events: none;
+}
+.kpi:hover::before { transform: translateX(100%); }
+
+/* KPI val — countup target */
+.kpi .val {
+  background: linear-gradient(180deg, #0f172a 0%, #475569 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Brand-tinted KPIs use the brand gradient text */
+.ai-stat .val { animation: gradient-drift 5s ease-in-out infinite alternate; background-size: 200% 200%; }
+
+/* ───── Inbox item — slide hover ───────────────────────────────────── */
+.inbox-item {
+  transition: background 150ms, transform 200ms var(--ease-out);
+}
+.inbox-item:hover { transform: translateX(2px); }
+
+/* ───── Sidebar nav — slide indicator ──────────────────────────────── */
+.side a {
+  position: relative;
+  overflow: hidden;
+}
+.side a::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 50%;
+  width: 3px; height: 0;
+  background: var(--brand-500);
+  border-radius: 0 3px 3px 0;
+  transform: translateY(-50%);
+  transition: height 200ms var(--ease-spring);
+}
+.side a.active::before { height: 60%; }
+.side a:hover::before { height: 30%; }
+
+/* ───── Page-enter animation ───────────────────────────────────────── */
+.page {
+  animation: page-in 380ms var(--ease-out);
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Stagger KPI entry */
+.kpis .kpi, .ai-stat-grid .ai-stat {
+  animation: kpi-in 420ms var(--ease-spring) backwards;
+}
+.kpis .kpi:nth-child(1), .ai-stat-grid .ai-stat:nth-child(1) { animation-delay: 60ms; }
+.kpis .kpi:nth-child(2), .ai-stat-grid .ai-stat:nth-child(2) { animation-delay: 120ms; }
+.kpis .kpi:nth-child(3), .ai-stat-grid .ai-stat:nth-child(3) { animation-delay: 180ms; }
+.kpis .kpi:nth-child(4), .ai-stat-grid .ai-stat:nth-child(4) { animation-delay: 240ms; }
+.kpis .kpi:nth-child(5) { animation-delay: 300ms; }
+@keyframes kpi-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.panel { animation: panel-in 520ms var(--ease-out) backwards; }
+.grid-2 .panel:nth-child(2),
+.grid-3 .panel:nth-child(2) { animation-delay: 80ms; }
+.grid-3 .panel:nth-child(3) { animation-delay: 160ms; }
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ───── AI Suggest panel — gradient border shimmer ─────────────────── */
+.suggested-reply {
+  position: relative;
+}
+.suggested-reply::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 13px;
+  padding: 1.5px;
+  background: linear-gradient(120deg,
+    rgba(44,118,86,0.4),
+    rgba(125,211,252,0.4),
+    rgba(173,214,194,0.4),
+    rgba(44,118,86,0.4));
+  background-size: 300% 300%;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: gradient-drift 6s linear infinite;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* ───── AI Suggest in chat — gentle float-in ───────────────────────── */
+.ai-suggest {
+  animation: ai-pop 420ms var(--ease-spring) backwards;
+}
+@keyframes ai-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ───── Typewriter cursor on streaming text ────────────────────────── */
+.streaming::after {
+  content: '▍';
+  color: var(--brand-500);
+  animation: caret 0.85s steps(2) infinite;
+  margin-left: 1px;
+}
+@keyframes caret {
+  50% { opacity: 0; }
+}
+
+/* ───── Composer focus glow ────────────────────────────────────────── */
+.composer .input-row:focus-within {
+  box-shadow: 0 0 0 3px rgba(44,118,86,0.1), 0 0 32px rgba(44,118,86,0.12);
+}
+
+/* ───── Send button — micro bounce on click ────────────────────────── */
+.composer .send:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+/* ───── Button — sheen ─────────────────────────────────────────────── */
+.page-head .actions .btn.brand,
+.peek-customer {
+  position: relative;
+  overflow: hidden;
+}
+.page-head .actions .btn.brand::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -120%;
+  width: 60%; height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent);
+  transition: left 700ms var(--ease-out);
+}
+.page-head .actions .btn.brand:hover::after { left: 130%; }
+
+/* ───── Schedule slots — pop in ────────────────────────────────────── */
+.schedule .slot {
+  animation: slot-pop 360ms var(--ease-spring) backwards;
+}
+.schedule .slot:nth-child(1) { animation-delay: 60ms; }
+.schedule .slot:nth-child(2) { animation-delay: 140ms; }
+@keyframes slot-pop {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ───── Bar chart — grow on load ───────────────────────────────────── */
+.bar-chart .bar .b {
+  animation: bar-grow 800ms var(--ease-out) backwards;
+  transform-origin: bottom;
+}
+.bar-chart .bar:nth-child(odd) .b { animation-delay: 60ms; }
+.bar-chart .bar:nth-child(3n) .b { animation-delay: 140ms; }
+.bar-chart .bar:nth-child(5n) .b { animation-delay: 220ms; }
+@keyframes bar-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+/* ───── Chart SVG — fade in ────────────────────────────────────────── */
+.chart svg polyline, .chart svg path, .chart svg circle {
+  animation: chart-in 700ms var(--ease-out) backwards;
+}
+@keyframes chart-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Donut segments grow from center */
+@keyframes donut-grow {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ───── Live "NEW" indicator on inbox items with unread ────────────── */
+.inbox-item .unread {
+  animation: badge-pop 380ms var(--ease-spring) backwards, badge-pulse 2.2s var(--ease-out) infinite;
+}
+@keyframes badge-pop {
+  from { transform: scale(0); }
+  to   { transform: scale(1); }
+}
+@keyframes badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(44,118,86,0.5); }
+  50%      { box-shadow: 0 0 0 5px rgba(44,118,86,0); }
+}
+
+/* ───── Toast — enrich entry & shake on warnings ───────────────────── */
+.toast.warn { background: var(--warning-fg); }
+.toast.success { background: var(--success); }
+
+/* ───── Confetti canvas ────────────────────────────────────────────── */
+#reya-confetti {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ───── Reward card — sparkle on hover ─────────────────────────────── */
+.reward-r .img {
+  position: relative;
+  overflow: hidden;
+}
+.reward-r:hover .img::before {
+  content: '✨';
+  position: absolute;
+  font-size: 18px;
+  animation: sparkle-fly 1.2s ease-out;
+  top: 50%; left: 50%;
+}
+@keyframes sparkle-fly {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+  40%  { opacity: 1; transform: translate(-50%, -120%) scale(1.2); }
+  100% { opacity: 0; transform: translate(-50%, -200%) scale(0.6) rotate(40deg); }
+}
+
+/* ───── Tier pill — shine for gold ─────────────────────────────────── */
+.tbl .tier.gold, .tbl .tier.platinum {
+  background: linear-gradient(110deg, #fef9c3, #fde68a, #fef9c3);
+  background-size: 200% 200%;
+  animation: gradient-drift 4s ease-in-out infinite alternate;
+}
+
+/* ───── Activity items — slide in ──────────────────────────────────── */
+.activity-list .activity-item,
+.ai-log-item {
+  animation: act-in 480ms var(--ease-out) backwards;
+}
+.activity-list .activity-item:nth-child(1), .ai-log-item:nth-child(1) { animation-delay: 80ms; }
+.activity-list .activity-item:nth-child(2), .ai-log-item:nth-child(2) { animation-delay: 140ms; }
+.activity-list .activity-item:nth-child(3), .ai-log-item:nth-child(3) { animation-delay: 200ms; }
+.activity-list .activity-item:nth-child(4), .ai-log-item:nth-child(4) { animation-delay: 260ms; }
+.activity-list .activity-item:nth-child(5), .ai-log-item:nth-child(5) { animation-delay: 320ms; }
+.activity-list .activity-item:nth-child(6), .ai-log-item:nth-child(6) { animation-delay: 380ms; }
+.activity-list .activity-item:nth-child(7), .ai-log-item:nth-child(7) { animation-delay: 440ms; }
+.activity-list .activity-item:nth-child(8), .ai-log-item:nth-child(8) { animation-delay: 500ms; }
+@keyframes act-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ───── Customer iphone — entrance ─────────────────────────────────── */
+.customer-frame .iphone {
+  animation: phone-in 520ms var(--ease-spring);
+}
+@keyframes phone-in {
+  from { opacity: 0; transform: translateY(40px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ───── Peek customer button — gentle bounce attention ─────────────── */
+.peek-customer {
+  animation: peek-attn 3s ease-in-out infinite;
+}
+@keyframes peek-attn {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+.peek-customer:hover {
+  animation: none;
+  transform: translateY(-4px) !important;
+}
+
+/* ───── Bubble — bounce in ─────────────────────────────────────────── */
+.msg-row.you .bubble,
+.msg-row.them .bubble {
+  animation: bub-in 320ms var(--ease-spring);
+}
+@keyframes bub-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ───── Quick actions — magnetic hover ─────────────────────────────── */
+.quick-action {
+  transition: transform 200ms var(--ease-spring), background 150ms, border-color 150ms;
+}
+.quick-action:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+.quick-action .ic {
+  transition: transform 250ms var(--ease-spring);
+}
+.quick-action:hover .ic {
+  transform: rotate(-8deg) scale(1.1);
+}
+
+/* ───── Mini app entry ─────────────────────────────────────────────── */
+.iphone .mini-screen > * {
+  animation: mini-page-in 380ms var(--ease-out);
+}
+@keyframes mini-page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ───── "Live" indicator next to status text ───────────────────────── */
+.live-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  background: var(--success);
+  border-radius: 50%;
+  margin-right: 4px;
+  animation: dot-pulse 2s var(--ease-out) infinite;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -8,17 +8,18 @@
      COLOR PALETTE - Dark Theme
      ======================================== */
   
-  /* Primary Colors - Indigo */
-  --color-primary-50: #eef2ff;
-  --color-primary-100: #e0e7ff;
-  --color-primary-200: #c7d2fe;
-  --color-primary-300: #a5b4fc;
-  --color-primary-400: #818cf8;
-  --color-primary-500: #6366f1;
-  --color-primary-600: #4f46e5;
-  --color-primary-700: #4338ca;
-  --color-primary-800: #3730a3;
-  --color-primary-900: #312e81;
+  /* Primary Colors - REYA emerald (legacy name kept so existing
+     `--color-primary-*` consumers inherit the rebrand automatically). */
+  --color-primary-50:  #ecfaf3;
+  --color-primary-100: #d6f1e3;
+  --color-primary-200: #aedfc4;
+  --color-primary-300: #79c79f;
+  --color-primary-400: #4dad7e;
+  --color-primary-500: #2c7656;
+  --color-primary-600: #235e45;
+  --color-primary-700: #1b4a36;
+  --color-primary-800: #143527;
+  --color-primary-900: #0d2418;
   
   /* Accent Colors - Emerald */
   --color-emerald-50: #ecfdf5;
@@ -91,7 +92,7 @@
   --glass-border: rgba(255, 255, 255, 0.15);
   --glass-border-medium: rgba(255, 255, 255, 0.25);
   --glass-border-strong: rgba(255, 255, 255, 0.4);
-  --glass-border-glow: rgba(99, 102, 241, 0.3);
+  --glass-border-glow: rgba(44, 118, 86, 0.3);  /* REYA emerald */
   
   /* Blur Amounts */
   --blur-sm: blur(8px);
@@ -118,7 +119,7 @@
   --shadow-glass-xl: 0 24px 64px rgba(0, 0, 0, 0.3);
   
   /* Glow Shadows */
-  --shadow-glow-primary: 0 0 30px rgba(99, 102, 241, 0.4);
+  --shadow-glow-primary: 0 0 30px rgba(44, 118, 86, 0.4);  /* REYA emerald */
   --shadow-glow-emerald: 0 0 30px rgba(16, 185, 129, 0.4);
   --shadow-glow-amber: 0 0 30px rgba(245, 158, 11, 0.4);
   --shadow-glow-rose: 0 0 30px rgba(244, 63, 94, 0.4);

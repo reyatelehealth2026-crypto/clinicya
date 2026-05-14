@@ -89,7 +89,9 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        // Apply strict frame-deny everywhere EXCEPT the REYA prototype assets,
+        // which the /reya Next.js page legitimately embeds via iframe.
+        source: '/((?!reya($|/)).*)',
         headers: [
           {
             key: 'X-Frame-Options',
@@ -106,6 +108,23 @@ const nextConfig = {
           {
             key: 'X-DNS-Prefetch-Control',
             value: 'on',
+          },
+        ],
+      },
+      {
+        source: '/reya/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
           },
         ],
       },
