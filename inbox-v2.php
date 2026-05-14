@@ -1269,7 +1269,7 @@ function formatThaiDateTime($datetime)
     }
 
     .border-teal-600 {
-        border-color: #0d9488 !important;
+        border-color: #2c7656 !important;
     }
 
     .rounded-full {
@@ -1302,15 +1302,15 @@ function formatThaiDateTime($datetime)
     }
 
     .bg-teal-100 {
-        background-color: #ccfbf1 !important;
+        background-color: #d6f1e3 !important;
     }
 
     .bg-teal-600 {
-        background-color: #0d9488 !important;
+        background-color: #2c7656 !important;
     }
 
     .bg-teal-700 {
-        background-color: #0f766e !important;
+        background-color: #235e45 !important;
     }
 
     .bg-green-300 {
@@ -1351,7 +1351,7 @@ function formatThaiDateTime($datetime)
     }
 
     .text-teal-700 {
-        color: #0f766e !important;
+        color: #235e45 !important;
     }
 
     .text-blue-700 {
@@ -1464,11 +1464,11 @@ function formatThaiDateTime($datetime)
     }
 
     .hover\:bg-teal-200:hover {
-        background-color: #99f6e4 !important;
+        background-color: #aedfc4 !important;
     }
 
     .hover\:bg-teal-700:hover {
-        background-color: #0f766e !important;
+        background-color: #235e45 !important;
     }
 
     .hover\:bg-white\/30:hover {
@@ -1549,8 +1549,8 @@ function formatThaiDateTime($datetime)
 
 <style>
     :root {
-        --primary: #0C665D;
-        --primary-dark: #0A5550;
+        --primary: #2c7656;       /* REYA emerald (was teal-700) */
+        --primary-dark: #235e45;  /* REYA emerald-600 */
     }
 
     .chat-scroll::-webkit-scrollbar {
@@ -1580,7 +1580,7 @@ function formatThaiDateTime($datetime)
     }
 
     .chat-outgoing {
-        background: #0C665D;
+        background: #235e45;
         color: #FFFFFF;
         border-radius: 18px 4px 18px 18px;
     }
@@ -1606,8 +1606,8 @@ function formatThaiDateTime($datetime)
 
     /* User list */
     .user-item.active {
-        background: #E0F2F1;
-        border-left: 3px solid #0C665D;
+        background: #ecfaf3;
+        border-left: 3px solid #235e45;
     }
 
     .user-item:hover {
@@ -1648,11 +1648,11 @@ function formatThaiDateTime($datetime)
 
     /* V2 Vibe Selling OS Styles */
     .vibe-header {
-        background: #0C665D;
+        background: #235e45;
     }
 
     .vibe-badge {
-        background: #0C665D;
+        background: #235e45;
         color: white;
         font-size: 9px;
         padding: 2px 6px;
@@ -1673,17 +1673,17 @@ function formatThaiDateTime($datetime)
         gap: 4px;
         padding: 6px 12px;
         background: white;
-        border: 1.5px solid #0C665D;
+        border: 1.5px solid #235e45;
         border-radius: 20px;
         font-size: 12px;
-        color: #0C665D;
+        color: #235e45;
         cursor: default;
         transition: all 0.2s;
     }
 
     .quick-reply-btn:hover {
-        background: #E6F7F5;
-        border-color: #0A5550;
+        background: #ecfaf3;
+        border-color: #143527;
     }
 
     /* HUD Dashboard Styles - Clean solid colors */
@@ -2015,7 +2015,7 @@ function formatThaiDateTime($datetime)
     }
 
     .quick-action-btn.primary {
-        background: #0C665D;
+        background: #235e45;
     }
 
     .quick-action-btn.primary:hover {
@@ -2083,7 +2083,7 @@ function formatThaiDateTime($datetime)
         top: 50%;
         transform: translateY(-50%);
         font-size: 10px;
-        color: #0C665D;
+        color: #235e45;
         display: flex;
         align-items: center;
         gap: 4px;
@@ -2521,7 +2521,7 @@ function formatThaiDateTime($datetime)
     }
 
     .purchase-action-btn.payment-link {
-        background: #0C665D;
+        background: #235e45;
         color: white;
     }
 
@@ -3305,7 +3305,7 @@ function formatThaiDateTime($datetime)
                                 </div>
                                 <button type="submit" id="sendBtn"
                                     class="text-white w-10 h-10 rounded-full flex items-center justify-center shadow-lg"
-                                    style="background: #0C665D;">
+                                    style="background: #235e45;">
                                     <i class="fas fa-paper-plane"></i>
                                 </button>
                             </form>
@@ -3322,7 +3322,7 @@ function formatThaiDateTime($datetime)
                                         <i class="fas fa-times"></i>
                                     </button>
                                     <button type="button" onclick="sendImage()"
-                                        class="text-white px-4 py-2 rounded-lg text-sm font-medium" style="background: #0C665D;">
+                                        class="text-white px-4 py-2 rounded-lg text-sm font-medium" style="background: #235e45;">
                                         <i class="fas fa-paper-plane mr-1"></i>ส่งรูป
                                     </button>
                                 </div>
@@ -3392,7 +3392,7 @@ function formatThaiDateTime($datetime)
             <?php if ($selectedUser): ?>
                     <div id="hudDashboard" class="hud-dashboard">
                         <!-- HUD Header with Mode Switcher -->
-                        <div class="p-3 border-b" style="background: #0C665D;">
+                        <div class="p-3 border-b" style="background: #235e45;">
                             <div class="flex items-center justify-between mb-2">
                                 <h3 class="text-white font-bold text-sm flex items-center gap-2">
                                     <i class="fas fa-th-large"></i>
@@ -3832,7 +3832,7 @@ function formatThaiDateTime($datetime)
                                                             </div>
                                                             <div class="w-full bg-gray-200 rounded-full h-1.5">
                                                                 <div class="h-1.5 rounded-full"
-                                                                    style="width: <?= ($customerClassification['confidence'] ?? 0) * 100 ?>%; background: #0C665D;">
+                                                                    style="width: <?= ($customerClassification['confidence'] ?? 0) * 100 ?>%; background: #235e45;">
                                                                 </div>
                                                             </div>
                                                             <p class="text-[10px] text-gray-400 mt-1">* คำนวณจากประวัติการสนทนา</p>
@@ -11492,13 +11492,13 @@ function formatThaiDateTime($datetime)
     ajaxStyles.textContent = `
                                                                                                                                                 /* Keyboard navigation styles - Task 18.1 */
                                                                                                                                                 .user-item.keyboard-selected {
-                                                                                                                                                    outline: 2px solid #0C665D;
+                                                                                                                                                    outline: 2px solid #235e45;
                                                                                                                                                     outline-offset: -2px;
                                                                                                                                                     background-color: rgba(12, 102, 93, 0.05);
                                                                                                                                                 }
     
                                                                                                                                                 .user-item:focus {
-                                                                                                                                                    outline: 2px solid #0C665D;
+                                                                                                                                                    outline: 2px solid #235e45;
                                                                                                                                                     outline-offset: -2px;
                                                                                                                                                 }
     
