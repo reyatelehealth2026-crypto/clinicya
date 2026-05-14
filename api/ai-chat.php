@@ -284,7 +284,7 @@ try {
 }
 
 // Top products - use the JSON that the dashboard uses if available, to avoid slow queries
-$prodCache = '/www/wwwroot/cny.re-ya.com/cache/inbox_products_7.json';
+$prodCache = __DIR__ . '/../cache/inbox_products_7.json';
 $topProductsStr = "ยังไม่มีข้อมูลสินค้าขายดีในขณะนี้";
 if (file_exists($prodCache)) {
     $jd = json_decode(file_get_contents($prodCache), true);

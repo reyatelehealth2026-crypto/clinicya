@@ -7,7 +7,7 @@ echo "Redis Connection Diagnostic"
 echo "═══════════════════════════════════════════════════════"
 echo ""
 
-cd /home/zrismpsz/public_html/cny.re-ya.com
+cd "$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "1. Checking Predis installation..."
 if [ -f "vendor/predis/predis/autoload.php" ]; then

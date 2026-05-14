@@ -1,6 +1,6 @@
 <?php
-require '/www/wwwroot/cny.re-ya.com/config/config.php';
-require '/www/wwwroot/cny.re-ya.com/classes/BdoContextManager.php';
+require __DIR__ . '/config/config.php';
+require __DIR__ . '/classes/BdoContextManager.php';
 
 $bdoName = 'BDO2603-02047';
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);

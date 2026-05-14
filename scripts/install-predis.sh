@@ -6,7 +6,7 @@ echo "════════════════════════�
 echo "Installing Predis without Composer"
 echo "═══════════════════════════════════════════════════════"
 
-cd /home/zrismpsz/public_html/cny.re-ya.com
+cd "$(cd "$(dirname "$0")/.." && pwd)"
 
 # Create vendor directory if not exists
 mkdir -p vendor/predis

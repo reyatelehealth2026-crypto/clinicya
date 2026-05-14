@@ -1,6 +1,6 @@
 <?php
-require_once "/www/wwwroot/cny.re-ya.com/config/config.php";
-require_once "/www/wwwroot/cny.re-ya.com/config/database.php";
+require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/config/database.php';
 try {
     $db = Database::getInstance()->getConnection();
     $stmt = $db->query("SELECT payload FROM odoo_webhooks_log WHERE event_type = \"bdo.confirmed\" ORDER BY id DESC LIMIT 5");

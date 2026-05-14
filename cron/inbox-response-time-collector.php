@@ -8,7 +8,7 @@
  * Writes to message_analytics table only (no existing files modified).
  *
  * Cron schedule: every 15 minutes (07,22,37,52)
- * Run: /www/server/php/83/bin/php /www/wwwroot/cny.re-ya.com/cron/inbox-response-time-collector.php
+ * Run: /www/server/php/83/bin/php /home/zrismpsz/public_html/cron/inbox-response-time-collector.php
  */
 
 set_time_limit(120);

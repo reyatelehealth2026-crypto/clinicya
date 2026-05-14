@@ -1,8 +1,8 @@
 <?php
-require_once '/www/wwwroot/cny.re-ya.com/config/config.php';
-require_once '/www/wwwroot/cny.re-ya.com/modules/Core/Database.php';
-require_once '/www/wwwroot/cny.re-ya.com/classes/BdoContextManager.php';
-require_once '/www/wwwroot/cny.re-ya.com/classes/OdooAPIClient.php';
+require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/modules/Core/Database.php';
+require_once __DIR__ . '/classes/BdoContextManager.php';
+require_once __DIR__ . '/classes/OdooAPIClient.php';
 
 use Modules\Core\Database;
 
