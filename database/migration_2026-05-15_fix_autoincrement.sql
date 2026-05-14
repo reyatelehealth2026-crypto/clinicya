@@ -1,35 +1,45 @@
 -- ---------------------------------------------------------------------------
--- Migration: 2026-05-15 fix AUTO_INCREMENT on line_accounts.id + activity_logs.id
+-- Migration: 2026-05-15 restore keys + AUTO_INCREMENT on line_accounts & activity_logs
 -- ---------------------------------------------------------------------------
--- Production was throwing repeated PHP Fatal errors:
---   SQLSTATE[HY000]: 1364 Field 'id' doesn't have a default value
--- in classes/LineAccountManager.php:148 (INSERT INTO line_accounts)
--- and classes/ActivityLogger.php (INSERT INTO activity_logs).
+-- Production audit on 2026-05-15 found that on the `zrismpsz_demo` database the
+-- tables `line_accounts` and `activity_logs` had been imported WITHOUT their
+-- PRIMARY KEY, UNIQUE KEY, secondary indexes, or AUTO_INCREMENT attribute.
+-- As a result:
+--   * LineAccountManager->createAccount() (settings.php → create LINE account)
+--     threw repeated PHP Fatal: 1364 Field 'id' doesn't have a default value
+--   * ActivityLogger->log() threw the same error on every admin action.
 --
--- Schema in database/install_complete_latest.sql declares both id columns as
--- AUTO_INCREMENT, but the production tables lost the AUTO_INCREMENT attribute
--- (likely from an older mysqldump restore). This migration restores it.
+-- Both tables were empty in production at the time of this fix, so no data
+-- migration / dedupe is needed.
 --
--- Safe to re-run: MODIFY is idempotent for the type definition.
+-- This migration restores the schema defined in
+-- database/install_complete_latest.sql for these two tables.
 -- ---------------------------------------------------------------------------
 
 SET time_zone = '+07:00';
 
--- line_accounts.id -- INT NOT NULL AUTO_INCREMENT
+-- =========================================================================
+-- line_accounts: restore PRIMARY KEY + UNIQUE KEY + AUTO_INCREMENT
+-- =========================================================================
+ALTER TABLE `line_accounts`
+    ADD PRIMARY KEY (`id`),
+    ADD UNIQUE KEY `unique_channel_secret` (`channel_secret`);
+
 ALTER TABLE `line_accounts`
     MODIFY `id` INT(11) NOT NULL AUTO_INCREMENT;
 
--- activity_logs.id -- BIGINT NOT NULL AUTO_INCREMENT
+-- =========================================================================
+-- activity_logs: restore PRIMARY KEY + secondary indexes + AUTO_INCREMENT
+-- =========================================================================
+ALTER TABLE `activity_logs`
+    ADD PRIMARY KEY (`id`),
+    ADD KEY `idx_log_type` (`log_type`),
+    ADD KEY `idx_action` (`action`),
+    ADD KEY `idx_user_id` (`user_id`),
+    ADD KEY `idx_admin_id` (`admin_id`),
+    ADD KEY `idx_entity` (`entity_type`,`entity_id`),
+    ADD KEY `idx_created_at` (`created_at`),
+    ADD KEY `idx_line_account` (`line_account_id`);
+
 ALTER TABLE `activity_logs`
     MODIFY `id` BIGINT(20) NOT NULL AUTO_INCREMENT;
-
--- Optional: re-seed AUTO_INCREMENT to MAX(id)+1 so the next insert is safe.
--- Run these manually after the ALTERs above if the auto_increment counter
--- got out of sync with the data:
---   SELECT @next := IFNULL(MAX(id),0)+1 FROM line_accounts;
---   SET @sql := CONCAT('ALTER TABLE line_accounts AUTO_INCREMENT=', @next);
---   PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
---
---   SELECT @next := IFNULL(MAX(id),0)+1 FROM activity_logs;
---   SET @sql := CONCAT('ALTER TABLE activity_logs AUTO_INCREMENT=', @next);
---   PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
