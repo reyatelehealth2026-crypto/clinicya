@@ -546,12 +546,13 @@ if (!function_exists('buildStorefrontQuery')) {
                         <th class="px-3 py-3 text-center">สถานะระบบ</th>
                         <th class="px-3 py-3 text-center">หน้าร้าน</th>
                         <th class="px-3 py-3 text-center w-14">แก้ไข</th>
+                        <th class="px-3 py-3 text-center">รายละเอียด</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y">
                     <?php if (empty($rows)): ?>
                         <tr>
-                            <td colspan="10" class="px-4 py-10 text-center text-gray-400">
+                            <td colspan="11" class="px-4 py-10 text-center text-gray-400">
                                 <i class="fas fa-box-open text-3xl mb-2 block"></i>
                                 ไม่พบสินค้าตาม filter ที่เลือก
                                 <?php if ((int) ($stats['total_cnt'] ?? 0) === 0): ?>
@@ -693,6 +694,14 @@ if (!function_exists('buildStorefrontQuery')) {
                                             title="<?= $anyOvr ? 'แก้ไข (มี admin override อยู่)' : 'แก้ไข' ?>">
                                         <i class="fas fa-pen"></i>
                                     </button>
+                                </td>
+                                <td class="px-3 py-2 text-center">
+                                    <a href="/inventory/product-detail?id=<?= $id ?>"
+                                       class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100"
+                                       title="เปิดหน้ารายละเอียดสินค้า (open product detail)">
+                                        <i class="fas fa-eye"></i>
+                                        <span>ดูรายละเอียด</span>
+                                    </a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
