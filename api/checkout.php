@@ -517,140 +517,11 @@ function checkoutBuildOdooProductSortClause(string $sort, bool $hasFeatured): st
     }
 }
 
-/**
- * Odoo storefront product list — same source as api/shop-products.php (shop_products).
- */
-function checkoutHandleGetShopProducts(int $lineAccountId): void
-{
-    global $db;
-
-    $categoryId = $_GET['category_id'] ?? null;
-    $search = trim((string) ($_GET['search'] ?? ''));
-    $sort = $_GET['sort'] ?? 'latest';
-    $brand = trim((string) ($_GET['brand'] ?? ''));
-    $limit = max(1, min(24, (int) ($_GET['limit'] ?? 12)));
-    $offset = max(0, (int) ($_GET['offset'] ?? 0));
-
-    try {
-        $hasOverrides = schema_table_has_column($db, 'shop_products', 'admin_overrides');
-        $hasFeatured = schema_table_has_column($db, 'shop_products', 'featured_order');
-        $hasManufacturer = schema_table_has_column($db, 'shop_products', 'manufacturer');
-        $extra = $hasOverrides ? ', admin_overrides' : '';
-
-        $where = ['line_account_id = ?', 'storefront_enabled = 1', 'is_active = 1'];
-        $params = [$lineAccountId];
-
-        if ($categoryId !== null && $categoryId !== '') {
-            $where[] = 'category = ?';
-            $params[] = $categoryId;
-        }
-
-        if ($search !== '') {
-            $where[] = '(name LIKE ? OR sku LIKE ? OR product_code LIKE ? OR barcode LIKE ? OR generic_name LIKE ?)';
-            $like = "%{$search}%";
-            array_push($params, $like, $like, $like, $like, $like);
-        }
-
-        if ($brand !== '' && $hasManufacturer) {
-            $where[] = 'manufacturer = ?';
-            $params[] = $brand;
-        } elseif ($brand !== '') {
-            jsonResponse(true, '', [
-                'products' => [],
-                'categories' => [],
-                'brands' => [],
-                'offset' => $offset,
-                'limit' => $limit,
-                'total' => 0,
-                'has_more' => false,
-                'product_catalog_source' => 'shop_products',
-                'category_id_is_string' => true,
-            ]);
-
-            return;
-        }
-
-        $whereClause = implode(' AND ', $where);
-        $orderBy = checkoutBuildOdooProductSortClause($sort, $hasFeatured);
-
-        $countSql = "SELECT COUNT(*) FROM shop_products WHERE {$whereClause}";
-        $stmt = $db->prepare($countSql);
-        $stmt->execute($params);
-        $total = (int) $stmt->fetchColumn();
-
-        $sql = "SELECT *{$extra} FROM shop_products WHERE {$whereClause} ORDER BY {$orderBy} LIMIT ? OFFSET ?";
-        $stmt = $db->prepare($sql);
-        $pi = 1;
-        foreach ($params as $p) {
-            $stmt->bindValue($pi++, $p);
-        }
-        $stmt->bindValue($pi++, $limit, PDO::PARAM_INT);
-        $stmt->bindValue($pi, $offset, PDO::PARAM_INT);
-        $stmt->execute();
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $products = [];
-        foreach ($rows as $row) {
-            $p = formatShopProductForLiff($row);
-            normalizeShopProductRow($p);
-            $products[] = $p;
-        }
-
-        $catStmt = $db->prepare(
-            "SELECT DISTINCT category FROM shop_products
-             WHERE line_account_id = ?
-               AND storefront_enabled = 1
-               AND is_active = 1
-               AND category IS NOT NULL AND category <> ''
-             ORDER BY category ASC"
-        );
-        $catStmt->execute([$lineAccountId]);
-        $catNames = $catStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
-        $categories = [];
-        foreach ($catNames as $cname) {
-            $categories[] = [
-                'id' => $cname,
-                'name' => $cname,
-                'icon_url' => null,
-            ];
-        }
-
-        $brands = [];
-        if ($hasManufacturer) {
-            $brandSql = "SELECT DISTINCT manufacturer FROM shop_products
-                         WHERE line_account_id = ?
-                           AND storefront_enabled = 1
-                           AND is_active = 1
-                           AND manufacturer IS NOT NULL AND manufacturer <> ''";
-            $bp = [$lineAccountId];
-            if ($categoryId !== null && $categoryId !== '') {
-                $brandSql .= ' AND category = ?';
-                $bp[] = $categoryId;
-            }
-            $brandSql .= ' ORDER BY manufacturer ASC LIMIT 16';
-            $bStmt = $db->prepare($brandSql);
-            $bStmt->execute($bp);
-            $brands = array_values(array_filter(array_map(
-                static fn(array $row) => $row['manufacturer'] ?? null,
-                $bStmt->fetchAll(PDO::FETCH_ASSOC) ?: []
-            )));
-        }
-
-        jsonResponse(true, '', [
-            'products' => $products,
-            'categories' => $categories,
-            'brands' => $brands,
-            'offset' => $offset,
-            'limit' => $limit,
-            'total' => $total,
-            'has_more' => $offset + $limit < $total,
-            'product_catalog_source' => 'shop_products',
-            'category_id_is_string' => true,
-        ]);
-    } catch (Exception $e) {
-        jsonResponse(false, 'Error loading products: ' . $e->getMessage());
-    }
-}
+// checkoutHandleGetShopProducts() was removed on 2026-05-15 when the
+// product tables were unified into business_items. The legacy shop_products
+// branch in handleGetProducts() now flows straight through to the
+// business_items query path. See:
+//   database/migration_2026-05-15_unify_products_to_business_items.sql
 
 /**
  * Single product for LINE mini-app product detail page (GET action=product_detail).
@@ -666,31 +537,9 @@ function handleGetProductDetail() {
         jsonResponse(false, 'Missing product_id');
     }
 
-    $lineAccountInt = ($lineAccountId !== null && $lineAccountId !== '') ? (int) $lineAccountId : 0;
-    if ($lineAccountInt > 0 && useShopProductCatalog($db, $lineAccountInt)) {
-        try {
-            $hasOverrides = schema_table_has_column($db, 'shop_products', 'admin_overrides');
-            $extra = $hasOverrides ? ', admin_overrides' : '';
-            $stmt = $db->prepare(
-                "SELECT *{$extra} FROM shop_products
-                 WHERE line_account_id = ? AND id = ?
-                   AND storefront_enabled = 1 AND is_active = 1 LIMIT 1"
-            );
-            $stmt->execute([$lineAccountInt, $productId]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$row) {
-                jsonResponse(false, 'Product not found');
-            }
-            $product = formatShopProductForLiff($row);
-            normalizeShopProductRow($product);
-            jsonResponse(true, '', ['product' => $product]);
-        } catch (Exception $e) {
-            jsonResponse(false, 'Error loading product: ' . $e->getMessage());
-        }
-
-        return;
-    }
-
+    // Unified (2026-05-15): always read product detail from business_items.
+    // The old shop_products branch has been removed — see
+    // database/migration_2026-05-15_unify_products_to_business_items.sql.
     try {
         $wishlistUserId = getExistingUserIdFromLineUserId($lineUserId);
         $canJoinWishlist = $wishlistUserId !== null && tableExists('user_wishlist');
@@ -827,13 +676,9 @@ function handleGetProducts() {
     global $db;
 
     $lineAccountId = $_GET['line_account_id'] ?? null;
-    $lineAccountInt = ($lineAccountId !== null && $lineAccountId !== '') ? (int) $lineAccountId : 0;
-    if ($lineAccountInt > 0 && useShopProductCatalog($db, $lineAccountInt)) {
-        checkoutHandleGetShopProducts($lineAccountInt);
-
-        return;
-    }
-
+    // Unified (2026-05-15): always read the product list from business_items.
+    // The early shop_products branch has been removed — see
+    // database/migration_2026-05-15_unify_products_to_business_items.sql.
     $categoryId = $_GET['category_id'] ?? null;
     $search = trim((string) ($_GET['search'] ?? ''));
     $sort = $_GET['sort'] ?? 'latest';

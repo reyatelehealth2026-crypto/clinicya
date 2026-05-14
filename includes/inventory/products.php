@@ -721,7 +721,11 @@ if ($isOdooMode) {
     }
     $offset = ($page - 1) * $perPage;
 
-    $baseWhere = " FROM {$cacheTable} oc LEFT JOIN cny_products cp ON cp.sku = oc.product_code WHERE oc.line_account_id = ?";
+    // 2026-05-15: dropped the LEFT JOIN to legacy `cny_products` (the table
+    // is being retired as part of the unify-products-to-business_items
+    // migration). The JOIN never returned columns into the SELECT — only the
+    // FROM table was used — so removing it is a no-op for the displayed data.
+    $baseWhere = " FROM {$cacheTable} oc WHERE oc.line_account_id = ?";
     $queryParams = [(int) $currentBotId];
 
     if ($categoryFilter !== '') {

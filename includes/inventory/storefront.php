@@ -16,16 +16,16 @@
 $currentBotId = (int) ($_SESSION['current_bot_id'] ?? 1);
 
 // ─── Verify migration ran ──────────────────────────────────────────────────────
+// Post-unification (2026-05-15) the storefront tab reads from business_items.
+// We treat business_items.is_active as the "storefront enabled" flag — there's
+// no separate storefront_enabled column on business_items.
 $migrationReady = false;
-$hasOverridesCol = false;
+$hasOverridesCol = false; // business_items has no admin_overrides JSON
 try {
-    $check = $db->query("SHOW COLUMNS FROM shop_products LIKE 'storefront_enabled'");
+    $check = $db->query("SHOW TABLES LIKE 'business_items'");
     $migrationReady = $check && $check->rowCount() > 0;
-    $check2 = $db->query("SHOW COLUMNS FROM shop_products LIKE 'admin_overrides'");
-    $hasOverridesCol = $check2 && $check2->rowCount() > 0;
 } catch (Exception $e) {
     $migrationReady = false;
-    $hasOverridesCol = false;
 }
 
 /**
@@ -78,42 +78,28 @@ if (!$migrationReady) {
 }
 
 // ─── Inline create handler — "เพิ่มสินค้า" button on storefront tab ──────────
+// NOTE (2026-05-15): unified to write to `business_items` (the canonical
+// product table). The old `shop_products` cacheTable is being retired —
+// see database/migration_2026-05-15_unify_products_to_business_items.sql.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'storefront_quick_create') {
     try {
-        $cacheTable = 'shop_products';
-        // Best-effort ensure extra columns exist (idempotent with products.php migration block)
-        $extraCols = [
-            'image_url'          => "ADD COLUMN image_url VARCHAR(500) DEFAULT NULL",
-            'description'        => "ADD COLUMN description TEXT DEFAULT NULL",
-            'usage_instructions' => "ADD COLUMN usage_instructions TEXT DEFAULT NULL",
-            'image_gallery'      => "ADD COLUMN image_gallery LONGTEXT DEFAULT NULL",
-            'manufacturer'       => "ADD COLUMN manufacturer VARCHAR(255) DEFAULT NULL",
-            'unit'               => "ADD COLUMN unit VARCHAR(50) DEFAULT NULL",
-            'base_unit'          => "ADD COLUMN base_unit VARCHAR(50) DEFAULT NULL",
-            'name_en'            => "ADD COLUMN name_en VARCHAR(255) DEFAULT NULL",
-            'sale_price'         => "ADD COLUMN sale_price DECIMAL(12,2) DEFAULT NULL",
-            'is_local'           => "ADD COLUMN is_local TINYINT(1) DEFAULT 0",
-        ];
+        $cacheTable = 'business_items';
+        // Best-effort ensure image_gallery column exists on business_items
+        // (idempotent — same migration we ship as a versioned SQL file).
         try {
-            $present = [];
-            foreach ($db->query("SHOW COLUMNS FROM {$cacheTable}")->fetchAll(PDO::FETCH_ASSOC) as $c) {
-                $present[$c['Field']] = true;
-            }
-            foreach ($extraCols as $name => $sql) {
-                if (!isset($present[$name])) {
-                    try { $db->exec("ALTER TABLE {$cacheTable} {$sql}"); } catch (Exception $e) {}
-                }
+            $hasGallery = $db->query("SHOW COLUMNS FROM {$cacheTable} LIKE 'image_gallery'");
+            if (!$hasGallery || $hasGallery->rowCount() === 0) {
+                try { $db->exec("ALTER TABLE {$cacheTable} ADD COLUMN image_gallery LONGTEXT NULL AFTER image_url"); } catch (Exception $e) {}
             }
         } catch (Exception $e) { /* non-fatal */ }
 
-        $productCode = trim((string) ($_POST['product_code'] ?? ''));
-        if ($productCode === '') {
-            $sku = trim((string) ($_POST['sku'] ?? ''));
-            $productCode = $sku !== '' ? $sku : ('LOC-' . time() . '-' . random_int(100, 999));
+        $skuInput   = trim((string) ($_POST['sku'] ?? ''));
+        if ($skuInput === '') {
+            $productCode = trim((string) ($_POST['product_code'] ?? ''));
+            $skuInput = $productCode !== '' ? $productCode : ('LOC-' . time() . '-' . random_int(100, 999));
         }
-        $listPrice   = (float) ($_POST['price'] ?? 0);
+        $price       = (float) ($_POST['price'] ?? 0);
         $salePrice   = ($_POST['sale_price'] ?? '') !== '' ? (float) $_POST['sale_price'] : null;
-        $onlinePrice = $salePrice !== null ? $salePrice : 0;
 
         // Image gallery: textarea is one URL per line; persist as JSON so the
         // mini-app product detail page can render multiple images.
@@ -128,29 +114,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store
             }
         }
 
+        // Resolve category text → business_categories.id. We look up by name
+        // scoped to the current line_account first, then global. If nothing
+        // matches we leave category_id NULL (free-text categories were
+        // historically common in shop_products, so this is a safe default).
+        $categoryText = trim((string) ($_POST['category'] ?? ''));
+        $categoryId = null;
+        if ($categoryText !== '') {
+            try {
+                $catStmt = $db->prepare(
+                    "SELECT id FROM business_categories
+                     WHERE name = ?
+                       AND (line_account_id = ? OR line_account_id IS NULL)
+                     ORDER BY (line_account_id = ?) DESC
+                     LIMIT 1"
+                );
+                $catStmt->execute([$categoryText, (int) $currentBotId, (int) $currentBotId]);
+                $catRow = $catStmt->fetchColumn();
+                $categoryId = $catRow ? (int) $catRow : null;
+            } catch (Exception $e) {
+                $categoryId = null;
+            }
+        }
+
         $fields = [
             'line_account_id'    => (int) $currentBotId,
-            'product_code'       => $productCode,
-            'sku'                => $_POST['sku'] ?? null,
+            'item_type'          => 'product',
+            'category_id'        => $categoryId,
             'name'               => $_POST['name'] ?? '',
             'name_en'            => $_POST['name_en'] ?? null,
             'generic_name'       => $_POST['generic_name'] ?? null,
-            'barcode'            => $_POST['barcode'] ?? null,
-            'category'           => $_POST['category'] ?? null,
             'manufacturer'       => $_POST['manufacturer'] ?? null,
             'description'        => $_POST['description'] ?? null,
             'usage_instructions' => $_POST['usage_instructions'] ?? null,
             'image_url'          => $_POST['image_url'] ?? null,
             'image_gallery'      => $galleryJson,
-            'list_price'         => $listPrice,
-            'online_price'       => $onlinePrice,
+            'sku'                => $skuInput,
+            'barcode'            => $_POST['barcode'] ?? null,
+            'price'              => $price,
             'sale_price'         => $salePrice,
-            'saleable_qty'       => (float) ($_POST['stock'] ?? 0),
-            'base_unit'          => $_POST['base_unit'] ?? null,
-            'unit'               => $_POST['unit'] ?? null,
+            'stock'              => (float) ($_POST['stock'] ?? 0),
             'is_active'          => 1,
-            'storefront_enabled' => 1, // added FROM storefront tab → publish immediately
-            'is_local'           => 1,
         ];
         $cols = array_keys($fields);
         $placeholders = implode(',', array_fill(0, count($cols), '?'));
@@ -188,37 +192,43 @@ if (!in_array($perPage, [20, 50, 100, 200], true)) {
 $offset = ($page - 1) * $perPage;
 
 // ─── Build WHERE ───────────────────────────────────────────────────────────────
-$where  = ['line_account_id = ?'];
+// Reads from `business_items` joined to `business_categories` (FK
+// p.category_id → c.id). The legacy shop_products columns map as follows:
+//   product_code   → sku
+//   list_price     → price
+//   online_price   → sale_price
+//   saleable_qty   → stock
+//   storefront_enabled → is_active
+//   category (varchar) → c.name (via JOIN on category_id)
+// drug_type and featured_order have no equivalents on business_items and are
+// silently dropped from filters / ordering.
+$where  = ['p.line_account_id = ?'];
 $params = [$currentBotId];
 
 if ($search !== '') {
-    $where[] = "(name LIKE ? OR sku LIKE ? OR product_code LIKE ? OR barcode LIKE ? OR generic_name LIKE ?)";
+    $where[] = "(p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ? OR p.generic_name LIKE ?)";
     $like = "%{$search}%";
-    $params[] = $like;
     $params[] = $like;
     $params[] = $like;
     $params[] = $like;
     $params[] = $like;
 }
 if ($categoryFilter !== '') {
-    $where[]  = "category = ?";
+    $where[]  = "c.name = ?";
     $params[] = $categoryFilter;
 }
-if ($drugTypeFilter !== '') {
-    $where[]  = "drug_type = ?";
-    $params[] = $drugTypeFilter;
-}
+// drug_type filter is intentionally a no-op (column does not exist on business_items).
 if ($statusFilter === 'enabled') {
-    $where[] = "storefront_enabled = 1";
+    $where[] = "p.is_active = 1";
 } elseif ($statusFilter === 'disabled') {
-    $where[] = "storefront_enabled = 0";
+    $where[] = "p.is_active = 0";
 }
 if ($priceFilter === 'zero') {
-    $where[] = "(online_price IS NULL OR online_price = 0) AND (list_price IS NULL OR list_price = 0)";
+    $where[] = "(p.sale_price IS NULL OR p.sale_price = 0) AND (p.price IS NULL OR p.price = 0)";
 } elseif ($priceFilter === 'has_price') {
-    $where[] = "(online_price > 0 OR list_price > 0)";
+    $where[] = "(p.sale_price > 0 OR p.price > 0)";
 } elseif ($priceFilter === 'range' && ($priceMin !== null || $priceMax !== null)) {
-    $priceCol = "COALESCE(NULLIF(online_price,0), list_price)";
+    $priceCol = "COALESCE(NULLIF(p.sale_price,0), p.price)";
     if ($priceMin !== null) {
         $where[]  = "{$priceCol} >= ?";
         $params[] = $priceMin;
@@ -229,33 +239,51 @@ if ($priceFilter === 'zero') {
     }
 }
 if ($stockFilter === 'in') {
-    $where[] = "saleable_qty > 5";
+    $where[] = "p.stock > 5";
 } elseif ($stockFilter === 'low') {
-    $where[] = "saleable_qty > 0 AND saleable_qty <= 5";
+    $where[] = "p.stock > 0 AND p.stock <= 5";
 } elseif ($stockFilter === 'out') {
-    $where[] = "saleable_qty <= 0";
+    $where[] = "p.stock <= 0";
 }
 
 $whereSql = implode(' AND ', $where);
 
 // ─── Query data ────────────────────────────────────────────────────────────────
-$countStmt = $db->prepare("SELECT COUNT(*) FROM shop_products WHERE {$whereSql}");
+$countStmt = $db->prepare(
+    "SELECT COUNT(*)
+     FROM business_items p
+     LEFT JOIN business_categories c ON c.id = p.category_id
+     WHERE {$whereSql}"
+);
 $countStmt->execute($params);
 $total = (int) $countStmt->fetchColumn();
 
 $totalPages = max(1, (int) ceil(max(1, $total) / $perPage));
 
-$overridesSelect = $hasOverridesCol ? ', admin_overrides' : '';
+// Alias business_items columns back to the shop_products names the template
+// (further down this file) still expects, so we don't have to rewrite the
+// table markup. drug_type / featured_order / admin_overrides have no
+// equivalents and surface as NULL.
 $listStmt = $db->prepare(
-    "SELECT id, product_code, sku, name, generic_name, category, drug_type,
-            list_price, online_price, saleable_qty, is_active, storefront_enabled,
-            featured_order, last_synced_at{$overridesSelect}
-     FROM shop_products
+    "SELECT p.id,
+            p.sku                AS product_code,
+            p.sku                AS sku,
+            p.name,
+            p.generic_name,
+            c.name               AS category,
+            NULL                 AS drug_type,
+            p.price              AS list_price,
+            p.sale_price         AS online_price,
+            p.stock              AS saleable_qty,
+            p.is_active,
+            p.is_active          AS storefront_enabled,
+            NULL                 AS featured_order,
+            p.updated_at         AS last_synced_at,
+            NULL                 AS admin_overrides
+     FROM business_items p
+     LEFT JOIN business_categories c ON c.id = p.category_id
      WHERE {$whereSql}
-     ORDER BY storefront_enabled DESC,
-              featured_order IS NULL,
-              featured_order ASC,
-              name ASC
+     ORDER BY p.is_active DESC, p.name ASC
      LIMIT {$perPage} OFFSET {$offset}"
 );
 $listStmt->execute($params);
@@ -265,11 +293,12 @@ $rows = $listStmt->fetchAll(PDO::FETCH_ASSOC);
 $categories = [];
 try {
     $catStmt = $db->prepare(
-        "SELECT category, COUNT(*) AS n
-         FROM shop_products
-         WHERE line_account_id = ? AND category IS NOT NULL AND category <> ''
-         GROUP BY category
-         ORDER BY n DESC, category ASC"
+        "SELECT c.name AS category, COUNT(*) AS n
+         FROM business_items p
+         INNER JOIN business_categories c ON c.id = p.category_id
+         WHERE p.line_account_id = ? AND c.name IS NOT NULL AND c.name <> ''
+         GROUP BY c.name
+         ORDER BY n DESC, c.name ASC"
     );
     $catStmt->execute([$currentBotId]);
     $categories = $catStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -277,30 +306,19 @@ try {
     $categories = [];
 }
 
+// drug_type has no equivalent on business_items; surface an empty list so
+// the dropdown stays present but inert.
 $drugTypes = [];
-try {
-    $dtStmt = $db->prepare(
-        "SELECT drug_type, COUNT(*) AS n
-         FROM shop_products
-         WHERE line_account_id = ? AND drug_type IS NOT NULL AND drug_type <> ''
-         GROUP BY drug_type
-         ORDER BY n DESC, drug_type ASC"
-    );
-    $dtStmt->execute([$currentBotId]);
-    $drugTypes = $dtStmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {
-    $drugTypes = [];
-}
 
-// Storefront stats
+// Storefront stats — keyed off business_items.is_active (= storefront_enabled)
 $statStmt = $db->prepare(
     "SELECT
-        SUM(storefront_enabled = 1)                              AS enabled_cnt,
-        SUM(storefront_enabled = 0)                              AS disabled_cnt,
-        SUM(storefront_enabled = 1 AND (online_price IS NULL OR online_price = 0)
-                                    AND (list_price   IS NULL OR list_price   = 0)) AS enabled_zero_cnt,
+        SUM(is_active = 1)                              AS enabled_cnt,
+        SUM(is_active = 0)                              AS disabled_cnt,
+        SUM(is_active = 1 AND (sale_price IS NULL OR sale_price = 0)
+                          AND (price      IS NULL OR price      = 0)) AS enabled_zero_cnt,
         COUNT(*) AS total_cnt
-     FROM shop_products
+     FROM business_items
      WHERE line_account_id = ?"
 );
 $statStmt->execute([$currentBotId]);
