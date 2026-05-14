@@ -1,11 +1,13 @@
-import { appConfig } from '@/lib/config'
+import { apiUrl, appConfig } from '@/lib/config'
 import type { ShopOrder, ShopOrdersResponse } from '@/types/orders'
+
+const CHECKOUT_URL = apiUrl('/api/checkout.php')
 
 /**
  * Shop orders from PHP `transactions` via `action=my_orders` (B2C CRM).
  */
 export async function getMyOrders(lineUserId: string, limit = 50, offset = 0): Promise<ShopOrdersResponse> {
-  const res = await fetch('/api/checkout', {
+  const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

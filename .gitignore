@@ -141,7 +141,16 @@ DB_CONNECTION.md
 !.claude/agents/*.md
 *.bak*
 *.bak-*
-line-mini-app/
+
+# line-mini-app: track sources, ignore build artefacts only
+line-mini-app/node_modules/
+line-mini-app/.next/
+line-mini-app/out/
+line-mini-app/*.tsbuildinfo
+line-mini-app/.env
+line-mini-app/.env.local
+line-mini-app/.env.development
+line-mini-app/.env.production
 
 # Local Claude Code / OMC tooling state
 .omc/

@@ -1,4 +1,6 @@
-import { appConfig } from '@/lib/config'
+import { apiUrl, appConfig } from '@/lib/config'
+
+const CHECKOUT_URL = apiUrl('/api/checkout.php')
 
 export type ShopProductBadge = {
   text: string
@@ -124,7 +126,7 @@ export async function fetchProducts({
   if (includeInactive != null) params.set('include_inactive', includeInactive ? '1' : '0')
   if (catalogMode && catalogMode.trim() !== '') params.set('catalog_mode', catalogMode.trim())
   if (catalogBucket && catalogBucket.trim() !== '') params.set('catalog_bucket', catalogBucket.trim())
-  const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
+  const res = await fetch(`${CHECKOUT_URL}?${params}`, { cache: 'no-store' })
   return res.json()
 }
 
@@ -142,7 +144,7 @@ export async function fetchProductDetail(productId: number, lineUserId?: string)
     line_account_id: String(appConfig.lineAccountId)
   })
   if (lineUserId) params.set('line_user_id', lineUserId)
-  const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
+  const res = await fetch(`${CHECKOUT_URL}?${params}`, { cache: 'no-store' })
   return res.json()
 }
 
@@ -152,12 +154,12 @@ export async function fetchPaymentInfo(): Promise<{ success: boolean; transfer_i
     action: 'payment_info',
     line_account_id: String(appConfig.lineAccountId)
   })
-  const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
+  const res = await fetch(`${CHECKOUT_URL}?${params}`, { cache: 'no-store' })
   return res.json()
 }
 
 export async function addToCart(lineUserId: string, productId: number, quantity = 1) {
-  const res = await fetch('/api/checkout', {
+  const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -198,12 +200,12 @@ export async function fetchCart(lineUserId: string): Promise<CartResponse> {
     line_user_id: lineUserId,
     line_account_id: String(appConfig.lineAccountId)
   })
-  const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
+  const res = await fetch(`${CHECKOUT_URL}?${params}`, { cache: 'no-store' })
   return res.json()
 }
 
 export async function updateCartItem(lineUserId: string, productId: number, quantity: number) {
-  const res = await fetch('/api/checkout', {
+  const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -218,7 +220,7 @@ export async function updateCartItem(lineUserId: string, productId: number, quan
 }
 
 export async function removeCartLine(lineUserId: string, productId: number) {
-  const res = await fetch('/api/checkout', {
+  const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -232,7 +234,7 @@ export async function removeCartLine(lineUserId: string, productId: number) {
 }
 
 export async function clearCart(lineUserId: string) {
-  const res = await fetch('/api/checkout', {
+  const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -251,7 +253,7 @@ export function promptPayQrSrc(amount: number) {
     amount: String(Math.max(0, amount)),
     line_account_id: String(appConfig.lineAccountId)
   })
-  return `/api/checkout?${params.toString()}`
+  return `${CHECKOUT_URL}?${params.toString()}`
 }
 
 export type ValidatePromoResponse = {
@@ -266,7 +268,7 @@ export async function validatePromo(
   lineUserId: string,
   subtotal: number
 ): Promise<ValidatePromoResponse> {
-  const res = await fetch('/api/checkout', {
+  const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -296,7 +298,7 @@ export async function fetchLastAddress(lineUserId: string): Promise<LastAddress 
     action: 'last_address',
     line_user_id: lineUserId
   })
-  const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
+  const res = await fetch(`${CHECKOUT_URL}?${params}`, { cache: 'no-store' })
   const data = await res.json()
   if (!data.success || !data.address) return null
   return data.address as LastAddress
@@ -321,7 +323,7 @@ export type CreateShopOrderResult = {
 /** Create order from server-side cart (`cart_items`) — same contract as `liff-app` / `checkout.php`. */
 export async function createShopOrder(input: CreateShopOrderInput): Promise<CreateShopOrderResult> {
   const { lineUserId, paymentMethod, address, subtotal: orderSubtotal } = input
-  const res = await fetch('/api/checkout', {
+  const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -361,7 +363,7 @@ export async function uploadPaymentSlip(orderId: number, file: File): Promise<Up
   fd.append('action', 'upload_slip')
   fd.append('order_id', String(orderId))
   fd.append('slip', file)
-  const res = await fetch('/api/checkout-slip', {
+  const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     body: fd
   })
@@ -393,6 +395,6 @@ export async function fetchOrderDetail(orderId: string): Promise<OrderDetailApiR
     action: 'get_order',
     order_id: orderId
   })
-  const res = await fetch(`/api/checkout?${params}`, { cache: 'no-store' })
+  const res = await fetch(`${CHECKOUT_URL}?${params}`, { cache: 'no-store' })
   return res.json()
 }

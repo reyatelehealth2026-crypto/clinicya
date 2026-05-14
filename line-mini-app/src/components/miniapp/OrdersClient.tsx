@@ -93,7 +93,7 @@ function OrderCard({ order }: { order: ShopOrder }) {
 
       <div className="border-t border-slate-100 px-4 py-2.5">
         <Link
-          href={`/order/${order.id}`}
+          href={`/order?id=${order.id}`}
           className="flex items-center justify-center gap-1.5 text-xs font-semibold text-line transition-colors hover:text-line-dark"
         >
           ดูรายละเอียดออเดอร์

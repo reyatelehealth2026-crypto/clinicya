@@ -217,7 +217,7 @@ export function CheckoutClient() {
           <div className="flex w-full flex-col gap-2">
             {successOrderId ? (
               <Link
-                href={`/order/${successOrderId}`}
+                href={`/order?id=${successOrderId}`}
                 className="flex w-full items-center justify-center rounded-2xl bg-line py-3 text-sm font-semibold text-white"
               >
                 ดูรายละเอียดออเดอร์
