@@ -87,7 +87,7 @@ $vibeHelper = VibeSellingHelper::getInstance($db);
 if (!$vibeHelper->isV2Enabled($currentBotId)) {
     // V2 is disabled, redirect to v1 with all query parameters preserved
     $queryString = $_SERVER['QUERY_STRING'] ?? '';
-    $redirectUrl = 'inbox.php';
+    $redirectUrl = 'messages.php';
     if (!empty($queryString)) {
         $redirectUrl .= '?' . $queryString;
     }
@@ -123,7 +123,7 @@ try {
     if ($vibeHelper->isAutoSwitchEnabled($currentBotId)) {
         error_log("Inbox V2: Service initialization failed, falling back to v1 - " . $e->getMessage());
         $queryString = $_SERVER['QUERY_STRING'] ?? '';
-        $redirectUrl = 'inbox.php';
+        $redirectUrl = 'messages.php';
         if (!empty($queryString)) {
             $redirectUrl .= '?' . $queryString;
         }
