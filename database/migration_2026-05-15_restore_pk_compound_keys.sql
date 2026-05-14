@@ -28,3 +28,8 @@ ALTER TABLE `sync_config`                    ADD PRIMARY KEY (`config_key`);
 ALTER TABLE `inbox_auth_verification_tokens` ADD PRIMARY KEY (`token`);
 ALTER TABLE `odoo_circuit_breaker_state`     ADD PRIMARY KEY (`service_name`);
 ALTER TABLE `odoo_products_sync_state`       ADD PRIMARY KEY (`line_account_id`);
+
+-- One-row-per-user tables (also missed by the auto-generator because they
+-- key on user_id rather than id). PK definitions per install_complete_latest.sql.
+ALTER TABLE `user_states`             ADD PRIMARY KEY (`user_id`);
+ALTER TABLE `user_profiles_extended`  ADD PRIMARY KEY (`user_id`);
