@@ -53,9 +53,22 @@ if (!function_exists('useOdooStorefrontCatalog')) {
 
 if (!function_exists('odooEffectiveFields')) {
     /**
-     * Merge admin_overrides JSON (same fields as inventory storefront)
+     * Merge admin_overrides JSON (same fields as inventory storefront).
+     * Admin-supplied non-empty values win over the synced cache row.
      *
-     * @return array{name: string, generic_name: string, category: string, list_price: float, online_price: float}
+     * @return array{
+     *   name: string,
+     *   generic_name: string,
+     *   category: string,
+     *   list_price: float,
+     *   online_price: float,
+     *   description: string,
+     *   usage_instructions: string,
+     *   manufacturer: string,
+     *   unit: string,
+     *   image_url: string,
+     *   image_gallery: string
+     * }
      */
     function odooEffectiveFields(array $row)
     {
@@ -68,23 +81,29 @@ if (!function_exists('odooEffectiveFields')) {
                 $overrides = $d;
             }
         }
-        $name = array_key_exists('name', $overrides) && $overrides['name'] !== null && $overrides['name'] !== ''
-            ? (string) $overrides['name'] : (string) ($row['name'] ?? '');
-        $generic = array_key_exists('generic_name', $overrides) && $overrides['generic_name'] !== null && $overrides['generic_name'] !== ''
-            ? (string) $overrides['generic_name'] : (string) ($row['generic_name'] ?? '');
-        $cat = array_key_exists('category', $overrides) && $overrides['category'] !== null && $overrides['category'] !== ''
-            ? (string) $overrides['category'] : (string) ($row['category'] ?? '');
+        $pick = function (string $key) use ($overrides, $row): string {
+            if (array_key_exists($key, $overrides) && $overrides[$key] !== null && $overrides[$key] !== '') {
+                return (string) $overrides[$key];
+            }
+            return (string) ($row[$key] ?? '');
+        };
         $list = array_key_exists('list_price', $overrides) && $overrides['list_price'] !== null
             ? (float) $overrides['list_price'] : (float) ($row['list_price'] ?? 0);
         $online = array_key_exists('online_price', $overrides) && $overrides['online_price'] !== null
             ? (float) $overrides['online_price'] : (float) ($row['online_price'] ?? 0);
 
         return [
-            'name' => $name,
-            'generic_name' => $generic,
-            'category' => $cat,
-            'list_price' => $list,
-            'online_price' => $online,
+            'name'               => $pick('name'),
+            'generic_name'       => $pick('generic_name'),
+            'category'           => $pick('category'),
+            'list_price'         => $list,
+            'online_price'       => $online,
+            'description'        => $pick('description'),
+            'usage_instructions' => $pick('usage_instructions'),
+            'manufacturer'       => $pick('manufacturer'),
+            'unit'               => $pick('unit'),
+            'image_url'          => $pick('image_url'),
+            'image_gallery'      => $pick('image_gallery'),
         ];
     }
 }
@@ -108,31 +127,65 @@ if (!function_exists('formatOdooProductForLiff')) {
             $displayPrice = $list > 0 ? $list : ($online > 0 ? $online : 0);
             $displaySale = null;
         }
-        $img = buildManagerProductPhotoUrl($row['product_code'] ?? null, $row['sku'] ?? null);
+
+        // image_url: prefer the admin-supplied URL; fall back to the legacy
+        // manager.cnypharmacy.com photo pattern by product_code/sku.
+        $imageUrl = $eff['image_url'] !== '' ? $eff['image_url'] : '';
+        if ($imageUrl === '') {
+            $imageUrl = buildManagerProductPhotoUrl($row['product_code'] ?? null, $row['sku'] ?? null);
+        }
+
+        // image_gallery: stored as a JSON array of URLs (one per image).
+        // Falls back to [image_url] so callers always get at least one entry
+        // when an admin only filled in the single-image field.
+        $gallery = [];
+        $rawGallery = $eff['image_gallery'];
+        if ($rawGallery !== '') {
+            $decoded = json_decode($rawGallery, true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $url) {
+                    if (is_string($url) && trim($url) !== '') {
+                        $gallery[] = trim($url);
+                    }
+                }
+            } else {
+                // Backwards compat: comma- or newline-separated list.
+                foreach (preg_split('/[\r\n,]+/', $rawGallery) as $url) {
+                    $url = trim((string) $url);
+                    if ($url !== '') {
+                        $gallery[] = $url;
+                    }
+                }
+            }
+        }
+        if ($imageUrl !== '' && !in_array($imageUrl, $gallery, true)) {
+            array_unshift($gallery, $imageUrl);
+        }
 
         return [
             'id' => (int) $row['id'],
             'sku' => (string) ($row['sku'] ?? ''),
             'name' => $eff['name'],
-            'name_en' => '',
+            'name_en' => (string) ($row['name_en'] ?? ''),
             'price' => $displayPrice,
             'sale_price' => $displaySale,
             'stock' => (int) round((float) ($row['saleable_qty'] ?? 0)),
-            'image_url' => $img,
-            'unit' => 'ชิ้น',
-            'manufacturer' => null,
-            'generic_name' => $eff['generic_name'] ?: null,
-            'description' => null,
-            'usage_instructions' => null,
-            'category_id' => $eff['category'] ?: null,
-            'category_name' => $eff['category'] ?: null,
+            'image_url' => $imageUrl,
+            'image_gallery' => $gallery,
+            'unit' => $eff['unit'] !== '' ? $eff['unit'] : 'ชิ้น',
+            'manufacturer' => $eff['manufacturer'] !== '' ? $eff['manufacturer'] : null,
+            'generic_name' => $eff['generic_name'] !== '' ? $eff['generic_name'] : null,
+            'description' => $eff['description'] !== '' ? $eff['description'] : null,
+            'usage_instructions' => $eff['usage_instructions'] !== '' ? $eff['usage_instructions'] : null,
+            'category_id' => $eff['category'] !== '' ? $eff['category'] : null,
+            'category_name' => $eff['category'] !== '' ? $eff['category'] : null,
             'barcode' => (string) ($row['barcode'] ?? ''),
             'is_featured' => !empty($row['featured_order']),
             'is_bestseller' => 0,
             'is_flash_sale' => 0,
             'is_choice' => 0,
             'flash_sale_end' => null,
-            'product_source' => 'odoo_products_cache',
+            'product_source' => 'shop_products',
             'product_code' => (string) ($row['product_code'] ?? ''),
             'drug_type' => $row['drug_type'] ?? null,
         ];

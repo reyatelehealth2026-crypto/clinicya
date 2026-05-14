@@ -83,14 +83,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store
         $cacheTable = 'odoo_products_cache';
         // Best-effort ensure extra columns exist (idempotent with products.php migration block)
         $extraCols = [
-            'image_url'   => "ADD COLUMN image_url VARCHAR(500) DEFAULT NULL",
-            'description' => "ADD COLUMN description TEXT DEFAULT NULL",
-            'manufacturer'=> "ADD COLUMN manufacturer VARCHAR(255) DEFAULT NULL",
-            'unit'        => "ADD COLUMN unit VARCHAR(50) DEFAULT NULL",
-            'base_unit'   => "ADD COLUMN base_unit VARCHAR(50) DEFAULT NULL",
-            'name_en'     => "ADD COLUMN name_en VARCHAR(255) DEFAULT NULL",
-            'sale_price'  => "ADD COLUMN sale_price DECIMAL(12,2) DEFAULT NULL",
-            'is_local'    => "ADD COLUMN is_local TINYINT(1) DEFAULT 0",
+            'image_url'          => "ADD COLUMN image_url VARCHAR(500) DEFAULT NULL",
+            'description'        => "ADD COLUMN description TEXT DEFAULT NULL",
+            'usage_instructions' => "ADD COLUMN usage_instructions TEXT DEFAULT NULL",
+            'image_gallery'      => "ADD COLUMN image_gallery LONGTEXT DEFAULT NULL",
+            'manufacturer'       => "ADD COLUMN manufacturer VARCHAR(255) DEFAULT NULL",
+            'unit'               => "ADD COLUMN unit VARCHAR(50) DEFAULT NULL",
+            'base_unit'          => "ADD COLUMN base_unit VARCHAR(50) DEFAULT NULL",
+            'name_en'            => "ADD COLUMN name_en VARCHAR(255) DEFAULT NULL",
+            'sale_price'         => "ADD COLUMN sale_price DECIMAL(12,2) DEFAULT NULL",
+            'is_local'           => "ADD COLUMN is_local TINYINT(1) DEFAULT 0",
         ];
         try {
             $present = [];
@@ -113,6 +115,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store
         $salePrice   = ($_POST['sale_price'] ?? '') !== '' ? (float) $_POST['sale_price'] : null;
         $onlinePrice = $salePrice !== null ? $salePrice : 0;
 
+        // Image gallery: textarea is one URL per line; persist as JSON so the
+        // mini-app product detail page can render multiple images.
+        $galleryJson = null;
+        if (!empty($_POST['image_gallery'])) {
+            $urls = preg_split('/[\r\n,]+/', (string) $_POST['image_gallery']);
+            $urls = array_values(array_filter(array_map('trim', $urls), function ($u) {
+                return $u !== '';
+            }));
+            if (!empty($urls)) {
+                $galleryJson = json_encode($urls, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            }
+        }
+
         $fields = [
             'line_account_id'    => (int) $currentBotId,
             'product_code'       => $productCode,
@@ -124,7 +139,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'store
             'category'           => $_POST['category'] ?? null,
             'manufacturer'       => $_POST['manufacturer'] ?? null,
             'description'        => $_POST['description'] ?? null,
+            'usage_instructions' => $_POST['usage_instructions'] ?? null,
             'image_url'          => $_POST['image_url'] ?? null,
+            'image_gallery'      => $galleryJson,
             'list_price'         => $listPrice,
             'online_price'       => $onlinePrice,
             'sale_price'         => $salePrice,
@@ -1147,14 +1164,23 @@ function storefrontTab() {
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">รายละเอียด</label>
-                            <textarea name="description" rows="2" class="w-full px-2 py-1.5 border rounded-lg text-sm"></textarea>
+                            <textarea name="description" rows="3" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="คำอธิบายสินค้า สรรพคุณ ฯลฯ"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">วิธีใช้</label>
+                            <textarea name="usage_instructions" rows="3" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="วิธีใช้ ขนาดยา คำเตือน ฯลฯ"></textarea>
                         </div>
                     </div>
 
                     <div class="space-y-3">
                         <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">URL รูปภาพ</label>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">URL รูปภาพหลัก</label>
                             <input type="url" name="image_url" class="w-full px-2 py-1.5 border rounded-lg text-sm" placeholder="https://...">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">รูปเพิ่มเติม (หลาย URL — 1 บรรทัดต่อ 1 รูป)</label>
+                            <textarea name="image_gallery" rows="3" class="w-full px-2 py-1.5 border rounded-lg text-sm font-mono" placeholder="https://...&#10;https://..."></textarea>
+                            <p class="text-[10px] text-gray-500 mt-1">รูปหลักจะถูกเพิ่มเข้าแกลเลอรีอัตโนมัติ; ที่นี่ใส่เฉพาะรูปเสริม</p>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <div>

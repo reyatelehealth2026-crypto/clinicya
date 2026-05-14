@@ -131,6 +131,7 @@ database/*.sql
 !database/migration_2026-05-15_restore_pk_all_tables.sql
 !database/migration_2026-05-15_restore_pk_compound_keys.sql
 !database/migration_2026-05-15_fix_mojibake_business_categories.sql
+!database/migration_2026-05-15_storefront_product_fields.sql
 *.png
 DB_CONNECTION.md
 *.md
