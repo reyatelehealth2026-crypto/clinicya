@@ -184,3 +184,13 @@ Examples from this repo: `fix(checkout): …`, `feat(line-mini-app): …`, `feat
 - **Same-page admin AJAX** — Many admin pages (`inbox-v2.php`, `messages.php`, `chat.php`) handle their own POST AJAX at the top of the file, gated on `$_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WITH'])`. Add new actions as a `case` inside the existing `switch ($action)` block; do not split into a separate API file unless the endpoint is shared across pages.
 - **Auto-create tables** — Some legacy admin pages auto-create their feature tables on page load via `SHOW TABLES LIKE` + `CREATE TABLE IF NOT EXISTS` (e.g. `dispensing_records`, `user_notes`, `user_tag_assignments`). For new features, prefer a versioned `database/migration_*.sql` file plus a whitelist entry, not page-load auto-create.
 - **Server path** — `/home/zrismpsz/public_html` on production (the `re-ya.com` site sits at the root of `public_html`; there is no `cny.re-ya.com/` or `clinicya.re-ya.com/` subdirectory). SSH: `ssh -i ~/.ssh/id_ed25519_cny -p 9922 zrismpsz@118.27.146.16`.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
+- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
