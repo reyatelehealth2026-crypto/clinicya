@@ -26,9 +26,6 @@ $db = Database::getInstance()->getConnection();
 $lineAccountId = $_SESSION['current_bot_id'] ?? $_GET['line_account_id'] ?? 1;
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
-// Debug log
-error_log("[inbox-realtime] Session bot_id: " . ($_SESSION['current_bot_id'] ?? 'NOT SET') . ", GET line_account_id: " . ($_GET['line_account_id'] ?? 'NOT SET') . ", Using: $lineAccountId");
-
 /**
  * Send JSON response
  */

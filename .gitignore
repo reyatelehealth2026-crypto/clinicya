@@ -127,6 +127,7 @@ database/*.sql
 !database/migration_transactions_payment_status.sql
 !database/migration_2026-04-28_broadcast_variants.sql
 !database/migration_2026-05-04_unified_broadcast.sql
+!database/migration_2026-05-15_fix_autoincrement.sql
 *.png
 DB_CONNECTION.md
 *.md

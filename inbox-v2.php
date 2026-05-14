@@ -80,9 +80,6 @@ require_once 'config/database.php';
 $db = Database::getInstance()->getConnection();
 $currentBotId = $_SESSION['current_bot_id'] ?? 1;
 
-// Debug: Log current bot ID
-error_log("[inbox-v2] Session current_bot_id: " . ($_SESSION['current_bot_id'] ?? 'NOT SET') . ", Using: $currentBotId");
-
 // Check if V2 is enabled - graceful fallback to v1 if disabled (Requirements: 10.6)
 require_once 'classes/VibeSellingHelper.php';
 $vibeHelper = VibeSellingHelper::getInstance($db);
