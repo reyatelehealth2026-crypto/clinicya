@@ -30,7 +30,7 @@ if (!isset($_SESSION['admin_user'])) {
     
     // Determine base path (remove /admin, /shop, /user, /auth from current path)
     $scriptPath = dirname($_SERVER['SCRIPT_NAME']);
-    $basePath = preg_replace('#/(admin|shop|user|auth).*$#', '', $scriptPath);
+    $basePath = preg_replace('#/(admin|shop|user|auth|inventory).*$#', '', $scriptPath);
     $basePath = rtrim($basePath, '/');
     
     // Build absolute login URL
