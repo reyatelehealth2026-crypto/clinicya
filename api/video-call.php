@@ -259,6 +259,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ]);
         exit;
     }
+
+    // Presence check — มีเภสัชกรพร้อมรับสายไหม
+    // คืน { online, pharmacists:[{id,name,avatar_url}] } ให้ mini app ใช้แสดงก่อนเปิด getUserMedia
+    if ($action === 'check_online') {
+        $accountId = $_GET['account_id'] ?? null;
+        $rows = [];
+        try {
+            $cols = $db->query("SHOW COLUMNS FROM pharmacists")->fetchAll(PDO::FETCH_COLUMN);
+            $select = ['id', 'name'];
+            if (in_array('image_url', $cols)) $select[] = 'image_url';
+            if (in_array('title', $cols)) $select[] = 'title';
+            $whereParts = [];
+            $params = [];
+            if (in_array('is_available', $cols)) $whereParts[] = 'is_available = 1';
+            if (in_array('is_active', $cols)) $whereParts[] = 'is_active = 1';
+            if ($accountId && in_array('line_account_id', $cols)) {
+                $whereParts[] = '(line_account_id = ? OR line_account_id IS NULL)';
+                $params[] = $accountId;
+            }
+            $whereSql = empty($whereParts) ? '1=1' : implode(' AND ', $whereParts);
+            $sql = "SELECT " . implode(',', $select) . " FROM pharmacists WHERE $whereSql ORDER BY id ASC LIMIT 10";
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
+            $list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($list as $p) {
+                $rows[] = [
+                    'id' => $p['id'],
+                    'name' => trim(($p['title'] ?? '') . ' ' . ($p['name'] ?? '')) ?: 'เภสัชกร',
+                    'avatar_url' => $p['image_url'] ?? null
+                ];
+            }
+        } catch (Exception $e) {
+            error_log('check_online error: ' . $e->getMessage());
+        }
+        echo json_encode(['success' => true, 'online' => !empty($rows), 'pharmacists' => $rows]);
+        exit;
+    }
 }
 
 // POST requests

@@ -439,7 +439,144 @@ include __DIR__ . '/includes/header.php';
             <p>รอลูกค้าโทรเข้ามา...</p>
         </div>
     </div>
+
+    <!-- ============================================================
+         📊 ประวัติการโทร — Today stats + history table
+    ============================================================ -->
+    <div class="history-section" style="background: white; border-radius: 16px; padding: 20px; margin-top: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+            <h3 style="font-size: 18px; font-weight: 700; color: #111827; display: flex; align-items: center; gap: 8px; margin: 0;">
+                <span style="font-size: 22px;">📋</span> ประวัติการโทร
+            </h3>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="history-filter-btn active" data-filter="">ทั้งหมด</button>
+                <button class="history-filter-btn" data-filter="completed">สำเร็จ</button>
+                <button class="history-filter-btn" data-filter="missed">ไม่ได้รับ</button>
+                <button class="history-filter-btn" data-filter="rejected">ปฏิเสธ</button>
+            </div>
+        </div>
+
+        <!-- Today's stats -->
+        <div id="history-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+            <div class="stat-tile" style="background: #EFF6FF; border-radius: 12px; padding: 14px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 700; color: #1E40AF;" id="stat-today-total">0</div>
+                <div style="font-size: 11px; color: #6B7280; margin-top: 2px;">วันนี้</div>
+            </div>
+            <div class="stat-tile" style="background: #ECFDF5; border-radius: 12px; padding: 14px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 700; color: #065F46;" id="stat-today-completed">0</div>
+                <div style="font-size: 11px; color: #6B7280; margin-top: 2px;">สำเร็จ</div>
+            </div>
+            <div class="stat-tile" style="background: #FEF2F2; border-radius: 12px; padding: 14px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 700; color: #991B1B;" id="stat-today-missed">0</div>
+                <div style="font-size: 11px; color: #6B7280; margin-top: 2px;">ไม่ได้รับ</div>
+            </div>
+            <div class="stat-tile" style="background: #FFFBEB; border-radius: 12px; padding: 14px; text-align: center;">
+                <div style="font-size: 24px; font-weight: 700; color: #92400E;" id="stat-today-avg">0:00</div>
+                <div style="font-size: 11px; color: #6B7280; margin-top: 2px;">เฉลี่ย</div>
+            </div>
+        </div>
+
+        <!-- Search -->
+        <div style="margin-bottom: 12px;">
+            <input type="text" id="history-search" placeholder="🔍 ค้นหาชื่อลูกค้า..."
+                style="width: 100%; padding: 10px 14px; border: 1px solid #E5E7EB; border-radius: 10px; font-size: 14px; outline: none;">
+        </div>
+
+        <!-- History list -->
+        <div id="history-list" style="max-height: 480px; overflow-y: auto;">
+            <div style="text-align: center; color: #9CA3AF; padding: 32px 12px; font-size: 14px;">
+                กำลังโหลดประวัติ...
+            </div>
+        </div>
+    </div>
 </div>
+
+<style>
+    .history-filter-btn {
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1px solid #E5E7EB;
+        background: white;
+        color: #6B7280;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+    .history-filter-btn:hover { background: #F9FAFB; }
+    .history-filter-btn.active {
+        background: #11B0A6;
+        color: white;
+        border-color: #11B0A6;
+    }
+    .history-row {
+        display: grid;
+        grid-template-columns: 40px 1fr auto auto auto;
+        gap: 12px;
+        align-items: center;
+        padding: 12px;
+        border-bottom: 1px solid #F3F4F6;
+        font-size: 13px;
+    }
+    .history-row:hover { background: #F9FAFB; }
+    .history-row:last-child { border-bottom: none; }
+    .history-status-badge {
+        font-size: 11px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-weight: 600;
+    }
+    .history-status-completed { background: #D1FAE5; color: #065F46; }
+    .history-status-rejected { background: #FEE2E2; color: #991B1B; }
+    .history-status-missed { background: #FEF3C7; color: #92400E; }
+    .history-status-ended { background: #E5E7EB; color: #374151; }
+    .history-action-btn {
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 0;
+        font-size: 12px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+    .history-action-chat { background: #11B0A6; color: white; }
+    .history-action-callback { background: #3B82F6; color: white; }
+    @media (max-width: 640px) {
+        .history-row { grid-template-columns: 36px 1fr auto; row-gap: 6px; }
+        #history-stats { grid-template-columns: repeat(2, 1fr) !important; }
+    }
+    .chat-quick-reply {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 18px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .chat-quick-reply:hover { background: rgba(255,255,255,0.25); }
+    .chat-sent-bubble {
+        background: linear-gradient(135deg, #11B0A6 0%, #0d8d85 100%);
+        color: white;
+        padding: 8px 14px;
+        border-radius: 16px 16px 4px 16px;
+        font-size: 13px;
+        align-self: flex-end;
+        max-width: 85%;
+        box-shadow: 0 2px 8px rgba(17,176,166,0.3);
+        animation: chatBubbleIn 0.3s ease;
+    }
+    @keyframes chatBubbleIn {
+        from { opacity: 0; transform: translateY(8px) scale(0.95); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    /* Incoming call pulse */
+    @keyframes ringPulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+        50% { box-shadow: 0 0 0 18px rgba(239,68,68,0); }
+    }
+    .call-card.ringing { animation: ringPulse 1.5s infinite; }
+</style>
 
 <!-- Video Call Modal -->
 <div id="video-modal" class="video-modal">
@@ -460,6 +597,27 @@ include __DIR__ . '/includes/header.php';
             <button onclick="sendWaiting()" title="รอสักครู่">⏳</button>
             <button onclick="takeScreenshot()" title="Screenshot">📸</button>
             <button onclick="toggleRecording()" id="btn-record-modal" title="บันทึก">🔴</button>
+            <button onclick="toggleChatBar()" title="พิมพ์ข้อความ" id="btn-toggle-chat">💬</button>
+        </div>
+
+        <!-- Chat Bar (overlay text บนจอลูกค้า — ใช้ WebRTC signaling, ไม่ใช่ LINE push) -->
+        <div id="video-chat-bar" style="display:none; position:absolute; bottom:120px; left:16px; right:16px; max-width:520px; margin:0 auto; z-index:5;">
+            <div id="chat-sent-feed" style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px; max-height:180px; overflow-y:auto;"></div>
+            <form id="chat-form" style="display:flex; gap:8px; background:rgba(15,23,42,0.85); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.12); border-radius:24px; padding:6px 6px 6px 16px; align-items:center;">
+                <input id="chat-input" type="text" placeholder="พิมพ์ข้อความถึงลูกค้า..." autocomplete="off" maxlength="200"
+                    style="flex:1; background:transparent; border:0; outline:none; color:white; font-size:14px; padding:8px 0;" />
+                <button type="submit" id="chat-send-btn"
+                    style="flex-shrink:0; width:36px; height:36px; border-radius:50%; border:0; background:#11B0A6; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-paper-plane" style="font-size:13px;"></i>
+                </button>
+            </form>
+            <!-- Quick replies -->
+            <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+                <button class="chat-quick-reply" data-text="กรุณารอสักครู่นะคะ">⏳ รอสักครู่</button>
+                <button class="chat-quick-reply" data-text="ได้ยินไหมคะ?">🔊 ได้ยินไหม?</button>
+                <button class="chat-quick-reply" data-text="ขอตรวจสอบยาก่อนนะคะ">💊 ตรวจยา</button>
+                <button class="chat-quick-reply" data-text="ขอบคุณค่ะ แล้วพบกันใหม่">👋 ขอบคุณ</button>
+            </div>
         </div>
 
         <div class="video-controls">
@@ -967,35 +1125,50 @@ include __DIR__ . '/includes/header.php';
     let mediaRecorder = null;
     let recordedChunks = [];
 
-    // Send greeting message via signal
-    async function sendGreeting() {
+    // Generic chat sender — แสดง overlay บนจอลูกค้าผ่าน WebRTC signaling
+    async function sendChatMessage(text) {
         if (!currentCallId) {
             showQuickActionToast('⚠️ ยังไม่มีสายที่กำลังโทร', 'warning');
-            return;
+            return false;
         }
-
+        const trimmed = (text || '').trim();
+        if (!trimmed) return false;
         try {
-            await sendSignal('message', { type: 'greeting', text: '👋 สวัสดีครับ/ค่ะ ยินดีให้บริการ' });
-            showQuickActionToast('👋 ส่งข้อความทักทายแล้ว');
+            await sendSignal('message', { text: trimmed, ts: Date.now() });
+            appendChatFeed(trimmed);
+            return true;
         } catch (e) {
             showQuickActionToast('❌ ส่งข้อความไม่สำเร็จ', 'error');
+            return false;
         }
     }
 
-    // Send waiting message via signal
-    async function sendWaiting() {
-        if (!currentCallId) {
-            showQuickActionToast('⚠️ ยังไม่มีสายที่กำลังโทร', 'warning');
-            return;
-        }
+    function appendChatFeed(text) {
+        const feed = document.getElementById('chat-sent-feed');
+        if (!feed) return;
+        const bubble = document.createElement('div');
+        bubble.className = 'chat-sent-bubble';
+        bubble.textContent = text;
+        feed.appendChild(bubble);
+        feed.scrollTop = feed.scrollHeight;
+        // Auto-fade old bubbles after 8s
+        setTimeout(() => {
+            bubble.style.transition = 'opacity 0.5s';
+            bubble.style.opacity = '0.6';
+        }, 8000);
+    }
 
-        try {
-            await sendSignal('message', { type: 'waiting', text: '⏳ กรุณารอสักครู่นะครับ/ค่ะ' });
-            showQuickActionToast('⏳ ส่งข้อความรอสักครู่แล้ว');
-        } catch (e) {
-            showQuickActionToast('❌ ส่งข้อความไม่สำเร็จ', 'error');
+    function toggleChatBar() {
+        const bar = document.getElementById('video-chat-bar');
+        if (!bar) return;
+        bar.style.display = bar.style.display === 'none' ? 'block' : 'none';
+        if (bar.style.display === 'block') {
+            setTimeout(() => document.getElementById('chat-input')?.focus(), 100);
         }
     }
+
+    async function sendGreeting() { return sendChatMessage('👋 สวัสดีครับ/ค่ะ ยินดีให้บริการ'); }
+    async function sendWaiting() { return sendChatMessage('⏳ กรุณารอสักครู่นะครับ/ค่ะ'); }
 
     // Take screenshot of video call
     function takeScreenshot() {
@@ -1142,14 +1315,292 @@ include __DIR__ . '/includes/header.php';
         }, 2000);
     }
 
+    // ==================== Ring tone + Browser Notification ====================
+    let knownRingingCallIds = new Set();
+    let ringtoneAudio = null;
+    let titleFlashInterval = null;
+    const originalPageTitle = document.title;
+
+    function createRingtone() {
+        // Synth ringtone (no external file). 2 tones alternating.
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return null;
+            const ctx = new AudioCtx();
+            let playing = false;
+            let timer = null;
+            const playBeep = (freq, dur) => {
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.connect(g); g.connect(ctx.destination);
+                o.frequency.value = freq;
+                o.type = 'sine';
+                g.gain.setValueAtTime(0, ctx.currentTime);
+                g.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+                g.gain.linearRampToValueAtTime(0, ctx.currentTime + dur);
+                o.start(ctx.currentTime);
+                o.stop(ctx.currentTime + dur);
+            };
+            return {
+                start() {
+                    if (playing) return;
+                    playing = true;
+                    if (ctx.state === 'suspended') ctx.resume();
+                    const loop = () => {
+                        if (!playing) return;
+                        playBeep(880, 0.25);
+                        setTimeout(() => playing && playBeep(660, 0.25), 280);
+                        timer = setTimeout(loop, 1400);
+                    };
+                    loop();
+                },
+                stop() {
+                    playing = false;
+                    if (timer) clearTimeout(timer);
+                }
+            };
+        } catch (e) {
+            console.warn('Ringtone init failed', e);
+            return null;
+        }
+    }
+
+    function flashTitle(name) {
+        clearInterval(titleFlashInterval);
+        let on = false;
+        titleFlashInterval = setInterval(() => {
+            document.title = on ? originalPageTitle : `📞 สายเข้า: ${name}`;
+            on = !on;
+        }, 900);
+    }
+    function stopTitleFlash() {
+        clearInterval(titleFlashInterval);
+        document.title = originalPageTitle;
+    }
+
+    async function showBrowserNotification(call) {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'default') {
+            try { await Notification.requestPermission(); } catch {}
+        }
+        if (Notification.permission !== 'granted') return;
+        const notif = new Notification('📞 สายเรียกเข้าจากลูกค้า', {
+            body: `${call.display_name || 'ลูกค้า'} กำลังโทรเข้า — กดเพื่อรับสาย`,
+            icon: call.picture_url || '/uploads/logo.png',
+            tag: `vc-${call.id}`,
+            requireInteraction: true
+        });
+        notif.onclick = () => {
+            window.focus();
+            notif.close();
+        };
+    }
+
+    function onNewRingingCall(call) {
+        if (!ringtoneAudio) ringtoneAudio = createRingtone();
+        ringtoneAudio?.start();
+        flashTitle(call.display_name || 'ลูกค้า');
+        showBrowserNotification(call);
+    }
+    function onAllCallsCleared() {
+        ringtoneAudio?.stop();
+        stopTitleFlash();
+    }
+
+    // Wrap renderCalls to detect new ringing calls
+    const _origRenderCalls = renderCalls;
+    renderCalls = function (calls) {
+        const currentIds = new Set(calls.filter(c => c.status === 'ringing').map(c => c.id));
+        // Detect new
+        const newCalls = calls.filter(c => c.status === 'ringing' && !knownRingingCallIds.has(c.id));
+        newCalls.forEach(c => onNewRingingCall(c));
+        knownRingingCallIds = currentIds;
+        if (currentIds.size === 0) onAllCallsCleared();
+        return _origRenderCalls(calls);
+    };
+    const _origRenderEmpty = renderEmptyState;
+    renderEmptyState = function () {
+        knownRingingCallIds.clear();
+        onAllCallsCleared();
+        return _origRenderEmpty();
+    };
+    const _origAnswerCall = answerCall;
+    answerCall = function (id) {
+        onAllCallsCleared();
+        return _origAnswerCall(id);
+    };
+    const _origRejectCall = rejectCall;
+    rejectCall = function (id) {
+        onAllCallsCleared();
+        return _origRejectCall(id);
+    };
+
+    // ==================== History Loader ====================
+    let historyFilter = '';
+    let historySearchTerm = '';
+    let historyDebounceTimer = null;
+
+    async function loadCallHistory() {
+        try {
+            const params = new URLSearchParams({
+                action: 'history',
+                account_id: String(LINE_ACCOUNT_ID),
+                limit: '50'
+            });
+            if (historyFilter) params.set('status', historyFilter);
+            if (historySearchTerm) params.set('q', historySearchTerm);
+            const res = await fetch(`${API_URL}?${params}`);
+            const data = await res.json();
+            if (!data.success) return;
+            updateHistoryStats(data.stats || {});
+            renderHistoryList(data.history || []);
+        } catch (e) {
+            console.error('History load error:', e);
+        }
+    }
+
+    function updateHistoryStats(stats) {
+        document.getElementById('stat-today-total').textContent = stats.today_total ?? 0;
+        document.getElementById('stat-today-completed').textContent = stats.today_completed ?? 0;
+        document.getElementById('stat-today-missed').textContent = stats.today_missed ?? 0;
+        const avg = stats.today_avg_duration ?? 0;
+        document.getElementById('stat-today-avg').textContent = formatDuration(avg);
+    }
+
+    function renderHistoryList(rows) {
+        const el = document.getElementById('history-list');
+        if (!rows.length) {
+            el.innerHTML = '<div style="text-align:center; color:#9CA3AF; padding:32px 12px; font-size:14px;">ไม่มีประวัติการโทร</div>';
+            return;
+        }
+        const statusLabels = {
+            completed: 'สำเร็จ', rejected: 'ปฏิเสธ', missed: 'ไม่ได้รับ',
+            ended: 'จบสาย', timeout: 'หมดเวลา'
+        };
+        el.innerHTML = rows.map(r => {
+            const avatar = r.picture_url
+                ? `<img src="${r.picture_url}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" alt="">`
+                : `<div style="width:40px;height:40px;border-radius:50%;background:#E5E7EB;display:flex;align-items:center;justify-content:center;color:#6B7280;">👤</div>`;
+            const dur = r.duration ? formatDuration(r.duration) : '—';
+            const when = formatHistoryTime(r.created_at);
+            const statusKey = r.status || 'ended';
+            return `
+            <div class="history-row">
+                ${avatar}
+                <div style="min-width:0;">
+                    <div style="font-weight:600; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(r.display_name || 'ลูกค้า')}</div>
+                    <div style="font-size:11px; color:#6B7280; margin-top:2px;">${when} · ⏱ ${dur}</div>
+                </div>
+                <span class="history-status-badge history-status-${statusKey}">${statusLabels[statusKey] || statusKey}</span>
+                <button class="history-action-btn history-action-chat" onclick="openCustomerChat('${r.line_user_id || ''}', ${r.user_id || 0})">💬 แชท</button>
+                <button class="history-action-btn history-action-callback" onclick="callbackCustomer('${r.line_user_id || ''}', '${escapeHtml(r.display_name || '')}', '${r.picture_url || ''}')">📞 โทรกลับ</button>
+            </div>`;
+        }).join('');
+    }
+
+    function formatHistoryTime(ts) {
+        if (!ts) return '';
+        const d = new Date(ts.replace(' ', 'T'));
+        const now = new Date();
+        const diffMs = now - d;
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 1) return 'เมื่อสักครู่';
+        if (diffMin < 60) return `${diffMin} นาทีที่แล้ว`;
+        const diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return `${diffHr} ชม. ที่แล้ว`;
+        return d.toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function openCustomerChat(lineUserId, userId) {
+        if (!userId && !lineUserId) {
+            alert('ไม่พบข้อมูลลูกค้า');
+            return;
+        }
+        window.open(`/inbox-v2?user=${userId}`, '_blank');
+    }
+
+    async function callbackCustomer(lineUserId, displayName, pictureUrl) {
+        if (!lineUserId) {
+            alert('ลูกค้ารายนี้ไม่มี LINE ID');
+            return;
+        }
+        if (!confirm(`โทรกลับหา ${displayName}?\n\n(จะสร้างสายใหม่และเริ่ม video call)`)) return;
+        try {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'create',
+                    user_id: lineUserId,
+                    display_name: displayName,
+                    picture_url: pictureUrl,
+                    account_id: LINE_ACCOUNT_ID
+                })
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || 'สร้างสายไม่สำเร็จ');
+            answerCall(data.call_id);
+        } catch (e) {
+            alert('โทรกลับล้มเหลว: ' + e.message);
+        }
+    }
+
+    // ==================== Init ====================
+    document.addEventListener('DOMContentLoaded', function () {
+        // Request notification permission early
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().catch(() => {});
+        }
+
+        // Wire history filter buttons
+        document.querySelectorAll('.history-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.history-filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                historyFilter = btn.dataset.filter || '';
+                loadCallHistory();
+            });
+        });
+        // Wire history search (debounced)
+        const searchInput = document.getElementById('history-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(historyDebounceTimer);
+                historyDebounceTimer = setTimeout(() => {
+                    historySearchTerm = e.target.value.trim();
+                    loadCallHistory();
+                }, 350);
+            });
+        }
+        // Wire chat form
+        const chatForm = document.getElementById('chat-form');
+        if (chatForm) {
+            chatForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const input = document.getElementById('chat-input');
+                const text = input.value.trim();
+                if (!text) return;
+                const ok = await sendChatMessage(text);
+                if (ok) input.value = '';
+            });
+        }
+        // Wire chat quick replies
+        document.querySelectorAll('.chat-quick-reply').forEach(btn => {
+            btn.addEventListener('click', () => sendChatMessage(btn.dataset.text));
+        });
+
+        checkIncomingCalls();
+        loadCallHistory();
+    });
+
     // Start polling
     setInterval(checkIncomingCalls, 3000);
+    setInterval(loadCallHistory, 30000); // refresh history every 30s
     checkIncomingCalls();
-
-    // Initial call immediately
-    document.addEventListener('DOMContentLoaded', function () {
-        checkIncomingCalls();
-    });
 </script>
 
 <style>
