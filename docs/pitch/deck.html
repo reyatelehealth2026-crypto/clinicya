@@ -1,0 +1,796 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="UTF-8">
+<title>REYA — Sales Pitch Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  @page { size: 1920px 1080px; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Sarabun', 'Noto Sans Thai', -apple-system, sans-serif; background: #0f172a; }
+  .slide {
+    width: 1920px; height: 1080px;
+    page-break-after: always;
+    display: flex; flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: #ffffff;
+  }
+  .slide:last-child { page-break-after: auto; }
+
+  /* Cover slide */
+  .slide.cover {
+    background: linear-gradient(135deg, #064e3b 0%, #047857 50%, #10b981 100%);
+    color: white;
+    align-items: center; justify-content: center;
+    text-align: center;
+  }
+  .slide.cover h1 { font-size: 280px; font-weight: 900; letter-spacing: -8px; line-height: 1; }
+  .slide.cover h2 { font-size: 80px; font-weight: 600; margin-top: 30px; opacity: 0.95; }
+  .slide.cover p { font-size: 42px; font-weight: 300; margin-top: 60px; opacity: 0.85; max-width: 1400px; line-height: 1.4; }
+  .slide.cover .date { position: absolute; bottom: 80px; font-size: 32px; opacity: 0.7; letter-spacing: 4px; }
+
+  /* Section divider */
+  .slide.section {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: white;
+    align-items: flex-start; justify-content: center;
+    padding: 0 200px;
+  }
+  .slide.section .section-num { font-size: 200px; font-weight: 900; color: #10b981; line-height: 1; }
+  .slide.section h2 { font-size: 100px; font-weight: 700; margin-top: 30px; line-height: 1.1; }
+  .slide.section p { font-size: 44px; font-weight: 300; margin-top: 40px; opacity: 0.7; max-width: 1500px; }
+
+  /* Pain / Value slide */
+  .slide.bullets {
+    background: white;
+    padding: 120px 200px;
+    color: #0f172a;
+  }
+  .slide.bullets h2 { font-size: 96px; font-weight: 800; line-height: 1.1; }
+  .slide.bullets .sub { font-size: 48px; color: #64748b; margin-top: 24px; font-weight: 400; }
+  .slide.bullets ul { list-style: none; margin-top: 80px; }
+  .slide.bullets li {
+    font-size: 56px; font-weight: 500; line-height: 1.4;
+    padding: 30px 0 30px 80px; position: relative;
+  }
+  .slide.bullets li::before {
+    content: '✓'; position: absolute; left: 0; top: 30px;
+    color: #10b981; font-weight: 900; font-size: 56px;
+  }
+
+  /* Image slide (admin desktop screenshots) */
+  .slide.image {
+    background: white;
+    padding: 60px 80px 40px 80px;
+    color: #0f172a;
+  }
+  .slide.image .header { display: flex; align-items: baseline; gap: 24px; margin-bottom: 24px; }
+  .slide.image .header h2 { font-size: 56px; font-weight: 800; flex: 1; line-height: 1.1; }
+  .slide.image .header .badge { font-size: 20px; color: #94a3b8; font-weight: 500; letter-spacing: 1px; }
+  .slide.image .img-wrap {
+    flex: 1; min-height: 0;
+    background: #f1f5f9;
+    border: 2px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .slide.image img {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;
+  }
+  .slide.image .caption {
+    margin-top: 24px;
+    font-size: 28px; font-weight: 400; color: #475569;
+    line-height: 1.4;
+    background: #f8fafc;
+    padding: 20px 32px;
+    border-left: 6px solid #10b981;
+    border-radius: 8px;
+  }
+
+  /* Mini App slide — phone frame layout */
+  .slide.miniapp {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    flex-direction: row;
+    padding: 60px 100px;
+    gap: 100px;
+    color: #0f172a;
+    align-items: center;
+  }
+  .slide.miniapp .phone-col {
+    flex: 0 0 540px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .phone-frame {
+    position: relative;
+    width: 480px;
+    height: 960px; /* 9:18 ratio matches mini app screens */
+    background: #0a0a0a;
+    border-radius: 60px;
+    padding: 18px;
+    box-shadow:
+      0 40px 80px rgba(6, 78, 59, 0.35),
+      inset 0 0 0 3px #1f2937,
+      inset 0 0 0 6px #0a0a0a;
+  }
+  .phone-frame::before {
+    content: '';
+    position: absolute;
+    top: 26px; left: 50%;
+    transform: translateX(-50%);
+    width: 130px; height: 32px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 3;
+  }
+  .phone-frame::after {
+    content: '';
+    position: absolute;
+    bottom: 12px; left: 50%;
+    transform: translateX(-50%);
+    width: 130px; height: 5px;
+    background: #2a2a2a;
+    border-radius: 3px;
+    z-index: 3;
+  }
+  .phone-frame .screen {
+    width: 100%; height: 100%;
+    background: white;
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+  }
+  .phone-frame .screen img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    display: block;
+  }
+  .slide.miniapp .text-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-width: 1100px;
+  }
+  .slide.miniapp .badge-route {
+    display: inline-block;
+    font-size: 18px; color: #047857;
+    background: #d1fae5;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    margin-bottom: 32px;
+    align-self: flex-start;
+  }
+  .slide.miniapp h2 {
+    font-size: 88px;
+    font-weight: 800;
+    line-height: 1.05;
+    color: #064e3b;
+  }
+  .slide.miniapp .tagline {
+    font-size: 40px;
+    color: #047857;
+    margin-top: 20px;
+    font-weight: 400;
+  }
+  .slide.miniapp ul {
+    list-style: none;
+    margin-top: 60px;
+  }
+  .slide.miniapp ul li {
+    font-size: 32px;
+    font-weight: 500;
+    color: #1e293b;
+    line-height: 1.4;
+    padding: 18px 0 18px 60px;
+    position: relative;
+  }
+  .slide.miniapp ul li::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 32px;
+    width: 32px; height: 4px;
+    background: #10b981;
+    border-radius: 2px;
+  }
+
+  /* Footer */
+  .footer-brand {
+    position: absolute; bottom: 30px; right: 80px;
+    font-size: 18px; color: #cbd5e1; letter-spacing: 2px; font-weight: 600;
+  }
+  .page-num {
+    position: absolute; bottom: 30px; left: 80px;
+    font-size: 18px; color: #cbd5e1; letter-spacing: 1px; font-weight: 600;
+  }
+  .slide.miniapp .footer-brand,
+  .slide.miniapp .page-num { color: #6ee7b7; }
+</style>
+</head><body><div class="slide cover">
+      <h1>REYA</h1>
+      <h2>Telepharmacy & CRM Platform</h2>
+      <p>แชท · ขาย · จ่ายยา · ERP — ในระบบเดียวบน LINE</p>
+      <div class="date">May 2026</div>
+    </div><div class="slide bullets">
+      <h2>ปัญหาของร้านยาออนไลน์วันนี้</h2>
+      
+      <ul><li>ลูกค้าทักผ่าน LINE หลายแอป จัดการยุ่ง</li><li>เภสัชกรสลับหน้าจอเยอะ ทำงานช้า</li><li>ขายของผ่าน LINE ไม่มีระบบหลังบ้านครบ</li><li>ไม่รู้ลูกค้าซื้ออะไร แพ้ยาอะไร</li></ul>
+    </div><div class="slide bullets">
+      <h2>REYA ทำอะไร</h2>
+      <div class="sub">ในประโยคเดียว</div>
+      <ul><li>ระบบเดียวจบ — แชท + ขาย + จ่ายยา + ERP</li><li>ลูกค้าใช้ผ่าน LINE Mini App ไม่ต้องโหลดแอป</li><li>เภสัชกรทำงานจากหน้าเดียว</li><li>รองรับหลายร้านในระบบเดียว (Multi-tenant)</li></ul>
+    </div><div class="slide section">
+      <div class="section-num">0</div>
+      <h2>หน้าแรกสาธารณะ — Landing Page</h2>
+      <p>หน้าแรก</p>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Landing Page</h2>
+        <div class="badge">00-landing/landing-home-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/00-landing/landing-home-fullpage.png" alt="Landing Page"/></div>
+      <div class="caption">หน้าเว็บสาธารณะที่ re-ya.com — Hero "ปรึกษาเภสัชกรและสั่งยากับ REYA" + บริการ + คุณสมบัติเด่น + 8 SKU แนะนำ</div>
+      <div class="page-num">5 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide section">
+      <div class="section-num">1</div>
+      <h2>สิ่งที่ลูกค้าเห็น (LINE Mini App)</h2>
+      <p>Customer-facing experience — 14+ pages</p>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-home-viewport.png" alt="Mini App Home (Guest)"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-home-viewport</span>
+        <h2>Mini App Home (Guest)</h2>
+        <div class="tagline">หน้าหลักก่อน login</div>
+        <ul><li>Banner flash sale</li><li>Tab nav 5 menu</li><li>Quick links: Shop · AI Chat · Appointments · Rewards · Wishlist</li></ul>
+      </div>
+      <div class="page-num">7 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-home-authed-viewport.png" alt="Mini App Home (Authed)"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-home-authed-viewport</span>
+        <h2>Mini App Home (Authed)</h2>
+        <div class="tagline">หลัง login — แสดงข้อมูลส่วนตัว</div>
+        <ul><li>Member tier + แต้มสะสม</li><li>ตะกร้ายังค้าง</li><li>ออเดอร์ล่าสุด TXN</li><li>ปุ่ม "เปิดแจ้งเตือน"</li></ul>
+      </div>
+      <div class="page-num">8 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-shop-viewport.png" alt="Shop — รวมสินค้า"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-shop-viewport</span>
+        <h2>Shop — รวมสินค้า</h2>
+        <div class="tagline">30 สินค้าพร้อมขาย</div>
+        <ul><li>Search bar + 3 sort tabs</li><li>12 หมวดยา</li><li>Brand filter</li><li>Card: รูป + ราคา + ใส่ตะกร้า</li></ul>
+      </div>
+      <div class="page-num">9 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-product-detail-viewport.png" alt="Product Detail"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-product-detail-viewport</span>
+        <h2>Product Detail</h2>
+        <div class="tagline">หน้ารายละเอียดสินค้า</div>
+        <ul><li>รูป + ชื่อ generic + SKU</li><li>ราคา + เลือกจำนวน</li><li>Wishlist heart</li><li>Related products carousel</li></ul>
+      </div>
+      <div class="page-num">10 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-cart-with-item-viewport.png" alt="Cart — ตะกร้า"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-cart-with-item-viewport</span>
+        <h2>Cart — ตะกร้า</h2>
+        <div class="tagline">จัดการก่อนชำระเงิน</div>
+        <ul><li>ปรับจำนวนสินค้า +/-</li><li>ยอดสินค้า + ค่าจัดส่ง</li><li>ยอดรวม</li><li>ปุ่ม "ไปชำระเงิน"</li></ul>
+      </div>
+      <div class="page-num">11 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-checkout-qr-viewport.png" alt="Checkout — โอน QR"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-checkout-qr-viewport</span>
+        <h2>Checkout — โอน QR</h2>
+        <div class="tagline">PromptPay + ที่อยู่จัดส่ง</div>
+        <ul><li>ที่อยู่ผู้รับ</li><li>QR PromptPay สแกนจ่าย</li><li>ชื่อ + เลขบัญชี copy</li><li>โค้ดส่วนลด + สรุปยอด</li></ul>
+      </div>
+      <div class="page-num">12 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-checkout-cod-fullpage.png" alt="Checkout — COD"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-checkout-cod-fullpage</span>
+        <h2>Checkout — COD</h2>
+        <div class="tagline">ทางเลือก: ชำระปลายทาง</div>
+        <ul><li>Toggle เปลี่ยนช่องทาง</li><li>รองรับ COD</li><li>สรุปยอดเดียวกัน</li><li>Push LINE notification หลังสั่ง</li></ul>
+      </div>
+      <div class="page-num">13 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-orders-list-viewport.png" alt="Orders List"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-orders-list-viewport</span>
+        <h2>Orders List</h2>
+        <div class="tagline">ประวัติคำสั่งซื้อ</div>
+        <ul><li>รายการ TXN ทั้งหมด</li><li>Filter by status</li><li>รอชำระ / กำลังจัดส่ง / สำเร็จ</li><li>Click → order detail</li></ul>
+      </div>
+      <div class="page-num">14 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-order-detail-viewport.png" alt="Order Detail"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-order-detail-viewport</span>
+        <h2>Order Detail</h2>
+        <div class="tagline">ติดตามสถานะออเดอร์</div>
+        <ul><li>TXN + วันสั่ง</li><li>Status timeline</li><li>เลขพัสดุ tracking</li><li>รายการสินค้า x จำนวน</li></ul>
+      </div>
+      <div class="page-num">15 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-ai-chat-viewport.png" alt="AI Chat — เภสัชกร 24/7"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-ai-chat-viewport</span>
+        <h2>AI Chat — เภสัชกร 24/7</h2>
+        <div class="tagline">ปรึกษาด้วย Gemini</div>
+        <ul><li>AI greeting Thai-aware</li><li>Intent chips (ไข้หวัด/ปวดหัว/ท้องเสีย/แพ้อากาศ)</li><li>AI ตอบ + เสนอสินค้า</li><li>ปุ่ม "ปรึกษาเภสัชกร" → human</li></ul>
+      </div>
+      <div class="page-num">16 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-health-profile-viewport.png" alt="Health Profile"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-health-profile-viewport</span>
+        <h2>Health Profile</h2>
+        <div class="tagline">บันทึกข้อมูลสุขภาพ</div>
+        <ul><li>อายุ/เพศ/น้ำหนัก/ส่วนสูง</li><li>โรคประจำตัว 10 ตัวเลือก</li><li>การแพ้ยา + ความรุนแรง</li><li>ยาที่ใช้ประจำ</li></ul>
+      </div>
+      <div class="page-num">17 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-appointments-viewport.png" alt="Appointments"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-appointments-viewport</span>
+        <h2>Appointments</h2>
+        <div class="tagline">จองคิวปรึกษา</div>
+        <ul><li>ปฏิทินเลือกวัน/เวลา</li><li>จอง video consult</li><li>นัดของฉัน vs นัดใหม่</li><li>ปุ่มยกเลิก/เลื่อน</li></ul>
+      </div>
+      <div class="page-num">18 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-rewards-viewport.png" alt="Rewards"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-rewards-viewport</span>
+        <h2>Rewards</h2>
+        <div class="tagline">แลกของรางวัลด้วยแต้ม</div>
+        <ul><li>รายการรางวัล</li><li>จำนวนแต้มต่อรางวัล</li><li>คูปองส่วนลด</li><li>Redeem flow</li></ul>
+      </div>
+      <div class="page-num">19 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-rewards-history-viewport.png" alt="Rewards History"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-rewards-history-viewport</span>
+        <h2>Rewards History</h2>
+        <div class="tagline">ประวัติได้/ใช้แต้ม</div>
+        <ul><li>Timeline แต้มเข้า/ออก</li><li>อ้างอิง TXN</li><li>รายการของรางวัลที่แลกแล้ว</li></ul>
+      </div>
+      <div class="page-num">20 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-wishlist-viewport.png" alt="Wishlist"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-wishlist-viewport</span>
+        <h2>Wishlist</h2>
+        <div class="tagline">สินค้าที่กดหัวใจ</div>
+        <ul><li>การ์ดสินค้าที่บันทึก</li><li>ปุ่มใส่ตะกร้า</li><li>ปุ่มลบออก</li><li>Sync กับ LINE user</li></ul>
+      </div>
+      <div class="page-num">21 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-profile-viewport.png" alt="Profile Hub"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-profile-viewport</span>
+        <h2>Profile Hub</h2>
+        <div class="tagline">ศูนย์รวมการตั้งค่า</div>
+        <ul><li>Member card + tier + แต้ม</li><li>Progress bar ไป tier ถัดไป</li><li>11 quick actions</li><li>Health + Pharmacy + Shopping</li></ul>
+      </div>
+      <div class="page-num">22 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-notifications-viewport.png" alt="Medication Reminders"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-notifications-viewport</span>
+        <h2>Medication Reminders</h2>
+        <div class="tagline">ตั้งการแจ้งเตือนทานยา</div>
+        <ul><li>สร้างการเตือนใหม่</li><li>ระบุชื่อยา + เวลา</li><li>แจ้งผ่าน LINE push</li><li>Snooze + done</li></ul>
+      </div>
+      <div class="page-num">23 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide miniapp">
+      <div class="phone-col">
+        <div class="phone-frame">
+          <div class="screen"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/01-miniapp/miniapp-video-viewport.png" alt="Video Consult"/></div>
+        </div>
+      </div>
+      <div class="text-col">
+        <span class="badge-route">LINE MINI APP · miniapp-video-viewport</span>
+        <h2>Video Consult</h2>
+        <div class="tagline">WebRTC call กับเภสัชกร</div>
+        <ul><li>เลือกเภสัชกร</li><li>Video call + chat</li><li>Share file/รูปยา</li><li>บันทึก session</li></ul>
+      </div>
+      <div class="page-num">24 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide section">
+      <div class="section-num">2</div>
+      <h2>เภสัชกรทำงานอย่างไร — Vibe Selling OS</h2>
+      <p>7 features — 3-pane inbox, dispense, AI reply, auto-tag, templates</p>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Inbox v2 — 3-Pane (หัวใจของระบบ)</h2>
+        <div class="badge">02-inbox/inbox-v2-3pane-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/02-inbox/inbox-v2-3pane-fullpage.png" alt="Inbox v2 — 3-Pane (หัวใจของระบบ)"/></div>
+      <div class="caption">ซ้าย: conversation list + filter / กลาง: chat thread + Flex medicine label / ขวา: CRM HUD (โปรไฟล์ + tags + แต้ม + ออเดอร์ + health profile)</div>
+      <div class="page-num">26 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Auto-Reply Rules</h2>
+        <div class="badge">02-inbox/auto-reply-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/02-inbox/auto-reply-fullpage.png" alt="Auto-Reply Rules"/></div>
+      <div class="caption">Keyword (exact/contains/regex) → reply text/Flex + priority + log</div>
+      <div class="page-num">27 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Triage Analytics</h2>
+        <div class="badge">02-inbox/triage-analytics-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/02-inbox/triage-analytics-fullpage.png" alt="Triage Analytics"/></div>
+      <div class="caption">Session ทั้งหมด / เสร็จสมบูรณ์ / ส่งต่อเภสัชกร / เร่งด่วน + อัตราสำเร็จ + นาที/เคส</div>
+      <div class="page-num">28 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Template Library</h2>
+        <div class="badge">02-inbox/templates-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/02-inbox/templates-fullpage.png" alt="Template Library"/></div>
+      <div class="caption">เทมเพลตข้อความที่ส่งบ่อย — รวมไว้ในที่เดียว</div>
+      <div class="page-num">29 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide section">
+      <div class="section-num">3</div>
+      <h2>ผู้บริหารเห็นอะไร</h2>
+      <p>Executive + CRM dashboards</p>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Executive Dashboard</h2>
+        <div class="badge">03-dashboard/executive-dashboard-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/03-dashboard/executive-dashboard-fullpage.png" alt="Executive Dashboard"/></div>
+      <div class="caption">6 KPI: ข้อความ/ลูกค้าใหม่/ออเดอร์/รายได้/video/SLA + กราฟยอด + ผลงาน admin + conversation feed</div>
+      <div class="page-num">31 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>CRM Dashboard</h2>
+        <div class="badge">03-dashboard/crm-dashboard-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/03-dashboard/crm-dashboard-fullpage.png" alt="CRM Dashboard"/></div>
+      <div class="caption">Lifecycle funnel + top tags + auto-rules + recent customers + quick actions</div>
+      <div class="page-num">32 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Customer Segments</h2>
+        <div class="badge">03-dashboard/customer-segments-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/03-dashboard/customer-segments-fullpage.png" alt="Customer Segments"/></div>
+      <div class="caption">Personalized marketing — สร้าง segment ตามเงื่อนไข + push targeted broadcast</div>
+      <div class="page-num">33 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Analytics Overview</h2>
+        <div class="badge">03-dashboard/analytics-overview-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/03-dashboard/analytics-overview-fullpage.png" alt="Analytics Overview"/></div>
+      <div class="caption">Followers + active users + messages + broadcast + กราฟรายได้ + top tags + export</div>
+      <div class="page-num">34 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Dashboard (default landing)</h2>
+        <div class="badge">03-dashboard/dashboard-default-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/03-dashboard/dashboard-default-fullpage.png" alt="Dashboard (default landing)"/></div>
+      <div class="caption">หน้าแรกของระบบ — เลือก tab Executive หรือ CRM</div>
+      <div class="page-num">35 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide section">
+      <div class="section-num">4</div>
+      <h2>AI Suite — Medical Copilot</h2>
+      <p>Powered by Gemini 2.0 + Imagen 4 + OpenAI</p>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>AI Studio</h2>
+        <div class="badge">04-ai/ai-studio-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/04-ai/ai-studio-fullpage.png" alt="AI Studio"/></div>
+      <div class="caption">Quick presets: chatbot/image/Flex/caption/translate + chat with Gemini 2.0 Flash</div>
+      <div class="page-num">37 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>AI Settings (per LINE OA)</h2>
+        <div class="badge">04-ai/ai-settings-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/04-ai/ai-settings-fullpage.png" alt="AI Settings (per LINE OA)"/></div>
+      <div class="caption">Gemini API key + 3 modes (พนักงานขาย/ซัพพอร์ต/เภสัชกร) + system prompt + auto-load สินค้า 50 รายการ</div>
+      <div class="page-num">38 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>AI Chatbot Fallback</h2>
+        <div class="badge">04-ai/ai-chatbot-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/04-ai/ai-chatbot-fullpage.png" alt="AI Chatbot Fallback"/></div>
+      <div class="caption">GPT-3.5/4/4-Turbo + custom prompt + temperature + max tokens. Workflow: Auto-Reply ก่อน → AI</div>
+      <div class="page-num">39 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide section">
+      <div class="section-num">5</div>
+      <h2>Marketing & Engagement</h2>
+      <p>6 tools — Broadcast, Drip, Flex, Rich Menu, Membership, LINE Accounts</p>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Broadcast — Send</h2>
+        <div class="badge">05-marketing/broadcast-send-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/05-marketing/broadcast-send-fullpage.png" alt="Broadcast — Send"/></div>
+      <div class="caption">Audience: ทุกคน/segment/tag/group + Type: text/image/Flex carousel + Schedule + Stats</div>
+      <div class="page-num">41 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Drip Campaigns</h2>
+        <div class="badge">05-marketing/drip-campaigns-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/05-marketing/drip-campaigns-fullpage.png" alt="Drip Campaigns"/></div>
+      <div class="caption">Welcome series / Re-engagement / Post-purchase — sequences อัตโนมัติตามเวลา</div>
+      <div class="page-num">42 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Flex Builder</h2>
+        <div class="badge">05-marketing/flex-builder-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/05-marketing/flex-builder-fullpage.png" alt="Flex Builder"/></div>
+      <div class="caption">Drag-drop visual editor — Bubble, Carousel, Text, Button, Image, Box + LINE Preview + JSON</div>
+      <div class="page-num">43 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Rich Menu</h2>
+        <div class="badge">05-marketing/rich-menu-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/05-marketing/rich-menu-fullpage.png" alt="Rich Menu"/></div>
+      <div class="caption">Static + Dynamic + Switch — สลับเมนูตาม segment/tag, A/B test</div>
+      <div class="page-num">44 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Membership</h2>
+        <div class="badge">05-marketing/membership-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/05-marketing/membership-fullpage.png" alt="Membership"/></div>
+      <div class="caption">4 tiers: Bronze → Silver → Gold → Platinum + กฎคะแนน + รายการของรางวัล</div>
+      <div class="page-num">45 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>LINE Accounts (Multi-Tenant)</h2>
+        <div class="badge">05-marketing/line-accounts-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/05-marketing/line-accounts-fullpage.png" alt="LINE Accounts (Multi-Tenant)"/></div>
+      <div class="caption">จัดการหลาย LINE OA ในระบบเดียว — Channel ID + LIFF + Webhook URL ต่อบัญชี</div>
+      <div class="page-num">46 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide section">
+      <div class="section-num">6</div>
+      <h2>Sales & Ops</h2>
+      <p>POS + Members + Inventory + Orders + Accounting</p>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>POS — เปิดกะ</h2>
+        <div class="badge">06-sales/pos-open-shift-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/06-sales/pos-open-shift-fullpage.png" alt="POS — เปิดกะ"/></div>
+      <div class="caption">ขายหน้าร้าน — เปิดกะด้วยเงินสด + ค้นสินค้า + ตะกร้า + รับชำระ + พิมพ์ใบเสร็จ + reports</div>
+      <div class="page-num">48 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Customer Database</h2>
+        <div class="badge">06-sales/users-list-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/06-sales/users-list-fullpage.png" alt="Customer Database"/></div>
+      <div class="caption">รายชื่อลูกค้า + LINE IDs + tags + status + จำนวนข้อความ + quick actions</div>
+      <div class="page-num">49 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Customer 360</h2>
+        <div class="badge">06-sales/user-detail-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/06-sales/user-detail-fullpage.png" alt="Customer 360"/></div>
+      <div class="caption">Member card + tier + แต้ม + tags + ข้อมูลส่วนตัว + ข้อมูลสุขภาพ + ประวัติออเดอร์ + LINE info</div>
+      <div class="page-num">50 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Inventory — 31 SKU</h2>
+        <div class="badge">06-sales/inventory-list-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/06-sales/inventory-list-fullpage.png" alt="Inventory — 31 SKU"/></div>
+      <div class="caption">11 tabs (สต็อก/เคลื่อนไหว/batch/lot/planogram/low stock/WMS) + bulk actions</div>
+      <div class="page-num">51 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Orders — ทุกประเภท</h2>
+        <div class="badge">06-sales/shop-orders-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/06-sales/shop-orders-fullpage.png" alt="Orders — ทุกประเภท"/></div>
+      <div class="caption">Type: ซื้อสินค้า/จองคิว/สมัครสมาชิก/แลกของรางวัล/จ่ายยา + Status filter + เลขพัสดุ</div>
+      <div class="page-num">52 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Accounting</h2>
+        <div class="badge">06-sales/accounting-dashboard-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/06-sales/accounting-dashboard-fullpage.png" alt="Accounting"/></div>
+      <div class="caption">AP/AR/สถานะสุทธิ + P&L (Revenue, COGS, Gross, OPEX, Net) + 6-month trend + quick links</div>
+      <div class="page-num">53 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide section">
+      <div class="section-num">7</div>
+      <h2>Telepharmacy</h2>
+      <p>Pharmacist queue + video call + dispense — remote 100%</p>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Pharmacy Management</h2>
+        <div class="badge">08-telepharmacy/pharmacy-management-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/08-telepharmacy/pharmacy-management-fullpage.png" alt="Pharmacy Management"/></div>
+      <div class="caption">4 tabs (Dashboard/เภสัชกร/ยาตีกัน/จ่ายยา) + KPI + รายการรอตรวจสอบ + sessions ล่าสุด + quick actions</div>
+      <div class="page-num">55 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide section">
+      <div class="section-num">8</div>
+      <h2>System Health & Trust</h2>
+      <p>Enterprise observability + PDPA compliance</p>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>System Status — All-Green ⭐</h2>
+        <div class="badge">09-system/system-status-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/09-system/system-status-fullpage.png" alt="System Status — All-Green ⭐"/></div>
+      <div class="caption">16+ services monitored (DB/Vibe Selling/Inbox/AI engines/all tables/LINE API) + ทุกบริการ green</div>
+      <div class="page-num">57 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Consent Management — PDPA</h2>
+        <div class="badge">09-system/consent-management-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/09-system/consent-management-fullpage.png" alt="Consent Management — PDPA"/></div>
+      <div class="caption">Privacy Policy + ToS tracking + counters + Consent Logs + Data Access Logs — audit-ready</div>
+      <div class="page-num">58 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Admin Users + Roles (RBAC)</h2>
+        <div class="badge">09-system/admin-users-roles-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/09-system/admin-users-roles-fullpage.png" alt="Admin Users + Roles (RBAC)"/></div>
+      <div class="caption">6 roles (เจ้าของ/Admin/เภสัชกร/พนักงาน/Marketing/IT) + permissions per Bot</div>
+      <div class="page-num">59 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide image">
+      <div class="header">
+        <h2>Activity Logs — Full Audit Trail</h2>
+        <div class="badge">09-system/activity-logs-fullpage.png</div>
+      </div>
+      <div class="img-wrap"><img src="file:///C:/Users/Administrator/clinicya/docs/screenshots/09-system/activity-logs-fullpage.png" alt="Activity Logs — Full Audit Trail"/></div>
+      <div class="caption">ทุก action ของ admin (login/dispense/edit/send/delete) + IP tracking + filter + export</div>
+      <div class="page-num">60 / 62</div>
+      <div class="footer-brand">REYA · TELEPHARMACY PLATFORM</div>
+    </div><div class="slide bullets">
+      <h2>Why REYA</h2>
+      <div class="sub">สรุป</div>
+      <ul><li>ระบบเดียวจบ — ไม่ต้องใช้ 5-10 tool แยก</li><li>Customer experience ผ่าน LINE ที่คนไทยใช้อยู่แล้ว</li><li>AI ช่วยลด workload เภสัชกร 50%+</li><li>Multi-tenant พร้อม scale หลายร้าน</li><li>PDPA compliant + audit ready</li></ul>
+    </div><div class="slide cover">
+      <h1>Next Step</h1>
+      <h2>Demo + Pricing</h2>
+      <p>ขอ demo 30 นาที · onboarding checklist · pricing per LINE OA / per pharmacist</p>
+      <div class="date">cnyhealthymall@gmail.com</div>
+    </div></body></html>

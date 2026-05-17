@@ -1,103 +1,251 @@
-# คู่มือการ Deploy ระบบ Odoo Dashboard (ส่วนที่ 2)
+# คู่มือการ Deploy ระบบ (ส่วนที่ 2) — Migration & Rollback
 
-## 7. การ Migration จากระบบเดิม
+**Last Updated**: May 17, 2026
 
-### 7.1 ภาพรวมกระบวนการ Migration
+## 7. การ Upgrade จากเวอร์ชันเก่า
 
-การ migrate จากระบบ PHP เดิมไปยังระบบใหม่แบ่งเป็น 3 ระยะ:
+### 7.1 ตรวจสอบความเข้ากันได้
 
-**ระยะที่ 1: Parallel Deployment (สัปดาห์ที่ 1-2)**
-- Deploy ระบบใหม่ควบคู่กับระบบเดิม
-- ตั้งค่า Feature Flags
-- Sync ข้อมูลระหว่างระบบ
+```bash
+# ตรวจสอบ PHP version
+php -v  # ต้องเป็น >= 8.0
 
-**ระยะที่ 2: Gradual Migration (สัปดาห์ที่ 3-6)**
-- ค่อยๆ เปลี่ยน traffic ไประบบใหม่
-- เริ่มจาก 10% → 25% → 50% → 75% → 100%
-- เก็บข้อมูล feedback จากผู้ใช้
+# ตรวจสอบ MySQL version
+mysql -V  # ต้องเป็น >= 5.7
 
-**ระยะที่ 3: Complete Migration (สัปดาห์ที่ 7)**
-- เปลี่ยน traffic ทั้งหมดไประบบใหม่
-- ปิดระบบเดิม
-- Archive ข้อมูล
+# ตรวจสอบ extension ที่จำเป็น
+php -m | grep -E "pdo|curl|json|mbstring"
+```
 
-### 7.2 เตรียมการ Migration
+### 7.2 ขั้นตอน Upgrade
 
 **ขั้นตอนที่ 1: Backup ข้อมูลทั้งหมด**
 
 ```bash
 # Backup MySQL database
-docker compose exec mysql mysqldump -uroot -p telepharmacy > backup_$(date +%Y%m%d_%H%M%S).sql
+mysqldump -u root -p telepharmacy > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # Backup files
 tar -czf uploads_backup_$(date +%Y%m%d_%H%M%S).tar.gz uploads/
 
-# Backup Redis (ถ้ามีข้อมูลสำคัญ)
-docker compose exec redis redis-cli --rdb /data/dump.rdb
-docker cp redis_container:/data/dump.rdb redis_backup_$(date +%Y%m%d_%H%M%S).rdb
+# Verify backup
+ls -lh backup_*.sql uploads_backup_*.tar.gz
 ```
 
-**ขั้นตอนที่ 2: ตั้งค่า Feature Flags**
+**ขั้นตอนที่ 2: Pull changes จาก repository**
 
 ```bash
-# รัน SQL script เพื่อสร้างตาราง feature flags
-docker compose exec mysql mysql -uodoo_user -p telepharmacy < migration/scripts/initialize-feature-flags.sql
+# ดูเวอร์ชันปัจจุบัน
+git log --oneline -1
+
+# Update code
+git fetch origin
+git pull origin main
+
+# ตรวจสอบ migration files
+ls database/migration_*.sql | tail -5
 ```
 
-**ตัวอย่าง Feature Flags:**
+**ขั้นตอนที่ 3: รัน migrations**
+
+```bash
+# ตรวจสอบ migration ที่ต้องรัน
+mysql -u root -p telepharmacy < database/migration_2026-05-17_dispense_refill_tracking.sql
+
+# Verify tables ถูกสร้าง
+mysql -u root -p telepharmacy -e "SHOW TABLES LIKE 'dispensing%';"
+```
+
+**ขั้นตอนที่ 4: Composer dependencies**
+
+```bash
+# Update PHP dependencies
+composer install --no-dev
+
+# Verify installation
+composer show | head -20
+```
+
+**ขั้นตอนที่ 5: Restart services**
+
+```bash
+# Docker
+docker-compose restart
+
+# หรือ Apache/Nginx
+sudo systemctl restart apache2
+# หรือ
+sudo systemctl restart nginx
+```
+
+### 7.3 ตรวจสอบหลังจาก Upgrade
+
+```bash
+# ตรวจสอบ admin login
+curl -I https://yourdomain.com/admin/
+
+# ตรวจสอบ webhook
+curl https://yourdomain.com/webhook.php
+
+# ดูข้อมูลผลิตภัณฑ์ใหม่
+SELECT COUNT(*) FROM business_items;
+```
+
+---
+
+## 8. Monitoring & Health Checks
+
+### 8.1 Health Check Endpoints
+
+```bash
+# Admin panel
+curl https://yourdomain.com/admin/dashboard.php -I
+
+# API health
+curl https://yourdomain.com/api/health.php
+
+# Database connection
+curl https://yourdomain.com/api/test-db.php
+
+# Webhook receiver
+curl -X POST https://yourdomain.com/webhook.php \
+  -H "X-Line-Signature: test" \
+  -d '{"test": true}'
+```
+
+### 8.2 เก็บ Logs
+
+```bash
+# ดูล่าสุด 100 lines
+tail -100 /var/log/apache2/access.log
+
+# ดูข้อผิดพลาด
+tail -50 /var/log/apache2/error.log
+
+# ดู PHP errors
+tail -100 storage/logs/php-errors.log
+```
+
+### 8.3 Performance Monitoring
+
+```bash
+# Database query time
+mysql -u root -p telepharmacy -e "
+SET SESSION sql_mode='';
+SELECT * FROM performance_schema.events_statements_summary_by_digest 
+LIMIT 10;
+"
+
+# Memory usage
+free -h
+
+# Disk usage
+df -h /home/zrismpsz/public_html
+```
+
+---
+
+## 9. Troubleshooting Common Issues
+
+### Issue: Webhook not receiving messages
+
+**สาเหตุ**:
+- URL ไม่ใช่ HTTPS
+- Channel Secret ไม่ถูกต้อง
+- IP firewall blocked
+
+**วิธีแก**:
+```bash
+# ตรวจสอบ HTTPS
+curl -I https://yourdomain.com/webhook.php
+
+# ตรวจสอบ config
+grep -i "channel_secret" config/config.php
+
+# ตรวจสอบ firewall
+sudo iptables -L | grep webhook
+```
+
+### Issue: Database connection error
+
+**สาเหตุ**:
+- MySQL not running
+- Wrong password
+- Database doesn't exist
+
+**วิธีแก**:
+```bash
+# ตรวจสอบ MySQL status
+sudo systemctl status mysql
+
+# ตรวจสอบ connection
+mysql -u root -p -e "SELECT 1"
+
+# ตรวจสอบ config
+cat config/config.php | grep DB_
+```
+
+### Issue: Cannot send LINE messages
+
+**สาเหตุ**:
+- Access token expired
+- Reply quota exceeded
+- Invalid user ID
+
+**วิธีแก**:
+```php
+// Check in admin > LINE Accounts
+// Verify Channel Access Token
+// Check reply_token exists for user
+// Use pushMessage instead if reply_token missing
+```
+
+---
+
+## 10. Performance Optimization
+
+### 10.1 Database Optimization
 
 ```sql
-INSERT INTO feature_flags (flag_key, flag_value, description, enabled) VALUES
-('use_new_dashboard', '0', 'ใช้ Dashboard ใหม่', 0),
-('use_new_orders', '0', 'ใช้ระบบจัดการ Order ใหม่', 0),
-('use_new_payments', '0', 'ใช้ระบบจัดการ Payment ใหม่', 0),
-('use_new_customers', '0', 'ใช้ระบบจัดการลูกค้าใหม่', 0),
-('use_new_webhooks', '0', 'ใช้ระบบ Webhook ใหม่', 0);
+-- Check slow queries
+SET GLOBAL slow_query_log = 'ON';
+SET GLOBAL long_query_time = 2;
+
+-- Rebuild indexes
+OPTIMIZE TABLE messages;
+OPTIMIZE TABLE orders;
+OPTIMIZE TABLE users;
+
+-- Check table statistics
+ANALYZE TABLE business_items;
+ANALYZE TABLE dispensing_records;
 ```
 
-### 7.3 Deploy Parallel System
-
-**ขั้นตอนที่ 1: Deploy ระบบใหม่บน port อื่น**
+### 10.2 Caching Strategy
 
 ```bash
-# แก้ไข docker-compose.migration.yml
-# เปลี่ยน ports เป็น:
-# - Frontend: 3100 (แทน 3000)
-# - Backend: 4100 (แทน 4000)
-# - WebSocket: 3101 (แทน 3001)
+# Redis cache
+redis-cli PING  # should return PONG
 
-# Deploy
-docker compose -f docker/docker-compose.migration.yml up -d
+# Check cache hit rate
+redis-cli INFO stats | grep hits
+
+# Clear specific keys if needed
+redis-cli DEL "cache:product:*"
 ```
 
-**ขั้นตอนที่ 2: ตั้งค่า Traffic Routing**
+### 10.3 File Upload Optimization
 
 ```bash
-# ตั้งค่า Nginx เพื่อ route traffic ตาม feature flags
-bash migration/scripts/setup-traffic-routing.sh
+# Check upload directory size
+du -sh uploads/
 
-# Nginx จะตรวจสอบ cookie หรือ header เพื่อตัดสินใจ route
+# Archive old files (older than 90 days)
+find uploads/ -type f -mtime +90 -exec tar -czf archive_$(date +%Y%m%d).tar.gz {} \;
+
+# Cleanup temp files
+find /tmp -name "*php*" -mtime +7 -delete
 ```
-
-**ตัวอย่าง Nginx Configuration:**
-
-```nginx
-# /etc/nginx/conf.d/traffic-routing.conf
-
-upstream legacy_backend {
-    server localhost:80;  # ระบบเดิม
-}
-
-upstream new_backend {
-    server localhost:3100;  # ระบบใหม่
-}
-
-map $cookie_use_new_system $backend {
-    default legacy_backend;
-    "1" new_backend;
-}
-
-server {
     listen 443 ssl;
     server_name dashboard.yourdomain.com;
 

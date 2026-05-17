@@ -19,7 +19,7 @@
 
 ### 1.1 สถาปัตยกรรมระบบ
 
-ระบบ Odoo Dashboard สมัยใหม่ประกอบด้วย:
+ระบบ LINE Telepharmacy CRM ประกอบด้วย:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -120,8 +120,8 @@ docker compose version
 
 ```bash
 # Clone โปรเจค
-git clone https://github.com/your-org/odoo-dashboard-modernization.git
-cd odoo-dashboard-modernization
+git clone https://github.com/your-org/telepharmacy-crm.git
+cd telepharmacy-crm
 
 # สร้าง branch สำหรับ production
 git checkout -b production
@@ -142,17 +142,17 @@ nano .env
 **ตัวอย่างไฟล์ `.env`:**
 
 ```bash
-# ===== ข้อมูลทั่วไป =====
+# ===== General Settings =====
 NODE_ENV=production
-APP_NAME="Odoo Dashboard"
-APP_URL=https://dashboard.yourdomain.com
+APP_NAME="LINE Telepharmacy CRM"
+APP_URL=https://yourdomain.com
 TIMEZONE=Asia/Bangkok
 
 # ===== Database Configuration =====
 DB_HOST=mysql
 DB_PORT=3306
 DB_DATABASE=telepharmacy
-DB_USERNAME=odoo_user
+DB_USERNAME=pharmacy_user
 DB_PASSWORD=your_secure_password_here
 DB_ROOT_PASSWORD=your_root_password_here
 
@@ -161,42 +161,18 @@ REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=your_redis_password_here
 
-# ===== JWT Configuration =====
-JWT_SECRET=your_jwt_secret_key_minimum_32_characters
-JWT_ACCESS_EXPIRY=15m
-JWT_REFRESH_EXPIRY=7d
-
-# ===== API Configuration =====
-API_PREFIX=/api/v1
-API_PORT=4000
-API_RATE_LIMIT=100
-
-# ===== Frontend Configuration =====
-NEXT_PUBLIC_API_URL=https://dashboard.yourdomain.com/api/v1
-NEXT_PUBLIC_WS_URL=wss://dashboard.yourdomain.com/ws
-FRONTEND_PORT=3000
-
-# ===== WebSocket Configuration =====
-WS_PORT=3001
-WS_CORS_ORIGIN=https://dashboard.yourdomain.com
-
-# ===== Odoo ERP Integration =====
-ODOO_API_URL=https://your-odoo-instance.com
-ODOO_API_KEY=your_odoo_api_key
-ODOO_DATABASE=your_odoo_database
-
 # ===== LINE Integration =====
 LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
 LINE_CHANNEL_SECRET=your_line_channel_secret
+
+# ===== AI Services =====
+GEMINI_API_KEY=your_gemini_api_key
+OPENAI_API_KEY=your_openai_api_key
 
 # ===== File Upload =====
 UPLOAD_MAX_SIZE=10485760
 UPLOAD_ALLOWED_TYPES=image/jpeg,image/png
 UPLOAD_PATH=/app/uploads
-
-# ===== Monitoring =====
-GRAFANA_ADMIN_PASSWORD=your_grafana_password
-PROMETHEUS_RETENTION=30d
 
 # ===== SSL/TLS =====
 SSL_CERT_PATH=/etc/nginx/ssl/cert.pem

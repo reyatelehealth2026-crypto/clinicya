@@ -1,103 +1,197 @@
 # คู่มือการ Deploy ระบบ Odoo Dashboard (ส่วนที่ 3)
 
-## 10. การ Rollback
+## 10. Disaster Recovery & Rollback
 
 ### 10.1 เมื่อไหร่ควร Rollback
 
 ควร rollback เมื่อ:
-- Error rate เพิ่มขึ้นเกิน 5%
-- Response time เพิ่มขึ้นเกิน 1 วินาที
-- มี critical bugs ที่แก้ไม่ทัน
-- ระบบ crash หรือไม่ตอบสนอง
-- ข้อมูลเสียหายหรือไม่ถูกต้อง
+- Admin page ไม่สามารถเข้าถึงได้
+- Webhook ไม่ทำงาน
+- Database corruption
+- Critical bugs ที่เกี่ยวกับลูกค้า
+- Data loss หรือ inconsistency
 
-### 10.2 Rollback แบบ Blue-Green
+### 10.2 Rollback แบบเร็ว (Quick Rollback)
 
-**ขั้นตอนที่ 1: Switch กลับไป Blue Environment**
+**ขั้นตอนที่ 1: Revert code changes**
 
 ```bash
-# Rollback ทันที
-bash docker/scripts/blue-green-deploy.sh rollback
+# ดูเวอร์ชันก่อนหน้า
+git log --oneline | head -5
 
-# Script จะ:
-# 1. Switch Nginx upstream กลับไป blue
-# 2. Reload Nginx
-# 3. Verify health checks
+# Revert to previous commit
+git revert <commit_hash>
+# หรือ
+git reset --hard <previous_commit>
 ```
 
-**ขั้นตอนที่ 2: ตรวจสอบว่า Rollback สำเร็จ**
+**ขั้นตอนที่ 2: Restart services**
 
 ```bash
-# ตรวจสอบ Nginx upstream
-docker compose exec nginx cat /etc/nginx/conf.d/upstream.conf
+# Docker
+docker-compose restart
 
-# ทดสอบ endpoints
-curl https://dashboard.yourdomain.com/health
-
-# ตรวจสอบ logs
-docker compose logs -f --tail 100
+# Apache/Nginx
+sudo systemctl restart apache2
+sudo systemctl restart nginx
 ```
 
-**ขั้นตอนที่ 3: Stop Green Environment**
+**ขั้นตอนที่ 3: Verify services**
 
 ```bash
-# Stop green containers
-docker compose -f docker-compose.green.yml down
+# Check admin panel
+curl -I https://yourdomain.com/admin/
 
-# เก็บ logs สำหรับ investigation
-docker compose -f docker-compose.green.yml logs > green_failure_logs.txt
+# Check webhook
+curl https://yourdomain.com/webhook.php
+
+# Check database
+mysql -u root -p telepharmacy -e "SELECT COUNT(*) FROM users;"
 ```
 
-### 10.3 Rollback Database
+### 10.3 Restore from Database Backup
 
-**ถ้ามีการเปลี่ยนแปลง Database Schema:**
+**ถ้ามี database corruption:**
 
 ```bash
-# Restore จาก backup
-docker compose exec mysql mysql -uroot -p telepharmacy < backup_before_deploy.sql
+# ตรวจสอบ backup files
+ls -lh backup_*.sql
 
-# หรือ rollback Prisma migrations
-docker compose exec backend npx prisma migrate resolve --rolled-back migration_name
+# Restore specific backup
+mysql -u root -p telepharmacy < backup_20260517_120000.sql
+
+# Verify restore
+mysql -u root -p telepharmacy -e "SELECT COUNT(*) FROM users;"
 ```
 
-**ตรวจสอบ Data Integrity:**
+**ตรวจสอบ Data Integrity หลังจาก Restore:**
 
 ```bash
-# รัน validation script
-docker compose exec backend npm run db:validate
-
-# ตรวจสอบ row counts
-docker compose exec mysql mysql -uroot -p -e "
+# ตรวจสอบจำนวน rows
+mysql -u root -p telepharmacy -e "
 SELECT 
-  'orders' as table_name, COUNT(*) as row_count FROM orders
+  'users' as table_name, COUNT(*) as row_count FROM users
 UNION ALL
-SELECT 'customers', COUNT(*) FROM users
+SELECT 'orders', COUNT(*) FROM orders
 UNION ALL
-SELECT 'payments', COUNT(*) FROM odoo_slip_uploads;
+SELECT 'messages', COUNT(*) FROM messages
+UNION ALL
+SELECT 'business_items', COUNT(*) FROM business_items;
 "
+
+# ตรวจสอบ referential integrity
+mysql -u root -p telepharmacy -e "
+SELECT COUNT(*) FROM orders o
+LEFT JOIN users u ON o.user_id = u.id
+WHERE u.id IS NULL;
+" # ควรคืน 0
 ```
 
-### 10.4 Rollback แบบ Manual
+### 10.4 Recovery Checklist
 
-**ถ้าไม่ได้ใช้ Blue-Green Deployment:**
+- [ ] ตรวจสอบ code version (`git log -1`)
+- [ ] ตรวจสอบ database integrity
+- [ ] ตรวจสอบ webhook receiver
+- [ ] ตรวจสอบ LINE channel connection
+- [ ] ตรวจสอบ admin login
+- [ ] ตรวจสอบ customer data
+- [ ] ตรวจสอบ logs ไม่มี errors
+- [ ] ประกาศให้ทีม admin ทราบ
+
+---
+
+## 11. Data Backup Strategy
+
+### 11.1 Backup Schedule
 
 ```bash
-# ขั้นตอนที่ 1: Stop services ปัจจุบัน
-docker compose down
+# Daily backup at 2:00 AM
+0 2 * * * mysqldump -u root -p telepharmacy > /backups/daily_$(date +\%Y\%m\%d).sql
 
-# ขั้นตอนที่ 2: Checkout version ก่อนหน้า
-git log --oneline  # ดู commit history
-git checkout <previous_commit_hash>
+# Weekly full backup on Sunday
+0 2 * * 0 tar -czf /backups/weekly_$(date +\%Y\%m\%d).tar.gz /home/zrismpsz/public_html/uploads/
 
-# ขั้นตอนที่ 3: Rebuild images
-docker compose build
+# Monthly archive
+0 2 1 * * tar -czf /backups/monthly_$(date +\%Y\%m).tar.gz /backups/daily_*.sql
+```
 
-# ขั้นตอนที่ 4: Restore database
-docker compose up -d mysql
-docker compose exec mysql mysql -uroot -p telepharmacy < backup_before_deploy.sql
+### 11.2 Verify Backups
 
-# ขั้นตอนที่ 5: Start services
-docker compose up -d
+```bash
+# ตรวจสอบขนาด backup
+ls -lh /backups/
+
+# ตรวจสอบ database backup สามารถ restore ได้
+mysqldump -u root -p telepharmacy | mysql -u root -p telepharmacy_test
+
+# ตรวจสอบ file integrity
+md5sum /backups/daily_*.sql
+```
+
+### 11.3 Store Backups Offsite
+
+```bash
+# Copy to external storage
+scp -r /backups/ remote_server:/backup-storage/
+
+# หรือ upload to cloud
+aws s3 sync /backups/ s3://your-bucket/backups/
+gsutil -m cp /backups/* gs://your-bucket/backups/
+```
+
+---
+
+## 12. Emergency Contacts & Escalation
+
+### 12.1 Crisis Response Team
+
+| Role | Name | Phone | Email |
+|------|------|-------|-------|
+| Technical Lead | [Name] | [Phone] | [Email] |
+| Database Admin | [Name] | [Phone] | [Email] |
+| DevOps Engineer | [Name] | [Phone] | [Email] |
+| Server Admin | [Name] | [Phone] | [Email] |
+
+### 12.2 Incident Report Template
+
+```
+[INCIDENT REPORT]
+Time: YYYY-MM-DD HH:MM:SS
+Severity: CRITICAL / HIGH / MEDIUM
+Component: [Admin/API/Database/Webhook/etc]
+Description: [What happened]
+Impact: [How many users affected]
+Actions Taken: [What was done to fix]
+Root Cause: [Why it happened]
+Prevention: [How to prevent next time]
+```
+
+---
+
+## 13. Maintenance Windows
+
+### 13.1 Schedule Maintenance
+
+```bash
+# Create maintenance mode
+touch /home/zrismpsz/public_html/.maintenance
+
+# Display maintenance page
+# (Configure in config/config.php or .htaccess)
+
+# Do maintenance work
+# ... deploy code, migrate database, etc ...
+
+# Resume service
+rm /home/zrismpsz/public_html/.maintenance
+```
+
+### 13.2 Announce Downtime
+
+- Email: Notify all customers 24 hours before
+- LINE: Send broadcast message
+- Website: Show maintenance banner
+- Slack: Notify team
 
 # ขั้นตอนที่ 6: Verify
 bash docker/scripts/smoke-tests.sh

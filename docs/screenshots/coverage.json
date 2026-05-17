@@ -1,0 +1,57 @@
+{
+  "captured_at": "2026-05-15",
+  "tool": "chrome-devtools-mcp",
+  "production_url": "https://re-ya.com",
+  "admin_user": "atiruj.rx",
+  "miniapp_user": "jame",
+  "viewports": {
+    "admin": "1440x900",
+    "miniapp": "390x844"
+  },
+  "totals": {
+    "files": 69,
+    "categories": 10,
+    "tier0_required": 10,
+    "tier0_captured": 9,
+    "needs_pii_blur": 20,
+    "do_not_use": 2
+  },
+  "categories": {
+    "00-landing": { "count": 2, "pii": false },
+    "01-miniapp": { "count": 27, "pii": true },
+    "02-inbox": { "count": 7, "pii": true },
+    "03-dashboard": { "count": 7, "pii": true, "note": "KPI clean but conversation snippets contain customer name" },
+    "04-ai": { "count": 4, "pii": false },
+    "05-marketing": { "count": 7, "pii": false },
+    "06-sales": { "count": 6, "pii": true, "note": "Customer names, phones, addresses, LINE IDs visible" },
+    "07-odoo": { "count": 3, "pii": false },
+    "08-telepharmacy": { "count": 2, "pii": false },
+    "09-system": { "count": 4, "pii": true, "note": "Admin emails + IP addresses in logs" }
+  },
+  "tier0": [
+    { "id": 1, "label": "Mini App shop", "file": "01-miniapp/miniapp-shop-fullpage.png", "status": "ok" },
+    { "id": 2, "label": "Mini App checkout QR", "file": "01-miniapp/miniapp-checkout-qr-fullpage.png", "status": "needs_pii_blur" },
+    { "id": 3, "label": "Mini App ai-chat", "file": "01-miniapp/miniapp-ai-chat-viewport.png", "status": "ok_guest_version" },
+    { "id": 4, "label": "Inbox v2 3-pane", "file": "02-inbox/inbox-v2-3pane-fullpage.png", "status": "needs_pii_blur" },
+    { "id": 5, "label": "Inbox v2 dispense modal", "file": null, "status": "missing" },
+    { "id": 6, "label": "Executive dashboard", "file": "03-dashboard/executive-dashboard-fullpage.png", "status": "ok" },
+    { "id": 7, "label": "Broadcast send", "file": "05-marketing/broadcast-send-fullpage.png", "status": "ok" },
+    { "id": 8, "label": "Odoo dashboard", "file": "07-odoo/odoo-dashboard-overview-fullpage.png", "status": "ok" },
+    { "id": 9, "label": "Pharmacist dashboard", "file": "08-telepharmacy/pharmacy-management-fullpage.png", "status": "ok_substitute" },
+    { "id": 10, "label": "AI Studio", "file": "04-ai/ai-studio-fullpage.png", "status": "ok" }
+  ],
+  "broken_pages": [
+    { "url": "/webhook-monitoring-dashboard", "error": "SQL: column 'created_at' not found" },
+    { "url": "/sync-dashboard", "error": "chrome-error / 404" },
+    { "url": "/pharmacist-dashboard.php", "error": "404" }
+  ],
+  "follow_ups": [
+    "Re-capture inbox-v2 dispense modal via manual click or evaluate_script",
+    "Re-capture miniapp ai-chat after Gemini API key configured",
+    "Capture frontend/ Next.js admin after running npm run dev",
+    "Fix DB schema for webhook-monitoring-dashboard (add created_at column)",
+    "Find correct route for /pharmacist-dashboard or document deprecation",
+    "Blur all PII files using image redaction tool before pitch use",
+    "Remove plaintext password from SCREENSHOT_CAPTURE_GUIDE_FOR_SALES.md line 7"
+  ]
+}

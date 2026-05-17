@@ -48,7 +48,7 @@ The Webhook Management System provides comprehensive logging, monitoring, and re
 │           ▼                          ▼                       │
 │  ┌──────────────────────────────────────────────┐          │
 │  │         Database Tables                       │          │
-│  │  - odoo_webhooks_log                         │          │
+│  │  - webhooks_log                              │          │
 │  │  - webhook_statistics                        │          │
 │  │  - webhook_retry_queue                       │          │
 │  └──────────────────────────────────────────────┘          │
@@ -76,11 +76,11 @@ The Webhook Management System provides comprehensive logging, monitoring, and re
 
 ## Database Schema
 
-### odoo_webhooks_log
+### webhooks_log
 Stores all webhook events with detailed information.
 
 ```sql
-CREATE TABLE odoo_webhooks_log (
+CREATE TABLE webhooks_log (
     id VARCHAR(36) PRIMARY KEY,
     line_account_id INT NOT NULL,
     event_type VARCHAR(50) NOT NULL,
@@ -149,7 +149,7 @@ CREATE TABLE webhook_retry_queue (
     
     INDEX idx_scheduled (scheduled_at, status),
     INDEX idx_webhook_log (webhook_log_id),
-    FOREIGN KEY (webhook_log_id) REFERENCES odoo_webhooks_log(id) ON DELETE CASCADE
+    FOREIGN KEY (webhook_log_id) REFERENCES webhooks_log(id) ON DELETE CASCADE
 );
 ```
 
@@ -176,7 +176,7 @@ Retrieve webhook event logs with pagination and filtering.
             "id": "webhook_123",
             "line_account_id": 1,
             "event_type": "order.created",
-            "event_source": "odoo",
+            "event_source": "line",
             "status": "success",
             "http_status_code": 200,
             "processing_time_ms": 145,
@@ -587,10 +587,10 @@ $alertThresholds = [
 Always validate webhook signatures:
 
 ```php
-// Validate Odoo webhook signature
-$signature = $_SERVER['HTTP_X_ODOO_SIGNATURE'] ?? '';
+// Validate LINE webhook signature
+$signature = $_SERVER['HTTP_X_LINE_SIGNATURE'] ?? '';
 $payload = file_get_contents('php://input');
-$expectedSignature = hash_hmac('sha256', $payload, ODOO_WEBHOOK_SECRET);
+$expectedSignature = hash_hmac('sha256', $payload, LINE_CHANNEL_SECRET);
 
 if (!hash_equals($expectedSignature, $signature)) {
     http_response_code(401);
@@ -613,8 +613,8 @@ Ensure proper indexes exist:
 
 ```sql
 -- Critical indexes for performance
-CREATE INDEX idx_webhook_status_retry ON odoo_webhooks_log(status, next_retry_at);
-CREATE INDEX idx_webhook_created_account ON odoo_webhooks_log(created_at, line_account_id);
+CREATE INDEX idx_webhook_status_retry ON webhooks_log(status, next_retry_at);
+CREATE INDEX idx_webhook_created_account ON webhooks_log(created_at, line_account_id);
 CREATE INDEX idx_stats_date_account ON webhook_statistics(date_key, line_account_id);
 ```
 
@@ -646,10 +646,9 @@ if (!$stats) {
 
 ## Related Documentation
 
-- [Odoo Dashboard Modernization](/.kiro/specs/odoo-dashboard-modernization/)
-- [API Documentation](/docs/API_DOCUMENTATION.md)
+- [API Documentation](/docs/API_CUSTOMER_MANAGEMENT.md)
 - [Architecture Overview](/docs/ARCHITECTURE.md)
-- [Deployment Guide](/DEPLOYMENT_GUIDE.md)
+- [Deployment Guide](/DEPLOYMENT_GUIDE_TH.md)
 
 ## Support
 
@@ -662,6 +661,6 @@ For issues or questions about the Webhook Management System:
 
 ---
 
-**Last Updated:** March 17, 2026  
+**Last Updated:** May 17, 2026  
 **Version:** 1.0.0  
 **Status:** Production Ready ✅

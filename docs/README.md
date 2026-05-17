@@ -202,15 +202,12 @@ Set up in Admin > AI Settings:
 ## 📖 Documentation
 
 - [Architecture](ARCHITECTURE.md)
-- [Webhook Management System](WEBHOOK_MANAGEMENT_SYSTEM.md) - **NEW** ✨
-- [Odoo Dashboard and BDO Matching Runbook](ODOO_DASHBOARD_BDO_RUNBOOK.md)
-- [Odoo Dashboard Analysis & Optimization](../ODOO_DASHBOARD_ANALYSIS.md) - Performance analysis for legacy PHP dashboard
-- [BDO Matching Workflow Design](reya_bdo_matching_workflow.md)
-- [Production Integration Summary](CNY_ODOO_PRODUCTION_INTEGRATION_SUMMARY.md)
-- [API Testing Guide](CNY_ODOO_PRODUCTION_API_TESTING.md)
+- [Webhook Management System](WEBHOOK_MANAGEMENT_SYSTEM.md)
 - [Master User Manual](MASTER_USER_MANUAL.md)
 - [Admin User Guide](ADMIN_USER_GUIDE.md)
 - [Customer User Guide](CUSTOMER_USER_GUIDE.md)
+- [Deployment Guide (Thai)](DEPLOYMENT_GUIDE_TH.md)
+- [API Documentation](API_CUSTOMER_MANAGEMENT.md)
 
 ---
 

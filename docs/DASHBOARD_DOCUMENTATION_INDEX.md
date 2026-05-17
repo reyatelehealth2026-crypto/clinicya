@@ -1,164 +1,116 @@
-# Odoo Dashboard Documentation Index
+# Documentation Index — LINE Telepharmacy CRM
 
-> Central index for all Odoo Dashboard related documentation
-
----
-
-## 📚 Documentation Overview
-
-This index provides quick access to all documentation related to the Odoo Dashboard system, including both the legacy PHP implementation and the modern Next.js rewrite.
+> Quick access to all documentation for the telepharmacy platform
 
 ---
 
-## 🔧 Legacy PHP Dashboard
+## 📚 Core Documentation
 
-### Code Review & Optimization
-
-| Document | Description | Language | Status |
-|----------|-------------|----------|--------|
-| **[Optimization Guide](../DASHBOARD_OPTIMIZATION_GUIDE.md)** | Complete implementation guide with fixes and optimizations | English | ✅ Ready |
-| **[Code Review](ODOO_DASHBOARD_REVIEW.md)** | Concise code review summary | Thai | ✅ Complete |
-| **[Detailed Analysis](../ODOO_DASHBOARD_ANALYSIS.md)** | Comprehensive technical analysis | English | ✅ Complete |
-| **[Changelog](../CHANGELOG_ODOO_DASHBOARD.md)** | Recent changes and improvements | English | ✅ Active |
-
-### Key Findings
-
-**Critical Issues (Must Fix)**:
-1. ❌ Matching section navigation bug - redirects instead of in-page navigation
-2. ⚠️ Missing search debouncing - excessive API calls
-
-**Performance Targets**:
-- Initial Load: 2.5s → 1.2s (52% improvement)
-- Section Switch: 1.2s → 0.8s (33% improvement)
-- Cache Hit Rate: ~70% → >85%
-
-### Quick Links
-
-- [Implementation Checklist](../DASHBOARD_OPTIMIZATION_GUIDE.md#-implementation-checklist)
-- [Critical Fixes](../DASHBOARD_OPTIMIZATION_GUIDE.md#-critical-issues-must-fix)
-- [Performance Optimizations](../DASHBOARD_OPTIMIZATION_GUIDE.md#-performance-optimizations)
-
----
-
-## 🚀 Modern Dashboard (Next.js Rewrite)
-
-### Project Documentation
+### System Overview
 
 | Document | Description | Status |
 |----------|-------------|--------|
-| **[Requirements](../.kiro/specs/odoo-dashboard-modernization/requirements.md)** | Functional and non-functional requirements | ✅ Complete |
-| **[Design](../.kiro/specs/odoo-dashboard-modernization/design.md)** | System architecture and design decisions | ✅ Complete |
-| **[Implementation Tasks](../.kiro/specs/odoo-dashboard-modernization/tasks.md)** | Detailed task breakdown with progress tracking | 🔄 In Progress |
+| **[README](README.md)** | Project overview and quick start | ✅ Current |
+| **[Architecture](ARCHITECTURE.md)** | System design and components | ✅ Current (2026-05-17) |
+| **[Master User Manual](MASTER_USER_MANUAL.md)** | Complete user guide | ✅ Current |
+
+### Admin Guides
+
+| Document | Description | Status |
+|----------|-------------|--------|
+| **[Admin User Guide](ADMIN_USER_GUIDE.md)** | Admin panel walkthrough for beginners | ✅ Current |
+| **[Customer User Guide](CUSTOMER_USER_GUIDE.md)** | Customer/user features guide | ✅ Current |
+| **[Webhook Management](WEBHOOK_MANAGEMENT_SYSTEM.md)** | Webhook logging and monitoring | ✅ Current (2026-05-17) |
 
 ### Technical Documentation
 
 | Document | Description | Status |
 |----------|-------------|--------|
-| **[Backend Database](../backend/DATABASE.md)** | Prisma schema and migration guide | ✅ Complete |
-| **[Backend Authentication](../backend/AUTHENTICATION_IMPLEMENTATION.md)** | JWT authentication system | ✅ Complete |
-| **[Core API Infrastructure](../backend/CORE_API_INFRASTRUCTURE.md)** | Fastify setup and middleware | ✅ Complete |
-
-### Implementation Status
-
-**Completed** (15/17 major tasks):
-- ✅ Project infrastructure and Docker setup
-- ✅ Database schema with performance tables
-- ✅ Authentication and authorization (JWT + RBAC)
-- ✅ Core API infrastructure (Fastify + Redis)
-- ✅ Dashboard overview with real-time updates
-- ✅ Order management system
-- ✅ Payment processing system
-- ✅ Webhook management and monitoring
-- ✅ Performance optimization
-- ✅ Security implementation
-- ✅ Testing framework
-- ✅ Deployment infrastructure
-- ✅ Migration system
-
-**In Progress** (2/17 tasks):
-- 🔄 Customer management system
-- 🔄 Final integration and testing
+| **[API Documentation](API_CUSTOMER_MANAGEMENT.md)** | Customer management API endpoints | ✅ Current |
+| **[Audit Logging](AUDIT_LOGGING.md)** | System audit and activity logs | ✅ Current |
+| **[Deployment Guide (Thai)](DEPLOYMENT_GUIDE_TH.md)** | Production deployment steps | ✅ Current (2026-05-17) |
 
 ---
 
-## 📊 Comparison: Legacy vs Modern
+## 🎯 Key Features
 
-| Aspect | Legacy PHP | Modern Next.js | Improvement |
-|--------|-----------|----------------|-------------|
-| **Lines of Code** | 4,700+ | ~2,000 (estimated) | 57% reduction |
-| **Load Time** | 2.5s | <1s | 60% faster |
-| **Error Rate** | 15% | <3% | 80% reduction |
-| **Type Safety** | None | Full TypeScript | ✅ |
-| **Testing** | Manual | Automated (93+ tests) | ✅ |
-| **Real-time** | Polling | WebSocket | ✅ |
-| **Caching** | Basic | Multi-layer | ✅ |
-| **Security** | Basic | Comprehensive | ✅ |
+### Pharmacy Operations
+- **Dispensing System** — Track medication dispensing and auto-refill reminders
+- **Refill Tracking** — 3-day threshold check, daily 9:00 AM reminder cron job
+- **Video Consultations** — WebRTC-enabled pharmacist video calls
 
----
+### E-commerce & Shop
+- **LINE Mini App** — Next.js 15 shop UI with cart, checkout, orders
+- **Product Management** — Catalog, inventory, business_items unified
+- **Loyalty Program** — Points earning, tier membership, redemptions
 
-## 🎯 Quick Start Guides
+### CRM & Communication
+- **Multi-Account LINE OA** — Support multiple LINE Official Accounts
+- **Real-time Chat Inbox** — 3-pane inbox with 200+ conversation pagination
+- **Broadcast & Drip Campaigns** — Scheduled messaging
+- **AI Assistant** — Gemini/OpenAI symptom assessment
 
-### For Legacy Dashboard Optimization
-
-1. Read [Code Review (Thai)](ODOO_DASHBOARD_REVIEW.md) for quick overview
-2. Review [Optimization Guide](../DASHBOARD_OPTIMIZATION_GUIDE.md) for implementation details
-3. Follow [Implementation Checklist](../DASHBOARD_OPTIMIZATION_GUIDE.md#-implementation-checklist)
-4. Test using [Testing Checklist](../DASHBOARD_OPTIMIZATION_GUIDE.md#testing-checklist)
-
-### For Modern Dashboard Development
-
-1. Review [Requirements](../.kiro/specs/odoo-dashboard-modernization/requirements.md)
-2. Understand [Design](../.kiro/specs/odoo-dashboard-modernization/design.md)
-3. Check [Implementation Tasks](../.kiro/specs/odoo-dashboard-modernization/tasks.md)
-4. Follow [Backend Database Guide](../backend/DATABASE.md) for setup
+### Admin Features
+- **Onboarding Wizard** — 7-step setup (shop, LINE, products, pharmacist)
+- **Help Hub** — Task-based tutorial system
+- **Admin Tour** — Shepherd-style guided overlay
+- **Dashboard** — Analytics, sales, customer segments
 
 ---
 
-## 🔗 Related Documentation
+## 📖 Getting Started
 
-### Deployment
-- [Production Deployment Guide (Thai)](DEPLOYMENT_GUIDE_TH.md)
-- [Docker Deployment](../DEPLOYMENT_GUIDE.md)
-- [Quick Deploy Guide](../QUICK_DEPLOY_GUIDE.md)
+### For New Admins
+1. Read [Admin User Guide](ADMIN_USER_GUIDE.md) intro section
+2. Complete [Onboarding Wizard](/onboarding/wizard.php)
+3. Explore [Help Hub](/help/) for task-based tutorials
 
-### API Documentation
-- [Customer Management API](API_CUSTOMER_MANAGEMENT.md)
-- [Webhook Management System](WEBHOOK_MANAGEMENT_SYSTEM.md)
-- [Audit Logging](AUDIT_LOGGING.md)
+### For Developers
+1. Review [Architecture](ARCHITECTURE.md) for system design
+2. Check [API Documentation](API_CUSTOMER_MANAGEMENT.md) for endpoints
+3. Follow [Deployment Guide](DEPLOYMENT_GUIDE_TH.md) for setup
 
-### Testing
-- [Backend Testing Guide](../backend/src/test/README.md)
-- [System Testing Report](../TASK_17_1_COMPREHENSIVE_SYSTEM_TESTING_REPORT.md)
-- [Security Testing Report](../TASK_17_2_SECURITY_PENETRATION_TESTING_REPORT.md)
-
----
-
-## 📞 Support & Contribution
-
-### Getting Help
-
-1. **Legacy Dashboard Issues**: Check [Optimization Guide](../DASHBOARD_OPTIMIZATION_GUIDE.md)
-2. **Modern Dashboard Issues**: Check [Implementation Tasks](../.kiro/specs/odoo-dashboard-modernization/tasks.md)
-3. **Deployment Issues**: Check [Deployment Guides](DEPLOYMENT_GUIDE_TH.md)
-
-### Contributing
-
-1. Review relevant documentation above
-2. Follow coding standards in [Tech Stack](../.kiro/steering/tech.md)
-3. Test changes thoroughly
-4. Update documentation as needed
+### For Shop Owners
+1. Read [Customer User Guide](CUSTOMER_USER_GUIDE.md)
+2. Use LINE Mini App at `/miniapp/` for shopping
+3. Check order history in customer profile
 
 ---
 
-## 📝 Document Status Legend
+## 🔗 Admin Tutorials
 
-- ✅ **Complete** - Document is finalized and up-to-date
-- 🔄 **In Progress** - Document is being actively updated
-- 📋 **Planned** - Document is planned but not yet started
-- ⚠️ **Needs Update** - Document exists but needs revision
+Detailed step-by-step guides in `docs/admin-tutorials/`:
+- `01-dispense.md` — Medication dispensing workflow
+- `02-video-call.md` — Pharmacist video consultations
+- `03-product.md` — Product management and inventory
+- `04-chat-tag.md` — Chat tagging and automation
+- `05-broadcast.md` — Broadcast campaigns
+- `06-membership.md` — Membership tier system
+- `07-refill.md` — Refill tracking workflow
 
 ---
 
-**Last Updated**: 2026-03-18  
-**Maintained By**: Development Team  
-**Version**: 1.0
+## 📸 Visual Resources
+
+Screenshots organized by feature in `docs/screenshots/`:
+- `00-landing/` — Public landing page
+- `01-miniapp/` — LINE Mini App shop UI
+- `02-inbox/` — Admin chat inbox
+- `03-dashboard/` — Analytics & reporting
+- `04-ai/` — AI chat and settings
+- `05-marketing/` — Broadcast, campaigns
+- `06-sales/` — Orders, inventory, POS
+- `08-telepharmacy/` — Video calls, consultations
+- `2026-05-17-onboarding/` — Latest onboarding flow
+
+---
+
+## 📝 Version Info
+
+**Last Updated**: May 17, 2026  
+**Version**: 3.0  
+**Status**: Production ✅
+
+---
+
+*For questions, check the relevant admin tutorial or contact support.*

@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clinicya — Full Preview & Demo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Sarabun', 'Inter', 'sans-serif'] },
+      colors: {
+        line: { DEFAULT: '#06C755', soft: '#E6F9EE', dark: '#04A647' },
+      },
+      boxShadow: {
+        soft: '0 4px 12px -2px rgba(15, 23, 42, 0.08)',
+        phone: '0 22px 60px -12px rgba(15, 23, 42, 0.35)',
+      }
+    }
+  }
+}
+</script>
+<style>
+  body { font-family: 'Sarabun', 'Inter', sans-serif; background: #f1f5f9; }
+  .phone { width: 360px; height: 760px; border-radius: 36px; background: #f5f5f5; overflow: hidden; position: relative; border: 8px solid #0f172a; box-shadow: 0 22px 60px -12px rgba(15,23,42,.35); }
+  .phone-notch { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 100px; height: 22px; background: #0f172a; border-radius: 0 0 14px 14px; z-index: 50; }
+  .phone-inner { height: 100%; overflow-y: auto; }
+  .desktop { width: 100%; max-width: 1280px; min-height: 720px; border-radius: 18px; background: white; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 22px 60px -12px rgba(15,23,42,.18); }
+  .tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; }
+  .badge-line { background: #E6F9EE; color: #04A647; }
+  .gradient-card { background: linear-gradient(135deg, #06C755 0%, #04A647 100%); }
+  .nav-pill { transition: all .2s; }
+  .nav-pill:hover { background: #f1f5f9; }
+  .grid-bg { background-image: linear-gradient(rgba(15,23,42,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,.04) 1px, transparent 1px); background-size: 24px 24px; }
+
+  /* ===== Pharmacist guide widget ===== */
+  @keyframes pharm-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  @keyframes pharm-pop { 0% { transform: scale(.6) translateY(8px); opacity: 0; } 100% { transform: scale(1) translateY(0); opacity: 1; } }
+  @keyframes pharm-wave { 0%,100% { transform: rotate(0deg); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(8deg); } }
+  @keyframes pharm-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(6,199,85,.55), 0 14px 32px -8px rgba(6,199,85,.45); } 50% { box-shadow: 0 0 0 14px rgba(6,199,85,0), 0 14px 32px -8px rgba(6,199,85,.45); } }
+  #pharm-avatar { animation: pharm-float 3s ease-in-out infinite, pharm-pulse 2.4s ease-out infinite; }
+  #pharm-bubble { animation: pharm-pop .35s ease-out; transform-origin: bottom right; }
+  #pharm-bubble::after { content: ''; position: absolute; right: 28px; bottom: -10px; width: 18px; height: 18px; background: white; border-right: 1px solid #d1fae5; border-bottom: 1px solid #d1fae5; transform: rotate(45deg); }
+  .pharm-mascot-card { background: radial-gradient(circle at 22% 18%, rgba(255,255,255,.95), rgba(236,253,245,.72) 34%, rgba(16,185,129,.28) 100%), linear-gradient(135deg, #06C755 0%, #047857 100%); }
+  .pharm-mascot-img { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .pharm-step-copy ul { margin-top: .55rem; display: grid; gap: .35rem; }
+  .pharm-step-copy li { position: relative; padding-left: 1rem; }
+  .pharm-step-copy li::before { content: ''; position: absolute; left: 0; top: .55em; width: .4rem; height: .4rem; border-radius: 9999px; background: #06C755; box-shadow: 0 0 0 3px #dcfce7; }
+  .pharm-step-copy strong { color: #065f46; font-weight: 800; }
+  .pharm-highlight-target { animation: pharm-target-glow 1.5s ease-out 1; position: relative; }
+  @keyframes pharm-target-glow { 0% { box-shadow: 0 0 0 0 rgba(6,199,85,.5); } 60% { box-shadow: 0 0 0 18px rgba(6,199,85,0); } 100% { box-shadow: 0 0 0 0 rgba(6,199,85,0); } }
+  .pharm-mascot-wave { animation: pharm-wave .8s ease-in-out 2; transform-origin: 70% 70%; }
+</style>
+</head>
+<body class="text-slate-800 antialiased">
+
+<header class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200">
+  <div class="mx-auto max-w-7xl px-6 py-3 flex items-center gap-4">
+    <div class="flex items-center gap-2">
+      <div class="h-9 w-9 rounded-xl bg-line text-white grid place-items-center font-bold">C</div>
+      <div>
+        <div class="text-sm font-extrabold tracking-tight text-slate-900">Clinicya — Reya Pharmacy CRM</div>
+        <div class="text-[11px] text-slate-500">LINE OA × Odoo × AI Telepharmacy — Full Preview</div>
+      </div>
+    </div>
+    <nav class="ml-auto hidden md:flex items-center gap-1 text-xs font-semibold">
+      <a href="#overview" class="nav-pill rounded-full px-3 py-1.5">ภาพรวม</a>
+      <a href="#mini-app" class="nav-pill rounded-full px-3 py-1.5">LINE Mini App</a>
+      <a href="#admin" class="nav-pill rounded-full px-3 py-1.5">Admin Panel</a>
+      <a href="#inbox" class="nav-pill rounded-full px-3 py-1.5">Inbox CRM</a>
+      <a href="#ai" class="nav-pill rounded-full px-3 py-1.5">AI</a>
+      <a href="#special" class="nav-pill rounded-full px-3 py-1.5">ฟีเจอร์พิเศษ</a>
+    </nav>
+  </div>
+</header>
+
+<section id="overview" class="mx-auto max-w-7xl px-6 py-10">
+  <div class="grid md:grid-cols-3 gap-6">
+    <div class="md:col-span-2 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-emerald-900 text-white p-8 relative overflow-hidden">
+      <div class="absolute -right-12 -top-12 w-64 h-64 rounded-full bg-line/30 blur-3xl"></div>
+      <div class="relative">
+        <span class="tag bg-white/10 text-white">PHP 8 · Next.js 15 · Fastify · Prisma · MySQL</span>
+        <h1 class="mt-3 text-3xl md:text-4xl font-extrabold leading-tight">ระบบ CRM ร้านยาแบบครบวงจร<br/>เชื่อม LINE OA × Odoo × AI</h1>
+        <p class="mt-3 text-white/80 max-w-2xl text-sm md:text-base">หน้านี้รวมตัวอย่างทุกหน้าและทุกฟังก์ชันของระบบ — ทั้ง LINE Mini App ฝั่งลูกค้า, แผง Admin/Inbox CRM ของเภสัชกร, การจ่ายยา, การยิงโบรดแคสต์, รวมถึง Odoo Dashboard และ AI Telepharmacy</p>
+        <div class="mt-5 flex flex-wrap gap-2 text-xs">
+          <span class="tag bg-white/10 text-white">17 LINE Mini App pages</span>
+          <span class="tag bg-white/10 text-white">100+ Admin pages</span>
+          <span class="tag bg-white/10 text-white">90+ REST endpoints</span>
+          <span class="tag bg-white/10 text-white">223 DB tables</span>
+          <span class="tag bg-white/10 text-white">Multi-tenant LINE OA</span>
+          <span class="tag bg-white/10 text-white">Blue-Green Deploy</span>
+        </div>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="rounded-2xl bg-white p-5 shadow-soft border border-slate-100"><div class="text-3xl font-extrabold">12,480</div><div class="text-xs text-slate-500 mt-1">สมาชิกเชื่อม LINE</div><div class="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-line" style="width:72%"></div></div></div>
+      <div class="rounded-2xl bg-white p-5 shadow-soft border border-slate-100"><div class="text-3xl font-extrabold">฿486K</div><div class="text-xs text-slate-500 mt-1">ยอดขายเดือนนี้</div><div class="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-amber-500" style="width:84%"></div></div></div>
+      <div class="rounded-2xl bg-white p-5 shadow-soft border border-slate-100"><div class="text-3xl font-extrabold">328</div><div class="text-xs text-slate-500 mt-1">คุยกับเภสัชวันนี้</div><div class="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-purple-500" style="width:48%"></div></div></div>
+      <div class="rounded-2xl bg-white p-5 shadow-soft border border-slate-100"><div class="text-3xl font-extrabold">98.4%</div><div class="text-xs text-slate-500 mt-1">Odoo sync uptime</div><div class="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-emerald-500" style="width:98%"></div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- === LINE MINI APP === -->
+<section id="mini-app" class="mx-auto max-w-7xl px-6 py-8">
+  <div class="flex items-end justify-between gap-4 mb-6">
+    <div>
+      <span class="tag badge-line">LIFF · Next.js 15</span>
+      <h2 class="mt-2 text-2xl md:text-3xl font-extrabold text-slate-900">LINE Mini App — ฝั่งลูกค้า</h2>
+      <p class="text-sm text-slate-500 mt-1">หน้าทั้งหมดของแอปในไลน์ พร้อม mock data สมจริง</p>
+    </div>
+  </div>
+  <div id="miniapp-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 justify-items-center">
+    <!-- pages injected below -->
+  </div>
+</section>
+
+<section id="admin" class="mx-auto max-w-7xl px-6 py-12 bg-white border-y border-slate-200">
+  <div class="mb-6">
+    <span class="tag bg-slate-900 text-white">PHP 8 · Admin Panel</span>
+    <h2 class="mt-2 text-2xl md:text-3xl font-extrabold text-slate-900">Admin Panel — ฝั่งเภสัชกร/ผู้ดูแล</h2>
+    <p class="text-sm text-slate-500 mt-1">แผงควบคุมหลักของระบบ — Dashboard, ผู้ใช้, สินค้า, แต้ม, ระบบจ่ายยา</p>
+  </div>
+  <div id="admin-grid" class="space-y-8"></div>
+</section>
+
+<section id="inbox" class="mx-auto max-w-7xl px-6 py-12">
+  <div class="mb-6">
+    <span class="tag bg-purple-100 text-purple-700">CRM HUD</span>
+    <h2 class="mt-2 text-2xl md:text-3xl font-extrabold text-slate-900">Inbox v2 — แชตแบบ Telepharmacy</h2>
+    <p class="text-sm text-slate-500 mt-1">3 คอลัมน์: คอนเวอร์เซชัน · แชต · CRM HUD + Dispense modal</p>
+  </div>
+  <div id="inbox-grid" class="space-y-8"></div>
+</section>
+
+<section id="ai" class="mx-auto max-w-7xl px-6 py-12">
+  <div class="mb-6">
+    <span class="tag bg-blue-100 text-blue-700">Gemini · OpenAI</span>
+    <h2 class="mt-2 text-2xl md:text-3xl font-extrabold text-slate-900">AI Studio & Telepharmacy</h2>
+    <p class="text-sm text-slate-500 mt-1">บอท AI ปรับ prompt ต่อ LINE OA, ประเมินอาการเบื้องต้น, ตรวจปฏิกิริยา</p>
+  </div>
+  <div id="ai-grid" class="space-y-8"></div>
+</section>
+
+<section id="special" class="mx-auto max-w-7xl px-6 py-12 bg-white border-y border-slate-200">
+  <div class="mb-6">
+    <span class="tag bg-amber-100 text-amber-700">Specialized Features</span>
+    <h2 class="mt-2 text-2xl md:text-3xl font-extrabold text-slate-900">ฟีเจอร์เฉพาะทาง</h2>
+    <p class="text-sm text-slate-500 mt-1">ระบบจ่ายยา, POS, WMS Put-Away, Rich Menu, Broadcast, แต้มสะสม</p>
+  </div>
+  <div id="special-grid" class="space-y-8"></div>
+</section>
+
+<footer class="mx-auto max-w-7xl px-6 py-12 text-center">
+  <div class="text-xs text-slate-400">© Reya Pharmacy CRM · Demo preview · ข้อมูลตัวอย่างทั้งหมดเป็น synthetic data</div>
+</footer>
+
+<script>
+/* ========= helpers ========= */
+function phone(title, sub, inner){
+  return `<div class="flex flex-col items-center gap-3"><div class="phone"><div class="phone-notch"></div><div class="phone-inner bg-white">${inner}</div></div><div class="text-center"><div class="font-bold text-slate-900">${title}</div><div class="text-xs text-slate-500 max-w-[320px]">${sub}</div></div></div>`;
+}
+function bottomNav(active){
+  const items = [['🏠','หน้าหลัก'],['🛒','ช้อป'],['💬','แชต'],['🔔','แจ้งเตือน'],['⚙','เมนู']];
+  return `<div class="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-5 py-2 text-[10px] text-center">${items.map((it,i)=>`<div class="${i===active?'text-line font-bold':'text-slate-500'}">${it[0]}<br/>${it[1]}</div>`).join('')}</div>`;
+}
+function phoneTopBar(title){ return `<div class="bg-white px-4 pt-8 pb-3 flex items-center gap-2 border-b sticky top-0 z-10"><div class="h-9 w-9 rounded-full bg-slate-100 grid place-items-center text-slate-600">${i('chevron-left',18)}</div><div class="text-base font-bold">${title}</div></div>`; }
+
+/* ========= Premium icon + artwork helpers ========= */
+function i(name, size=16, cls=''){
+  // Render a Lucide icon via data-lucide; lucide.createIcons() will replace it.
+  return `<i data-lucide="${name}" class="${cls}" style="width:${size}px;height:${size}px;display:inline-block;stroke-width:1.75;"></i>`;
+}
+const PRODUCT_GRADIENTS = {
+  mint:    ['#d1fae5','#a7f3d0','#10b981','#047857'],
+  amber:   ['#fef3c7','#fde68a','#f59e0b','#b45309'],
+  lavender:['#ede9fe','#ddd6fe','#8b5cf6','#5b21b6'],
+  sky:     ['#dbeafe','#bfdbfe','#3b82f6','#1d4ed8'],
+  rose:    ['#fce7f3','#fbcfe8','#ec4899','#9d174d'],
+  coral:   ['#ffedd5','#fed7aa','#f97316','#9a3412'],
+  slate:   ['#f1f5f9','#e2e8f0','#64748b','#1e293b'],
+};
+function productArt(palette='mint', kind='capsule', extraClass=''){
+  const c = PRODUCT_GRADIENTS[palette] || PRODUCT_GRADIENTS.mint;
+  let art = '';
+  if (kind === 'capsule') {
+    art = `<svg width="56" height="56" viewBox="0 0 80 80" fill="none">
+      <defs>
+        <linearGradient id="cap-${palette}-top" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="white" stop-opacity=".98"/><stop offset="1" stop-color="white" stop-opacity=".88"/></linearGradient>
+        <linearGradient id="cap-${palette}-bot" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${c[2]}"/><stop offset="1" stop-color="${c[3]}"/></linearGradient>
+      </defs>
+      <g transform="rotate(-30 40 40)">
+        <rect x="16" y="14" width="48" height="26" rx="13" fill="url(#cap-${palette}-top)" stroke="${c[3]}" stroke-opacity=".18"/>
+        <rect x="16" y="40" width="48" height="26" rx="13" fill="url(#cap-${palette}-bot)"/>
+        <rect x="20" y="20" width="10" height="3" rx="1.5" fill="white" fill-opacity=".55"/>
+      </g>
+    </svg>`;
+  } else if (kind === 'bottle') {
+    art = `<svg width="48" height="60" viewBox="0 0 60 80" fill="none">
+      <defs><linearGradient id="bot-${palette}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${c[2]}"/><stop offset="1" stop-color="${c[3]}"/></linearGradient></defs>
+      <rect x="22" y="6" width="16" height="8" rx="2" fill="${c[3]}" fill-opacity=".55"/>
+      <path d="M14 22 Q14 16 22 16 L38 16 Q46 16 46 22 L46 70 Q46 76 40 76 L20 76 Q14 76 14 70 Z" fill="url(#bot-${palette})"/>
+      <rect x="18" y="30" width="24" height="20" rx="2" fill="white" fill-opacity=".88"/>
+      <line x1="22" y1="38" x2="38" y2="38" stroke="${c[3]}" stroke-opacity=".4" stroke-width="1.2"/>
+      <line x1="22" y1="42" x2="34" y2="42" stroke="${c[3]}" stroke-opacity=".25" stroke-width="1.2"/>
+    </svg>`;
+  } else if (kind === 'leaf') {
+    art = `<svg width="54" height="54" viewBox="0 0 80 80" fill="none">
+      <defs><linearGradient id="lf-${palette}" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="${c[2]}"/><stop offset="1" stop-color="${c[3]}"/></linearGradient></defs>
+      <path d="M14 60 C14 30 30 14 60 14 C60 44 44 60 14 60 Z" fill="url(#lf-${palette})"/>
+      <path d="M14 60 L60 14" stroke="white" stroke-opacity=".6" stroke-width="1.4"/>
+    </svg>`;
+  } else if (kind === 'patch') {
+    art = `<svg width="56" height="36" viewBox="0 0 80 60" fill="none">
+      <defs><linearGradient id="pt-${palette}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${c[2]}"/><stop offset="1" stop-color="${c[3]}"/></linearGradient></defs>
+      <rect x="6" y="14" width="68" height="32" rx="6" fill="url(#pt-${palette})"/>
+      <circle cx="40" cy="30" r="8" fill="white" fill-opacity=".88"/>
+      ${[12,24,52,64].map(x=>[16,32].map(y=>`<circle cx="${x}" cy="${y}" r="1.6" fill="white" fill-opacity=".55"/>`).join('')).join('')}
+    </svg>`;
+  }
+  return `<div class="relative h-full w-full ${extraClass}" style="background: linear-gradient(135deg, ${c[0]} 0%, ${c[1]} 100%);">
+    <div class="absolute inset-0 grid place-items-center">${art}</div>
+    <div class="absolute inset-0" style="background: radial-gradient(circle at 30% 25%, rgba(255,255,255,.55), transparent 55%);"></div>
+  </div>`;
+}
+// quick action tile (4-grid on Home)
+function quickAction(name, label, palette){
+  const c = PRODUCT_GRADIENTS[palette] || PRODUCT_GRADIENTS.mint;
+  return `<div class="flex flex-col items-center gap-1.5"><div class="h-11 w-11 rounded-2xl grid place-items-center" style="background: linear-gradient(135deg, ${c[0]} 0%, ${c[1]} 100%); color: ${c[3]}">${i(name,20)}</div><div class="text-[10px] mt-0.5 font-medium text-slate-600">${label}</div></div>`;
+}
+// bottom nav
+function bottomNav(active){
+  const items = [['home','หน้าหลัก'],['shopping-bag','ช้อป'],['message-circle','แชต'],['bell','แจ้งเตือน'],['menu','เมนู']];
+  return `<div class="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 grid grid-cols-5 py-2 text-[10px] text-center">${items.map((it,idx)=>`<div class="flex flex-col items-center gap-0.5 ${idx===active?'text-line font-bold':'text-slate-400'}">${i(it[0],18)}<span>${it[1]}</span></div>`).join('')}</div>`;
+}
+// admin sidebar (wide, with labels)
+const ADMIN_MENU = [
+  ['layout-dashboard','แดชบอร์ด'],
+  ['message-circle','กล่องข้อความ'],
+  ['package','คำสั่งซื้อ'],
+  ['users','สมาชิก'],
+  ['pill','คลังสินค้า'],
+  ['stethoscope','จ่ายยา'],
+  ['megaphone','โบรดแคสต์'],
+  ['gift','แต้ม/รางวัล'],
+  ['sparkles','AI Studio'],
+  ['settings','ตั้งค่า']
+];
+function adminSidebar(active=0, extra=[]){
+  const items = ADMIN_MENU.concat(extra);
+  return `<aside class="w-56 bg-slate-900 text-white p-4 shrink-0 overflow-y-auto">
+    <div class="flex items-center gap-2 mb-4"><div class="h-9 w-9 rounded-xl bg-line grid place-items-center font-extrabold">R</div><div><div class="text-sm font-extrabold leading-tight">เรยา CRM</div><div class="text-[9px] text-slate-400 tracking-widest">PHARMACY OS</div></div></div>
+    <div class="text-[9px] uppercase tracking-widest text-slate-500 mt-2 mb-1.5">หลัก</div>
+    ${items.map((it,idx)=>`<a class="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[12px] mb-0.5 ${idx===active?'bg-line/20 text-line font-bold':'text-slate-300 hover:bg-slate-800'}">${i(it[0],16)}<span>${it[1]}</span></a>`).join('')}
+    <div class="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-500">
+      <div class="flex items-center gap-2"><div class="h-7 w-7 rounded-full bg-amber-500 grid place-items-center text-[10px] font-bold text-white">ภ</div><div><div class="text-slate-300 font-bold text-[11px]">ภก.นิรันดร์</div><div>super_admin</div></div></div>
+    </div>
+  </aside>`;
+}
+// compact icon-only sidebar
+function adminSidebarCompact(active=0){
+  const icons = ADMIN_MENU.map(m=>m[0]);
+  return `<aside class="w-16 bg-slate-900 text-white shrink-0 flex flex-col items-center py-4 gap-2">
+    <div class="h-10 w-10 rounded-xl bg-line grid place-items-center font-extrabold mb-2">R</div>
+    ${icons.map((ic,idx)=>`<a class="h-10 w-10 rounded-xl ${idx===active?'bg-line/20 text-line':'text-slate-400 hover:bg-slate-800'} grid place-items-center" title="${ADMIN_MENU[idx][1]}">${i(ic,18)}</a>`).join('')}
+  </aside>`;
+}
+// premium product image for POS-like tiles (smaller variant)
+function productMini(palette, kind='capsule'){
+  return `<div class="h-12 w-12 rounded-xl overflow-hidden mx-auto">${productArt(palette,kind)}</div>`;
+}
+
+/* ========= MINI APP PAGES ========= */
+const miniapp = [];
+
+// 1. HOME
+miniapp.push(phone('1. Home', '/ — แบนเนอร์, ลัด, สินค้าแนะนำ, ออเดอร์', `
+  <div class="bg-white px-4 pt-8 pb-3 flex items-center gap-3">
+    <div class="h-10 w-10 rounded-full gradient-card text-white grid place-items-center text-sm font-bold shadow-soft">ส</div>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm font-bold text-slate-900 truncate">สมหญิง ใจดี</div>
+      <div class="flex items-center gap-1.5 mt-0.5 text-[11px]"><span class="text-amber-600 font-semibold inline-flex items-center gap-1">${i('star',11)} Gold</span><span class="text-slate-300">·</span><span class="font-bold text-slate-700">2,450 แต้ม</span></div>
+    </div>
+    <button class="h-9 w-9 rounded-full bg-slate-50 grid place-items-center text-slate-500">${i('bell',18)}</button>
+  </div>
+  <div class="px-3 pt-3"><div class="h-32 rounded-2xl gradient-card text-white p-4 flex flex-col justify-between relative overflow-hidden"><div class="absolute -right-6 -bottom-6 opacity-30">${productArt('mint','capsule')}</div><div class="relative"><div class="text-[10px] font-bold uppercase tracking-wider opacity-80">ลด 30%</div><div class="text-sm font-extrabold mt-0.5">วิตามินรวม Centrum ครบสารอาหาร</div></div><div class="relative flex items-center justify-between text-[11px]"><span class="opacity-90">หมดเขต 31 ธ.ค.</span><span class="bg-white text-line rounded-full px-2 py-0.5 font-bold">ซื้อเลย</span></div></div></div>
+  <div class="mx-3 mt-3 bg-white rounded-2xl p-3 grid grid-cols-4 gap-2 text-center">
+    ${quickAction('user-round','โปรไฟล์','sky')}
+    ${quickAction('gift','แลกแต้ม','amber')}
+    ${quickAction('package','ออเดอร์','lavender')}
+    ${quickAction('store','ร้านยา','mint')}
+  </div>
+  <div class="mx-3 mt-3 bg-white rounded-2xl p-3"><div class="flex items-center justify-between mb-2"><div class="text-sm font-bold">สินค้าแนะนำ</div><span class="text-[11px] text-line font-semibold inline-flex items-center gap-0.5">ดูทั้งหมด ${i('chevron-right',11)}</span></div><div class="grid grid-cols-2 gap-2"><div class="rounded-xl border border-slate-100 overflow-hidden"><div class="h-20">${productArt('mint','capsule')}</div><div class="p-2"><div class="text-[11px] font-semibold leading-tight line-clamp-2">พาราเซตามอล 500mg</div><div class="text-[11px] font-bold text-line mt-1">฿35</div></div></div><div class="rounded-xl border border-slate-100 overflow-hidden"><div class="h-20">${productArt('amber','bottle')}</div><div class="p-2"><div class="text-[11px] font-semibold leading-tight line-clamp-2">วิตามินซี 1000mg</div><div class="text-[11px] font-bold text-line mt-1">฿189</div></div></div></div></div>
+  <div class="mx-3 mt-3 bg-white rounded-2xl p-3"><div class="text-sm font-bold mb-2">ออเดอร์ล่าสุด</div>
+    <div class="flex items-center gap-2 py-1.5"><div class="h-9 w-9 rounded-xl bg-amber-50 text-amber-600 grid place-items-center">${i('clock',16)}</div><div class="flex-1 min-w-0"><div class="text-[12px] font-semibold truncate">#REYA-2026-0427</div><div class="text-[10px] text-slate-500">รอชำระเงิน · ฿520</div></div><span class="text-[10px] tag bg-amber-50 text-amber-700">รอจ่าย</span></div>
+    <div class="flex items-center gap-2 py-1.5 border-t border-slate-50"><div class="h-9 w-9 rounded-xl bg-line-soft text-line grid place-items-center">${i('check-circle-2',16)}</div><div class="flex-1 min-w-0"><div class="text-[12px] font-semibold truncate">#REYA-2026-0418</div><div class="text-[10px] text-slate-500">จัดส่งแล้ว · ฿1,240</div></div><span class="text-[10px] tag badge-line">สำเร็จ</span></div>
+  </div>
+  <div class="h-16"></div>
+  ${bottomNav(0)}
+`));
+
+// 2. SHOP
+miniapp.push(phone('2. Shop', '/shop — ค้นหา หมวด สินค้า', `
+  <div class="px-4 pt-8 pb-3 border-b border-slate-100">
+    <div class="flex items-center gap-2">
+      <div class="h-10 w-10 rounded-2xl gradient-card text-white grid place-items-center text-sm font-bold shadow-soft">ร</div>
+      <div class="flex-1"><div class="text-[10px] font-bold tracking-widest text-line">REYA SHOP</div><div class="text-sm font-bold">ร้านยาเรยา สาขาสุขุมวิท</div></div>
+      <div class="relative h-10 w-10 rounded-2xl border border-slate-200 grid place-items-center text-slate-600">${i('shopping-cart',18)}<span class="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-line text-white text-[10px] font-bold grid place-items-center">3</span></div>
+    </div>
+    <div class="mt-3 flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2 text-xs text-slate-500">${i('search',14,'text-slate-400')}<span>ค้นหายา/วิตามิน/ของใช้...</span></div>
+  </div>
+  <div class="px-4 py-3 flex gap-2 overflow-x-auto whitespace-nowrap">
+    ${[['ทั้งหมด','pill','mint',true],['ลดไข้','thermometer','rose',false],['หวัด','wind','sky',false],['วิตามิน','heart-pulse','amber',false],['เด็ก','baby','lavender',false]].map(cat=>{const cl=PRODUCT_GRADIENTS[cat[2]];return `<div class="rounded-2xl border-2 ${cat[3]?'border-line':'border-slate-200'} ${cat[3]?'bg-line-soft':'bg-white'} px-3 py-2 text-center min-w-[72px]"><div class="h-9 w-9 mx-auto rounded-full grid place-items-center" style="background: linear-gradient(135deg, ${cl[0]} 0%, ${cl[1]} 100%); color: ${cl[3]}">${i(cat[1],16)}</div><div class="text-[10px] font-bold ${cat[3]?'text-line':'text-slate-600'} mt-1">${cat[0]}</div></div>`}).join('')}
+  </div>
+  <div class="px-4 flex gap-2 text-[11px]">
+    <span class="tag bg-slate-900 text-white px-3 py-1.5 rounded-full">ล่าสุด</span>
+    <span class="tag bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full inline-flex items-center gap-1">${i('flame',11,'text-orange-500')} โปรแรง</span>
+    <span class="tag bg-white border border-slate-200 text-slate-600 px-3 py-1.5 rounded-full">ราคาต่ำ</span>
+  </div>
+  <div class="px-3 py-3 grid grid-cols-2 gap-2">
+    ${[['mint','capsule','พาราเซตามอล Tylenol 500mg','49','70','-30%','4.9','1.2k'],
+       ['amber','bottle','วิตามินซี Blackmores 1000mg','189','','','4.8','856'],
+       ['sky','patch','พลาสเตอร์ Hansaplast Aqua','79','','','4.7','342'],
+       ['lavender','leaf','ฟ้าทะลายโจร 60 cap','120','','','4.6','218']].map(p=>`
+    <div class="rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+      <div class="relative h-28">${productArt(p[0],p[1])}${p[5]?`<span class="absolute top-2 left-2 tag bg-red-500 text-white px-1.5 py-0.5 text-[9px] z-10">${p[5]}</span>`:''}<button class="absolute top-2 right-2 h-6 w-6 rounded-full bg-white/90 backdrop-blur grid place-items-center text-slate-400 z-10">${i('heart',12)}</button></div>
+      <div class="p-2.5"><div class="text-[11px] font-semibold leading-tight line-clamp-2">${p[2]}</div><div class="mt-1 flex items-baseline gap-1"><span class="text-sm font-extrabold text-line">฿${p[3]}</span>${p[4]?`<span class="text-[10px] text-slate-400 line-through">฿${p[4]}</span>`:''}</div><div class="text-[10px] text-slate-400 mt-0.5 inline-flex items-center gap-0.5">${i('star',10,'text-amber-400 fill-amber-400')} ${p[6]} · ขาย ${p[7]}</div></div>
+    </div>`).join('')}
+  </div>
+  <div class="h-12"></div>
+`));
+
+// 3. PRODUCT DETAIL
+miniapp.push(phone('3. Product Detail', '/shop/product — แกลเลอรี โปร เพิ่มตะกร้า', `
+  <div class="relative h-72">
+    ${productArt('mint','capsule')}
+    <div class="absolute top-10 left-4 h-9 w-9 rounded-full bg-white/95 backdrop-blur grid place-items-center text-slate-700 shadow-soft z-10">${i('chevron-left',18)}</div>
+    <button class="absolute top-10 right-4 h-9 w-9 rounded-full bg-white/95 backdrop-blur grid place-items-center text-rose-500 shadow-soft z-10">${i('heart',18)}</button>
+    <div class="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1 z-10"><span class="h-1.5 w-6 rounded-full bg-line"></span><span class="h-1.5 w-1.5 rounded-full bg-white/60"></span><span class="h-1.5 w-1.5 rounded-full bg-white/60"></span></div>
+  </div>
+  <div class="px-4 py-4">
+    <div class="flex items-center gap-2"><span class="tag bg-red-100 text-red-700 px-2 py-0.5">-30%</span><span class="tag bg-blue-100 text-blue-700 px-2 py-0.5 inline-flex items-center gap-1">${i('trending-up',10)} ยอดนิยม</span></div>
+    <h3 class="mt-2 text-lg font-extrabold leading-tight">พาราเซตามอล Tylenol 500mg<br/><span class="text-xs font-medium text-slate-500">บรรจุ 100 เม็ด/กล่อง</span></h3>
+    <div class="mt-3 flex items-baseline gap-2"><span class="text-2xl font-extrabold text-line">฿49</span><span class="text-sm text-slate-400 line-through">฿70</span><span class="ml-auto text-[11px] text-slate-500">คงเหลือ 248</span></div>
+    <div class="mt-3 flex items-center gap-1 text-[11px] text-amber-600">${i('star',12,'fill-amber-400 text-amber-400')}${i('star',12,'fill-amber-400 text-amber-400')}${i('star',12,'fill-amber-400 text-amber-400')}${i('star',12,'fill-amber-400 text-amber-400')}${i('star',12,'fill-amber-400 text-amber-400')}<span class="ml-1 font-semibold">4.9</span><span class="text-slate-400">· 1,247 รีวิว</span></div>
+    <div class="mt-3 rounded-2xl bg-amber-50 border border-amber-100 p-3 text-[11px] text-amber-800 flex items-start gap-2">${i('alert-triangle',14,'text-amber-600 shrink-0 mt-0.5')}<span>ปรึกษาเภสัชกรก่อนใช้หากมีโรคตับ/ไต</span></div>
+    <div class="mt-4 text-sm font-bold">รายละเอียดยา</div>
+    <ul class="mt-2 text-[12px] text-slate-600 space-y-1.5 leading-relaxed">
+      <li class="flex gap-2">${i('check',12,'text-line shrink-0 mt-0.5')}<span>สรรพคุณ: ลดไข้ บรรเทาปวด</span></li>
+      <li class="flex gap-2">${i('check',12,'text-line shrink-0 mt-0.5')}<span>ขนาดรับประทาน: 1-2 เม็ด ทุก 4-6 ชม.</span></li>
+      <li class="flex gap-2">${i('check',12,'text-line shrink-0 mt-0.5')}<span>ห้ามใช้เกิน 4,000 mg/วัน</span></li>
+      <li class="flex gap-2">${i('check',12,'text-line shrink-0 mt-0.5')}<span>เก็บที่อุณหภูมิห้อง พ้นแสง</span></li>
+    </ul>
+    <div class="h-24"></div>
+  </div>
+  <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 flex items-center gap-3">
+    <div class="flex items-center rounded-full border border-slate-200"><button class="h-8 w-8 grid place-items-center text-slate-500">${i('minus',14)}</button><span class="px-2 font-bold text-sm">1</span><button class="h-8 w-8 grid place-items-center text-slate-500">${i('plus',14)}</button></div>
+    <button class="flex-1 h-11 rounded-full bg-line text-white font-bold text-sm inline-flex items-center justify-center gap-2">${i('shopping-cart',16)} เพิ่มลงตะกร้า · ฿49</button>
+  </div>
+`));
+
+// 4. CART
+miniapp.push(phone('4. Cart', '/cart — เลือก/แก้จำนวน, แต้ม, โค้ด', `
+  ${phoneTopBar('ตะกร้าของฉัน (3)')}
+  <div class="p-3 space-y-2 bg-slate-50">
+    ${[['mint','capsule','พาราเซตามอล 500mg','49','2',true],
+       ['amber','bottle','วิตามินซี 1000mg Blackmores','189','1',true],
+       ['lavender','leaf','ฟ้าทะลายโจร 60 cap','120','1',false]].map(it=>`
+    <div class="bg-white rounded-2xl p-3 flex gap-3 items-center shadow-sm">
+      <div class="h-6 w-6 rounded-full ${it[5]?'border-2 border-line bg-line grid place-items-center text-white':'border-2 border-slate-200'} text-[10px]">${it[5]?i('check',12,'text-white'):''}</div>
+      <div class="h-16 w-16 rounded-xl overflow-hidden">${productArt(it[0],it[1])}</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[12px] font-semibold line-clamp-2">${it[2]}</div>
+        <div class="text-[13px] font-bold text-line mt-1">฿${it[3]}</div>
+        <div class="mt-1 inline-flex items-center rounded-full border border-slate-200 text-xs"><button class="h-6 w-6 grid place-items-center text-slate-500">${i('minus',12)}</button><span class="px-2 font-bold">${it[4]}</span><button class="h-6 w-6 grid place-items-center text-slate-500">${i('plus',12)}</button></div>
+      </div>
+      <button class="text-slate-300 hover:text-red-500">${i('trash-2',16)}</button>
+    </div>`).join('')}
+    <div class="bg-line-soft rounded-2xl p-3 text-[12px] text-line font-semibold flex items-center gap-2">${i('gift',16,'text-line')}<span>ใช้แต้ม 200 → ลด ฿20</span><span class="ml-auto">${i('chevron-right',14)}</span></div>
+    <div class="bg-white rounded-2xl p-3 text-[12px] text-slate-700 flex items-center gap-2">${i('tag',16,'text-slate-500')}<span>ใส่โค้ดส่วนลด</span><span class="ml-auto text-slate-300">${i('chevron-right',14)}</span></div>
+  </div>
+  <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3">
+    <div class="flex justify-between text-xs"><span class="text-slate-500">ยอดรวม (3 ชิ้น)</span><span class="font-bold">฿287</span></div>
+    <div class="flex justify-between text-xs mt-1"><span class="text-slate-500">ค่าจัดส่ง</span><span class="font-bold text-line">ฟรี</span></div>
+    <button class="mt-2 w-full h-11 rounded-full bg-line text-white font-bold text-sm inline-flex items-center justify-center gap-2">ดำเนินการสั่งซื้อ ${i('arrow-right',14)} ฿287</button>
+  </div>
+`));
+
+// 6. ORDERS LIST
+miniapp.push(phone('6. Orders', '/orders — รายการคำสั่งซื้อทั้งหมด', `
+  ${phoneTopBar('คำสั่งซื้อของฉัน')}
+  <div class="px-4 py-2 flex gap-2 text-[11px] bg-white border-b overflow-x-auto whitespace-nowrap">
+    <span class="tag bg-line text-white px-3 py-1.5 rounded-full">ทั้งหมด · 12</span>
+    <span class="tag bg-slate-100 text-slate-700 px-3 py-1.5 rounded-full">รอชำระ · 2</span>
+    <span class="tag bg-slate-100 text-slate-700 px-3 py-1.5 rounded-full">กำลังจัดส่ง · 1</span>
+    <span class="tag bg-slate-100 text-slate-700 px-3 py-1.5 rounded-full">สำเร็จ · 8</span>
+    <span class="tag bg-slate-100 text-slate-700 px-3 py-1.5 rounded-full">ยกเลิก · 1</span>
+  </div>
+  <div class="p-3 space-y-2 bg-slate-50">
+    ${[['REYA-2026-0427','รอชำระเงิน','520','3','amber','clock'],
+       ['REYA-2026-0425','กำลังจัดส่ง','1240','5','blue','truck'],
+       ['REYA-2026-0418','สำเร็จ','287','3','line','check-circle-2'],
+       ['REYA-2026-0411','สำเร็จ','892','7','line','check-circle-2'],
+       ['REYA-2026-0402','ยกเลิก','450','2','red','x-circle']].map(o=>`
+    <div class="bg-white rounded-2xl p-3 shadow-sm">
+      <div class="flex items-center justify-between"><span class="text-[11px] font-mono text-slate-500">#${o[0]}</span><span class="tag bg-${o[4]}-50 text-${o[4]}-700 inline-flex items-center gap-1">${i(o[5],11)} ${o[1]}</span></div>
+      <div class="mt-2 flex items-center gap-2"><div class="h-12 w-12 rounded-lg overflow-hidden">${productArt('mint','capsule')}</div><div class="flex-1 min-w-0"><div class="text-[12px] font-semibold truncate">พาราเซตามอล + อีก ${parseInt(o[3])-1} รายการ</div><div class="text-[11px] text-slate-500">${o[3]} ชิ้น · 27 พ.ย. 2026</div></div><div class="text-right"><div class="text-sm font-extrabold text-line">฿${o[2]}</div></div></div>
+      <div class="mt-2 pt-2 border-t border-slate-50 flex gap-2 text-[11px]"><button class="flex-1 h-7 rounded-full border border-slate-200 font-semibold">ดูรายละเอียด</button>${o[1]==='รอชำระเงิน'?'<button class="flex-1 h-7 rounded-full bg-line text-white font-semibold">จ่ายเลย</button>':''}${o[1]==='สำเร็จ'?'<button class="flex-1 h-7 rounded-full border border-line text-line font-semibold">ซื้อซ้ำ</button>':''}</div>
+    </div>`).join('')}
+    <div class="h-12"></div>
+  </div>
+  ${bottomNav(-1)}
+`));
+
+// 7. ORDER DETAIL
+miniapp.push(phone('7. Order Detail', '/order — สถานะ ไทม์ไลน์ อัปสลิป', `
+  ${phoneTopBar('รายละเอียดออเดอร์')}
+  <div class="p-3 space-y-3 bg-slate-50">
+    <div class="bg-white rounded-2xl p-3">
+      <div class="flex items-center justify-between"><span class="text-[11px] font-mono text-slate-500">#REYA-2026-0427</span><span class="tag bg-amber-50 text-amber-700">⏱ รอชำระเงิน</span></div>
+      <div class="mt-3 space-y-2">
+        <div class="flex items-center gap-2"><div class="h-7 w-7 rounded-full bg-line text-white grid place-items-center text-xs">1</div><div class="flex-1"><div class="text-[12px] font-semibold">สั่งซื้อแล้ว</div><div class="text-[10px] text-slate-500">27 พ.ย. 14:32</div></div></div>
+        <div class="flex items-center gap-2"><div class="h-7 w-7 rounded-full bg-amber-100 text-amber-600 grid place-items-center text-xs">2</div><div class="flex-1"><div class="text-[12px] font-semibold text-amber-700">รอแนบสลิป</div><div class="text-[10px] text-slate-500">กรุณาชำระภายใน 24 ชม.</div></div></div>
+        <div class="flex items-center gap-2 opacity-40"><div class="h-7 w-7 rounded-full bg-slate-200 grid place-items-center text-xs">3</div><div class="flex-1"><div class="text-[12px] font-semibold">เภสัชกรยืนยัน</div></div></div>
+        <div class="flex items-center gap-2 opacity-40"><div class="h-7 w-7 rounded-full bg-slate-200 grid place-items-center text-xs">4</div><div class="flex-1"><div class="text-[12px] font-semibold">จัดส่ง</div></div></div>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl p-3">
+      <div class="text-[10px] font-bold tracking-widest text-slate-400">รายการสินค้า (3)</div>
+      <div class="mt-2 space-y-2">
+        <div class="flex items-center gap-2"><div class="h-10 w-10 rounded-lg overflow-hidden">${productArt('mint','capsule')}</div><div class="flex-1 text-[12px]"><div class="font-semibold">พาราเซตามอล 500mg ×2</div><div class="text-slate-500">฿49 × 2</div></div><div class="text-[12px] font-bold">฿98</div></div>
+        <div class="flex items-center gap-2"><div class="h-10 w-10 rounded-lg overflow-hidden">${productArt('amber','bottle')}</div><div class="flex-1 text-[12px]"><div class="font-semibold">วิตามินซี ×1</div><div class="text-slate-500">฿189 × 1</div></div><div class="text-[12px] font-bold">฿189</div></div>
+        <div class="flex items-center gap-2"><div class="h-10 w-10 rounded-lg overflow-hidden">${productArt('lavender','leaf')}</div><div class="flex-1 text-[12px]"><div class="font-semibold">ฟ้าทะลายโจร ×1</div><div class="text-slate-500">฿120 × 1</div></div><div class="text-[12px] font-bold">฿120</div></div>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl p-3 text-[12px] space-y-1"><div class="flex justify-between"><span>ค่าสินค้า</span><span>฿407</span></div><div class="flex justify-between"><span>ส่วนลด</span><span class="text-line">−฿20</span></div><div class="flex justify-between font-bold border-t pt-1.5 mt-1.5"><span>ชำระทั้งสิ้น</span><span class="text-line">฿520</span></div></div>
+    <button class="bg-line text-white rounded-2xl p-3 w-full text-center text-sm font-bold inline-flex items-center justify-center gap-2">${i('upload',16)} แนบสลิปการโอนเงิน</button>
+    <div class="h-8"></div>
+  </div>
+`));
+
+// 8. PROFILE
+miniapp.push(phone('8. Profile', '/profile — ข้อมูลส่วนตัว ที่อยู่ การตั้งค่า', `
+  <div class="bg-gradient-to-br from-line to-emerald-700 px-4 pt-12 pb-8 text-white relative overflow-hidden">
+    <div class="absolute -right-12 -top-12 w-44 h-44 rounded-full bg-white/10 blur-2xl"></div>
+    <div class="flex items-center gap-3 relative">
+      <div class="h-16 w-16 rounded-full bg-white text-line grid place-items-center text-2xl font-extrabold ring-4 ring-white/30">ส</div>
+      <div><div class="text-lg font-extrabold">สมหญิง ใจดี</div><div class="text-xs opacity-90 inline-flex items-center gap-1">${i('star',12,'fill-amber-300 text-amber-300')} Gold Member · 2,450 แต้ม</div></div>
+    </div>
+    <div class="mt-4 grid grid-cols-3 gap-2 text-center relative">
+      <div class="bg-white/15 backdrop-blur rounded-xl py-2"><div class="text-lg font-extrabold">12</div><div class="text-[10px] opacity-90">ออเดอร์</div></div>
+      <div class="bg-white/15 backdrop-blur rounded-xl py-2"><div class="text-lg font-extrabold">8</div><div class="text-[10px] opacity-90">รีวิว</div></div>
+      <div class="bg-white/15 backdrop-blur rounded-xl py-2"><div class="text-lg font-extrabold">4</div><div class="text-[10px] opacity-90">รายการโปรด</div></div>
+    </div>
+  </div>
+  <div class="p-3 -mt-4 space-y-2 relative">
+    <div class="bg-white rounded-2xl p-3 shadow-soft">
+      <div class="text-[10px] font-bold tracking-widest text-slate-400">ข้อมูลส่วนตัว</div>
+      <div class="mt-2 space-y-1.5 text-[12px]">
+        <div class="flex justify-between"><span class="text-slate-500">เบอร์โทร</span><span class="font-semibold">089-123-4567</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">อีเมล</span><span class="font-semibold">somying@example.com</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">วันเกิด</span><span class="font-semibold">15 มี.ค. 1985</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">เพศ</span><span class="font-semibold">หญิง</span></div>
+      </div>
+    </div>
+    ${[['map-pin','ที่อยู่จัดส่ง','2 ที่อยู่','sky'],['heart-pulse','โปรไฟล์สุขภาพ','โรคประจำตัว: ไมเกรน','rose'],['bell','การแจ้งเตือน','เปิด','amber'],['gift','แต้มและรางวัล','2,450 แต้ม','amber'],['history','ประวัติการใช้แต้ม','','lavender'],['heart','รายการโปรด','4 รายการ','rose'],['stethoscope','นัดหมายเภสัชกร','ไม่มีนัด','mint'],['phone','ติดต่อร้าน','','sky'],['settings','การตั้งค่า','','slate'],['log-out','ออกจากระบบ','','slate']].map(m=>{const cl=PRODUCT_GRADIENTS[m[3]];return `
+    <div class="bg-white rounded-2xl p-3 flex items-center gap-3 hover:bg-slate-50 transition cursor-pointer"><div class="h-9 w-9 rounded-xl grid place-items-center" style="background: linear-gradient(135deg, ${cl[0]} 0%, ${cl[1]} 100%); color: ${cl[3]}">${i(m[0],17)}</div><span class="flex-1 text-sm font-semibold">${m[1]}</span><span class="text-[11px] text-slate-400">${m[2]}</span><span class="text-slate-300">${i('chevron-right',14)}</span></div>`}).join('')}
+    <div class="h-12"></div>
+  </div>
+`));
+
+// 9. REGISTER
+miniapp.push(phone('9. Register', '/register — ลงทะเบียนสมาชิกใหม่', `
+  ${phoneTopBar('ลงทะเบียนสมาชิก')}
+  <div class="p-4 space-y-3">
+    <div class="rounded-2xl bg-line-soft border border-line/20 p-3 text-[12px] text-line font-medium">📌 ใช้ข้อมูลของ LINE Profile แล้ว สามารถแก้ไขได้</div>
+    <div><label class="text-[11px] font-bold text-slate-600">ชื่อ-สกุล <span class="text-red-500">*</span></label><input value="สมหญิง ใจดี" class="mt-1 w-full h-11 px-3 rounded-xl border border-slate-200 text-sm font-medium"/></div>
+    <div><label class="text-[11px] font-bold text-slate-600">เบอร์โทรศัพท์ <span class="text-red-500">*</span></label><div class="mt-1 flex gap-2"><input value="089-123-4567" class="flex-1 h-11 px-3 rounded-xl border border-slate-200 text-sm"/><button class="h-11 px-3 rounded-xl bg-line text-white text-xs font-bold">ขอ OTP</button></div></div>
+    <div><label class="text-[11px] font-bold text-slate-600">รหัส OTP 6 หลัก</label><div class="mt-1 flex gap-1.5 justify-center">${[1,2,3,4,5,6].map(i=>`<input value="${i<=4?i:''}" class="h-12 w-10 text-center rounded-xl border-2 ${i<=4?'border-line':'border-slate-200'} font-bold text-lg"/>`).join('')}</div><div class="mt-1 text-center text-[10px] text-slate-400">ส่งซ้ำใน 0:42</div></div>
+    <div><label class="text-[11px] font-bold text-slate-600">วันเกิด</label><input type="date" value="1985-03-15" class="mt-1 w-full h-11 px-3 rounded-xl border border-slate-200 text-sm"/></div>
+    <div><label class="text-[11px] font-bold text-slate-600">เพศ</label><div class="mt-1 grid grid-cols-3 gap-2 text-xs"><button class="h-10 rounded-xl border-2 border-line bg-line-soft text-line font-bold">หญิง</button><button class="h-10 rounded-xl border border-slate-200">ชาย</button><button class="h-10 rounded-xl border border-slate-200">ไม่ระบุ</button></div></div>
+    <label class="flex items-start gap-2 text-[11px]"><input type="checkbox" checked class="mt-0.5"/>ยอมรับ <span class="text-line font-semibold">นโยบายความเป็นส่วนตัว (PDPA)</span></label>
+    <button class="w-full h-11 rounded-full bg-line text-white font-bold mt-2">สมัครสมาชิก</button>
+    <div class="h-4"></div>
+  </div>
+`));
+
+// 10. HEALTH PROFILE
+miniapp.push(phone('10. Health Profile', '/health — แพ้ยา โรคประจำตัว สุขภาพ', `
+  ${phoneTopBar('โปรไฟล์สุขภาพ')}
+  <div class="p-3 space-y-3 bg-slate-50">
+    <div class="rounded-2xl bg-gradient-to-br from-red-50 to-rose-50 border border-red-100 p-3"><div class="text-[10px] font-bold tracking-widest text-red-600 inline-flex items-center gap-1">${i('alert-triangle',12)} แพ้ยา / สารก่อภูมิแพ้</div><div class="mt-2 flex flex-wrap gap-1.5">${['Penicillin','Sulfa','ไอบูโพรเฟน','ถั่ว'].map(a=>`<span class="tag bg-white border border-red-200 text-red-700 px-2 py-1 inline-flex items-center gap-1">${a} ${i('x',10)}</span>`).join('')}<button class="tag border-2 border-dashed border-red-300 text-red-600 px-2 py-1 inline-flex items-center gap-1">${i('plus',10)} เพิ่ม</button></div></div>
+    <div class="rounded-2xl bg-white p-3"><div class="text-[10px] font-bold tracking-widest text-slate-400 inline-flex items-center gap-1">${i('clipboard-list',12)} โรคประจำตัว</div><div class="mt-2 flex flex-wrap gap-1.5">${['ไมเกรน','ความดันโลหิตสูง'].map(c=>`<span class="tag bg-slate-100 text-slate-700 px-2 py-1 inline-flex items-center gap-1">${c} ${i('x',10)}</span>`).join('')}<button class="tag border-2 border-dashed border-slate-300 text-slate-500 px-2 py-1 inline-flex items-center gap-1">${i('plus',10)} เพิ่ม</button></div></div>
+    <div class="rounded-2xl bg-white p-3"><div class="text-[10px] font-bold tracking-widest text-slate-400 inline-flex items-center gap-1">${i('pill',12)} ยาที่ใช้ประจำ</div>
+      <div class="mt-2 space-y-2 text-[12px]">
+        <div class="flex items-center gap-2"><div class="h-8 w-8 rounded-lg overflow-hidden">${productArt('mint','capsule')}</div><span class="font-semibold flex-1">Losartan 50mg</span><span class="text-slate-500">1×1 เช้า</span></div>
+        <div class="flex items-center gap-2"><div class="h-8 w-8 rounded-lg overflow-hidden">${productArt('rose','capsule')}</div><span class="font-semibold flex-1">Aspirin 81mg</span><span class="text-slate-500">1×1 หลังอาหาร</span></div>
+      </div>
+    </div>
+    <div class="rounded-2xl bg-white p-3 grid grid-cols-2 gap-3 text-center">
+      <div class="flex items-center gap-2"><div class="h-9 w-9 rounded-xl grid place-items-center" style="background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1d4ed8">${i('weight',18)}</div><div class="text-left"><div class="text-[10px] text-slate-400">น้ำหนัก</div><div class="text-base font-extrabold">62<span class="text-xs text-slate-400 ml-1">kg</span></div></div></div>
+      <div class="flex items-center gap-2"><div class="h-9 w-9 rounded-xl grid place-items-center" style="background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #5b21b6">${i('ruler',18)}</div><div class="text-left"><div class="text-[10px] text-slate-400">ส่วนสูง</div><div class="text-base font-extrabold">165<span class="text-xs text-slate-400 ml-1">cm</span></div></div></div>
+      <div class="flex items-center gap-2"><div class="h-9 w-9 rounded-xl grid place-items-center" style="background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #047857">${i('activity',18)}</div><div class="text-left"><div class="text-[10px] text-slate-400">BMI</div><div class="text-base font-extrabold text-line">22.8</div></div></div>
+      <div class="flex items-center gap-2"><div class="h-9 w-9 rounded-xl grid place-items-center" style="background: linear-gradient(135deg, #fce7f3, #fbcfe8); color: #9d174d">${i('droplet',18)}</div><div class="text-left"><div class="text-[10px] text-slate-400">หมู่เลือด</div><div class="text-base font-extrabold">O+</div></div></div>
+    </div>
+    <div class="rounded-2xl bg-white p-3"><div class="text-[10px] font-bold tracking-widest text-slate-400 inline-flex items-center gap-1">${i('heart-pulse',12)} Vital Signs (ล่าสุด)</div><div class="mt-2 text-[12px] space-y-1.5"><div class="flex justify-between items-center"><span class="inline-flex items-center gap-1.5">${i('gauge',13,'text-rose-500')} ความดัน</span><span class="font-semibold">128/82 mmHg</span></div><div class="flex justify-between items-center"><span class="inline-flex items-center gap-1.5">${i('heart-pulse',13,'text-red-500')} ชีพจร</span><span class="font-semibold">72 ครั้ง/นาที</span></div><div class="flex justify-between items-center"><span class="inline-flex items-center gap-1.5">${i('droplet',13,'text-amber-500')} น้ำตาลในเลือด</span><span class="font-semibold">95 mg/dL</span></div></div></div>
+    <button class="w-full h-11 rounded-full bg-line text-white font-bold text-sm inline-flex items-center justify-center gap-2">${i('save',16)} บันทึก</button>
+    <div class="h-4"></div>
+  </div>
+`));
+
+// 11. AI CHAT
+miniapp.push(phone('11. AI Chat', '/ai-chat — คุยกับ AI เภสัชกร', `
+  <div class="bg-white px-4 pt-8 pb-3 flex items-center gap-3 border-b sticky top-0 z-10">
+    <div class="h-9 w-9 rounded-full bg-slate-100 grid place-items-center text-slate-500">${i('chevron-left',18)}</div>
+    <div class="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 grid place-items-center text-white shadow-soft">${i('sparkles',20)}</div>
+    <div class="flex-1"><div class="text-sm font-bold">น้องเรยา AI</div><div class="text-[10px] text-line inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-line"></span>ออนไลน์ · ตอบใน 2 วินาที</div></div>
+    <button class="h-9 w-9 rounded-full bg-slate-100 grid place-items-center text-slate-500">${i('phone',16)}</button>
+  </div>
+  <div class="p-3 space-y-2 bg-gradient-to-b from-slate-50 to-blue-50 min-h-[500px]">
+    <div class="text-center text-[10px] text-slate-400 py-1">วันนี้ 14:32</div>
+    <div class="flex items-end gap-2"><div class="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 grid place-items-center text-white shrink-0">${i('sparkles',13)}</div><div class="max-w-[75%] bg-white rounded-2xl rounded-bl-md p-3 text-[12px] shadow-soft">สวัสดีค่ะ คุณสมหญิง ดิฉันน้องเรยา ผู้ช่วย AI ของร้านยาเรยา มีอะไรให้ช่วยไหมคะ?</div></div>
+    <div class="flex justify-end"><div class="max-w-[75%] bg-line text-white rounded-2xl rounded-br-md p-3 text-[12px] shadow-soft">ปวดหัวมา 2 วันแล้ว แต่ก่อนเคยทานพาราแล้วไม่หาย</div></div>
+    <div class="flex items-end gap-2"><div class="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 grid place-items-center text-white shrink-0">${i('sparkles',13)}</div><div class="max-w-[80%] bg-white rounded-2xl rounded-bl-md p-3 text-[12px] shadow-soft space-y-2">
+      <div>ขอข้อมูลเพิ่มเติมหน่อยนะคะ:</div>
+      <ul class="space-y-1 ml-1">
+        <li class="flex gap-1.5">${i('check',12,'text-line shrink-0 mt-0.5')}<span>ปวดข้างเดียวหรือสองข้าง?</span></li>
+        <li class="flex gap-1.5">${i('check',12,'text-line shrink-0 mt-0.5')}<span>มีคลื่นไส้/อาเจียนร่วมด้วยไหม?</span></li>
+        <li class="flex gap-1.5">${i('check',12,'text-line shrink-0 mt-0.5')}<span>ระดับความปวด 1-10?</span></li>
+      </ul>
+      <div class="grid grid-cols-2 gap-1.5 mt-2"><button class="text-[11px] py-1.5 rounded-full bg-line-soft text-line font-semibold">ข้างเดียว · 7/10</button><button class="text-[11px] py-1.5 rounded-full bg-line-soft text-line font-semibold">สองข้าง · 5/10</button></div>
+    </div></div>
+    <div class="flex justify-end"><div class="max-w-[75%] bg-line text-white rounded-2xl rounded-br-md p-3 text-[12px] shadow-soft">ข้างเดียว ระดับ 7/10 มีคลื่นไส้ด้วย</div></div>
+    <div class="flex items-end gap-2"><div class="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 grid place-items-center text-white shrink-0">${i('sparkles',13)}</div><div class="max-w-[85%] bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl rounded-bl-md p-3 text-[12px] space-y-2">
+      <div class="font-bold text-amber-800 inline-flex items-center gap-1.5">${i('alert-triangle',14)} มีแนวโน้มเป็นไมเกรน</div>
+      <div class="text-amber-700">เนื่องจากคุณมีประวัติไมเกรน + อาการเข้าได้ ดิฉันแนะนำให้ปรึกษาเภสัชกรเพื่อพิจารณายา ไม่ควรซื้อเอง</div>
+      <button class="w-full mt-1 py-1.5 rounded-full bg-line text-white text-[11px] font-bold inline-flex items-center justify-center gap-1.5">${i('phone',13)} ขอคุยกับเภสัชกร</button>
+    </div></div>
+  </div>
+  <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-2 flex gap-2 items-center"><div class="h-9 w-9 rounded-full bg-slate-100 grid place-items-center text-slate-500">${i('paperclip',16)}</div><input placeholder="พิมพ์ข้อความ..." class="flex-1 h-9 rounded-full bg-slate-100 px-3 text-[12px]"/><div class="h-9 w-9 rounded-full bg-line text-white grid place-items-center">${i('send',16)}</div></div>
+`));
+
+// 12. VIDEO CALL
+miniapp.push(phone('12. Video Call', '/video — วิดีโอคอลเภสัชกร', `
+  <div class="bg-slate-900 h-full relative">
+    <div class="absolute top-0 left-0 right-0 p-4 pt-10 flex items-center gap-2 z-10">
+      <div class="h-9 w-9 rounded-full bg-white/15 backdrop-blur grid place-items-center text-white">←</div>
+      <div class="flex-1 text-white"><div class="text-sm font-bold">ภก. นิรันดร์ วัฒนกุล</div><div class="text-[10px] opacity-80">● เชื่อมต่อแล้ว · 02:34</div></div>
+      <div class="h-9 w-9 rounded-full bg-red-500 grid place-items-center text-white">🔇</div>
+    </div>
+    <div class="absolute inset-0 bg-gradient-to-br from-emerald-800 via-emerald-900 to-slate-900 grid place-items-center">
+      <div class="h-32 w-32 rounded-full bg-line/30 grid place-items-center text-6xl backdrop-blur">👨‍⚕️</div>
+    </div>
+    <div class="absolute top-20 right-3 w-24 h-32 rounded-2xl bg-slate-700 border-2 border-white/30 grid place-items-center text-3xl">👤</div>
+    <div class="absolute bottom-32 left-0 right-0 px-4">
+      <div class="bg-white/10 backdrop-blur rounded-2xl p-3 text-white text-[11px]">💬 "อาการที่เล่ามาน่าจะเป็นไมเกรนกำเริบ แนะนำให้ลอง..."</div>
+    </div>
+    <div class="absolute bottom-12 left-0 right-0 flex justify-center gap-3">
+      <button class="h-12 w-12 rounded-full bg-white/15 backdrop-blur grid place-items-center text-white">🎤</button>
+      <button class="h-12 w-12 rounded-full bg-white/15 backdrop-blur grid place-items-center text-white">📹</button>
+      <button class="h-12 w-12 rounded-full bg-red-500 grid place-items-center text-white">📞</button>
+      <button class="h-12 w-12 rounded-full bg-white/15 backdrop-blur grid place-items-center text-white">🔄</button>
+      <button class="h-12 w-12 rounded-full bg-white/15 backdrop-blur grid place-items-center text-white">💊</button>
+    </div>
+  </div>
+`));
+
+// 5. CHECKOUT
+miniapp.push(phone('5. Checkout', '/checkout — ที่อยู่ ชำระเงิน สรุป', `
+  ${phoneTopBar('ยืนยันการสั่งซื้อ')}
+  <div class="p-3 space-y-3 bg-slate-50">
+    <div class="bg-white rounded-2xl p-3"><div class="text-[10px] font-bold tracking-widest text-slate-400">ที่อยู่จัดส่ง</div><div class="mt-1 text-sm font-bold">สมหญิง ใจดี · 089-123-4567</div><div class="text-[12px] text-slate-500 leading-relaxed">123/45 ซอยสุขุมวิท 23 แขวงคลองเตยเหนือ เขตวัฒนา กรุงเทพฯ 10110</div><div class="mt-2 text-[11px] text-line font-semibold">เปลี่ยน ›</div></div>
+    <div class="bg-white rounded-2xl p-3"><div class="text-[10px] font-bold tracking-widest text-slate-400 mb-2">วิธีการชำระเงิน</div>
+      <label class="flex items-center gap-3 py-2 border-b border-slate-50"><div class="h-5 w-5 rounded-full border-2 border-line grid place-items-center"><div class="h-2.5 w-2.5 rounded-full bg-line"></div></div><div class="flex-1"><div class="text-sm font-semibold">โอนผ่านธนาคาร</div><div class="text-[11px] text-slate-500">SCB · บจก.เรยา ฟาร์มาซี · 123-4-56789-0</div></div>🏦</label>
+      <label class="flex items-center gap-3 py-2 border-b border-slate-50"><div class="h-5 w-5 rounded-full border-2 border-slate-300"></div><div class="flex-1"><div class="text-sm">PromptPay QR</div><div class="text-[11px] text-slate-500">สแกนจ่ายผ่านแอปธนาคาร</div></div>📱</label>
+      <label class="flex items-center gap-3 py-2"><div class="h-5 w-5 rounded-full border-2 border-slate-300"></div><div class="flex-1"><div class="text-sm">เก็บเงินปลายทาง (COD)</div><div class="text-[11px] text-slate-500">ค่าธรรมเนียม ฿30</div></div>💵</label>
+    </div>
+    <div class="bg-white rounded-2xl p-3"><div class="text-[10px] font-bold tracking-widest text-slate-400 mb-2">สรุปคำสั่งซื้อ</div>
+      <div class="space-y-1 text-[12px]"><div class="flex justify-between"><span>ราคาสินค้า (3 ชิ้น)</span><span>฿287</span></div><div class="flex justify-between"><span>ส่วนลดแต้ม</span><span class="text-line">−฿20</span></div><div class="flex justify-between"><span>ค่าจัดส่ง</span><span>ฟรี</span></div><div class="flex justify-between font-extrabold text-base pt-2 border-t border-slate-100 mt-2"><span>ชำระทั้งสิ้น</span><span class="text-line">฿267</span></div></div>
+    </div>
+    <div class="h-16"></div>
+  </div>
+  <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3"><button class="w-full h-11 rounded-full bg-line text-white font-bold">ยืนยันสั่งซื้อ ฿267</button></div>
+`));
+
+// 13. NOTIFICATIONS
+miniapp.push(phone('13. Notifications', '/notifications — แจ้งเตือนทั้งหมด', `
+  ${phoneTopBar('การแจ้งเตือน')}
+  <div class="px-4 py-2 flex gap-2 text-[11px] bg-white border-b">
+    <span class="tag bg-line text-white px-3 py-1 rounded-full">ทั้งหมด · 8</span>
+    <span class="tag bg-slate-100 text-slate-700 px-3 py-1 rounded-full">ออเดอร์</span>
+    <span class="tag bg-slate-100 text-slate-700 px-3 py-1 rounded-full">โปรโมชั่น</span>
+    <span class="tag bg-slate-100 text-slate-700 px-3 py-1 rounded-full">สุขภาพ</span>
+  </div>
+  <div class="p-3 space-y-2 bg-slate-50">
+    ${[['pill','mint','เตือนทานยา Losartan','ถึงเวลาทานยาความดัน 1 เม็ด','เมื่อสักครู่',true],
+       ['package','sky','ออเดอร์ #REYA-2026-0425','กำลังจัดส่ง · เลขพัสดุ TH8273...','30 นาทีที่แล้ว',true],
+       ['shield-check','mint','สลิปได้รับการตรวจสอบแล้ว','การชำระเงินสำหรับ #0427 ได้รับการยืนยัน','1 ชม. ที่แล้ว',true],
+       ['gift','amber','โบนัสครบรอบสมาชิก','รับ 100 แต้มฟรี!','3 ชม. ที่แล้ว',false],
+       ['stethoscope','lavender','นัดหมายเภสัชกรพรุ่งนี้','ภก. นิรันดร์ · 10:00 น. · Video Call','5 ชม. ที่แล้ว',false],
+       ['flame','rose','Flash Sale ลด 50%!','วิตามินรวมเฉพาะวันนี้เท่านั้น','เมื่อวาน',false],
+       ['star','amber','เลื่อนระดับเป็น Gold!','ขอแสดงความยินดี — สิทธิประโยชน์ใหม่','3 วันที่แล้ว',false],
+       ['map-pin','sky','ร้านยาเรยาเปิดสาขาใหม่','สาขาทองหล่อ — เริ่มเปิดบริการ 1 ธ.ค.','สัปดาห์ที่แล้ว',false]].map(n=>{const cl=PRODUCT_GRADIENTS[n[1]];return `
+    <div class="bg-white rounded-2xl p-3 flex gap-3 items-start shadow-sm ${n[5]?'border-l-4 border-line':''}">
+      <div class="h-10 w-10 rounded-xl grid place-items-center shrink-0" style="background: linear-gradient(135deg, ${cl[0]} 0%, ${cl[1]} 100%); color: ${cl[3]}">${i(n[0],18)}</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[12px] font-bold ${n[5]?'text-slate-900':'text-slate-700'}">${n[2]}</div>
+        <div class="text-[11px] text-slate-500 leading-relaxed">${n[3]}</div>
+        <div class="text-[10px] text-slate-400 mt-0.5">${n[4]}</div>
+      </div>
+      ${n[5]?'<span class="h-2 w-2 rounded-full bg-line shrink-0 mt-1"></span>':''}
+    </div>`}).join('')}
+    <div class="h-12"></div>
+  </div>
+  ${bottomNav(3)}
+`));
+
+// 14. WISHLIST
+miniapp.push(phone('14. Wishlist', '/wishlist — รายการโปรด', `
+  ${phoneTopBar('รายการโปรด')}
+  <div class="p-3 grid grid-cols-2 gap-2 bg-slate-50 min-h-[680px]">
+    ${[['mint','capsule','พาราเซตามอล 500mg','49','70','-30%',true],
+       ['amber','bottle','วิตามินซี Blackmores','189','','',true],
+       ['lavender','leaf','ฟ้าทะลายโจร 60 cap','120','','',false],
+       ['sky','patch','พลาสเตอร์ Hansaplast','79','','',true]].map(p=>`
+    <div class="rounded-2xl border border-slate-100 bg-white overflow-hidden relative shadow-sm">
+      <button class="absolute top-1.5 right-1.5 h-7 w-7 rounded-full bg-white/95 backdrop-blur grid place-items-center text-rose-500 z-10 shadow-sm">${i('heart',13,'fill-rose-500')}</button>
+      <div class="relative h-28">${productArt(p[0],p[1])}${p[5]?`<span class="absolute top-2 left-2 tag bg-red-500 text-white px-1.5 py-0.5 text-[9px] z-10">${p[5]}</span>`:''}</div>
+      <div class="p-2.5">
+        <div class="text-[11px] font-semibold leading-tight line-clamp-2">${p[2]}</div>
+        <div class="mt-1 flex items-baseline gap-1"><span class="text-sm font-extrabold text-line">฿${p[3]}</span>${p[4]?`<span class="text-[10px] text-slate-400 line-through">฿${p[4]}</span>`:''}</div>
+        <button class="mt-2 w-full h-7 rounded-full ${p[6]?'bg-line text-white':'bg-slate-100 text-slate-400'} text-[10px] font-bold inline-flex items-center justify-center gap-1">${p[6]?`${i('plus',11)} เพิ่มลงตะกร้า`:'หมดสต็อก'}</button>
+      </div>
+    </div>`).join('')}
+  </div>
+`));
+
+// 15. REWARDS
+miniapp.push(phone('15. Rewards', '/rewards — แลกของรางวัล', `
+  <div class="bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 px-4 pt-10 pb-6 text-white relative overflow-hidden">
+    <div class="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-white/15 blur-2xl"></div>
+    <div class="relative flex items-center justify-between"><div><div class="text-[10px] font-bold tracking-widest opacity-90">REYA POINTS</div><div class="mt-1 text-4xl font-extrabold tabular-nums">2,450</div><div class="text-xs opacity-90">แต้มสะสมของคุณ</div></div><div class="h-14 w-14 rounded-full bg-white/20 backdrop-blur grid place-items-center">${i('award',28,'text-white')}</div></div>
+    <div class="mt-3 bg-white/15 backdrop-blur rounded-xl p-2.5 text-[11px] relative"><div class="flex justify-between items-center"><span class="inline-flex items-center gap-1 font-bold">${i('star',12,'fill-white')} Gold Member</span><span>เพิ่ม 550 แต้ม → Platinum</span></div><div class="mt-1.5 h-1.5 rounded-full bg-white/20 overflow-hidden"><div class="h-full bg-white" style="width:81%"></div></div></div>
+  </div>
+  <div class="p-3 space-y-3 bg-slate-50">
+    <div class="grid grid-cols-3 gap-2 text-center">
+      ${[['gift','แลก','rose'],['history','ประวัติ','lavender'],['file-text','กฎ','sky']].map(t=>{const cl=PRODUCT_GRADIENTS[t[2]];return `<button class="bg-white rounded-2xl p-3 shadow-sm"><div class="h-9 w-9 mx-auto rounded-xl grid place-items-center" style="background: linear-gradient(135deg, ${cl[0]} 0%, ${cl[1]} 100%); color: ${cl[3]}">${i(t[0],17)}</div><div class="text-[10px] font-bold mt-1.5">${t[1]}</div></button>`}).join('')}
+    </div>
+    <div class="text-sm font-bold mt-2">รางวัลที่แลกได้</div>
+    ${[['ticket','คูปอง ฿50','200','mint',true],
+       ['ticket','คูปอง ฿100','400','mint',true],
+       ['pill','พาราฟรี 1 แผง','100','sky',true],
+       ['flask-conical','วิตามินซี 1 ขวด','800','amber',true],
+       ['gift','เซ็ตของขวัญ Premium','2,500','lavender',false],
+       ['truck','ส่งฟรี 1 ครั้ง','150','rose',true]].map(r=>{const cl=PRODUCT_GRADIENTS[r[3]];return `
+    <div class="bg-white rounded-2xl p-3 flex items-center gap-3 shadow-sm ${r[4]?'':'opacity-60'}">
+      <div class="h-12 w-12 rounded-xl grid place-items-center" style="background: linear-gradient(135deg, ${cl[0]} 0%, ${cl[1]} 100%); color: ${cl[3]}">${i(r[0],22)}</div>
+      <div class="flex-1 min-w-0"><div class="text-[12px] font-bold">${r[1]}</div><div class="text-[11px] text-amber-600 font-semibold inline-flex items-center gap-1">${i('star',11,'fill-amber-400 text-amber-400')} ${r[2]} แต้ม</div></div>
+      <button class="text-[10px] py-1.5 px-3 rounded-full ${r[4]?'bg-line text-white':'bg-slate-200 text-slate-400'} font-bold">${r[4]?'แลกเลย':'แต้มไม่พอ'}</button>
+    </div>`}).join('')}
+    <div class="h-4"></div>
+  </div>
+`));
+
+// 16. REWARDS HISTORY
+miniapp.push(phone('16. Rewards History', '/rewards/history — ประวัติแต้ม', `
+  ${phoneTopBar('ประวัติแต้มสะสม')}
+  <div class="p-3 space-y-2 bg-slate-50">
+    <div class="bg-gradient-to-r from-amber-400 to-amber-600 text-white rounded-2xl p-3"><div class="text-[10px] opacity-80">ยอดแต้มปัจจุบัน</div><div class="text-2xl font-extrabold">2,450</div></div>
+    <div class="flex gap-1.5 text-[11px]">
+      <span class="tag bg-slate-900 text-white px-3 py-1 rounded-full">ทั้งหมด</span>
+      <span class="tag bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-full">+ ได้รับ</span>
+      <span class="tag bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-full">− ใช้</span>
+    </div>
+    ${[['ซื้อสินค้า #REYA-2026-0418','+25','line','27 พ.ย. 14:32'],
+       ['โบนัสครบรอบสมาชิก','+100','amber','25 พ.ย. 09:00'],
+       ['แลกคูปอง ฿50','-200','red','24 พ.ย. 16:42'],
+       ['ซื้อสินค้า #REYA-2026-0411','+89','line','22 พ.ย. 11:15'],
+       ['รีวิวสินค้า','+10','line','22 พ.ย. 11:20'],
+       ['อัพเกรด Gold','+500','amber','15 พ.ย. 08:00']].map(h=>`
+    <div class="bg-white rounded-2xl p-3 flex items-center gap-3">
+      <div class="h-9 w-9 rounded-full bg-${h[2]}-50 text-${h[2]}-700 grid place-items-center text-xs font-bold">${h[1].startsWith('+')?'+':'−'}</div>
+      <div class="flex-1 min-w-0"><div class="text-[12px] font-semibold">${h[0]}</div><div class="text-[10px] text-slate-400">${h[3]}</div></div>
+      <div class="text-base font-extrabold ${h[1].startsWith('+')?'text-line':'text-red-500'}">${h[1]}</div>
+    </div>`).join('')}
+    <div class="h-4"></div>
+  </div>
+`));
+
+// 17. APPOINTMENTS
+miniapp.push(phone('17. Appointments', '/appointments — นัดหมาย Telepharmacy', `
+  ${phoneTopBar('นัดหมายเภสัชกร')}
+  <div class="p-3 space-y-3 bg-slate-50">
+    <div class="bg-gradient-to-br from-line to-emerald-600 text-white rounded-2xl p-3 flex items-center gap-3">
+      <div class="h-12 w-12 rounded-full bg-white/20 grid place-items-center text-2xl">👨‍⚕️</div>
+      <div class="flex-1"><div class="text-[10px] opacity-90">การนัดถัดไป</div><div class="text-sm font-bold">ภก. นิรันดร์ วัฒนกุล</div><div class="text-[11px] opacity-90">📅 พรุ่งนี้ · 🕙 10:00 · 📹 Video Call</div></div>
+      <button class="text-[11px] font-bold bg-white text-line rounded-full px-3 py-1.5">เข้าร่วม</button>
+    </div>
+    <div class="text-sm font-bold mt-2 flex items-center justify-between">เลือกวันและเวลา <span class="text-[11px] text-line">+ จองใหม่</span></div>
+    <div class="bg-white rounded-2xl p-3">
+      <div class="flex justify-between mb-2"><span class="text-[12px] font-bold">พฤศจิกายน 2026</span><div class="flex gap-1"><button class="h-6 w-6 rounded bg-slate-100">‹</button><button class="h-6 w-6 rounded bg-slate-100">›</button></div></div>
+      <div class="grid grid-cols-7 gap-1 text-center text-[10px]"><div class="text-slate-400">จ</div><div class="text-slate-400">อ</div><div class="text-slate-400">พ</div><div class="text-slate-400">พฤ</div><div class="text-slate-400">ศ</div><div class="text-slate-400">ส</div><div class="text-slate-400">อา</div></div>
+      <div class="grid grid-cols-7 gap-1 mt-1 text-center text-[11px]">${Array.from({length:30},(_,i)=>i+1).map(d=>`<div class="h-7 grid place-items-center ${d===28?'bg-line text-white rounded-full font-bold':d===29?'bg-line-soft text-line rounded-full font-bold':d>27?'text-slate-700':'text-slate-300'}">${d}</div>`).join('')}</div>
+    </div>
+    <div class="text-sm font-bold mt-2">ช่วงเวลาที่ว่าง · 28 พ.ย.</div>
+    <div class="grid grid-cols-3 gap-2 text-[11px]">${['09:00','10:00','11:00','14:00','15:00','16:00'].map((t,i)=>`<button class="h-9 rounded-xl ${i===1?'bg-line text-white border-2 border-line':i===4?'bg-slate-100 text-slate-300 line-through':'bg-white border border-slate-200'} font-semibold">${t}</button>`).join('')}</div>
+    <div class="bg-white rounded-2xl p-3 mt-2"><div class="text-[10px] font-bold tracking-widest text-slate-400">หมายเหตุ / อาการ</div><textarea rows="2" class="mt-1 w-full text-[12px] border-0 focus:ring-0 resize-none" placeholder="เช่น ปวดหัวเรื้อรัง อยากปรับยา..."></textarea></div>
+    <button class="w-full h-11 rounded-full bg-line text-white font-bold text-sm">ยืนยันการจอง</button>
+  </div>
+`));
+</script>
+
+<!-- ===== ADMIN PANEL CONTENT ===== -->
+<script>
+const admin = [];
+
+// A. DASHBOARD
+admin.push(`
+<div class="desktop">
+  <div class="flex h-[720px]">
+    ${adminSidebar(0)}
+    <main class="flex-1 bg-slate-50 overflow-y-auto">
+      <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3">
+        <h1 class="text-base font-extrabold">แดชบอร์ดภาพรวม</h1>
+        <span class="text-[11px] text-slate-400 ml-2 inline-flex items-center gap-1">${i('calendar',12)} 28 พ.ย. 2026</span>
+        <select class="ml-auto text-xs border border-slate-200 rounded-lg px-2 py-1"><option>วันนี้</option><option>7 วัน</option><option>30 วัน</option></select>
+        <button class="h-8 w-8 rounded-lg border border-slate-200 grid place-items-center text-slate-500">${i('bell',16)}</button>
+        <div class="h-8 w-8 rounded-full bg-line text-white grid place-items-center text-xs font-bold">ภ</div>
+      </header>
+      <div class="p-6 space-y-4">
+        <div class="grid grid-cols-4 gap-3">
+          ${[['ยอดขายวันนี้','฿24,580','+18%','mint','wallet'],['ออเดอร์ใหม่','42','+5','sky','package'],['แชตค้างตอบ','7','-3','amber','message-circle'],['สมาชิกใหม่','12','+12','lavender','sparkles']].map(s=>{const cl=PRODUCT_GRADIENTS[s[3]];return `
+          <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm"><div class="flex items-center justify-between"><div class="h-10 w-10 rounded-xl grid place-items-center" style="background: linear-gradient(135deg, ${cl[0]} 0%, ${cl[1]} 100%); color: ${cl[3]}">${i(s[4],20)}</div><span class="tag bg-${s[3]==='mint'?'emerald':s[3]==='sky'?'blue':s[3]==='lavender'?'purple':'amber'}-50 text-${s[3]==='mint'?'emerald':s[3]==='sky'?'blue':s[3]==='lavender'?'purple':'amber'}-700 inline-flex items-center gap-1">${s[2].startsWith('+')?i('trending-up',10):i('trending-down',10)} ${s[2]}</span></div><div class="mt-3 text-2xl font-extrabold tabular-nums">${s[1]}</div><div class="text-[11px] text-slate-500 mt-0.5">${s[0]}</div></div>`}).join('')}
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-2 bg-white rounded-xl p-4 border border-slate-100">
+            <div class="flex items-center justify-between"><div class="text-sm font-bold">ยอดขาย 7 วันย้อนหลัง</div><div class="text-[11px] text-slate-400">฿156,420 รวม</div></div>
+            <div class="mt-4 h-44 flex items-end gap-2">${[40,55,42,68,58,82,74].map((h,i)=>`<div class="flex-1 flex flex-col items-center gap-1"><div class="w-full rounded-t bg-gradient-to-t from-line to-emerald-300" style="height:${h*1.8}px"></div><div class="text-[10px] text-slate-400">${['จ','อ','พ','พฤ','ศ','ส','อา'][i]}</div></div>`).join('')}</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 border border-slate-100">
+            <div class="text-sm font-bold">สินค้าขายดี</div>
+            <div class="mt-3 space-y-2">${[['พาราเซตามอล','248 ชิ้น',96],['วิตามินซี','186 ชิ้น',74],['ฟ้าทะลายโจร','142 ชิ้น',56],['Hansaplast','89 ชิ้น',35]].map(p=>`<div class="text-[12px]"><div class="flex justify-between"><span class="font-semibold">${p[0]}</span><span class="text-slate-500">${p[1]}</span></div><div class="mt-1 h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-line" style="width:${p[2]}%"></div></div></div>`).join('')}</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+            <div class="text-sm font-bold flex items-center gap-2">${i('activity',16,'text-line')} กิจกรรมล่าสุด</div>
+            <div class="mt-3 space-y-3 text-[12px]">${[['user-plus','คุณสมหญิงสั่งซื้อ ฿520','2 นาทีก่อน','sky'],['pill','ภก.นิรันดร์จ่ายยา 3 รายการ','5 นาทีก่อน','mint'],['user-check','คุณวิชัยลงทะเบียนสมาชิก','8 นาทีก่อน','amber'],['sparkles','AI ตอบลูกค้า 14 คน','15 นาทีก่อน','lavender'],['truck','รับสินค้า 24 SKU','30 นาทีก่อน','coral']].map(a=>{const cl=PRODUCT_GRADIENTS[a[3]];return `<div class="flex items-center gap-2.5"><div class="h-8 w-8 rounded-lg grid place-items-center" style="background: linear-gradient(135deg, ${cl[0]} 0%, ${cl[1]} 100%); color: ${cl[3]}">${i(a[0],15)}</div><div class="flex-1 text-slate-700">${a[1]}</div><div class="text-slate-400 text-[10px]">${a[2]}</div></div>`}).join('')}</div>
+          </div>
+          <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+            <div class="text-sm font-bold flex items-center gap-2">${i('server',16,'text-emerald-600')} สถานะระบบ</div>
+            <div class="mt-3 space-y-2 text-[12px]">${[['LINE Webhook','online','line','message-square'],['AI (Gemini)','online · 142ms','line','sparkles'],['WebSocket','online · 47 clients','line','radio'],['MySQL','online','line','database'],['Redis','online · 0.2GB','line','hard-drive'],['Cron Jobs','5 active','line','clock']].map(s=>`<div class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-${s[2]} animate-pulse"></span>${i(s[3],13,'text-slate-400')}<span class="font-semibold flex-1">${s[0]}</span><span class="text-slate-500">${s[1]}</span></div>`).join('')}</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">A. Dashboard ภาพรวม</div><div class="text-xs text-slate-500">account-analytics.php — สถิติ ยอดขาย กิจกรรม สถานะระบบ</div></div>
+`);
+
+// B. ORDERS
+admin.push(`
+<div class="desktop">
+  <div class="flex h-[720px]">
+    ${adminSidebar(2)}
+    <main class="flex-1 bg-slate-50 overflow-y-auto">
+      <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3"><h1 class="text-base font-extrabold">คำสั่งซื้อ</h1><span class="ml-2 text-[11px] text-slate-500">รวม 247 ออเดอร์</span><button class="ml-auto h-8 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold">+ สร้างออเดอร์</button></header>
+      <div class="p-6 space-y-4">
+        <div class="grid grid-cols-5 gap-2">${[['ทั้งหมด','247','slate'],['รอชำระ','42','amber'],['ยืนยันแล้ว','86','blue'],['จัดส่ง','24','purple'],['สำเร็จ','89','line']].map(s=>`<div class="bg-white rounded-xl p-3 border border-slate-100 text-center"><div class="text-[10px] text-slate-500">${s[0]}</div><div class="text-2xl font-extrabold text-${s[2]}-700 mt-0.5">${s[1]}</div></div>`).join('')}</div>
+        <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+            <input placeholder="ค้นหาเลขออเดอร์, ลูกค้า..." class="flex-1 h-8 px-3 rounded-lg border border-slate-200 text-xs"/>
+            <select class="h-8 px-2 rounded-lg border border-slate-200 text-xs"><option>ทุกสถานะ</option></select>
+            <select class="h-8 px-2 rounded-lg border border-slate-200 text-xs"><option>ทุกวิธีจ่าย</option></select>
+            <button class="h-8 px-3 rounded-lg border border-slate-200 text-xs">↓ Export</button>
+          </div>
+          <table class="w-full text-[12px]">
+            <thead class="bg-slate-50 text-slate-500 text-[11px]"><tr>${['#','ออเดอร์','ลูกค้า','สถานะ','ชำระ','รายการ','ยอด','วันที่',''].map(h=>`<th class="text-left px-3 py-2">${h}</th>`).join('')}</tr></thead>
+            <tbody>${[
+              ['REYA-2026-0427','สมหญิง ใจดี','รอชำระ','amber','โอนธนาคาร','3','520','27 พ.ย. 14:32'],
+              ['REYA-2026-0426','วิชัย สุขใจ','ยืนยันแล้ว','blue','PromptPay','5','1240','27 พ.ย. 13:15'],
+              ['REYA-2026-0425','มาลี ดอกไม้','จัดส่ง','purple','โอนธนาคาร','2','340','27 พ.ย. 11:42'],
+              ['REYA-2026-0424','ธนา ทอง','สำเร็จ','line','COD','7','1820','27 พ.ย. 10:05'],
+              ['REYA-2026-0423','รัตนา ใจเย็น','สำเร็จ','line','PromptPay','4','692','26 พ.ย. 18:30'],
+              ['REYA-2026-0422','สมชาย ขยัน','ยกเลิก','red','—','3','450','26 พ.ย. 15:18'],
+              ['REYA-2026-0421','พิมพ์ ใจ','สำเร็จ','line','โอนธนาคาร','6','1140','26 พ.ย. 12:00']
+            ].map((r,i)=>`<tr class="border-b border-slate-50 hover:bg-slate-50">
+              <td class="px-3 py-2"><input type="checkbox"/></td>
+              <td class="px-3 py-2 font-mono text-[11px]">#${r[0]}</td>
+              <td class="px-3 py-2 font-semibold">${r[1]}</td>
+              <td class="px-3 py-2"><span class="tag bg-${r[3]}-50 text-${r[3]}-700">${r[2]}</span></td>
+              <td class="px-3 py-2 text-slate-500">${r[4]}</td>
+              <td class="px-3 py-2">${r[5]}</td>
+              <td class="px-3 py-2 font-bold text-line">฿${r[6]}</td>
+              <td class="px-3 py-2 text-slate-500 text-[11px]">${r[7]}</td>
+              <td class="px-3 py-2"><button class="text-line text-[11px] font-bold">ดู ›</button></td>
+            </tr>`).join('')}</tbody>
+          </table>
+          <div class="px-4 py-3 border-t border-slate-100 flex items-center text-[11px] text-slate-500"><span>หน้า 1 จาก 36</span><div class="ml-auto flex gap-1"><button class="h-7 px-2 rounded border border-slate-200">‹</button><button class="h-7 w-7 rounded bg-slate-900 text-white">1</button><button class="h-7 w-7 rounded border border-slate-200">2</button><button class="h-7 w-7 rounded border border-slate-200">3</button><button class="h-7 px-2 rounded border border-slate-200">›</button></div></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">B. Orders Management</div><div class="text-xs text-slate-500">orders.php — ตัวกรอง, สถานะ, การชำระเงิน, export</div></div>
+`);
+
+// C. INVENTORY
+admin.push(`
+<div class="desktop">
+  <div class="flex h-[720px]">
+    ${adminSidebar(4)}
+    <main class="flex-1 bg-slate-50 overflow-y-auto">
+      <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3"><h1 class="text-base font-extrabold">คลังสินค้า (business_items)</h1><button class="ml-auto h-8 px-3 rounded-lg border border-slate-200 text-xs">↑ Import CSV</button><button class="h-8 px-3 rounded-lg bg-line text-white text-xs font-bold">+ เพิ่มสินค้า</button></header>
+      <div class="p-6 space-y-4">
+        <div class="grid grid-cols-4 gap-3">${[['SKU ทั้งหมด','1,247','box','blue'],['สต็อกพอ','1,089','✓','line'],['ใกล้หมด','86','⚠','amber'],['หมด','72','✕','red']].map(s=>`<div class="bg-white rounded-xl p-4 border border-slate-100"><div class="flex items-center justify-between"><span class="text-[11px] text-slate-500">${s[0]}</span><span class="h-7 w-7 rounded-lg bg-${s[3]}-50 grid place-items-center text-${s[3]}-700 text-xs">${s[2]}</span></div><div class="text-2xl font-extrabold mt-1">${s[1]}</div></div>`).join('')}</div>
+        <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
+          <div class="px-4 py-3 border-b flex items-center gap-2"><input placeholder="ค้นหา SKU/ชื่อ..." class="flex-1 h-8 px-3 rounded-lg border border-slate-200 text-xs"/><select class="h-8 px-2 rounded-lg border border-slate-200 text-xs"><option>ทุกหมวด</option></select><span class="tag bg-slate-100">เลือก 0/1247</span></div>
+          <table class="w-full text-[12px]">
+            <thead class="bg-slate-50 text-slate-500 text-[11px]"><tr>${['','รหัส','ชื่อสินค้า','หมวด','ราคา','ทุน','สต็อก','สถานะ','ขาย','Odoo','ใช้งาน'].map(h=>`<th class="text-left px-3 py-2">${h}</th>`).join('')}</tr></thead>
+            <tbody>${[
+              ['PARA-500','พาราเซตามอล Tylenol 500mg','ลดไข้','49','28','248','พอ','1240','✓',true],
+              ['VITC-1000','วิตามินซี Blackmores 1000mg','วิตามิน','189','120','86','พอ','856','✓',true],
+              ['HANS-AQ','พลาสเตอร์ Hansaplast Aqua','อุปกรณ์','79','42','12','ใกล้หมด','342','✓',true],
+              ['FT-60','ฟ้าทะลายโจร 60 cap','สมุนไพร','120','68','0','หมด','218','✓',true],
+              ['LOSAR-50','Losartan 50mg','ความดัน','280','180','45','พอ','98','✓',true],
+              ['IBUP-400','Ibuprofen 400mg','แก้ปวด','62','35','156','พอ','468','—',true],
+              ['CEN-50','Centrum Multi 50+','วิตามิน','620','420','24','ใกล้หมด','142','✓',false]
+            ].map(r=>{const stockColor=r[7]==='พอ'?'line':r[7]==='ใกล้หมด'?'amber':'red';return `<tr class="border-b border-slate-50 hover:bg-slate-50">
+              <td class="px-3 py-2"><input type="checkbox"/></td>
+              <td class="px-3 py-2 font-mono text-[11px]">${r[0]}</td>
+              <td class="px-3 py-2 font-semibold">${r[1]}</td>
+              <td class="px-3 py-2"><span class="tag bg-slate-100 text-slate-700">${r[2]}</span></td>
+              <td class="px-3 py-2 font-bold text-line">฿${r[3]}</td>
+              <td class="px-3 py-2 text-slate-500">฿${r[4]}</td>
+              <td class="px-3 py-2 font-bold">${r[5]}</td>
+              <td class="px-3 py-2"><span class="tag bg-${stockColor}-50 text-${stockColor}-700">${r[7]}</span></td>
+              <td class="px-3 py-2 text-slate-500">${r[8]}</td>
+              <td class="px-3 py-2 text-slate-500">${r[9]}</td>
+              <td class="px-3 py-2"><label class="relative inline-block w-9 h-5 ${r[10]?'bg-line':'bg-slate-300'} rounded-full"><span class="absolute ${r[10]?'right-0.5':'left-0.5'} top-0.5 h-4 w-4 rounded-full bg-white shadow"></span></label></td>
+            </tr>`}).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">C. Inventory / Products</div><div class="text-xs text-slate-500">includes/inventory/* — business_items, Odoo sync, hot path</div></div>
+`);
+
+// D. CUSTOMERS / MEMBERS
+admin.push(`
+<div class="desktop">
+  <div class="flex h-[720px]">
+    ${adminSidebar(3)}
+    <main class="flex-1 bg-slate-50 overflow-y-auto">
+      <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3"><h1 class="text-base font-extrabold">สมาชิก (12,480)</h1><button class="ml-auto h-8 px-3 rounded-lg border border-slate-200 text-xs">↓ Export</button><button class="h-8 px-3 rounded-lg bg-slate-900 text-white text-xs">+ ดึงจาก LINE</button></header>
+      <div class="p-6 grid grid-cols-3 gap-4">
+        <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
+          <div class="px-4 py-3 border-b"><input placeholder="ค้นหา ชื่อ/เบอร์/LINE..." class="w-full h-8 px-3 rounded-lg border border-slate-200 text-xs"/></div>
+          <div class="divide-y divide-slate-100 max-h-[580px] overflow-y-auto">
+            ${[
+              ['สมหญิง ใจดี','089-123-4567','Gold',2450,true],
+              ['วิชัย สุขใจ','081-234-5678','Silver',1240,false],
+              ['มาลี ดอกไม้','088-345-6789','Bronze',420,false],
+              ['ธนา ทอง','092-456-7890','Gold',3120,false],
+              ['รัตนา ใจเย็น','087-567-8901','Silver',1890,false],
+              ['สมชาย ขยัน','083-678-9012','Bronze',180,false],
+              ['พิมพ์ ใจ','099-789-0123','Platinum',5420,false],
+              ['อนันต์ ฤดี','085-890-1234','Bronze',640,false]
+            ].map(m=>`<div class="px-4 py-3 flex items-center gap-2 ${m[4]?'bg-line-soft':''} hover:bg-slate-50 cursor-pointer">
+              <div class="h-9 w-9 rounded-full bg-${m[2]==='Platinum'?'purple':m[2]==='Gold'?'amber':m[2]==='Silver'?'slate':'orange'}-500 text-white grid place-items-center font-bold text-xs">${m[0].charAt(0)}</div>
+              <div class="flex-1 min-w-0"><div class="text-[12px] font-semibold truncate">${m[0]}</div><div class="text-[11px] text-slate-500">${m[1]} · ${m[3]} pts</div></div>
+              <span class="tag bg-slate-100 text-slate-700 text-[10px]">${m[2]}</span>
+            </div>`).join('')}
+          </div>
+        </div>
+        <div class="col-span-2 bg-white rounded-xl border border-slate-100 overflow-hidden flex flex-col">
+          <div class="px-5 py-4 border-b flex items-center gap-3">
+            <div class="h-14 w-14 rounded-full bg-amber-500 text-white grid place-items-center text-xl font-extrabold">ส</div>
+            <div class="flex-1"><div class="text-lg font-extrabold">สมหญิง ใจดี</div><div class="text-[12px] text-slate-500">⭐ Gold Member · ID #1247 · เป็นสมาชิกตั้งแต่ ม.ค. 2025</div><div class="flex gap-1.5 mt-1.5">${['#vip','#allergy','#migraine'].map(t=>`<span class="tag bg-blue-100 text-blue-700 text-[10px]">${t}</span>`).join('')}</div></div>
+            <button class="h-8 px-3 rounded-lg bg-line text-white text-xs font-bold">💬 ส่งข้อความ</button>
+          </div>
+          <div class="flex border-b text-[12px]">${['ภาพรวม','ออเดอร์ (12)','แต้ม','สุขภาพ','โน้ต (3)','กิจกรรม'].map((t,i)=>`<button class="px-4 py-2 ${i===0?'border-b-2 border-line text-line font-bold':'text-slate-500'}">${t}</button>`).join('')}</div>
+          <div class="p-5 flex-1 overflow-y-auto space-y-4">
+            <div class="grid grid-cols-4 gap-3 text-center">${[['12','ออเดอร์'],['฿8,420','ใช้จ่ายรวม'],['2,450','แต้ม'],['8','รีวิว']].map(s=>`<div class="bg-slate-50 rounded-lg p-3"><div class="text-xl font-extrabold">${s[0]}</div><div class="text-[10px] text-slate-500 mt-0.5">${s[1]}</div></div>`).join('')}</div>
+            <div><div class="text-sm font-bold mb-2">ข้อมูลติดต่อ</div>
+              <div class="grid grid-cols-2 gap-2 text-[12px] bg-slate-50 rounded-lg p-3">
+                <div><div class="text-[10px] text-slate-400">เบอร์โทร</div><div class="font-semibold">089-123-4567</div></div>
+                <div><div class="text-[10px] text-slate-400">อีเมล</div><div class="font-semibold">somying@example.com</div></div>
+                <div><div class="text-[10px] text-slate-400">LINE ID</div><div class="font-mono text-[11px]">U4af49************2c5</div></div>
+                <div><div class="text-[10px] text-slate-400">วันเกิด</div><div class="font-semibold">15 มี.ค. 1985 (41 ปี)</div></div>
+              </div>
+            </div>
+            <div><div class="text-sm font-bold mb-2 flex items-center gap-2">🚨 แพ้ยา/ภูมิแพ้ <span class="ml-auto text-[11px] text-line">แก้ไข</span></div><div class="flex flex-wrap gap-1.5">${['Penicillin','Sulfa','ไอบูโพรเฟน','ถั่ว'].map(a=>`<span class="tag bg-red-100 text-red-700">${a}</span>`).join('')}</div></div>
+            <div><div class="text-sm font-bold mb-2">โรคประจำตัว / ยาที่ใช้</div><div class="bg-slate-50 rounded-lg p-3 text-[12px] space-y-1"><div>• ไมเกรน · ใช้ Cafergot เมื่อกำเริบ</div><div>• ความดันสูง · Losartan 50mg เช้า</div></div></div>
+            <div><div class="text-sm font-bold mb-2">ออเดอร์ล่าสุด</div>
+              <div class="space-y-1 text-[12px]">${[['REYA-2026-0427','520','รอชำระ','amber'],['REYA-2026-0418','287','สำเร็จ','line'],['REYA-2026-0411','892','สำเร็จ','line']].map(o=>`<div class="flex items-center gap-2 bg-slate-50 rounded-lg p-2"><div class="font-mono text-[11px]">#${o[0]}</div><div class="ml-auto font-bold text-line">฿${o[1]}</div><span class="tag bg-${o[3]}-50 text-${o[3]}-700">${o[2]}</span></div>`).join('')}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">D. Customers / Members</div><div class="text-xs text-slate-500">customers.php — โปรไฟล์ลูกค้า, ภูมิแพ้, ประวัติ, โน้ต CRM</div></div>
+`);
+
+// E. BROADCAST
+admin.push(`
+<div class="desktop">
+  <div class="flex h-[720px]">
+    ${adminSidebar(6)}
+    <main class="flex-1 bg-slate-50 overflow-y-auto">
+      <header class="bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-3"><h1 class="text-base font-extrabold">ยิงข้อความโบรดแคสต์</h1><span class="ml-auto text-[11px] text-slate-500">โควต้าเดือนนี้: 2,840 / 12,480</span></header>
+      <div class="p-6 grid grid-cols-3 gap-4">
+        <div class="col-span-2 space-y-4">
+          <div class="bg-white rounded-xl border border-slate-100 p-5">
+            <div class="text-sm font-bold mb-3">1. กลุ่มเป้าหมาย</div>
+            <div class="grid grid-cols-3 gap-2">${[['ทุกคน','12,480',true],['Gold/Platinum','3,420',false],['Bronze (ไม่ active)','1,840',false]].map(g=>`<button class="rounded-xl border-2 p-3 text-left ${g[2]?'border-line bg-line-soft':'border-slate-200'}"><div class="text-[11px] font-bold">${g[0]}</div><div class="text-lg font-extrabold mt-1">${g[1]}</div><div class="text-[10px] text-slate-500">คน</div></button>`).join('')}</div>
+            <div class="mt-3 text-[11px] text-slate-500">+ เพิ่มเงื่อนไข: <span class="text-line font-semibold">แท็ก, ออเดอร์ล่าสุด, สินค้าที่ซื้อ, อายุ</span></div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-100 p-5">
+            <div class="text-sm font-bold mb-3">2. ประเภทข้อความ</div>
+            <div class="grid grid-cols-5 gap-2 text-center">${[['📝','Text',true],['🖼','Image',false],['🎬','Video',false],['📋','Flex',false],['🎠','Carousel',false]].map(t=>`<button class="rounded-xl border-2 p-3 ${t[2]?'border-line bg-line-soft':'border-slate-200'}"><div class="text-2xl">${t[0]}</div><div class="text-[10px] font-bold mt-1">${t[1]}</div></button>`).join('')}</div>
+            <textarea class="mt-3 w-full h-24 p-3 rounded-lg border border-slate-200 text-sm" placeholder="พิมพ์ข้อความ...">🎉 โปรพิเศษวันนี้! วิตามินรวม Centrum ลด 30% เฉพาะวันนี้เท่านั้น
+
+แตะลิงก์เพื่อสั่งซื้อ → https://reya.app/p/centrum</textarea>
+            <div class="mt-2 text-[10px] text-slate-500 flex justify-between"><span>248 / 5,000 ตัวอักษร</span><span>📎 แทรกชื่อลูกค้า · ลิงก์</span></div>
+          </div>
+          <div class="bg-white rounded-xl border border-slate-100 p-5">
+            <div class="text-sm font-bold mb-3">3. เวลาส่ง</div>
+            <div class="grid grid-cols-3 gap-2">${[['ส่งตอนนี้',true,'⚡'],['ตั้งเวลา',false,'📅'],['ทยอยส่ง',false,'⏳']].map(t=>`<button class="rounded-xl border-2 p-3 ${t[1]?'border-line bg-line-soft':'border-slate-200'}"><div class="text-xl">${t[2]}</div><div class="text-[11px] font-bold mt-1">${t[0]}</div></button>`).join('')}</div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-100 p-5">
+          <div class="text-sm font-bold mb-3">👁 พรีวิวในไลน์</div>
+          <div class="bg-gradient-to-b from-emerald-50 to-white rounded-2xl p-3">
+            <div class="bg-line text-white text-[11px] font-bold p-2 rounded-lg">ร้านยาเรยา</div>
+            <div class="mt-2 flex items-start gap-2"><div class="h-7 w-7 rounded-full bg-line shrink-0"></div><div class="bg-white rounded-2xl rounded-tl-md p-3 text-[12px] shadow-soft">🎉 โปรพิเศษวันนี้! วิตามินรวม Centrum ลด 30% เฉพาะวันนี้เท่านั้น<br/><br/>แตะลิงก์เพื่อสั่งซื้อ → <span class="text-blue-500 underline">reya.app/p/centrum</span></div></div>
+          </div>
+          <div class="mt-4 text-[11px] space-y-1 bg-slate-50 rounded-lg p-3">
+            <div class="flex justify-between"><span class="text-slate-500">กลุ่ม</span><span class="font-bold">ทุกคน · 12,480</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">ค่าใช้จ่าย</span><span class="font-bold">12,480 push</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">เวลาส่ง</span><span class="font-bold">ส่งทันที</span></div>
+          </div>
+          <button class="mt-4 w-full h-10 rounded-full bg-line text-white text-sm font-bold">📢 ยิงโบรดแคสต์</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">E. Broadcast Campaign</div><div class="text-xs text-slate-500">broadcast.php — segment, รูปแบบ, พรีวิว, ตั้งเวลา</div></div>
+`);
+</script>
+
+<!-- ===== INBOX V2 ===== -->
+<script>
+const inbox = [];
+
+// F. INBOX V2 (3-column CRM HUD)
+inbox.push(`
+<div class="desktop">
+  <div class="flex h-[760px]">
+    ${adminSidebarCompact(1)}
+    <!-- conversation list -->
+    <div class="w-72 bg-white border-r border-slate-200 shrink-0 flex flex-col">
+      <div class="px-4 py-3 border-b">
+        <div class="flex items-center gap-2"><h2 class="text-sm font-extrabold">กล่องข้อความ</h2><span class="ml-auto text-[10px] text-slate-500">328 วันนี้</span></div>
+        <input placeholder="ค้นหา..." class="mt-2 w-full h-8 px-3 rounded-lg bg-slate-100 text-xs"/>
+        <div class="mt-2 flex gap-1.5 text-[10px]">
+          <span class="tag bg-line text-white px-2 py-0.5">ทั้งหมด · 328</span>
+          <span class="tag bg-slate-100 text-slate-700 px-2 py-0.5">ค้างตอบ · 7</span>
+          <span class="tag bg-slate-100 text-slate-700 px-2 py-0.5">ของฉัน</span>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto divide-y divide-slate-100">
+        ${[
+          ['สมหญิง ใจดี','ส','amber','ปวดหัวมา 2 วันแล้ว...','14:32',true,'2','VIP'],
+          ['วิชัย สุขใจ','ว','blue','ขอบคุณครับ ได้รับแล้ว','14:28',true,'',''],
+          ['มาลี ดอกไม้','ม','purple','สลิปโอนครับ [Image]','14:15',false,'1',''],
+          ['ธนา ทอง','ธ','line','รับยาที่ร้านได้กี่โมง?','13:55',false,'',''],
+          ['รัตนา ใจเย็น','ร','pink','[Sticker]','13:42',false,'',''],
+          ['สมชาย ขยัน','ส','orange','ยา Centrum มีไหมครับ','13:20',false,'',''],
+          ['พิมพ์ ใจ','พ','red','ขอสอบถามเรื่อง...','13:05',false,'','VIP'],
+          ['อนันต์ ฤดี','อ','indigo','อาการดีขึ้นแล้วครับ','12:48',false,'','']
+        ].map((c,i)=>`<div class="px-4 py-3 flex items-center gap-2 ${i===0?'bg-line-soft border-l-4 border-line':'hover:bg-slate-50'} cursor-pointer">
+          <div class="h-10 w-10 rounded-full bg-${c[2]}-500 text-white grid place-items-center font-bold text-xs shrink-0">${c[1]}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1"><span class="text-[12px] font-bold truncate">${c[0]}</span>${c[7]?`<span class="tag bg-amber-100 text-amber-700 text-[9px] px-1">${c[7]}</span>`:''}</div>
+            <div class="text-[11px] text-slate-500 truncate">${c[3]}</div>
+          </div>
+          <div class="flex flex-col items-end gap-0.5"><span class="text-[10px] text-slate-400">${c[4]}</span>${c[6]?`<span class="h-4 min-w-4 px-1 rounded-full bg-line text-white text-[9px] font-bold grid place-items-center">${c[6]}</span>`:''}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <!-- chat panel -->
+    <div class="flex-1 flex flex-col bg-slate-50 min-w-0">
+      <div class="bg-white border-b px-5 py-3 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-full bg-amber-500 text-white grid place-items-center font-bold">ส</div>
+        <div class="flex-1 min-w-0"><div class="text-sm font-extrabold flex items-center gap-2">สมหญิง ใจดี <span class="tag bg-amber-100 text-amber-700 inline-flex items-center gap-1">${i('star',10,'fill-amber-500')} Gold</span><span class="tag bg-red-100 text-red-700 inline-flex items-center gap-1">${i('alert-triangle',10)} แพ้ Penicillin</span></div><div class="text-[11px] text-slate-500">089-123-4567 · 12 ออเดอร์ · 2,450 แต้ม</div></div>
+        <button class="h-9 px-3 rounded-lg bg-line text-white text-xs font-bold inline-flex items-center gap-1.5">${i('pill',14)} จ่ายยา</button>
+        <button class="h-9 w-9 rounded-lg border border-slate-200 grid place-items-center text-slate-500" title="โทร">${i('phone',16)}</button>
+        <button class="h-9 w-9 rounded-lg border border-slate-200 grid place-items-center text-slate-500" title="วิดีโอคอล">${i('video',16)}</button>
+        <button class="h-9 w-9 rounded-lg border border-slate-200 grid place-items-center text-slate-500" title="เพิ่มเติม">${i('more-horizontal',16)}</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-5 space-y-3">
+        <div class="text-center text-[10px] text-slate-400">วันนี้ 14:00</div>
+        <div class="flex justify-start"><div class="max-w-md bg-white rounded-2xl rounded-tl-md p-3 text-[13px] shadow-soft">สวัสดีค่ะ ปวดหัวมา 2 วันแล้ว แต่ก่อนเคยทานพาราแล้วไม่หายค่ะ</div></div>
+        <div class="flex justify-start"><div class="max-w-md bg-white rounded-2xl p-3 text-[13px] shadow-soft">ปวดข้างเดียว ระดับ 7/10 มีคลื่นไส้ด้วยค่ะ 😢</div></div>
+        <div class="text-center"><span class="tag bg-blue-100 text-blue-700">🤖 AI ประเมินอาการ: ไมเกรนกำเริบ — แนะนำคุยกับเภสัชกร</span></div>
+        <div class="flex justify-end"><div class="max-w-md bg-line text-white rounded-2xl rounded-tr-md p-3 text-[13px]">สวัสดีค่ะคุณสมหญิง 😊<br/>จากประวัติพบว่าเคยทาน Cafergot สำหรับไมเกรน — แนะนำทาน Cafergot 1 เม็ดทันทีค่ะ ถ้ายังไม่หายใน 1 ชม. ทานเพิ่มได้อีก 1 เม็ด<br/><br/>หลีกเลี่ยงแสงจ้า เสียงดัง พักผ่อนในห้องมืดนะคะ</div></div>
+        <div class="flex justify-start"><div class="max-w-md bg-white rounded-2xl p-3 text-[13px] shadow-soft">ตอนนี้ที่บ้านไม่มี Cafergot เลยค่ะ สั่งกับร้านได้ไหมคะ?</div></div>
+        <div class="flex justify-end"><div class="max-w-md bg-line text-white rounded-2xl p-3 text-[13px]">ได้ค่ะ จะจัดยาให้ พร้อมบันทึกการจ่ายยา 👇</div></div>
+        <div class="flex justify-end"><div class="max-w-sm bg-white rounded-2xl border-2 border-line p-3 shadow-soft">
+          <div class="text-[10px] font-bold tracking-widest text-line">📋 ฉลากยา (Flex)</div>
+          <div class="mt-2 text-[13px] font-bold">Cafergot 1mg/100mg</div>
+          <div class="text-[11px] text-slate-500">สำหรับ: คุณสมหญิง ใจดี</div>
+          <div class="mt-2 bg-amber-50 rounded-lg p-2 text-[11px] text-amber-800">💊 ทาน 1 เม็ดทันทีเมื่อปวด · ทานซ้ำได้ใน 30 นาที</div>
+          <div class="mt-1 text-[10px] text-slate-500">⚠ ห้ามใช้เกิน 6 เม็ด/วัน · ห้ามในผู้แพ้ Ergot</div>
+        </div></div>
+      </div>
+      <div class="bg-white border-t p-3">
+        <div class="flex gap-1.5 text-[11px] mb-2">${[['paperclip','ไฟล์'],['image','รูป'],['pill','จ่ายยา'],['layout-template','Flex'],['ticket','คูปอง'],['sparkles','AI Draft']].map(t=>`<button class="tag bg-slate-100 text-slate-700 hover:bg-slate-200 px-3 py-1.5 inline-flex items-center gap-1.5">${i(t[0],12)} ${t[1]}</button>`).join('')}</div>
+        <div class="flex gap-2 items-center"><button class="h-10 w-10 rounded-xl border border-slate-200 grid place-items-center text-slate-500">${i('smile',18)}</button><textarea rows="1" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm resize-none" placeholder="พิมพ์ข้อความ..."></textarea><button class="h-10 w-10 rounded-xl bg-line text-white grid place-items-center">${i('send',18)}</button></div>
+      </div>
+    </div>
+    <!-- CRM HUD -->
+    <aside class="w-72 bg-white border-l border-slate-200 shrink-0 overflow-y-auto">
+      <div class="p-4 border-b text-center bg-gradient-to-b from-amber-50 to-white">
+        <div class="h-16 w-16 mx-auto rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white grid place-items-center text-2xl font-extrabold ring-4 ring-white shadow-soft">ส</div>
+        <div class="mt-2 text-sm font-extrabold">สมหญิง ใจดี</div>
+        <div class="text-[11px] text-slate-500 inline-flex items-center gap-1">${i('star',11,'fill-amber-400 text-amber-400')} Gold · 2,450 pts</div>
+        <div class="mt-2 flex justify-center gap-1.5 flex-wrap">${['#vip','#allergy','#migraine'].map(t=>`<span class="tag bg-blue-100 text-blue-700 text-[10px]">${t}</span>`).join('')}</div>
+      </div>
+      <div class="p-4 border-b bg-gradient-to-r from-red-50 to-rose-50">
+        <div class="text-[10px] font-bold tracking-widest text-red-700 inline-flex items-center gap-1">${i('alert-triangle',12)} แพ้ยา</div>
+        <div class="mt-1.5 flex flex-wrap gap-1">${['Penicillin','Sulfa','Ibuprofen','ถั่ว'].map(a=>`<span class="tag bg-white border border-red-200 text-red-700 text-[10px]">${a}</span>`).join('')}</div>
+      </div>
+      <div class="p-4 border-b">
+        <div class="text-[10px] font-bold tracking-widest text-slate-400 inline-flex items-center gap-1">${i('pill',12)} ยาที่ใช้ประจำ</div>
+        <div class="mt-2 space-y-1.5 text-[12px]">
+          <div class="flex items-center gap-2"><div class="h-7 w-7 rounded-md overflow-hidden">${productArt('mint','capsule')}</div><span class="flex-1 font-semibold">Losartan 50mg</span><span class="text-slate-500">1×1 เช้า</span></div>
+          <div class="flex items-center gap-2"><div class="h-7 w-7 rounded-md overflow-hidden">${productArt('rose','capsule')}</div><span class="flex-1 font-semibold">Cafergot 1mg</span><span class="text-slate-500">prn</span></div>
+        </div>
+      </div>
+      <div class="p-4 border-b">
+        <div class="text-[10px] font-bold tracking-widest text-slate-400 inline-flex items-center gap-1">${i('package',12)} ออเดอร์ล่าสุด</div>
+        <div class="mt-2 space-y-1.5 text-[12px]">${[['#0427','520','amber','clock'],['#0418','287','line','check-circle-2'],['#0411','892','line','check-circle-2']].map(o=>`<div class="flex items-center gap-2">${i(o[3],12,`text-${o[2]}-500`)}<span class="font-mono text-[11px] flex-1">${o[0]}</span><span class="font-bold text-line">฿${o[1]}</span></div>`).join('')}</div>
+      </div>
+      <div class="p-4 border-b">
+        <div class="text-[10px] font-bold tracking-widest text-slate-400 inline-flex items-center gap-1">${i('sticky-note',12)} โน้ตเภสัชกร</div>
+        <div class="mt-2 space-y-2 text-[11px]">
+          <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-2 border-l-2 border-amber-400"><div class="font-semibold">ผู้ป่วยมีไมเกรน — ติดตามอาการ</div><div class="text-[10px] text-slate-500 mt-0.5">ภก.นิรันดร์ · 25 พ.ย.</div></div>
+          <div class="bg-slate-50 rounded-lg p-2 border-l-2 border-slate-300"><div>ชอบคุย LINE · ตอบเร็ว</div><div class="text-[10px] text-slate-500 mt-0.5">ภก.พิม · 18 พ.ย.</div></div>
+        </div>
+        <button class="mt-2 w-full h-7 rounded-lg border border-dashed border-slate-300 text-[11px] text-slate-500 inline-flex items-center justify-center gap-1">${i('plus',12)} เพิ่มโน้ต</button>
+      </div>
+      <div class="p-4">
+        <div class="text-[10px] font-bold tracking-widest text-slate-400 inline-flex items-center gap-1">${i('zap',12)} ลัด</div>
+        <div class="mt-2 grid grid-cols-2 gap-1.5 text-[10px]">${[['pill','จ่ายยา','mint'],['phone','โทร','sky'],['ticket','คูปอง','amber'],['calendar','นัดหมาย','lavender'],['flag-triangle-right','รายงาน','rose'],['file-text','ใบสั่งยา','slate']].map(q=>{const cl=PRODUCT_GRADIENTS[q[2]];return `<button class="bg-white border border-slate-100 hover:border-slate-300 hover:shadow-soft rounded-lg p-2 font-semibold transition"><div class="h-7 w-7 mx-auto rounded-lg grid place-items-center" style="background: linear-gradient(135deg, ${cl[0]}, ${cl[1]}); color: ${cl[3]}">${i(q[0],14)}</div><div class="mt-1">${q[1]}</div></button>`}).join('')}</div>
+      </div>
+    </aside>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">F. Inbox v2 — CRM HUD แบบ 3 คอลัมน์</div><div class="text-xs text-slate-500">inbox-v2.php — คุยแบบเภสัชกร, ดูแพ้ยา/ประวัติ/โน้ต, จ่ายยาด้วย Flex template</div></div>
+`);
+
+// G. DISPENSE MODAL
+inbox.push(`
+<div class="desktop relative" style="min-height:680px;">
+  <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"></div>
+  <div class="absolute inset-0 grid place-items-center p-6">
+    <div class="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden">
+      <div class="px-6 py-4 border-b flex items-center gap-3 bg-gradient-to-r from-emerald-50 to-white">
+        <div class="h-10 w-10 rounded-xl bg-line text-white grid place-items-center shadow-soft">${i('pill',20)}</div>
+        <div><h3 class="text-base font-extrabold">ระบบจ่ายยา (Dispense)</h3><div class="text-[11px] text-slate-500 inline-flex items-center gap-1">สำหรับ: สมหญิง ใจดี · ${i('star',11,'fill-amber-400 text-amber-400')} Gold</div></div>
+        <button class="ml-auto h-8 w-8 rounded-lg hover:bg-slate-100 grid place-items-center text-slate-500">${i('x',16)}</button>
+      </div>
+      <div class="p-6 grid grid-cols-2 gap-6">
+        <div>
+          <div class="text-sm font-bold mb-2">เลือกยา</div>
+          <div class="rounded-lg border border-slate-200 overflow-hidden">
+            <div class="p-2 border-b"><input placeholder="ค้นหายา..." class="w-full h-8 px-3 rounded-lg bg-slate-50 text-xs"/></div>
+            <div class="max-h-48 overflow-y-auto divide-y divide-slate-100">
+              ${[['Cafergot','1mg/100mg','ลดไมเกรน','24',true],['Tylenol','500mg','ลดไข้/ปวด','248',false],['Losartan','50mg','ลดความดัน','45',false],['Domperidone','10mg','คลื่นไส้','86',false]].map(d=>`<div class="px-3 py-2 flex items-center gap-2 ${d[4]?'bg-line-soft':'hover:bg-slate-50'} cursor-pointer"><input type="checkbox" ${d[4]?'checked':''}/><div class="flex-1"><div class="text-[12px] font-semibold">${d[0]} ${d[1]}</div><div class="text-[10px] text-slate-500">${d[2]} · คงเหลือ ${d[3]}</div></div>${d[4]?'<span class="tag bg-line text-white text-[10px]">เลือกแล้ว</span>':''}</div>`).join('')}
+            </div>
+          </div>
+          <div class="text-sm font-bold mt-4 mb-2">รายการที่เลือก (1)</div>
+          <div class="rounded-lg border border-slate-200 p-3 space-y-2 text-[12px]">
+            <div><div class="font-bold">Cafergot 1mg/100mg</div>
+              <div class="grid grid-cols-3 gap-2 mt-2">
+                <div><label class="text-[10px] text-slate-500">จำนวน</label><input type="number" value="2" class="w-full h-8 px-2 rounded border border-slate-200 text-sm"/></div>
+                <div><label class="text-[10px] text-slate-500">ขนาด</label><input value="1 เม็ด" class="w-full h-8 px-2 rounded border border-slate-200 text-sm"/></div>
+                <div><label class="text-[10px] text-slate-500">ความถี่</label><input value="ทุก 30 นาที" class="w-full h-8 px-2 rounded border border-slate-200 text-sm"/></div>
+              </div>
+              <textarea rows="2" class="mt-2 w-full p-2 rounded border border-slate-200 text-[11px]" placeholder="คำแนะนำเพิ่มเติม">ทาน 1 เม็ดเมื่อปวด ทานซ้ำได้ใน 30 นาที ห้ามเกิน 6 เม็ด/วัน</textarea>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="text-sm font-bold mb-2">วิธีจ่าย</div>
+          <div class="grid grid-cols-2 gap-2 mb-3">${[['banknote','เงินสด','mint',true],['credit-card','เครดิต','sky',false],['landmark','โอน','lavender',false],['calendar','ภายหลัง','amber',false]].map(p=>{const cl=PRODUCT_GRADIENTS[p[2]];return `<button class="rounded-xl border-2 p-3 ${p[3]?'border-line bg-line-soft':'border-slate-200'} text-left flex items-center gap-2"><div class="h-8 w-8 rounded-lg grid place-items-center" style="background: linear-gradient(135deg, ${cl[0]}, ${cl[1]}); color: ${cl[3]}">${i(p[0],17)}</div><div class="text-[11px] font-bold">${p[1]}</div></button>`}).join('')}</div>
+          <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[11px] text-amber-800 flex items-start gap-2">${i('alert-triangle',14,'text-amber-600 shrink-0 mt-0.5')}<span>ระบบจะหักสต็อก -2 ของ Cafergot อัตโนมัติ และส่ง Flex medicine label ในแชต</span></div>
+          <div class="text-sm font-bold mt-4 mb-2">พรีวิวฉลากยา</div>
+          <div class="rounded-2xl border-2 border-line p-3 bg-line-soft">
+            <div class="text-[10px] font-bold tracking-widest text-line">REYA PHARMACY</div>
+            <div class="text-sm font-extrabold mt-1">Cafergot 1mg/100mg</div>
+            <div class="text-[11px] text-slate-600">สำหรับ: คุณสมหญิง ใจดี</div>
+            <div class="mt-2 bg-white rounded-lg p-2 text-[12px]">💊 ทาน 1 เม็ดเมื่อปวด · ทานซ้ำได้ใน 30 นาที</div>
+            <div class="mt-1 text-[10px] text-red-700 font-semibold">⚠ ห้ามใช้เกิน 6 เม็ด/วัน · ห้ามในผู้แพ้ Ergot</div>
+            <div class="mt-2 text-[10px] text-slate-500">ภก.นิรันดร์ วัฒนกุล · 28 พ.ย. 2026 14:32</div>
+          </div>
+          <div class="rounded-lg bg-slate-50 p-3 text-[12px] mt-3 space-y-1"><div class="flex justify-between"><span>ราคารวม</span><span class="font-bold">฿320</span></div><div class="flex justify-between"><span>ส่วนลดสมาชิก</span><span class="text-line">−฿32</span></div><div class="flex justify-between font-extrabold text-base"><span>ชำระ</span><span class="text-line">฿288</span></div></div>
+          <button class="mt-3 w-full h-11 rounded-full bg-line text-white font-bold">✓ ยืนยันจ่ายยา + ส่ง Flex</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">G. Dispense Modal</div><div class="text-xs text-slate-500">classes/FlexTemplates.php — medicineLabel() / medicineLabelsCarousel()</div></div>
+`);
+</script>
+
+<!-- Odoo section removed per user request -->
+
+<!-- ===== AI ===== -->
+<script>
+const ai = [];
+
+// I. AI STUDIO
+ai.push(`
+<div class="desktop">
+  <header class="bg-gradient-to-r from-blue-900 to-blue-600 text-white px-6 py-4 flex items-center gap-3">
+    <div class="h-9 w-9 rounded-xl bg-white text-blue-700 grid place-items-center font-extrabold">AI</div>
+    <div><h1 class="text-base font-extrabold">AI Studio — น้องเรยา</h1><div class="text-[11px] text-blue-200">Gemini 2.0 Flash · Custom prompt per LINE OA</div></div>
+    <span class="ml-auto tag bg-line text-white">● Active</span>
+  </header>
+  <div class="p-6 grid grid-cols-3 gap-4 bg-slate-50">
+    <div class="col-span-2 space-y-4">
+      <div class="bg-white rounded-xl border border-slate-100 p-5">
+        <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-bold">System Prompt</h3><span class="text-[10px] text-slate-500">PHP: ai_settings.system_prompt</span></div>
+        <textarea rows="8" class="w-full p-3 rounded-lg border border-slate-200 text-[12px] font-mono leading-relaxed">คุณคือ "น้องเรยา" ผู้ช่วย AI ของร้านยาเรยา ฟาร์มาซี
+หน้าที่:
+1. ทักทายลูกค้าและถามอาการเบื้องต้น
+2. เก็บข้อมูลอาการอย่างละเอียด (ตำแหน่ง ระดับความปวด ระยะเวลา)
+3. ตรวจสอบข้อมูลแพ้ยาและโรคประจำตัวก่อนแนะนำ
+4. กรณีอาการรุนแรงหรือซับซ้อน ให้ส่งต่อเภสัชกร
+5. ห้ามวินิจฉัยโรค ห้ามสั่งยา (เฉพาะแนะนำ OTC ทั่วไป)
+
+โทน: เป็นมิตร สุภาพ ใช้คำว่า "ค่ะ/ครับ" ตามเพศของผู้ใช้</textarea>
+        <div class="mt-2 flex gap-2 text-[11px]">
+          <button class="tag bg-blue-100 text-blue-700">+ ตัวแปร {{user_name}}</button>
+          <button class="tag bg-blue-100 text-blue-700">+ ข้อมูลแพ้ยา</button>
+          <button class="tag bg-blue-100 text-blue-700">+ ประวัติยา</button>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-100 p-5">
+        <h3 class="text-sm font-bold mb-3">ทดสอบ AI (Playground)</h3>
+        <div class="bg-slate-50 rounded-lg p-3 space-y-2 max-h-56 overflow-y-auto">
+          <div class="flex justify-end"><div class="bg-line text-white rounded-2xl rounded-br-md p-2.5 text-[12px] max-w-md">ปวดท้องน้อยมา 1 ชั่วโมง</div></div>
+          <div class="flex"><div class="bg-white rounded-2xl rounded-bl-md p-2.5 text-[12px] max-w-md shadow-soft">สวัสดีค่ะ ขอสอบถามรายละเอียดเพิ่มเติมนะคะ:<br/>1. ปวดเป็นจุดเดียวหรือทั่ว ๆ?<br/>2. มีคลื่นไส้/ท้องเสียร่วมไหม?<br/>3. เคยปวดแบบนี้มาก่อนไหม?</div></div>
+        </div>
+        <div class="mt-2 flex gap-2"><input class="flex-1 h-9 px-3 rounded-lg border border-slate-200 text-sm" placeholder="ลองพิมพ์ทดสอบ..."/><button class="h-9 px-4 rounded-lg bg-blue-600 text-white text-xs font-bold">ส่ง</button></div>
+      </div>
+    </div>
+    <div class="space-y-4">
+      <div class="bg-white rounded-xl border border-slate-100 p-4">
+        <h3 class="text-sm font-bold mb-2">Model & Settings</h3>
+        <div class="space-y-2 text-[12px]">
+          <div><label class="text-[10px] text-slate-500">Provider</label><select class="w-full h-8 px-2 rounded border border-slate-200"><option>Gemini (default)</option><option>OpenAI</option></select></div>
+          <div><label class="text-[10px] text-slate-500">Model</label><select class="w-full h-8 px-2 rounded border border-slate-200"><option>gemini-2.0-flash</option><option>gemini-1.5-pro</option></select></div>
+          <div><label class="text-[10px] text-slate-500">Temperature</label><div class="flex items-center gap-2"><input type="range" value="40" class="flex-1"/><span class="font-bold">0.4</span></div></div>
+          <div><label class="text-[10px] text-slate-500">Max tokens</label><input value="1024" class="w-full h-8 px-2 rounded border border-slate-200"/></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-100 p-4">
+        <h3 class="text-sm font-bold mb-2">Auto-reply Rules</h3>
+        <div class="space-y-1.5 text-[12px]">${[['ทักทาย → ตอบทันที',true],['ถามราคา → ดึงสินค้า',true],['ปรึกษาอาการ → AI',true],['ขอเภสัชกร → ส่งต่อ',true],['คำหยาบ → ปิดเสียง',false]].map(r=>`<label class="flex items-center gap-2"><input type="checkbox" ${r[1]?'checked':''}/>${r[0]}</label>`).join('')}</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-100 p-4">
+        <h3 class="text-sm font-bold mb-2">การใช้งานเดือนนี้</h3>
+        <div class="text-[12px] space-y-1">
+          <div class="flex justify-between"><span class="text-slate-500">Tokens used</span><span class="font-bold">2.4M / 10M</span></div>
+          <div class="h-1.5 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-blue-500" style="width:24%"></div></div>
+          <div class="flex justify-between mt-2"><span class="text-slate-500">ค่าใช้จ่าย</span><span class="font-bold text-line">฿1,240</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">บทสนทนา</span><span class="font-bold">3,420</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">I. AI Studio</div><div class="text-xs text-slate-500">ai-studio.php — system prompt, playground, rules, usage</div></div>
+`);
+
+// J. SYMPTOM ASSESSMENT
+ai.push(`
+<div class="desktop">
+  <header class="bg-gradient-to-r from-pink-600 to-rose-600 text-white px-6 py-4 flex items-center gap-3">
+    <div class="h-9 w-9 rounded-xl bg-white text-rose-600 grid place-items-center font-extrabold">🩺</div>
+    <div><h1 class="text-base font-extrabold">ระบบประเมินอาการเบื้องต้น</h1><div class="text-[11px] text-rose-200">Triage assistant — ไม่ใช้แทนการวินิจฉัย</div></div>
+  </header>
+  <div class="p-6 grid grid-cols-3 gap-4 bg-slate-50">
+    <div class="bg-white rounded-xl border border-slate-100 p-4">
+      <h3 class="text-sm font-bold mb-3">1. เลือกอาการหลัก</h3>
+      <div class="grid grid-cols-3 gap-2 text-center text-[10px]">${[['🤕','ปวดหัว',true],['🤢','คลื่นไส้',false],['🌡','ไข้',false],['😷','ไอ',false],['💩','ท้องเสีย',false],['🤧','คัดจมูก',false],['🦵','ปวดเมื่อย',false],['🩹','ผื่น',false],['👁','ตาแดง',false]].map(s=>`<button class="rounded-xl border-2 p-2 ${s[2]?'border-line bg-line-soft':'border-slate-200'}"><div class="text-2xl">${s[0]}</div><div class="font-bold mt-1">${s[1]}</div></button>`).join('')}</div>
+    </div>
+    <div class="bg-white rounded-xl border border-slate-100 p-4">
+      <h3 class="text-sm font-bold mb-3">2. รายละเอียด</h3>
+      <div class="space-y-3 text-[12px]">
+        <div><label class="text-[11px] text-slate-500">ตำแหน่ง</label><div class="grid grid-cols-3 gap-1.5 mt-1">${['ข้างซ้าย','ข้างขวา','ทั้งสองข้าง'].map((p,i)=>`<button class="rounded-lg border ${i===0?'border-line bg-line-soft text-line font-bold':'border-slate-200'} py-1.5 text-[11px]">${p}</button>`).join('')}</div></div>
+        <div><label class="text-[11px] text-slate-500">ระดับความปวด (1-10)</label><div class="mt-1 flex items-center gap-2"><input type="range" min="1" max="10" value="7" class="flex-1"/><span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold">7</span></div></div>
+        <div><label class="text-[11px] text-slate-500">ระยะเวลา</label><div class="grid grid-cols-4 gap-1.5 mt-1">${['<1ชม.','1-6ชม.','1-2วัน','>2วัน'].map((p,i)=>`<button class="rounded-lg border ${i===2?'border-line bg-line-soft text-line font-bold':'border-slate-200'} py-1.5 text-[11px]">${p}</button>`).join('')}</div></div>
+        <div><label class="text-[11px] text-slate-500">อาการร่วม</label><div class="mt-1 flex flex-wrap gap-1.5">${['คลื่นไส้','แสงแสบตา','อาเจียน','เห็นภาพซ้อน','มึนงง'].map((p,i)=>`<button class="tag ${i===0?'bg-line text-white':'bg-slate-100 text-slate-700'} px-2 py-1">${p}</button>`).join('')}</div></div>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl border-2 border-amber-300 p-4">
+      <h3 class="text-sm font-bold mb-3 flex items-center gap-2">⚠ ผลประเมิน <span class="ml-auto tag bg-amber-100 text-amber-700">Triage</span></h3>
+      <div class="space-y-3">
+        <div class="bg-amber-50 rounded-xl p-3"><div class="text-[11px] font-bold tracking-widest text-amber-700">อาการที่เป็นไปได้</div><div class="mt-1 text-sm font-extrabold text-amber-900">ไมเกรน (Migraine)</div><div class="text-[11px] text-amber-700 mt-0.5">ความน่าจะเป็น 78% · เข้ากับ ICHD-3</div></div>
+        <div><div class="text-[10px] text-slate-500 mb-1">ระดับความเร่งด่วน</div><div class="grid grid-cols-4 gap-1"><div class="h-2 rounded-l bg-emerald-500"></div><div class="h-2 bg-amber-400"></div><div class="h-2 bg-slate-200"></div><div class="h-2 rounded-r bg-slate-200"></div></div><div class="text-[11px] text-amber-700 font-bold mt-1">🟡 ปรึกษาเภสัชกร</div></div>
+        <div class="text-[11px] space-y-1">
+          <div class="font-bold text-slate-700">💊 แนะนำเบื้องต้น</div>
+          <ul class="space-y-0.5 text-slate-600"><li>• Paracetamol 500-1000mg (ถ้าไม่แพ้)</li><li>• พักในห้องมืดเงียบ</li><li>• ดื่มน้ำมาก ๆ</li></ul>
+        </div>
+        <div class="text-[11px] space-y-1">
+          <div class="font-bold text-red-700">🚩 พบเภสัชกรทันทีถ้า:</div>
+          <ul class="space-y-0.5 text-red-600"><li>• ปวดรุนแรงสุดในชีวิต</li><li>• เห็นภาพซ้อน/พูดไม่ชัด</li><li>• ปวดต่อเนื่อง >72 ชม.</li></ul>
+        </div>
+        <button class="w-full h-9 rounded-full bg-line text-white font-bold text-xs">📞 ปรึกษาเภสัชกรเลย</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">J. Symptom Assessment / Triage</div><div class="text-xs text-slate-500">api/symptom-assessment.php — ประเมินอาการเบื้องต้น</div></div>
+`);
+</script>
+
+<!-- ===== SPECIAL FEATURES ===== -->
+<script>
+const special = [];
+
+// K. POS
+special.push(`
+<div class="desktop">
+  <header class="bg-slate-900 text-white px-6 py-4 flex items-center gap-3">
+    <div class="h-9 w-9 rounded-xl bg-line grid place-items-center">${i('shopping-cart',18,'text-white')}</div>
+    <h1 class="text-base font-extrabold">POS — ขายหน้าร้าน</h1>
+    <span class="ml-auto tag bg-line text-white inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-white"></span> Online</span>
+    <span class="tag bg-white/15 inline-flex items-center gap-1">${i('user',11)} ภก.นิรันดร์ · กะเช้า</span>
+  </header>
+  <div class="grid grid-cols-3 gap-0 bg-slate-50" style="min-height:680px;">
+    <div class="col-span-2 p-4 border-r border-slate-200">
+      <div class="flex gap-2 mb-3"><div class="flex-1 relative"><div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">${i('search',16)}</div><input placeholder="บาร์โค้ด หรือชื่อสินค้า..." class="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 text-sm"/></div><button class="h-10 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold inline-flex items-center gap-1.5">${i('scan-barcode',15)} สแกน</button></div>
+      <div class="grid grid-cols-3 gap-2">${[['mint','capsule','พาราเซตามอล 500mg','49'],['amber','bottle','วิตามินซี 1000mg','189'],['lavender','leaf','ฟ้าทะลายโจร 60 cap','120'],['sky','patch','พลาสเตอร์ Hansaplast','79'],['rose','capsule','Tylenol Cold','89'],['mint','capsule','Loratadine 10mg','120'],['coral','capsule','Domperidone 10mg','68'],['sky','bottle','Hand Sanitizer 250ml','99'],['slate','patch','หน้ากากอนามัย 50ชิ้น','149'],['amber','bottle','Betadine 30ml','55'],['rose','capsule','Cafergot 20เม็ด','320'],['amber','leaf','ขมิ้นชัน 100cap','89']].map(p=>`<button class="bg-white rounded-xl p-2 border border-slate-100 text-left hover:border-line hover:shadow-soft transition shadow-sm"><div class="h-16 rounded-lg overflow-hidden">${productArt(p[0],p[1])}</div><div class="text-[11px] font-semibold mt-1.5 line-clamp-1 leading-tight">${p[2]}</div><div class="text-sm font-extrabold text-line">฿${p[3]}</div></button>`).join('')}</div>
+    </div>
+    <div class="bg-white p-4 flex flex-col">
+      <div class="flex items-center justify-between mb-2"><h3 class="text-sm font-bold inline-flex items-center gap-2">${i('shopping-bag',16,'text-line')} ตะกร้า (3)</h3><button class="text-[11px] text-red-500 font-semibold inline-flex items-center gap-1">${i('x',12)} ล้าง</button></div>
+      <div class="flex-1 space-y-2 overflow-y-auto">${[['mint','capsule','พาราเซตามอล 500mg','49','2','98'],['amber','bottle','วิตามินซี 1000mg','189','1','189'],['rose','capsule','Cafergot 20เม็ด','320','1','320']].map(c=>`<div class="bg-slate-50 rounded-lg p-2"><div class="flex items-center gap-2"><div class="h-9 w-9 rounded-md overflow-hidden">${productArt(c[0],c[1])}</div><div class="flex-1 text-[12px] font-semibold">${c[2]}</div><button class="text-slate-300 hover:text-red-500">${i('x',14)}</button></div><div class="mt-1 flex items-center gap-2 text-[12px]"><span class="text-slate-500">฿${c[3]} ×</span><div class="inline-flex items-center rounded border border-slate-200"><button class="h-6 w-6 grid place-items-center text-slate-500">${i('minus',12)}</button><span class="px-2 font-bold">${c[4]}</span><button class="h-6 w-6 grid place-items-center text-slate-500">${i('plus',12)}</button></div><span class="ml-auto font-bold text-line">฿${c[5]}</span></div></div>`).join('')}</div>
+      <div class="space-y-1 text-[12px] mt-2 pt-2 border-t border-slate-100">
+        <div class="flex justify-between"><span class="text-slate-500">รวม</span><span>฿607</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">ส่วนลด</span><span class="text-line">−฿0</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">VAT 7%</span><span>+฿42.49</span></div>
+        <div class="flex justify-between font-extrabold text-base"><span>ชำระทั้งสิ้น</span><span class="text-line">฿649.49</span></div>
+      </div>
+      <div class="mt-2 relative"><div class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">${i('user-search',14)}</div><input placeholder="ค้นหาสมาชิก..." class="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 text-xs"/></div>
+      <div class="grid grid-cols-3 gap-1.5 mt-2 text-[11px]">${[['banknote','เงินสด','mint',true],['credit-card','บัตร','sky',false],['smartphone','PromptPay','lavender',false]].map(p=>{const cl=PRODUCT_GRADIENTS[p[2]];return `<button class="rounded-lg border-2 p-2 ${p[3]?'border-line bg-line-soft':'border-slate-200'} text-center"><div class="h-7 w-7 mx-auto rounded-lg grid place-items-center" style="background: linear-gradient(135deg, ${cl[0]}, ${cl[1]}); color: ${cl[3]}">${i(p[0],15)}</div><div class="font-bold mt-1">${p[1]}</div></button>`}).join('')}</div>
+      <button class="mt-3 h-12 rounded-xl bg-line text-white font-extrabold text-base inline-flex items-center justify-center gap-2">${i('wallet',18)} ชำระเงิน · ฿649</button>
+      <button class="mt-1.5 h-9 rounded-lg border border-slate-200 text-xs font-bold inline-flex items-center justify-center gap-1.5">${i('pause',14)} พักบิล</button>
+    </div>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">K. POS — ขายหน้าร้าน</div><div class="text-xs text-slate-500">api/pos.php — ขายแบบ walk-in, scan, ผูกสมาชิก</div></div>
+`);
+
+// L. PUT-AWAY (WMS)
+special.push(`
+<div class="desktop">
+  <header class="bg-gradient-to-r from-indigo-900 to-indigo-700 text-white px-6 py-4 flex items-center gap-3">
+    <div class="h-9 w-9 rounded-xl bg-white text-indigo-700 grid place-items-center">${i('package-plus',20)}</div>
+    <h1 class="text-base font-extrabold">WMS Put-Away — รับสินค้าเข้าคลัง</h1>
+    <span class="ml-auto tag bg-white/15">BDO: WH/IN/0089</span>
+    <span class="tag bg-amber-500">รับ 18/24</span>
+  </header>
+  <div class="grid grid-cols-3 gap-0 bg-slate-50" style="min-height:680px;">
+    <div class="col-span-2 p-5 border-r">
+      <div class="bg-white rounded-xl border border-slate-100 p-4 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="h-12 w-12 rounded-xl bg-indigo-100 text-indigo-700 grid place-items-center text-xl">📦</div>
+          <div class="flex-1"><div class="text-sm font-extrabold">PO #PO00012 จาก Odoo</div><div class="text-[11px] text-slate-500">Supplier: บจก. ฟาร์มาเทค จำกัด · 24 รายการ · ใบส่งของ #DN-2026-1127-089</div></div>
+          <button class="h-9 px-3 rounded-lg bg-indigo-600 text-white text-xs font-bold">🔄 ดึงจาก Odoo</button>
+        </div>
+      </div>
+      <h3 class="text-sm font-bold mb-2">รายการสินค้า</h3>
+      <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
+        <table class="w-full text-[12px]">
+          <thead class="bg-slate-50 text-[10px] text-slate-500"><tr>${['SKU','สินค้า','สั่ง','รับแล้ว','ตำแหน่ง','Lot','EXP','สถานะ'].map(h=>`<th class="text-left px-3 py-2">${h}</th>`).join('')}</tr></thead>
+          <tbody>${[
+            ['PARA-500','พาราเซตามอล 500mg','100','100','A-01-03','L26-1145','12/2028','line'],
+            ['VITC-1000','วิตามินซี 1000mg','50','50','B-02-01','L26-2208','06/2028','line'],
+            ['HANS-AQ','พลาสเตอร์ Hansaplast','30','30','C-01-04','L26-9912','03/2029','line'],
+            ['LOSAR-50','Losartan 50mg','40','40','A-03-02','L26-3344','09/2027','line'],
+            ['CEN-50','Centrum Multi 50+','20','12','—','—','—','amber'],
+            ['IBUP-400','Ibuprofen 400mg','80','—','—','—','—','slate']
+          ].map(r=>`<tr class="border-b border-slate-50"><td class="px-3 py-2 font-mono">${r[0]}</td><td class="px-3 py-2 font-semibold">${r[1]}</td><td class="px-3 py-2">${r[2]}</td><td class="px-3 py-2 font-bold ${r[3]==='—'?'text-slate-300':r[3]<r[2]?'text-amber-600':'text-line'}">${r[3]}</td><td class="px-3 py-2 font-mono text-[11px]">${r[4]}</td><td class="px-3 py-2 font-mono text-[11px]">${r[5]}</td><td class="px-3 py-2 text-[11px]">${r[6]}</td><td class="px-3 py-2"><span class="tag bg-${r[7]}-50 text-${r[7]}-700">${r[7]==='line'?'✓ เสร็จ':r[7]==='amber'?'รอ':'ยังไม่รับ'}</span></td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="bg-white p-5">
+      <h3 class="text-sm font-bold mb-3">สแกนรับสินค้า</h3>
+      <div class="border-2 border-dashed border-indigo-200 rounded-2xl p-6 text-center bg-indigo-50">
+        <div class="text-5xl mb-2">📷</div>
+        <div class="text-sm font-bold text-indigo-700">รอสแกนบาร์โค้ด</div>
+        <div class="text-[11px] text-indigo-600 mt-1">หรือพิมพ์ SKU ด้านล่าง</div>
+      </div>
+      <input placeholder="พิมพ์ SKU..." class="mt-3 w-full h-10 px-3 rounded-lg border border-slate-200 text-sm"/>
+      <div class="space-y-2 mt-3 text-[12px]">
+        <div><label class="text-[10px] text-slate-500">ตำแหน่งจัดเก็บ</label><input value="A-01-03" class="w-full h-9 px-2 rounded border border-slate-200 mt-1 font-mono"/></div>
+        <div><label class="text-[10px] text-slate-500">จำนวน</label><input value="100" type="number" class="w-full h-9 px-2 rounded border border-slate-200 mt-1"/></div>
+        <div><label class="text-[10px] text-slate-500">Lot Number</label><input value="L26-1145" class="w-full h-9 px-2 rounded border border-slate-200 mt-1 font-mono"/></div>
+        <div><label class="text-[10px] text-slate-500">วันหมดอายุ</label><input type="date" value="2028-12-31" class="w-full h-9 px-2 rounded border border-slate-200 mt-1"/></div>
+      </div>
+      <button class="mt-4 w-full h-11 rounded-full bg-line text-white font-bold text-sm">✓ ยืนยันรับสินค้า</button>
+      <div class="mt-4 bg-amber-50 rounded-lg p-3 text-[11px] text-amber-800">⚠ จะอัปเดต business_items.stock และส่งกลับไปยัง Odoo</div>
+    </div>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">L. WMS Put-Away</div><div class="text-xs text-slate-500">api/put-away.php — รับสินค้า BDO scan, lot, expiry</div></div>
+`);
+
+// M. RICH MENU
+special.push(`
+<div class="desktop">
+  <header class="bg-gradient-to-r from-line to-emerald-600 text-white px-6 py-4 flex items-center gap-3">
+    <div class="h-9 w-9 rounded-xl bg-white text-line grid place-items-center">${i('layout-grid',20)}</div>
+    <h1 class="text-base font-extrabold">Rich Menu Editor — ตัวจัดการเมนูล่าง LINE</h1>
+    <span class="ml-auto tag bg-white/15">เปลี่ยนตามเงื่อนไข: สมาชิก/ไม่สมาชิก/VIP</span>
+  </header>
+  <div class="grid grid-cols-3 gap-0 bg-slate-50" style="min-height:680px;">
+    <div class="p-5 border-r">
+      <div class="flex items-center gap-2 mb-3"><h3 class="text-sm font-bold flex-1">เมนูที่บันทึก</h3><button class="h-8 px-3 rounded-lg bg-line text-white text-xs font-bold">+ ใหม่</button></div>
+      <div class="space-y-2">${[['default','สมาชิกทั่วไป',true,2840],['vip','VIP / Gold+',false,3420],['new','ผู้ใช้ใหม่ (ยังไม่ลงทะเบียน)',false,1240],['promo','ช่วงโปรโมชั่น',false,0]].map(m=>`<div class="bg-white rounded-xl border ${m[2]?'border-line':'border-slate-100'} p-3 ${m[2]?'bg-line-soft':''}"><div class="flex items-center gap-2"><span class="tag bg-${m[2]?'line text-white':'slate-100 text-slate-700'}">${m[2]?'● ใช้งานอยู่':'พักไว้'}</span></div><div class="font-bold text-[13px] mt-1.5">${m[1]}</div><div class="text-[10px] text-slate-500 font-mono mt-0.5">${m[0]}</div><div class="text-[10px] text-slate-500 mt-1">👤 ${m[3]} คน</div></div>`).join('')}</div>
+    </div>
+    <div class="col-span-2 p-5">
+      <h3 class="text-sm font-bold mb-3">กำลังแก้ไข: สมาชิกทั่วไป</h3>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <div class="text-[11px] text-slate-500 mb-1.5">Layout (Compact 1686×1686)</div>
+          <div class="grid grid-cols-3 gap-1 bg-slate-900 rounded-xl p-1" style="aspect-ratio:1;">
+            ${[['🛒','ช้อป','line'],['📦','ออเดอร์','amber'],['🎁','แต้ม','purple'],['🤖','คุยกับ AI','blue'],['💊','จ่ายยา','rose'],['📞','โทรร้าน','indigo']].map(c=>`<div class="bg-${c[2]}-100 grid place-items-center rounded-lg p-2"><div class="text-3xl">${c[0]}</div><div class="text-[10px] font-bold mt-1 text-${c[2]}-700">${c[1]}</div></div>`).join('')}
+          </div>
+          <div class="mt-3 flex gap-2"><button class="flex-1 h-9 rounded-lg border border-slate-200 text-xs font-bold">↑ อัปโหลดรูป</button><button class="flex-1 h-9 rounded-lg border border-slate-200 text-xs font-bold">🎨 เลย์เอาต์อื่น</button></div>
+        </div>
+        <div>
+          <div class="text-[11px] text-slate-500 mb-1.5">ปุ่ม / Action ของแต่ละช่อง</div>
+          <div class="space-y-1.5 text-[12px]">${[['ช้อป','URI','/shop','line'],['ออเดอร์','URI','/orders','amber'],['แต้ม','URI','/rewards','purple'],['คุยกับ AI','Message','คุยกับ AI','blue'],['จ่ายยา','URI','/dispense','rose'],['โทรร้าน','Phone','02-345-6789','indigo']].map(b=>`<div class="bg-white rounded-lg border border-slate-100 p-2 flex items-center gap-2"><div class="h-7 w-7 rounded bg-${b[3]}-50 text-${b[3]}-700 grid place-items-center text-xs font-bold">${b[3].charAt(0).toUpperCase()}</div><div class="flex-1"><div class="font-semibold">${b[0]}</div><div class="text-[10px] text-slate-500"><span class="tag bg-slate-100">${b[1]}</span> ${b[2]}</div></div><button class="text-slate-300">✎</button></div>`).join('')}</div>
+          <div class="mt-4 bg-line-soft rounded-lg p-3 text-[11px] text-line"><div class="font-bold">✓ ค่าเริ่มต้น: เปิดอัตโนมัติเมื่อเข้าแชต</div><div class="mt-1">ใช้กับ LINE OA: 3 บัญชี · sync เมื่อบันทึก</div></div>
+          <div class="mt-3 flex gap-2"><button class="flex-1 h-10 rounded-lg border border-slate-200 text-sm font-bold">📋 พรีวิว</button><button class="flex-1 h-10 rounded-lg bg-line text-white text-sm font-bold">💾 บันทึก + ส่งไป LINE</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">M. Rich Menu Editor</div><div class="text-xs text-slate-500">api/dynamic-rich-menu.php — เปลี่ยนเมนูตามเงื่อนไขผู้ใช้</div></div>
+`);
+
+// N. REWARDS ADMIN
+special.push(`
+<div class="desktop">
+  <header class="bg-gradient-to-r from-amber-400 to-orange-500 text-white px-6 py-4 flex items-center gap-3">
+    <div class="h-9 w-9 rounded-xl bg-white text-amber-600 grid place-items-center">${i('award',20)}</div>
+    <h1 class="text-base font-extrabold">ระบบแต้มและรางวัล (Admin)</h1>
+    <span class="ml-auto tag bg-white/15">12,480 สมาชิก · 4.2M แต้มหมุนเวียน</span>
+  </header>
+  <div class="grid grid-cols-3 gap-0 bg-slate-50" style="min-height:680px;">
+    <div class="col-span-2 p-5 border-r space-y-4">
+      <div class="grid grid-cols-4 gap-3">${[['แต้มออกเดือนนี้','248,420','+12%','line'],['แต้มแลกเดือนนี้','86,240','-5%','amber'],['สมาชิก Gold+','942','7.5%','purple'],['คอนเวอร์ชั่น','24%','+3%','blue']].map(s=>`<div class="bg-white rounded-xl p-4 border border-slate-100"><div class="text-[10px] text-slate-500">${s[0]}</div><div class="text-2xl font-extrabold mt-1">${s[1]}</div><div class="text-[11px] text-${s[3]}-700 font-semibold">${s[2]}</div></div>`).join('')}</div>
+      <div class="bg-white rounded-xl border border-slate-100 overflow-hidden">
+        <div class="px-4 py-3 border-b flex items-center gap-2"><h3 class="text-sm font-bold">รางวัลที่ตั้งไว้</h3><button class="ml-auto h-8 px-3 rounded-lg bg-amber-500 text-white text-xs font-bold">+ เพิ่มรางวัล</button></div>
+        <table class="w-full text-[12px]">
+          <thead class="bg-slate-50 text-[10px] text-slate-500"><tr>${['#','ชื่อ','ประเภท','แต้ม','สต็อก','แลกแล้ว','สถานะ',''].map(h=>`<th class="text-left px-3 py-2">${h}</th>`).join('')}</tr></thead>
+          <tbody>${[
+            [1,'คูปองส่วนลด ฿50','คูปอง',200,'∞',342,true],
+            [2,'คูปองส่วนลด ฿100','คูปอง',400,'∞',186,true],
+            [3,'พาราเซตามอลฟรี 1 แผง','สินค้า',100,42,28,true],
+            [4,'วิตามินซีฟรี 1 ขวด','สินค้า',800,12,5,true],
+            [5,'เซ็ตของขวัญ Premium','สินค้า',2500,3,1,true],
+            [6,'ส่งฟรี 1 ครั้ง','บริการ',150,'∞',128,true],
+            [7,'ส่วนลด 10% ทั้งร้าน','คูปอง',500,'∞',0,false]
+          ].map(r=>`<tr class="border-b border-slate-50"><td class="px-3 py-2 font-mono">${r[0]}</td><td class="px-3 py-2 font-semibold">${r[1]}</td><td class="px-3 py-2"><span class="tag bg-slate-100">${r[2]}</span></td><td class="px-3 py-2 font-bold text-amber-600">⭐ ${r[3]}</td><td class="px-3 py-2">${r[4]}</td><td class="px-3 py-2">${r[5]}</td><td class="px-3 py-2"><label class="relative inline-block w-9 h-5 ${r[6]?'bg-line':'bg-slate-300'} rounded-full"><span class="absolute ${r[6]?'right-0.5':'left-0.5'} top-0.5 h-4 w-4 rounded-full bg-white"></span></label></td><td class="px-3 py-2"><button class="text-line text-[11px] font-bold">แก้ไข</button></td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="p-5 space-y-4">
+      <div class="bg-white rounded-xl border border-slate-100 p-4">
+        <h3 class="text-sm font-bold mb-3">กฎการได้รับแต้ม</h3>
+        <div class="space-y-2 text-[12px]">${[['ซื้อสินค้า 25 บาท','+1 แต้ม',true],['รีวิวสินค้า','+10 แต้ม',true],['ครบรอบสมาชิก','+100 แต้ม',true],['ชวนเพื่อน','+200 แต้ม',true],['อัปโปรไฟล์','+30 แต้ม',false]].map(r=>`<div class="flex items-center gap-2 bg-slate-50 rounded-lg p-2"><div class="flex-1"><div class="font-semibold">${r[0]}</div><div class="text-[10px] text-amber-700 font-bold">${r[1]}</div></div><label class="relative inline-block w-9 h-5 ${r[2]?'bg-line':'bg-slate-300'} rounded-full"><span class="absolute ${r[2]?'right-0.5':'left-0.5'} top-0.5 h-4 w-4 rounded-full bg-white"></span></label></div>`).join('')}</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-100 p-4">
+        <h3 class="text-sm font-bold mb-3">ระดับสมาชิก</h3>
+        <div class="space-y-2 text-[12px]">${[['🥉 Bronze','0','slate'],['🥈 Silver','500','slate'],['🥇 Gold','2000','amber'],['💎 Platinum','5000','purple']].map(t=>`<div class="flex items-center gap-2 bg-slate-50 rounded-lg p-2"><div class="flex-1 font-bold">${t[0]}</div><div class="text-[11px] text-${t[2]}-700">${t[1]} แต้ม</div></div>`).join('')}</div>
+        <button class="mt-3 w-full h-9 rounded-lg border border-slate-200 text-xs font-bold">+ เพิ่มระดับ</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">N. Rewards & Loyalty Admin</div><div class="text-xs text-slate-500">admin-rewards.php / admin-points-settings.php — รางวัล กฎ ระดับ</div></div>
+`);
+
+// O. DRUG INTERACTIONS
+special.push(`
+<div class="desktop">
+  <header class="bg-gradient-to-r from-red-600 to-orange-600 text-white px-6 py-4 flex items-center gap-3">
+    <div class="h-9 w-9 rounded-xl bg-white text-red-600 grid place-items-center">${i('shield-alert',20)}</div>
+    <h1 class="text-base font-extrabold">Drug Interactions — ตรวจปฏิกิริยาระหว่างยา</h1>
+    <span class="ml-auto tag bg-white/15">MIMS Database</span>
+  </header>
+  <div class="p-6 grid grid-cols-3 gap-4 bg-slate-50">
+    <div class="col-span-2 space-y-4">
+      <div class="bg-white rounded-xl border border-slate-100 p-5">
+        <h3 class="text-sm font-bold mb-3">เลือกยาที่ต้องการตรวจ</h3>
+        <div class="flex flex-wrap gap-2 mb-3">${['Warfarin 5mg','Aspirin 81mg','Losartan 50mg','Ibuprofen 400mg'].map(d=>`<span class="tag bg-blue-100 text-blue-700 px-3 py-1.5">${d} ✕</span>`).join('')}</div>
+        <input placeholder="🔍 ค้นหา เพิ่มยา..." class="w-full h-10 px-3 rounded-lg border border-slate-200 text-sm"/>
+      </div>
+      <div class="bg-white rounded-xl border-2 border-red-300 p-5">
+        <div class="flex items-center gap-2 mb-3"><span class="tag bg-red-500 text-white">CRITICAL · ห้ามใช้ร่วม</span><span class="text-[11px] text-slate-500">ตรวจพบ 1 รายการ</span></div>
+        <div class="bg-red-50 rounded-xl p-4 border border-red-200">
+          <div class="flex items-center gap-2"><span class="font-extrabold text-red-700">Warfarin × Aspirin</span></div>
+          <div class="mt-2 text-[12px] text-red-900">เพิ่มความเสี่ยงเลือดออก (bleeding) อย่างมีนัยสำคัญ Warfarin เป็น anticoagulant Aspirin ทำให้เกล็ดเลือดทำงานน้อยลง</div>
+          <div class="mt-3 grid grid-cols-3 gap-2 text-[11px]"><div class="bg-white rounded p-2"><div class="text-slate-500">ความรุนแรง</div><div class="font-bold text-red-700">รุนแรง 9/10</div></div><div class="bg-white rounded p-2"><div class="text-slate-500">หลักฐาน</div><div class="font-bold">Established</div></div><div class="bg-white rounded p-2"><div class="text-slate-500">เกิดเร็ว</div><div class="font-bold">ภายในไม่กี่วัน</div></div></div>
+          <div class="mt-3 text-[12px]"><span class="font-bold text-red-700">คำแนะนำ:</span> หลีกเลี่ยงการใช้ร่วม หากจำเป็นต้องใช้ ให้ติดตาม INR และอาการเลือดออกใกล้ชิด</div>
+        </div>
+        <div class="mt-3 bg-amber-50 rounded-xl p-4 border border-amber-200">
+          <div class="flex items-center gap-2"><span class="tag bg-amber-500 text-white">MODERATE</span><span class="font-bold text-amber-800">Ibuprofen × Losartan</span></div>
+          <div class="mt-1 text-[12px] text-amber-900">ลดประสิทธิภาพ Losartan และเพิ่มความเสี่ยงต่อไต — ใช้ระยะสั้น (<5 วัน) ได้ถ้าจำเป็น</div>
+        </div>
+      </div>
+    </div>
+    <div class="space-y-4">
+      <div class="bg-white rounded-xl border border-slate-100 p-4">
+        <h3 class="text-sm font-bold mb-2">สรุปผล</h3>
+        <div class="grid grid-cols-2 gap-2 text-center">
+          <div class="bg-red-50 rounded-lg p-3"><div class="text-2xl font-extrabold text-red-700">1</div><div class="text-[11px] text-red-600">Critical</div></div>
+          <div class="bg-amber-50 rounded-lg p-3"><div class="text-2xl font-extrabold text-amber-700">1</div><div class="text-[11px] text-amber-600">Moderate</div></div>
+          <div class="bg-blue-50 rounded-lg p-3"><div class="text-2xl font-extrabold text-blue-700">2</div><div class="text-[11px] text-blue-600">Minor</div></div>
+          <div class="bg-slate-50 rounded-lg p-3"><div class="text-2xl font-extrabold text-slate-500">4</div><div class="text-[11px] text-slate-500">ไม่มีปัญหา</div></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-100 p-4">
+        <h3 class="text-sm font-bold mb-2">ภูมิแพ้ผู้ป่วย</h3>
+        <div class="flex flex-wrap gap-1.5">${['Penicillin','Sulfa','ไอบูโพรเฟน'].map(a=>`<span class="tag bg-red-100 text-red-700">${a}</span>`).join('')}</div>
+        <div class="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 text-[11px] text-red-700"><span class="font-bold">🚨 แจ้งเตือน:</span> ผู้ป่วยแพ้ Ibuprofen — แต่มีในรายการตรวจ!</div>
+      </div>
+      <div class="bg-white rounded-xl border border-slate-100 p-4">
+        <h3 class="text-sm font-bold mb-2">ทางเลือกที่ปลอดภัย</h3>
+        <div class="space-y-1.5 text-[12px]">${['Paracetamol 500mg','Cetirizine 10mg','Domperidone 10mg'].map(d=>`<div class="bg-line-soft rounded p-2 font-semibold text-line">✓ ${d}</div>`).join('')}</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">O. Drug Interactions Checker</div><div class="text-xs text-slate-500">api/drug-interactions.php — ตรวจปฏิกิริยา + alert แพ้ยา (MIMS)</div></div>
+`);
+
+// P. SETTINGS / LINE ACCOUNTS
+special.push(`
+<div class="desktop">
+  <header class="bg-slate-800 text-white px-6 py-4 flex items-center gap-3">
+    <div class="h-9 w-9 rounded-xl bg-white text-slate-900 grid place-items-center">${i('settings',20)}</div>
+    <h1 class="text-base font-extrabold">การตั้งค่า · LINE Accounts (Multi-tenant)</h1>
+    <button class="ml-auto h-9 px-3 rounded-lg bg-line text-white text-xs font-bold">+ เชื่อม LINE OA</button>
+  </header>
+  <div class="p-6 grid grid-cols-3 gap-4 bg-slate-50">
+    ${[
+      ['ร้านยาเรยา สาขาสุขุมวิท','@reya-sukhumvit',true,'line','12,480','142','line'],
+      ['ร้านยาเรยา สาขาทองหล่อ','@reya-thonglor',false,'amber','3,420','45','line'],
+      ['ร้านยาเรยา (Test)','@reya-test',false,'slate','12','0','red']
+    ].map(a=>`<div class="bg-white rounded-2xl border ${a[2]?'border-line shadow-soft':'border-slate-100'} overflow-hidden">
+      <div class="px-5 py-4 ${a[2]?'gradient-card':'bg-slate-100'} text-${a[2]?'white':'slate-700'}">
+        <div class="flex items-center gap-2"><div class="h-10 w-10 rounded-full bg-white/20 grid place-items-center text-base">🏪</div><div class="flex-1"><div class="text-sm font-extrabold">${a[0]}</div><div class="text-[11px] opacity-90">${a[1]}</div></div>${a[2]?'<span class="tag bg-white/20">● Active</span>':''}</div>
+      </div>
+      <div class="p-5 space-y-2 text-[12px]">
+        <div class="flex justify-between"><span class="text-slate-500">Channel ID</span><span class="font-mono">1234567890</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Channel Secret</span><span class="font-mono">****d8f2</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Access Token</span><span class="font-mono">****X8Yz...</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Webhook</span><span class="tag bg-${a[6]}-50 text-${a[6]}-700">${a[6]==='line'?'✓ HMAC OK':'❌ ผิดพลาด'}</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">ผู้ใช้</span><span class="font-bold">${a[4]} คน</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Push ใช้ไป</span><span class="font-bold">${a[5]} / 12,480</span></div>
+        <div class="mt-3 flex gap-2"><button class="flex-1 h-8 rounded-lg border border-slate-200 text-xs font-bold">⚙ ตั้งค่า</button><button class="flex-1 h-8 rounded-lg ${a[2]?'bg-red-50 text-red-600':'bg-line text-white'} text-xs font-bold">${a[2]?'ปิด':'เปิด'}</button></div>
+      </div>
+    </div>`).join('')}
+    <div class="col-span-3 grid grid-cols-3 gap-4 mt-2">
+      <div class="bg-white rounded-xl border border-slate-100 p-4"><h3 class="text-sm font-bold mb-2">🔐 ผู้ดูแลระบบ</h3><div class="space-y-1.5 text-[12px]">${[['ภก.นิรันดร์ วัฒนกุล','super_admin','line'],['ภก.พิม สุขใจ','pharmacist','blue'],['คุณวิภา (การตลาด)','marketing','purple'],['คุณตั๊ก (สต็อก)','staff','slate']].map(u=>`<div class="flex items-center gap-2"><div class="h-7 w-7 rounded-full bg-${u[2]}-500 text-white grid place-items-center font-bold text-[10px]">${u[0].charAt(0)}</div><span class="flex-1 truncate">${u[0]}</span><span class="tag bg-${u[2]}-50 text-${u[2]}-700">${u[1]}</span></div>`).join('')}</div></div>
+      <div class="bg-white rounded-xl border border-slate-100 p-4"><h3 class="text-sm font-bold mb-2">🔔 การแจ้งเตือน</h3><div class="space-y-2 text-[12px]">${[['ออเดอร์ใหม่ → LINE Notify',true],['สลิปใหม่ → Telegram',true],['สต็อกใกล้หมด → Email',true],['สมาชิกใหม่ → ในแอป',false]].map(n=>`<label class="flex items-center gap-2"><input type="checkbox" ${n[1]?'checked':''}/>${n[0]}</label>`).join('')}</div></div>
+      <div class="bg-white rounded-xl border border-slate-100 p-4"><h3 class="text-sm font-bold mb-2">🌐 บูรณาการ</h3><div class="space-y-1.5 text-[12px]">${[['Odoo ERP','line','● เชื่อม'],['Gemini AI','line','● ใช้งาน'],['OpenAI','slate','พักไว้'],['Telegram','line','● เชื่อม'],['Facebook Messenger','amber','รอยืนยัน']].map(i=>`<div class="flex items-center gap-2"><span class="flex-1">${i[0]}</span><span class="tag bg-${i[1]}-50 text-${i[1]}-700">${i[2]}</span></div>`).join('')}</div></div>
+    </div>
+  </div>
+</div>
+<div class="mt-3 text-center"><div class="font-bold">P. Settings — Multi-tenant LINE OA</div><div class="text-xs text-slate-500">line_accounts table — channel, webhook HMAC, role, integration</div></div>
+`);
+</script>
+
+<!-- ===== INJECTION ===== -->
+<script>
+document.getElementById('miniapp-grid').innerHTML = miniapp.join('');
+document.getElementById('admin-grid').innerHTML = admin.join('');
+document.getElementById('inbox-grid').innerHTML = inbox.join('');
+document.getElementById('ai-grid').innerHTML = ai.join('');
+document.getElementById('special-grid').innerHTML = special.join('');
+// initialize Lucide icons after DOM injection
+if (window.lucide) window.lucide.createIcons();
+</script>
+
+<!-- ===== Pharmacist Guide Widget ===== -->
+<div id="pharm-widget" class="fixed bottom-5 right-5 z-[100] flex flex-col items-end gap-3 select-none">
+
+  <!-- Speech bubble -->
+  <div id="pharm-bubble" class="hidden w-[26rem] max-w-[calc(100vw-2.5rem)] bg-white rounded-3xl rounded-br-md p-5 shadow-2xl border border-emerald-100 relative">
+    <div class="flex items-start justify-between mb-2">
+      <div class="flex items-center gap-2">
+        <div class="h-7 w-7 rounded-full gradient-card grid place-items-center text-white text-[10px] font-bold shadow-soft">AI</div>
+        <div>
+          <div class="text-[12px] font-extrabold text-slate-900 leading-tight" id="pharm-title">ภก.เรยา · AI Mascot Guide</div>
+          <div class="text-[9px] text-emerald-600 tracking-widest font-bold">GPT-2 STYLE SYSTEM TOUR</div>
+        </div>
+      </div>
+      <button id="pharm-close" class="h-6 w-6 rounded-full hover:bg-slate-100 grid place-items-center text-slate-400" aria-label="ปิด"><i data-lucide="x" style="width:14px;height:14px"></i></button>
+    </div>
+    <div id="pharm-text" class="pharm-step-copy text-[13px] text-slate-700 leading-relaxed">สวัสดีค่ะ!</div>
+    <div class="mt-4 flex items-center gap-2">
+      <button id="pharm-prev" class="text-[11px] text-slate-500 hover:text-line font-semibold inline-flex items-center gap-1"><i data-lucide="chevron-left" style="width:12px;height:12px"></i> ย้อน</button>
+      <div id="pharm-dots" class="flex-1 flex gap-1 justify-center"></div>
+      <button id="pharm-next" class="text-[11px] font-bold text-white bg-line hover:bg-emerald-700 rounded-full px-3 py-1.5 inline-flex items-center gap-1 transition">ต่อไป <i data-lucide="chevron-right" style="width:12px;height:12px"></i></button>
+    </div>
+    <button id="pharm-skip" class="absolute -top-2 left-1/2 -translate-x-1/2 bg-white text-[10px] text-slate-400 hover:text-slate-700 px-2 py-0.5 rounded-full border border-slate-100 shadow-sm">ข้ามทัวร์</button>
+  </div>
+
+  <!-- Avatar (pharmacist mascot) -->
+  <button id="pharm-avatar" class="h-24 w-24 rounded-[2rem] pharm-mascot-card overflow-hidden grid place-items-center shadow-2xl ring-4 ring-white hover:scale-105 transition relative cursor-pointer" aria-label="เปิดทัวร์แนะนำ">
+    <svg viewBox="0 0 160 160" class="drop-shadow-sm pharm-mascot-wave pharm-mascot-img" role="img" aria-label="ภก.เรยา มาสคอตนำชมระบบ">
+      <defs>
+        <linearGradient id="mascotHair" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#6b3f28"/><stop offset="1" stop-color="#2f1f19"/></linearGradient>
+        <linearGradient id="mascotCoat" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e7fff1"/></linearGradient>
+        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#047857" flood-opacity=".25"/></filter>
+      </defs>
+      <circle cx="80" cy="80" r="70" fill="rgba(255,255,255,.72)"/>
+      <path d="M24 147c4-35 25-55 56-55s52 20 56 55H24z" fill="url(#mascotCoat)" filter="url(#softShadow)"/>
+      <path d="M50 101l30 30 30-30" fill="none" stroke="#06C755" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="80" cy="64" r="34" fill="#fde5cc"/>
+      <path d="M43 63c1-33 22-49 46-45 21 3 33 19 31 43-14-16-32-21-54-15-12 3-19 9-23 17z" fill="url(#mascotHair)"/>
+      <circle cx="47" cy="68" r="5" fill="#fde5cc"/><circle cx="113" cy="68" r="5" fill="#fde5cc"/>
+      <circle cx="68" cy="66" r="4" fill="#0f172a"/><circle cx="93" cy="66" r="4" fill="#0f172a"/>
+      <circle cx="69.5" cy="64.5" r="1.3" fill="#fff"/><circle cx="94.5" cy="64.5" r="1.3" fill="#fff"/>
+      <circle cx="59" cy="78" r="4" fill="#f9a8d4" opacity=".72"/><circle cx="101" cy="78" r="4" fill="#f9a8d4" opacity=".72"/>
+      <path d="M70 82c7 7 16 7 23 0" fill="none" stroke="#0f172a" stroke-width="3.5" stroke-linecap="round"/>
+      <circle cx="80" cy="131" r="7" fill="#fff" stroke="#06C755" stroke-width="4"/>
+      <rect x="96" y="111" width="24" height="12" rx="4" fill="#06C755"/>
+      <path d="M104 117h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <path d="M120 35c11 2 18 9 20 20" fill="none" stroke="#fbbf24" stroke-width="5" stroke-linecap="round"/>
+      <path d="M26 44c6-9 14-14 25-15" fill="none" stroke="#34d399" stroke-width="5" stroke-linecap="round"/>
+    </svg>
+    <svg width="64" height="64" viewBox="0 0 100 100" class="hidden">
+      <!-- white coat collar / body bg -->
+      <circle cx="50" cy="50" r="46" fill="white"/>
+      <!-- face -->
+      <circle cx="50" cy="42" r="20" fill="#fde4cc"/>
+      <!-- hair -->
+      <path d="M 30 38 Q 30 22 50 21 Q 70 22 70 38 Q 66 30 50 28 Q 34 30 30 38 Z" fill="#3f2a1d"/>
+      <!-- ear bumps -->
+      <circle cx="31" cy="43" r="2.5" fill="#fde4cc"/>
+      <circle cx="69" cy="43" r="2.5" fill="#fde4cc"/>
+      <!-- eyes -->
+      <circle cx="43" cy="43" r="1.8" fill="#1e293b"/>
+      <circle cx="57" cy="43" r="1.8" fill="#1e293b"/>
+      <!-- eye highlights -->
+      <circle cx="43.6" cy="42.4" r=".7" fill="white"/>
+      <circle cx="57.6" cy="42.4" r=".7" fill="white"/>
+      <!-- cheeks -->
+      <circle cx="38" cy="48" r="2.2" fill="#f9a8d4" opacity=".6"/>
+      <circle cx="62" cy="48" r="2.2" fill="#f9a8d4" opacity=".6"/>
+      <!-- smile -->
+      <path d="M 44 50 Q 50 55 56 50" stroke="#1e293b" fill="none" stroke-width="1.6" stroke-linecap="round"/>
+      <!-- white coat -->
+      <path d="M 18 92 Q 18 70 33 64 L 67 64 Q 82 70 82 92 Z" fill="white" stroke="#cbd5e1" stroke-width="1"/>
+      <!-- coat V-neck -->
+      <path d="M 33 64 L 50 80 L 67 64" stroke="#cbd5e1" fill="none" stroke-width="1.2"/>
+      <!-- coat collar accent -->
+      <path d="M 38 64 L 50 76 L 62 64" fill="white" stroke="#94a3b8" stroke-width=".8"/>
+      <!-- stethoscope tubing -->
+      <path d="M 42 68 Q 38 78 50 86 Q 62 78 58 68" stroke="#06C755" fill="none" stroke-width="2" stroke-linecap="round"/>
+      <!-- stethoscope chestpiece -->
+      <circle cx="50" cy="86" r="3.5" fill="white" stroke="#06C755" stroke-width="2"/>
+      <circle cx="50" cy="86" r="1.5" fill="#06C755"/>
+      <!-- name tag -->
+      <rect x="60" y="70" width="14" height="6" rx="1.5" fill="#06C755"/>
+      <rect x="62" y="72" width="10" height="1.2" fill="white" opacity=".7"/>
+      <rect x="62" y="74" width="6" height=".8" fill="white" opacity=".5"/>
+    </svg>
+    <span id="pharm-badge" class="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-rose-500 text-white text-[11px] font-extrabold grid place-items-center ring-2 ring-white">1</span>
+  </button>
+</div>
+
+<script>
+(function(){
+  const TOUR = [
+    { sel: '#overview', icon: 'sparkles', title: 'ยินดีต้อนรับค่ะ!',
+      text: 'สวัสดีค่ะคุณ ดิฉันภก.เรยา จะพาทัวร์ระบบทั้งหมดให้ดูเองค่ะ — กดปุ่ม "ต่อไป" เพื่อเริ่มเลย หรือกด "ข้ามทัวร์" ถ้าอยากดูเองค่ะ'},
+    { sel: '#mini-app', icon: 'smartphone', title: 'LINE Mini App · ฝั่งลูกค้า',
+      text: '17 หน้าในแอปไลน์ค่ะ — ตั้งแต่ Home, ช้อป, ตะกร้า, จ่ายเงิน, ดูออเดอร์, แลกแต้ม, โปรไฟล์สุขภาพ, นัดเภสัชกร — ลูกค้าทำได้หมดในไลน์ ไม่ต้องโหลดแอปอื่นเลยค่ะ'},
+    { sel: '#admin', icon: 'layout-dashboard', title: 'Admin Panel · ฝั่งร้าน',
+      text: 'แผงควบคุมหลักของผู้ดูแลค่ะ — Dashboard ดูยอดขายเรียลไทม์, จัดการคำสั่งซื้อ, สมาชิก, สินค้า (business_items), และยิงโบรดแคสต์เข้า LINE'},
+    { sel: '#inbox', icon: 'message-circle', title: 'Inbox v2 · หัวใจของระบบ',
+      text: 'หน้าจอที่เภสัชกรใช้บ่อยที่สุดค่ะ! คุยกับลูกค้าผ่าน LINE พร้อม CRM HUD ด้านขวาที่โชว์ "แพ้ยา" "โรคประจำตัว" "ยาที่ใช้ประจำ" — แล้วจ่ายยาผ่าน Flex template ได้ในคลิกเดียวค่ะ'},
+    { sel: '#ai', icon: 'sparkles', title: 'AI Telepharmacy',
+      text: 'AI Studio ตั้ง system prompt ของบอท AI แต่ละ LINE OA ได้ (Gemini/OpenAI) และระบบประเมินอาการเบื้องต้น (Triage) ที่ส่งต่อให้เภสัชกรเมื่อเคสยากค่ะ'},
+    { sel: '#special', icon: 'shapes', title: 'ฟีเจอร์เฉพาะทาง',
+      text: 'POS หน้าร้าน, WMS Put-Away รับสินค้าเข้าคลัง, Rich Menu Editor, ระบบแต้ม, ตรวจปฏิกิริยายา (Drug Interactions) และตั้งค่า Multi-tenant LINE OA — ครบทุกฟังก์ชันค่ะ'},
+    { sel: '#overview', icon: 'check-circle', title: 'จบทัวร์แล้วค่ะ',
+      text: 'ขอบคุณที่ดูจนจบนะคะ! กดที่หุ่นภก.มุมขวาล่างเพื่อเรียกทัวร์ใหม่ได้ตลอดเวลาค่ะ — หรือเลื่อนหน้าเอง ดิฉันจะอธิบายแต่ละส่วนตอนที่เลื่อนผ่านค่ะ'}
+  ];
+
+  TOUR.splice(0, TOUR.length, ...[
+    {
+      sel: '#overview',
+      icon: 'sparkles',
+      title: 'ภก.เรยา · เริ่มทัวร์ Clinicya',
+      html: '<p><strong>สวัสดีค่ะ ดิฉันภก.เรยา</strong> มาสคอตไกด์สไตล์ GPT-2 จะพาชมระบบแบบเป็นขั้นตอน ตั้งแต่ภาพรวมจนถึงงานหน้าร้านและ AI Telepharmacy</p><ul><li>ดูว่า Clinicya เชื่อม LINE OA, ร้านยา, CRM และหลังบ้านเข้าด้วยกันอย่างไร</li><li>เข้าใจ flow ลูกค้าใน LINE Mini App และ flow เภสัชกรใน Admin</li><li>รู้ว่าฟีเจอร์ไหนช่วยขาย ดูแลลูกค้า และลดงานซ้ำของทีม</li></ul>'
+    },
+    {
+      sel: '#mini-app',
+      icon: 'smartphone',
+      title: 'LINE Mini App · หน้าบ้านของลูกค้า',
+      html: '<p><strong>ลูกค้าใช้งานผ่าน LINE ได้เลย</strong> ไม่ต้องติดตั้งแอปเพิ่ม เหมาะกับร้านยาที่ต้องการให้ลูกค้าซื้อซ้ำและติดตามบริการง่ายขึ้น</p><ul><li>Home รวมแบนเนอร์ เมนูลัด สินค้าแนะนำ และสถานะออเดอร์ล่าสุด</li><li>Shop, Cart, Checkout รองรับสินค้า คูปอง ช่องทางชำระเงิน และที่อยู่จัดส่ง</li><li>Profile เก็บข้อมูลสุขภาพ แพ้ยา โรคประจำตัว แต้มสะสม และประวัติคำสั่งซื้อ</li><li>Booking ให้ลูกค้านัดคุยเภสัชกรหรือปรึกษา Telepharmacy ได้ใน LINE</li></ul>'
+    },
+    {
+      sel: '#admin',
+      icon: 'layout-dashboard',
+      title: 'Admin Panel · ศูนย์ควบคุมร้านยา',
+      html: '<p><strong>ฝั่งทีมร้านใช้จัดการงานประจำวัน</strong> ตั้งแต่ยอดขาย สต็อก สมาชิก ไปจนถึงแคมเปญและการตั้งค่า LINE OA หลายบัญชี</p><ul><li>Dashboard สรุปยอดขาย ออเดอร์ ลูกค้าใหม่ และสถานะระบบสำคัญ</li><li>Products/Inventory จัดการสินค้า ราคา สต็อก และการรับสินค้าเข้าคลัง</li><li>Orders/Payments ติดตามคำสั่งซื้อ การโอนเงิน COD และสถานะจัดส่ง</li><li>Broadcast/Reward สร้างแคมเปญ LINE, คูปอง, แต้ม และของรางวัล</li></ul>'
+    },
+    {
+      sel: '#inbox',
+      icon: 'message-circle',
+      title: 'Inbox v2 · จุดทำงานหลักของเภสัชกร',
+      html: '<p><strong>หน้านี้คือหัวใจของ CRM</strong> เพราะรวมแชต LINE, ประวัติลูกค้า และเครื่องมือจ่ายยาไว้ในจอเดียว</p><ul><li>Conversation list แยกลูกค้าที่ต้องตอบ เคสค้าง และข้อความล่าสุด</li><li>CRM HUD แสดงแพ้ยา โรคประจำตัว ยาประจำ ระดับสมาชิก และบันทึกสำคัญ</li><li>Dispense modal ช่วยเลือกยา ใส่วิธีใช้ หักสต็อก และส่ง Flex medicine label</li><li>เหมาะกับเคสที่ต้องคุยต่อเนื่อง เพราะเภสัชกรเห็นบริบทก่อนตอบทุกครั้ง</li></ul>'
+    },
+    {
+      sel: '#ai',
+      icon: 'sparkles',
+      title: 'AI Telepharmacy · ผู้ช่วยคัดกรองก่อนถึงเภสัชกร',
+      html: '<p><strong>AI ช่วยเตรียมข้อมูล ไม่แทนการวินิจฉัย</strong> ระบบเน้นการคัดกรองเบื้องต้นและส่งต่อให้เภสัชกรเมื่อมีความเสี่ยง</p><ul><li>AI Studio ตั้ง persona, system prompt, ขอบเขตคำตอบ และภาษาของแต่ละ LINE OA</li><li>Triage Assistant เก็บอาการ ระยะเวลา ยาที่ใช้ โรคประจำตัว และสัญญาณอันตราย</li><li>สรุปเคสให้เภสัชกรอ่านเร็วขึ้น พร้อมเตือนว่าอะไรควรถามเพิ่มก่อนแนะนำ</li><li>ข้อความควรเลี่ยงคำเคลมรักษาหาย และย้ำให้ปรึกษาผู้เชี่ยวชาญเมื่อจำเป็น</li></ul>'
+    },
+    {
+      sel: '#special',
+      icon: 'shapes',
+      title: 'ฟีเจอร์เฉพาะทาง · งานร้านยาครบวงจร',
+      html: '<p><strong>ส่วนนี้รวมเครื่องมือที่ทำให้ระบบเป็นมากกว่าแค่หน้าร้านออนไลน์</strong> เหมาะกับทีมที่ต้องดูแลทั้งหน้าร้าน คลัง และลูกค้า LINE</p><ul><li>POS สำหรับขายหน้าร้านและเชื่อมสต็อกกับระบบกลาง</li><li>WMS Put-Away ช่วยรับสินค้าเข้าคลังและจัดตำแหน่งจัดเก็บ</li><li>Rich Menu Editor ปรับเมนู LINE OA ให้พาลูกค้าไปยัง shop, order, booking หรือโปรโมชัน</li><li>Drug Interactions ช่วยเตือนความเสี่ยงเมื่อมีรายการยาที่ควรตรวจสอบร่วมกัน</li></ul>'
+    },
+    {
+      sel: '#overview',
+      icon: 'check-circle',
+      title: 'สรุปการใช้งานที่แนะนำ',
+      html: '<p><strong>เส้นทางทดลองระบบที่คุ้มที่สุด</strong> คือไล่จากลูกค้าไปหาเภสัชกร แล้วจบที่หลังบ้าน</p><ul><li>เริ่มจาก LINE Mini App: เลือกสินค้า ใส่ตะกร้า และดู flow checkout</li><li>ต่อด้วย Inbox v2: ดูว่าทีมร้านเห็นข้อมูลสุขภาพและจ่ายยาอย่างไร</li><li>ดู AI/Triage: ตรวจว่าเคสปรึกษาถูกสรุปและส่งต่ออย่างปลอดภัยหรือไม่</li><li>ปิดท้ายที่ Admin: เช็กออเดอร์ สต็อก แคมเปญ และการตั้งค่า LINE OA</li></ul>'
+    }
+  ]);
+
+  const $ = (id) => document.getElementById(id);
+  const bubble = $('pharm-bubble');
+  const titleEl = $('pharm-title');
+  const textEl = $('pharm-text');
+  const dotsEl = $('pharm-dots');
+  const badge = $('pharm-badge');
+  const avatar = $('pharm-avatar');
+
+  let idx = 0;
+  let inTour = false;
+  let dismissed = false;
+
+  function renderStepText(step){
+    textEl.innerHTML = step.html || step.text || '';
+  }
+
+  function renderDots(){
+    dotsEl.innerHTML = TOUR.map((_,i)=>`<span class="h-1.5 ${i===idx?'w-4 bg-line':'w-1.5 bg-slate-200'} rounded-full transition-all"></span>`).join('');
+  }
+
+  function showStep(i){
+    idx = (i + TOUR.length) % TOUR.length;
+    const step = TOUR[idx];
+    titleEl.textContent = step.title;
+    renderStepText(step);
+    renderDots();
+    badge.classList.add('hidden');
+    bubble.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+    // scroll target
+    const target = document.querySelector(step.sel);
+    if (target) {
+      target.scrollIntoView({behavior:'smooth', block:'start'});
+      target.classList.remove('pharm-highlight-target');
+      // force reflow then add highlight
+      void target.offsetWidth;
+      target.classList.add('pharm-highlight-target');
+      setTimeout(()=>target.classList.remove('pharm-highlight-target'), 1600);
+    }
+  }
+
+  function openTour(startIdx=0){ inTour = true; dismissed = false; showStep(startIdx); }
+  function closeBubble(){ bubble.classList.add('hidden'); badge.classList.remove('hidden'); badge.textContent='?'; }
+
+  // Buttons
+  $('pharm-next').onclick = () => {
+    if (idx === TOUR.length - 1) { closeBubble(); return; }
+    showStep(idx+1);
+  };
+  $('pharm-prev').onclick = () => showStep(idx-1);
+  $('pharm-close').onclick = closeBubble;
+  $('pharm-skip').onclick = () => { dismissed = true; closeBubble(); localStorage.setItem('pharm-tour-seen','1'); };
+  avatar.onclick = () => {
+    if (bubble.classList.contains('hidden')) openTour(0);
+    else closeBubble();
+  };
+
+  // Ambient mode: when user scrolls naturally (after closing tour), update message to current section
+  const SECTIONS = TOUR.slice(0,6); // exclude final wrap-up step
+  const sectionMap = {};
+  SECTIONS.forEach((s,i)=>{ const el = document.querySelector(s.sel); if(el) sectionMap[s.sel]=i; });
+  let lastAmbientIdx = -1;
+  const io = new IntersectionObserver((entries)=>{
+    if (!dismissed) return; // don't interrupt active tour
+    if (bubble && !bubble.classList.contains('hidden')) return;
+    let best = null, bestRatio = 0;
+    entries.forEach(e=>{ if (e.intersectionRatio > bestRatio) { bestRatio = e.intersectionRatio; best = e.target; } });
+    if (!best) return;
+    const selector = '#' + best.id;
+    if (!(selector in sectionMap)) return;
+    const i = sectionMap[selector];
+    if (i === lastAmbientIdx) return;
+    lastAmbientIdx = i;
+    // Show tiny ambient toast — reuse bubble briefly
+    idx = i;
+    const step = TOUR[i];
+    titleEl.textContent = step.title;
+    renderStepText(step);
+    renderDots();
+    bubble.classList.remove('hidden');
+    badge.classList.add('hidden');
+    if (window.lucide) window.lucide.createIcons();
+    // auto-hide after 6s in ambient mode
+    clearTimeout(window.__pharmAmbientHide);
+    window.__pharmAmbientHide = setTimeout(()=>{ if(dismissed) closeBubble(); }, 6000);
+  }, { threshold: [0.3, 0.6] });
+  SECTIONS.forEach(s=>{ const el=document.querySelector(s.sel); if(el) io.observe(el); });
+
+  // First visit: auto-open tour
+  if (!localStorage.getItem('pharm-tour-seen')) {
+    setTimeout(()=>openTour(0), 900);
+  } else {
+    // returning visitor: just show greeting briefly
+    setTimeout(()=>{ idx=0; const s=TOUR[0]; titleEl.textContent='ยินดีต้อนรับกลับมาค่ะ'; textEl.innerHTML='<p>กดที่มาสคอต <strong>ภก.เรยา</strong> เพื่อเรียกทัวร์ละเอียดใหม่ได้ตลอด หรือเลื่อนดูแต่ละ section แล้วฉันจะช่วยสรุปบริบทสำคัญให้ค่ะ</p>'; renderDots(); bubble.classList.remove('hidden'); badge.classList.add('hidden'); if(window.lucide) window.lucide.createIcons(); setTimeout(()=>{ dismissed=true; closeBubble(); }, 4500); }, 800);
+  }
+  // Reset button for demo: ctrl+click avatar resets
+  avatar.addEventListener('contextmenu', (e)=>{ e.preventDefault(); localStorage.removeItem('pharm-tour-seen'); location.reload(); });
+})();
+</script>
+</body>
+</html>
