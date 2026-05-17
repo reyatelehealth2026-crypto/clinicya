@@ -239,13 +239,14 @@ $quickAccessMenus = [
     'messages' => ['icon' => 'fa-inbox', 'label' => 'กล่องข้อความ', 'url' => $inboxUrl, 'page' => 'inbox', 'badge' => $unreadMessages, 'color' => 'green', 'roles' => ['owner', 'admin', 'pharmacist', 'staff']],
     'quick-reply' => ['icon' => 'fa-comments', 'label' => 'แชทหลัก', 'url' => '/inbox-master', 'page' => 'inbox-master', 'color' => 'blue', 'roles' => ['owner', 'admin', 'pharmacist', 'staff']],
     'chat-analytics' => ['icon' => 'fa-chart-bar', 'label' => 'สถิติแชท', 'url' => $inboxUrl . '?tab=analytics', 'page' => 'inbox', 'color' => 'purple', 'roles' => ['owner', 'admin']],
-    'video-call' => ['icon' => 'fa-video', 'label' => 'Video Call', 'url' => '/video-call', 'page' => 'video-call', 'color' => 'red', 'roles' => ['pharmacist', 'staff']],
+    'video-call' => ['icon' => 'fa-video', 'label' => 'Video Call', 'url' => '/pharmacist-video-calls', 'page' => 'pharmacist-video-calls', 'color' => 'red', 'roles' => ['pharmacist', 'staff']],
     'auto-reply' => ['icon' => 'fa-robot', 'label' => 'ตอบอัตโนมัติ', 'url' => '/auto-reply', 'page' => 'auto-reply', 'color' => 'pink', 'roles' => ['pharmacist', 'staff']],
 
     // ==================== Clinical Station - Roster & Shifts (all staff) ====================
     'pharmacist-dashboard' => ['icon' => 'fa-user-md', 'label' => 'Dashboard เภสัชกร', 'url' => '/pharmacy?tab=dashboard', 'page' => 'pharmacy', 'color' => 'emerald'],
     'pharmacists' => ['icon' => 'fa-users', 'label' => 'จัดการเภสัชกร', 'url' => '/pharmacy?tab=pharmacists', 'page' => 'pharmacy', 'color' => 'teal'],
     'appointments' => ['icon' => 'fa-calendar-check', 'label' => 'นัดหมาย', 'url' => '/appointments-admin', 'page' => 'appointments-admin', 'color' => 'amber'],
+    'dispense-tracking' => ['icon' => 'fa-prescription-bottle-alt', 'label' => 'ติดตามการจ่ายยา', 'url' => '/dispense-tracking', 'page' => 'dispense-tracking', 'color' => 'teal', 'roles' => ['pharmacist', 'owner', 'admin']],
 
     // ==================== Clinical Station - Medical Copilot AI ====================
     'ai-chat' => ['icon' => 'fa-comments', 'label' => 'AI ตอบแชท', 'url' => '/ai-chat?tab=settings', 'page' => 'ai-chat', 'color' => 'fuchsia', 'roles' => ['pharmacist']],
@@ -311,11 +312,11 @@ $quickAccessMenus = [
     // ==================== Facility Setup - Facility Profile ====================
     'shop-settings' => ['icon' => 'fa-store', 'label' => 'ข้อมูลสถานพยาบาล', 'url' => '/shop/settings', 'page' => 'settings', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
     'miniapp-settings' => ['icon' => 'fa-mobile-alt', 'label' => 'ตั้งค่า Mini App', 'url' => '/admin/miniapp-settings.php', 'page' => 'miniapp-settings', 'color' => 'violet', 'roles' => ['admin', 'owner']],
-    'shop-new' => ['icon' => 'fa-bag-shopping', 'label' => 'Shop ใหม่ (Mini App)', 'url' => 'https://line-mini-app-six.vercel.app/shop', 'page' => 'shop-new', 'color' => 'pink', 'roles' => ['admin', 'owner', 'staff']],
+    'shop-new' => ['icon' => 'fa-bag-shopping', 'label' => 'Shop ใหม่ (Mini App)', 'url' => '/miniapp', 'page' => 'shop-new', 'color' => 'pink', 'roles' => ['admin', 'owner', 'staff']],
     'landing-settings' => ['icon' => 'fa-home', 'label' => 'Landing Page', 'url' => '/admin/landing-settings', 'page' => 'landing-settings', 'color' => 'sky', 'roles' => ['admin', 'owner']],
 
     // ==================== Facility Setup - Staff & Roles ====================
-    'admin-users' => ['icon' => 'fa-users-cog', 'label' => 'บุคลากร & สิทธิ์', 'url' => '/admin-users2', 'page' => 'admin-users2', 'color' => 'indigo', 'roles' => ['owner', 'admin']],
+    'admin-users' => ['icon' => 'fa-users-cog', 'label' => 'บุคลากร & สิทธิ์', 'url' => '/admin-users', 'page' => 'admin-users', 'color' => 'indigo', 'roles' => ['owner', 'admin']],
 
     // ==================== Facility Setup - Integrations ====================
     'line-accounts' => ['icon' => 'fa-layer-group', 'label' => 'บัญชี LINE', 'url' => '/settings?tab=line', 'page' => 'settings', 'color' => 'green', 'roles' => ['owner', 'admin', 'tech']],
@@ -401,6 +402,7 @@ $menuGroups = [
         'roles' => ['owner', 'admin', 'pharmacist'],
         'menus' => [
             ['title' => 'ห้องยา / จ่ายยา', 'icon' => '💊', 'href' => '/pharmacy'],
+            ['title' => 'ติดตามการจ่ายยา', 'icon' => '🔔', 'href' => '/dispense-tracking'],
             ['title' => 'นัดหมาย', 'icon' => '📅', 'href' => '/appointments-admin'],
             ['title' => 'ปรึกษาออนไลน์', 'icon' => '📹', 'href' => '/pharmacist-video-calls'],
         ]
@@ -435,10 +437,11 @@ $menuGroups = [
             ['title' => 'ตั้งค่าระบบ', 'icon' => '🔧', 'href' => '/settings'],
             ['title' => 'ข้อมูลร้าน', 'icon' => '🏪', 'href' => '/shop/settings'],
             ['title' => 'ตั้งค่า Mini App', 'icon' => '📱', 'href' => '/admin/miniapp-settings.php'],
-            ['title' => 'Shop ใหม่ (Mini App)', 'icon' => '🛍️', 'href' => 'https://line-mini-app-six.vercel.app/shop'],
+            ['title' => 'Shop ใหม่ (Mini App)', 'icon' => '🛍️', 'href' => '/miniapp'],
             ['title' => 'Landing Page', 'icon' => '🏠', 'href' => '/admin/landing-settings'],
             ['title' => 'Rich Menu', 'icon' => '🎨', 'href' => '/rich-menu'],
             ['title' => 'เช็คสถานะระบบ', 'icon' => '🔍', 'href' => '/system-status'],
+            ['title' => 'ศูนย์ช่วยเหลือ', 'icon' => '📚', 'href' => '/help'],
         ]
     ],
 ];
@@ -2592,6 +2595,11 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                                 <i class="fas fa-question-circle w-5 text-gray-400"></i>
                                 <span class="ml-2">Help & Support</span>
                             </a>
+                            <button type="button" data-admin-tour-launch
+                                class="flex items-center px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 w-full text-left">
+                                <i class="fas fa-graduation-cap w-5 text-gray-400"></i>
+                                <span class="ml-2">🎓 ทัวร์ระบบ (Tour)</span>
+                            </button>
                             <div class="border-t border-gray-100 mt-2 pt-2">
                                 <a href="<?= $baseUrl ?>auth/logout.php"
                                     class="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50">

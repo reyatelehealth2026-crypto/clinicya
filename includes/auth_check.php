@@ -28,9 +28,9 @@ if (!isset($_SESSION['admin_user'])) {
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
     $host = $_SERVER['HTTP_HOST'];
     
-    // Determine base path (remove /admin, /shop, /user, /auth from current path)
+    // Determine base path (remove /admin, /shop, /user, /auth, /inventory, /onboarding from current path)
     $scriptPath = dirname($_SERVER['SCRIPT_NAME']);
-    $basePath = preg_replace('#/(admin|shop|user|auth|inventory).*$#', '', $scriptPath);
+    $basePath = preg_replace('#/(admin|shop|user|auth|inventory|onboarding).*$#', '', $scriptPath);
     $basePath = rtrim($basePath, '/');
     
     // Build absolute login URL
@@ -41,6 +41,45 @@ if (!isset($_SESSION['admin_user'])) {
 }
 
 $currentUser = $_SESSION['admin_user'];
+
+/**
+ * Setup Wizard auto-redirect
+ *
+ * ถ้า admin ยังไม่ตั้งค่าครั้งแรก (onboarding_completed=0 AND onboarding_skipped=0)
+ * → ส่งไป /onboarding/wizard.php?step=<step+1> เพื่อทำต่อจากที่ค้าง
+ *
+ * ละเว้นเมื่ออยู่ในหน้า wizard, logout, หรือ /api/*
+ * และ fail-open หาก migration ยังไม่ได้รัน (column ยังไม่มี)
+ */
+if (!defined('SKIP_ONBOARDING_REDIRECT')) {
+    $__path = $_SERVER['REQUEST_URI'] ?? '';
+    $__skip = (
+        strpos($__path, '/onboarding/') !== false ||
+        strpos($__path, '/auth/logout') !== false ||
+        strpos($__path, '/api/') === 0
+    );
+    if (!$__skip && class_exists('Database') && !empty($currentUser['id'])) {
+        try {
+            $__db = Database::getInstance()->getConnection();
+            $__s = $__db->prepare(
+                'SELECT onboarding_completed, onboarding_skipped, onboarding_step
+                   FROM admin_users WHERE id = :id LIMIT 1'
+            );
+            $__s->execute([':id' => (int)$currentUser['id']]);
+            $__ob = $__s->fetch(PDO::FETCH_ASSOC);
+            if ($__ob
+                && (int)$__ob['onboarding_completed'] === 0
+                && (int)$__ob['onboarding_skipped']   === 0
+            ) {
+                $__nextStep = min(7, max(1, (int)$__ob['onboarding_step'] + 1));
+                header('Location: /onboarding/wizard.php?step=' . $__nextStep);
+                exit;
+            }
+        } catch (Exception $__e) {
+            // Migration not yet applied → fail open
+        }
+    }
+}
 
 /**
  * ตรวจสอบว่าเป็น Super Admin หรือไม่

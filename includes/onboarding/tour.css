@@ -1,0 +1,160 @@
+/**
+ * Admin Interactive Tour — vanilla CSS
+ * Z-index plan: backdrop 9990 · ring 9991 · tooltip 9992
+ */
+.adm-tour-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    z-index: 9990;
+    opacity: 0;
+    transition: opacity 200ms ease;
+    pointer-events: auto;
+}
+.adm-tour-backdrop.is-visible { opacity: 1; }
+
+.adm-tour-ring {
+    position: absolute;
+    z-index: 9991;
+    pointer-events: none;
+    border-radius: 12px;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.85),
+                0 0 0 9999px rgba(15, 23, 42, 0.45);
+    transition: top 250ms ease, left 250ms ease, width 250ms ease, height 250ms ease;
+    animation: adm-tour-pulse 1.6s ease-in-out infinite;
+}
+@keyframes adm-tour-pulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.85), 0 0 0 9999px rgba(15, 23, 42, 0.45); }
+    50%      { box-shadow: 0 0 0 8px rgba(129, 140, 248, 0.55), 0 0 0 9999px rgba(15, 23, 42, 0.45); }
+}
+
+.adm-tour-tooltip {
+    position: absolute;
+    z-index: 9992;
+    max-width: 320px;
+    width: max-content;
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 14px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+    padding: 18px 18px 14px;
+    font-family: inherit;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 200ms ease, transform 200ms ease, top 250ms ease, left 250ms ease;
+}
+.adm-tour-tooltip.is-visible { opacity: 1; transform: translateY(0); }
+
+.adm-tour-tooltip__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+}
+.adm-tour-tooltip__title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.35;
+}
+.adm-tour-tooltip__counter {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6366f1;
+    background: #eef2ff;
+    border-radius: 999px;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+.adm-tour-tooltip__body {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #475569;
+    margin-bottom: 14px;
+}
+
+.adm-tour-tooltip__dots {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+.adm-tour-tooltip__dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    transition: background 150ms ease, transform 150ms ease;
+}
+.adm-tour-tooltip__dot.is-active { background: #6366f1; transform: scale(1.25); }
+.adm-tour-tooltip__dot.is-done   { background: #a5b4fc; }
+
+.adm-tour-tooltip__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.adm-tour-btn {
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+    font-family: inherit;
+}
+.adm-tour-btn--skip { background: transparent; color: #94a3b8; padding-left: 0; }
+.adm-tour-btn--skip:hover { color: #475569; }
+.adm-tour-btn--ghost { background: #f1f5f9; color: #475569; }
+.adm-tour-btn--ghost:hover { background: #e2e8f0; }
+.adm-tour-btn--primary { background: #6366f1; color: #ffffff; }
+.adm-tour-btn--primary:hover { background: #4f46e5; }
+.adm-tour-tooltip__nav { display: flex; gap: 8px; }
+
+.adm-tour-tooltip__arrow {
+    position: absolute;
+    width: 12px; height: 12px;
+    background: #ffffff;
+    transform: rotate(45deg);
+}
+.adm-tour-tooltip[data-pos="top"]    .adm-tour-tooltip__arrow { bottom: -6px; left: 24px; }
+.adm-tour-tooltip[data-pos="bottom"] .adm-tour-tooltip__arrow { top: -6px; left: 24px; }
+.adm-tour-tooltip[data-pos="left"]   .adm-tour-tooltip__arrow { right: -6px; top: 24px; }
+.adm-tour-tooltip[data-pos="right"]  .adm-tour-tooltip__arrow { left: -6px; top: 24px; }
+
+.adm-tour-toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b; color: #f8fafc;
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-size: 13px;
+    z-index: 9993;
+    opacity: 0;
+    transition: opacity 200ms ease;
+    pointer-events: none;
+}
+.adm-tour-toast.is-visible { opacity: 1; }
+
+.adm-tour-launch {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    color: #4b5563;
+    cursor: pointer;
+    width: 100%;
+    background: transparent;
+    border: 0;
+    text-align: left;
+}
+.adm-tour-launch:hover { background: #f9fafb; }
+.adm-tour-launch i { width: 1.25rem; color: #9ca3af; }
+.adm-tour-launch span { margin-left: 0.5rem; }
+
+@media (max-width: 640px) {
+    .adm-tour-tooltip { max-width: calc(100vw - 32px); }
+}

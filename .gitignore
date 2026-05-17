@@ -134,6 +134,8 @@ database/*.sql
 !database/migration_2026-05-15_storefront_product_fields.sql
 !database/migration_2026-05-15_unify_products_to_business_items.sql
 !database/migration_2026-05-15_seed_15_products.sql
+!database/migration_2026-05-17_dispense_refill_tracking.sql
+!database/migration_2026-05-17_onboarding.sql
 *.png
 DB_CONNECTION.md
 *.md
@@ -142,6 +144,8 @@ DB_CONNECTION.md
 !docs/plans/2026-04-13-line-mini-app-human-vs-ai.md
 !docs/plans/UAT-line-mini-app-b4.md
 !docs/plans/2026-04-13-line-mini-app-gap-closure.md
+!docs/admin-tutorials/*.md
+!docs/user-manual.md
 !.claude/agents/*.md
 *.bak*
 *.bak-*
