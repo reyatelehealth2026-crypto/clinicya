@@ -14,6 +14,9 @@ import { useToast } from '@/lib/toast'
 const inputClass =
   'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-line/30'
 
+const todayISO = new Date().toISOString().split('T')[0]
+const phonePattern = /^0[0-9]{8,9}$/
+
 export function RegisterClient() {
   const line = useLineContext()
   const { toast } = useToast()
@@ -65,8 +68,17 @@ export function RegisterClient() {
       toast.warning('กรุณาเลือกวันเกิด')
       return
     }
+    if (birthday > todayISO) {
+      toast.warning('วันเกิดต้องไม่เกินวันนี้')
+      return
+    }
     if (!gender) {
       toast.warning('กรุณาเลือกเพศ')
+      return
+    }
+    const trimmedPhone = phone.trim()
+    if (trimmedPhone && !phonePattern.test(trimmedPhone)) {
+      toast.warning('เบอร์โทรไม่ถูกต้อง (ตัวอย่าง 0812345678)')
       return
     }
     mutation.mutate()
@@ -113,7 +125,7 @@ export function RegisterClient() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">วันเกิด *</label>
-            <input className={inputClass} type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+            <input className={inputClass} type="date" max={todayISO} value={birthday} onChange={(e) => setBirthday(e.target.value)} />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">เพศ *</label>
@@ -126,7 +138,16 @@ export function RegisterClient() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">เบอร์โทร</label>
-            <input className={inputClass} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0812345678" />
+            <input
+              className={inputClass}
+              type="tel"
+              inputMode="tel"
+              pattern="0[0-9]{8,9}"
+              maxLength={10}
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
+              placeholder="0812345678"
+            />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">อีเมล</label>

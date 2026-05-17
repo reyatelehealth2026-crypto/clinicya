@@ -142,6 +142,7 @@ export function RemindersClient() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-500">เวลาเตือน</label>
+              <p className="mb-2 text-[11px] text-slate-400">(เวลาประเทศไทย)</p>
               <div className="space-y-2">
                 {times.map((t, i) => (
                   <div key={i} className="flex items-center gap-2">

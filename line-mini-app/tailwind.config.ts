@@ -10,22 +10,22 @@ const config: Config = {
     extend: {
       colors: {
         line: {
-          DEFAULT: '#004aad',
-          dark: '#003890',
-          soft: '#e6eeff',
-          muted: '#b3c9f5'
+          DEFAULT: '#187162',
+          dark: '#0f5649',
+          soft: '#e6f3ef',
+          muted: '#a9d4ca'
         },
         brand: {
-          50: '#eff4ff',
-          100: '#dce8ff',
-          200: '#bad4ff',
-          300: '#85b3ff',
-          400: '#4a87ff',
-          500: '#004aad',
-          600: '#003890',
-          700: '#002f78',
-          800: '#002563',
-          900: '#001e52'
+          50: '#edf8f4',
+          100: '#d6eee6',
+          200: '#b1ddd1',
+          300: '#80c5b3',
+          400: '#4ba892',
+          500: '#187162',
+          600: '#0f5649',
+          700: '#0d473e',
+          800: '#0b3932',
+          900: '#082d28'
         },
         surface: {
           DEFAULT: '#ffffff',
@@ -36,7 +36,7 @@ const config: Config = {
       boxShadow: {
         soft: '0 2px 16px rgba(15, 23, 42, 0.06)',
         card: '0 4px 24px rgba(15, 23, 42, 0.08)',
-        glow: '0 0 20px rgba(0, 74, 173, 0.15)',
+        glow: '0 0 20px rgba(24, 113, 98, 0.15)',
         'inner-soft': 'inset 0 2px 4px rgba(15, 23, 42, 0.04)'
       },
       borderRadius: {

@@ -67,7 +67,7 @@ export function RewardsClient() {
           }}
           onRedeem={(rewardId) => {
             if (!lineUserId) {
-              window.alert('กรุณาเข้าสู่ระบบ LINE ก่อน')
+              toast.error('กรุณาเข้าสู่ระบบ LINE ก่อน')
               return
             }
             void redeemMutation.mutateAsync(rewardId)

@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Image from 'next/image'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,14 +12,14 @@ import {
   createShopOrder,
   fetchCart,
   fetchLastAddress,
-  fetchPaymentInfo,
   formatThb,
-  promptPayQrSrc,
   validatePromo,
   type LastAddress
 } from '@/lib/shop-api'
-import { TransferBankInfo } from '@/components/miniapp/TransferBankInfo'
 import { useToast } from '@/lib/toast'
+
+const PHONE_REGEX = /^0[0-9]{8,9}$/
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type PaymentMethod = 'transfer' | 'cod'
 
@@ -47,6 +46,7 @@ export function CheckoutClient() {
   const [payment, setPayment] = useState<PaymentMethod>('transfer')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
   const [address, setAddress] = useState('')
   const [promoInput, setPromoInput] = useState('')
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null)
@@ -62,12 +62,6 @@ export function CheckoutClient() {
     queryKey: ['last-address', lineUserId],
     queryFn: () => fetchLastAddress(lineUserId),
     enabled: Boolean(lineUserId)
-  })
-
-  const paymentInfoQuery = useQuery({
-    queryKey: ['payment-info', payment],
-    queryFn: () => fetchPaymentInfo(),
-    enabled: Boolean(lineUserId) && payment === 'transfer'
   })
 
   useEffect(() => {
@@ -143,9 +137,22 @@ export function CheckoutClient() {
     }
   })
 
+  const validationError = useMemo(() => {
+    if (!name.trim() || !phone.trim() || !address.trim()) {
+      return 'กรุณากรอกข้อมูลจัดส่งให้ครบ'
+    }
+    if (!PHONE_REGEX.test(phone.trim())) {
+      return 'เบอร์โทรไม่ถูกต้อง (เช่น 0812345678)'
+    }
+    if (email.trim() && !EMAIL_REGEX.test(email.trim())) {
+      return 'อีเมลไม่ถูกต้อง'
+    }
+    return null
+  }, [name, phone, address, email])
+
   const handleSubmit = () => {
-    if (!name?.trim() || !phone?.trim() || !address?.trim()) {
-      toast.warning('กรุณากรอกข้อมูลจัดส่งให้ครบ')
+    if (validationError) {
+      toast.warning(validationError)
       return
     }
     createMutation.mutate()
@@ -261,7 +268,14 @@ export function CheckoutClient() {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="เบอร์โทร"
+              placeholder="เบอร์โทร (เช่น 0812345678)"
+              className={inputClass}
+            />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="อีเมล (ไม่บังคับ)"
               className={inputClass}
             />
             <textarea
@@ -299,23 +313,10 @@ export function CheckoutClient() {
         </section>
 
         {payment === 'transfer' ? (
-          <section className="rounded-3xl bg-white p-4 shadow-soft">
-            <h3 className="mb-2 text-sm font-semibold text-slate-900">ชำระด้วยการโอน</h3>
-            <TransferBankInfo info={paymentInfoQuery.data?.transfer_info} className="mb-4" />
-            <h3 className="mb-2 text-sm font-semibold text-slate-900">QR พร้อมเพย์</h3>
-            <p className="mb-3 text-xs text-slate-500">
-              สแกนจ่ายยอด {formatThb(total)} (ตั้งค่าหมายเลขใน Admin / shop_settings.promptpay_number)
+          <section className="rounded-3xl border border-sky-100 bg-sky-50 p-4">
+            <p className="text-xs text-sky-800">
+              หลังกดยืนยันสั่งซื้อ ระบบจะแสดง QR พร้อมเพย์และเลขบัญชีในหน้ารายละเอียดออเดอร์ พร้อมให้คุณอัปโหลดสลิป
             </p>
-            <div className="flex justify-center rounded-2xl bg-slate-50 p-4">
-              <Image
-                src={promptPayQrSrc(total)}
-                alt="PromptPay QR"
-                width={200}
-                height={200}
-                className="h-[200px] w-[200px] object-contain"
-                unoptimized
-              />
-            </div>
           </section>
         ) : null}
 
@@ -378,9 +379,13 @@ export function CheckoutClient() {
           แก้ไขตะกร้า
         </Link>
 
+        {validationError && (name || phone || address || email) ? (
+          <p className="px-1 text-xs text-rose-600">{validationError}</p>
+        ) : null}
+
         <button
           type="button"
-          disabled={createMutation.isPending}
+          disabled={createMutation.isPending || Boolean(validationError)}
           onClick={handleSubmit}
           className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-line py-3.5 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
         >

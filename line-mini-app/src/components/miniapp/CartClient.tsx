@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -21,6 +22,7 @@ export function CartClient() {
   const lineUserId = line.profile?.userId || ''
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   const cartQuery = useQuery({
     queryKey: ['shop-cart', lineUserId],
@@ -70,7 +72,13 @@ export function CartClient() {
       {line.error ? <VerifiedOnlyNotice title="LINE bootstrap issue" description={line.error} /> : null}
 
       {!lineUserId ? (
-        <p className="text-center text-sm text-slate-500">กรุณาเข้าสู่ระบบ LINE</p>
+        <div className="flex flex-col items-center gap-3 rounded-3xl bg-white py-14 text-center shadow-soft">
+          <ShoppingBag className="text-slate-300" size={40} />
+          <p className="text-sm text-slate-500">กรุณาเข้าสู่ระบบ LINE</p>
+          <Link href="/" className="rounded-2xl bg-line px-5 py-2 text-sm font-semibold text-white">
+            กลับหน้าหลัก
+          </Link>
+        </div>
       ) : cartQuery.isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -105,13 +113,18 @@ export function CartClient() {
                     <button
                       type="button"
                       aria-label="ลดจำนวน"
-                      disabled={updateMut.isPending}
-                      onClick={() =>
-                        updateMut.mutate({
-                          productId: row.product_id,
-                          quantity: Math.max(0, row.quantity - 1)
-                        })
-                      }
+                      disabled={updateMut.isPending || removeMut.isPending}
+                      onClick={() => {
+                        const next = row.quantity - 1
+                        if (next <= 0) {
+                          removeMut.mutate(row.product_id)
+                        } else {
+                          updateMut.mutate({
+                            productId: row.product_id,
+                            quantity: next
+                          })
+                        }
+                      }}
                       className="p-2 text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50"
                     >
                       <Minus size={16} />
@@ -161,17 +174,41 @@ export function CartClient() {
               <span>รวม</span>
               <span>฿{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
             </div>
-            <button
-              type="button"
-              disabled={clearMut.isPending}
-              onClick={() => {
-                if (typeof window !== 'undefined' && !window.confirm('ล้างสินค้าทั้งหมดในตะกร้า?')) return
-                clearMut.mutate()
-              }}
-              className="mt-2 w-full text-center text-xs font-medium text-slate-500 underline decoration-slate-300 disabled:opacity-50"
-            >
-              ล้างตะกร้าทั้งหมด
-            </button>
+            {showClearConfirm ? (
+              <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-center">
+                <p className="text-xs font-medium text-red-700">ล้างสินค้าทั้งหมดในตะกร้า?</p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowClearConfirm(false)}
+                    className="flex-1 rounded-xl bg-white py-2 text-xs font-semibold text-slate-600 ring-1 ring-slate-200"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    disabled={clearMut.isPending}
+                    onClick={() => {
+                      clearMut.mutate(undefined, {
+                        onSettled: () => setShowClearConfirm(false)
+                      })
+                    }}
+                    className="flex-1 rounded-xl bg-red-500 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    {clearMut.isPending ? 'กำลังล้าง…' : 'ยืนยันล้าง'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={clearMut.isPending}
+                onClick={() => setShowClearConfirm(true)}
+                className="mt-2 w-full text-center text-xs font-medium text-slate-500 underline decoration-slate-300 disabled:opacity-50"
+              >
+                ล้างตะกร้าทั้งหมด
+              </button>
+            )}
             <Link
               href="/checkout"
               className="mt-4 flex w-full items-center justify-center rounded-2xl bg-line py-3 text-sm font-semibold text-white"

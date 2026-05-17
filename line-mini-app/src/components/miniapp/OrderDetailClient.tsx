@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ImageUp, Package, MapPin, Truck, NotebookPen } from 'lucide-react'
@@ -40,6 +40,14 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
 
   const order = q.data?.order
 
+  // Revoke blob URL when preview changes / component unmounts (memory leak fix)
+  useEffect(() => {
+    if (!preview) return
+    return () => {
+      try { URL.revokeObjectURL(preview) } catch {}
+    }
+  }, [preview])
+
   const slipMutation = useMutation({
     mutationFn: (file: File) => uploadPaymentSlip(Number(orderId), file),
     onSuccess: (data) => {
@@ -50,6 +58,18 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
       toast.success('อัปโหลดสลิปเรียบร้อย')
       setPreview(null)
       if (fileRef.current) fileRef.current.value = ''
+      // Optimistic update — show "รอตรวจสอบสลิป" immediately instead of waiting
+      // for admin to mark as paid. Real status will overwrite on next refetch.
+      queryClient.setQueryData<OrderDetailApiResponse | undefined>(
+        ['shop-order', orderId],
+        (prev) => {
+          if (!prev || !prev.order) return prev
+          return {
+            ...prev,
+            order: { ...prev.order, payment_status: 'รอตรวจสอบสลิป' }
+          }
+        }
+      )
       queryClient.invalidateQueries({ queryKey: ['shop-order', orderId] })
       queryClient.invalidateQueries({ queryKey: ['my-orders'] })
     },

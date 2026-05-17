@@ -1,5 +1,5 @@
-import { VideoClient } from '@/components/miniapp/VideoClient'
+import { VideoCallClient } from '@/components/miniapp/VideoCallClient'
 
 export default function VideoPage() {
-  return <VideoClient />
+  return <VideoCallClient />
 }

@@ -210,7 +210,11 @@ export function AppointmentsClient() {
               tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
             }`}
           >
-            {t === 'upcoming' ? `นัดหมายของฉัน (${appointments.length})` : 'นัดหมายใหม่'}
+            {t === 'upcoming'
+              ? appointmentsQuery.isLoading
+                ? 'นัดหมายของฉัน'
+                : `นัดหมายของฉัน (${appointments.length})`
+              : 'นัดหมายใหม่'}
           </button>
         ))}
       </div>

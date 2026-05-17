@@ -218,6 +218,8 @@ export function ShopClient() {
     >
       {line.error ? <VerifiedOnlyNotice title="LINE bootstrap issue" description={line.error} /> : null}
 
+      {banners.length > 0 ? <BannerSlider banners={banners} /> : null}
+
       <div className="sticky top-0 z-20 -mx-4 bg-surface-secondary/95 px-4 pb-4 pt-1 backdrop-blur-md">
         <div className="retail-surface p-4">
           <div className="flex items-center gap-2 rounded-[1.4rem] border border-slate-200 bg-white px-4 py-3">
@@ -295,7 +297,7 @@ export function ShopClient() {
         <section className="space-y-3">
           <div className="flex items-center gap-2 text-slate-900">
             <Sparkles size={16} className="text-line" />
-            <h2 className="text-sm font-semibold">Catalog Bucket</h2>
+            <h2 className="text-sm font-semibold">คอลเลกชัน</h2>
           </div>
           <div className="hide-scrollbar flex gap-2 overflow-x-auto pb-1">
             {allBuckets.map((bucket) => (
@@ -338,8 +340,6 @@ export function ShopClient() {
           </div>
         </section>
       ) : null}
-
-      {banners.length > 0 ? <BannerSlider banners={banners} /> : null}
 
       {merchSections.map((section) => (
         <ShopMerchSectionRail key={section.id} section={section} />

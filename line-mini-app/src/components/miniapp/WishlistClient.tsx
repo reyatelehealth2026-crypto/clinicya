@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -82,10 +83,13 @@ export function WishlistClient() {
                 {/* Product image */}
                 <Link href={`/shop/product?id=${item.product_id}`} className="shrink-0">
                   {item.image_url ? (
-                    <img
+                    <Image
                       src={item.image_url}
                       alt={item.name}
+                      width={64}
+                      height={64}
                       className="h-16 w-16 rounded-xl object-cover"
+                      unoptimized
                     />
                   ) : (
                     <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-slate-100 text-xl">

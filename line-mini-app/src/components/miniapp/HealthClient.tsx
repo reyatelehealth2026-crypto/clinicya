@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, AlertTriangle, ChevronDown, ChevronUp, Pill, Plus, Trash2, User } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
@@ -111,6 +111,20 @@ export function HealthClient() {
 
   /* Sync personal form with loaded data */
   const pi = profile?.personal_info
+
+  /* Init local form state จาก pi เมื่อ profileQuery.isSuccess */
+  useEffect(() => {
+    if (profileQuery.isSuccess && pi && personal === null) {
+      setPersonal({
+        age: pi.age ?? null,
+        gender: pi.gender ?? null,
+        weight: pi.weight ?? null,
+        height: pi.height ?? null,
+        blood_type: pi.blood_type ?? 'unknown'
+      })
+    }
+  }, [profileQuery.isSuccess, pi, personal])
+
   const personalForm: HealthPersonalInfo = personal ?? {
     age: pi?.age ?? null,
     gender: pi?.gender ?? null,
@@ -118,6 +132,17 @@ export function HealthClient() {
     height: pi?.height ?? null,
     blood_type: pi?.blood_type ?? 'unknown'
   }
+
+  /* isDirty — เทียบ personal กับ pi (server state) */
+  const isDirty =
+    personal !== null &&
+    (
+      (personal.age ?? null) !== (pi?.age ?? null) ||
+      (personal.gender ?? null) !== (pi?.gender ?? null) ||
+      (personal.weight ?? null) !== (pi?.weight ?? null) ||
+      (personal.height ?? null) !== (pi?.height ?? null) ||
+      (personal.blood_type ?? 'unknown') !== (pi?.blood_type ?? 'unknown')
+    )
 
   const completion = profile?.completion_percent ?? 0
 
@@ -219,10 +244,10 @@ export function HealthClient() {
             <button
               type="button"
               onClick={() => personalMutation.mutate(personalForm)}
-              disabled={personalMutation.isPending}
+              disabled={personalMutation.isPending || !isDirty}
               className="mt-3 w-full rounded-xl bg-line py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
-              {personalMutation.isPending ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+              {personalMutation.isPending ? 'กำลังบันทึก...' : isDirty ? 'บันทึกข้อมูล' : 'บันทึกแล้ว'}
             </button>
             {personalMutation.isSuccess && (
               <p className="mt-2 text-center text-xs font-medium text-emerald-600">บันทึกแล้ว</p>

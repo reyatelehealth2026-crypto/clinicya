@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Inbox, Package } from 'lucide-react'
@@ -42,7 +43,7 @@ function orderStateBadge(order: ShopOrder) {
       return <span className="badge badge-amber">กำลังดำเนินการ</span>
     case 'shipped':
     case 'shipping':
-      return <span className="badge badge-blue">จัดส่งแล้ว</span>
+      return <span className="badge badge-blue">กำลังจัดส่ง</span>
     case 'cancelled':
     case 'refunded':
       return <span className="badge badge-red">ยกเลิก/คืนเงิน</span>
@@ -103,17 +104,22 @@ function OrderCard({ order }: { order: ShopOrder }) {
   )
 }
 
+const ORDERS_PAGE_SIZE = 20
+
 export function OrdersClient() {
   const line = useLineContext()
   const lineUserId = line.profile?.userId || ''
+  const [limit, setLimit] = useState(ORDERS_PAGE_SIZE)
 
   const ordersQuery = useQuery({
-    queryKey: ['my-orders', lineUserId],
-    queryFn: () => getMyOrders(lineUserId, 50),
+    queryKey: ['my-orders', lineUserId, limit],
+    queryFn: () => getMyOrders(lineUserId, limit),
     enabled: Boolean(lineUserId)
   })
 
   const orders = ordersQuery.data?.orders || []
+  const total = ordersQuery.data?.total ?? 0
+  const hasMore = total > orders.length
 
   return (
     <AppShell title="ออเดอร์ของฉัน" subtitle="คำสั่งซื้อจากร้านค้า (CRM)">
@@ -130,9 +136,18 @@ export function OrdersClient() {
               <OrderCard order={order} />
             </div>
           ))}
-          {ordersQuery.data && ordersQuery.data.total > orders.length ? (
+          {hasMore ? (
+            <button
+              type="button"
+              onClick={() => setLimit((prev) => prev + ORDERS_PAGE_SIZE)}
+              disabled={ordersQuery.isFetching}
+              className="w-full rounded-2xl bg-white py-3 text-sm font-semibold text-line shadow-soft disabled:opacity-50"
+            >
+              {ordersQuery.isFetching ? 'กำลังโหลด…' : `โหลดเพิ่ม (เหลืออีก ${total - orders.length})`}
+            </button>
+          ) : total > 0 ? (
             <p className="py-4 text-center text-xs text-slate-400">
-              แสดง {orders.length} จาก {ordersQuery.data.total} ออเดอร์
+              แสดงครบทั้งหมด {orders.length} ออเดอร์
             </p>
           ) : null}
         </div>

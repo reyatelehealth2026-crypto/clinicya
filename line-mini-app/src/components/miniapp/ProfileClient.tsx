@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Activity,
-  Bell,
   Bot,
   Calendar,
+  Check,
   ChevronRight,
   Coins,
   CreditCard,
@@ -15,17 +16,17 @@ import {
   LogOut,
   Package,
   Pill,
-  Star,
-  Stethoscope,
   Store,
   UserPlus,
-  Video
+  Video,
+  X
 } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
 import { AppShell } from '@/components/miniapp/AppShell'
 import { MemberCard } from '@/components/miniapp/MemberCard'
 import { VerifiedOnlyNotice } from '@/components/miniapp/VerifiedOnlyNotice'
 import { checkMember, getMemberCard } from '@/lib/member-api'
+import type { MemberProfile, TierInfo } from '@/types/member'
 
 function LoadingSkeleton() {
   return (
@@ -65,56 +66,162 @@ function QuickLink({
 
 function ProfileMenuRow({
   href,
+  onClick,
   icon: Icon,
   title,
   subtitle
 }: {
-  href: string
+  href?: string
+  onClick?: () => void
   icon: typeof Store
   title: string
   subtitle?: string
 }) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-soft transition-colors hover:bg-slate-50"
-    >
+  const content = (
+    <>
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-line-soft">
         <Icon size={20} className="text-line" />
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 text-left">
         <p className="text-sm font-semibold text-slate-900">{title}</p>
         {subtitle ? <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p> : null}
       </div>
       <ChevronRight className="shrink-0 text-slate-300" size={20} aria-hidden />
-    </Link>
+    </>
   )
+  const cls = 'flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-soft transition-colors hover:bg-slate-50'
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={cls}>{content}</button>
+  }
+  return <Link href={href ?? '#'} className={cls}>{content}</Link>
 }
 
-function handleLogout() {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const liff = (window as any).liff
-    if (liff && typeof liff.logout === 'function') {
-      liff.logout()
-    }
-  } catch {
-    // not in LIFF context — fall through
-  }
-  try {
-    sessionStorage.clear()
-  } catch {
-    // ignore
-  }
-  window.location.href = '/'
+// Bottom-sheet modal แสดงสิทธิประโยชน์ + ข้อมูลบัตรสมาชิกแบบละเอียด
+function MemberBenefitsSheet({
+  member,
+  tier,
+  onClose
+}: {
+  member: MemberProfile
+  tier: TierInfo
+  onClose: () => void
+}) {
+  const benefits = [
+    { tier: 'bronze', label: 'Bronze', perks: ['สะสมแต้มจากการซื้อ 1฿ = 1 แต้ม', 'รับโปรโมชั่นพิเศษทาง LINE'] },
+    { tier: 'silver', label: 'Silver', perks: ['ส่วนลด 5% ทุกออเดอร์', 'แต้มสะสม x1.2', 'ของขวัญวันเกิด'] },
+    { tier: 'gold', label: 'Gold', perks: ['ส่วนลด 10% ทุกออเดอร์', 'แต้มสะสม x1.5', 'จัดส่งฟรี', 'ปรึกษาเภสัชกร VIP'] },
+    { tier: 'platinum', label: 'Platinum', perks: ['ส่วนลด 15% ทุกออเดอร์', 'แต้มสะสม x2', 'จัดส่งด่วนฟรี', 'เภสัชกรประจำตัว', 'สิทธิ์เข้าร่วมกิจกรรมพิเศษ'] }
+  ]
+  const currentTier = (tier.tier_code || 'bronze').toLowerCase()
+  const isCurrent = (t: string) => t === currentTier
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div
+        className="relative w-full max-w-md rounded-t-3xl bg-white p-5 pb-safe-bottom max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">บัตรสมาชิก</h3>
+            <p className="mt-0.5 text-xs text-slate-500">สิทธิประโยชน์ตามระดับ</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Member ID card */}
+        <div className="gradient-card mb-4 rounded-2xl p-4 text-white">
+          <div className="text-xs opacity-80">รหัสสมาชิก</div>
+          <div className="mt-1 text-2xl font-bold tabular-nums tracking-wider">{member.member_id || '—'}</div>
+          <div className="mt-2 flex items-center justify-between">
+            <div className="text-xs opacity-80">{member.display_name || 'LINE User'}</div>
+            <div className="rounded-full bg-white/25 px-3 py-1 text-xs font-bold backdrop-blur-sm">{tier.tier_name || 'Bronze'}</div>
+          </div>
+        </div>
+
+        {/* Tier benefits */}
+        <div className="space-y-3">
+          {benefits.map((b) => {
+            const active = isCurrent(b.tier)
+            return (
+              <div
+                key={b.tier}
+                className={`rounded-2xl border p-3.5 ${active ? 'border-line bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <p className={`text-sm font-bold ${active ? 'text-line' : 'text-slate-700'}`}>{b.label}</p>
+                  {active && (
+                    <span className="rounded-full bg-line px-2 py-0.5 text-[10px] font-semibold text-white">ระดับของคุณ</span>
+                  )}
+                </div>
+                <ul className="space-y-1">
+                  {b.perks.map((p) => {
+                    const isVipConsult = /ปรึกษาเภสัชกร VIP|เภสัชกรประจำตัว/.test(p)
+                    if (isVipConsult) {
+                      return (
+                        <li key={p}>
+                          <Link
+                            href="/video"
+                            onClick={onClose}
+                            className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-xs font-medium text-line hover:bg-line-soft transition-colors"
+                          >
+                            <Check size={12} className="shrink-0 text-line" />
+                            <span className="flex-1">{p}</span>
+                            <ChevronRight size={14} className="shrink-0 text-line" />
+                          </Link>
+                        </li>
+                      )
+                    }
+                    return (
+                      <li key={p} className="flex items-start gap-2 text-xs text-slate-600">
+                        <Check size={12} className="mt-0.5 shrink-0 text-line" />
+                        <span>{p}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 w-full rounded-xl bg-line py-3 text-sm font-semibold text-white"
+        >
+          ปิด
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export function ProfileClient() {
   const line = useLineContext()
+  const queryClient = useQueryClient()
   const lineUserId = line.profile?.userId || ''
-  const displayName = line.profile?.displayName || ''
-  const pictureUrl = line.profile?.pictureUrl || null
-  const avatarFallback = displayName ? displayName.charAt(0).toUpperCase() : '?'
+  const [showBenefits, setShowBenefits] = useState(false)
+
+  const handleLogout = () => {
+    // Clear React Query cache first so cached member / order data doesn't
+    // bleed into the next signed-in user on the same device.
+    try { queryClient.clear() } catch {}
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const liff = (window as any).liff
+      if (liff && typeof liff.logout === 'function') {
+        liff.logout()
+      }
+    } catch {
+      // not in LIFF context — fall through
+    }
+    try { sessionStorage.clear() } catch {}
+    window.location.href = '/'
+  }
 
   const checkQuery = useQuery({
     queryKey: ['member-check', lineUserId],
@@ -135,38 +242,8 @@ export function ProfileClient() {
   const tier = memberQuery.data?.tier
 
   return (
-    <AppShell title="โปรไฟล์" subtitle="สมาชิกและบริการ">
+    <AppShell header={<div className="safe-top bg-line" />}>
       {line.error ? <VerifiedOnlyNotice title="LINE bootstrap issue" description={line.error} /> : null}
-
-      {/* Gradient hero header */}
-      {lineUserId ? (
-        <div className="-mx-4 -mt-5 mb-2 gradient-card px-4 pb-14 pt-6 text-white">
-          <div className="flex flex-col items-center gap-3">
-            {/* Avatar */}
-            {pictureUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={pictureUrl}
-                alt={displayName}
-                className="h-16 w-16 rounded-full border-2 border-white/30 object-cover shadow-lg ring-2 ring-white/20"
-              />
-            ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-white/30 bg-white/20 text-xl font-bold shadow-lg ring-2 ring-white/20">
-                {avatarFallback}
-              </div>
-            )}
-            {/* Name */}
-            <div className="text-center">
-              <p className="text-base font-bold">{displayName || 'LINE User'}</p>
-              {member?.phone ? (
-                <p className="mt-0.5 text-xs text-white/60">{member.phone}</p>
-              ) : member?.email ? (
-                <p className="mt-0.5 text-xs text-white/60">{member.email}</p>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {/* Not logged in to LIFF */}
       {line.isReady && !lineUserId && !line.error ? (
@@ -240,18 +317,6 @@ export function ProfileClient() {
         </div>
       ) : null}
 
-      {/* Registered but profile incomplete — soft CTA */}
-      {checkQuery.data?.exists && !checkQuery.data.has_profile ? (
-        <div className="space-y-2">
-          <QuickLink
-            href="/register"
-            icon={UserPlus}
-            title="กรอกข้อมูลส่วนตัวให้ครบ"
-            description="ช่วยให้เราบริการคุณได้ดียิ่งขึ้น (ไม่บังคับ)"
-          />
-        </div>
-      ) : null}
-
       {/* Loaded successfully but member data still missing (edge case) */}
       {checkQuery.data?.exists &&
       memberQuery.isSuccess &&
@@ -273,49 +338,15 @@ export function ProfileClient() {
 
       {member && tier ? (
         <>
-          {/* Stats card */}
-          <div className="-mt-8 rounded-2xl bg-white p-4 shadow-card">
-            <div className="grid grid-cols-3 divide-x divide-slate-100">
-              {/* Points */}
-              <div className="flex flex-col items-center gap-1 px-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50">
-                  <Coins size={16} className="text-emerald-600" />
-                </div>
-                <p className="text-sm font-bold tabular-nums text-slate-900">
-                  {member.points.toLocaleString()}
-                </p>
-                <p className="text-[10px] text-slate-400">คะแนน</p>
-              </div>
-              {/* Tier */}
-              <div className="flex flex-col items-center gap-1 px-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-50">
-                  <Star size={16} className="text-violet-600" />
-                </div>
-                <p className="text-sm font-bold text-slate-900">{tier.tier_name || 'Bronze'}</p>
-                <p className="text-[10px] text-slate-400">ระดับ</p>
-              </div>
-              {/* Orders */}
-              <Link href="/orders" className="flex flex-col items-center gap-1 px-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50">
-                  <Package size={16} className="text-blue-600" />
-                </div>
-                <p className="text-sm font-bold tabular-nums text-slate-900">
-                  {(member.total_orders ?? 0).toLocaleString()}
-                </p>
-                <p className="text-[10px] text-slate-400">ออเดอร์</p>
-              </Link>
-            </div>
-          </div>
-
           <MemberCard member={member} tier={tier} />
 
           <div className="space-y-2">
             <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">สมาชิก</p>
             <ProfileMenuRow
-              href="/profile"
+              onClick={() => setShowBenefits(true)}
               icon={CreditCard}
               title="บัตรสมาชิก"
-              subtitle="ข้อมูลระดับและสิทธิประโยชน์"
+              subtitle="ดูรหัสสมาชิก ระดับ และสิทธิประโยชน์"
             />
             <ProfileMenuRow
               href="/rewards/history"
@@ -324,12 +355,6 @@ export function ProfileClient() {
               subtitle="สะสมและใช้แต้ม"
             />
             <ProfileMenuRow href="/rewards" icon={Gift} title="แลกของรางวัล" subtitle="ของรางวัลและสิทธิพิเศษ" />
-            <ProfileMenuRow
-              href="/rewards"
-              icon={Bell}
-              title="คูปองของฉัน"
-              subtitle="โค้ดส่วนลด — กรอกตอนชำระเงิน"
-            />
             <ProfileMenuRow href="/wishlist" icon={Heart} title="รายการโปรด" subtitle="สินค้าที่บันทึกไว้" />
           </div>
 
@@ -344,13 +369,7 @@ export function ProfileClient() {
             />
             <ProfileMenuRow href="/appointments" icon={Calendar} title="นัดหมาย" subtitle="ตารางนัดและบริการ" />
             <ProfileMenuRow href="/video" icon={Video} title="ปรึกษาเภสัชกร" subtitle="วิดีโอปรึกษา" />
-            <ProfileMenuRow
-              href="/ai-chat"
-              icon={Stethoscope}
-              title="ประเมินอาการ"
-              subtitle="สอบถามอาการเบื้องต้น"
-            />
-            <ProfileMenuRow href="/ai-chat" icon={Bot} title="ผู้ช่วย AI" subtitle="แชทสอบถามสินค้าและสุขภาพ" />
+            <ProfileMenuRow href="/ai-chat" icon={Bot} title="ผู้ช่วย AI" subtitle="แชทสอบถามอาการและสินค้า" />
           </div>
 
           <div className="space-y-2">
@@ -373,6 +392,10 @@ export function ProfileClient() {
             </button>
           </div>
         </>
+      ) : null}
+
+      {showBenefits && member && tier ? (
+        <MemberBenefitsSheet member={member} tier={tier} onClose={() => setShowBenefits(false)} />
       ) : null}
     </AppShell>
   )

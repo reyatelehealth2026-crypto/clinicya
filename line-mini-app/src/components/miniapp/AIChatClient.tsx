@@ -162,7 +162,7 @@ export function AIChatClient() {
 
   return (
     <AppShell>
-      <div className="flex flex-col h-[calc(100dvh-8rem)]">
+      <div className="flex flex-col h-[calc(100svh-8rem)]">
         {/* Header */}
         <div className="px-4 py-3 border-b border-gray-100 bg-white">
           <div className="flex items-center gap-2">
@@ -280,6 +280,7 @@ export function AIChatClient() {
           {/* Quick suggestions */}
           {!isStreaming && messages.length <= 2 && (
             <div className="mt-3 flex flex-wrap gap-2">
+              {/* TODO: ดึงจาก backend top-search */}
               {['ไข้หวัด', 'ปวดหัว', 'ท้องเสีย', 'แพ้อากาศ', 'ปรึกษาเภสัชกร'].map((suggestion) => (
                 <button
                   key={suggestion}

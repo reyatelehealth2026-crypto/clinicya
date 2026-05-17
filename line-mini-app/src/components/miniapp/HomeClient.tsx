@@ -186,7 +186,7 @@ export function HomeClient() {
                 {recentOrders.map((order) => (
                   <Link
                     key={order.id}
-                    href="/orders"
+                    href={`/order?id=${order.id}`}
                     className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-slate-50"
                   >
                     <div className="min-w-0 flex-1">

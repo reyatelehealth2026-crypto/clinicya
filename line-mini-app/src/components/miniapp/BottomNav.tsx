@@ -32,44 +32,54 @@ export function BottomNav() {
   return (
     <nav className="shrink-0 border-t border-slate-100 bg-white/95 backdrop-blur-xl safe-bottom">
       <div className="mx-auto flex max-w-md items-center justify-around px-1 pt-1">
-        {items.map(({ href, label, icon: Icon }) => {
-          const active =
+        {(() => {
+          // Determine if pathname matches any nav item; if not, treat as "profile" fallback
+          // (covers /wishlist, /rewards, /health, /notifications, /appointments, /video, /ai-chat, etc.)
+          const matchesAnyNav = items.some(({ href }) =>
             href === '/'
               ? pathname === '/' || pathname === ''
               : pathname === href || pathname.startsWith(`${href}/`)
+          )
+          return items.map(({ href, label, icon: Icon }) => {
+            const direct =
+              href === '/'
+                ? pathname === '/' || pathname === ''
+                : pathname === href || pathname.startsWith(`${href}/`)
+            const active = direct || (!matchesAnyNav && href === '/profile')
 
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-2xl px-1 py-2 text-[10px] font-medium transition-all duration-200 sm:text-[11px]',
-                active ? 'text-line' : 'text-slate-400 hover:text-slate-600'
-              )}
-            >
-              <div
+            return (
+              <Link
+                key={href}
+                href={href}
                 className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200',
-                  active ? 'bg-line-soft scale-110' : ''
+                  'relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-2xl px-1 py-2 text-[10px] font-medium transition-all duration-200 sm:text-[11px]',
+                  active ? 'text-line' : 'text-slate-400 hover:text-slate-600'
                 )}
               >
-                {href === '/cart' ? (
-                  <div className="relative">
+                <div
+                  className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-200',
+                    active ? 'bg-line-soft scale-110' : ''
+                  )}
+                >
+                  {href === '/cart' ? (
+                    <div className="relative">
+                      <Icon size={18} strokeWidth={active ? 2.5 : 2} />
+                      {cartCount > 0 ? (
+                        <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white leading-none">
+                          {cartCount > 9 ? '9+' : cartCount}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
                     <Icon size={18} strokeWidth={active ? 2.5 : 2} />
-                    {cartCount > 0 ? (
-                      <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white leading-none">
-                        {cartCount > 9 ? '9+' : cartCount}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : (
-                  <Icon size={18} strokeWidth={active ? 2.5 : 2} />
-                )}
-              </div>
-              <span className={cn('truncate', active && 'font-semibold')}>{label}</span>
-            </Link>
-          )
-        })}
+                  )}
+                </div>
+                <span className={cn('truncate', active && 'font-semibold')}>{label}</span>
+              </Link>
+            )
+          })
+        })()}
       </div>
     </nav>
   )
