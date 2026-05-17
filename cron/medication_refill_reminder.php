@@ -9,7 +9,7 @@
  * Logic:
  * - ดูจากประวัติการสั่งซื้อยา
  * - คำนวณว่ายาน่าจะหมดเมื่อไหร่ (จากจำนวนที่ซื้อ / วันที่ทาน)
- * - แจ้งเตือนล่วงหน้า 3-5 วันก่อนหมด
+ * - แจ้งเตือนล่วงหน้า 3 วันก่อนหมด (ตาม spec ของผู้ใช้)
  */
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
@@ -44,9 +44,9 @@ try {
     echo "Table creation error: " . $e->getMessage() . "\n";
 }
 
-// Find medications that will run out in 3-5 days
+// Find medications that will run out in <=3 days
 // and haven't been reminded in the last 7 days
-$sql = "SELECT mrt.*, 
+$sql = "SELECT mrt.*,
                u.line_user_id, u.display_name,
                la.channel_access_token,
                p.image_url, p.price, p.sale_price,
@@ -56,7 +56,7 @@ $sql = "SELECT mrt.*,
         LEFT JOIN line_accounts la ON mrt.line_account_id = la.id
         LEFT JOIN business_items p ON mrt.product_id = p.id
         LEFT JOIN user_notification_preferences unp ON mrt.user_id = unp.user_id
-        WHERE mrt.estimated_end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 5 DAY)
+        WHERE mrt.estimated_end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
           AND (mrt.reminder_sent_at IS NULL OR mrt.reminder_sent_at < DATE_SUB(NOW(), INTERVAL 7 DAY))
           AND (unp.drug_reminders IS NULL OR unp.drug_reminders = 1)
           AND u.line_user_id IS NOT NULL
@@ -122,13 +122,19 @@ function createRefillReminderFlex($item, $daysLeft) {
     $imageUrl = $item['image_url'] ?: 'https://via.placeholder.com/400x300?text=Medicine';
     
     // Urgency color based on days left
-    $urgencyColor = '#F59E0B'; // Yellow for 3-5 days
-    $urgencyText = "เหลืออีก {$daysLeft} วัน";
-    if ($daysLeft <= 2) {
-        $urgencyColor = '#EF4444'; // Red for urgent
-        $urgencyText = "⚠️ ใกล้หมดแล้ว!";
+    $urgencyColor = '#F59E0B';
+    $urgencyText = "เหลือ {$daysLeft} วัน";
+    if ($daysLeft <= 0) {
+        $urgencyColor = '#EF4444';
+        $urgencyText = 'ครบกำหนด Refill';
+    } elseif ($daysLeft <= 2) {
+        $urgencyColor = '#EF4444';
+        $urgencyText = "เหลือ {$daysLeft} วัน";
     }
-    
+
+    $baseUrl = rtrim(defined('BASE_URL') ? BASE_URL : '', '/');
+    $productUrl = $baseUrl . '/miniapp/shop/product/?id=' . intval($item['product_id']);
+
     $bubble = [
         'type' => 'bubble',
         'size' => 'mega',
@@ -147,45 +153,31 @@ function createRefillReminderFlex($item, $daysLeft) {
                     'type' => 'box',
                     'layout' => 'horizontal',
                     'contents' => [
+                        ['type' => 'text', 'text' => '🔁 Refill ยา', 'weight' => 'bold', 'color' => $urgencyColor, 'size' => 'sm', 'flex' => 1],
                         [
-                            'type' => 'text',
-                            'text' => '💊 ยาใกล้หมด',
-                            'weight' => 'bold',
-                            'color' => $urgencyColor,
-                            'size' => 'sm'
-                        ],
-                        [
-                            'type' => 'text',
-                            'text' => $urgencyText,
-                            'weight' => 'bold',
-                            'color' => '#FFFFFF',
-                            'size' => 'xs',
-                            'align' => 'center',
+                            'type' => 'box',
+                            'layout' => 'vertical',
                             'backgroundColor' => $urgencyColor,
                             'cornerRadius' => 'md',
-                            'paddingAll' => 'xs'
+                            'paddingAll' => '4px',
+                            'paddingStart' => '8px',
+                            'paddingEnd' => '8px',
+                            'flex' => 0,
+                            'contents' => [
+                                ['type' => 'text', 'text' => $urgencyText, 'weight' => 'bold', 'color' => '#FFFFFF', 'size' => 'xs', 'align' => 'center']
+                            ]
                         ]
                     ]
                 ],
-                [
-                    'type' => 'text',
-                    'text' => $productName,
-                    'weight' => 'bold',
-                    'size' => 'lg',
-                    'wrap' => true,
-                    'margin' => 'md'
-                ],
-                [
-                    'type' => 'separator',
-                    'margin' => 'lg'
-                ],
+                ['type' => 'text', 'text' => $productName, 'weight' => 'bold', 'size' => 'lg', 'wrap' => true, 'margin' => 'md'],
+                ['type' => 'separator', 'margin' => 'lg'],
                 [
                     'type' => 'box',
                     'layout' => 'horizontal',
                     'margin' => 'lg',
                     'contents' => [
-                        ['type' => 'text', 'text' => '📅 คาดว่าหมด', 'size' => 'sm', 'color' => '#888888', 'flex' => 1],
-                        ['type' => 'text', 'text' => date('d/m/Y', strtotime($item['estimated_end_date'])), 'size' => 'sm', 'weight' => 'bold', 'align' => 'end', 'flex' => 1]
+                        ['type' => 'text', 'text' => '📅 ครบกำหนด Refill', 'size' => 'sm', 'color' => '#888888', 'flex' => 2],
+                        ['type' => 'text', 'text' => date('d/m/Y', strtotime($item['estimated_end_date'])), 'size' => 'sm', 'weight' => 'bold', 'align' => 'end', 'flex' => 2]
                     ]
                 ],
                 [
@@ -196,38 +188,38 @@ function createRefillReminderFlex($item, $daysLeft) {
                         ['type' => 'text', 'text' => '💰 ราคา', 'size' => 'sm', 'color' => '#888888', 'flex' => 1],
                         ['type' => 'text', 'text' => '฿' . number_format($currentPrice), 'size' => 'sm', 'weight' => 'bold', 'color' => '#11B0A6', 'align' => 'end', 'flex' => 1]
                     ]
-                ],
-                [
-                    'type' => 'text',
-                    'text' => '🔔 สั่งซื้อล่วงหน้าเพื่อไม่ให้ยาขาด',
-                    'size' => 'xs',
-                    'color' => '#888888',
-                    'margin' => 'lg',
-                    'wrap' => true
                 ]
             ]
         ],
         'footer' => [
             'type' => 'box',
             'layout' => 'vertical',
+            'spacing' => 'sm',
             'contents' => [
                 [
                     'type' => 'button',
-                    'action' => [
-                        'type' => 'uri',
-                        'label' => '🛒 สั่งซื้อเลย',
-                        'uri' => rtrim(BASE_URL, '/') . "/liff-product-detail.php?id={$item['product_id']}&user={$item['line_user_id']}&account={$item['line_account_id']}"
-                    ],
+                    'action' => ['type' => 'uri', 'label' => '🛒 สั่ง Refill เลย', 'uri' => $productUrl],
                     'style' => 'primary',
-                    'color' => '#11B0A6'
+                    'color' => '#11B0A6',
+                    'height' => 'sm'
+                ],
+                [
+                    'type' => 'button',
+                    'action' => [
+                        'type' => 'message',
+                        'label' => '💬 ติดต่อเภสัชกรเพื่อสั่งซ้ำ',
+                        'text' => "ขอ Refill ยา: {$productName}"
+                    ],
+                    'style' => 'secondary',
+                    'height' => 'sm'
                 ]
             ]
         ]
     ];
-    
+
     return [
         'type' => 'flex',
-        'altText' => "💊 ยาใกล้หมด: {$productName} - เหลืออีก {$daysLeft} วัน",
+        'altText' => "🔁 Refill ยา: {$productName} ({$urgencyText})",
         'contents' => $bubble
     ];
 }

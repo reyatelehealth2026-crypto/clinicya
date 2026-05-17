@@ -9,6 +9,22 @@
 
 $sessionId = (int)($_GET['session_id'] ?? 0);
 
+// Quick-access banner: ติดตามการจ่ายยา (วันคงเหลือ + แจ้งเตือนแมนนวล)
+?>
+<div class="bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 rounded-xl p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
+    <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center text-xl">🔔</div>
+        <div>
+            <div class="font-semibold text-gray-900">ติดตามการจ่ายยา</div>
+            <div class="text-xs text-gray-600">ดูยาคงเหลือของลูกค้าที่จ่ายไปแล้ว · ส่งแจ้งเตือนแบบแมนนวล</div>
+        </div>
+    </div>
+    <a href="/dispense-tracking" class="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 transition">
+        <i class="fas fa-prescription-bottle-alt mr-1"></i> เปิดหน้าติดตาม
+    </a>
+</div>
+<?php
+
 // If no session_id, show session list
 if (!$sessionId) {
     // Get pending sessions

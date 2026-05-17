@@ -331,49 +331,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
             $stmt->execute([$currentBotId, $userId, $pharmacistId, $orderNumber, $items, $totalAmount, $paymentMethod, $notes]);
             $dispenseId = $db->lastInsertId();
             
-            // Add items to user's cart and create transaction for payment
-            if ($paymentMethod === 'later' || $paymentMethod === 'transfer') {
-                // Clear existing cart
-                try {
-                    $stmt = $db->prepare("DELETE FROM cart WHERE user_id = ? AND line_account_id = ?");
-                    $stmt->execute([$userId, $currentBotId]);
-                } catch (Exception $e) {}
-                
-                // Add items to cart
-                foreach ($itemsArr as $item) {
+            // ทุกครั้งที่จ่ายยา → สร้าง transaction ให้เข้าออเดอร์ลูกค้า
+            // cash → payment_status='paid', transfer/later → 'pending' (รอจ่ายเงิน)
+            $isPaid = ($paymentMethod === 'cash');
+            $paymentStatus = $isPaid ? 'paid' : 'pending';
+            $txnStatus     = $isPaid ? 'completed' : 'pending';
+            $transactionId = null;
+
+            try {
+                if (!$isPaid) {
                     try {
-                        $stmt = $db->prepare("INSERT INTO cart (line_account_id, user_id, product_id, quantity, created_at) VALUES (?, ?, ?, ?, NOW())");
-                        $stmt->execute([$currentBotId, $userId, $item['product_id'], $item['qty']]);
-                    } catch (Exception $e) {
-                        error_log("Failed to add to cart: " . $e->getMessage());
-                    }
-                }
-                
-                // Create transaction for payment tracking
-                $txnOrderNumber = 'TXN' . date('YmdHis') . rand(100, 999);
-                try {
-                    $deliveryInfo = json_encode(['type' => 'pickup', 'dispense_id' => $dispenseId]);
-                    $stmt = $db->prepare("INSERT INTO transactions (line_account_id, user_id, order_number, transaction_type, status, payment_status, subtotal, grand_total, delivery_info, notes, created_at) VALUES (?, ?, ?, 'purchase', 'pending', 'pending', ?, ?, ?, ?, NOW())");
-                    $stmt->execute([$currentBotId, $userId, $txnOrderNumber, $totalAmount, $totalAmount, $deliveryInfo, 'จ่ายยา: ' . $orderNumber]);
-                    $transactionId = $db->lastInsertId();
-                    
-                    // Add transaction items
+                        $stmt = $db->prepare("DELETE FROM cart WHERE user_id = ? AND line_account_id = ?");
+                        $stmt->execute([$userId, $currentBotId]);
+                    } catch (Exception $e) {}
+
                     foreach ($itemsArr as $item) {
-                        $stmt = $db->prepare("INSERT INTO transaction_items (transaction_id, product_id, product_name, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?, ?)");
-                        $subtotal = ($item['price'] ?? 0) * ($item['qty'] ?? 1);
-                        $stmt->execute([$transactionId, $item['product_id'], $item['name'], $item['qty'], $item['price'] ?? 0, $subtotal]);
+                        try {
+                            $stmt = $db->prepare("INSERT INTO cart (line_account_id, user_id, product_id, quantity, created_at) VALUES (?, ?, ?, ?, NOW())");
+                            $stmt->execute([$currentBotId, $userId, $item['product_id'], $item['qty']]);
+                        } catch (Exception $e) {
+                            error_log("Failed to add to cart: " . $e->getMessage());
+                        }
                     }
-                } catch (Exception $e) {
-                    error_log("Failed to create transaction: " . $e->getMessage());
                 }
-            } else {
-                // Update stock for cash payment (immediate)
+
+                $txnOrderNumber = 'TXN' . date('YmdHis') . rand(100, 999);
+                $deliveryInfo = json_encode(['type' => 'pickup', 'dispense_id' => $dispenseId, 'payment_method' => $paymentMethod]);
+                $stmt = $db->prepare("INSERT INTO transactions (line_account_id, user_id, line_user_id, order_number, transaction_type, status, payment_status, payment_method, total_amount, grand_total, delivery_info, note, created_at) VALUES (?, ?, ?, ?, 'purchase', ?, ?, ?, ?, ?, ?, ?, NOW())");
+                $stmt->execute([$currentBotId, $userId, $user['line_user_id'] ?? null, $txnOrderNumber, $txnStatus, $paymentStatus, $paymentMethod, $totalAmount, $totalAmount, $deliveryInfo, 'จ่ายยา: ' . $orderNumber]);
+                $transactionId = $db->lastInsertId();
+
+                foreach ($itemsArr as $item) {
+                    $stmt = $db->prepare("INSERT INTO transaction_items (transaction_id, product_id, product_name, product_price, quantity, subtotal) VALUES (?, ?, ?, ?, ?, ?)");
+                    $subtotal = ($item['price'] ?? 0) * ($item['qty'] ?? 1);
+                    $stmt->execute([$transactionId, $item['product_id'], $item['name'], $item['price'] ?? 0, $item['qty'], $subtotal]);
+                }
+            } catch (Exception $e) {
+                error_log("Failed to create transaction: " . $e->getMessage());
+            }
+
+            if ($isPaid) {
                 foreach ($itemsArr as $item) {
                     if (!empty($item['product_id']) && !empty($item['qty'])) {
                         $stmt = $db->prepare("UPDATE business_items SET stock = stock - ? WHERE id = ? AND stock >= ?");
                         $stmt->execute([$item['qty'], $item['product_id'], $item['qty']]);
                     }
                 }
+            }
+
+            // แจ้งเตือนยาใกล้หมด — คำนวณวันยาหมดจาก dosage × ครั้ง/วัน
+            try {
+                require_once __DIR__ . '/classes/RefillTrackingHelper.php';
+                RefillTrackingHelper::trackFromDispense($db, $itemsArr, [
+                    'user_id'         => $userId,
+                    'line_user_id'    => $user['line_user_id'] ?? null,
+                    'line_account_id' => $currentBotId,
+                    'dispense_id'     => $dispenseId,
+                ]);
+            } catch (Exception $e) {
+                error_log("Dispense: refill tracking failed: " . $e->getMessage());
             }
             
             // Send LINE Flex Message to customer
@@ -385,17 +401,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 
                 error_log("Dispense: LINE API initialized for account " . $user['line_account_id']);
                 
-                // Build checkout URL
+                // Build checkout URL — ชี้ไปหน้า order ใน mini app ใหม่ พร้อม transaction id
                 $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
-                $checkoutUrl = $baseUrl . '/liff-checkout.php';
-                
-                // Get LIFF URL if available
+                $checkoutUrl = !empty($transactionId)
+                    ? $baseUrl . '/miniapp/order/?id=' . $transactionId
+                    : $baseUrl . '/miniapp/orders/';
+
+                // ถ้ามี LIFF wrapper สำหรับ mini app → ห่อด้วย liff.line.me เพื่อให้ LIFF init auto
                 try {
-                    $stmt = $db->prepare("SELECT liff_checkout FROM liff_apps WHERE line_account_id = ?");
+                    $stmt = $db->prepare("SELECT liff_id FROM liff_apps WHERE line_account_id = ? AND is_active = 1 AND (name IN ('miniapp','order','checkout') OR endpoint_url LIKE '%/miniapp%') ORDER BY FIELD(name,'order','checkout','miniapp') LIMIT 1");
                     $stmt->execute([$user['line_account_id']]);
                     $liffApp = $stmt->fetch(PDO::FETCH_ASSOC);
-                    if ($liffApp && !empty($liffApp['liff_checkout'])) {
-                        $checkoutUrl = 'https://liff.line.me/' . $liffApp['liff_checkout'];
+                    if ($liffApp && !empty($liffApp['liff_id'])) {
+                        $deepLink = !empty($transactionId) ? '/order?id=' . $transactionId : '/orders';
+                        $checkoutUrl = 'https://liff.line.me/' . $liffApp['liff_id'] . $deepLink;
                     }
                 } catch (Exception $e) {}
                 
