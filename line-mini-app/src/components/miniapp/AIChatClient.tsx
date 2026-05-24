@@ -321,10 +321,17 @@ export function AIChatClient() {
             handleStructured(payload)
           },
           onComplete: () => {
+            // Narrow discriminated union — only some payload types carry message/question_th text
+            const structuredText = ((): string | undefined => {
+              const p = lastStructured
+              if (!p) return undefined
+              if (p.type === 'question') return p.question_th
+              if (p.type === 'escalate' || p.type === 'products') return p.message
+              return undefined
+            })()
             const finalText =
               fullResponse.trim() ||
-              lastStructured?.message ||
-              lastStructured?.question_th ||
+              structuredText ||
               'ขออภัย ไม่สามารถให้คำตอบได้'
             const aiMsg: ChatMessage = {
               id: generateId(),
