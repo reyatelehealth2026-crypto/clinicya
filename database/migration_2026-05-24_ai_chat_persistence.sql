@@ -104,3 +104,33 @@ END //
 DELIMITER ;
 CALL migrate_ach_add_session_idx();
 DROP PROCEDURE IF EXISTS migrate_ach_add_session_idx;
+
+-- ---------------------------------------------------------------------
+-- 5) pharmacist_notifications table — used by the AI chat triage flow
+--    to surface escalations on the pharmacist dashboard. Previously this
+--    DDL ran inline inside includes/ai-chat-context.php on every request,
+--    which is wasteful and made schema drift impossible to audit.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `pharmacist_notifications` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `line_account_id` INT NULL,
+    `type` VARCHAR(50) DEFAULT 'triage_alert',
+    `title` VARCHAR(255),
+    `message` TEXT,
+    `notification_data` JSON,
+    `reference_id` INT,
+    `reference_type` VARCHAR(50),
+    `user_id` INT,
+    `triage_session_id` INT NULL,
+    `priority` ENUM('normal','urgent') DEFAULT 'normal',
+    `status` ENUM('pending','handled','dismissed') DEFAULT 'pending',
+    `is_read` TINYINT(1) DEFAULT 0,
+    `handled_by` INT NULL,
+    `handled_at` TIMESTAMP NULL,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `idx_line_account` (`line_account_id`),
+    INDEX `idx_status` (`status`),
+    INDEX `idx_priority` (`priority`),
+    INDEX `idx_triage_session` (`triage_session_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

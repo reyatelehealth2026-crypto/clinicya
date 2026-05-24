@@ -617,32 +617,23 @@ if (!function_exists('aiChatEnsureTriageNotification')) {
         }
 
         try {
-            // Make sure the table exists (matches pharmacy-ai.php DDL).
-            $db->exec(
-                'CREATE TABLE IF NOT EXISTS pharmacist_notifications (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    line_account_id INT NULL,
-                    type VARCHAR(50) DEFAULT "triage_alert",
-                    title VARCHAR(255),
-                    message TEXT,
-                    notification_data JSON,
-                    reference_id INT,
-                    reference_type VARCHAR(50),
-                    user_id INT,
-                    triage_session_id INT NULL,
-                    priority ENUM("normal","urgent") DEFAULT "normal",
-                    status ENUM("pending","handled","dismissed") DEFAULT "pending",
-                    is_read TINYINT(1) DEFAULT 0,
-                    handled_by INT NULL,
-                    handled_at TIMESTAMP NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    INDEX idx_line_account (line_account_id),
-                    INDEX idx_status (status),
-                    INDEX idx_priority (priority),
-                    INDEX idx_triage_session (triage_session_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
-            );
+            // Table is created by database/migration_2026-05-24_ai_chat_persistence.sql.
+            // Run a single feature-probe per request as defence-in-depth: if the
+            // migration hasn't been applied yet we log it once and let the INSERT
+            // fail through the outer catch (rather than re-creating the table on
+            // every consult turn, which was the previous behaviour).
+            static $tableChecked = false;
+            if (!$tableChecked) {
+                $tableChecked = true;
+                try {
+                    $db->query('SELECT 1 FROM pharmacist_notifications LIMIT 1');
+                } catch (\Throwable $probeError) {
+                    error_log(
+                        'aiChatEnsureTriageNotification: pharmacist_notifications missing — '
+                        . 'run database/migration_2026-05-24_ai_chat_persistence.sql'
+                    );
+                }
+            }
 
             // Existing pending notification for this session?
             $stmt = $db->prepare(
