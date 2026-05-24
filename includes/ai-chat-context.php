@@ -516,8 +516,20 @@ if (!function_exists('aiChatExtractProductMentions')) {
         $found = [];
 
         try {
-            // Pull a bounded list of active product names + generics. Keep
-            // the limit low — this runs on every consult turn.
+            // Pull a bounded list of active product names + generics.
+            //
+            // LIMIT 5000: A LIMIT of 500 was silently dropping safety hits
+            // for tenants with mid-size catalogs (e.g. a pharmacy with
+            // 800 SKUs would never match anything beyond row 500, which
+            // means allergy/interaction warnings FAIL OPEN — the worst
+            // possible failure mode for this helper). 5000 covers
+            // essentially every tenant we have today.
+            //
+            // TODO(perf): replace this scan with a reverse-index lookup —
+            // extract drug-like tokens from $aiResponse first, then
+            // `WHERE name IN (...) OR generic_name IN (...)`. That way the
+            // limit becomes the number of tokens (small), not the catalog
+            // size (potentially huge).
             $sql = 'SELECT id, name, generic_name
                       FROM business_items
                      WHERE is_active = 1';
@@ -526,11 +538,13 @@ if (!function_exists('aiChatExtractProductMentions')) {
                 $sql .= ' AND (line_account_id = ? OR line_account_id IS NULL)';
                 $args[] = $lineAccountId;
             }
-            $sql .= ' LIMIT 500';
+            $sql .= ' LIMIT 5000';
             $stmt = $db->prepare($sql);
             $stmt->execute($args);
 
+            $scanned = 0;
             while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                $scanned++;
                 $name    = trim((string) ($row['name'] ?? ''));
                 $generic = trim((string) ($row['generic_name'] ?? ''));
                 if ($name === '' && $generic === '') {
@@ -557,6 +571,16 @@ if (!function_exists('aiChatExtractProductMentions')) {
                         break;
                     }
                 }
+            }
+
+            // Defensive: if we hit the LIMIT we may have silently skipped
+            // products. Surface it in the log so ops can catch tenants
+            // outgrowing this scan strategy. (See TODO above.)
+            if ($scanned >= 5000) {
+                error_log(sprintf(
+                    'aiChatExtractProductMentions: scan hit LIMIT 5000 — may miss matches (tenant=%s)',
+                    $lineAccountId !== null ? (string) $lineAccountId : 'null'
+                ));
             }
         } catch (\Throwable $e) {
             error_log('aiChatExtractProductMentions: ' . $e->getMessage());
