@@ -14,12 +14,26 @@
  *   line_user_id belongs to a real row in `users`.
  * - File stored at: public_html/uploads/ai-chat/{YYYY-MM}/{hash}_{ts}.{ext}
  * - Gemini model: gemini-2.0-flash (vision-capable, same family as ai-chat.php).
+ *
+ * Phase 4 security hardening (2026-05-24):
+ *  - CORS allowlist (re-ya.com + liff.line.me) — no wildcard origin.
+ *  - Rate limit: 20/hr per line_user_id, 200/hr per IP.
+ *  - Strict LINE userId regex (U + 32 hex).
+ *  - Image dimension cap (decompression bomb mitigation).
+ *  - Exception messages no longer leaked to clients.
  */
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+
+// --- CORS allowlist (no wildcard) ---------------------------------------------
+$allowedOrigins = ['https://re-ya.com', 'https://liff.line.me'];
+$origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
+if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+    header('Access-Control-Allow-Methods: POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type');
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     exit;
@@ -30,6 +44,7 @@ error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_WARNING);
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/ai-rate-limit.php';
 
 function vision_fail(string $msg, int $code = 400): void
 {
@@ -42,6 +57,19 @@ function vision_ok(array $extra = []): void
 {
     echo json_encode(['success' => true] + $extra, JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+/**
+ * Return client IP — prefers REMOTE_ADDR (only safe value here, we are not
+ * behind a trusted proxy that sets X-Forwarded-For).
+ */
+function vision_client_ip(): string
+{
+    $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    if (filter_var($ip, FILTER_VALIDATE_IP) !== false) {
+        return $ip;
+    }
+    return '0.0.0.0';
 }
 
 /**
@@ -88,8 +116,8 @@ try {
     if ($lineUserId === '') {
         vision_fail('line_user_id required');
     }
-    // LINE user IDs always start with "U" followed by 32 hex chars; be lenient for legacy ids.
-    if (strlen($lineUserId) > 64 || !preg_match('/^[A-Za-z0-9._-]+$/', $lineUserId)) {
+    // LINE user IDs are always "U" + 32 hex chars. Reject anything else.
+    if (!preg_match('/^U[0-9a-f]{32}$/i', $lineUserId)) {
         vision_fail('invalid line_user_id');
     }
 
@@ -106,6 +134,27 @@ try {
     $userId = (int) ($userStmt->fetchColumn() ?: 0);
     if ($userId <= 0) {
         vision_fail('unknown user', 403);
+    }
+
+    // Rate limit BEFORE touching the uploaded file or calling Gemini.
+    $ip = vision_client_ip();
+    if (!checkAndIncrementRateLimit($db, 'vision', $lineUserId, 'user', 20)) {
+        http_response_code(429);
+        echo json_encode([
+            'success' => false,
+            'error'   => 'rate_limit_exceeded',
+            'message' => 'ส่งรูปบ่อยเกินไป ลองใหม่ใน 1 ชั่วโมง',
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if (!checkAndIncrementRateLimit($db, 'vision', $ip, 'ip', 200)) {
+        http_response_code(429);
+        echo json_encode([
+            'success' => false,
+            'error'   => 'rate_limit_exceeded',
+            'message' => 'มีการใช้งานจากที่อยู่ของคุณเยอะเกินไป ลองใหม่ภายหลัง',
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     // File presence / upload error checks.
@@ -171,6 +220,17 @@ try {
     }
     @chmod($absPath, 0644);
     $publicUrl = $relDir . '/' . $filename;
+
+    // Decompression-bomb / oversized-pixel-grid guard.
+    // 8000x8000 RGBA ≈ 256MB decoded — refuse anything larger.
+    $dim = @getimagesize($absPath);
+    if ($dim === false || !is_array($dim)
+        || ($dim[0] ?? 0) <= 0 || ($dim[1] ?? 0) <= 0
+        || ($dim[0] ?? 0) > 8000 || ($dim[1] ?? 0) > 8000
+    ) {
+        @unlink($absPath);
+        vision_fail('Image dimensions too large or unreadable', 400);
+    }
 
     // Gemini Vision call.
     $apiKey = vision_load_gemini_key($db);
@@ -245,5 +305,5 @@ try {
     ]);
 } catch (Throwable $e) {
     error_log('[ai-chat-vision] ' . $e->getMessage());
-    vision_fail('Server error: ' . $e->getMessage(), 500);
+    vision_fail('Server error', 500);
 }

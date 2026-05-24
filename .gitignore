@@ -136,6 +136,7 @@ database/*.sql
 !database/migration_2026-05-15_seed_15_products.sql
 !database/migration_2026-05-17_dispense_refill_tracking.sql
 !database/migration_2026-05-17_onboarding.sql
+!database/migration_2026-05-24_ai_rate_limits.sql
 *.png
 DB_CONNECTION.md
 *.md
