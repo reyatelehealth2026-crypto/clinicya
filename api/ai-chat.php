@@ -370,6 +370,33 @@ if ($isConsultMode) {
                     $actions = array_map(static function ($f) {
                         return (string) ($f['action'] ?? '');
                     }, $critical);
+
+                    // Flip the active triage session to 'escalate' BEFORE we
+                    // emit the emergency event so the pharmacist dashboard
+                    // and the Mini-App state header agree on the new state
+                    // even if the client races to re-poll.
+                    if ($activeSession !== null && !empty($activeSession['id'])) {
+                        try {
+                            $stmt = $db->prepare(
+                                "UPDATE triage_sessions
+                                    SET current_state = 'escalate', updated_at = NOW()
+                                  WHERE id = ?"
+                            );
+                            $stmt->execute([(int) $activeSession['id']]);
+                        } catch (\Throwable $stateErr) {
+                            error_log('triage_sessions escalate update: ' . $stateErr->getMessage());
+                        }
+                    }
+
+                    // Emit the state transition first so any UI listening on
+                    // 'state' switches the header chip before the emergency
+                    // modal opens (avoids the stale 'greeting' flash).
+                    $emitStructured([
+                        'type'     => 'state',
+                        'state'    => 'escalate',
+                        'label_th' => 'ส่งต่อเภสัชกร',
+                    ]);
+
                     $emitStructured([
                         'type'           => 'emergency',
                         'severity'       => 'critical',
@@ -636,7 +663,12 @@ $emitErrorOrCapture = static function (string $msg) use (&$silentMode, &$capture
 /**
  * ลอง Gemini ด้วยคีย์ที่ระบุ คืน true ถ้ามี token ส่งออกอย่างน้อย 1 ตัว
  */
-$tryGemini = function (string $key) use ($payload, $emitToken, &$capturedError, &$emittedAnyToken): bool {
+$tryGemini = function (string $key) use ($payload, $emitToken, &$capturedError, &$emittedAnyToken, &$assistantBuffer): bool {
+    // Reset the persistence buffer at the start of each attempt so a
+    // partially-streamed response from a failed key does not get appended
+    // to (and pollute) the response that the fallback key eventually
+    // succeeds with. Mirrors the $emittedAnyToken accounting below.
+    $assistantBuffer = '';
     $tokenCountBefore = $emittedAnyToken ? 1 : 0;
     $sseBuffer = '';
     $upstreamBody = '';
@@ -752,7 +784,11 @@ $tryGemini = function (string $key) use ($payload, $emitToken, &$capturedError, 
 /**
  * Fallback OpenAI (non-streaming) — emit เป็น chunk เดียว
  */
-$tryOpenAI = function (string $key) use ($systemPrompt, $contents, $emitToken, &$capturedError): bool {
+$tryOpenAI = function (string $key) use ($systemPrompt, $contents, $emitToken, &$capturedError, &$assistantBuffer): bool {
+    // Same buffer reset as $tryGemini — if Gemini emitted partial tokens
+    // then failed, OpenAI's fallback response should not be concatenated
+    // onto that fragment when we persist.
+    $assistantBuffer = '';
     $messages = [['role' => 'system', 'content' => $systemPrompt]];
     foreach ($contents as $turn) {
         $role = ($turn['role'] ?? 'user') === 'model' ? 'assistant' : 'user';
