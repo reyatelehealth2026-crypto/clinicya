@@ -48,6 +48,13 @@ function dispatchStructured(
     case 'continue':
       // Handled exclusively via the generic `onStructured` callback today.
       return
+    default: {
+      // Exhaustiveness check — adding a new variant to
+      // `TriageStructuredPayload` without handling it here is a TS error.
+      const _exhaustive: never = payload
+      void _exhaustive
+      return
+    }
   }
 }
 
