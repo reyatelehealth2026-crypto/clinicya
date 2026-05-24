@@ -16,7 +16,7 @@ import { MIMSInfoCard } from '@/components/miniapp/MIMSInfoCard'
 import { PharmacistConsultCTA } from '@/components/miniapp/PharmacistConsultCTA'
 import { streamAIChat } from '@/lib/ai-chat-api'
 import { fetchAIChatHistory } from '@/lib/ai-chat-history-api'
-import { scanEmergency, type EmergencyPayload } from '@/lib/emergency-scan'
+import { scanEmergency, type EmergencyPayload, type EmergencySeverity } from '@/lib/emergency-scan'
 import { toTriageState, type TriageState } from '@/lib/state-labels'
 import { useToast } from '@/lib/toast'
 import type {
@@ -157,16 +157,28 @@ export function AIChatClient() {
         cancelled = true
       }
     }
-    fetchAIChatHistory(userId).then((history) => {
-      if (cancelled) return
-      if (history.length === 0) {
+    fetchAIChatHistory(userId)
+      .then((history) => {
+        if (cancelled) return
+        if (history.length === 0) {
+          setHistoryLoaded(true)
+          return
+        }
+        // Only seed history if the user hasn't started a conversation yet.
+        // Using functional setState ensures we observe the latest message list
+        // (avoids overwriting messages sent before the fetch resolved).
+        setMessages((prev) => {
+          const userInteracted = prev.some((m) => m.role === 'user')
+          if (userInteracted) return prev
+          // Preserve the default greeting (rendered after history) so the
+          // restored transcript stays in chronological order.
+          return [...history, buildHistorySeparator(), ...prev]
+        })
         setHistoryLoaded(true)
-        return
-      }
-      // Replace the default greeting with restored history + separator
-      setMessages([...history, buildHistorySeparator()])
-      setHistoryLoaded(true)
-    })
+      })
+      .catch(() => {
+        if (!cancelled) setHistoryLoaded(true)
+      })
     return () => {
       cancelled = true
     }
@@ -201,7 +213,8 @@ export function AIChatClient() {
       return
     }
 
-    // New types — `type` is a string at runtime; narrow via unknown cast
+    // TODO(post-merge): replace `payload as unknown as ...` with discriminated union narrowing
+    // once Phase 2's extended TriageStructuredPayload is on this branch
     const extra = payload as unknown as Record<string, unknown>
     const kind = typeof extra.type === 'string' ? extra.type : ''
 
@@ -213,12 +226,23 @@ export function AIChatClient() {
         return
       }
       case 'emergency': {
-        const sev = extra.severity === 'critical' ? 'critical' : 'warning'
+        const sev: EmergencySeverity = extra.severity === 'critical' ? 'critical' : 'warning'
         const symptomsRaw = Array.isArray(extra.symptoms) ? extra.symptoms : []
         const symptoms = symptomsRaw.filter((s): s is string => typeof s === 'string')
         const recommendation =
           typeof extra.recommendation === 'string' ? extra.recommendation : ''
-        setEmergency({ severity: sev, symptoms, recommendation })
+        const serverPayload: EmergencyPayload = { severity: sev, symptoms, recommendation }
+        // Prevent flicker: keep client-side `critical` modal when server confirms with
+        // a lesser severity, and merge symptom lists (deduped) when severities match.
+        setEmergency((prev) => {
+          if (!prev) return serverPayload
+          if (prev.severity === 'critical' && serverPayload.severity !== 'critical') return prev
+          if (prev.severity === serverPayload.severity) {
+            const merged = Array.from(new Set([...prev.symptoms, ...serverPayload.symptoms]))
+            return { ...serverPayload, symptoms: merged }
+          }
+          return serverPayload
+        })
         return
       }
       case 'drug_interactions': {
