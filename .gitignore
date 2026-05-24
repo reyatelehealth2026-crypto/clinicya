@@ -139,6 +139,7 @@ database/*.sql
 !database/migration_2026-05-17_onboarding.sql
 !database/migration_2026-05-24_ai_rate_limits.sql
 !database/migration_2026-05-24_ai_chat_persistence.sql
+!database/migration_2026-05-24_products_inventory.sql
 *.png
 DB_CONNECTION.md
 *.md
