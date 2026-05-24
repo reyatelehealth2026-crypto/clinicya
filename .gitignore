@@ -58,6 +58,7 @@ package-lock.json
 # Test & Cache
 test*.php
 !tests/
+!tests/Smoke/test_06_ai_chat_safety.php
 .phpunit.result.cache
 phpunit.xml.bak
 cache/
@@ -137,6 +138,7 @@ database/*.sql
 !database/migration_2026-05-17_dispense_refill_tracking.sql
 !database/migration_2026-05-17_onboarding.sql
 !database/migration_2026-05-24_ai_rate_limits.sql
+!database/migration_2026-05-24_ai_chat_persistence.sql
 *.png
 DB_CONNECTION.md
 *.md
