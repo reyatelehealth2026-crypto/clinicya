@@ -13,7 +13,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit; }
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/ai-chat-context.php';
 session_write_close();
+
+/**
+ * Emit a structured SSE event ({"structured": {...}}). Used by Phase 1
+ * extensions (user_context, state, emergency, drug_interactions).
+ */
+$emitStructured = static function (array $payload): void {
+    $flags = JSON_UNESCAPED_UNICODE;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    echo 'data: ' . json_encode(['structured' => $payload], $flags) . "\n\n";
+    if (function_exists('ob_get_level') && ob_get_level() > 0) {
+        @ob_flush();
+    }
+    @flush();
+};
 
 $input = json_decode(file_get_contents('php://input'), true);
 if (!is_array($input)) {
@@ -248,6 +265,180 @@ if ($isConsultMode) {
     }
 }
 
+// --- PHASE 1 SAFETY + PERSISTENCE (consult mode only) -----------------------
+// Runs AFTER TriageRouter returned 'continue' (or failed silently), BEFORE we
+// build the Gemini payload. Loads user context, screens for emergency red
+// flags, persists the user turn, and stages the post-stream callback to save
+// the assistant response + emit drug_interactions warnings.
+$ctxLineUserId   = isset($input['line_user_id']) && is_string($input['line_user_id'])
+    ? trim($input['line_user_id']) : '';
+$ctxLineAccountId = isset($input['line_account_id']) && is_numeric($input['line_account_id'])
+    ? (int) $input['line_account_id'] : null;
+$ctxInternalUserId = 0;
+if ($ctxLineUserId !== '') {
+    $ctxInternalUserId = aiChatResolveInternalUserId($db, $ctxLineUserId);
+}
+$ctxUserProfile  = ['drug_allergies' => [], 'current_medications' => [], 'chronic_diseases' => null, 'display_name' => null];
+$ctxSafetyXml    = '';
+$ctxSafetyRule   = '';
+$ctxSessionId    = null;
+
+if ($isConsultMode) {
+    try {
+        // 1) Full user safety context — used to inject into system prompt
+        //    AND emitted as user_context SSE event for the UI.
+        if ($ctxLineUserId !== '') {
+            $ctxUserProfile = getUserFullContextForChat($db, $ctxLineUserId);
+            if (!empty($ctxUserProfile['id'])) {
+                $ctxInternalUserId = (int) $ctxUserProfile['id'];
+            }
+        }
+
+        // 2) Resolve active triage session id (read-only) so we can tag
+        //    persisted messages + drive the state header indicator.
+        $activeSession = null;
+        if ($ctxInternalUserId > 0) {
+            $activeSession = aiChatGetActiveTriageSession($db, $ctxInternalUserId, $ctxLineAccountId);
+            if ($activeSession !== null) {
+                $ctxSessionId = (string) ($activeSession['id'] ?? '');
+                if ($ctxSessionId === '') {
+                    $ctxSessionId = null;
+                }
+            }
+        }
+
+        // 3) Build inline <user_profile> XML for the Gemini system prompt.
+        $ctxSafetyXml = aiChatBuildUserProfileXml($ctxUserProfile);
+        if ($ctxSafetyXml !== '') {
+            $ctxSafetyRule = "\n\nกฎความปลอดภัย (สำคัญที่สุด):\n"
+                . "- ห้ามแนะนำยาที่ผู้ใช้แพ้เด็ดขาด — ดูใน <allergies> ของ <user_profile>\n"
+                . "- ตรวจดู <current_medications> ของ user ก่อนแนะนำยาใหม่ — ระบุปฏิกิริยาที่อาจเกิดขึ้น\n"
+                . "- คำนึงถึง <chronic_diseases> เมื่อเลือกยา (เช่น โรคไต/ตับ/หัวใจ)\n\n"
+                . $ctxSafetyXml;
+        }
+
+        // 4) Emit state SSE event (Phase 2/3 will render as a chip).
+        $stateName = $activeSession !== null
+            ? (string) ($activeSession['current_state'] ?? 'greeting')
+            : 'greeting';
+        $stateLabels = [
+            'greeting'         => 'พร้อมให้บริการ',
+            'symptom'          => 'ซักประวัติอาการ',
+            'duration'         => 'สอบถามระยะเวลา',
+            'severity'         => 'ประเมินความรุนแรง',
+            'associated'       => 'อาการร่วม',
+            'allergy'          => 'ประวัติการแพ้ยา',
+            'medical_history'  => 'โรคประจำตัว',
+            'current_meds'     => 'ยาที่ทานอยู่',
+            'recommend'        => 'แนะนำยา',
+            'confirm'          => 'ยืนยันการรักษา',
+            'complete'         => 'เสร็จสิ้นการประเมิน',
+            'escalate'         => 'ส่งต่อเภสัชกร',
+        ];
+        $emitStructured([
+            'type'     => 'state',
+            'state'    => $stateName,
+            'label_th' => $stateLabels[$stateName] ?? 'พร้อมให้บริการ',
+        ]);
+
+        // 5) Emit user_context SSE event ONLY if there is anything worth
+        //    surfacing (allergies / chronic / current meds).
+        $hasAllergies = !empty($ctxUserProfile['drug_allergies']);
+        $hasMeds      = !empty($ctxUserProfile['current_medications']);
+        $hasChronic   = !empty($ctxUserProfile['chronic_diseases']);
+        if ($hasAllergies || $hasMeds || $hasChronic) {
+            $emitStructured(aiChatBuildUserContextEvent($ctxUserProfile));
+        }
+
+        // 6) Early emergency screen — if RedFlagDetector finds CRITICAL
+        //    flags we emit `emergency` and exit BEFORE the LLM round-trip.
+        try {
+            require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+            if (function_exists('loadAIChatModule')) {
+                loadAIChatModule();
+            }
+            if (class_exists(\Modules\AIChat\Services\RedFlagDetector::class)) {
+                $detector = new \Modules\AIChat\Services\RedFlagDetector();
+                $flags = $detector->detect($userMessage);
+                $critical = array_values(array_filter($flags, static function ($f) {
+                    return is_array($f) && ($f['severity'] ?? '') === 'critical';
+                }));
+                if (!empty($critical)) {
+                    $symptoms = array_map(static function ($f) {
+                        return (string) ($f['message'] ?? '');
+                    }, $critical);
+                    $actions = array_map(static function ($f) {
+                        return (string) ($f['action'] ?? '');
+                    }, $critical);
+                    $emitStructured([
+                        'type'           => 'emergency',
+                        'severity'       => 'critical',
+                        'symptoms'       => array_values(array_filter($symptoms)),
+                        'recommendation' => trim(implode("\n", array_filter($actions))),
+                    ]);
+
+                    // Persist what we have (user turn) so the conversation
+                    // history still reflects the escalation event.
+                    if ($ctxInternalUserId > 0) {
+                        aiChatSaveConversationMessage(
+                            $db,
+                            $ctxInternalUserId,
+                            $ctxLineAccountId,
+                            $ctxSessionId,
+                            'user',
+                            $userMessage
+                        );
+                        $emergencyText = '🚨 ' . implode(' / ', $symptoms) . "\n" . implode("\n", $actions);
+                        aiChatSaveConversationMessage(
+                            $db,
+                            $ctxInternalUserId,
+                            $ctxLineAccountId,
+                            $ctxSessionId,
+                            'assistant',
+                            $emergencyText
+                        );
+                    }
+
+                    // Best-effort pharmacist notification for active sessions.
+                    if ($activeSession !== null) {
+                        aiChatEnsureTriageNotification(
+                            $db,
+                            (int) $activeSession['id'],
+                            $ctxInternalUserId,
+                            $ctxLineAccountId,
+                            $ctxUserProfile,
+                            ['red_flags' => $critical],
+                            'escalate'
+                        );
+                    }
+
+                    echo "data: [DONE]\n\n";
+                    flush();
+                    exit;
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('RedFlag early screen error: ' . $e->getMessage());
+        }
+
+        // 7) Persist the user's turn now (before LLM call) so the row exists
+        //    even if Gemini times out.
+        if ($ctxInternalUserId > 0) {
+            aiChatSaveConversationMessage(
+                $db,
+                $ctxInternalUserId,
+                $ctxLineAccountId,
+                $ctxSessionId,
+                'user',
+                $userMessage
+            );
+        }
+    } catch (\Throwable $e) {
+        // Safety layer must not break the SSE stream.
+        error_log('AIChat Phase1 safety pass error: ' . $e->getMessage());
+    }
+}
+
 // --- FAST CONTEXT (queries must not fatal — missing tables / SQL errors → defaults) ---
 $oy = ['total' => 0, 'amount' => 0, 'customers' => 0];
 $ot = ['total' => 0, 'amount' => 0];
@@ -353,6 +544,7 @@ if ($isConsultMode) {
         "6. คำถามที่ไม่ใช่เรื่องสุขภาพ/ยา → ตอบอย่างสุภาพว่าให้คำแนะนำได้เฉพาะเรื่องสุขภาพ\n" .
         "7. **ห้ามตอบเรื่อง stock/สต็อก, ยอดขาย, ออเดอร์, รายงาน B2B, การวิเคราะห์ธุรกิจ, admin metrics ใด ๆ ทั้งสิ้น** — ถ้าถูกถามให้ตอบว่า 'ส่วนนี้ต้องสอบถามแอดมินครับ/ค่ะ'\n" .
         "8. ใช้ความรู้ทางคลินิกจาก RAG context ด้านล่าง (ถ้ามี) เป็นหลัก ห้ามแต่งเอง"
+        . ($ctxSafetyRule !== '' ? $ctxSafetyRule : '')
         . ($ragContext !== '' ? "\n\n" . $ragContext : '');
 } else {
     $systemPrompt = "คุณเป็น REYA Intelligence AI — ผู้ช่วยบริหารธุรกิจของ REYA ร้านยาส่ง B2B\n" .
@@ -413,9 +605,11 @@ if ($payload === false) {
 $emittedAnyToken = false;
 $capturedError = '';
 $silentMode = true; // true = บัฟเฟอร์ error ไว้ลอง key/provider ถัดไป (ไม่ส่งให้ client ทันที)
+$assistantBuffer = ''; // เก็บข้อความตอบกลับทั้งหมดเพื่อ persist หลังจบ stream
 
-$emitToken = static function (string $t) use (&$emittedAnyToken): void {
+$emitToken = static function (string $t) use (&$emittedAnyToken, &$assistantBuffer): void {
     $emittedAnyToken = true;
+    $assistantBuffer .= $t;
     $flags = JSON_UNESCAPED_UNICODE;
     if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
         $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
@@ -630,6 +824,43 @@ if (!$success && $openaiKey !== '') {
 $silentMode = false;
 if (!$success) {
     $emitErrorOrCapture($capturedError !== '' ? $capturedError : 'AI ไม่ตอบสนอง — ตรวจสอบคีย์ Gemini/OpenAI');
+}
+
+// --- PHASE 1 POST-STREAM: persistence + drug-interaction warnings ----------
+if ($isConsultMode && $success && $assistantBuffer !== '') {
+    try {
+        // Persist assistant response (mirrors user-turn save earlier).
+        if ($ctxInternalUserId > 0) {
+            aiChatSaveConversationMessage(
+                $db,
+                $ctxInternalUserId,
+                $ctxLineAccountId,
+                $ctxSessionId,
+                'assistant',
+                $assistantBuffer
+            );
+        }
+
+        // If the AI mentioned any catalog products AND the user has a known
+        // allergy/medication, emit a drug_interactions structured event so
+        // the UI can render a warning card.
+        $hasSafetySignal = !empty($ctxUserProfile['drug_allergies'])
+            || !empty($ctxUserProfile['current_medications']);
+        if ($hasSafetySignal) {
+            $mentions = aiChatExtractProductMentions($db, $ctxLineAccountId, $assistantBuffer);
+            if (!empty($mentions)) {
+                $warnings = aiChatCheckDrugInteractionsSimple($mentions, $ctxUserProfile);
+                if (!empty($warnings)) {
+                    $emitStructured([
+                        'type'     => 'drug_interactions',
+                        'warnings' => $warnings,
+                    ]);
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+        error_log('AIChat Phase1 post-stream error: ' . $e->getMessage());
+    }
 }
 
 echo "data: [DONE]\n\n";
