@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   AlertTriangle,
@@ -10,6 +10,13 @@ import {
   X,
   Activity
 } from 'lucide-react'
+
+/**
+ * Query string for tabbable / focusable descendants inside the dialog. Used
+ * by the focus-trap effect — keep this in sync with elements rendered below.
+ */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /**
  * Props for {@link EmergencyModal}.
@@ -50,18 +57,43 @@ export function EmergencyModal({
   onConsultPharmacist
 }: EmergencyModalProps) {
   const [mounted, setMounted] = useState(false)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null)
+  const firstHotlineRef = useRef<HTMLAnchorElement | null>(null)
 
   // SSR-safe portal: only render after mount on the client.
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Lock body scroll while the modal is open + restore on unmount.
+  /**
+   * Lock body scroll while the modal is open + restore on unmount.
+   *
+   * iOS Safari (LIFF runtime) ignores `body { overflow: hidden }` alone — the
+   * page still rubber-band scrolls under the modal. The accepted fix is to
+   * pin `<body>` with `position: fixed; top: -scrollY` and restore the
+   * scroll position on unmount.
+   */
   useEffect(() => {
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    if (typeof window === 'undefined') return
+    const scrollY = window.scrollY
+    const body = document.body
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      overflow: body.style.overflow
+    }
+    body.style.position = 'fixed'
+    body.style.top = `-${scrollY}px`
+    body.style.width = '100%'
+    body.style.overflow = 'hidden'
     return () => {
-      document.body.style.overflow = previous
+      body.style.position = prev.position
+      body.style.top = prev.top
+      body.style.width = prev.width
+      body.style.overflow = prev.overflow
+      window.scrollTo(0, scrollY)
     }
   }, [])
 
@@ -74,9 +106,62 @@ export function EmergencyModal({
     return () => window.removeEventListener('keydown', handleKey)
   }, [onClose])
 
-  if (!mounted) return null
-
   const isCritical = severity === 'critical'
+
+  /**
+   * Focus management (WCAG 2.4.3, ARIA APG dialog pattern):
+   *  - on open: remember the previously-focused element, then move focus
+   *    into the dialog (first hotline link when `isCritical`, otherwise
+   *    the close button).
+   *  - while open: trap Tab / Shift+Tab inside the dialog's focusable
+   *    descendants so keyboard users can't escape behind the backdrop.
+   *  - on close: restore focus to the previously-focused element.
+   */
+  useEffect(() => {
+    if (!mounted) return
+    const previouslyActive = document.activeElement as HTMLElement | null
+
+    // Defer initial focus by a frame so refs are attached and the
+    // animation doesn't fight the focus ring.
+    const focusTarget = isCritical
+      ? firstHotlineRef.current ?? closeBtnRef.current
+      : closeBtnRef.current ?? firstHotlineRef.current
+    focusTarget?.focus?.()
+
+    function handleTabKey(e: KeyboardEvent) {
+      if (e.key !== 'Tab') return
+      const root = dialogRef.current
+      if (!root) return
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+      ).filter((el) => !el.hasAttribute('aria-hidden'))
+      if (focusables.length === 0) {
+        e.preventDefault()
+        return
+      }
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey) {
+        if (active === first || !root.contains(active)) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else {
+        if (active === last || !root.contains(active)) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleTabKey)
+    return () => {
+      window.removeEventListener('keydown', handleTabKey)
+      previouslyActive?.focus?.()
+    }
+  }, [mounted, isCritical])
+
+  if (!mounted) return null
 
   const contentBgClass = isCritical
     ? 'bg-gradient-to-br from-rose-50 to-white border-rose-300'
@@ -94,26 +179,27 @@ export function EmergencyModal({
     : 'หากอาการไม่ดีขึ้นหรือรุนแรงขึ้น ควรพบแพทย์โดยเร็ว'
 
   const modal = (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="emergency-modal-title"
-      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center"
-    >
-      {/* Backdrop */}
-      <button
-        type="button"
-        aria-label="ปิดการแจ้งเตือนฉุกเฉิน"
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+      {/* Backdrop — sibling of the dialog, not a focusable child. Decorative
+          click-to-close affordance only; the X button below provides the a11y
+          close. aria-hidden keeps screen readers + Tab order out of it. */}
+      <div
+        aria-hidden="true"
         onClick={onClose}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
       />
 
-      {/* Card */}
+      {/* Dialog */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="emergency-modal-title"
         className={`relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border-2 shadow-card animate-slide-up ${contentBgClass}`}
       >
         {/* Close (X) */}
         <button
+          ref={closeBtnRef}
           type="button"
           onClick={onClose}
           aria-label="ปิด"
@@ -165,6 +251,7 @@ export function EmergencyModal({
         <div className="px-5 pb-5 pt-2 grid gap-2">
           {isCritical ? (
             <a
+              ref={firstHotlineRef}
               href="tel:1669"
               className="min-h-[48px] inline-flex items-center justify-between gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-2xl active:scale-95"
             >
@@ -177,6 +264,9 @@ export function EmergencyModal({
           ) : null}
 
           <a
+            ref={(el) => {
+              if (!isCritical) firstHotlineRef.current = el
+            }}
             href="tel:1323"
             className="min-h-[48px] inline-flex items-center justify-between gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-2xl active:scale-95"
           >
