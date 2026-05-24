@@ -248,6 +248,7 @@ class TriageRouter
                 // ignore
             }
         }
+        $this->fireAndForgetSummary($sessionId);
         return [
             'type'       => 'escalate',
             'session_id' => $sessionId,
@@ -275,12 +276,55 @@ class TriageRouter
             $summary
         );
 
+        $this->fireAndForgetSummary($sessionId);
+
         return [
             'type'       => 'products',
             'session_id' => $sessionId,
             'products'   => $products,
             'message'    => $summary,
         ];
+    }
+
+    /**
+     * Trigger the auto-summary endpoint asynchronously after the response has
+     * been flushed. Never blocks or throws — best-effort. The cron sweeper
+     * (cron/ai_session_summarizer.php) catches anything this drops.
+     */
+    private function fireAndForgetSummary(?int $sessionId): void
+    {
+        if ($sessionId === null || $sessionId <= 0) {
+            return;
+        }
+        try {
+            register_shutdown_function(static function () use ($sessionId): void {
+                try {
+                    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                    $host   = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+                    $url    = $scheme . '://' . $host . '/api/ai-chat-summary.php';
+                    $body   = json_encode(['session_id' => $sessionId]);
+                    $ch = curl_init($url);
+                    curl_setopt_array($ch, [
+                        CURLOPT_POST           => true,
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_TIMEOUT        => 2,
+                        CURLOPT_CONNECTTIMEOUT => 1,
+                        CURLOPT_HTTPHEADER     => [
+                            'Content-Type: application/json',
+                            'Expect:',
+                        ],
+                        CURLOPT_POSTFIELDS     => $body,
+                    ]);
+                    // Fire and forget — short timeout, ignore the response.
+                    @curl_exec($ch);
+                    curl_close($ch);
+                } catch (\Throwable $e) {
+                    error_log('[TriageRouter] fireAndForgetSummary failed: ' . $e->getMessage());
+                }
+            });
+        } catch (\Throwable $e) {
+            error_log('[TriageRouter] register_shutdown_function failed: ' . $e->getMessage());
+        }
     }
 
     private function canRecommendProducts(): bool
