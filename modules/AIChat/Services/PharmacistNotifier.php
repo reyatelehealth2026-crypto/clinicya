@@ -48,13 +48,22 @@ class PharmacistNotifier
             foreach ($pharmacists as $pharmacist) {
                 // ส่ง LINE
                 $this->sendLINEPush($pharmacist['line_user_id'], $flexMessage);
-                
+
                 // ส่ง Email ถ้าเป็น urgent และมี email
                 if ($urgent && !empty($pharmacist['email'])) {
                     $this->sendUrgentEmail($pharmacist['email'], $data);
                 }
             }
-            
+
+            // เพิ่ม text push พร้อม deep-link ตอบกลับใน inbox (urgent เท่านั้น) — best-effort
+            if ($urgent) {
+                try {
+                    $this->pushToActivePharmacists($data, $pharmacists);
+                } catch (\Throwable $e) {
+                    error_log('PharmacistNotifier::pushToActivePharmacists fatal: ' . $e->getMessage());
+                }
+            }
+
             return true;
         } catch (\Exception $e) {
             error_log("PharmacistNotifier error: " . $e->getMessage());
@@ -809,6 +818,94 @@ class PharmacistNotifier
         ];
     }
     
+    /**
+     * Send a plain-text LINE push with an inbox deep-link to every active
+     * pharmacist (admin_users with role=pharmacist|admin, is_active=1, real
+     * line_user_id). Idempotent in spirit — best-effort, never throws.
+     *
+     * Re-uses the pharmacist list already fetched by notifyAllPharmacists so we
+     * don't hit `admin_users` twice.
+     *
+     * @param array<string, mixed>      $data
+     * @param list<array<string, mixed>> $pharmacists
+     */
+    private function pushToActivePharmacists(array $data, array $pharmacists): void
+    {
+        if (empty($pharmacists)) {
+            return;
+        }
+
+        $sessionId  = (int) ($data['session_id'] ?? 0);
+        $userId     = (int) ($data['user_id'] ?? 0);
+        $userName   = (string) ($data['user_name'] ?? 'ลูกค้า');
+        $complaint  = trim((string) ($data['chief_complaint'] ?? $data['message'] ?? ''));
+        if ($complaint === '') {
+            $complaint = 'ผู้ใช้ขอปรึกษาเภสัชกร';
+        }
+        if (mb_strlen($complaint) > 280) {
+            $complaint = mb_substr($complaint, 0, 280) . '…';
+        }
+
+        $linkParts = [];
+        if ($userId > 0) {
+            $linkParts[] = 'user=' . $userId;
+        }
+        if ($sessionId > 0) {
+            $linkParts[] = 'session=' . $sessionId;
+        }
+        $inboxLink = 'https://re-ya.com/inbox-v2.php'
+            . (empty($linkParts) ? '' : ('?' . implode('&', $linkParts)));
+
+        $text = sprintf(
+            "🚨 ผู้ใช้ %s ต้องการเภสัชกรด่วน\nอาการ: %s\nแตะเพื่อตอบกลับ → %s",
+            $userName,
+            $complaint,
+            $inboxLink
+        );
+
+        $sent = 0;
+        $errors = 0;
+        foreach ($pharmacists as $pharmacist) {
+            $lineUserId = trim((string) ($pharmacist['line_user_id'] ?? ''));
+            if ($lineUserId === '') {
+                continue;
+            }
+            try {
+                $ok = $this->sendLINEPush($lineUserId, [
+                    'type' => 'text',
+                    'text' => $text,
+                ]);
+                $ok ? $sent++ : $errors++;
+            } catch (\Throwable $e) {
+                $errors++;
+                error_log('pushToActivePharmacists send error: ' . $e->getMessage());
+            }
+        }
+
+        // Audit to dev_logs — never let logging failure break the flow.
+        try {
+            $this->db->execute(
+                'INSERT INTO dev_logs (log_type, source, message, data, created_at)
+                 VALUES (?, ?, ?, ?, NOW())',
+                [
+                    'info',
+                    'PharmacistNotifier::pushToActivePharmacists',
+                    sprintf('escalate text push: sent=%d errors=%d', $sent, $errors),
+                    json_encode([
+                        'session_id'        => $sessionId,
+                        'user_id'           => $userId,
+                        'line_account_id'   => $this->lineAccountId,
+                        'pharmacist_count'  => count($pharmacists),
+                        'sent'              => $sent,
+                        'errors'            => $errors,
+                    ], JSON_UNESCAPED_UNICODE),
+                ]
+            );
+        } catch (\Throwable $e) {
+            error_log('pushToActivePharmacists audit log failed: ' . $e->getMessage());
+        }
+    }
+
     /**
      * ส่ง LINE Push Message
      */
