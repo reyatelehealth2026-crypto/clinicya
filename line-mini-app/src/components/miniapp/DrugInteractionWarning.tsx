@@ -39,24 +39,40 @@ export function DrugInteractionWarning({
 }: DrugInteractionWarningProps) {
   if (warnings.length === 0) return null
 
-  const allergyWarnings = warnings.filter(
-    (w) => w.type === 'allergy' || w.severity === 'high'
-  )
-  const interactionWarnings = warnings.filter(
-    (w) => w.type === 'interaction' && w.severity !== 'high'
-  )
+  // Partition strictly by `type` so a high-severity drug-drug interaction
+  // stays in the interactions section (it's NOT an allergy). Sort each
+  // section by severity: high → medium → low.
+  const severityRank: Record<'high' | 'medium' | 'low', number> = {
+    high: 0,
+    medium: 1,
+    low: 2
+  }
+  const bySeverity = (a: WarningItem, b: WarningItem): number => {
+    const ra = severityRank[a.severity] ?? 3
+    const rb = severityRank[b.severity] ?? 3
+    return ra - rb
+  }
+  const allergyWarnings = warnings
+    .filter((w) => w.type === 'allergy')
+    .sort(bySeverity)
+  const interactionWarnings = warnings
+    .filter((w) => w.type === 'interaction')
+    .sort(bySeverity)
 
   const hasAllergies = allergyWarnings.length > 0
   const hasInteractions = interactionWarnings.length > 0
 
   if (!hasAllergies && !hasInteractions) return null
 
-  // Outer card tone keys off the worst-severity inside
-  const outerClass = hasAllergies
+  // Outer card tone keys off the worst-severity inside. Allergies always
+  // dominate; otherwise a high-severity interaction also warrants rose.
+  const hasAnyHigh =
+    hasAllergies || interactionWarnings.some((w) => w.severity === 'high')
+  const outerClass = hasAnyHigh
     ? 'border-rose-300 bg-rose-50'
     : 'border-amber-300 bg-amber-50'
-  const headerClass = hasAllergies ? 'text-rose-700' : 'text-amber-800'
-  const HeaderIcon = hasAllergies ? AlertTriangle : AlertCircle
+  const headerClass = hasAnyHigh ? 'text-rose-700' : 'text-amber-800'
+  const HeaderIcon = hasAnyHigh ? AlertTriangle : AlertCircle
   const headerText = hasAllergies ? '⛔ คำเตือนการแพ้ยา!' : '⚠️ ข้อควรระวังการใช้ยา'
 
   return (
@@ -138,7 +154,7 @@ export function DrugInteractionWarning({
           <button
             type="button"
             onClick={onConsultPharmacist}
-            className="self-start min-h-[40px] inline-flex items-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-full active:scale-95"
+            className="self-start min-h-[44px] inline-flex items-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-full active:scale-95"
           >
             <Bot className="w-3.5 h-3.5" aria-hidden="true" />
             ปรึกษาเภสัชกร
