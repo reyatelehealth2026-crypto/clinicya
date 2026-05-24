@@ -34,8 +34,15 @@ export function CartClient() {
     queryClient.invalidateQueries({ queryKey: ['shop-cart', lineUserId] })
 
   const updateMut = useMutation({
-    mutationFn: ({ productId, quantity }: { productId: number; quantity: number }) =>
-      updateCartItem(lineUserId, productId, quantity),
+    mutationFn: ({
+      productId,
+      quantity,
+      unitId,
+    }: {
+      productId: number
+      quantity: number
+      unitId?: number | null
+    }) => updateCartItem(lineUserId, productId, quantity, unitId),
     onSuccess: (data) => {
       if (!data.success) toast.error(data.message || 'อัปเดตตะกร้าไม่สำเร็จ')
       void invalidateCart()
@@ -44,7 +51,8 @@ export function CartClient() {
   })
 
   const removeMut = useMutation({
-    mutationFn: (productId: number) => removeCartLine(lineUserId, productId),
+    mutationFn: ({ productId, unitId }: { productId: number; unitId?: number | null }) =>
+      removeCartLine(lineUserId, productId, unitId),
     onSuccess: (data) => {
       if (!data.success) toast.error(data.message || 'ลบรายการไม่สำเร็จ')
       void invalidateCart()
@@ -96,7 +104,7 @@ export function CartClient() {
       ) : (
         <div className="space-y-3">
           {items.map((row) => (
-            <div key={row.product_id} className="flex gap-3 rounded-2xl bg-white p-3 shadow-soft">
+            <div key={`${row.product_id}-${row.unit_id ?? 'base'}`} className="flex gap-3 rounded-2xl bg-white p-3 shadow-soft">
               <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-slate-100">
                 {row.image_url ? (
                   <Image src={row.image_url} alt="" fill className="object-cover" sizes="64px" />
@@ -108,6 +116,14 @@ export function CartClient() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900">{row.name}</p>
+                {row.unit_name ? (
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    หน่วย: <span className="font-medium text-slate-700">{row.unit_name}</span>
+                    {row.unit_price != null
+                      ? ` · ฿${Number(row.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 })}/${row.unit_name}`
+                      : ''}
+                  </p>
+                ) : null}
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50">
                     <button
@@ -117,11 +133,12 @@ export function CartClient() {
                       onClick={() => {
                         const next = row.quantity - 1
                         if (next <= 0) {
-                          removeMut.mutate(row.product_id)
+                          removeMut.mutate({ productId: row.product_id, unitId: row.unit_id })
                         } else {
                           updateMut.mutate({
                             productId: row.product_id,
-                            quantity: next
+                            quantity: next,
+                            unitId: row.unit_id,
                           })
                         }
                       }}
@@ -137,7 +154,7 @@ export function CartClient() {
                       aria-label="เพิ่มจำนวน"
                       disabled={updateMut.isPending}
                       onClick={() =>
-                        updateMut.mutate({ productId: row.product_id, quantity: row.quantity + 1 })
+                        updateMut.mutate({ productId: row.product_id, quantity: row.quantity + 1, unitId: row.unit_id })
                       }
                       className="p-2 text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50"
                     >
@@ -148,7 +165,7 @@ export function CartClient() {
                     type="button"
                     aria-label="ลบรายการ"
                     disabled={removeMut.isPending}
-                    onClick={() => removeMut.mutate(row.product_id)}
+                    onClick={() => removeMut.mutate({ productId: row.product_id, unitId: row.unit_id })}
                     className="inline-flex items-center gap-1 rounded-xl px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                   >
                     <Trash2 size={14} />

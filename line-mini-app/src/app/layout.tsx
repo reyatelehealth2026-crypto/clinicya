@@ -21,9 +21,17 @@ export const viewport = {
   viewportFit: 'cover'
 }
 
+// Plausible Analytics — using standard CDN (no proxy). Some ad-blockers will
+// block this, but most Thai users don't have aggressive ad-blockers. If/when
+// we need 100% capture we'll proxy through Cloudflare Worker at /_pa/*.
+const PLAUSIBLE_SCRIPT = 'https://plausible.io/js/script.outbound-links.tagged-events.js'
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="th">
+      <head>
+        <script defer data-domain="re-ya.com" src={PLAUSIBLE_SCRIPT} />
+      </head>
       <body className={`${inter.variable} ${notoSansThai.variable}`}>
         <Providers>{children}</Providers>
       </body>

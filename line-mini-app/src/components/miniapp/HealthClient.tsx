@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, AlertTriangle, ChevronDown, ChevronUp, Pill, Plus, Trash2, User } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
+import { useToast } from '@/lib/toast'
 import { AppShell } from '@/components/miniapp/AppShell'
 import {
   MEDICAL_CONDITIONS,
@@ -61,6 +62,7 @@ export function HealthClient() {
   const line = useLineContext()
   const lineUserId = line.profile?.userId || ''
   const qc = useQueryClient()
+  const { toast } = useToast()
 
   const profileQuery = useQuery({
     queryKey: ['health-profile', lineUserId],
@@ -72,11 +74,44 @@ export function HealthClient() {
 
   const personalMutation = useMutation({
     mutationFn: (data: HealthPersonalInfo) => updatePersonalInfo(lineUserId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['health-profile', lineUserId] })
+    onSuccess: (data) => {
+      if (data?.success === false) {
+        toast.error(data.message || 'บันทึกข้อมูลไม่สำเร็จ')
+        return
+      }
+      toast.success('บันทึกข้อมูลส่วนตัวแล้ว')
+      hasUserEditedRef.current = false
+      qc.invalidateQueries({ queryKey: ['health-profile', lineUserId] })
+    },
+    onError: (e: Error) => toast.error(e.message || 'บันทึกข้อมูลไม่สำเร็จ')
   })
+  // Optimistic update for medical condition chips so the UI reacts instantly
   const conditionsMutation = useMutation({
     mutationFn: (conditions: string[]) => updateMedicalHistory(lineUserId, conditions),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['health-profile', lineUserId] })
+    onMutate: async (next: string[]) => {
+      await qc.cancelQueries({ queryKey: ['health-profile', lineUserId] })
+      const snapshot = qc.getQueryData<{ success: boolean; profile?: { medical_conditions: string[] } }>(
+        ['health-profile', lineUserId]
+      )
+      // Patch the cached profile in-place so chips toggle immediately
+      qc.setQueryData(['health-profile', lineUserId], (old: any) => {
+        if (!old?.profile) return old
+        return { ...old, profile: { ...old.profile, medical_conditions: next } }
+      })
+      return { snapshot }
+    },
+    onError: (e: Error, _vars, ctx) => {
+      if (ctx?.snapshot) qc.setQueryData(['health-profile', lineUserId], ctx.snapshot)
+      toast.error(e.message || 'บันทึกโรคประจำตัวไม่สำเร็จ')
+    },
+    onSuccess: (data) => {
+      if (data?.success === false) {
+        toast.error(data.message || 'บันทึกโรคประจำตัวไม่สำเร็จ')
+        return
+      }
+      toast.success('บันทึกโรคประจำตัวแล้ว')
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['health-profile', lineUserId] })
   })
   const removeAllergyMutation = useMutation({
     mutationFn: (id: number) => removeAllergy(lineUserId, id),
@@ -105,6 +140,11 @@ export function HealthClient() {
   const [newMed, setNewMed] = useState('')
   const [newMedDosage, setNewMedDosage] = useState('')
 
+  // Tracks whether the user has touched the personal form since the last
+  // successful save. While false, we always re-sync the form with whatever
+  // the server returned (covers Bug #3: data not appearing after refresh).
+  const hasUserEditedRef = useRef(false)
+
   const handleRefresh = useCallback(async () => {
     await qc.invalidateQueries({ queryKey: ['health-profile', lineUserId] })
   }, [qc, lineUserId])
@@ -112,36 +152,53 @@ export function HealthClient() {
   /* Sync personal form with loaded data */
   const pi = profile?.personal_info
 
-  /* Init local form state จาก pi เมื่อ profileQuery.isSuccess */
-  useEffect(() => {
-    if (profileQuery.isSuccess && pi && personal === null) {
-      setPersonal({
-        age: pi.age ?? null,
-        gender: pi.gender ?? null,
-        weight: pi.weight ?? null,
-        height: pi.height ?? null,
-        blood_type: pi.blood_type ?? 'unknown'
-      })
-    }
-  }, [profileQuery.isSuccess, pi, personal])
+  // Normalize server fields (PHP returns DECIMAL columns as strings, JSON
+  // returns ints) to numbers so isDirty equality works.
+  const piNormalized: HealthPersonalInfo | null = pi ? {
+    name: pi.name ?? null,
+    age: pi.age != null ? Number(pi.age) || null : null,
+    gender: pi.gender ?? null,
+    weight: pi.weight != null ? Number(pi.weight) || null : null,
+    height: pi.height != null ? Number(pi.height) || null : null,
+    blood_type: pi.blood_type ?? 'unknown'
+  } : null
 
-  const personalForm: HealthPersonalInfo = personal ?? {
-    age: pi?.age ?? null,
-    gender: pi?.gender ?? null,
-    weight: pi?.weight ?? null,
-    height: pi?.height ?? null,
-    blood_type: pi?.blood_type ?? 'unknown'
+  /* Re-sync local form with server data whenever the server data changes,
+   * UNLESS the user has uncommitted edits in flight. This fixes the
+   * "save succeeds but disappears after refresh" bug. */
+  useEffect(() => {
+    if (piNormalized && !hasUserEditedRef.current) {
+      setPersonal(piNormalized)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piNormalized?.name, piNormalized?.age, piNormalized?.gender, piNormalized?.weight, piNormalized?.height, piNormalized?.blood_type])
+
+  const personalForm: HealthPersonalInfo = personal ?? piNormalized ?? {
+    name: null,
+    age: null,
+    gender: null,
+    weight: null,
+    height: null,
+    blood_type: 'unknown'
   }
 
-  /* isDirty — เทียบ personal กับ pi (server state) */
+  // Updater that also marks the form as user-edited.
+  const updatePersonal = (patch: Partial<HealthPersonalInfo>) => {
+    hasUserEditedRef.current = true
+    setPersonal({ ...personalForm, ...patch })
+  }
+
+  /* isDirty — เทียบ personal กับ piNormalized (server state) */
   const isDirty =
     personal !== null &&
+    piNormalized !== null &&
     (
-      (personal.age ?? null) !== (pi?.age ?? null) ||
-      (personal.gender ?? null) !== (pi?.gender ?? null) ||
-      (personal.weight ?? null) !== (pi?.weight ?? null) ||
-      (personal.height ?? null) !== (pi?.height ?? null) ||
-      (personal.blood_type ?? 'unknown') !== (pi?.blood_type ?? 'unknown')
+      (personal.name ?? null) !== (piNormalized.name ?? null) ||
+      (personal.age ?? null) !== (piNormalized.age ?? null) ||
+      (personal.gender ?? null) !== (piNormalized.gender ?? null) ||
+      (personal.weight ?? null) !== (piNormalized.weight ?? null) ||
+      (personal.height ?? null) !== (piNormalized.height ?? null) ||
+      (personal.blood_type ?? 'unknown') !== (piNormalized.blood_type ?? 'unknown')
     )
 
   const completion = profile?.completion_percent ?? 0
@@ -174,13 +231,24 @@ export function HealthClient() {
         <>
           {/* Personal info */}
           <SectionCard title="ข้อมูลส่วนตัว" icon={User}>
+            <div className="mb-3">
+              <label className="mb-1 block text-xs font-medium text-slate-500">ชื่อ-นามสกุล</label>
+              <input
+                type="text"
+                value={personalForm.name ?? ''}
+                onChange={e => updatePersonal({ name: e.target.value || null })}
+                placeholder="เช่น สมชาย ใจดี"
+                className="input-field w-full"
+                maxLength={255}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-500">อายุ</label>
                 <input
                   type="number"
                   value={personalForm.age ?? ''}
-                  onChange={e => setPersonal({ ...personalForm, age: e.target.value ? Number(e.target.value) : null })}
+                  onChange={e => updatePersonal({ age: e.target.value ? Number(e.target.value) : null })}
                   placeholder="ปี"
                   className="input-field w-full"
                   min={0} max={150}
@@ -190,7 +258,7 @@ export function HealthClient() {
                 <label className="mb-1 block text-xs font-medium text-slate-500">เพศ</label>
                 <select
                   value={personalForm.gender ?? ''}
-                  onChange={e => setPersonal({ ...personalForm, gender: e.target.value as 'male' | 'female' | 'other' | null || null })}
+                  onChange={e => updatePersonal({ gender: (e.target.value as 'male' | 'female' | 'other') || null })}
                   className="input-field w-full"
                 >
                   <option value="">เลือก</option>
@@ -204,7 +272,7 @@ export function HealthClient() {
                 <input
                   type="number"
                   value={personalForm.weight ?? ''}
-                  onChange={e => setPersonal({ ...personalForm, weight: e.target.value ? Number(e.target.value) : null })}
+                  onChange={e => updatePersonal({ weight: e.target.value ? Number(e.target.value) : null })}
                   placeholder="กก."
                   className="input-field w-full"
                   min={0}
@@ -215,7 +283,7 @@ export function HealthClient() {
                 <input
                   type="number"
                   value={personalForm.height ?? ''}
-                  onChange={e => setPersonal({ ...personalForm, height: e.target.value ? Number(e.target.value) : null })}
+                  onChange={e => updatePersonal({ height: e.target.value ? Number(e.target.value) : null })}
                   placeholder="ซม."
                   className="input-field w-full"
                   min={0}

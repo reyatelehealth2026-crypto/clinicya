@@ -7,6 +7,16 @@ export type ShopProductBadge = {
   color?: string
 }
 
+export type ProductUnit = {
+  id: number
+  unit_name: string
+  unit_code?: string | null
+  factor: number
+  sale_price: number
+  barcode?: string | null
+  is_base_unit: boolean
+}
+
 export type ProductSort = 'latest' | 'discount' | 'price_asc' | 'price_desc' | 'name_asc'
 
 export type ShopCategory = {
@@ -49,6 +59,8 @@ export type ShopProduct = {
   catalog_bucket?: string | null
   /** Set when catalog is served from Odoo cache (`api/checkout.php` / `shop-products.php`) */
   product_source?: 'shop_products' | 'business_items'
+  /** Multi-unit sale options (base + bigger/smaller units). Empty/absent → single base unit only. */
+  units?: ProductUnit[]
 }
 
 export type TransferBankRow = {
@@ -158,7 +170,12 @@ export async function fetchPaymentInfo(): Promise<{ success: boolean; transfer_i
   return res.json()
 }
 
-export async function addToCart(lineUserId: string, productId: number, quantity = 1) {
+export async function addToCart(
+  lineUserId: string,
+  productId: number,
+  quantity = 1,
+  unitId?: number | null,
+) {
   const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -167,10 +184,11 @@ export async function addToCart(lineUserId: string, productId: number, quantity 
       line_user_id: lineUserId,
       line_account_id: appConfig.lineAccountId,
       product_id: productId,
-      quantity
-    })
+      quantity,
+      ...(unitId ? { unit_id: unitId } : {}),
+    }),
   })
-  return res.json()
+  return res.json() as Promise<{ success: boolean; message?: string; cart_count?: number; product_name?: string }>
 }
 
 export type CartLine = {
@@ -181,6 +199,11 @@ export type CartLine = {
   image_url?: string | null
   sale_price?: number | string
   price?: number | string
+  /** Multi-unit (from product_units join). Null/absent = legacy line using base unit. */
+  unit_id?: number | null
+  unit_name?: string | null
+  unit_factor?: number | null
+  unit_price?: number | null
 }
 
 export type CartResponse = {
@@ -204,7 +227,12 @@ export async function fetchCart(lineUserId: string): Promise<CartResponse> {
   return res.json()
 }
 
-export async function updateCartItem(lineUserId: string, productId: number, quantity: number) {
+export async function updateCartItem(
+  lineUserId: string,
+  productId: number,
+  quantity: number,
+  unitId?: number | null,
+) {
   const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -213,13 +241,18 @@ export async function updateCartItem(lineUserId: string, productId: number, quan
       line_user_id: lineUserId,
       line_account_id: appConfig.lineAccountId,
       product_id: productId,
-      quantity
-    })
+      quantity,
+      ...(unitId != null ? { unit_id: unitId } : {}),
+    }),
   })
   return res.json() as Promise<{ success: boolean; message?: string }>
 }
 
-export async function removeCartLine(lineUserId: string, productId: number) {
+export async function removeCartLine(
+  lineUserId: string,
+  productId: number,
+  unitId?: number | null,
+) {
   const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -227,7 +260,8 @@ export async function removeCartLine(lineUserId: string, productId: number) {
       action: 'remove_from_cart',
       line_user_id: lineUserId,
       line_account_id: appConfig.lineAccountId,
-      product_id: productId
+      product_id: productId,
+      ...(unitId != null ? { unit_id: unitId } : {})
     })
   })
   return res.json() as Promise<{ success: boolean; message?: string }>
