@@ -14,6 +14,9 @@
  *
  * Manual run:
  *   php cron/ai_session_summarizer.php
+ *
+ * Concurrency: holds an flock on this file. A second concurrent invocation
+ * exits silently with code 0 so overlapping cron runs do not double-process.
  */
 declare(strict_types=1);
 
@@ -24,11 +27,22 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-define('AI_CHAT_SUMMARY_HELPER_ONLY', true);
+// Self-flock — prevents two crons from racing on the same session_id list.
+$lockFp = @fopen(__FILE__, 'r');
+if (!$lockFp || !@flock($lockFp, LOCK_EX | LOCK_NB)) {
+    // Another instance is already running. Exit quietly.
+    exit(0);
+}
+register_shutdown_function(static function () use ($lockFp): void {
+    if (is_resource($lockFp)) {
+        @flock($lockFp, LOCK_UN);
+        @fclose($lockFp);
+    }
+});
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../api/ai-chat-summary.php';
+require_once __DIR__ . '/../includes/ai-chat-summary-helper.php';
 
 $startedAt = date('Y-m-d H:i:s');
 $db = Database::getInstance()->getConnection();

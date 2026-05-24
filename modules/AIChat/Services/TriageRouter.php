@@ -287,39 +287,33 @@ class TriageRouter
     }
 
     /**
-     * Trigger the auto-summary endpoint asynchronously after the response has
-     * been flushed. Never blocks or throws — best-effort. The cron sweeper
-     * (cron/ai_session_summarizer.php) catches anything this drops.
+     * Trigger the auto-summary helper after the response has been flushed.
+     * Replaces the previous self-HTTP curl indirection — that path had two
+     * security issues:
+     *   1. The endpoint accepted any session_id without auth.
+     *   2. URL was built from $_SERVER['HTTP_HOST'] (attacker-controlled).
+     *
+     * New flow: flush the response via fastcgi_finish_request (FPM only),
+     * then call the helper in-process. The cron sweeper
+     * (cron/ai_session_summarizer.php) still catches anything this drops.
      */
     private function fireAndForgetSummary(?int $sessionId): void
     {
         if ($sessionId === null || $sessionId <= 0) {
             return;
         }
+        $sid = $sessionId;
         try {
-            register_shutdown_function(static function () use ($sessionId): void {
+            register_shutdown_function(static function () use ($sid): void {
                 try {
-                    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-                    $host   = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
-                    $url    = $scheme . '://' . $host . '/api/ai-chat-summary.php';
-                    $body   = json_encode(['session_id' => $sessionId]);
-                    $ch = curl_init($url);
-                    curl_setopt_array($ch, [
-                        CURLOPT_POST           => true,
-                        CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_TIMEOUT        => 2,
-                        CURLOPT_CONNECTTIMEOUT => 1,
-                        CURLOPT_HTTPHEADER     => [
-                            'Content-Type: application/json',
-                            'Expect:',
-                        ],
-                        CURLOPT_POSTFIELDS     => $body,
-                    ]);
-                    // Fire and forget — short timeout, ignore the response.
-                    @curl_exec($ch);
-                    curl_close($ch);
+                    if (function_exists('fastcgi_finish_request')) {
+                        @fastcgi_finish_request(); // response already sent
+                    }
+                    require_once __DIR__ . '/../../../includes/ai-chat-summary-helper.php';
+                    $db = \Database::getInstance()->getConnection();
+                    summary_run_for_session($db, $sid);
                 } catch (\Throwable $e) {
-                    error_log('[TriageRouter] fireAndForgetSummary failed: ' . $e->getMessage());
+                    error_log('[TriageRouter] summary helper failed: ' . $e->getMessage());
                 }
             });
         } catch (\Throwable $e) {
