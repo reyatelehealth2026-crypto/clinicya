@@ -214,7 +214,22 @@ if ($isConsultMode) {
             ? (int) $input['line_account_id'] : null;
         $userId = isset($input['user_id']) && is_numeric($input['user_id'])
             ? (int) $input['user_id'] : 0;
-        // ถ้าไม่มี user_id ให้ derive จาก line_user_id (string) ผ่าน crc32 — stable per LINE user
+        // 🆕 ถ้าไม่มี user_id → lookup users.id จริงจาก line_user_id ก่อน fallback crc32
+        // (สำคัญ: ทำให้ triage_sessions.user_id link กลับมา users ได้ → pharmacy dashboard
+        //  + dispense page แสดง display_name + AI chat history ถูกจับคู่)
+        if ($userId === 0 && !empty($input['line_user_id']) && is_string($input['line_user_id'])) {
+            try {
+                $lookupStmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ? LIMIT 1");
+                $lookupStmt->execute([trim($input['line_user_id'])]);
+                $userRow = $lookupStmt->fetch(\PDO::FETCH_ASSOC);
+                if ($userRow && !empty($userRow['id'])) {
+                    $userId = (int) $userRow['id'];
+                }
+            } catch (\Throwable $e) {
+                error_log('ai-chat user lookup error: ' . $e->getMessage());
+            }
+        }
+        // Fallback: anonymous LINE user ที่ยังไม่มี row ใน users → ใช้ crc32 ของ line_user_id
         if ($userId === 0 && !empty($input['line_user_id']) && is_string($input['line_user_id'])) {
             $userId = (int) (crc32(trim($input['line_user_id'])) & 0x7FFFFFFF);
         }
@@ -561,16 +576,20 @@ if ($isConsultMode) {
 
 if ($isConsultMode) {
     $systemPrompt = "คุณคือ AI เภสัชกรผู้ช่วยของร้านยา Re-Ya สำหรับลูกค้า/ผู้ป่วยทั่วไป\n" .
-        "บทบาท: ให้คำแนะนำอาการเบื้องต้น ข้อมูลยาสามัญประจำบ้าน วิธีดูแลตัวเอง และแนะนำให้พบแพทย์เมื่อจำเป็น\n\n" .
+        "บทบาท: ให้คำแนะนำอาการ + **แนะนำชื่อยาเฉพาะตัวอย่างชัดเจน** ที่เหมาะกับอาการ พร้อมขนาด/วิธีใช้/ข้อควรระวัง — เภสัชกรร้านจะเป็นคนอนุมัติก่อนจ่ายจริง คุณไม่ได้จ่ายยาเอง\n\n" .
         "กฎเด็ดขาด (ห้ามฝ่าฝืน):\n" .
-        "1. ตอบภาษาไทย กระชับ 1-4 ประโยค ไม่อ้อมค้อม\n" .
-        "2. ห้ามวินิจฉัยโรคชี้ชัด ห้ามสั่งยา prescription — แนะนำเบื้องต้นเท่านั้น\n" .
-        "3. อาการรุนแรง/ฉุกเฉิน → แนะนำพบแพทย์ทันทีหรือโทร 1669\n" .
-        "4. ห้ามแนะนำตัว ไม่ต้องทวนคำถาม ตอบตรงประเด็น\n" .
-        "5. emoji 1-2 ตัวสูงสุด ใช้เภสัชกรน้ำเสียงเป็นมิตร\n" .
-        "6. คำถามที่ไม่ใช่เรื่องสุขภาพ/ยา → ตอบอย่างสุภาพว่าให้คำแนะนำได้เฉพาะเรื่องสุขภาพ\n" .
-        "7. **ห้ามตอบเรื่อง stock/สต็อก, ยอดขาย, ออเดอร์, รายงาน B2B, การวิเคราะห์ธุรกิจ, admin metrics ใด ๆ ทั้งสิ้น** — ถ้าถูกถามให้ตอบว่า 'ส่วนนี้ต้องสอบถามแอดมินครับ/ค่ะ'\n" .
-        "8. ใช้ความรู้ทางคลินิกจาก RAG context ด้านล่าง (ถ้ามี) เป็นหลัก ห้ามแต่งเอง"
+        "1. ตอบภาษาไทย ครบถ้วนชัดเจน 3-8 ประโยค ปิดท้ายเรียบร้อย ไม่ตัดกลางคัน\n" .
+        "2. **ต้องระบุชื่อยาที่แนะนำ** (เช่น Paracetamol 500mg, Loratadine 10mg, ORS, Bromhexine, ฯลฯ) พร้อมขนาดและวิธีใช้ — ห้ามตอบ 'ปรึกษาเภสัชกร' เป็นคำตอบหลัก เพราะระบบมีเภสัชกรอนุมัติอยู่แล้ว\n" .
+        "3. ห้ามวินิจฉัยโรคชี้ชัด ใช้คำว่า 'มีแนวโน้ม/อาจเป็น' ได้ — แต่ต้องเสนอยาเบื้องต้นที่ปลอดภัย OTC ได้\n" .
+        "4. ยา prescription (ยาควบคุม/Rx) → แนะนำชื่อตัวยาได้ แต่บอกว่า 'ต้องให้เภสัชกรอนุมัติก่อน'\n" .
+        "5. อาการฉุกเฉิน (หายใจไม่ออก/เจ็บหน้าอกรุนแรง/หมดสติ/อัมพาต/แพ้รุนแรง) → แนะนำโทร 1669 ทันที + ห้ามแนะนำยา\n" .
+        "6. ห้ามแนะนำตัว ไม่ทวนคำถาม ตอบตรงประเด็น emoji 1-2 ตัว\n" .
+        "7. คำถามไม่ใช่เรื่องสุขภาพ/ยา → ตอบสุภาพว่าให้คำแนะนำเฉพาะเรื่องสุขภาพ\n" .
+        "8. **ห้ามตอบเรื่อง stock/ยอดขาย/ออเดอร์/B2B/admin metrics** — ถ้าถูกถามให้ตอบ 'ส่วนนี้ต้องสอบถามแอดมินครับ/ค่ะ'\n" .
+        "9. ใช้ RAG context (ถ้ามี) เป็นหลัก ห้ามแต่งสรรพคุณยา\n" .
+        "10. ใช้ user_profile (ถ้ามี) — ตรวจ <allergies> ก่อนแนะนำยาทุกครั้ง ห้ามแนะนำยาที่ผู้ใช้แพ้\n" .
+        "11. **เมื่อแนะนำยา** ปิดท้ายสั้นๆ ตอบคำถาม + ห้ามขอ confirm/นัด/พูดเรื่อง 'บอก โอเค' — ระบบจะแสดงปุ่ม 'ส่งให้เภสัชกร' ให้ผู้ใช้กดเอง อย่าพูดถึงปุ่มซ้ำ ไม่ต้อง prompt ทุกครั้ง\n" .
+        "12. ห้ามทักทาย ห้ามทบทวนยาที่แนะนำไปแล้วใน turn ก่อน ถ้าผู้ใช้ไม่ได้ถามใหม่"
         . ($ctxSafetyRule !== '' ? $ctxSafetyRule : '')
         . ($ragContext !== '' ? "\n\n" . $ragContext : '');
 } else {
@@ -618,7 +637,7 @@ if (!empty($contents) && ($contents[count($contents) - 1]['role'] ?? '') === 'us
 $payload = json_encode([
     'system_instruction' => ['parts' => [['text' => $systemPrompt]]],
     'contents' => $contents,
-    'generationConfig' => ['maxOutputTokens' => 512, 'temperature' => 0.3],
+    'generationConfig' => ['maxOutputTokens' => 2048, 'temperature' => 0.4],
 ], JSON_UNESCAPED_UNICODE);
 
 if ($payload === false) {

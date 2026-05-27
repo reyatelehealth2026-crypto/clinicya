@@ -266,16 +266,18 @@ class TriageRouter
             ? $this->recommender->recommend($this->lineAccountId, $symptoms, [], 5)
             : [];
 
-        $summary = empty($products)
-            ? 'ขอบคุณค่ะ ตอนนี้ยังไม่พบยาที่เหมาะสมในร้าน แนะนำให้ปรึกษาเภสัชกร'
-            : 'ตามอาการที่คุณระบุ แนะนำสินค้าต่อไปนี้ค่ะ';
+        // 🆕 Empty product list → don't dead-end the chat. Fall through to
+        // Gemini AI so it can suggest OTC drugs by name (Paracetamol etc.)
+        // and explain dose/usage. Mark session complete so the same Y/N flow
+        // doesn't re-trigger, but return `continue` to let the LLM answer.
+        if (empty($products)) {
+            $this->sessions->complete($sessionId, 'self_care', 'no_match_fallback_to_ai');
+            $this->fireAndForgetSummary($sessionId);
+            return ['type' => 'continue'];
+        }
 
-        $this->sessions->complete(
-            $sessionId,
-            empty($products) ? 'self_care' : 'otc_recommended',
-            $summary
-        );
-
+        $summary = 'ตามอาการที่คุณระบุ แนะนำสินค้าต่อไปนี้ค่ะ';
+        $this->sessions->complete($sessionId, 'otc_recommended', $summary);
         $this->fireAndForgetSummary($sessionId);
 
         return [

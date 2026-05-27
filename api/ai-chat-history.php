@@ -27,7 +27,7 @@ if (in_array($origin, $allowedOrigins, true)) {
     header('Access-Control-Allow-Origin: ' . $origin);
     header('Vary: Origin');
 }
-header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
@@ -38,7 +38,21 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/ai-chat-context.php';
 
-$lineUserId = isset($_GET['line_user_id']) ? trim((string) $_GET['line_user_id']) : '';
+$method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+$isDelete = ($method === 'DELETE') || ($method === 'POST' && (($_GET['action'] ?? '') === 'clear'));
+
+// Body params accepted for DELETE/POST clear
+$body = [];
+if ($method === 'POST' || $method === 'DELETE') {
+    $raw = file_get_contents('php://input');
+    if ($raw) {
+        $tmp = json_decode($raw, true);
+        if (is_array($tmp)) $body = $tmp;
+    }
+}
+
+$lineUserId = isset($_GET['line_user_id']) ? trim((string) $_GET['line_user_id'])
+            : trim((string) ($body['line_user_id'] ?? ''));
 $limitParam = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
 $limit      = max(1, min(100, $limitParam));
 
@@ -62,8 +76,34 @@ if ($lineUserId === '' || !preg_match('/^U[0-9a-f]{32}$/i', $lineUserId)) {
 
 try {
     $db = Database::getInstance()->getConnection();
-    $messages = aiChatGetConversationHistory($db, $lineUserId, $limit);
 
+    if ($isDelete) {
+        // Resolve internal users.id from line_user_id
+        $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ? LIMIT 1");
+        $stmt->execute([$lineUserId]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $internalUserId = $row ? (int)$row['id'] : 0;
+
+        $deleted = 0;
+        if ($internalUserId > 0) {
+            $del = $db->prepare("DELETE FROM ai_conversation_history WHERE user_id = ?");
+            $del->execute([$internalUserId]);
+            $deleted = $del->rowCount();
+            // Also mark any active triage_sessions as cleared (don't hard-delete — keep audit trail for pharmacist)
+            try {
+                $upd = $db->prepare("UPDATE triage_sessions SET status='cancelled', updated_at=NOW() WHERE user_id = ? AND (status IS NULL OR status='active' OR status='')");
+                $upd->execute([$internalUserId]);
+            } catch (\Throwable $e2) { error_log('triage cancel on clear: ' . $e2->getMessage()); }
+        }
+        error_log("ai-chat-history clear: line_user={$lineUserId} user_id={$internalUserId} rows_deleted={$deleted}");
+        echo json_encode([
+            'success' => true,
+            'deleted' => $deleted,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $messages = aiChatGetConversationHistory($db, $lineUserId, $limit);
     echo json_encode([
         'success'  => true,
         'messages' => $messages,

@@ -6,6 +6,12 @@
 
 namespace Modules\AIChat\Services;
 
+// Self-contained dependency load — callers (e.g. api/pharmacist.php) only require
+// global config/database.php, so the namespaced Modules\Core\Database is not yet
+// in scope when this file is included. Loading it here makes the file safe to
+// drop into any context without forcing the caller to know about the namespace.
+require_once __DIR__ . '/../../Core/Database.php';
+
 use Modules\Core\Database;
 
 class DrugInteractionChecker
