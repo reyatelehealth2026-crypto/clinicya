@@ -75,8 +75,10 @@ function genDocNumber(PDO $db, int $lineAccountId, string $docType, ?DateTimeInt
     try {
         // Ensure row exists (UNIQUE on tenant+type+month). Use INSERT IGNORE so a
         // concurrent inserter doesn't crash us — we'll SELECT FOR UPDATE next.
+        // NB: `year_month` is a reserved MySQL keyword (used in INTERVAL … YEAR_MONTH),
+        // so it MUST be backtick-quoted in every reference or the parser rejects it.
         $stmt = $db->prepare(
-            'INSERT IGNORE INTO document_sequences (line_account_id, doc_type, year_month, last_seq)
+            'INSERT IGNORE INTO document_sequences (line_account_id, doc_type, `year_month`, last_seq)
              VALUES (?, ?, ?, 0)'
         );
         $stmt->execute([$lineAccountId, $docType, $yearMonth]);
@@ -84,7 +86,7 @@ function genDocNumber(PDO $db, int $lineAccountId, string $docType, ?DateTimeInt
         // Lock & read.
         $stmt = $db->prepare(
             'SELECT id, last_seq FROM document_sequences
-             WHERE line_account_id = ? AND doc_type = ? AND year_month = ?
+             WHERE line_account_id = ? AND doc_type = ? AND `year_month` = ?
              FOR UPDATE'
         );
         $stmt->execute([$lineAccountId, $docType, $yearMonth]);

@@ -22,10 +22,27 @@ header('Content-Type: application/json; charset=utf-8');
 $db = Database::getInstance()->getConnection();
 $logger = ActivityLogger::getInstance($db);
 
+// Resolve current tenant. Mirror header.php precedence with 3-tier fallback.
 $lineAccountId = (int)($_SESSION['current_bot_id'] ?? $_SESSION['line_account_id'] ?? 0);
+if ($lineAccountId <= 0 && isset($_GET['line_account_id'])) {
+    $lineAccountId = (int)$_GET['line_account_id'];
+}
+if ($lineAccountId <= 0 && !empty($_SESSION['user_id'])) {
+    try {
+        $stmt = $db->prepare('SELECT line_account_id FROM admin_users WHERE id = ? LIMIT 1');
+        $stmt->execute([(int)$_SESSION['user_id']]);
+        $lineAccountId = (int)($stmt->fetchColumn() ?: 0);
+    } catch (\Throwable $e) { /* ignore */ }
+}
+if ($lineAccountId <= 0) {
+    try {
+        $row = $db->query('SELECT id FROM line_accounts WHERE is_active = 1 ORDER BY id ASC LIMIT 1')->fetch(\PDO::FETCH_ASSOC);
+        $lineAccountId = (int)($row['id'] ?? 0);
+    } catch (\Throwable $e) { /* ignore */ }
+}
 if ($lineAccountId <= 0) {
     http_response_code(401);
-    echo json_encode(['success' => false, 'error' => 'no_line_account']);
+    echo json_encode(['success' => false, 'error' => 'no_line_account', 'message' => 'ไม่พบบัญชี LINE — กรุณาเลือกบัญชีก่อน']);
     exit;
 }
 

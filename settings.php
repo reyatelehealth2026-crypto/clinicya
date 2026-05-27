@@ -15,14 +15,25 @@ require_once 'config/config.php';
 require_once 'config/database.php';
 require_once 'includes/auth_check.php';
 require_once 'includes/components/tabs.php';
+require_once 'includes/components/form-section.php';
+require_once 'includes/components/field.php';
+require_once 'includes/components/toggle.php';
+require_once 'includes/components/sticky-save-bar.php';
+require_once 'includes/shop-data-source.php';
 require_once 'classes/ActivityLogger.php';
 
 $db = Database::getInstance()->getConnection();
 $activityLogger = ActivityLogger::getInstance($db);
+$currentBotId = $_SESSION['current_bot_id'] ?? 1;
+$lineAccountId = $_SESSION['line_account_id'] ?? $_SESSION['current_bot_id'] ?? 1;
+$success = null;
+$error = null;
 
 // Tab configuration
 $tabs = [
     'line' => ['label' => 'LINE Accounts', 'icon' => 'fab fa-line'],
+    'general' => ['label' => 'ข้อมูลร้าน', 'icon' => 'fas fa-store'],
+    'shop_tax' => ['label' => 'ข้อมูลร้าน / ใบกำกับภาษี', 'icon' => 'fas fa-file-invoice'],
     'welcome' => ['label' => 'ข้อความต้อนรับ', 'icon' => 'fas fa-hand-sparkles'],
     'liff' => ['label' => 'LIFF Settings', 'icon' => 'fas fa-mobile-alt'],
     'vibe-selling' => ['label' => 'Vibe Selling v2', 'icon' => 'fas fa-brain'],
@@ -35,6 +46,74 @@ $tabs = [
 
 $activeTab = getActiveTab($tabs, 'line');
 $pageTitle = 'ตั้งค่าระบบ';
+
+$isShopGeneralRequest = $activeTab === 'general'
+    || ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['tab'] ?? '') === 'general');
+$tableExists = false;
+$hasAccountCol = false;
+
+if ($isShopGeneralRequest) {
+    try {
+        $db->query("SELECT 1 FROM shop_settings LIMIT 1");
+        $tableExists = true;
+    } catch (Exception $e) {
+        try {
+            $db->exec("CREATE TABLE IF NOT EXISTS shop_settings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                line_account_id INT DEFAULT NULL,
+                shop_name VARCHAR(255) DEFAULT 'LINE Shop',
+                shop_logo VARCHAR(500),
+                welcome_message TEXT,
+                shipping_fee DECIMAL(10,2) DEFAULT 50,
+                free_shipping_min DECIMAL(10,2) DEFAULT 500,
+                bank_accounts TEXT,
+                promptpay_number VARCHAR(20),
+                contact_phone VARCHAR(20),
+                is_open TINYINT(1) DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )");
+            $tableExists = true;
+        } catch (Exception $e2) {
+            $error = "ไม่สามารถสร้างตารางได้: " . $e2->getMessage();
+        }
+    }
+
+    if ($tableExists) {
+        try {
+            $stmt = $db->query("SHOW COLUMNS FROM shop_settings LIKE 'line_account_id'");
+            $hasAccountCol = $stmt->rowCount() > 0;
+
+            if (!$hasAccountCol) {
+                $db->exec("ALTER TABLE shop_settings ADD COLUMN line_account_id INT DEFAULT NULL AFTER id");
+                $hasAccountCol = true;
+            }
+        } catch (Exception $e) {
+        }
+
+        $columnsToAdd = [
+            'shop_logo' => "VARCHAR(500) DEFAULT NULL",
+            'cod_enabled' => "TINYINT(1) DEFAULT 0",
+            'cod_fee' => "DECIMAL(10,2) DEFAULT 0",
+            'auto_confirm_payment' => "TINYINT(1) DEFAULT 0",
+            'order_data_source' => "VARCHAR(20) DEFAULT 'shop'",
+            'shop_address' => "TEXT DEFAULT NULL",
+            'shop_email' => "VARCHAR(255) DEFAULT NULL",
+            'line_id' => "VARCHAR(100) DEFAULT NULL",
+            'facebook_url' => "VARCHAR(500) DEFAULT NULL",
+            'instagram_url' => "VARCHAR(500) DEFAULT NULL"
+        ];
+
+        foreach ($columnsToAdd as $col => $type) {
+            try {
+                $stmt = $db->query("SHOW COLUMNS FROM shop_settings LIKE '$col'");
+                if ($stmt->rowCount() == 0) {
+                    $db->exec("ALTER TABLE shop_settings ADD COLUMN $col $type");
+                }
+            } catch (Exception $e) {
+            }
+        }
+    }
+}
 
 // Load required classes for LINE tab
 if ($activeTab === 'line') {
@@ -63,11 +142,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
 }
 
 // Handle form submissions
-$success = null;
-$error = null;
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+    $postTab = $_POST['tab'] ?? '';
+
+    if ($postTab === 'general' && $tableExists) {
+        $bankAccounts = json_encode([
+            'banks' => array_map(function ($name, $account, $holder) {
+                return ['name' => $name, 'account' => $account, 'holder' => $holder];
+            }, $_POST['bank_name'] ?? [], $_POST['bank_account'] ?? [], $_POST['bank_holder'] ?? [])
+        ]);
+
+        try {
+            $logoUrl = $_POST['shop_logo'] ?? '';
+            if (!empty($_FILES['logo_file']['tmp_name']) && $_FILES['logo_file']['error'] === UPLOAD_ERR_OK) {
+                $uploadDir = __DIR__ . '/uploads/shop/';
+                if (!is_dir($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+
+                $fileExt = strtolower(pathinfo($_FILES['logo_file']['name'], PATHINFO_EXTENSION));
+                $allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+                if (in_array($fileExt, $allowedExts)) {
+                    $fileName = 'logo_' . $currentBotId . '_' . time() . '.' . $fileExt;
+                    $uploadPath = $uploadDir . $fileName;
+
+                    if (move_uploaded_file($_FILES['logo_file']['tmp_name'], $uploadPath)) {
+                        $logoUrl = rtrim(BASE_URL, '/') . '/uploads/shop/' . $fileName;
+                    }
+                }
+            }
+
+            $updateFields = [
+                'shop_name' => $_POST['shop_name'] ?? '',
+                'shop_logo' => $logoUrl,
+                'welcome_message' => $_POST['welcome_message'] ?? '',
+                'shop_address' => $_POST['shop_address'] ?? '',
+                'shop_email' => $_POST['shop_email'] ?? '',
+                'shipping_fee' => (float) ($_POST['shipping_fee'] ?? 50),
+                'free_shipping_min' => (float) ($_POST['free_shipping_min'] ?? 500),
+                'bank_accounts' => $bankAccounts,
+                'promptpay_number' => $_POST['promptpay_number'] ?? '',
+                'contact_phone' => $_POST['contact_phone'] ?? '',
+                'is_open' => isset($_POST['is_open']) ? 1 : 0,
+                'cod_enabled' => isset($_POST['cod_enabled']) ? 1 : 0,
+                'cod_fee' => (float) ($_POST['cod_fee'] ?? 0),
+                'auto_confirm_payment' => isset($_POST['auto_confirm_payment']) ? 1 : 0,
+                'order_data_source' => normalizeShopOrderDataSource($_POST['order_data_source'] ?? 'shop'),
+                'line_id' => $_POST['line_id'] ?? '',
+                'facebook_url' => $_POST['facebook_url'] ?? '',
+                'instagram_url' => $_POST['instagram_url'] ?? ''
+            ];
+
+            if ($hasAccountCol && $currentBotId) {
+                $stmt = $db->prepare("SELECT id FROM shop_settings WHERE line_account_id = ?");
+                $stmt->execute([$currentBotId]);
+                $existingId = $stmt->fetchColumn();
+
+                if ($existingId) {
+                    $setClauses = [];
+                    $values = [];
+                    foreach ($updateFields as $field => $value) {
+                        $setClauses[] = "$field = ?";
+                        $values[] = $value;
+                    }
+                    $values[] = $currentBotId;
+
+                    $stmt = $db->prepare("UPDATE shop_settings SET " . implode(', ', $setClauses) . " WHERE line_account_id = ?");
+                    $stmt->execute($values);
+                } else {
+                    $fields = array_keys($updateFields);
+                    $fields[] = 'line_account_id';
+                    $values = array_values($updateFields);
+                    $values[] = $currentBotId;
+                    $placeholders = array_fill(0, count($values), '?');
+
+                    $stmt = $db->prepare("INSERT INTO shop_settings (" . implode(', ', $fields) . ") VALUES (" . implode(', ', $placeholders) . ")");
+                    $stmt->execute($values);
+                }
+            } else {
+                $setClauses = [];
+                $values = [];
+                foreach ($updateFields as $field => $value) {
+                    $setClauses[] = "$field = ?";
+                    $values[] = $value;
+                }
+
+                $stmt = $db->prepare("UPDATE shop_settings SET " . implode(', ', $setClauses) . " WHERE id = 1");
+                $stmt->execute($values);
+
+                if ($stmt->rowCount() == 0) {
+                    $fields = array_keys($updateFields);
+                    $placeholders = array_fill(0, count($updateFields), '?');
+                    $stmt = $db->prepare("INSERT INTO shop_settings (" . implode(', ', $fields) . ") VALUES (" . implode(', ', $placeholders) . ")");
+                    $stmt->execute(array_values($updateFields));
+                }
+            }
+
+            $activityLogger->logData(ActivityLogger::ACTION_UPDATE, 'ตั้งค่าทั่วไปร้านค้า', [
+                'entity_type' => 'shop_settings',
+                'new_value' => ['name' => $_POST['shop_name'] ?? '']
+            ]);
+
+            header('Location: settings.php?tab=general&saved=1');
+            exit;
+        } catch (Exception $e) {
+            $error = "เกิดข้อผิดพลาด: " . $e->getMessage();
+            $activeTab = 'general';
+        }
+    }
 
     // LINE Account actions
     if ($action === 'create_line') {
@@ -505,7 +689,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 require_once 'includes/header.php';
 echo getTabsStyles();
+echo getFormSectionStyles();
+echo getFieldStyles();
+echo getToggleStyles();
+echo getStickySaveBarStyles();
 ?>
+
+<?php if (isset($_GET['saved'])): ?>
+    <div class="mb-4 p-4 bg-green-100 text-green-700 rounded-lg">
+        <i class="fas fa-check-circle mr-2"></i>บันทึกการตั้งค่าสำเร็จ!
+    </div>
+<?php endif; ?>
 
 <?php if ($success): ?>
     <div class="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-center gap-3">
@@ -529,6 +723,12 @@ echo getTabsStyles();
     <div class="tab-panel">
         <?php
         switch ($activeTab) {
+            case 'general':
+                include 'includes/shop/general.php';
+                break;
+            case 'shop_tax':
+                include 'includes/settings/shop-tax.php';
+                break;
             case 'welcome':
                 include 'includes/settings/welcome.php';
                 break;
