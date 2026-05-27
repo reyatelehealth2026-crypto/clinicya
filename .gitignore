@@ -140,6 +140,15 @@ database/*.sql
 !database/migration_2026-05-24_ai_rate_limits.sql
 !database/migration_2026-05-24_ai_chat_persistence.sql
 !database/migration_2026-05-24_products_inventory.sql
+!database/migration_2026-05-24_documents.sql
+!database/migration_2026-05-25_platform_master.sql
+!database/migration_2026-05-25_tenant_template.sql
+!database/migration_2026-05-25_beta_signups.sql
+!database/migration_2026-05-27_master_products.sql
+!database/migration_2026-05-27_tenant_line_account_routes.sql
+!docs/adr/*.md
+!CONTEXT.md
+!CONTEXT-MAP.md
 *.png
 DB_CONNECTION.md
 *.md
@@ -166,4 +175,20 @@ line-mini-app/.env.production
 
 # Local Claude Code / OMC tooling state
 .omc/
+.omx/
 *.tsbuildinfo
+
+# Knowledge-graph / analysis caches (regenerated locally)
+.understand-anything/
+.codegraph/
+graphify-out/
+
+# Runtime / scratch
+test-results/
+demo-capture/
+
+# Sales artefacts — keep out of repo root; move to docs/sales/ if needed
+/Fresh_Veggie_*.pdf
+/Fresh_Veggie_*.pptx
+/REYA_Fresh_Veggie_*.pdf
+/REYA_Fresh_Veggie_*.pptx
