@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PHP 8.0+ multi-tenant CRM/e-commerce platform for Thai pharmacies integrating LINE Official Accounts, Odoo ERP, AI (Gemini/OpenAI), and telepharmacy. All UI text and DB comments are bilingual Thai/English. Timezone is always `Asia/Bangkok` (`+07:00`).
+PHP 8.0+ multi-tenant SaaS CRM/e-commerce platform for Thai pharmacies integrating LINE Official Accounts, Odoo ERP, AI (Gemini/OpenAI), and telepharmacy. Wave-3 architecture is **database-per-tenant** (ADR-001) with **subdomain routing** (`tenant-XXXX.re-ya.com`). A master DB (`zrismpsz_reya_platform`) holds the tenant registry; each tenant has its own `reya_tenant_*` schema. All UI text and DB comments are bilingual Thai/English. Timezone is always `Asia/Bangkok` (`+07:00`).
 
 ## Commands
 
@@ -78,8 +78,11 @@ bash deploy_testry_branch.sh
 | Root `*.php` files | Admin panel pages (104 files) |
 | `inbox-v2.php` + `api/inbox-v2.php` | **Active admin inbox** — CRM HUD panel, dispense modal, cursor-paginated conversation list. Same-page POST AJAX (`X-Requested-With` header) co-exists with the cursor API in `api/inbox-v2.php`. |
 | `messages.php` | Older parallel inbox UI; AJAX endpoint is `chat.php`. New inbox features should be added to `inbox-v2.php` and ported back only if needed. |
+| `inventory/index.php` | **Consolidated product/inventory hub** — storefront, locations, drug-groups, generic-names, label-templates, drug-interactions tabs. `/products.php` is now just a redirect into this. |
+| `documents.php` + `api/documents.php` | **VAT documents** — Thai receipts/invoices/quotations. Helpers in `includes/document-helpers.php` (doc numbering, VAT calc, Thai date). |
 | `cron/*.php` | ~30 scheduled background tasks |
 | `index.php` | Public landing page |
+| `admin/platform-login.php`, `admin/switch-tenant.php`, `admin/beta-signups.php` | Platform super-admin entry — login against the master `reya_platform` DB, switch into a tenant scope, review beta signups. |
 | `backend/src/server.ts` | Modern Fastify + Prisma API (dashboard modernisation layer) |
 | `frontend/src/app/` | Next.js 16 admin dashboard UI (TanStack Query) |
 | `websocket-server.js` | Real-time inbox updates — Socket.io + Redis |
@@ -95,9 +98,19 @@ $db = Database::getInstance()->getConnection(); // returns PDO
 
 `classes/Database.php` is a backward-compat wrapper around `modules/Core/Database.php`. Never instantiate PDO directly. Charset is `utf8mb4_unicode_ci`; MySQL timezone forced to `+07:00`. The backend Prisma schema also connects to MySQL (not PostgreSQL).
 
+### Multi-Tenant SaaS (Wave 3, ADR-001)
+
+- **Master DB**: `zrismpsz_reya_platform` — single source of truth for tenants, platform users, beta signups, line-account routing (`master.tenants`, `platform_users`, `tenant_line_account_routes`). Name is in `TenantContext::PLATFORM_DB_NAME`; credentials reuse `DB_HOST/DB_USER/DB_PASS`.
+- **Tenant DBs**: `reya_tenant_*` schemas — one per tenant; created from `database/migration_2026-05-25_tenant_template.sql`.
+- **Resolution**: `bootstrap/resolve_subdomain.php` runs on every request via `config/database.php`, parses HTTP_HOST → subdomain → looks up `master.tenants.slug` → sets `TenantContext + $_SESSION['active_tenant_id']`. Reserved subdomains (`www`, `api`, `admin`, …) skip resolution. Suspended/terminated tenants get a 503.
+- **`TenantContext`** (`classes/TenantContext.php`) resolves order: explicit `setCurrentTenantId()` → session → `platform_users.tenant_id` → legacy `current_bot_id` → null. Super-admins do **not** get an implicit tenant; they must call `setCurrentTenantId()` or `enterPlatformContext()` explicitly — guards against accidental cross-tenant reads.
+- **CLI / cron**: must `define('REYA_SKIP_SUBDOMAIN_RESOLUTION', true);` before `require_once 'config/database.php'`. Cron loops that iterate tenants do so via `TenantContext::setCurrentTenantId($id)`.
+- **Provisioning**: `classes/TenantProvisioning.php` (DB creation), `classes/TenantFileStorage.php` (per-tenant uploads).
+- **Fail-safe**: any subdomain-resolution error logs + falls through to the legacy `DB_NAME` connection (`modules/Core/Database.php::legacyFallback()`); emergency rollback is `config/database.legacy.php`.
+
 ### Multi-Account LINE OA
 
-Every LINE feature is scoped to a `line_account_id` FK against `line_accounts`. Pass `$lineAccountId` to service constructors (e.g., `new BusinessBot($db, $line, $lineAccountId)`). Webhook identifies account via `?account={id}` + HMAC-SHA256 signature validation.
+Within a tenant, every LINE feature is scoped to a `line_account_id` FK against `line_accounts`. Pass `$lineAccountId` to service constructors (e.g., `new BusinessBot($db, $line, $lineAccountId)`). Webhook identifies account via `?account={id}` + HMAC-SHA256 signature validation. Cross-tenant LINE routing is handled by `master.tenant_line_account_routes` (which tenant DB owns a given LINE channel ID).
 
 ### Service Class Patterns
 
@@ -149,6 +162,8 @@ Role hierarchy: `super_admin` → `admin` → `pharmacist` / `marketing` / `tech
 - **Flex medicine label** — `classes/FlexTemplates.php` exposes `medicineLabel()`, `medicineLabelsCarousel()`, `toMessage()`. Used by the dispense flow in `inbox-v2.php` and `messages.php`. Carousel is automatically used when `count($items) > 1`.
 - **Odoo ERP** — `classes/OdooAPIClient.php` (JSON-RPC 2.0, circuit breaker + exponential backoff). Sync flow: Odoo webhook → `api/odoo-webhook.php` → `OdooSyncService` → cache tables (`odoo_orders`, `odoo_invoices`, `odoo_bdos`). Use `OdooAPIPool.php` for parallel fan-out queries.
 - **AI** — `classes/GeminiAI.php` (primary), `classes/OpenAI.php`. Settings per `line_account_id` in `ai_settings` table.
+- **AIChat consultation pipeline** (`modules/AIChat/`, `api/ai-chat*.php`) — PSR-4 `Modules\AIChat\…`. SSE-streamed Gemini chat for the mini-app's pharmacist persona. Pipeline: `TriageRouter` → `TriageQuestionEngine` / `TriageSessionManager` → `ContextAnalyzer` + `SymptomMapper` → `KnowledgeRetriever` / `MIMSKnowledgeBase` / `PharmacyRAG` → `PromptBuilder` → `GeminiAPI`. Safety: `RedFlagDetector` + `DrugInteractionChecker` emit structured SSE events (`{structured: {…}}`) for emergency / drug-interaction UI cards. Escalation: `PharmacistNotifier` pushes urgent LINE text messages to on-call pharmacists. Default persona is `consult` (customer-facing); `admin`/`b2b` requires explicit `mode` param or admin-page referer. Sibling endpoints: `api/ai-chat-vision.php` (Gemini Vision image upload), `api/ai-chat-summary.php` (auto chief-complaint summary), `api/ai-chat-history.php` (persistence), `api/ai-chat-approve-order.php` (escalate → order). Persistence + rate-limits in `ai_chat_*` + `ai_rate_limits` tables.
+- **Documents (VAT)** — `api/documents.php` + `documents.php` + `includes/document-helpers.php`. Generates Thai receipts/invoices/quotations with shop tax info from `shop_settings`, PDF render, optional revenue-department register. Doc numbering, VAT calc, and Thai-date formatting all live in the helper file — reuse it, don't re-implement.
 - **Notifications** — `classes/NotificationRouter.php` fans out to LINE, Telegram, email.
 - **Real-time** — Node.js + Socket.io WebSocket server (`websocket-server.js`).
 
@@ -184,13 +199,12 @@ Examples from this repo: `fix(checkout): …`, `feat(line-mini-app): …`, `feat
 - **Same-page admin AJAX** — Many admin pages (`inbox-v2.php`, `messages.php`, `chat.php`) handle their own POST AJAX at the top of the file, gated on `$_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WITH'])`. Add new actions as a `case` inside the existing `switch ($action)` block; do not split into a separate API file unless the endpoint is shared across pages.
 - **Auto-create tables** — Some legacy admin pages auto-create their feature tables on page load via `SHOW TABLES LIKE` + `CREATE TABLE IF NOT EXISTS` (e.g. `dispensing_records`, `user_notes`, `user_tag_assignments`). For new features, prefer a versioned `database/migration_*.sql` file plus a whitelist entry, not page-load auto-create.
 - **Server path** — `/home/zrismpsz/public_html` on production (the `re-ya.com` site sits at the root of `public_html`; there is no `cny.re-ya.com/` or `clinicya.re-ya.com/` subdirectory). SSH: `ssh -i ~/.ssh/id_ed25519_cny -p 9922 zrismpsz@118.27.146.16`.
+- **`/products.php` is a redirect** — the real consolidated product/inventory UI is `/inventory/` (tabs: storefront, locations, drug-groups, generic-names, label-templates, drug-interactions). Don't add new product UI to `products.php`.
 
-## graphify
+## Knowledge Graphs
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+Three graph snapshots coexist; pick the one matching the task:
 
-Rules:
-- ALWAYS read graphify-out/GRAPH_REPORT.md before reading any source files, running grep/glob searches, or answering codebase questions. The graph is your primary map of the codebase.
-- IF graphify-out/wiki/index.md EXISTS, navigate it instead of reading raw files
-- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- **`graphify-out/`** — full god-node / community report. Read `graphify-out/GRAPH_REPORT.md` first for cross-module / "how does X relate to Y" questions. Use `graphify query "…"`, `graphify path "A" "B"`, `graphify explain "concept"` over grep when traversing relationships. Run `graphify update .` after non-trivial code changes (AST-only, no API cost).
+- **`.understand-anything/knowledge-graph.json`** — JSON graph powering the `/understand-anything:understand-dashboard` Vite dashboard. Launch with that slash command; the dashboard prints a tokenised URL (`http://127.0.0.1:PORT/?token=…`) — share the full URL or the token gate blocks access.
+- **`.codegraph/codegraph.db`** — SQLite graph used by codegraph CLI; ad-hoc.
