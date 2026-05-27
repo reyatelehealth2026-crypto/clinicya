@@ -100,6 +100,23 @@ $symptoms = $triageData['symptoms'] ?? [];
 $severity = $triageData['severity'] ?? null;
 $redFlags = $triageData['red_flags'] ?? [];
 $isEmergency = $session['current_state'] === 'emergency';
+
+// ── NEW: Load AI conversation history for this session (Option D) ────────────
+$aiChat = [];
+try {
+    $stmt = $db->prepare("SELECT role, content, created_at FROM ai_conversation_history WHERE session_id = ? ORDER BY created_at ASC LIMIT 60");
+    $stmt->execute([(string)$sessionId]);
+    $aiChat = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    // Fallback: try by user_id when session_id wasn't populated yet
+    if (empty($aiChat) && !empty($session['user_id'])) {
+        $stmt = $db->prepare("SELECT role, content, created_at FROM ai_conversation_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 60");
+        $stmt->execute([(int)$session['user_id']]);
+        $aiChat = array_reverse($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []);
+    }
+} catch (\Throwable $e) {
+    error_log('dispense: load ai_conversation_history failed: ' . $e->getMessage());
+}
+$chiefComplaint = trim((string)($session['chief_complaint'] ?? ''));
 ?>
 
 <style>
@@ -145,6 +162,45 @@ $isEmergency = $session['current_state'] === 'emergency';
     <span class="px-4 py-2 bg-red-500 text-white rounded-full font-medium">กรณีฉุกเฉิน</span>
     <?php endif; ?>
 </div>
+
+<!-- ── NEW: AI Chat transcript + AI summary (Option D) ───────────────────── -->
+<?php if (!empty($aiChat) || $chiefComplaint !== ''): ?>
+<div class="bg-white rounded-xl shadow p-4 mb-6 border-l-4 border-purple-400">
+    <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-gray-800 flex items-center gap-2">
+            <i class="fas fa-robot text-purple-500"></i>
+            บทสนทนา AI กับลูกค้า
+            <span class="text-xs text-gray-500 font-normal">(<?= count($aiChat) ?> ข้อความ)</span>
+        </h3>
+        <button type="button" onclick="document.getElementById('aiChatBody').classList.toggle('hidden')" class="text-xs text-purple-600 hover:text-purple-700">
+            <i class="fas fa-chevron-up"></i> ย่อ/ขยาย
+        </button>
+    </div>
+    <?php if ($chiefComplaint !== ''): ?>
+    <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">
+        <p class="text-xs font-semibold text-purple-800 mb-1">📋 สรุปจาก AI (chief complaint):</p>
+        <p class="text-sm text-gray-800 leading-relaxed"><?= nl2br(htmlspecialchars($chiefComplaint)) ?></p>
+    </div>
+    <?php endif; ?>
+    <div id="aiChatBody" class="space-y-2 max-h-96 overflow-y-auto bg-gray-50 rounded-lg p-3">
+        <?php if (empty($aiChat)): ?>
+        <p class="text-xs text-gray-500 italic text-center py-4">ไม่มีบทสนทนา AI สำหรับ session นี้</p>
+        <?php else: ?>
+        <?php foreach ($aiChat as $msg): ?>
+        <div class="flex gap-2 <?= $msg['role'] === 'user' ? 'flex-row-reverse' : '' ?>">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs <?= $msg['role'] === 'user' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700' ?>">
+                <i class="fas <?= $msg['role'] === 'user' ? 'fa-user' : 'fa-robot' ?>"></i>
+            </div>
+            <div class="max-w-[80%] px-3 py-2 rounded-xl text-sm <?= $msg['role'] === 'user' ? 'bg-blue-600 text-white' : 'bg-white text-gray-800 border border-gray-200' ?>">
+                <p class="whitespace-pre-line leading-relaxed"><?= nl2br(htmlspecialchars($msg['content'])) ?></p>
+                <p class="text-[10px] mt-1 opacity-60"><?= date('d/m H:i', strtotime($msg['created_at'])) ?></p>
+            </div>
+        </div>
+        <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-1">

@@ -660,48 +660,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     error_log("Medical history save error (non-fatal): " . $historyError->getMessage());
                 }
                 
-                // Add items to user's cart if requested (use cart_items table for LIFF compatibility)
+                // NEW (Option D): create a "pending_payment" transaction directly — bypass cart.
+                // Reason: cart filters out is_active=0 products; dispense must work on any product
+                // a pharmacist chose. Use `add_to_cart` flag name for backwards compatibility.
                 $addToCart = $input['add_to_cart'] ?? false;
-                error_log("approve_drugs: add_to_cart=" . ($addToCart ? 'true' : 'false') . ", drugs count=" . count($drugs) . ", userId={$userId}");
-                
+                $createdOrderId = null;
+                $createdOrderNumber = null;
+                error_log("approve_drugs: add_to_cart={$addToCart} drugs=" . count($drugs) . " userId={$userId}");
+
                 if ($addToCart) {
-                    $cartAdded = 0;
                     try {
-                        // Get user's line_user_id for cart_items table
                         $stmt = $db->prepare("SELECT line_user_id FROM users WHERE id = ?");
                         $stmt->execute([$userId]);
                         $userLineId = $stmt->fetchColumn() ?: '';
-                        
+
+                        $items = [];
+                        $totalAmount = 0.0;
                         foreach ($drugs as $drug) {
                             $productId = (int)($drug['id'] ?? 0);
-                            $quantity = (int)($drug['quantity'] ?? 1);
-                            error_log("approve_drugs: Processing drug id={$productId}, quantity={$quantity}");
-                            if ($productId <= 0) {
-                                error_log("approve_drugs: Skipping drug with invalid id");
-                                continue;
-                            }
-                            
-                            // Check if item already in cart_items (LIFF uses cart_items table)
-                            $stmt = $db->prepare("SELECT id, quantity FROM cart_items WHERE user_id = ? AND product_id = ?");
-                            $stmt->execute([$userId, $productId]);
-                            $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-                            
-                            if ($existing) {
-                                // Update quantity
-                                $stmt = $db->prepare("UPDATE cart_items SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?");
-                                $stmt->execute([$quantity, $existing['id']]);
-                                error_log("approve_drugs: Updated cart_items item {$existing['id']}");
-                            } else {
-                                // Insert new cart item (include line_user_id as it's NOT NULL)
-                                $stmt = $db->prepare("INSERT INTO cart_items (user_id, line_user_id, product_id, quantity, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())");
-                                $stmt->execute([$userId, $userLineId, $productId, $quantity]);
-                                error_log("approve_drugs: Inserted cart_items item, lastInsertId=" . $db->lastInsertId());
-                            }
-                            $cartAdded++;
+                            $quantity = max(1, (int)($drug['quantity'] ?? 1));
+                            if ($productId <= 0) continue;
+                            // Fetch product (ignore is_active filter so hidden-from-shop items are allowed)
+                            $p = $db->prepare("SELECT id, name, price, sale_price, sku FROM business_items WHERE id = ?");
+                            $p->execute([$productId]);
+                            $row = $p->fetch(PDO::FETCH_ASSOC);
+                            if (!$row) { error_log("approve_drugs: product {$productId} not found"); continue; }
+                            $unitPrice = (float)($row['sale_price'] ?? null) > 0 ? (float)$row['sale_price'] : (float)$row['price'];
+                            $lineTotal = $unitPrice * $quantity;
+                            $totalAmount += $lineTotal;
+                            $items[] = [
+                                'product_id' => $productId, 'product_name' => $row['name'],
+                                'sku' => $row['sku'], 'unit_price' => $unitPrice,
+                                'quantity' => $quantity, 'line_total' => $lineTotal,
+                                'note' => trim((string)($drug['instructions'] ?? '')),
+                            ];
                         }
-                        error_log("Added {$cartAdded} items to cart_items for user {$userId}");
-                    } catch (Exception $cartError) {
-                        error_log("Cart add error (non-fatal): " . $cartError->getMessage());
+
+                        if (!empty($items)) {
+                            $orderNumber = 'DSP' . date('YmdHis') . str_pad((string)$sessionId, 4, '0', STR_PAD_LEFT);
+                            $deliveryInfo = json_encode([
+                                'source' => 'pharmacist_dispense',
+                                'session_id' => $sessionId,
+                                'pharmacist_name' => $pharmacistName,
+                                'pharmacist_license' => $pharmacistLicense,
+                                'note' => $pharmacistNote,
+                            ], JSON_UNESCAPED_UNICODE);
+
+                            $db->beginTransaction();
+                            $ins = $db->prepare("INSERT INTO transactions
+                                (line_account_id, user_id, line_user_id, order_number, transaction_type, status, payment_status, payment_method, total_amount, grand_total, delivery_info, note, created_at)
+                                VALUES (?, ?, ?, ?, 'purchase', 'pending', 'pending', 'transfer', ?, ?, ?, ?, NOW())");
+                            $ins->execute([
+                                $lineAccountId, $userId, $userLineId, $orderNumber,
+                                $totalAmount, $totalAmount, $deliveryInfo,
+                                'รอชำระเงิน — เภสัชกรอนุมัติยาผ่าน dispense (session #' . $sessionId . ')'
+                            ]);
+                            $createdOrderId = (int)$db->lastInsertId();
+                            $createdOrderNumber = $orderNumber;
+
+                            $insItem = $db->prepare("INSERT INTO transaction_items
+                                (transaction_id, product_id, product_name, product_price, quantity, subtotal)
+                                VALUES (?, ?, ?, ?, ?, ?)");
+                            foreach ($items as $it) {
+                                $insItem->execute([
+                                    $createdOrderId, $it['product_id'], $it['product_name'],
+                                    $it['unit_price'], $it['quantity'], $it['line_total']
+                                ]);
+                            }
+                            $db->commit();
+                            error_log("approve_drugs: created pending order #{$createdOrderId} ({$orderNumber}) total={$totalAmount}");
+                        }
+                    } catch (Exception $orderErr) {
+                        if ($db->inTransaction()) { $db->rollBack(); }
+                        error_log("approve_drugs: pending order create failed: " . $orderErr->getMessage());
                     }
                 }
                 
@@ -721,8 +752,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
                 
                 echo json_encode([
-                    'success' => true, 
-                    'message' => 'Drugs approved' . ($lineSent ? ' and sent to customer' : ' (LINE notification pending)') . ($addToCart ? ' - items added to cart' : '')
+                    'success' => true,
+                    'message' => 'Drugs approved' . ($lineSent ? ' + LINE sent' : '') . ($createdOrderId ? " - pending order #{$createdOrderId} created" : ''),
+                    'order_id' => $createdOrderId,
+                    'order_number' => $createdOrderNumber,
                 ]);
             } catch (Exception $e) {
                 error_log("approve_drugs error: " . $e->getMessage());

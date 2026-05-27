@@ -5,6 +5,12 @@
  */
 
 $featuredProducts = $featuredProductService->getFeaturedProducts(8);
+
+// 2026-05-26: ถ้า admin ลบ featured หมด → ซ่อน section ทั้งบล็อค
+// (เดิมยังขึ้น title "สินค้าแนะนำจากร้านยา" ค้างอยู่)
+if (empty($featuredProducts)) {
+    return;
+}
 ?>
 
 <!-- Featured Products Section -->
@@ -15,7 +21,7 @@ $featuredProducts = $featuredProductService->getFeaturedProducts(8);
             <h2>สินค้าแนะนำจากร้านยา</h2>
             <p>สินค้าคุณภาพที่คัดไว้ให้เริ่มต้นดูแลสุขภาพได้ง่ายขึ้น</p>
         </div>
-        
+
         <?php if (!empty($featuredProducts)): ?>
         <div class="products-grid">
             <?php foreach ($featuredProducts as $product): ?>

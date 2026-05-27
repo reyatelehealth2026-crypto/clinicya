@@ -157,7 +157,8 @@ echo getStickySaveBarStyles();
 .miniapp-btn-sm { padding: 6px 12px; font-size: 12px; }
 .miniapp-btn-outline { background: transparent; border: 1px solid #e2e8f0; color: #475569; }
 .miniapp-btn-outline:hover { background: #f8fafc; }
-.miniapp-modal { display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+/* 2026-05-25: bump z-index above header.php's 1200 + Tailwind dropdowns — fixes "modal click ไม่ได้" (A3) */
+.miniapp-modal { display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
 .miniapp-modal.active { display: flex; }
 .miniapp-modal-content { background: white; border-radius: 16px; padding: 24px; max-width: 700px; width: 95%; max-height: 90vh; overflow-y: auto; }
 .miniapp-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -183,22 +184,97 @@ echo getStickySaveBarStyles();
 
 <?= renderTabs($tabs, $activeTab) ?>
 
-<div class="tab-content">
-    <div class="tab-panel">
-        <?php
-        switch ($activeTab) {
-            case 'banners':
-                include ADMIN_BASE_PATH . 'includes/miniapp/admin-miniapp-banners.php';
-                break;
-            case 'sections':
-                include ADMIN_BASE_PATH . 'includes/miniapp/admin-miniapp-sections.php';
-                break;
-            case 'products':
-                include ADMIN_BASE_PATH . 'includes/miniapp/admin-miniapp-products.php';
-                break;
-        }
-        ?>
+<style>
+/* 2-column layout: form left, live preview right.
+   Stacks on mobile/tablet (< 1280px). */
+.miniapp-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-top: 16px;
+}
+@media (min-width: 1280px) {
+    .miniapp-layout { grid-template-columns: minmax(0, 1fr) 380px; }
+}
+.miniapp-preview-pane {
+    position: sticky;
+    top: 80px;
+    align-self: start;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.1);
+}
+.miniapp-preview-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;
+    font-size: 13px; font-weight: 600; color: #1e293b;
+}
+.miniapp-preview-head .actions { display: flex; gap: 6px; }
+.miniapp-preview-head button, .miniapp-preview-head a {
+    width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    background: white; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer;
+    color: #64748b; text-decoration: none; font-size: 12px;
+}
+.miniapp-preview-head button:hover, .miniapp-preview-head a:hover { background: #f1f5f9; color: #0f172a; }
+.miniapp-preview-frame {
+    width: 100%; aspect-ratio: 9 / 16; max-height: 78vh;
+    border: 0; display: block; background: #f1f5f9;
+}
+</style>
+
+<div class="miniapp-layout">
+    <div class="tab-content">
+        <div class="tab-panel">
+            <?php
+            switch ($activeTab) {
+                case 'banners':
+                    include ADMIN_BASE_PATH . 'includes/miniapp/admin-miniapp-banners.php';
+                    break;
+                case 'sections':
+                    include ADMIN_BASE_PATH . 'includes/miniapp/admin-miniapp-sections.php';
+                    break;
+                case 'products':
+                    include ADMIN_BASE_PATH . 'includes/miniapp/admin-miniapp-products.php';
+                    break;
+            }
+            ?>
+        </div>
     </div>
+
+    <!-- Live Preview pane (sticky right side on desktop) -->
+    <aside class="miniapp-preview-pane">
+        <div class="miniapp-preview-head">
+            <span>
+                <i class="fas fa-mobile-screen-button text-violet-500 mr-1"></i>
+                Live Preview · /miniapp/
+            </span>
+            <div class="actions">
+                <button type="button" onclick="reyaReloadMiniappPreview()" title="รีโหลด preview">
+                    <i class="fas fa-rotate"></i>
+                </button>
+                <a href="/miniapp/" target="_blank" title="เปิดในแท็บใหม่">
+                    <i class="fas fa-arrow-up-right-from-square"></i>
+                </a>
+            </div>
+        </div>
+        <iframe id="reyaMiniappPreview"
+                src="/miniapp/?preview=1&_=<?= time() ?>"
+                class="miniapp-preview-frame"
+                loading="lazy"
+                allow="geolocation"
+                title="REYA Mini App Live Preview"></iframe>
+    </aside>
 </div>
+
+<script>
+function reyaReloadMiniappPreview() {
+    const fr = document.getElementById('reyaMiniappPreview');
+    if (!fr) return;
+    const base = '/miniapp/?preview=1';
+    fr.src = base + '&_=' + Date.now();
+}
+</script>
 
 <?php require_once ADMIN_BASE_PATH . 'includes/footer.php'; ?>

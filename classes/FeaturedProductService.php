@@ -35,11 +35,14 @@ class FeaturedProductService {
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
             $selections = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
+            // 2026-05-26: ถ้า admin ลบ featured หมด → return empty (ซ่อน section).
+            // เลิก fallback ไป getAutoFeaturedProducts() เพราะทำให้ landing แสดงสินค้า
+            // ที่ admin ลบไปแล้ว — confusing.
             if (empty($selections)) {
-                return $this->getAutoFeaturedProducts($limit);
+                return [];
             }
-            
+
             // Fetch actual product data from respective tables
             $products = [];
             foreach ($selections as $sel) {
@@ -49,10 +52,11 @@ class FeaturedProductService {
                     $products[] = $product;
                 }
             }
-            
+
             return $products;
         } catch (PDOException $e) {
-            return $this->getAutoFeaturedProducts($limit);
+            error_log('[FeaturedProductService] query failed: ' . $e->getMessage());
+            return [];
         }
     }
     

@@ -300,7 +300,7 @@ $_SESSION['current_bot_id'] = $currentBotId;
                             ข้อความต้อนรับ
                         </a>
                         
-                        <a href="shop-settings.php" class="menu-item <?= $currentPage === 'shop-settings' ? 'active' : '' ?>">
+                        <a href="/settings.php?tab=shop_tax" class="menu-item <?= $currentPage === 'shop-settings' || $currentPage === 'settings' ? 'active' : '' ?>">
                             <span class="menu-icon"><i class="fas fa-store"></i></span>
                             ตั้งค่าร้านค้า
                         </a>

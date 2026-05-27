@@ -1486,6 +1486,31 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
     </section>
     <?php endif; ?>
     
+    <!-- Custom HTML block (2026-05-27) — admin-managed via /admin/landing-settings → Custom HTML tab -->
+    <?php
+    $__customHtml = '';
+    try {
+        // Use $lineAccountId resolved at top of file (default LINE OA of this tenant).
+        // Fall back to NULL-keyed row for global default.
+        $__stmtCH = $db->prepare(
+            'SELECT setting_value FROM landing_settings
+              WHERE setting_key = "custom_html"
+                AND (line_account_id = ? OR line_account_id IS NULL)
+              ORDER BY line_account_id IS NULL ASC
+              LIMIT 1'
+        );
+        $__stmtCH->execute([$lineAccountId]);
+        $__customHtml = (string) ($__stmtCH->fetchColumn() ?: '');
+    } catch (\Throwable $__e) { /* table may not exist yet — skip */ }
+    if ($__customHtml !== '') :
+    ?>
+    <section class="landing-custom-html" style="padding:24px 16px;">
+        <div class="container" style="max-width:1100px; margin:0 auto;">
+            <?= $__customHtml ?>
+        </div>
+    </section>
+    <?php endif; ?>
+
     <!-- Footer (Requirements: 3.1, 3.2) -->
     <footer class="landing-footer">
         <div class="container">
@@ -1756,6 +1781,125 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
         }
     })();
     </script>
+
+    <?php if (isset($_GET['preview'])): /* 2026-05-27 — preview-mode click-to-edit */ ?>
+    <style>
+        /* Hover outline + edit badge for sections, only in preview mode */
+        [data-edit-tab], [data-edit-disabled] {
+            position: relative;
+            transition: outline 0.15s, background 0.15s;
+            cursor: pointer;
+        }
+        [data-edit-tab]:hover {
+            outline: 3px dashed #10b981;
+            outline-offset: -3px;
+            background-color: rgba(16, 185, 129, 0.04);
+        }
+        [data-edit-tab]:hover::after {
+            content: '✏️ ' attr(data-edit-label);
+            position: absolute;
+            top: 8px; right: 8px;
+            background: #10b981; color: white;
+            padding: 4px 10px; border-radius: 6px;
+            font-size: 12px; font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            pointer-events: none;
+            z-index: 9999;
+        }
+        [data-edit-disabled]:hover {
+            outline: 3px dashed #f59e0b;
+            outline-offset: -3px;
+            background-color: rgba(245, 158, 11, 0.04);
+            cursor: not-allowed;
+        }
+        [data-edit-disabled]:hover::after {
+            content: '🚧 ยังไม่มี Admin Tab — ' attr(data-edit-label);
+            position: absolute;
+            top: 8px; right: 8px;
+            background: #f59e0b; color: white;
+            padding: 4px 10px; border-radius: 6px;
+            font-size: 12px; font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            pointer-events: none;
+            z-index: 9999;
+        }
+        /* Top banner explaining preview mode */
+        .reya-preview-banner {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white; text-align: center;
+            padding: 6px 16px; font-size: 12px; font-weight: 600;
+            z-index: 999999; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        body { padding-top: 28px; }
+    </style>
+    <div class="reya-preview-banner">
+        🖱 Preview Mode — คลิกที่ section เพื่อเปิด tab แก้ไข
+    </div>
+    <script>
+    (function () {
+        // Map sections to admin tabs. Sections without an admin tab use data-edit-disabled.
+        const tabMap = [
+            { sel: '.banner-slider, [class*="banner-slider"]',     tab: 'banners',     label: 'แบนเนอร์' },
+            { sel: '#featured-products, .featured-products',        tab: 'featured',    label: 'สินค้าแนะนำ' },
+            { sel: '#health-articles, .health-articles, .articles-section', tab: 'articles', label: 'บทความ' },
+            { sel: '#testimonials, .testimonials-section',          tab: 'testimonials', label: 'รีวิว' },
+            { sel: '#faq, .faq-section',                            tab: 'faq',         label: 'FAQ' },
+            { sel: '#trust-badges, .trust-badges-section',          tab: 'trust',       label: 'Trust Badges' },
+            { sel: '.landing-custom-html',                          tab: 'custom_html', label: 'Custom HTML' },
+        ];
+        const noTabMap = [
+            { sel: '.pharm-hero',           label: 'Hero (ปรึกษาเภสัชกร)' },
+            { sel: '.about-intro-section',  label: 'แนะนำบริการ' },
+            { sel: '.features-section',     label: 'จุดเด่น' },
+            { sel: '.services-section',     label: 'บริการ' },
+            { sel: '.contact-section',      label: 'ติดต่อ' },
+            { sel: '.cta-section',          label: 'CTA' },
+            { sel: '.landing-footer',       label: 'Footer (SEO tab)', tab: 'seo' }  // footer info comes from SEO settings
+        ];
+
+        tabMap.forEach(m => {
+            document.querySelectorAll(m.sel).forEach(el => {
+                el.setAttribute('data-edit-tab', m.tab);
+                el.setAttribute('data-edit-label', m.label);
+            });
+        });
+        noTabMap.forEach(m => {
+            document.querySelectorAll(m.sel).forEach(el => {
+                if (m.tab) {
+                    el.setAttribute('data-edit-tab', m.tab);
+                    el.setAttribute('data-edit-label', m.label);
+                } else {
+                    el.setAttribute('data-edit-disabled', '1');
+                    el.setAttribute('data-edit-label', m.label);
+                }
+            });
+        });
+
+        // Click → tell parent admin to switch tab
+        document.addEventListener('click', function (e) {
+            const target = e.target.closest('[data-edit-tab]');
+            if (!target) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const tab = target.getAttribute('data-edit-tab');
+            const label = target.getAttribute('data-edit-label') || tab;
+            try {
+                window.parent.postMessage({ type: 'reya-edit-tab', tab: tab, label: label }, '*');
+            } catch (err) {}
+        }, true);
+
+        // Disable navigation links in preview mode (avoid clicking through to other pages)
+        document.querySelectorAll('a[href]').forEach(a => {
+            a.addEventListener('click', function (ev) {
+                const href = a.getAttribute('href') || '';
+                if (href.startsWith('#') || href === '' || href === '#') return;
+                ev.preventDefault();
+            });
+        });
+    })();
+    </script>
+    <?php endif; ?>
 
 </body>
 </html>

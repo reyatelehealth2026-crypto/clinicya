@@ -115,11 +115,6 @@ const HUDMode = {
     },
 
     switchMode(mode) {
-        // AI mode removed for performance optimization
-        if (mode === 'ai') {
-            mode = 'crm'; // Fallback to CRM if someone tries to access AI mode
-        }
-
         this.currentMode = mode;
         localStorage.setItem('hudMode', mode);
 
@@ -129,16 +124,21 @@ const HUDMode = {
 
         const crmPanel = document.getElementById('hudCRMPanel');
         const templatesPanel = document.getElementById('hudTemplatesPanel');
+        const aiPanel = document.getElementById('hudAIPanel');
 
         // Hide all panels
         if (crmPanel) crmPanel.style.display = 'none';
         if (templatesPanel) templatesPanel.style.display = 'none';
+        if (aiPanel) aiPanel.style.display = 'none';
 
         // Show selected panel
         switch (mode) {
             case 'crm':
                 if (crmPanel) crmPanel.style.display = 'block';
                 this.loadCRMData();
+                break;
+            case 'ai':
+                if (aiPanel) aiPanel.style.display = 'block';
                 break;
             case 'templates':
                 if (templatesPanel) templatesPanel.style.display = 'block';
