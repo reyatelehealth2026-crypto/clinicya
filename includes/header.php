@@ -237,7 +237,7 @@ try {
 $quickAccessMenus = [
     // ==================== Clinical Station - Unified Care Chat ====================
     'messages' => ['icon' => 'fa-inbox', 'label' => 'กล่องข้อความ', 'url' => $inboxUrl, 'page' => 'inbox', 'badge' => $unreadMessages, 'color' => 'green', 'roles' => ['owner', 'admin', 'pharmacist', 'staff']],
-    'quick-reply' => ['icon' => 'fa-comments', 'label' => 'แชทหลัก', 'url' => '/inbox-master', 'page' => 'inbox-master', 'color' => 'blue', 'roles' => ['owner', 'admin', 'pharmacist', 'staff']],
+    // 'quick-reply' (inbox-master) — เมนูถูกซ่อนตามคำขอ Atiruj 2026-05-25 (หน้านี้ยัง bug + ซ้ำกับ "กล่องข้อความ" หลัก)
     'chat-analytics' => ['icon' => 'fa-chart-bar', 'label' => 'สถิติแชท', 'url' => $inboxUrl . '?tab=analytics', 'page' => 'inbox', 'color' => 'purple', 'roles' => ['owner', 'admin']],
     'video-call' => ['icon' => 'fa-video', 'label' => 'Video Call', 'url' => '/pharmacist-video-calls', 'page' => 'pharmacist-video-calls', 'color' => 'red', 'roles' => ['pharmacist', 'staff']],
     'auto-reply' => ['icon' => 'fa-robot', 'label' => 'ตอบอัตโนมัติ', 'url' => '/auto-reply', 'page' => 'auto-reply', 'color' => 'pink', 'roles' => ['pharmacist', 'staff']],
@@ -310,9 +310,8 @@ $quickAccessMenus = [
     'accounting-expenses' => ['icon' => 'fa-receipt', 'label' => 'ค่าใช้จ่าย', 'url' => '/accounting?tab=expenses', 'page' => 'accounting', 'color' => 'orange', 'roles' => ['admin', 'owner']],
 
     // ==================== Facility Setup - Facility Profile ====================
-    'shop-settings' => ['icon' => 'fa-store', 'label' => 'ข้อมูลสถานพยาบาล', 'url' => '/shop/settings', 'page' => 'settings', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
-    'miniapp-settings' => ['icon' => 'fa-mobile-alt', 'label' => 'ตั้งค่า Mini App', 'url' => '/admin/miniapp-settings.php', 'page' => 'miniapp-settings', 'color' => 'violet', 'roles' => ['admin', 'owner']],
-    'shop-new' => ['icon' => 'fa-bag-shopping', 'label' => 'Shop ใหม่ (Mini App)', 'url' => '/miniapp', 'page' => 'shop-new', 'color' => 'pink', 'roles' => ['admin', 'owner', 'staff']],
+    'shop-settings' => ['icon' => 'fa-store', 'label' => 'ข้อมูลสถานพยาบาล', 'url' => '/settings.php?tab=general', 'page' => 'settings', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
+    'miniapp-settings' => ['icon' => 'fa-mobile-alt', 'label' => 'ตั้งค่าร้านออนไลน์', 'url' => '/admin/miniapp-settings.php', 'page' => 'miniapp-settings', 'color' => 'violet', 'roles' => ['admin', 'owner']],
     'landing-settings' => ['icon' => 'fa-home', 'label' => 'Landing Page', 'url' => '/admin/landing-settings', 'page' => 'landing-settings', 'color' => 'sky', 'roles' => ['admin', 'owner']],
 
     // ==================== Facility Setup - Staff & Roles ====================
@@ -414,7 +413,7 @@ $menuGroups = [
         'roles' => ['owner', 'admin', 'marketing', 'staff'],
         'menus' => [
             ['title' => 'กล่องข้อความ', 'icon' => '💬', 'href' => $inboxUrl, 'badge' => $unreadMessages],
-            ['title' => 'แชทหลัก', 'icon' => '💬', 'href' => '/inbox-master'],
+            // "แชทหลัก" (inbox-master) — เมนูถูกซ่อนตามคำขอ 2026-05-25
             ['title' => 'สถิติแชท', 'icon' => '📊', 'href' => $inboxUrl . '?tab=analytics'],
             ['title' => 'รายชื่อลูกค้า', 'icon' => '📇', 'href' => '/users'],
             ['title' => 'บรอดแคสต์', 'icon' => '📢', 'href' => '/broadcast'],
@@ -435,12 +434,10 @@ $menuGroups = [
         'roles' => ['owner', 'admin', 'tech'],
         'menus' => [
             ['title' => 'ตั้งค่าระบบ', 'icon' => '🔧', 'href' => '/settings'],
-            ['title' => 'ข้อมูลร้าน', 'icon' => '🏪', 'href' => '/shop/settings'],
-            ['title' => 'ตั้งค่า Mini App', 'icon' => '📱', 'href' => '/admin/miniapp-settings.php'],
-            ['title' => 'Shop ใหม่ (Mini App)', 'icon' => '🛍️', 'href' => '/miniapp'],
+            // ข้อมูลร้านอยู่ในแท็บของหน้าตั้งค่าระบบแล้ว
+            ['title' => 'ตั้งค่าร้านออนไลน์', 'icon' => '📱', 'href' => '/admin/miniapp-settings.php'],
             ['title' => 'Landing Page', 'icon' => '🏠', 'href' => '/admin/landing-settings'],
             ['title' => 'Rich Menu', 'icon' => '🎨', 'href' => '/rich-menu'],
-            ['title' => 'เช็คสถานะระบบ', 'icon' => '🔍', 'href' => '/system-status'],
             ['title' => 'ศูนย์ช่วยเหลือ', 'icon' => '📚', 'href' => '/help'],
         ]
     ],
@@ -2198,14 +2195,31 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
         <!-- Sidebar -->
         <aside id="sidebar" class="sidebar flex flex-col">
             <!-- Brand -->
+            <?php
+            // 2026-05-26: per-tenant logo (fallback ไป REYA default ถ้าไม่มี)
+            $brandLogo = null;
+            try {
+                $bid = (int)($_SESSION['current_bot_id'] ?? 0);
+                if ($bid > 0) {
+                    $s = $db->prepare('SELECT shop_logo FROM shop_settings WHERE line_account_id = ? LIMIT 1');
+                    $s->execute([$bid]);
+                    $brandLogo = (string)($s->fetchColumn() ?: '');
+                }
+            } catch (\Throwable $e) { /* table might be missing on some tenants */ }
+            if (!$brandLogo) {
+                $brandLogo = '/uploads/shop/logo_1_1778797967.png'; // REYA default
+            }
+            ?>
             <div class="sidebar-brand">
                 <div class="flex items-center">
-                    <div class="w-10 h-10 rounded-xl flex items-center justify-center"
-                        style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);">
-                        <i class="fab fa-line text-white text-xl"></i>
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden bg-white border border-emerald-100">
+                        <img src="<?= htmlspecialchars($brandLogo) ?>"
+                             alt="REYA"
+                             class="w-full h-full object-cover"
+                             onerror="this.outerHTML='<div class=\'w-full h-full flex items-center justify-center text-white text-lg font-bold\' style=\'background: linear-gradient(135deg, var(--primary), var(--primary-dark));\'>R</div>';">
                     </div>
                     <div class="ml-3 flex-1 min-w-0">
-                        <div class="font-bold text-gray-800 text-sm truncate"><?= APP_NAME ?></div>
+                        <div class="font-bold text-gray-800 text-sm truncate">REYA PHARMACY CRM</div>
                         <div class="text-xs text-gray-400">REYA · Pharmacy Admin</div>
                     </div>
                     <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-gray-700">
