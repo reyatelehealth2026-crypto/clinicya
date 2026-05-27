@@ -34,13 +34,29 @@ require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../classes/ActivityLogger.php';
 
 $db             = Database::getInstance()->getConnection();
-$lineAccountId  = $_SESSION['current_bot_id'] ?? null;
-$adminId        = $_SESSION['admin_user']['id'] ?? null;
+$lineAccountId  = (int)($_SESSION['current_bot_id'] ?? $_SESSION['line_account_id'] ?? 0);
+$adminId        = $_SESSION['admin_user']['id'] ?? ($_SESSION['user_id'] ?? null);
 $activityLogger = ActivityLogger::getInstance($db);
 
-if (!$lineAccountId) {
+// Fallback 1: derive from admin user's primary tenant
+if ($lineAccountId <= 0 && !empty($adminId)) {
+    try {
+        $stmt = $db->prepare('SELECT line_account_id FROM admin_users WHERE id = ? LIMIT 1');
+        $stmt->execute([(int)$adminId]);
+        $lineAccountId = (int)($stmt->fetchColumn() ?: 0);
+    } catch (\Throwable $e) { /* ignore */ }
+}
+// Fallback 2: first active line_account (single-tenant deployment)
+if ($lineAccountId <= 0) {
+    try {
+        $row = $db->query('SELECT id FROM line_accounts WHERE is_active = 1 ORDER BY id ASC LIMIT 1')->fetch(\PDO::FETCH_ASSOC);
+        $lineAccountId = (int)($row['id'] ?? 0);
+    } catch (\Throwable $e) { /* ignore */ }
+}
+
+if ($lineAccountId <= 0) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'ยังไม่ได้เลือก LINE account']);
+    echo json_encode(['success' => false, 'error' => 'no_line_account', 'message' => 'ยังไม่ได้เลือก LINE account — กรุณาสร้างบัญชี LINE Account ก่อน']);
     exit;
 }
 
@@ -147,7 +163,7 @@ function handleList(PDO $db, int $lineAccountId): void
                          bi.is_active, bi.is_featured, bi.requires_prescription,
                          bi.unit, bi.unit_id, bi.category_id, bi.drug_group_id, bi.generic_name_id,
                          bi.storage_location_id, bi.label_template_id, bi.usage_method,
-                         gn.generic_name, dg.name_th AS drug_group_name, pu.name AS unit_name
+                         gn.generic_name, dg.name_th AS drug_group_name, pu.unit_name AS unit_name
                   ' . $sql . '
                   ORDER BY bi.name ASC
                   LIMIT ? OFFSET ?';

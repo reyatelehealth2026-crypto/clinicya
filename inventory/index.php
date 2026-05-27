@@ -13,10 +13,12 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/InventoryService.php';
+require_once __DIR__ . '/../classes/ActivityLogger.php';
 require_once __DIR__ . '/../includes/components/tabs.php';
 
 $db = Database::getInstance()->getConnection();
 $lineAccountId = $_SESSION['current_bot_id'] ?? 1;
+$activityLogger = ActivityLogger::getInstance($db);
 
 // Check if inventory tables exist
 $tableExists = false;
@@ -38,6 +40,11 @@ $tabs = [
     'planogram' => ['label' => 'Planogram', 'icon' => 'fas fa-th'],
     'batches' => ['label' => 'Batch/Lot', 'icon' => 'fas fa-layer-group'],
     'put-away' => ['label' => 'Put Away', 'icon' => 'fas fa-inbox'],
+    // ── เภสัชกรรม / Pharmacy Master Data ──
+    'drug-groups'       => ['label' => 'กลุ่มยา',         'icon' => 'fas fa-capsules'],
+    'generic-names'     => ['label' => 'ชื่อสามัญทางยา', 'icon' => 'fas fa-prescription'],
+    'label-templates'   => ['label' => 'ฉลากยา',          'icon' => 'fas fa-tag'],
+    'drug-interactions' => ['label' => 'ยาตีกัน (admin)', 'icon' => 'fas fa-exclamation-triangle'],
     'reports' => ['label' => 'รายงาน', 'icon' => 'fas fa-chart-bar'],
     'wms' => ['label' => 'WMS', 'icon' => 'fas fa-shipping-fast'],
 ];
@@ -57,6 +64,10 @@ $tabTitles = [
     'planogram' => 'Planogram - ผังชั้นวางสินค้า',
     'batches' => 'Batch/Lot Tracking',
     'put-away' => 'Put Away - จัดเก็บสินค้า',
+    'drug-groups'       => 'กลุ่มยา (Drug Groups)',
+    'generic-names'     => 'ชื่อสามัญทางยา (Generic Names)',
+    'label-templates'   => 'แม่แบบฉลากยา (Drug Label Templates)',
+    'drug-interactions' => 'ฐานข้อมูลยาตีกัน (Drug Interactions — Admin CRUD)',
     'reports' => 'รายงานคลังสินค้า',
     'wms' => 'WMS - Pick Pack Ship',
 ];
@@ -124,6 +135,18 @@ switch ($activeTab) {
         break;
     case 'put-away':
         include __DIR__ . '/../includes/inventory/put-away.php';
+        break;
+    case 'drug-groups':
+        include __DIR__ . '/../includes/inventory/drug-groups.php';
+        break;
+    case 'generic-names':
+        include __DIR__ . '/../includes/inventory/generic-names.php';
+        break;
+    case 'label-templates':
+        include __DIR__ . '/../includes/inventory/label-templates.php';
+        break;
+    case 'drug-interactions':
+        include __DIR__ . '/../includes/inventory/drug-interactions.php';
         break;
     case 'reports':
         include __DIR__ . '/../includes/inventory/reports.php';
