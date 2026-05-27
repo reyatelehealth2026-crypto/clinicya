@@ -330,7 +330,8 @@ export type LastAddress = {
 export async function fetchLastAddress(lineUserId: string): Promise<LastAddress | null> {
   const params = new URLSearchParams({
     action: 'last_address',
-    line_user_id: lineUserId
+    line_user_id: lineUserId,
+    line_account_id: String(appConfig.lineAccountId)
   })
   const res = await fetch(`${CHECKOUT_URL}?${params}`, { cache: 'no-store' })
   const data = await res.json()
@@ -396,6 +397,7 @@ export async function uploadPaymentSlip(orderId: number, file: File): Promise<Up
   const fd = new FormData()
   fd.append('action', 'upload_slip')
   fd.append('order_id', String(orderId))
+  fd.append('line_account_id', String(appConfig.lineAccountId))
   fd.append('slip', file)
   const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
@@ -443,7 +445,8 @@ export type OrderDetailApiResponse = {
 export async function fetchOrderDetail(orderId: string): Promise<OrderDetailApiResponse> {
   const params = new URLSearchParams({
     action: 'get_order',
-    order_id: orderId
+    order_id: orderId,
+    line_account_id: String(appConfig.lineAccountId)
   })
   const res = await fetch(`${CHECKOUT_URL}?${params}`, { cache: 'no-store' })
   return res.json()

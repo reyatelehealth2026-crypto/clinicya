@@ -42,6 +42,27 @@ function generateHistoryId(index: number, createdAt: string | undefined): string
 }
 
 /**
+ * DELETE server-side conversation history for the given LINE user.
+ * Returns true on success (even if zero rows), false on network/server failure.
+ */
+export async function clearAIChatHistory(lineUserId: string | null | undefined): Promise<boolean> {
+  if (!lineUserId) return false
+  const url = apiUrl('/api/ai-chat-history.php?action=clear')
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ line_user_id: lineUserId })
+    })
+    if (!response.ok) return false
+    const data = (await response.json()) as { success?: boolean }
+    return data.success === true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Load the last N history rows for the given LINE user.
  * Returns `[]` for anonymous sessions or when the request fails.
  */

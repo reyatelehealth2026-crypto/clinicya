@@ -1,14 +1,14 @@
-import { Package, Star, TrendingUp } from 'lucide-react'
+import { Crown, Package, Star, TrendingUp } from 'lucide-react'
 import type { MemberProfile, TierInfo } from '@/types/member'
 
-const LABEL_MAX_TIER = '\u0e23\u0e30\u0e14\u0e31\u0e1a\u0e2a\u0e39\u0e07\u0e2a\u0e38\u0e14'
-const LABEL_POINTS = '\u0e41\u0e15\u0e49\u0e21\u0e2a\u0e30\u0e2a\u0e21'
-const LABEL_ORDERS = '\u0e2d\u0e2d\u0e23\u0e4c\u0e40\u0e14\u0e2d\u0e23\u0e4c'
-const LABEL_TO = '\u0e44\u0e1b\u0e22\u0e31\u0e07'
-const LABEL_REMAINING = '\u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e2d\u0e35\u0e01'
-const LABEL_POINT_UNIT = '\u0e41\u0e15\u0e49\u0e21'
-const LABEL_UPGRADE_TO = '\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e40\u0e25\u0e37\u0e48\u0e2d\u0e19\u0e40\u0e1b\u0e47\u0e19'
-const LABEL_TOP_LEVEL = '\u0e04\u0e38\u0e13\u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19\u0e23\u0e30\u0e14\u0e31\u0e1a\u0e2a\u0e39\u0e07\u0e2a\u0e38\u0e14\u0e41\u0e25\u0e49\u0e27'
+const LABEL_MAX_TIER = 'ระดับสูงสุด'
+const LABEL_POINTS = 'แต้มสะสม'
+const LABEL_ORDERS = 'ออร์เดอร์'
+const LABEL_TO = 'ไปยัง'
+const LABEL_REMAINING = 'เหลืออีก'
+const LABEL_POINT_UNIT = 'แต้ม'
+const LABEL_UPGRADE_TO = 'เพื่อเลื่อนเป็น'
+const LABEL_TOP_LEVEL = 'คุณอยู่ในระดับสูงสุดแล้ว'
 
 export function MemberCard({ member, tier }: { member: MemberProfile; tier: TierInfo }) {
   const displayName = member.display_name || [member.first_name, member.last_name].filter(Boolean).join(' ') || 'LINE User'
@@ -17,64 +17,72 @@ export function MemberCard({ member, tier }: { member: MemberProfile; tier: Tier
   const fallbackUrl = 'https://placehold.co/96x96/187162/ffffff?text=' + encodeURIComponent(displayName.charAt(0))
 
   return (
-    <section className="animate-fade-in overflow-hidden rounded-2xl bg-white shadow-card">
-      <div className="gradient-card relative overflow-hidden px-5 pb-5 pt-5 text-white">
-        <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-white/10" aria-hidden />
-        <div className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15">
-          <Star size={20} className="text-white/90" aria-hidden />
+    <section className="animate-fade-in overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-brand-300 via-line to-brand-800 p-[1px] shadow-card">
+      <div className="relative overflow-hidden rounded-[1.65rem] bg-gradient-to-br from-[#0b5f50] via-[#187162] to-[#082d28] p-4 text-white">
+        <div className="absolute -right-10 -top-12 h-32 w-32 rounded-full bg-white/12 blur-sm" aria-hidden />
+        <div className="absolute -bottom-14 left-8 h-28 w-28 rounded-full bg-line-muted/20 blur-md" aria-hidden />
+        <div className="relative flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/60">REYA Member</p>
+            <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-white/14 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur-sm ring-1 ring-white/15">
+              <Crown size={12} aria-hidden />
+              {tier.tier_name || 'Bronze'}
+            </div>
+          </div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/14 ring-1 ring-white/15">
+            <Star size={16} className="text-white" aria-hidden />
+          </div>
         </div>
 
-        <div className="flex items-center gap-3.5 pr-12">
+        <div className="relative mt-4 flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={member.picture_url || fallbackUrl}
             alt={displayName}
-            className="h-14 w-14 rounded-2xl border-2 border-white/30 object-cover shadow-lg"
+            className="h-[52px] w-[52px] rounded-2xl border border-white/30 object-cover shadow-md"
           />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-bold">{displayName}</h2>
-            <p className="mt-0.5 truncate text-sm text-white/75">ID: {member.member_id}</p>
+            <h2 className="truncate text-lg font-extrabold leading-tight">{displayName}</h2>
+            <p className="mt-1 truncate font-mono text-[10px] tracking-wider text-white/62">ID {member.member_id}</p>
           </div>
         </div>
 
-        <div className="mt-5 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-medium text-white/70">{LABEL_POINTS}</p>
-            <p className="mt-0.5 text-3xl font-extrabold tabular-nums">{member.points.toLocaleString()}</p>
+        <div className="relative mt-4 grid grid-cols-[1.2fr_0.8fr] gap-2">
+          <div className="rounded-2xl bg-white/14 p-3 ring-1 ring-white/15">
+            <p className="text-[10px] font-semibold text-white/62">{LABEL_POINTS}</p>
+            <p className="mt-1 text-2xl font-black leading-none tabular-nums">{member.points.toLocaleString()}</p>
           </div>
-          <div className="flex flex-col items-end gap-2 text-right">
-            <div className="rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold backdrop-blur-sm">
-              {tier.tier_name || 'Bronze'}
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-white/75">
-              <Package size={14} aria-hidden />
-              <span>{(member.total_orders ?? 0).toLocaleString()} {LABEL_ORDERS}</span>
+          <div className="rounded-2xl bg-white/10 p-3 text-right ring-1 ring-white/12">
+            <p className="text-[10px] font-semibold text-white/62">{LABEL_ORDERS}</p>
+            <div className="mt-1 flex items-end justify-end gap-1 text-white">
+              <Package size={14} className="mb-0.5" aria-hidden />
+              <span className="text-xl font-black leading-none tabular-nums">{(member.total_orders ?? 0).toLocaleString()}</span>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="bg-white px-5 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-500">
-            <TrendingUp size={14} className="shrink-0" aria-hidden />
-            <span className="truncate">{progress >= 100 ? 'Max Level' : `${LABEL_TO} ${nextTier}`}</span>
+        <div className="relative mt-4 rounded-2xl bg-white/12 p-3 ring-1 ring-white/14">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold text-white/70">
+              <TrendingUp size={11} className="shrink-0" aria-hidden />
+              <span className="truncate">{progress >= 100 ? LABEL_MAX_TIER : `${LABEL_TO} ${nextTier}`}</span>
+            </div>
+            <span className="text-[10px] font-black text-white">{Math.round(progress)}%</span>
           </div>
-          <span className="text-xs font-bold text-line">{Math.round(progress)}%</span>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/18">
+            <div
+              className="h-full rounded-full bg-white transition-all duration-700 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          {tier.points_to_next && tier.points_to_next > 0 ? (
+            <p className="mt-2 text-[10px] text-white/62">
+              {LABEL_REMAINING} <span className="font-bold text-white">{tier.points_to_next.toLocaleString()}</span> {LABEL_POINT_UNIT} {LABEL_UPGRADE_TO} {nextTier}
+            </p>
+          ) : (
+            <p className="mt-2 text-[10px] font-bold text-white">{LABEL_TOP_LEVEL}</p>
+          )}
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-line to-brand-300 transition-all duration-700 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        {tier.points_to_next && tier.points_to_next > 0 ? (
-          <p className="mt-2 text-xs text-slate-400">
-            {LABEL_REMAINING} <span className="font-semibold text-slate-600">{tier.points_to_next.toLocaleString()}</span> {LABEL_POINT_UNIT} {LABEL_UPGRADE_TO} {nextTier}
-          </p>
-        ) : (
-          <p className="mt-2 text-xs font-semibold text-line">{LABEL_TOP_LEVEL}</p>
-        )}
       </div>
     </section>
   )
