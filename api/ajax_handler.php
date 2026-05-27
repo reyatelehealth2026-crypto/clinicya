@@ -941,8 +941,11 @@ try {
                 $table = 'business_items';
 
                 $search = '%' . $query . '%';
-                $sql = "SELECT id, name, sku, barcode, price, stock, unit FROM {$table} 
-                    WHERE (name LIKE ? OR sku LIKE ? OR barcode LIKE ?) AND is_active = 1";
+                $sql = "SELECT id, name, sku, barcode, price, stock, unit,
+                               description, usage_instructions, default_usage_text,
+                               generic_name, strength, manufacturer, image_url
+                        FROM {$table}
+                        WHERE (name LIKE ? OR sku LIKE ? OR barcode LIKE ?) AND is_active = 1";
                 $params = [$search, $search, $search];
 
                 // Filter by line_account_id if set

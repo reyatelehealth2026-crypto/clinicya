@@ -7,26 +7,25 @@ import {
   Activity,
   Bot,
   Calendar,
-  Check,
   ChevronRight,
   Coins,
-  CreditCard,
   Gift,
   Heart,
   LogOut,
+  MapPin,
   Package,
   Pill,
   Store,
   UserPlus,
-  Video,
-  X
+  Video
 } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
 import { AppShell } from '@/components/miniapp/AppShell'
-import { MemberCard } from '@/components/miniapp/MemberCard'
+import { AddressesSheet } from '@/components/miniapp/AddressesSheet'
+import { FlipMemberCard } from '@/components/miniapp/FlipMemberCard'
 import { VerifiedOnlyNotice } from '@/components/miniapp/VerifiedOnlyNotice'
 import { checkMember, getMemberCard } from '@/lib/member-api'
-import type { MemberProfile, TierInfo } from '@/types/member'
+import { getHealthProfile } from '@/lib/health-api'
 
 function LoadingSkeleton() {
   return (
@@ -37,174 +36,66 @@ function LoadingSkeleton() {
   )
 }
 
-function QuickLink({
-  href,
-  icon: Icon,
-  title,
-  description
-}: {
-  href: string
-  icon: typeof Store
-  title: string
-  description: string
-}) {
+/**
+ * MenuSection — Shopee/7-Eleven Pre/Lazada style: one rounded card per group,
+ * rows separated by hairline dividers (not separate cards floating in space).
+ */
+function MenuSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Link
-      href={href}
-      className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-soft transition-colors hover:bg-slate-50"
-    >
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-line-soft">
-        <Icon size={20} className="text-line" />
+    <div className="space-y-1.5">
+      <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</p>
+      <div className="overflow-hidden rounded-2xl bg-white shadow-soft divide-y divide-slate-100">
+        {children}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-900">{title}</p>
-        <p className="mt-0.5 text-xs text-slate-500">{description}</p>
-      </div>
-    </Link>
+    </div>
   )
 }
 
-function ProfileMenuRow({
+/**
+ * MenuRow — single clean line: icon + title + optional right hint + chevron.
+ * No subtitle (those just repeated the title in the old design). When extra
+ * context matters, surface it as `rightHint` (count, percent, status).
+ */
+function MenuRow({
   href,
   onClick,
   icon: Icon,
   title,
-  subtitle
+  rightHint
 }: {
   href?: string
   onClick?: () => void
   icon: typeof Store
   title: string
-  subtitle?: string
+  rightHint?: string
 }) {
   const content = (
     <>
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-line-soft">
-        <Icon size={20} className="text-line" />
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-line-soft">
+        <Icon size={18} className="text-line" />
       </div>
-      <div className="min-w-0 flex-1 text-left">
-        <p className="text-sm font-semibold text-slate-900">{title}</p>
-        {subtitle ? <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p> : null}
-      </div>
-      <ChevronRight className="shrink-0 text-slate-300" size={20} aria-hidden />
+      <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-slate-900">{title}</span>
+      {rightHint ? (
+        <span className="shrink-0 text-xs font-medium text-slate-400">{rightHint}</span>
+      ) : null}
+      <ChevronRight className="shrink-0 text-slate-300" size={18} aria-hidden />
     </>
   )
-  const cls = 'flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-soft transition-colors hover:bg-slate-50'
+  const cls = 'flex w-full items-center gap-3 bg-white px-4 py-3 transition-colors hover:bg-slate-50 active:bg-slate-100'
   if (onClick) {
     return <button type="button" onClick={onClick} className={cls}>{content}</button>
   }
   return <Link href={href ?? '#'} className={cls}>{content}</Link>
 }
 
-// Bottom-sheet modal แสดงสิทธิประโยชน์ + ข้อมูลบัตรสมาชิกแบบละเอียด
-function MemberBenefitsSheet({
-  member,
-  tier,
-  onClose
-}: {
-  member: MemberProfile
-  tier: TierInfo
-  onClose: () => void
-}) {
-  const benefits = [
-    { tier: 'bronze', label: 'Bronze', perks: ['สะสมแต้มจากการซื้อ 1฿ = 1 แต้ม', 'รับโปรโมชั่นพิเศษทาง LINE'] },
-    { tier: 'silver', label: 'Silver', perks: ['ส่วนลด 5% ทุกออเดอร์', 'แต้มสะสม x1.2', 'ของขวัญวันเกิด'] },
-    { tier: 'gold', label: 'Gold', perks: ['ส่วนลด 10% ทุกออเดอร์', 'แต้มสะสม x1.5', 'จัดส่งฟรี', 'ปรึกษาเภสัชกร VIP'] },
-    { tier: 'platinum', label: 'Platinum', perks: ['ส่วนลด 15% ทุกออเดอร์', 'แต้มสะสม x2', 'จัดส่งด่วนฟรี', 'เภสัชกรประจำตัว', 'สิทธิ์เข้าร่วมกิจกรรมพิเศษ'] }
-  ]
-  const currentTier = (tier.tier_code || 'bronze').toLowerCase()
-  const isCurrent = (t: string) => t === currentTier
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50" />
-      <div
-        className="relative w-full max-w-md rounded-t-3xl bg-white p-5 pb-safe-bottom max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-bold text-slate-900">บัตรสมาชิก</h3>
-            <p className="mt-0.5 text-xs text-slate-500">สิทธิประโยชน์ตามระดับ</p>
-          </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Member ID card */}
-        <div className="gradient-card mb-4 rounded-2xl p-4 text-white">
-          <div className="text-xs opacity-80">รหัสสมาชิก</div>
-          <div className="mt-1 text-2xl font-bold tabular-nums tracking-wider">{member.member_id || '—'}</div>
-          <div className="mt-2 flex items-center justify-between">
-            <div className="text-xs opacity-80">{member.display_name || 'LINE User'}</div>
-            <div className="rounded-full bg-white/25 px-3 py-1 text-xs font-bold backdrop-blur-sm">{tier.tier_name || 'Bronze'}</div>
-          </div>
-        </div>
-
-        {/* Tier benefits */}
-        <div className="space-y-3">
-          {benefits.map((b) => {
-            const active = isCurrent(b.tier)
-            return (
-              <div
-                key={b.tier}
-                className={`rounded-2xl border p-3.5 ${active ? 'border-line bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}
-              >
-                <div className="mb-2 flex items-center gap-2">
-                  <p className={`text-sm font-bold ${active ? 'text-line' : 'text-slate-700'}`}>{b.label}</p>
-                  {active && (
-                    <span className="rounded-full bg-line px-2 py-0.5 text-[10px] font-semibold text-white">ระดับของคุณ</span>
-                  )}
-                </div>
-                <ul className="space-y-1">
-                  {b.perks.map((p) => {
-                    const isVipConsult = /ปรึกษาเภสัชกร VIP|เภสัชกรประจำตัว/.test(p)
-                    if (isVipConsult) {
-                      return (
-                        <li key={p}>
-                          <Link
-                            href="/video"
-                            onClick={onClose}
-                            className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-xs font-medium text-line hover:bg-line-soft transition-colors"
-                          >
-                            <Check size={12} className="shrink-0 text-line" />
-                            <span className="flex-1">{p}</span>
-                            <ChevronRight size={14} className="shrink-0 text-line" />
-                          </Link>
-                        </li>
-                      )
-                    }
-                    return (
-                      <li key={p} className="flex items-start gap-2 text-xs text-slate-600">
-                        <Check size={12} className="mt-0.5 shrink-0 text-line" />
-                        <span>{p}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            )
-          })}
-        </div>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-5 w-full rounded-xl bg-line py-3 text-sm font-semibold text-white"
-        >
-          ปิด
-        </button>
-      </div>
-    </div>
-  )
-}
+// (MemberBenefitsSheet was removed 2026-05-23 — the "บัตรสมาชิก" modal is now
+// an address-book editor. See AddressesSheet.tsx.)
 
 export function ProfileClient() {
   const line = useLineContext()
   const queryClient = useQueryClient()
   const lineUserId = line.profile?.userId || ''
-  const [showBenefits, setShowBenefits] = useState(false)
+  const [showAddresses, setShowAddresses] = useState(false)
 
   const handleLogout = () => {
     // Clear React Query cache first so cached member / order data doesn't
@@ -238,8 +129,18 @@ export function ProfileClient() {
     enabled: Boolean(lineUserId) && Boolean(checkQuery.data?.exists)
   })
 
+  // Health profile feeds the front of the FlipMemberCard (name, age, blood
+  // type, height/weight, conditions, allergies). Wait for the same gate as
+  // memberQuery so we don't call the API for unregistered users.
+  const healthQuery = useQuery({
+    queryKey: ['health-profile', lineUserId],
+    queryFn: () => getHealthProfile(lineUserId),
+    enabled: Boolean(lineUserId) && Boolean(checkQuery.data?.exists)
+  })
+
   const member = memberQuery.data?.member
   const tier = memberQuery.data?.tier
+  const healthProfile = healthQuery.data?.profile ?? null
 
   return (
     <AppShell header={<div className="safe-top bg-line" />}>
@@ -338,45 +239,32 @@ export function ProfileClient() {
 
       {member && tier ? (
         <>
-          <MemberCard member={member} tier={tier} />
+          <FlipMemberCard member={member} tier={tier} health={healthProfile} />
 
-          <div className="space-y-2">
-            <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">สมาชิก</p>
-            <ProfileMenuRow
-              onClick={() => setShowBenefits(true)}
-              icon={CreditCard}
-              title="บัตรสมาชิก"
-              subtitle="ดูรหัสสมาชิก ระดับ และสิทธิประโยชน์"
-            />
-            <ProfileMenuRow
-              href="/rewards/history"
-              icon={Coins}
-              title="ประวัติแต้ม"
-              subtitle="สะสมและใช้แต้ม"
-            />
-            <ProfileMenuRow href="/rewards" icon={Gift} title="แลกของรางวัล" subtitle="ของรางวัลและสิทธิพิเศษ" />
-            <ProfileMenuRow href="/wishlist" icon={Heart} title="รายการโปรด" subtitle="สินค้าที่บันทึกไว้" />
-          </div>
+          <MenuSection title="สมาชิก">
+            <MenuRow onClick={() => setShowAddresses(true)} icon={MapPin} title="ที่อยู่จัดส่ง" />
+            <MenuRow href="/rewards/history" icon={Coins} title="ประวัติแต้ม" rightHint={`${member.points.toLocaleString()} pt`} />
+            <MenuRow href="/rewards" icon={Gift} title="แลกของรางวัล" />
+            <MenuRow href="/wishlist" icon={Heart} title="รายการโปรด" />
+          </MenuSection>
 
-          <div className="space-y-2">
-            <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">สุขภาพและบริการ</p>
-            <ProfileMenuRow href="/health" icon={Activity} title="ข้อมูลสุขภาพ" subtitle="โปรไฟล์สุขภาพของคุณ" />
-            <ProfileMenuRow
-              href="/notifications"
-              icon={Pill}
-              title="เตือนทานยา"
-              subtitle="การแจ้งเตือนและยาที่เกี่ยวข้อง"
+          <MenuSection title="สุขภาพและบริการ">
+            <MenuRow
+              href="/health"
+              icon={Activity}
+              title="ข้อมูลสุขภาพ"
+              rightHint={healthProfile ? `${healthProfile.completion_percent ?? 0}%` : undefined}
             />
-            <ProfileMenuRow href="/appointments" icon={Calendar} title="นัดหมาย" subtitle="ตารางนัดและบริการ" />
-            <ProfileMenuRow href="/video" icon={Video} title="ปรึกษาเภสัชกร" subtitle="วิดีโอปรึกษา" />
-            <ProfileMenuRow href="/ai-chat" icon={Bot} title="ผู้ช่วย AI" subtitle="แชทสอบถามอาการและสินค้า" />
-          </div>
+            <MenuRow href="/notifications" icon={Pill} title="เตือนทานยา" />
+            <MenuRow href="/appointments" icon={Calendar} title="นัดหมาย" />
+            <MenuRow href="/video" icon={Video} title="ปรึกษาเภสัชกร" />
+            <MenuRow href="/ai-chat" icon={Bot} title="ผู้ช่วย AI" />
+          </MenuSection>
 
-          <div className="space-y-2">
-            <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">ช้อปปิ้ง</p>
-            <QuickLink href="/shop" icon={Store} title="ร้านค้า" description="เลือกสินค้าและสั่งซื้อ" />
-            <QuickLink href="/orders" icon={Package} title="ออเดอร์ของฉัน" description="ติดตามคำสั่งซื้อ" />
-          </div>
+          <MenuSection title="ช้อปปิ้ง">
+            <MenuRow href="/shop" icon={Store} title="ร้านค้า" />
+            <MenuRow href="/orders" icon={Package} title="ออเดอร์ของฉัน" />
+          </MenuSection>
 
           {/* Logout */}
           <div className="pt-2">
@@ -394,8 +282,8 @@ export function ProfileClient() {
         </>
       ) : null}
 
-      {showBenefits && member && tier ? (
-        <MemberBenefitsSheet member={member} tier={tier} onClose={() => setShowBenefits(false)} />
+      {showAddresses && lineUserId ? (
+        <AddressesSheet lineUserId={lineUserId} onClose={() => setShowAddresses(false)} />
       ) : null}
     </AppShell>
   )

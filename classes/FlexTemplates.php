@@ -1329,6 +1329,7 @@ class FlexTemplates
         $shopName = !empty($shopInfo['name']) ? $shopInfo['name'] : 'ร้านยา';
         $shopAddress = !empty($shopInfo['address']) ? $shopInfo['address'] : '';
         $shopPhone = !empty($shopInfo['phone']) ? $shopInfo['phone'] : '';
+        $shopLogo = !empty($shopInfo['logo']) ? $shopInfo['logo'] : '';
         $openHours = !empty($shopInfo['open_hours']) ? $shopInfo['open_hours'] : '08:00-24:00 น.';
         $pharmacistName = !empty($shopInfo['pharmacist']) ? $shopInfo['pharmacist'] : '';
         
@@ -1388,33 +1389,24 @@ class FlexTemplates
             ];
         }
         
-        // Special instructions - แสดงทั้งหมด ติ๊กเฉพาะที่เลือก
+        // 2026-05-27 — Warnings-only block (timing/water guidance moved to "วิธีใช้").
+        // Show only items the pharmacist actually ticked, in a clean ⚠️ section.
         $specialInst = $item['specialInstructions'] ?? [];
-        $specialContents = [];
-        $specialMap = [
-            'before_meal_30' => 'ก่อนอาหาร 1/2-1 ชม.',
-            'after_meal_immediately' => 'ทานยาหลังอาหารทันที',
-            'take_until_finish' => 'ทานยาติดต่อกันจนหมด',
-            'drink_water' => 'ดื่มน้ำตามมากๆ',
-            'drowsiness' => 'ยานี้อาจทำให้ง่วงซึม',
-            'no_alcohol' => 'ห้ามดื่มแอลกอฮอล์'
+        $warningMap = [
+            'drowsiness'  => 'ยานี้อาจทำให้ง่วงซึม',
+            'no_alcohol'  => 'ห้ามดื่มแอลกอฮอล์',
         ];
-        
-        // แสดงคำแนะนำทั้งหมด พร้อมติ๊กถูกเฉพาะที่เลือก
-        foreach ($specialMap as $key => $label) {
-            $isChecked = in_array($key, $specialInst);
-            $isWarning = ($key === 'drowsiness' || $key === 'no_alcohol');
-            $checkMark = $isChecked ? '☑' : '☐';
-            $textColor = $isWarning ? '#DC2626' : $gray;
-            
+        $specialContents = [];
+        foreach ($warningMap as $key => $label) {
+            if (!in_array($key, $specialInst, true)) continue;
             $specialContents[] = [
                 'type' => 'box',
                 'layout' => 'horizontal',
                 'contents' => [
-                    ['type' => 'text', 'text' => $checkMark, 'size' => 'sm', 'color' => $isChecked ? $darkGreen : '#CCCCCC', 'flex' => 0],
-                    ['type' => 'text', 'text' => ($isWarning ? '⚠️ ' : '') . $label, 'size' => 'xs', 'color' => $textColor, 'margin' => 'sm', 'wrap' => true, 'flex' => 1]
+                    ['type' => 'text', 'text' => '⚠️', 'size' => 'sm', 'flex' => 0],
+                    ['type' => 'text', 'text' => $label, 'size' => 'sm', 'color' => '#B91C1C', 'weight' => 'bold', 'margin' => 'sm', 'wrap' => true, 'flex' => 1]
                 ],
-                'margin' => 'xs'
+                'margin' => 'sm'
             ];
         }
         
@@ -1433,33 +1425,81 @@ class FlexTemplates
         
         // Build body contents
         $bodyContents = [];
-        
-        // Warning header for medicine
-        if ($isMedicine) {
-            $bodyContents[] = [
-                'type' => 'box',
-                'layout' => 'horizontal',
-                'contents' => [
-                    ['type' => 'text', 'text' => '⚠️ ตั้งครรภ์ แพ้ยา มีโรคประจำตัว กรุณาแจ้งเภสัชกร', 'size' => 'xxs', 'color' => $white, 'wrap' => true, 'align' => 'center']
-                ],
-                'backgroundColor' => '#B91C1C',
-                'paddingAll' => 'sm',
-                'cornerRadius' => 'md'
-            ];
-        }
-        
-        // Patient name and date
+
+        // (1) Pregnancy / allergy warning bar — small white text on red bg, at the TOP of body.
+        $bodyContents[] = [
+            'type' => 'box',
+            'layout' => 'vertical',
+            'contents' => [
+                ['type' => 'text', 'text' => '⚠️ ตั้งครรภ์ แพ้ยา มีโรคประจำตัว กรุณาแจ้งเภสัชกร', 'size' => 'xxs', 'color' => $white, 'wrap' => true, 'align' => 'center', 'weight' => 'bold']
+            ],
+            'backgroundColor' => '#B91C1C',
+            'paddingAll' => 'sm',
+            'cornerRadius' => 'md'
+        ];
+
+        // (2) Rx badge row — ฉลากยา / MEDICINE LABEL
         $bodyContents[] = [
             'type' => 'box',
             'layout' => 'horizontal',
             'contents' => [
-                ['type' => 'text', 'text' => 'ชื่อผู้ป่วย: ' . ($patientName ?: '-'), 'size' => 'xs', 'color' => $gray, 'flex' => 2],
-                ['type' => 'text', 'text' => 'วันที่: ' . date('d/m/Y'), 'size' => 'xs', 'color' => $gray, 'align' => 'end', 'flex' => 1]
+                ['type' => 'text', 'text' => '℞ ฉลากยา', 'size' => 'md', 'weight' => 'bold', 'color' => $darkGreen, 'flex' => 1],
+                ['type' => 'text', 'text' => 'MEDICINE LABEL', 'size' => 'xs', 'color' => $gray, 'align' => 'end', 'gravity' => 'center', 'flex' => 1]
             ],
-            'margin' => 'lg'
+            'margin' => 'md'
+        ];
+        $bodyContents[] = ['type' => 'separator', 'color' => '#E5E7EB', 'margin' => 'sm'];
+
+        // (3) Framed two-row patient + date block (AD year).
+        $adDate = date('d/m/Y');
+        $bodyContents[] = [
+            'type' => 'box',
+            'layout' => 'horizontal',
+            'contents' => [
+                [
+                    'type' => 'box',
+                    'layout' => 'vertical',
+                    'contents' => [
+                        ['type' => 'text', 'text' => 'ผู้ป่วย', 'size' => 'xxs', 'color' => $gray],
+                        ['type' => 'text', 'text' => $patientName ?: 'ลูกค้าทั่วไป', 'size' => 'md', 'weight' => 'bold', 'color' => $black, 'wrap' => true, 'margin' => 'xs']
+                    ],
+                    'flex' => 2
+                ],
+                [
+                    'type' => 'box',
+                    'layout' => 'vertical',
+                    'contents' => [
+                        ['type' => 'text', 'text' => 'วันที่จ่ายยา', 'size' => 'xxs', 'color' => $gray, 'align' => 'end'],
+                        ['type' => 'text', 'text' => $adDate, 'size' => 'sm', 'color' => $black, 'align' => 'end', 'margin' => 'xs']
+                    ],
+                    'flex' => 1
+                ]
+            ],
+            'margin' => 'md',
+            'paddingAll' => 'md',
+            'backgroundColor' => '#F9FAFB',
+            'cornerRadius' => 'md',
+            'borderWidth' => '1px',
+            'borderColor' => '#E5E7EB'
         ];
         
-        // Medicine name with product image
+        // === Medicine card — image left, name + brand right (restored from clean-rows revert) ===
+        $__brandLine = [];
+        if (!empty($item['generic_name'])) $__brandLine[] = $item['generic_name'];
+        if (!empty($item['strength']))     $__brandLine[] = $item['strength'];
+        $__brandText = implode(' · ', $__brandLine);
+
+        $__medContents = [
+            ['type' => 'text', 'text' => 'ชื่อสินค้า', 'size' => 'xxs', 'color' => $gray],
+            ['type' => 'text', 'text' => $item['name'] ?? '-', 'size' => 'md', 'weight' => 'bold', 'wrap' => true, 'color' => $black]
+        ];
+        if (!empty($__brandText)) {
+            $__medContents[] = ['type' => 'text', 'text' => $__brandText, 'size' => 'xxs', 'color' => $gray, 'wrap' => true, 'margin' => 'xs'];
+        }
+        if (!empty($item['manufacturer'])) {
+            $__medContents[] = ['type' => 'text', 'text' => 'ผลิตโดย ' . $item['manufacturer'], 'size' => 'xxs', 'color' => $gray, 'wrap' => true];
+        }
+
         $bodyContents[] = [
             'type' => 'box',
             'layout' => 'horizontal',
@@ -1470,106 +1510,68 @@ class FlexTemplates
                     'contents' => [
                         ['type' => 'image', 'url' => $productImage, 'size' => 'full', 'aspectMode' => 'cover', 'aspectRatio' => '1:1']
                     ],
-                    'width' => '60px',
-                    'height' => '60px',
+                    'width' => '64px',
+                    'height' => '64px',
                     'cornerRadius' => 'md',
                     'flex' => 0
                 ],
                 [
                     'type' => 'box',
                     'layout' => 'vertical',
-                    'contents' => [
-                        ['type' => 'text', 'text' => $isMedicine ? 'ชื่อยา' : 'ชื่อสินค้า', 'size' => 'xxs', 'color' => $gray],
-                        ['type' => 'text', 'text' => $item['name'] ?? '-', 'size' => 'sm', 'weight' => 'bold', 'wrap' => true, 'color' => $black]
-                    ],
+                    'contents' => $__medContents,
                     'flex' => 1,
                     'margin' => 'md'
                 ]
             ],
             'margin' => 'md',
-            'paddingAll' => 'sm',
+            'paddingAll' => 'md',
             'backgroundColor' => $lightGreen,
-            'cornerRadius' => 'md'
+            'cornerRadius' => 'md',
+            'borderWidth' => '1px',
+            'borderColor' => $darkGreen
         ];
-        
-        // Indication
+
+        // ข้อบ่งใช้ — colored green box (restored)
         if (!empty($item['indication'])) {
             $bodyContents[] = [
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => 'ข้อบ่งใช้', 'size' => 'xxs', 'color' => $gray],
-                    ['type' => 'text', 'text' => $item['indication'], 'size' => 'sm', 'wrap' => true, 'color' => $black]
+                    ['type' => 'text', 'text' => '💊 สรรพคุณ / ข้อบ่งใช้', 'size' => 'xs', 'weight' => 'bold', 'color' => $darkGreen],
+                    ['type' => 'text', 'text' => (string) $item['indication'], 'size' => 'sm', 'wrap' => true, 'color' => $black, 'margin' => 'sm']
                 ],
-                'margin' => 'md'
-            ];
-        }
-        
-        if ($isMedicine) {
-            // Dosage info
-            $dosage = $item['dosage'] ?? 1;
-            $dosageUnit = $item['dosageUnit'] ?? 'เม็ด';
-            $frequency = $item['frequency'] ?? '3';
-            $freqText = $frequency === 'prn' ? 'เมื่อมีอาการ' : $frequency;
-            
-            $bodyContents[] = [
-                'type' => 'box',
-                'layout' => 'horizontal',
-                'contents' => [
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => 'ครั้งละ', 'size' => 'xxs', 'color' => $gray, 'align' => 'center'],
-                        ['type' => 'text', 'text' => (string)$dosage, 'size' => 'xxl', 'weight' => 'bold', 'align' => 'center', 'color' => $darkGreen]
-                    ], 'flex' => 1],
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => 'หน่วย', 'size' => 'xxs', 'color' => $gray, 'align' => 'center'],
-                        ['type' => 'text', 'text' => $dosageUnit, 'size' => 'md', 'weight' => 'bold', 'align' => 'center', 'color' => $black]
-                    ], 'flex' => 1],
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => 'วันละ', 'size' => 'xxs', 'color' => $gray, 'align' => 'center'],
-                        ['type' => 'text', 'text' => $freqText . ' ครั้ง', 'size' => 'md', 'weight' => 'bold', 'align' => 'center', 'color' => $black]
-                    ], 'flex' => 1]
-                ],
-                'margin' => 'lg',
-                'paddingAll' => 'md',
-                'backgroundColor' => $lightGreen,
-                'cornerRadius' => 'md'
-            ];
-            
-            // Meal timing - ช่องสี่เหลี่ยมพร้อม ✓ (ขนาดเท่ากัน)
-            $bodyContents[] = [
-                'type' => 'box',
-                'layout' => 'horizontal',
-                'contents' => [
-                    ['type' => 'box', 'layout' => 'horizontal', 'contents' => [
-                        ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                            ['type' => 'text', 'text' => $beforeMeal ? '✓' : '-', 'size' => 'md', 'align' => 'center', 'color' => $beforeMeal ? $white : '#D1D5DB', 'weight' => 'bold']
-                        ], 'width' => '28px', 'height' => '28px', 'backgroundColor' => $beforeMeal ? $darkGreen : '#F3F4F6', 'cornerRadius' => 'md', 'justifyContent' => 'center', 'alignItems' => 'center', 'borderWidth' => '2px', 'borderColor' => $beforeMeal ? $darkGreen : '#E5E7EB'],
-                        ['type' => 'text', 'text' => 'ก่อนอาหาร', 'size' => 'sm', 'margin' => 'md', 'color' => $beforeMeal ? $darkGreen : '#9CA3AF', 'weight' => $beforeMeal ? 'bold' : 'regular']
-                    ], 'flex' => 1, 'alignItems' => 'center'],
-                    ['type' => 'box', 'layout' => 'horizontal', 'contents' => [
-                        ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                            ['type' => 'text', 'text' => $afterMeal ? '✓' : '-', 'size' => 'md', 'align' => 'center', 'color' => $afterMeal ? $white : '#D1D5DB', 'weight' => 'bold']
-                        ], 'width' => '28px', 'height' => '28px', 'backgroundColor' => $afterMeal ? $darkGreen : '#F3F4F6', 'cornerRadius' => 'md', 'justifyContent' => 'center', 'alignItems' => 'center', 'borderWidth' => '2px', 'borderColor' => $afterMeal ? $darkGreen : '#E5E7EB'],
-                        ['type' => 'text', 'text' => 'หลังอาหาร', 'size' => 'sm', 'margin' => 'md', 'color' => $afterMeal ? $darkGreen : '#9CA3AF', 'weight' => $afterMeal ? 'bold' : 'regular']
-                    ], 'flex' => 1, 'alignItems' => 'center']
-                ],
-                'margin' => 'lg',
-                'paddingAll' => 'sm',
-                'backgroundColor' => '#FAFAFA',
-                'cornerRadius' => 'md'
-            ];
-            
-            // Time of day - ช่องสี่เหลี่ยมพร้อม ✓
-            $bodyContents[] = [
-                'type' => 'box',
-                'layout' => 'horizontal',
-                'contents' => $timeIconsRow,
                 'margin' => 'md',
-                'spacing' => 'sm'
+                'paddingAll' => 'md',
+                'backgroundColor' => '#F0F9F4',
+                'cornerRadius' => 'md'
             ];
         }
-        
-        // Quantity
+
+        // วิธีใช้ — colored yellow box, defaults from DB usage_text
+        $usageDisplay = '';
+        if (!empty($item['usage_text'])) {
+            $usageDisplay = (string) $item['usage_text'];
+        } elseif ($isMedicine) {
+            $usageDisplay = 'รับประทานครั้งละ ' . ($item['dosage'] ?? 1) . ' ' . ($item['dosageUnit'] ?? 'เม็ด');
+        }
+        if ($usageDisplay !== '') {
+            $bodyContents[] = [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'contents' => [
+                    ['type' => 'text', 'text' => '📖 วิธีใช้', 'size' => 'xs', 'weight' => 'bold', 'color' => '#B45309'],
+                    ['type' => 'text', 'text' => $usageDisplay, 'size' => 'sm', 'wrap' => true, 'color' => $black, 'margin' => 'sm']
+                ],
+                'margin' => 'md',
+                'paddingAll' => 'md',
+                'backgroundColor' => '#FFFBEB',
+                'cornerRadius' => 'md',
+                'borderWidth' => '1px',
+                'borderColor' => '#FCD34D'
+            ];
+        }
+
+        // Quantity row + price (simple horizontal rows, no clean-row helper)
         $bodyContents[] = [
             'type' => 'box',
             'layout' => 'horizontal',
@@ -1579,64 +1581,75 @@ class FlexTemplates
             ],
             'margin' => 'lg'
         ];
-        
-        // Price
+
         $price = ($item['price'] ?? 0) * ($item['qty'] ?? 1);
-        $bodyContents[] = [
-            'type' => 'box',
-            'layout' => 'horizontal',
-            'contents' => [
-                ['type' => 'text', 'text' => 'ราคา:', 'size' => 'sm', 'color' => $gray],
-                ['type' => 'text', 'text' => '฿' . number_format($price, 2), 'size' => 'lg', 'weight' => 'bold', 'color' => $darkGreen, 'align' => 'end']
-            ],
-            'margin' => 'sm'
-        ];
-        
-        // Special instructions - แสดงทั้งหมด
-        if ($isMedicine && !empty($specialContents)) {
-            $bodyContents[] = ['type' => 'separator', 'margin' => 'lg'];
+        if ($price > 0) {
             $bodyContents[] = [
-                'type' => 'text',
-                'text' => '— คำแนะนำการใช้ยา —',
-                'size' => 'xs',
-                'color' => $darkGreen,
-                'align' => 'center',
-                'margin' => 'md',
-                'weight' => 'bold'
+                'type' => 'box',
+                'layout' => 'horizontal',
+                'contents' => [
+                    ['type' => 'text', 'text' => 'ราคา:', 'size' => 'sm', 'color' => $gray],
+                    ['type' => 'text', 'text' => '฿' . number_format($price, 2), 'size' => 'lg', 'weight' => 'bold', 'color' => $darkGreen, 'align' => 'end']
+                ],
+                'margin' => 'sm'
             ];
-            $bodyContents = array_merge($bodyContents, $specialContents);
         }
-        
-        // Build header contents (only include non-empty fields)
+
+        // หมายเหตุ — only when present
+        if (!empty($item['notes'])) {
+            $bodyContents[] = [
+                'type' => 'box',
+                'layout' => 'horizontal',
+                'contents' => [
+                    ['type' => 'text', 'text' => 'หมายเหตุ:', 'size' => 'sm', 'color' => $gray, 'flex' => 0],
+                    ['type' => 'text', 'text' => (string) $item['notes'], 'size' => 'sm', 'color' => $black, 'flex' => 1, 'margin' => 'sm', 'wrap' => true]
+                ],
+                'margin' => 'md'
+            ];
+        }
+
+        // Warnings (red box) — only if pharmacist ticked something
+        if ($isMedicine && !empty($specialContents)) {
+            $bodyContents[] = [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'contents' => array_merge(
+                    [['type' => 'text', 'text' => '⚠️ คำเตือน', 'size' => 'xs', 'weight' => 'bold', 'color' => '#B91C1C']],
+                    $specialContents
+                ),
+                'margin' => 'md',
+                'paddingAll' => 'md',
+                'backgroundColor' => '#FEF2F2',
+                'cornerRadius' => 'md',
+                'borderWidth' => '1px',
+                'borderColor' => '#FCA5A5'
+            ];
+        }
+
+        // Build header — vertical centered block: shop name, Pharmacist (English label), phone.
         $headerContents = [
-            ['type' => 'text', 'text' => $shopName, 'weight' => 'bold', 'size' => 'xl', 'color' => $white, 'align' => 'center']
+            ['type' => 'text', 'text' => $shopName, 'weight' => 'bold', 'size' => 'xl', 'color' => $white, 'align' => 'center', 'wrap' => true]
         ];
-        if (!empty($shopAddress)) {
-            $headerContents[] = ['type' => 'text', 'text' => $shopAddress, 'size' => 'xxs', 'color' => $white, 'align' => 'center', 'margin' => 'sm', 'wrap' => true];
+        if (!empty($pharmacistName)) {
+            $headerContents[] = ['type' => 'text', 'text' => 'Pharmacist: ' . $pharmacistName, 'size' => 'xs', 'color' => $white, 'align' => 'center', 'margin' => 'xs'];
         }
         if (!empty($shopPhone)) {
-            $headerContents[] = ['type' => 'text', 'text' => 'Tel. ' . $shopPhone, 'size' => 'xxs', 'color' => $white, 'align' => 'center'];
+            $headerContents[] = ['type' => 'text', 'text' => '☎ ' . $shopPhone, 'size' => 'sm', 'color' => $white, 'align' => 'center', 'margin' => 'sm'];
         }
-        // Pharmacist name
-        if (!empty($pharmacistName)) {
-            $headerContents[] = ['type' => 'text', 'text' => 'Pharmacist: ' . $pharmacistName, 'size' => 'xs', 'color' => $white, 'align' => 'center', 'margin' => 'sm', 'weight' => 'bold'];
-        }
-        // Removed old code
-        if (false && false) {
-            $headerContents[] = ['type' => 'text', 'text' => '� ⚕ผู้จ่ายยา: ' . $pharmacistName, 'size' => 'xs', 'color' => $white, 'align' => 'center', 'margin' => 'sm', 'weight' => 'bold'];
-        }
-        
-        // Build bubble with dark green header
+
+        $headerBox = [
+            'type' => 'box',
+            'layout' => 'vertical',
+            'contents' => $headerContents,
+            'backgroundColor' => $darkGreen,
+            'paddingAll' => 'lg'
+        ];
+
+        // Build bubble — dark-green header (with optional inline logo), then body
         $bubble = [
             'type' => 'bubble',
             'size' => 'mega',
-            'header' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => $headerContents,
-                'backgroundColor' => $darkGreen,
-                'paddingAll' => 'lg'
-            ],
+            'header' => $headerBox,
             'body' => [
                 'type' => 'box',
                 'layout' => 'vertical',
@@ -1646,7 +1659,7 @@ class FlexTemplates
             ]
         ];
         
-        // Footer with checkout button
+        // Footer — opening hours (restored), with optional checkout button
         if ($checkoutUrl) {
             $bubble['footer'] = [
                 'type' => 'box',

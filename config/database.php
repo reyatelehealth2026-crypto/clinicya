@@ -1,43 +1,31 @@
 <?php
 /**
- * Database Connection Class
+ * config/database.php — preserved for backward-compat with files that
+ * `require_once 'config/database.php'` (and there are ~100 such files).
+ *
+ * Body delegated to classes/Database.php as part of Phase 1 SaaS migration
+ * (ADR-001: Database-per-Tenant Isolation Model).
+ *
+ * The global \Database class is now defined in classes/Database.php — which
+ * resolves to per-tenant connections via TenantContext when available, and
+ * falls back to the legacy DB_NAME connection otherwise (pre-migration safety
+ * net described in modules/Core/Database.php::legacyFallback()).
+ *
+ * EMERGENCY ROLLBACK:
+ *   The pre-Phase-1 version of this file (a self-contained singleton that
+ *   ALWAYS used DB_NAME) is preserved at config/database.legacy.php. To roll
+ *   back, replace the require_once below with `require_once __DIR__ . '/database.legacy.php';`
+ *   and clear opcache.
  */
+require_once __DIR__ . '/../classes/Database.php';
 
-class Database {
-    private static $instance = null;
-    private $conn;
-
-    private function __construct() {
-        try {
-            $this->conn = new PDO(
-                "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
-                DB_USER,
-                DB_PASS,
-                [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES => false,
-                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
-                ]
-            );
-            // Ensure UTF-8
-            $this->conn->exec("SET NAMES utf8mb4");
-            $this->conn->exec("SET CHARACTER SET utf8mb4");
-            // Set Thai timezone (+07:00 = Asia/Bangkok)
-            $this->conn->exec("SET time_zone = '+07:00'");
-        } catch (PDOException $e) {
-            die("Database connection failed: " . $e->getMessage());
-        }
+// Subdomain tenant resolution — Option A SaaS routing.
+// Skips automatically when REYA_SKIP_SUBDOMAIN_RESOLUTION is defined (CLI/cron).
+// Fails open: any error → log + fall through, app keeps working on legacy fallback.
+if (!defined('REYA_SKIP_SUBDOMAIN_RESOLUTION')) {
+    $__reya_bootstrap = __DIR__ . '/../bootstrap/resolve_subdomain.php';
+    if (is_file($__reya_bootstrap)) {
+        require_once $__reya_bootstrap;
     }
-
-    public static function getInstance() {
-        if (self::$instance === null) {
-            self::$instance = new self();
-        }
-        return self::$instance;
-    }
-
-    public function getConnection() {
-        return $this->conn;
-    }
+    unset($__reya_bootstrap);
 }

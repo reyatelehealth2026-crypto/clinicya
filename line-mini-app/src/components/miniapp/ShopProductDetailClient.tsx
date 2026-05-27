@@ -102,6 +102,7 @@ export function ShopProductDetailClient() {
   const productId = Number(searchParams.get('id') || 0)
 
   const [quantity, setQuantity] = useState(1)
+  const [selectedUnitId, setSelectedUnitId] = useState<number | null>(null)
 
   const cartQuery = useQuery({
     queryKey: ['shop-cart', lineUserId],
@@ -127,6 +128,7 @@ export function ShopProductDetailClient() {
 
   useEffect(() => {
     setQuantity(1)
+    setSelectedUnitId(null)
   }, [productId])
 
   const relatedQuery = useQuery({
@@ -145,7 +147,7 @@ export function ShopProductDetailClient() {
   })
 
   const addMutation = useMutation({
-    mutationFn: () => addToCart(lineUserId, productId, quantity),
+    mutationFn: () => addToCart(lineUserId, productId, quantity, selectedUnitId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shop-cart', lineUserId] })
     },
@@ -207,7 +209,19 @@ export function ShopProductDetailClient() {
   }
 
   const basePrice = getNumericPrice(visibleProduct.price)
-  const effectivePrice = getNumericPrice(visibleProduct.sale_price) ?? basePrice ?? 0
+  const baseSalePrice = getNumericPrice(visibleProduct.sale_price) ?? basePrice ?? 0
+  const units = visibleProduct.units ?? []
+  // Resolve currently chosen unit: explicit selection → base unit (is_base_unit=true) → first available → null
+  const selectedUnit =
+    units.find((u) => u.id === selectedUnitId) ??
+    units.find((u) => u.is_base_unit) ??
+    units[0] ??
+    null
+  const unitFactor = selectedUnit?.factor && selectedUnit.factor > 0 ? selectedUnit.factor : 1
+  const stockBase = visibleProduct.stock != null && Number(visibleProduct.stock) > 0 ? Number(visibleProduct.stock) : null
+  const maxQty = stockBase != null ? Math.floor(stockBase / unitFactor) : null
+  // Unit-aware price: selected unit's sale_price if present, else base price (factor=1 case)
+  const effectivePrice = selectedUnit?.sale_price ?? baseSalePrice
   const totalPrice = effectivePrice * quantity
   const cartCount = cartQuery.data?.item_count ?? cartQuery.data?.items?.length ?? 0
   const detailSections = [
@@ -280,19 +294,70 @@ export function ShopProductDetailClient() {
         </div>
       </section>
 
+      {units.length > 1 ? (
+        <section className="retail-surface space-y-3 p-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">หน่วยขาย</p>
+            <p className="mt-1 text-sm text-slate-500">เลือกหน่วยที่ต้องการซื้อ</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {units.map((u) => {
+              const active = (selectedUnit?.id ?? null) === u.id
+              const qtyInUnit = stockBase != null && u.factor > 0 ? Math.floor(stockBase / u.factor) : null
+              const baseUnitName = units.find((x) => x.is_base_unit)?.unit_name ?? 'หน่วยฐาน'
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedUnitId(u.id)
+                    setQuantity(1)
+                  }}
+                  className={cn(
+                    'flex flex-col items-start rounded-2xl border px-4 py-3 text-left transition',
+                    active
+                      ? 'border-line bg-line-soft text-line ring-2 ring-line/30'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                  )}
+                >
+                  <span className="text-sm font-semibold">
+                    {u.unit_name}
+                    {u.is_base_unit ? <span className="ml-1 text-[10px] font-medium opacity-70">หน่วยฐาน</span> : null}
+                  </span>
+                  <span className="text-xs">
+                    ฿{u.sale_price.toLocaleString()}
+                    {u.factor > 1 ? ` · 1 ${u.unit_name} = ${u.factor} ${baseUnitName}` : ''}
+                  </span>
+                  {qtyInUnit != null ? (
+                    <span className="text-[10px] text-slate-400">มี ~{qtyInUnit} {u.unit_name}</span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
       <section className="retail-surface flex flex-col items-center gap-3 p-5 text-center">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Quantity</p>
-          <p className="mt-1 text-sm text-slate-500">เลือกจำนวนก่อนใส่ตะกร้า</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">จำนวน</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {selectedUnit?.unit_name ? `เลือกจำนวน (หน่วย: ${selectedUnit.unit_name})` : 'เลือกจำนวนก่อนใส่ตะกร้า'}
+          </p>
         </div>
         <QuantityStepper
           value={quantity}
           onChange={setQuantity}
           min={1}
-          max={visibleProduct.stock != null && visibleProduct.stock > 0 ? visibleProduct.stock : undefined}
-          disabled={!lineUserId || addMutation.isPending || visibleProduct.stock === 0}
+          max={maxQty ?? undefined}
+          disabled={!lineUserId || addMutation.isPending || maxQty === 0}
           size="lg"
         />
+        {maxQty != null ? (
+          <p className="text-xs text-slate-400">
+            ขายได้สูงสุด {maxQty.toLocaleString()} {selectedUnit?.unit_name ?? 'ชิ้น'}
+          </p>
+        ) : null}
       </section>
 
       {detailSections.map((section) => (
@@ -341,7 +406,7 @@ export function ShopProductDetailClient() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">รวมคำสั่งซื้อ</p>
             <p className="mt-1 text-xl font-bold text-slate-900">฿{totalPrice.toLocaleString()}</p>
-            <p className="text-xs text-slate-500">{quantity} ชิ้น</p>
+            <p className="text-xs text-slate-500">{quantity} {selectedUnit?.unit_name ?? 'ชิ้น'}</p>
           </div>
         }
         action={

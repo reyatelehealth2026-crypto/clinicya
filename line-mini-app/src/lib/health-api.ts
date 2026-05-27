@@ -2,6 +2,7 @@ import { appConfig } from '@/lib/config'
 import { phpGet, phpPost } from '@/lib/php-bridge'
 
 export type HealthPersonalInfo = {
+  name: string | null
   age: number | null
   gender: 'male' | 'female' | 'other' | null
   weight: number | null

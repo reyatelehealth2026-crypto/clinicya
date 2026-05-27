@@ -29,6 +29,10 @@ register_shutdown_function(function () {
 
 require_once 'config/config.php';
 require_once 'config/database.php';
+// 2026-05-27 — Route root-domain webhook to the correct tenant DB via
+// ?account=N (line_account_id). Falls back silently if mapping is missing.
+require_once __DIR__ . '/bootstrap/route_by_account.php';
+
 require_once 'classes/ActivityLogger.php';
 require_once 'classes/LineAPI.php';
 require_once 'classes/LineAccountManager.php';

@@ -204,6 +204,16 @@ define('CNY_ODOO_USER_TOKEN', getenv('CNY_ODOO_USER_TOKEN') ?: (getenv('ODOO_PRO
 // Gemini AI Chat
 define('GEMINI_API_KEY', getenv('GEMINI_API_KEY') ?: '');
 
+// Internal API token — shared secret for server-to-self callbacks
+// (e.g. api/ai-chat-summary.php). Prefer env var; fall back to a per-host
+// deterministic token derived from DB credentials so the value is stable
+// across requests on the same host but not committed to the repo.
+define(
+    'INTERNAL_API_TOKEN',
+    getenv('INTERNAL_API_TOKEN')
+        ?: hash('sha256', 'internal-api|' . DB_HOST . '|' . DB_NAME . '|' . DB_USER)
+);
+
 // Webhook URL (for Odoo team reference)
 define('ODOO_WEBHOOK_URL', APP_URL . '/api/webhook/odoo.php');
 

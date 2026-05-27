@@ -248,6 +248,7 @@ class TriageRouter
                 // ignore
             }
         }
+        $this->fireAndForgetSummary($sessionId);
         return [
             'type'       => 'escalate',
             'session_id' => $sessionId,
@@ -265,15 +266,19 @@ class TriageRouter
             ? $this->recommender->recommend($this->lineAccountId, $symptoms, [], 5)
             : [];
 
-        $summary = empty($products)
-            ? 'ขอบคุณค่ะ ตอนนี้ยังไม่พบยาที่เหมาะสมในร้าน แนะนำให้ปรึกษาเภสัชกร'
-            : 'ตามอาการที่คุณระบุ แนะนำสินค้าต่อไปนี้ค่ะ';
+        // 🆕 Empty product list → don't dead-end the chat. Fall through to
+        // Gemini AI so it can suggest OTC drugs by name (Paracetamol etc.)
+        // and explain dose/usage. Mark session complete so the same Y/N flow
+        // doesn't re-trigger, but return `continue` to let the LLM answer.
+        if (empty($products)) {
+            $this->sessions->complete($sessionId, 'self_care', 'no_match_fallback_to_ai');
+            $this->fireAndForgetSummary($sessionId);
+            return ['type' => 'continue'];
+        }
 
-        $this->sessions->complete(
-            $sessionId,
-            empty($products) ? 'self_care' : 'otc_recommended',
-            $summary
-        );
+        $summary = 'ตามอาการที่คุณระบุ แนะนำสินค้าต่อไปนี้ค่ะ';
+        $this->sessions->complete($sessionId, 'otc_recommended', $summary);
+        $this->fireAndForgetSummary($sessionId);
 
         return [
             'type'       => 'products',
@@ -281,6 +286,41 @@ class TriageRouter
             'products'   => $products,
             'message'    => $summary,
         ];
+    }
+
+    /**
+     * Trigger the auto-summary helper after the response has been flushed.
+     * Replaces the previous self-HTTP curl indirection — that path had two
+     * security issues:
+     *   1. The endpoint accepted any session_id without auth.
+     *   2. URL was built from $_SERVER['HTTP_HOST'] (attacker-controlled).
+     *
+     * New flow: flush the response via fastcgi_finish_request (FPM only),
+     * then call the helper in-process. The cron sweeper
+     * (cron/ai_session_summarizer.php) still catches anything this drops.
+     */
+    private function fireAndForgetSummary(?int $sessionId): void
+    {
+        if ($sessionId === null || $sessionId <= 0) {
+            return;
+        }
+        $sid = $sessionId;
+        try {
+            register_shutdown_function(static function () use ($sid): void {
+                try {
+                    if (function_exists('fastcgi_finish_request')) {
+                        @fastcgi_finish_request(); // response already sent
+                    }
+                    require_once __DIR__ . '/../../../includes/ai-chat-summary-helper.php';
+                    $db = \Database::getInstance()->getConnection();
+                    summary_run_for_session($db, $sid);
+                } catch (\Throwable $e) {
+                    error_log('[TriageRouter] summary helper failed: ' . $e->getMessage());
+                }
+            });
+        } catch (\Throwable $e) {
+            error_log('[TriageRouter] register_shutdown_function failed: ' . $e->getMessage());
+        }
     }
 
     private function canRecommendProducts(): bool

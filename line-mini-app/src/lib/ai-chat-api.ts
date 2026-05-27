@@ -13,6 +13,51 @@ function parseSseDataLine(trimmed: string): { data: string } | null {
   return { data }
 }
 
+/**
+ * Dispatch a `structured` payload to the matching specialized callback.
+ * Uses an exhaustive switch over the discriminated union — adding a new
+ * member to `TriageStructuredPayload` is a TypeScript error here until it
+ * is handled, which is intentional.
+ */
+function dispatchStructured(
+  payload: TriageStructuredPayload,
+  callbacks: AIChatStreamCallbacks
+): void {
+  switch (payload.type) {
+    case 'user_context':
+      callbacks.onUserContext?.(payload)
+      return
+    case 'emergency':
+      callbacks.onEmergency?.(payload)
+      return
+    case 'drug_interactions':
+      callbacks.onDrugInteractions?.(payload)
+      return
+    case 'mims_info':
+      callbacks.onMimsInfo?.(payload)
+      return
+    case 'suggest_pharmacist':
+      callbacks.onSuggestPharmacist?.(payload)
+      return
+    case 'state':
+      callbacks.onState?.(payload)
+      return
+    case 'question':
+    case 'products':
+    case 'escalate':
+    case 'continue':
+      // Handled exclusively via the generic `onStructured` callback today.
+      return
+    default: {
+      // Exhaustiveness check — adding a new variant to
+      // `TriageStructuredPayload` without handling it here is a TS error.
+      const _exhaustive: never = payload
+      void _exhaustive
+      return
+    }
+  }
+}
+
 /** ประมวลผลบรรทัด SSE หนึ่งบรรทัด (หลังตัด prefix แล้วค่อย JSON.parse) */
 function handleSsePayload(
   data: string,
@@ -33,8 +78,11 @@ function handleSsePayload(
       callbacks.onError(parsed.error)
       return 'error'
     }
-    if (parsed.structured && callbacks.onStructured) {
-      callbacks.onStructured(parsed.structured)
+    if (parsed.structured) {
+      // Backward compat: fire the generic callback for EVERY structured event.
+      callbacks.onStructured?.(parsed.structured)
+      // Phase 2: also fan-out to typed callbacks.
+      dispatchStructured(parsed.structured, callbacks)
     }
     if (parsed.token) {
       callbacks.onToken(parsed.token)
@@ -120,7 +168,7 @@ export async function streamAIChat(
     callbacks.onError(
       preview
         ? `HTTP ${response.status}: ${preview}`
-        : `HTTP ${response.status} — ตั้งค่า NEXT_PUBLIC_PHP_API_BASE_URL ให้ชี้ PHP ที่มี /api/ai-chat.php (เช่น https://clinicya.re-ya.com)`
+        : `HTTP ${response.status} — ตั้งค่า NEXT_PUBLIC_PHP_API_BASE_URL ให้ชี้ PHP ที่มี /api/ai-chat.php (เช่น https://REYA.re-ya.com)`
     )
     return
   }

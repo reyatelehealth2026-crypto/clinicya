@@ -62,11 +62,14 @@ export interface HomeSection {
   products: HomeProduct[]
 }
 
+export type HomeTheme = 'modern' | 'healthcare'
+
 export interface HomeAllResponse {
   success: boolean
   data?: {
     banners: MiniAppBanner[]
     sections: HomeSection[]
+    home_theme?: HomeTheme
   }
   error?: string
 }

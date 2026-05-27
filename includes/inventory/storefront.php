@@ -279,9 +279,21 @@ $listStmt = $db->prepare(
             p.is_active          AS storefront_enabled,
             NULL                 AS featured_order,
             p.updated_at         AS last_synced_at,
-            NULL                 AS admin_overrides
+            NULL                 AS admin_overrides,
+            p.image_url,
+            p.unit,
+            pu.unit_list,
+            pu.unit_count
      FROM business_items p
      LEFT JOIN business_categories c ON c.id = p.category_id
+     LEFT JOIN (
+        SELECT product_id,
+               GROUP_CONCAT(unit_name ORDER BY factor ASC SEPARATOR ' · ') AS unit_list,
+               COUNT(*) AS unit_count
+        FROM product_units
+        WHERE is_active = 1
+        GROUP BY product_id
+     ) pu ON pu.product_id = p.id
      WHERE {$whereSql}
      ORDER BY p.is_active DESC, p.name ASC
      LIMIT {$perPage} OFFSET {$offset}"
@@ -343,15 +355,429 @@ if (!function_exists('buildStorefrontQuery')) {
         <div class="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700"><?= htmlspecialchars($storefrontError) ?></div>
     <?php endif; ?>
 
-    <!-- ─── Quick action: เพิ่มสินค้า ──────────────────────────────────────── -->
-    <div class="flex flex-wrap items-center justify-between gap-2 bg-white rounded-xl shadow p-4">
-        <div class="text-sm text-gray-700">
-            <i class="fas fa-store text-blue-500 mr-1"></i>เพิ่มสินค้าใหม่ลงหน้าร้านทันที (จะถูกตั้งให้เผยแพร่อัตโนมัติ)
+    <!-- ─── Quick action: เพิ่มสินค้า + Import/Export CSV ─────────────────── -->
+    <div class="bg-white rounded-xl shadow p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="text-sm text-gray-700">
+                <i class="fas fa-store text-blue-500 mr-1"></i>เพิ่มสินค้าใหม่ลงหน้าร้านทันที (จะถูกตั้งให้เผยแพร่อัตโนมัติ)
+            </div>
+            <button type="button" onclick="openStorefrontProductModal()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
+                <i class="fas fa-plus mr-1"></i>เพิ่มสินค้า
+            </button>
         </div>
-        <button type="button" onclick="openStorefrontProductModal()" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
-            <i class="fas fa-plus mr-1"></i>เพิ่มสินค้า
-        </button>
+
+        <!-- CSV Import/Export panel — 2026-05-25 -->
+        <div class="border-t border-gray-100 pt-3">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="text-xs text-gray-600 flex items-center gap-2">
+                    <i class="fas fa-file-csv text-emerald-600"></i>
+                    <span><strong>นำเข้า/ส่งออกผ่าน CSV</strong> — เพิ่ม/อัปเดตสินค้าครั้งละหลายรายการ
+                        พร้อมรายละเอียดตัวยา (ผู้ผลิต, ตัวยาสำคัญ, วิธีใช้, สรรพคุณ, รูปภาพ)
+                        <span class="text-gray-400">— Excel ให้ Save As → CSV ก่อน</span>
+                    </span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="reyaMasterCatalogOpen()"
+                            class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs inline-flex items-center gap-1 shadow-sm">
+                        <i class="fas fa-store"></i> เลือกจากคลังกลาง REYA
+                    </button>
+                    <a href="/api/inventory-csv.php?action=template" download
+                       class="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg text-xs inline-flex items-center gap-1">
+                        <i class="fas fa-download"></i> ดาวน์โหลด Template
+                    </a>
+                    <button type="button" onclick="document.getElementById('csvImportInput').click()"
+                            class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs inline-flex items-center gap-1">
+                        <i class="fas fa-file-import"></i> นำเข้า CSV
+                    </button>
+                    <a href="/api/inventory-csv.php?action=export"
+                       class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg text-xs inline-flex items-center gap-1">
+                        <i class="fas fa-file-export"></i> ส่งออกทั้งหมด
+                    </a>
+                </div>
+            </div>
+            <input id="csvImportInput" type="file" accept=".csv,text/csv" hidden onchange="reyaImportCSV(this)">
+            <div id="csvImportStatus" class="mt-3 hidden text-xs"></div>
+        </div>
     </div>
+
+    <script>
+    // Inline CSV import handler — kept in same file to avoid extra JS bundle
+    function reyaImportCSV(input) {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('action', 'import');
+        fd.append('file', file);
+        fd.append('mode', 'upsert');  // update existing SKUs
+
+        const box = document.getElementById('csvImportStatus');
+        box.className = 'mt-3 text-xs p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-700';
+        box.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> กำลังนำเข้า ' + file.name + ' …';
+        box.classList.remove('hidden');
+
+        fetch('/api/inventory-csv.php?action=import', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(j => {
+                if (j.ok) {
+                    box.className = 'mt-3 text-xs p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800';
+                    let msg = '<i class="fas fa-check-circle mr-1"></i> นำเข้าสำเร็จ — '
+                            + 'เพิ่ม ' + j.inserted + ' รายการ · '
+                            + 'อัปเดต ' + j.updated + ' รายการ · '
+                            + 'ข้าม ' + j.skipped + ' รายการ.';
+                    if (j.errors && j.errors.length) {
+                        msg += '<br><span class="text-amber-700">⚠ บางบรรทัดข้าม: ' + j.errors.slice(0, 5).join(' / ') + '</span>';
+                    }
+                    msg += '<br><a href="" class="text-emerald-700 underline">รีโหลดเพื่อดูสินค้าใหม่</a>';
+                    box.innerHTML = msg;
+                    setTimeout(() => location.reload(), 2500);
+                } else {
+                    box.className = 'mt-3 text-xs p-3 rounded-lg bg-red-50 border border-red-200 text-red-800';
+                    box.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> ผิดพลาด: ' + (j.message || j.error);
+                }
+            })
+            .catch(e => {
+                box.className = 'mt-3 text-xs p-3 rounded-lg bg-red-50 border border-red-200 text-red-800';
+                box.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> เครือข่าย: ' + e.message;
+            })
+            .finally(() => { input.value = ''; });
+    }
+    </script>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         Master Catalog Picker — เลือกสินค้าจากคลังกลาง REYA (4,297 รายการ)
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="masterCatalogModal" class="fixed inset-0 z-[10000] hidden">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/50" onclick="reyaMasterCatalogClose()"></div>
+
+        <!-- Dialog -->
+        <div class="relative mx-auto my-6 max-w-6xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+             style="max-height: calc(100vh - 3rem);">
+
+            <!-- Header -->
+            <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-emerald-50">
+                <div class="flex items-center gap-3">
+                    <span class="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center">
+                        <i class="fas fa-store text-lg"></i>
+                    </span>
+                    <div>
+                        <div class="font-bold text-slate-900">คลังกลางสินค้า REYA</div>
+                        <div class="text-xs text-slate-500">เลือกสินค้าที่ต้องการเพิ่มเข้าหน้าร้านของคุณ —
+                            รายละเอียดตัวยาจะถูกนำเข้าให้ทันที</div>
+                    </div>
+                </div>
+                <button type="button" onclick="reyaMasterCatalogClose()"
+                        class="w-9 h-9 rounded-full hover:bg-slate-200 text-slate-600 flex items-center justify-center">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Search + summary bar -->
+            <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center gap-3">
+                <div class="flex-1 min-w-[200px] relative">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input id="mcSearch" type="text" placeholder="ค้นหา ชื่อสินค้า, SKU, ตัวยา, ผู้ผลิต…"
+                           class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                </div>
+                <div class="text-xs text-slate-600">
+                    <span>พบ <strong id="mcTotal" class="text-slate-900">0</strong> รายการ ·</span>
+                    <span>เลือก <strong id="mcSelected" class="text-teal-700">0</strong> รายการ</span>
+                </div>
+            </div>
+
+            <!-- Item list -->
+            <div id="mcList" class="flex-1 overflow-y-auto px-5 py-3 bg-slate-50">
+                <div class="text-center text-slate-400 py-12">
+                    <i class="fas fa-spinner fa-spin text-2xl"></i>
+                    <div class="text-sm mt-2">กำลังโหลด…</div>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div id="mcPagination" class="px-5 py-2 border-t border-slate-100 flex items-center justify-center gap-2 text-xs"></div>
+
+            <!-- Footer / import bar -->
+            <div class="px-5 py-3 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center gap-3 text-xs">
+                    <label class="flex items-center gap-1 text-slate-600">
+                        ราคาเริ่มต้น
+                        <input id="mcDefaultPrice" type="number" min="0" step="0.01" value="0"
+                               class="w-20 px-2 py-1 border border-slate-300 rounded text-right">
+                        บาท
+                    </label>
+                    <label class="flex items-center gap-1 text-slate-600">
+                        สต็อกเริ่มต้น
+                        <input id="mcDefaultStock" type="number" min="0" step="1" value="0"
+                               class="w-20 px-2 py-1 border border-slate-300 rounded text-right">
+                    </label>
+                    <label class="flex items-center gap-1 text-slate-700">
+                        <input id="mcActivate" type="checkbox" class="rounded">
+                        เปิดขายทันทีหลังนำเข้า
+                    </label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="reyaMasterClearSelection()"
+                            class="px-3 py-2 text-xs text-slate-600 hover:text-slate-900">
+                        ล้างการเลือก
+                    </button>
+                    <button type="button" id="mcImportBtn" onclick="reyaMasterImport()" disabled
+                            class="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium inline-flex items-center gap-1">
+                        <i class="fas fa-file-import"></i>
+                        <span id="mcImportBtnLabel">นำเข้า 0 รายการ</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    /* ─────────────────────────────────────────────────────────────────────────
+       Master Catalog Picker — state + behaviour
+       ───────────────────────────────────────────────────────────────────────── */
+    (function () {
+        const PER_PAGE = 50;
+        const state = {
+            query:       '',
+            page:        1,
+            totalPages:  1,
+            total:       0,
+            items:       [],
+            selected:    new Map(),  // id → {sku, name}
+            loading:     false,
+            searchDebounce: null,
+        };
+
+        // --- Helpers ---
+        const $ = (id) => document.getElementById(id);
+        const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
+            ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+        function updateImportBtn() {
+            const n = state.selected.size;
+            $('mcSelected').textContent = n;
+            $('mcImportBtnLabel').textContent = 'นำเข้า ' + n + ' รายการ';
+            $('mcImportBtn').disabled = (n === 0);
+        }
+
+        // --- Fetch one page ---
+        async function loadPage(page = state.page) {
+            state.loading = true;
+            state.page = page;
+            $('mcList').innerHTML =
+                '<div class="text-center text-slate-400 py-12"><i class="fas fa-spinner fa-spin text-2xl"></i><div class="text-sm mt-2">กำลังโหลด…</div></div>';
+
+            const url = '/api/master-catalog.php?action=list'
+                      + '&q=' + encodeURIComponent(state.query)
+                      + '&page=' + page
+                      + '&per_page=' + PER_PAGE;
+            try {
+                const r = await fetch(url, { credentials: 'same-origin' });
+                const j = await r.json();
+                if (!j.ok) throw new Error(j.message || j.error || 'load_failed');
+
+                state.items      = j.items || [];
+                state.total      = j.total | 0;
+                state.totalPages = j.pages | 0 || 1;
+                $('mcTotal').textContent = state.total.toLocaleString('th-TH');
+                renderList();
+                renderPagination();
+            } catch (e) {
+                $('mcList').innerHTML =
+                    '<div class="text-center text-red-600 py-12"><i class="fas fa-exclamation-circle text-2xl"></i><div class="text-sm mt-2">' + escHtml(e.message) + '</div></div>';
+            } finally {
+                state.loading = false;
+            }
+        }
+
+        function renderList() {
+            if (!state.items.length) {
+                $('mcList').innerHTML =
+                    '<div class="text-center text-slate-400 py-12"><i class="fas fa-search text-2xl"></i><div class="text-sm mt-2">ไม่พบสินค้าที่ตรงกัน</div></div>';
+                return;
+            }
+            const placeholderImg = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 fill=%22%23f1f5f9%22/%3E%3Ctext x=%2232%22 y=%2240%22 text-anchor=%22middle%22 font-size=%2228%22 fill=%22%23cbd5e1%22%3E📦%3C/text%3E%3C/svg%3E';
+
+            const rows = state.items.map(item => {
+                const id = +item.id;
+                const isImported  = !!item.already_imported;
+                const isSelected  = state.selected.has(id);
+                const sub = [
+                    item.manufacturer,
+                    item.generic_name,
+                    item.pack_size,
+                    item.unit,
+                ].filter(Boolean).map(escHtml).join(' · ');
+                return `
+                <label class="block bg-white rounded-lg border ${isSelected ? 'border-teal-500 ring-2 ring-teal-200' : 'border-slate-200'} p-3 cursor-pointer hover:border-teal-400 transition mb-2">
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" data-master-id="${id}" data-sku="${escHtml(item.sku)}" data-name="${escHtml(item.name)}"
+                               ${isSelected ? 'checked' : ''} ${isImported ? 'disabled' : ''}
+                               class="mt-1 w-4 h-4 text-teal-600 rounded">
+                        <img src="${escHtml(item.image_url || '')}" onerror="this.src='${placeholderImg}'"
+                             class="w-12 h-12 rounded-lg object-cover bg-slate-100 flex-shrink-0">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-medium text-sm text-slate-900 truncate">${escHtml(item.name)}</span>
+                                ${isImported ? '<span class="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">นำเข้าแล้ว</span>' : ''}
+                            </div>
+                            <div class="text-[11px] text-slate-500 mt-0.5">SKU ${escHtml(item.sku)}${item.name_en ? ' · <span class="text-slate-400">' + escHtml(item.name_en) + '</span>' : ''}</div>
+                            ${sub ? '<div class="text-[11px] text-slate-600 mt-0.5">' + sub + '</div>' : ''}
+                        </div>
+                    </div>
+                </label>`;
+            });
+            $('mcList').innerHTML = rows.join('');
+
+            // Wire checkbox events
+            $('mcList').querySelectorAll('input[type=checkbox][data-master-id]').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    const id = +e.target.dataset.masterId;
+                    if (e.target.checked) {
+                        state.selected.set(id, {
+                            sku: e.target.dataset.sku,
+                            name: e.target.dataset.name,
+                        });
+                    } else {
+                        state.selected.delete(id);
+                    }
+                    // Re-style the parent card
+                    const card = e.target.closest('label');
+                    if (e.target.checked) {
+                        card.classList.add('border-teal-500', 'ring-2', 'ring-teal-200');
+                        card.classList.remove('border-slate-200');
+                    } else {
+                        card.classList.remove('border-teal-500', 'ring-2', 'ring-teal-200');
+                        card.classList.add('border-slate-200');
+                    }
+                    updateImportBtn();
+                });
+            });
+        }
+
+        function renderPagination() {
+            const wrap = $('mcPagination');
+            if (state.totalPages <= 1) { wrap.innerHTML = ''; return; }
+
+            const cur = state.page;
+            const tot = state.totalPages;
+            const btn = (label, page, disabled = false, active = false) =>
+                `<button type="button" ${disabled ? 'disabled' : ''} onclick="window.__mcGoto(${page})"
+                    class="px-2.5 py-1 rounded ${active ? 'bg-teal-600 text-white' : disabled ? 'text-slate-300' : 'bg-white border border-slate-200 hover:bg-slate-100 text-slate-700'}">${label}</button>`;
+
+            const pages = [];
+            const around = 2;
+            for (let p = 1; p <= tot; p++) {
+                if (p === 1 || p === tot || Math.abs(p - cur) <= around) {
+                    pages.push(p);
+                } else if (pages[pages.length - 1] !== '…') {
+                    pages.push('…');
+                }
+            }
+            wrap.innerHTML =
+                btn('« แรก', 1, cur === 1) +
+                btn('‹', cur - 1, cur === 1) +
+                pages.map(p => p === '…' ? '<span class="px-1 text-slate-400">…</span>' : btn(String(p), p, false, p === cur)).join('') +
+                btn('›', cur + 1, cur === tot) +
+                btn('สุดท้าย »', tot, cur === tot);
+        }
+
+        // Selection-clear button
+        window.reyaMasterClearSelection = function () {
+            state.selected.clear();
+            renderList();
+            updateImportBtn();
+        };
+
+        // Pagination jump
+        window.__mcGoto = function (page) {
+            page = Math.max(1, Math.min(state.totalPages, page | 0));
+            if (page === state.page) return;
+            loadPage(page);
+        };
+
+        // Open modal — fetch first page if not loaded
+        window.reyaMasterCatalogOpen = function () {
+            $('masterCatalogModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            // Reset
+            state.query = '';
+            $('mcSearch').value = '';
+            state.selected.clear();
+            updateImportBtn();
+            loadPage(1);
+            setTimeout(() => $('mcSearch').focus(), 100);
+        };
+
+        window.reyaMasterCatalogClose = function () {
+            $('masterCatalogModal').classList.add('hidden');
+            document.body.style.overflow = '';
+        };
+
+        // Search (debounced)
+        document.addEventListener('input', (e) => {
+            if (e.target && e.target.id === 'mcSearch') {
+                const v = e.target.value;
+                clearTimeout(state.searchDebounce);
+                state.searchDebounce = setTimeout(() => {
+                    state.query = v.trim();
+                    loadPage(1);
+                }, 300);
+            }
+        });
+
+        // Esc to close
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !$('masterCatalogModal').classList.contains('hidden')) {
+                reyaMasterCatalogClose();
+            }
+        });
+
+        // Import handler
+        window.reyaMasterImport = async function () {
+            if (!state.selected.size) return;
+            const btn = $('mcImportBtn');
+            btn.disabled = true;
+            const origLabel = $('mcImportBtnLabel').textContent;
+            $('mcImportBtnLabel').textContent = 'กำลังนำเข้า…';
+
+            const payload = {
+                ids:           Array.from(state.selected.keys()),
+                default_price: parseFloat($('mcDefaultPrice').value) || 0,
+                default_stock: parseInt($('mcDefaultStock').value, 10) || 0,
+                activate:      $('mcActivate').checked,
+            };
+
+            try {
+                const r = await fetch('/api/master-catalog.php?action=import', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const j = await r.json();
+                if (!j.ok) throw new Error(j.message || j.error || 'import_failed');
+
+                // Show success toast and reload
+                const msg = 'นำเข้าสำเร็จ — เพิ่ม ' + j.inserted + ' รายการ, อัปเดต ' + j.updated + ' รายการ';
+                const t = document.createElement('div');
+                t.className = 'fixed top-6 right-6 z-[20000] px-4 py-3 bg-emerald-600 text-white rounded-lg shadow-2xl text-sm';
+                t.textContent = msg;
+                document.body.appendChild(t);
+                setTimeout(() => t.remove(), 3500);
+
+                state.selected.clear();
+                reyaMasterCatalogClose();
+                setTimeout(() => location.reload(), 1500);
+            } catch (e) {
+                alert('นำเข้าไม่สำเร็จ: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                $('mcImportBtnLabel').textContent = origLabel;
+                updateImportBtn();
+            }
+        };
+    })();
+    </script>
 
     <!-- ─── Stats bar ─────────────────────────────────────────────────────── -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -393,12 +819,6 @@ if (!function_exists('buildStorefrontQuery')) {
                     class="px-4 py-2 rounded-lg text-sm font-medium">
                 <i class="fas fa-folder-minus mr-1"></i>ปิดหมวดหมู่ที่เลือก
             </button>
-            <button type="button" @click="bulkDisableByDrugType()"
-                    :disabled="!filterDrugType"
-                    :class="filterDrugType ? 'bg-red-100 text-red-800 hover:bg-red-200' : 'bg-gray-100 text-gray-400 cursor-not-allowed'"
-                    class="px-4 py-2 rounded-lg text-sm font-medium">
-                <i class="fas fa-pills mr-1"></i>ปิดชนิดยาที่เลือก
-            </button>
             <?php if (defined('ODOO_INTEGRATION_ENABLED') && ODOO_INTEGRATION_ENABLED === true): ?>
             <button type="button" @click="bulkDisableOdooInactive()"
                     class="px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 text-sm font-medium">
@@ -437,19 +857,7 @@ if (!function_exists('buildStorefrontQuery')) {
                 </select>
             </div>
 
-            <div>
-                <label class="text-xs text-gray-500 block mb-1">ชนิดยา</label>
-                <select name="drug_type" x-model="filterDrugType" @change="$el.form.submit()"
-                        class="px-3 py-2 border rounded-lg text-sm w-40">
-                    <option value="">ทั้งหมด</option>
-                    <?php foreach ($drugTypes as $d): ?>
-                        <option value="<?= htmlspecialchars($d['drug_type']) ?>"
-                                <?= $drugTypeFilter === $d['drug_type'] ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($d['drug_type']) ?> (<?= (int) $d['n'] ?>)
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
+<?php /* ชนิดยา filter ลบออก — drug_type ไม่มีใน business_items (2026-05-26) */ ?>
 
             <div>
                 <label class="text-xs text-gray-500 block mb-1">สถานะ</label>
@@ -537,22 +945,22 @@ if (!function_exists('buildStorefrontQuery')) {
                             <input type="checkbox" @change="toggleAll($event.target.checked)"
                                    :checked="allSelected" class="rounded">
                         </th>
+                        <th class="px-3 py-3 text-center w-14">รูป</th>
                         <th class="px-3 py-3 text-left">รหัส / SKU</th>
                         <th class="px-3 py-3 text-left">ชื่อสินค้า</th>
                         <th class="px-3 py-3 text-left">หมวดหมู่</th>
-                        <th class="px-3 py-3 text-left">ชนิดยา</th>
                         <th class="px-3 py-3 text-right">ราคา</th>
                         <th class="px-3 py-3 text-center">สต็อก</th>
+                        <th class="px-3 py-3 text-center">หน่วย</th>
                         <th class="px-3 py-3 text-center">สถานะระบบ</th>
                         <th class="px-3 py-3 text-center">หน้าร้าน</th>
-                        <th class="px-3 py-3 text-center w-14">แก้ไข</th>
                         <th class="px-3 py-3 text-center">รายละเอียด</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y">
                     <?php if (empty($rows)): ?>
                         <tr>
-                            <td colspan="11" class="px-4 py-10 text-center text-gray-400">
+                            <td colspan="11" class="px-4 py-10 text-center text-gray-400"><!-- 11 cols: ☑ + รูป + รหัส + ชื่อ + หมวด + ราคา + สต็อก + หน่วย + สถานะ + หน้าร้าน + รายละเอียด -->
                                 <i class="fas fa-box-open text-3xl mb-2 block"></i>
                                 ไม่พบสินค้าตาม filter ที่เลือก
                                 <?php if ((int) ($stats['total_cnt'] ?? 0) === 0): ?>
@@ -597,12 +1005,27 @@ if (!function_exists('buildStorefrontQuery')) {
                                 ],
                             ];
                         ?>
+                            <?php $imgUrl = trim((string) ($r['image_url'] ?? '')); ?>
                             <tr class="hover:bg-gray-50" :class="selectedIds.includes(<?= $id ?>) ? 'bg-blue-50' : ''">
                                 <td class="px-3 py-2 text-center">
                                     <input type="checkbox" :checked="selectedIds.includes(<?= $id ?>)"
                                            @change="toggleRow(<?= $id ?>, $event.target.checked)"
                                            data-row-id="<?= $id ?>"
                                            class="row-checkbox rounded">
+                                </td>
+                                <td class="px-3 py-2 text-center">
+                                    <?php if ($imgUrl !== ''): ?>
+                                        <a href="/inventory/product-detail.php?id=<?= $id ?>" title="ดูรายละเอียดสินค้า">
+                                            <img src="<?= htmlspecialchars($imgUrl, ENT_QUOTES) ?>" alt=""
+                                                 loading="lazy"
+                                                 class="w-12 h-12 rounded-lg object-cover border border-gray-200 inline-block bg-white"
+                                                 onerror="this.outerHTML='<div class=\'w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 inline-flex items-center justify-center text-gray-300\'><i class=\'fas fa-image\'></i></div>';">
+                                        </a>
+                                    <?php else: ?>
+                                        <div class="w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 inline-flex items-center justify-center text-gray-300">
+                                            <i class="fas fa-image"></i>
+                                        </div>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="px-3 py-2">
                                     <div class="font-mono text-xs text-gray-800"><?= htmlspecialchars((string) $r['product_code']) ?></div>
@@ -637,23 +1060,6 @@ if (!function_exists('buildStorefrontQuery')) {
                                         <span class="text-gray-300">—</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="px-3 py-2">
-                                    <?php if (!empty($r['drug_type'])):
-                                        $dtColor = [
-                                            'OTC'        => 'bg-green-100 text-green-700',
-                                            'Rx'         => 'bg-red-100 text-red-700',
-                                            'Controlled' => 'bg-purple-100 text-purple-700',
-                                            'Supplement' => 'bg-blue-100 text-blue-700',
-                                            'Cosmetic'   => 'bg-pink-100 text-pink-700',
-                                        ][$r['drug_type']] ?? 'bg-gray-100 text-gray-700';
-                                    ?>
-                                        <span class="px-2 py-0.5 rounded text-xs <?= $dtColor ?>">
-                                            <?= htmlspecialchars((string) $r['drug_type']) ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="text-gray-300">—</span>
-                                    <?php endif; ?>
-                                </td>
                                 <td class="px-3 py-2 text-right">
                                     <?php if ($isZero): ?>
                                         <span class="text-red-500 font-medium">฿0</span>
@@ -672,6 +1078,29 @@ if (!function_exists('buildStorefrontQuery')) {
                                     ?>
                                     <span class="font-medium <?= $stockClass ?>"><?= number_format($stock) ?></span>
                                 </td>
+                                <td class="px-3 py-2 text-center text-xs">
+                                    <?php
+                                    $unitList  = trim((string) ($r['unit_list']  ?? ''));
+                                    $unitCount = (int)  ($r['unit_count'] ?? 0);
+                                    $baseUnit  = trim((string) ($r['unit']       ?? ''));
+                                    ?>
+                                    <?php if ($unitCount > 1): ?>
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 font-medium"
+                                              title="<?= htmlspecialchars($unitList, ENT_QUOTES) ?>">
+                                            <i class="fas fa-layer-group text-[10px]"></i>
+                                            <?= $unitCount ?> หน่วย
+                                        </span>
+                                        <div class="text-[10px] text-gray-500 mt-0.5 truncate" style="max-width:140px;" title="<?= htmlspecialchars($unitList, ENT_QUOTES) ?>">
+                                            <?= htmlspecialchars($unitList) ?>
+                                        </div>
+                                    <?php elseif ($unitList !== ''): ?>
+                                        <span class="text-gray-700"><?= htmlspecialchars($unitList) ?></span>
+                                    <?php elseif ($baseUnit !== ''): ?>
+                                        <span class="text-gray-700"><?= htmlspecialchars($baseUnit) ?></span>
+                                    <?php else: ?>
+                                        <span class="text-gray-300">—</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="px-3 py-2 text-center">
                                     <?php if ($isActive): ?>
                                         <span class="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">active</span>
@@ -689,18 +1118,12 @@ if (!function_exists('buildStorefrontQuery')) {
                                     </button>
                                 </td>
                                 <td class="px-3 py-2 text-center">
-                                    <button type="button" @click='openEditModal(<?= json_encode($modalData, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'
-                                            class="w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors <?= $anyOvr ? 'text-amber-500 hover:text-amber-600' : '' ?>"
-                                            title="<?= $anyOvr ? 'แก้ไข (มี admin override อยู่)' : 'แก้ไข' ?>">
-                                        <i class="fas fa-pen"></i>
-                                    </button>
-                                </td>
-                                <td class="px-3 py-2 text-center">
                                     <a href="/inventory/product-detail?id=<?= $id ?>"
-                                       class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100"
-                                       title="เปิดหน้ารายละเอียดสินค้า (open product detail)">
+                                       class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 <?= $anyOvr ? 'ring-1 ring-amber-300' : '' ?>"
+                                       title="<?= $anyOvr ? 'แก้ไข/ดูรายละเอียด (มี admin override)' : 'เปิดหน้ารายละเอียดสินค้า' ?>">
                                         <i class="fas fa-eye"></i>
                                         <span>ดูรายละเอียด</span>
+                                        <?php if ($anyOvr): ?><i class="fas fa-pen-square text-amber-500 text-[10px]"></i><?php endif; ?>
                                     </a>
                                 </td>
                             </tr>

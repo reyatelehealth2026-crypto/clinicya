@@ -14,6 +14,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+// 2026-05-27 — Route root-domain Mini App calls to correct tenant DB.
+require_once __DIR__ . '/../bootstrap/route_by_account.php';
 
 $db = Database::getInstance()->getConnection();
 

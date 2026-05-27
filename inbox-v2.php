@@ -440,6 +440,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                     throw new Exception('No items to dispense');
                 }
 
+                // 2026-05-27 — Hydrate from business_items so the medicine label
+                // shows description (สรรพคุณ) + usage_instructions (วิธีใช้) +
+                // product image even when the pharmacist didn't type them by hand.
+                foreach ($itemsArr as &$__itm) {
+                    $pid = (int) ($__itm['product_id'] ?? 0);
+                    if ($pid <= 0) continue;
+                    try {
+                        $s = $db->prepare(
+                            'SELECT description, usage_instructions, default_usage_text, image_url, photo_path,
+                                    generic_name, strength, manufacturer
+                             FROM business_items WHERE id = ? LIMIT 1'
+                        );
+                        $s->execute([$pid]);
+                        $bi = $s->fetch(PDO::FETCH_ASSOC);
+                        if (!$bi) continue;
+
+                        if (empty($__itm['indication']) && !empty($bi['description'])) {
+                            $__itm['indication'] = $bi['description'];
+                        }
+                        if (empty($__itm['usage_text'])) {
+                            $__itm['usage_text'] = $bi['usage_instructions'] ?: ($bi['default_usage_text'] ?? '');
+                        }
+                        if (empty($__itm['image'])) {
+                            $__itm['image'] = $bi['image_url'] ?: ($bi['photo_path'] ?? '');
+                        }
+                        if (empty($__itm['generic_name']) && !empty($bi['generic_name'])) {
+                            $__itm['generic_name'] = $bi['generic_name'];
+                        }
+                        if (empty($__itm['strength']) && !empty($bi['strength'])) {
+                            $__itm['strength'] = $bi['strength'];
+                        }
+                        if (empty($__itm['manufacturer']) && !empty($bi['manufacturer'])) {
+                            $__itm['manufacturer'] = $bi['manufacturer'];
+                        }
+                    } catch (\Throwable $e) {
+                        // ignore — keep raw item
+                    }
+                }
+                unset($__itm);
+
                 // Get user info with reply token
                 $stmt = $db->prepare("SELECT line_user_id, line_account_id, display_name, reply_token, reply_token_expires FROM users WHERE id = ?");
                 $stmt->execute([$userId]);
@@ -448,21 +488,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                     throw new Exception('User not found');
                 }
 
-                // Get shop info — pharmacist input wins, fall back to line_accounts + shop_settings
-                $shopInfo = ['name' => 'ร้านยา', 'address' => '', 'phone' => '', 'open_hours' => '08:00-24:00 น.', 'pharmacist' => $pharmacistName];
+                // Get shop info — pharmacist input wins, fall back to shop_settings + line_accounts.
+                // 2026-05-27: shop_settings actually uses shop_name + contact_phone + shop_address (not name/phone/address).
+                $shopInfo = ['name' => '', 'address' => '', 'phone' => '', 'logo' => '', 'open_hours' => '08:00-24:00 น.', 'pharmacist' => $pharmacistName];
                 try {
-                    $stmt = $db->prepare("SELECT * FROM line_accounts WHERE id = ?");
-                    $stmt->execute([$user['line_account_id']]);
-                    $lineAccount = $stmt->fetch(PDO::FETCH_ASSOC);
-                    if ($lineAccount) {
-                        $shopInfo['name'] = $lineAccount['display_name'] ?? $lineAccount['channel_name'] ?? 'ร้านยา';
-                    }
-                    $stmt = $db->prepare("SELECT * FROM shop_settings WHERE line_account_id = ?");
+                    $stmt = $db->prepare("SELECT shop_name, address, shop_address, contact_phone, shop_logo, pharmacist_name FROM shop_settings WHERE line_account_id = ?");
                     $stmt->execute([$user['line_account_id']]);
                     $shopSettings = $stmt->fetch(PDO::FETCH_ASSOC);
                     if ($shopSettings) {
-                        $shopInfo['address'] = $shopSettings['address'] ?? '';
-                        $shopInfo['phone'] = $shopSettings['phone'] ?? '';
+                        $shopInfo['name']    = trim((string) ($shopSettings['shop_name'] ?? ''));
+                        $shopInfo['address'] = trim((string) ($shopSettings['shop_address'] ?? $shopSettings['address'] ?? ''));
+                        $shopInfo['phone']   = trim((string) ($shopSettings['contact_phone'] ?? ''));
+                        // Pharmacist fallback when admin didn't type a name — use the licensed pharmacist on file
+                        if ($shopInfo['pharmacist'] === '' && !empty($shopSettings['pharmacist_name'])) {
+                            $shopInfo['pharmacist'] = (string) $shopSettings['pharmacist_name'];
+                        }
+                        $rawLogo = (string) ($shopSettings['shop_logo'] ?? '');
+                        if ($rawLogo !== '') {
+                            if (preg_match('#^https?://#i', $rawLogo)) {
+                                $shopInfo['logo'] = $rawLogo;
+                            } else {
+                                $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                                $host = $_SERVER['HTTP_HOST'] ?? 're-ya.com';
+                                $shopInfo['logo'] = $scheme . '://' . $host . '/' . ltrim($rawLogo, '/');
+                            }
+                        }
+                    }
+                    // Final fallback: line_accounts.name or display_name
+                    if ($shopInfo['name'] === '') {
+                        $stmt = $db->prepare("SELECT name FROM line_accounts WHERE id = ?");
+                        $stmt->execute([$user['line_account_id']]);
+                        $la = $stmt->fetch(PDO::FETCH_ASSOC);
+                        $shopInfo['name'] = trim((string) ($la['name'] ?? '')) ?: 'ร้านยา';
                     }
                 } catch (Exception $e) {}
                 if (!empty($shopNameInput)) {
@@ -1599,6 +1656,20 @@ function formatThaiDateTime($datetime)
         max-width: 100%;
     }
 
+    /* Bubble that wraps a Flex message — let it grow to the flex bubble's size
+       (transparent so the inner white card looks like the real LINE preview).
+       2026-05-25: ตอบโจทย์ "flex หน้าแชทมันเล็ก" */
+    .chat-bubble:has(.flex-message-container) {
+        background: transparent !important;
+        padding: 4px !important;
+        max-width: 360px !important;
+        box-shadow: none !important;
+    }
+    .flex-message-container {
+        display: block;
+        width: 100%;
+    }
+
     .chat-incoming {
         background: #E8E8E8;
         color: #1A1A1A;
@@ -1659,6 +1730,64 @@ function formatThaiDateTime($datetime)
     /* Chat area background - Light gray like LINE OA */
     #chatBox {
         background: #F0F0F0;
+    }
+
+    .chat-workflow-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+        overflow-x: auto;
+        flex-shrink: 0;
+    }
+
+    .chat-workflow-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+        margin-right: 2px;
+    }
+
+    .chat-workflow-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 34px;
+        padding: 7px 10px;
+        border: 1px solid #dbe4ef;
+        border-radius: 8px;
+        background: #f8fafc;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+        transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .chat-workflow-btn:hover {
+        background: #eef7f3;
+        border-color: #9fd8c1;
+        color: #235e45;
+    }
+
+    .chat-workflow-btn.primary {
+        background: #235e45;
+        border-color: #235e45;
+        color: #ffffff;
+    }
+
+    .chat-workflow-btn.primary:hover {
+        background: #1b4d38;
+        border-color: #1b4d38;
+        color: #ffffff;
     }
 
     .chat-area-wrapper {
@@ -2908,6 +3037,49 @@ function formatThaiDateTime($datetime)
                             </div>
                         </div>
 
+                        <?php $chatWorkflowUserId = (int) ($selectedUser['id'] ?? 0); ?>
+                        <div class="chat-workflow-bar" aria-label="งานด่วนในหน้าแชท">
+                            <div class="chat-workflow-label">
+                                <i class="fas fa-bolt"></i>
+                                <span>งานด่วน</span>
+                            </div>
+                            <button type="button" class="chat-workflow-btn primary"
+                                onclick="ChatWorkflow.openCustomer()">
+                                <i class="fas fa-user-circle"></i>
+                                <span>ข้อมูลลูกค้า</span>
+                            </button>
+                            <button type="button" class="chat-workflow-btn"
+                                onclick="ChatWorkflow.openNotes()">
+                                <i class="fas fa-sticky-note"></i>
+                                <span>โน้ต</span>
+                            </button>
+                            <button type="button" class="chat-workflow-btn"
+                                onclick="ChatWorkflow.openDispense()">
+                                <i class="fas fa-prescription-bottle-alt"></i>
+                                <span>จ่ายยา</span>
+                            </button>
+                            <button type="button" class="chat-workflow-btn"
+                                onclick="ChatWorkflow.openPath('/shop/orders?user_id=<?= $chatWorkflowUserId ?>')">
+                                <i class="fas fa-receipt"></i>
+                                <span>ออเดอร์</span>
+                            </button>
+                            <button type="button" class="chat-workflow-btn"
+                                onclick="ChatWorkflow.openPath('/appointments-admin?user_id=<?= $chatWorkflowUserId ?>')">
+                                <i class="fas fa-calendar-check"></i>
+                                <span>นัดหมาย</span>
+                            </button>
+                            <button type="button" class="chat-workflow-btn"
+                                onclick="ChatWorkflow.openPath('/inventory?tab=products')">
+                                <i class="fas fa-box"></i>
+                                <span>สินค้า</span>
+                            </button>
+                            <button type="button" class="chat-workflow-btn"
+                                onclick="ChatWorkflow.sendMenu()">
+                                <i class="fas fa-paper-plane"></i>
+                                <span>ส่งเมนู</span>
+                            </button>
+                        </div>
+
                         <!-- Chat Messages -->
                         <div id="chatBox" class="flex-1 overflow-y-auto p-4 space-y-3 chat-scroll">
                             <?php foreach ($messages as $msg):
@@ -3317,9 +3489,10 @@ function formatThaiDateTime($datetime)
                                     <textarea name="message" id="messageInput" rows="3"
                                         class="w-full bg-transparent border-0 outline-none text-sm resize-none"
                                         style="min-height: 80px; max-height: 200px;"
-                                        placeholder="พิมพ์ข้อความ... (Tab เพื่อใช้ Ghost Draft)"
+                                        placeholder="พิมพ์ข้อความ... (วางรูป/PDF จากคลิปบอร์ดได้เลย, Tab เพื่อใช้ Ghost Draft)"
                                         oninput="autoResize(this); handleMessageInput(this)"
-                                        onkeydown="handleKeyDown(event)"></textarea>
+                                        onkeydown="handleKeyDown(event)"
+                                        onpaste="handleClipboardPaste(event)"></textarea>
                                     <div id="ghostDraftIndicator" class="ghost-draft-indicator hidden">
                                         <i class="fas fa-magic"></i>
                                         <span>Tab เพื่อใช้</span>
@@ -3437,10 +3610,13 @@ function formatThaiDateTime($datetime)
                                     </button>
                                 </div>
                             </div>
-                            <!-- Mode Switcher - Order: CRM / เทมเพลต (AI removed for performance) -->
+                            <!-- Mode Switcher - Order: CRM / AI / Templates -->
                             <div class="hud-mode-switcher">
                                 <button class="hud-mode-btn active" data-mode="crm" onclick="HUDMode.switchMode('crm')">
                                     <i class="fas fa-user-circle"></i> CRM
+                                </button>
+                                <button class="hud-mode-btn" data-mode="ai" onclick="HUDMode.switchMode('ai')">
+                                    <i class="fas fa-robot"></i> AI
                                 </button>
                                 <button class="hud-mode-btn" data-mode="templates" onclick="HUDMode.switchMode('templates')">
                                     <i class="fas fa-file-alt"></i> เทมเพลต
@@ -4038,6 +4214,72 @@ function formatThaiDateTime($datetime)
             function togglePanel() {
                 toggleHUD();
             }
+
+            window.ChatWorkflow = {
+                openPath(url) {
+                    window.open(url, '_blank', 'noopener');
+                },
+
+                ensureHUDVisible() {
+                    const hud = document.getElementById('hudDashboard');
+                    if (hud && hud.classList.contains('collapsed')) {
+                        toggleHUD();
+                    }
+                },
+
+                focusHUDSection(sectionId, focusSelector = null) {
+                    this.ensureHUDVisible();
+                    window.setTimeout(() => {
+                        const section = document.getElementById(sectionId);
+                        if (!section) return;
+
+                        section.classList.remove('collapsed');
+                        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                        if (focusSelector) {
+                            const focusTarget = document.querySelector(focusSelector);
+                            if (focusTarget) {
+                                window.setTimeout(() => focusTarget.focus(), 180);
+                            }
+                        }
+                    }, 180);
+                },
+
+                openCustomer() {
+                    this.focusHUDSection('crmInfoSection');
+                },
+
+                openNotes() {
+                    this.focusHUDSection('crmNotesSection', '#crmNoteInput');
+                },
+
+                openDispense() {
+                    if (typeof window.openDispenseModal === 'function') {
+                        window.openDispenseModal();
+                        return;
+                    }
+
+                    if (typeof showNotification === 'function') {
+                        showNotification('ยังไม่พบหน้าต่างจ่ายยา', 'warning');
+                    }
+                },
+
+                sendMenu() {
+                    if (typeof sendRichMenu === 'function') {
+                        sendRichMenu();
+                        return;
+                    }
+
+                    if (window.FAB && typeof window.FAB.action === 'function') {
+                        window.FAB.action('menu');
+                        return;
+                    }
+
+                    if (typeof showNotification === 'function') {
+                        showNotification('ยังไม่พบคำสั่งส่งเมนู', 'warning');
+                    }
+                }
+            };
 
             /**
              * Generate Ghost Draft (defined early for onclick handlers)
@@ -6476,6 +6718,183 @@ function formatThaiDateTime($datetime)
                 chatBox.appendChild(msgDiv);
             }
 
+            // 2026-05-26: restore missing handlers that HTML still references.
+            // ReferenceError fix — keep behavior compatible with existing single-file pipeline.
+            async function handleMultipleImageSelect(input) {
+                if (!input || !input.files || !input.files.length) return;
+
+                // Single file → existing preview-then-send flow.
+                if (input.files.length === 1) {
+                    handleImageSelect(input);
+                    return;
+                }
+
+                // Multi-file → confirm + send sequentially via the existing single-file pipeline.
+                const files = Array.from(input.files);
+                if (!confirm(`ส่งรูป ${files.length} รูปติดต่อกัน?`)) {
+                    input.value = '';
+                    return;
+                }
+                for (const file of files) {
+                    selectedImageFile = file;
+                    try { await sendImage(); } catch (e) { console.error('multi-send', e); }
+                }
+                input.value = '';
+            }
+
+            const EMOJI_CATEGORIES = {
+                smileys:  ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','😘','🥰','🙂','🤗','🤩','🤔','🙃','😐','😶','😏','😒','🙄','😬','😮','😯','😢','😭','😡','🥲','🥹','😴','🤤','🤒','🤕','🤧','🥳','🤠'],
+                gestures: ['👍','👎','👌','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','✋','🤚','🖐️','🖖','👋','🤝','🙏','💪','👀','👁️','💋','🫶','🫰','🤌','🤏'],
+                hearts:   ['❤️','🧡','💛','💚','💙','💜','🤎','🖤','🤍','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','♥️'],
+                objects:  ['🎁','🎀','🎊','🎉','🎂','🍰','🧁','🎈','🎵','🎶','📱','💻','⌚','📷','🔋','💡','🔥','💧','⭐','✨','🌟','💫','🏆','🥇','🥈','🥉','🏅','🎯','🎮','📦','💊','💉','🩺','🩹','🧴','🧼'],
+                food:     ['🍔','🍟','🍕','🌭','🥪','🌮','🌯','🥗','🍝','🍜','🍲','🍛','🍣','🍱','🍙','🍚','🍞','🥐','🍳','🥚','🥩','🍗','🍖','🍤','🍦','🍩','🍪','🍫','🍬','🍭','🍯','☕','🍵','🥤','🍺','🍶','🍇','🍈','🍉','🍊','🍋','🍌','🍍','🍎','🍐','🍑','🍒','🍓','🥝','🍅','🥥','🥑','🍆','🥔','🥕','🌽','🌶️','🥒','🥬','🥦','🍄','🥜'],
+                nature:   ['🌸','🌹','🌺','🌻','🌷','🥀','💐','🌾','🌱','🌲','🌳','🌴','🌵','🌿','☘️','🍀','🍁','🍂','🍃','🌍','🌙','☀️','🌤️','⛅','🌈','☁️','🌧️','⛈️','❄️','☃️','🌊','🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐔','🐧','🦆']
+            };
+
+            function toggleEmojiPicker() {
+                const c = document.getElementById('emojiPickerContainer');
+                if (!c) return;
+                const willOpen = !c.classList.contains('active');
+                c.classList.toggle('active');
+                if (!willOpen) return;
+
+                showEmojiCategory('smileys');
+                // close on outside-click (one-shot listener)
+                setTimeout(() => {
+                    const off = (e) => {
+                        if (c.contains(e.target)) return;
+                        if (e.target.closest('button[onclick*="toggleEmojiPicker"]')) return;
+                        c.classList.remove('active');
+                        document.removeEventListener('click', off);
+                    };
+                    document.addEventListener('click', off);
+                }, 0);
+            }
+
+            function showEmojiCategory(category) {
+                const grid = document.getElementById('emojiGrid');
+                if (!grid) return;
+                const list = EMOJI_CATEGORIES[category] || [];
+                grid.innerHTML = list
+                    .map(e => `<button type="button" class="emoji-btn" onclick="insertEmoji('${e}')">${e}</button>`)
+                    .join('');
+                document.querySelectorAll('.emoji-category-btn').forEach(b => b.classList.remove('active'));
+                const activeBtn = Array.from(document.querySelectorAll('.emoji-category-btn'))
+                    .find(b => (b.getAttribute('onclick') || '').includes(`'${category}'`));
+                if (activeBtn) activeBtn.classList.add('active');
+            }
+
+            function insertEmoji(emoji) {
+                const ta = document.getElementById('messageInput');
+                if (!ta) return;
+                const start = ta.selectionStart ?? ta.value.length;
+                const end   = ta.selectionEnd   ?? ta.value.length;
+                ta.value = ta.value.slice(0, start) + emoji + ta.value.slice(end);
+                const pos = start + emoji.length;
+                ta.setSelectionRange(pos, pos);
+                ta.focus();
+                ta.dispatchEvent(new Event('input', { bubbles: true })); // re-trigger autoResize + ghost draft
+            }
+
+            // 2026-05-26: missing companion to #pdfInput onchange — same fix as image.
+            async function handleMultiplePdfSelect(input) {
+                if (!input || !input.files || !input.files.length) return;
+                if (input.files.length === 1) { handlePdfSelect(input); return; }
+
+                const MAX = 10 * 1024 * 1024;
+                const valid = Array.from(input.files).filter(f => {
+                    if (!f.type.includes('pdf') && !/\.pdf$/i.test(f.name)) {
+                        showNotification('ข้าม ' + f.name + ' (ไม่ใช่ PDF)', 'warning'); return false;
+                    }
+                    if (f.size > MAX) {
+                        showNotification('ข้าม ' + f.name + ' (>10MB)', 'warning'); return false;
+                    }
+                    return true;
+                });
+                if (!valid.length) { input.value = ''; return; }
+                if (!confirm(`ส่ง PDF ${valid.length} ไฟล์ติดต่อกัน?`)) { input.value = ''; return; }
+                for (const f of valid) {
+                    selectedPdfFile = f;
+                    try { await sendPdf(); } catch (e) { console.error('multi-pdf-send', e); }
+                }
+                input.value = '';
+            }
+
+            // 2026-05-26: paste-from-clipboard support — รับทั้งรูป (screenshot/copied image)
+            // และ PDF (copied from File Explorer). Plain text paste behaves normally.
+            async function handleClipboardPaste(e) {
+                if (!e.clipboardData || !e.clipboardData.items) return;
+                const fileItems = Array.from(e.clipboardData.items).filter(it => it.kind === 'file');
+                if (!fileItems.length) return; // text-only paste → leave alone
+
+                e.preventDefault();
+                const files = fileItems.map(it => it.getAsFile()).filter(Boolean);
+                if (!files.length) return;
+
+                const images = files.filter(f => (f.type || '').startsWith('image/'));
+                const pdfs   = files.filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+                const others = files.filter(f => !images.includes(f) && !pdfs.includes(f));
+
+                if (others.length) {
+                    showNotification(`ข้าม ${others.length} ไฟล์ที่ไม่รองรับ (รับเฉพาะรูปและ PDF)`, 'warning');
+                }
+
+                // Single-image paste → preview-then-send (เหมือนเลือกจาก file picker)
+                if (images.length === 1 && pdfs.length === 0) {
+                    selectedImageFile = images[0];
+                    const preview     = document.getElementById('imagePreview');
+                    const previewImg  = document.getElementById('previewImg');
+                    const previewName = document.getElementById('previewName');
+                    const previewSize = document.getElementById('previewSize');
+                    if (preview && previewImg) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => { previewImg.src = ev.target.result; };
+                        reader.readAsDataURL(selectedImageFile);
+                        previewName.textContent = selectedImageFile.name || 'pasted-image.png';
+                        previewSize.textContent = formatFileSize(selectedImageFile.size);
+                        preview.classList.remove('hidden');
+                        // Make sure the action send button is wired to sendImage (might have been swapped to sendPdf).
+                        const sendBtn = preview.querySelector('button[onclick="sendPdf()"]');
+                        if (sendBtn) {
+                            sendBtn.setAttribute('onclick', 'sendImage()');
+                            sendBtn.innerHTML = '<i class="fas fa-paper-plane mr-1"></i>ส่งรูป';
+                        }
+                    }
+                    showNotification('วางรูปแล้ว — กดส่งเพื่อยืนยัน', 'info');
+                    return;
+                }
+
+                // Single-PDF paste → preview-then-send
+                if (pdfs.length === 1 && images.length === 0) {
+                    if (pdfs[0].size > 10 * 1024 * 1024) {
+                        showNotification('ไฟล์ PDF ต้องมีขนาดไม่เกิน 10MB', 'error');
+                        return;
+                    }
+                    selectedPdfFile = pdfs[0];
+                    showPdfPreview(selectedPdfFile);
+                    showNotification('วาง PDF แล้ว — กดส่งเพื่อยืนยัน', 'info');
+                    return;
+                }
+
+                // Multi-file paste → confirm + send sequentially via existing single-file pipelines.
+                const total = images.length + pdfs.length;
+                if (total === 0) return;
+                if (!confirm(`ส่งไฟล์ที่วาง ${total} ไฟล์? (รูป ${images.length}, PDF ${pdfs.length})`)) return;
+
+                for (const img of images) {
+                    selectedImageFile = img;
+                    try { await sendImage(); } catch (err) { console.error('paste-img', err); }
+                }
+                for (const pdf of pdfs) {
+                    if (pdf.size > 10 * 1024 * 1024) {
+                        showNotification('ข้าม ' + pdf.name + ' (>10MB)', 'warning');
+                        continue;
+                    }
+                    selectedPdfFile = pdf;
+                    try { await sendPdf(); } catch (err) { console.error('paste-pdf', err); }
+                }
+            }
+
             function openImage(src) {
                 const lightbox = document.getElementById('imageLightbox');
                 const lightboxImg = document.getElementById('lightboxImage');
@@ -7675,8 +8094,11 @@ function formatThaiDateTime($datetime)
                 const body = bubble.body ? renderFlexBox(bubble.body) : '';
                 const footer = bubble.footer ? renderFlexBox(bubble.footer) : '';
 
+                // 2026-05-25: ขยาย flex preview ในแชท (ตามคำขอ Atiruj — "flex หน้าแชทมันเล็ก")
+                // เดิม: max-width 200px, font-size 10px, scale 0.85 → เล็กไป อ่านไม่ออก
+                // ใหม่: max-width 340px, font-size 13px, ไม่ scale → ใกล้กับขนาดที่ลูกค้าเห็นใน LINE จริง
                 return `
-                    <div class="flex-bubble" style="width: 100%; max-width: 200px; max-height: 280px; border-radius: 8px; overflow: hidden; overflow-y: auto; box-shadow: 0 1px 4px rgba(0,0,0,0.1); background: white; font-size: 10px; transform: scale(0.85); transform-origin: top left; scrollbar-width: thin;">
+                    <div class="flex-bubble" style="width: 100%; max-width: 340px; max-height: 480px; border-radius: 10px; overflow: hidden; overflow-y: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.08); background: white; font-size: 13px; line-height: 1.4; scrollbar-width: thin;">
                         ${header}
                         ${hero}
                         ${body}
@@ -8950,10 +9372,10 @@ function formatThaiDateTime($datetime)
 
         const messageInput = document.getElementById('messageInput');
         const baseUrl = window.location.origin;
-        const liffBase = `${baseUrl}/liff/index.php`;
+        const miniAppBase = `${baseUrl}/miniapp`;
 
         if (messageInput) {
-            messageInput.value = `📋 เมนูบริการ\n\n🛒 สั่งซื้อสินค้า: ${liffBase}?page=shop\n💊 ปรึกษาเภสัชกร: ${liffBase}?page=consult\n📦 ติดตามออเดอร์: ${liffBase}?page=orders\n⭐ แต้มสะสม: ${liffBase}?page=points\n\n✨ กดลิงก์เพื่อใช้บริการได้เลยค่ะ`;
+            messageInput.value = `📋 เมนูบริการ\n\n🛒 สั่งซื้อสินค้า: ${miniAppBase}/shop/\n💊 ปรึกษาเภสัชกร: ${miniAppBase}/ai-chat/\n📦 ติดตามออเดอร์: ${miniAppBase}/orders/\n⭐ โปรไฟล์ / แต้มสะสม: ${miniAppBase}/profile/\n\n✨ กดลิงก์เพื่อใช้บริการได้เลยค่ะ`;
             autoResize(messageInput);
             messageInput.focus();
             showNotification('เมนูพร้อมส่ง', 'success');
@@ -11665,113 +12087,58 @@ function formatThaiDateTime($datetime)
                 <p class="font-bold text-green-700" id="medDetailName">-</p>
             </div>
 
-            <div class="mb-3 p-3 bg-blue-50 rounded-lg">
-                <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" id="medIsMedicine" checked onchange="medToggleMedicineFields()" class="w-5 h-5 text-blue-500 rounded">
-                    <span class="text-sm font-medium text-blue-700">💊 เป็นยา (แสดงรายละเอียดการใช้ยา)</span>
-                </label>
-            </div>
+            <!-- 2026-05-27: removed "เป็นยา/ไม่ใช่ยา" toggle — always treat as medicine -->
+            <input type="hidden" id="medIsMedicine" value="1">
 
             <div id="medMedicineFields">
                 <div class="mb-3">
-                    <label class="block text-xs font-medium text-gray-600 mb-1">ข้อบ่งใช้ (Indication)</label>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">
+                        สรรพคุณ / ข้อบ่งใช้ <span class="text-emerald-600 text-[10px]">(ดึงจากสินค้าให้อัตโนมัติ)</span>
+                    </label>
                     <input type="text" id="medIndication" class="w-full border rounded-lg px-3 py-2 text-sm" placeholder="เช่น แก้ปวด, ลดไข้, แก้อักเสบ">
                 </div>
-                <div class="grid grid-cols-3 gap-2 mb-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">รับประทานครั้งละ <span class="text-amber-600 font-semibold">⚠️ ต่อมื้อ</span></label>
-                        <input type="number" id="medDosage" class="w-full border rounded-lg px-3 py-2 text-sm text-center" value="1" min="0.5" step="0.5">
-                        <p class="text-[10px] text-amber-700 mt-0.5">💡 จำนวนต่อมื้อ ไม่ใช่จำนวนรวมที่จ่าย</p>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">หน่วย</label>
-                        <select id="medDosageUnit" class="w-full border rounded-lg px-2 py-2 text-sm">
-                            <option value="เม็ด">เม็ด</option>
-                            <option value="แคปซูล">แคปซูล</option>
-                            <option value="ช้อนชา">ช้อนชา</option>
-                            <option value="ช้อนโต๊ะ">ช้อนโต๊ะ</option>
-                            <option value="มล.">มล.</option>
-                            <option value="ซอง">ซอง</option>
-                            <option value="หยด">หยด</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">วันละ</label>
-                        <select id="medFrequency" class="w-full border rounded-lg px-2 py-2 text-sm">
-                            <option value="1">1 ครั้ง</option>
-                            <option value="2">2 ครั้ง</option>
-                            <option value="3" selected>3 ครั้ง</option>
-                            <option value="4">4 ครั้ง</option>
-                            <option value="prn">เมื่อมีอาการ</option>
-                        </select>
-                    </div>
-                </div>
-
                 <div class="mb-3">
-                    <label class="block text-xs font-medium text-gray-600 mb-2">เวลารับประทาน</label>
-                    <div class="flex gap-2">
-                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="medMealTiming" value="before" class="text-green-500"><span class="text-xs">ก่อนอาหาร</span>
-                        </label>
-                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="medMealTiming" value="after" checked class="text-green-500"><span class="text-xs">หลังอาหาร</span>
-                        </label>
-                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="medMealTiming" value="with" class="text-green-500"><span class="text-xs">พร้อมอาหาร</span>
-                        </label>
-                    </div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">
+                        วิธีใช้ <span class="text-emerald-600 text-[10px]">(ดึงจากสินค้าให้อัตโนมัติ — แก้ไขได้)</span>
+                    </label>
+                    <textarea id="medUsageText" rows="2" class="w-full border rounded-lg px-3 py-2 text-sm resize-y" placeholder="เช่น รับประทานครั้งละ 1 เม็ดทุก 4-6 ชั่วโมง หลังอาหาร หรือเมื่อมีอาการ"></textarea>
                 </div>
-
-                <div class="mb-3">
-                    <label class="block text-xs font-medium text-gray-600 mb-2">มื้อที่รับประทาน</label>
-                    <div class="grid grid-cols-4 gap-2">
-                        <label class="flex flex-col items-center p-2 border rounded-lg cursor-pointer hover:bg-yellow-50 has-[:checked]:bg-yellow-100 has-[:checked]:border-yellow-400">
-                            <span class="text-xl">🌅</span><input type="checkbox" name="medTimeOfDay" value="morning" checked class="mt-1"><span class="text-xs">เช้า</span>
-                        </label>
-                        <label class="flex flex-col items-center p-2 border rounded-lg cursor-pointer hover:bg-orange-50 has-[:checked]:bg-orange-100 has-[:checked]:border-orange-400">
-                            <span class="text-xl">☀️</span><input type="checkbox" name="medTimeOfDay" value="noon" checked class="mt-1"><span class="text-xs">กลางวัน</span>
-                        </label>
-                        <label class="flex flex-col items-center p-2 border rounded-lg cursor-pointer hover:bg-blue-50 has-[:checked]:bg-blue-100 has-[:checked]:border-blue-400">
-                            <span class="text-xl">🌆</span><input type="checkbox" name="medTimeOfDay" value="evening" checked class="mt-1"><span class="text-xs">เย็น</span>
-                        </label>
-                        <label class="flex flex-col items-center p-2 border rounded-lg cursor-pointer hover:bg-purple-50 has-[:checked]:bg-purple-100 has-[:checked]:border-purple-400">
-                            <span class="text-xl">🌙</span><input type="checkbox" name="medTimeOfDay" value="bedtime" class="mt-1"><span class="text-xs">ก่อนนอน</span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="block text-xs font-medium text-gray-600 mb-2">ประเภทการใช้</label>
-                    <div class="flex gap-2">
-                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="medUsageType" value="internal" checked class="text-green-500"><span class="text-xs">💊 ยาใช้ภายใน</span>
-                        </label>
-                        <label class="flex items-center gap-1 px-3 py-2 border rounded-lg cursor-pointer hover:bg-gray-50">
-                            <input type="radio" name="medUsageType" value="external" class="text-green-500"><span class="text-xs">🧴 ยาใช้ภายนอก</span>
-                        </label>
-                    </div>
-                </div>
+                <!-- 2026-05-27: removed รับประทาน/เวลา/มื้อ/ประเภท sections — all covered by "วิธีใช้" textarea above.
+                     Hidden defaults preserved so save logic keeps working without changes. -->
+                <input type="hidden" id="medDosage"      value="1">
+                <input type="hidden" id="medDosageUnit"  value="เม็ด">
+                <input type="hidden" id="medFrequency"   value="3">
+                <input type="hidden" name="medMealTiming" id="medMealTimingHidden" value="after">
             </div>
 
             <div class="mb-3" id="medSpecialInstSection">
-                <label class="block text-xs font-medium text-gray-600 mb-2">คำแนะนำพิเศษ</label>
+                <label class="block text-xs font-medium text-gray-600 mb-2">⚠️ คำเตือนเพิ่มเติม</label>
                 <div class="grid grid-cols-2 gap-2 text-xs">
-                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="before_meal_30"><span>ก่อนอาหาร 30 นาที</span></label>
-                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="after_meal_immediately"><span>หลังอาหารทันที</span></label>
-                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="take_until_finish"><span>ทานยาติดต่อกันจนหมด</span></label>
-                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="drink_water"><span>ดื่มน้ำตามมากๆ</span></label>
-                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="drowsiness"><span>⚠️ ยานี้อาจทำให้ง่วงซึม</span></label>
-                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"><input type="checkbox" name="medSpecialInst" value="no_alcohol"><span>⚠️ ห้ามดื่มแอลกอฮอล์</span></label>
+                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-red-50"><input type="checkbox" name="medSpecialInst" value="drowsiness"><span>ยานี้อาจทำให้ง่วงซึม</span></label>
+                    <label class="flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-red-50"><input type="checkbox" name="medSpecialInst" value="no_alcohol"><span>ห้ามดื่มแอลกอฮอล์</span></label>
                 </div>
             </div>
 
             <div class="mb-3">
-                <label class="block text-xs font-medium text-gray-600 mb-1">จำนวนที่จ่าย</label>
+                <label class="block text-xs font-medium text-gray-600 mb-1">จำนวนที่จ่าย <span class="text-gray-400">(หน่วยบรรจุ ไม่ใช่หน่วยกิน)</span></label>
                 <div class="flex items-center gap-2">
                     <button type="button" onclick="medAdjustQty(-1)" class="w-10 h-10 bg-gray-100 rounded-lg hover:bg-gray-200 text-lg">-</button>
                     <input type="number" id="medQuantity" class="w-20 border rounded-lg px-3 py-2 text-center text-lg font-bold" value="1" min="1">
                     <button type="button" onclick="medAdjustQty(1)" class="w-10 h-10 bg-gray-100 rounded-lg hover:bg-gray-200 text-lg">+</button>
-                    <span class="text-sm text-gray-500" id="medUnitLabel">ชิ้น</span>
+                    <select id="medDispenseUnit" class="flex-1 border rounded-lg px-2 py-2 text-sm">
+                        <option value="ชิ้น">ชิ้น</option>
+                        <option value="กล่อง">กล่อง</option>
+                        <option value="กระปุก">กระปุก</option>
+                        <option value="ขวด">ขวด</option>
+                        <option value="แผง">แผง</option>
+                        <option value="ซอง">ซอง</option>
+                        <option value="หลอด">หลอด</option>
+                        <option value="ห่อ">ห่อ</option>
+                        <option value="แพ็ค">แพ็ค</option>
+                        <option value="เม็ด">เม็ด</option>
+                        <option value="แคปซูล">แคปซูล</option>
+                        <option value="__custom__">อื่นๆ (พิมพ์เอง)…</option>
+                    </select>
                 </div>
             </div>
 
@@ -11836,14 +12203,18 @@ function formatThaiDateTime($datetime)
                 } catch (e) {}
 
                 if (products.length > 0) {
+                    // Cache the current result set so click handler can pull full product detail
+                    // (description, usage_instructions, etc.) without re-fetching.
+                    window.__dispenseSearchCache = {};
+                    products.slice(0, 8).forEach(p => { window.__dispenseSearchCache[String(p.id)] = p; });
+
                     resultsDiv.innerHTML = products.slice(0, 8).map(p => {
                         const pid = Number(p.id) || 0;
                         const pname = escHtml(p.name || '');
                         const pprice = Number(p.price || 0);
-                        const punit = escHtml(p.unit || 'ชิ้น');
                         const psku = escHtml(p.sku || '');
                         return `<div class="p-2 hover:bg-purple-50 cursor-pointer text-xs border-b last:border-0 dispense-result-item"
-                                     data-id="${pid}" data-name="${pname}" data-price="${pprice}" data-unit="${punit}">
+                                     data-id="${pid}">
                             <div class="font-medium text-gray-800">${pname}</div>
                             <div class="text-gray-500 flex gap-2">
                                 ${psku ? `<span>${psku}</span>` : ''}
@@ -11852,15 +12223,12 @@ function formatThaiDateTime($datetime)
                             </div>
                         </div>`;
                     }).join('');
-                    // Click delegation — avoids embedding JSON strings in onclick attribute
+                    // Click delegation — passes the FULL cached product object so dispenseAddItem
+                    // can pre-fill description + usage_instructions + generic_name + manufacturer.
                     resultsDiv.querySelectorAll('.dispense-result-item').forEach(el => {
                         el.addEventListener('click', () => {
-                            window.dispenseAddItem(
-                                Number(el.dataset.id),
-                                el.dataset.name,
-                                Number(el.dataset.price),
-                                el.dataset.unit
-                            );
+                            const p = window.__dispenseSearchCache[el.dataset.id];
+                            if (p) window.dispenseAddItem(p);
                         });
                     });
                 } else {
@@ -11873,17 +12241,45 @@ function formatThaiDateTime($datetime)
         }, 200);
     };
 
-    window.dispenseAddItem = function (productId, name, price, unit) {
+    // 2026-05-27: now accepts the FULL product object so we can pre-fill
+    // ข้อบ่งใช้ + วิธีใช้ + generic_name + manufacturer + image without an extra round-trip.
+    window.dispenseAddItem = function (productOrId, name, price, unit) {
+        // Back-compat: old call shape (productId, name, price, unit)
+        let p;
+        if (typeof productOrId === 'object' && productOrId !== null) {
+            p = productOrId;
+        } else {
+            p = { id: productOrId, name, price, unit };
+        }
+        const productId = Number(p.id) || 0;
         const existing = dispenseItems.find(i => i.product_id === productId);
         if (existing) {
             openMedicineDetail(dispenseItems.indexOf(existing));
         } else {
+            const usageDefault = (p.usage_instructions || p.default_usage_text || '').trim();
+            const indicationDefault = (p.description || '').trim();
             dispenseItems.push({
-                product_id: productId, name, price, unit: unit || 'ชิ้น', qty: 1,
-                isMedicine: true, indication: '', dosage: 1, dosageUnit: 'เม็ด',
-                frequency: '3', mealTiming: 'after',
-                timeOfDay: ['morning', 'noon', 'evening'],
-                usageType: 'internal', specialInstructions: [], notes: ''
+                product_id:        productId,
+                name:              p.name || '',
+                price:             Number(p.price) || 0,
+                unit:              (p.unit || 'ชิ้น'),
+                qty:               1,
+                isMedicine:        true,
+                indication:        indicationDefault,
+                usage_text:        usageDefault,
+                generic_name:      p.generic_name || '',
+                strength:          p.strength || '',
+                manufacturer:      p.manufacturer || '',
+                image:             p.image_url || '',
+                dosage:            1,
+                dosageUnit:        'เม็ด',
+                frequency:         '3',
+                mealTiming:        'after',
+                timeOfDay:         ['morning', 'noon', 'evening'],
+                usageType:         'internal',
+                specialInstructions: [],
+                notes:             '',
+                _prefilled:        true
             });
             openMedicineDetail(dispenseItems.length - 1);
         }
@@ -11891,27 +12287,74 @@ function formatThaiDateTime($datetime)
         document.getElementById('dispenseProductResults').classList.add('hidden');
     };
 
-    window.medToggleMedicineFields = function () {
-        const isMed = document.getElementById('medIsMedicine').checked;
-        document.getElementById('medMedicineFields').style.display = isMed ? 'block' : 'none';
-        document.getElementById('medSpecialInstSection').style.display = isMed ? 'block' : 'none';
-        document.getElementById('medNotesLabel').textContent = isMed ? 'หมายเหตุเพิ่มเติม' : 'คำแนะนำการใช้';
-        document.getElementById('medNotes').placeholder = isMed ? 'คำแนะนำอื่นๆ...' : 'คำแนะนำการใช้งาน...';
-    };
+    // 2026-05-27: no-op kept for backward compat — always show medicine fields
+    window.medToggleMedicineFields = function () {};
+
+    // Fetch the product's description + usage_instructions from DB and prefill the form.
+    async function medPrefillFromProduct(item) {
+        if (!item.product_id) return;
+        if (item._prefilled) return; // skip if already loaded once
+        try {
+            const res = await fetch('/api/cny_sync.php?action=find_local&id=' + encodeURIComponent(item.product_id));
+            const data = await res.json();
+            const p = data && data.product ? data.product : null;
+            if (!p) return;
+
+            const indEl = document.getElementById('medIndication');
+            const useEl = document.getElementById('medUsageText');
+            if (indEl && !indEl.value) {
+                indEl.value = (p.description || '').trim();
+                item.indication = indEl.value;
+            }
+            if (useEl && !useEl.value) {
+                useEl.value = (p.usage_instructions || p.default_usage_text || '').trim();
+                item.usage_text = useEl.value;
+            }
+            item._prefilled = true;
+        } catch (e) {
+            console.debug('prefill skip', e);
+        }
+    }
 
     function openMedicineDetail(index) {
         const item = dispenseItems[index];
         document.getElementById('medEditingItemIndex').value = index;
         document.getElementById('medDetailName').textContent = item.name;
         document.getElementById('medIndication').value = item.indication || '';
+        document.getElementById('medUsageText').value = item.usage_text || '';
         document.getElementById('medDosage').value = item.dosage || 1;
         document.getElementById('medDosageUnit').value = item.dosageUnit || 'เม็ด';
         document.getElementById('medFrequency').value = item.frequency || '3';
         document.getElementById('medQuantity').value = item.qty || 1;
-        document.getElementById('medUnitLabel').textContent = item.unit || 'ชิ้น';
+        // Wire dispense-unit select. If the product's unit isn't a built-in option,
+        // inject a temporary <option> so the value is preserved across reopen.
+        (function () {
+            const sel = document.getElementById('medDispenseUnit');
+            if (!sel) return;
+            const wanted = (item.unit && String(item.unit).trim()) || 'ชิ้น';
+            const has = Array.from(sel.options).some(o => o.value === wanted);
+            if (!has) {
+                const opt = document.createElement('option');
+                opt.value = wanted;
+                opt.textContent = wanted;
+                sel.insertBefore(opt, sel.firstChild);
+            }
+            sel.value = wanted;
+            // Prompt for custom when user picks "__custom__"
+            sel.onchange = function () {
+                if (sel.value !== '__custom__') return;
+                const v = (window.prompt('พิมพ์หน่วยเอง:', '') || '').trim();
+                if (!v) { sel.value = wanted; return; }
+                const exists = Array.from(sel.options).some(o => o.value === v);
+                if (!exists) {
+                    const o = document.createElement('option');
+                    o.value = v; o.textContent = v;
+                    sel.insertBefore(o, sel.firstChild);
+                }
+                sel.value = v;
+            };
+        })();
         document.getElementById('medNotes').value = item.notes || '';
-        document.getElementById('medIsMedicine').checked = item.isMedicine !== false;
-        window.medToggleMedicineFields();
 
         document.querySelectorAll('input[name="medMealTiming"]').forEach(r => r.checked = r.value === (item.mealTiming || 'after'));
         document.querySelectorAll('input[name="medTimeOfDay"]').forEach(cb => cb.checked = (item.timeOfDay || ['morning','noon','evening']).includes(cb.value));
@@ -11919,6 +12362,9 @@ function formatThaiDateTime($datetime)
         document.querySelectorAll('input[name="medSpecialInst"]').forEach(cb => cb.checked = (item.specialInstructions || []).includes(cb.value));
 
         document.getElementById('medicineDetailModal').classList.remove('hidden');
+
+        // Auto-prefill ข้อบ่งใช้ + วิธีใช้ from product DB (fire-and-forget)
+        medPrefillFromProduct(item);
     }
     window.openMedicineDetail = openMedicineDetail;
 
@@ -11936,9 +12382,14 @@ function formatThaiDateTime($datetime)
         const index = parseInt(document.getElementById('medEditingItemIndex').value);
         const item = dispenseItems[index];
         if (!item) return;
-        item.isMedicine = document.getElementById('medIsMedicine').checked;
+        item.isMedicine = true; // always — toggle removed
         item.qty = parseInt(document.getElementById('medQuantity').value) || 1;
+        const dispenseUnitSel = document.getElementById('medDispenseUnit');
+        if (dispenseUnitSel && dispenseUnitSel.value && dispenseUnitSel.value !== '__custom__') {
+            item.unit = dispenseUnitSel.value;
+        }
         item.notes = document.getElementById('medNotes').value;
+        item.usage_text = document.getElementById('medUsageText').value;
 
         if (item.isMedicine) {
             item.indication = document.getElementById('medIndication').value;

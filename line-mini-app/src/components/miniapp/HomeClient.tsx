@@ -2,11 +2,11 @@
 
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useRef } from 'react'
-import { Gift, MessageCircle, Package, Star, Store, UserRound } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Bell, Gift, MessageCircle, Package, Star, Store, UserRound } from 'lucide-react'
 import { useLineContext } from '@/components/providers'
 import { BottomNav } from '@/components/miniapp/BottomNav'
-import { ServiceMessageBanner } from '@/components/miniapp/ServiceMessageBanner'
+import { NotificationCenterSheet } from '@/components/miniapp/NotificationCenterSheet'
 import { BannerSlider, BannerSliderSkeleton } from '@/components/miniapp/BannerSlider'
 import { HomeSectionRenderer } from '@/components/miniapp/HomeSectionRenderer'
 import { getMemberCard } from '@/lib/member-api'
@@ -37,6 +37,7 @@ export function HomeClient() {
   const avatar = line.profile?.pictureUrl
   const queryClient = useQueryClient()
   const mainRef = useRef<HTMLElement>(null)
+  const [showNotifSheet, setShowNotifSheet] = useState(false)
 
   const memberQuery = useQuery({
     queryKey: ['member-card', lineUserId],
@@ -62,6 +63,20 @@ export function HomeClient() {
 
   const banners = homeQuery.data?.data?.banners || []
   const sections = homeQuery.data?.data?.sections || []
+  const homeTheme = homeQuery.data?.data?.home_theme
+
+  // Apply mini-app home theme via [data-theme] on <html> — CSS overrides in globals.css
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const root = document.documentElement
+    if (homeTheme === 'healthcare' || homeTheme === 'modern') {
+      root.dataset.theme = homeTheme
+    }
+    return () => {
+      // On unmount (route change away from home), keep theme — other pages can override.
+      // No-op cleanup.
+    }
+  }, [homeTheme])
 
   const handleRefresh = useCallback(async () => {
     await Promise.all([
@@ -99,6 +114,17 @@ export function HomeClient() {
                 </div>
               ) : null}
             </div>
+            <button
+              type="button"
+              aria-label="การแจ้งเตือน"
+              disabled={!lineUserId}
+              onClick={() => {
+                if (lineUserId) setShowNotifSheet(true)
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-slate-100 disabled:opacity-40"
+            >
+              <Bell size={20} className="text-slate-700" />
+            </button>
           </div>
         </div>
       </header>
@@ -163,11 +189,6 @@ export function HomeClient() {
             </Link>
           </div>
 
-          {/* Notification Banner */}
-          <div className="px-3 mt-3">
-            <ServiceMessageBanner />
-          </div>
-
           {/* Dynamic Sections — Makro Pro product feed style */}
           <div className="mt-3 flex flex-col gap-3">
             {sections.map((section) => (
@@ -209,6 +230,10 @@ export function HomeClient() {
       </main>
 
       <BottomNav />
+
+      {showNotifSheet && lineUserId ? (
+        <NotificationCenterSheet lineUserId={lineUserId} onClose={() => setShowNotifSheet(false)} />
+      ) : null}
     </div>
   )
 }

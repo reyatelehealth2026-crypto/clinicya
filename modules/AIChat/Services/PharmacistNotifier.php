@@ -48,13 +48,19 @@ class PharmacistNotifier
             foreach ($pharmacists as $pharmacist) {
                 // ส่ง LINE
                 $this->sendLINEPush($pharmacist['line_user_id'], $flexMessage);
-                
+
                 // ส่ง Email ถ้าเป็น urgent และมี email
                 if ($urgent && !empty($pharmacist['email'])) {
                     $this->sendUrgentEmail($pharmacist['email'], $data);
                 }
             }
-            
+
+            // เพิ่ม text push พร้อม deep-link ตอบกลับใน inbox (urgent เท่านั้น) — best-effort,
+            // deferred until AFTER the response is flushed so it never blocks the user.
+            if ($urgent) {
+                $this->dispatchActivePharmacistPushAsync($data, $pharmacists);
+            }
+
             return true;
         } catch (\Exception $e) {
             error_log("PharmacistNotifier error: " . $e->getMessage());
@@ -810,6 +816,129 @@ class PharmacistNotifier
     }
     
     /**
+     * Defer pushToActivePharmacists until after the HTTP response is flushed.
+     * On FPM this calls fastcgi_finish_request first so the LINE push round-trips
+     * never count against the user-visible latency.
+     *
+     * @param array<string, mixed>       $data
+     * @param list<array<string, mixed>> $pharmacists
+     */
+    private function dispatchActivePharmacistPushAsync(array $data, array $pharmacists): void
+    {
+        try {
+            register_shutdown_function(function () use ($data, $pharmacists): void {
+                try {
+                    if (function_exists('fastcgi_finish_request')) {
+                        @fastcgi_finish_request();
+                    }
+                    $this->pushToActivePharmacists($data, $pharmacists);
+                } catch (\Throwable $e) {
+                    error_log('PharmacistNotifier::dispatchActivePharmacistPushAsync fatal: ' . $e->getMessage());
+                }
+            });
+        } catch (\Throwable $e) {
+            // Fallback: do it inline rather than drop it.
+            try {
+                $this->pushToActivePharmacists($data, $pharmacists);
+            } catch (\Throwable $e2) {
+                error_log('PharmacistNotifier::pushToActivePharmacists fatal: ' . $e2->getMessage());
+            }
+        }
+    }
+
+    /**
+     * Send a plain-text LINE push with an inbox deep-link to every active
+     * pharmacist (admin_users with role=pharmacist|admin, is_active=1, real
+     * line_user_id). Idempotent in spirit — best-effort, never throws.
+     *
+     * Re-uses the pharmacist list already fetched by notifyAllPharmacists so we
+     * don't hit `admin_users` twice.
+     *
+     * @param array<string, mixed>      $data
+     * @param list<array<string, mixed>> $pharmacists
+     */
+    private function pushToActivePharmacists(array $data, array $pharmacists): void
+    {
+        if (empty($pharmacists)) {
+            return;
+        }
+
+        $sessionId  = (int) ($data['session_id'] ?? 0);
+        $userId     = (int) ($data['user_id'] ?? 0);
+        $userName   = (string) ($data['user_name'] ?? 'ลูกค้า');
+        $complaint  = trim((string) ($data['chief_complaint'] ?? $data['message'] ?? ''));
+        if ($complaint === '') {
+            $complaint = 'ผู้ใช้ขอปรึกษาเภสัชกร';
+        }
+        // Collapse CR/LF in user-supplied fields so attackers can't inject
+        // additional lines into the LINE text message.
+        $userName  = preg_replace('/[\r\n]+/u', ' ', $userName) ?? $userName;
+        $complaint = preg_replace('/[\r\n]+/u', ' ', $complaint) ?? $complaint;
+        if (mb_strlen($complaint) > 280) {
+            $complaint = mb_substr($complaint, 0, 280) . '…';
+        }
+
+        $linkParts = [];
+        if ($userId > 0) {
+            $linkParts[] = 'user=' . $userId;
+        }
+        if ($sessionId > 0) {
+            $linkParts[] = 'session=' . $sessionId;
+        }
+        $inboxLink = 'https://re-ya.com/inbox-v2.php'
+            . (empty($linkParts) ? '' : ('?' . implode('&', $linkParts)));
+
+        $text = sprintf(
+            "🚨 ผู้ใช้ %s ต้องการเภสัชกรด่วน\nอาการ: %s\nแตะเพื่อตอบกลับ → %s",
+            $userName,
+            $complaint,
+            $inboxLink
+        );
+
+        $sent = 0;
+        $errors = 0;
+        foreach ($pharmacists as $pharmacist) {
+            $lineUserId = trim((string) ($pharmacist['line_user_id'] ?? ''));
+            if ($lineUserId === '') {
+                continue;
+            }
+            try {
+                $ok = $this->sendLINEPush($lineUserId, [
+                    'type' => 'text',
+                    'text' => $text,
+                ]);
+                $ok ? $sent++ : $errors++;
+            } catch (\Throwable $e) {
+                $errors++;
+                error_log('pushToActivePharmacists send error: ' . $e->getMessage());
+            }
+        }
+
+        // Audit to dev_logs — never let logging failure break the flow.
+        try {
+            $this->db->execute(
+                'INSERT INTO dev_logs (log_type, source, message, data, created_at)
+                 VALUES (?, ?, ?, ?, NOW())',
+                [
+                    'info',
+                    'PharmacistNotifier::pushToActivePharmacists',
+                    sprintf('escalate text push: sent=%d errors=%d', $sent, $errors),
+                    json_encode([
+                        'session_id'        => $sessionId,
+                        'user_id'           => $userId,
+                        'line_account_id'   => $this->lineAccountId,
+                        'pharmacist_count'  => count($pharmacists),
+                        'sent'              => $sent,
+                        'errors'            => $errors,
+                    ], JSON_UNESCAPED_UNICODE),
+                ]
+            );
+        } catch (\Throwable $e) {
+            error_log('pushToActivePharmacists audit log failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * ส่ง LINE Push Message
      */
     private function sendLINEPush(string $lineUserId, array $message): bool
@@ -831,29 +960,31 @@ class PharmacistNotifier
             curl_setopt_array($ch, [
                 CURLOPT_POST => true,
                 CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 4,
+                CURLOPT_CONNECTTIMEOUT => 2,
                 CURLOPT_HTTPHEADER => [
                     'Content-Type: application/json',
                     'Authorization: Bearer ' . $token
                 ],
                 CURLOPT_POSTFIELDS => json_encode($data)
             ]);
-            
+
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
-            
+
             if ($httpCode !== 200) {
                 error_log("LINE Push failed: " . $response);
                 return false;
             }
-            
+
             return true;
         } catch (\Exception $e) {
             error_log("sendLINEPush error: " . $e->getMessage());
             return false;
         }
     }
-    
+
     /**
      * ดึง Channel Access Token
      */

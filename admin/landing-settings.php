@@ -47,6 +47,7 @@ $tabs = [
     'faq' => ['label' => 'FAQ', 'icon' => 'fas fa-question-circle'],
     'testimonials' => ['label' => 'รีวิว', 'icon' => 'fas fa-comments', 'badge' => $testimonialService->getPendingCount()],
     'trust' => ['label' => 'Trust Badges', 'icon' => 'fas fa-shield-alt'],
+    'custom_html' => ['label' => 'Custom HTML', 'icon' => 'fas fa-code'],
 ];
 
 $activeTab = getActiveTab($tabs, 'banners');
@@ -225,6 +226,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $activeTab = 'trust';
         }
         
+        // Custom HTML action (2026-05-27)
+        elseif ($action === 'save_custom_html') {
+            $html = (string) ($_POST['custom_html'] ?? '');
+            $stmt = $db->prepare(
+                "INSERT INTO landing_settings (line_account_id, setting_key, setting_value)
+                 VALUES (?, 'custom_html', ?)
+                 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)"
+            );
+            $stmt->execute([$currentBotId, $html]);
+            $success = 'บันทึก Custom HTML สำเร็จ!';
+            $activeTab = 'custom_html';
+        }
+
         // Custom Badges action (Requirements: 10.5)
         elseif ($action === 'save_custom_badges') {
             $customBadgesJson = $_POST['custom_badges_json'] ?? '[]';
@@ -296,34 +310,120 @@ echo getStickySaveBarStyles();
 <!-- Tab Navigation -->
 <?= renderTabs($tabs, $activeTab) ?>
 
-<!-- Tab Content -->
-<div class="tab-content">
-    <div class="tab-panel">
-        <?php
-        switch ($activeTab) {
-            case 'banners':
-                include ADMIN_BASE_PATH . 'includes/landing/admin-banners.php';
-                break;
-            case 'featured':
-                include ADMIN_BASE_PATH . 'includes/landing/admin-featured.php';
-                break;
-            case 'articles':
-                include ADMIN_BASE_PATH . 'includes/landing/admin-articles.php';
-                break;
-            case 'faq':
-                include ADMIN_BASE_PATH . 'includes/landing/admin-faq.php';
-                break;
-            case 'testimonials':
-                include ADMIN_BASE_PATH . 'includes/landing/admin-testimonials.php';
-                break;
-            case 'trust':
-                include ADMIN_BASE_PATH . 'includes/landing/admin-trust.php';
-                break;
-            default:
-                include ADMIN_BASE_PATH . 'includes/landing/admin-seo.php';
-        }
-        ?>
+<style>
+/* 2026-05-27: 2-col layout for landing-settings — form left, Live Preview right.
+   Stacks on tablets/mobile (< 1280px). */
+.landing-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-top: 16px;
+}
+@media (min-width: 1280px) {
+    .landing-layout { grid-template-columns: minmax(0, 1fr) 420px; }
+}
+.landing-preview-pane {
+    position: sticky;
+    top: 80px;
+    align-self: start;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.1);
+}
+.landing-preview-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;
+    font-size: 13px; font-weight: 600; color: #1e293b;
+}
+.landing-preview-head .actions { display: flex; gap: 6px; }
+.landing-preview-head button, .landing-preview-head a {
+    width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    background: white; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer;
+    color: #64748b; text-decoration: none; font-size: 12px;
+}
+.landing-preview-head button:hover, .landing-preview-head a:hover { background: #f1f5f9; color: #0f172a; }
+.landing-preview-frame {
+    width: 100%; aspect-ratio: 9 / 16; max-height: 80vh;
+    border: 0; display: block; background: #f1f5f9;
+}
+</style>
+
+<div class="landing-layout">
+    <!-- Tab Content (left) -->
+    <div class="tab-content">
+        <div class="tab-panel">
+            <?php
+            switch ($activeTab) {
+                case 'banners':
+                    include ADMIN_BASE_PATH . 'includes/landing/admin-banners.php';
+                    break;
+                case 'featured':
+                    include ADMIN_BASE_PATH . 'includes/landing/admin-featured.php';
+                    break;
+                case 'articles':
+                    include ADMIN_BASE_PATH . 'includes/landing/admin-articles.php';
+                    break;
+                case 'faq':
+                    include ADMIN_BASE_PATH . 'includes/landing/admin-faq.php';
+                    break;
+                case 'testimonials':
+                    include ADMIN_BASE_PATH . 'includes/landing/admin-testimonials.php';
+                    break;
+                case 'trust':
+                    include ADMIN_BASE_PATH . 'includes/landing/admin-trust.php';
+                    break;
+                case 'custom_html':
+                    include ADMIN_BASE_PATH . 'includes/landing/admin-custom-html.php';
+                    break;
+                default:
+                    include ADMIN_BASE_PATH . 'includes/landing/admin-seo.php';
+            }
+            ?>
+        </div>
     </div>
+
+    <!-- Live Preview pane (sticky right side on desktop) -->
+    <aside class="landing-preview-pane">
+        <div class="landing-preview-head">
+            <span>
+                <i class="fas fa-eye text-emerald-500 mr-1"></i>
+                Live Preview · Landing
+            </span>
+            <div class="actions">
+                <button type="button" onclick="reyaReloadLandingPreview()" title="รีโหลด preview">
+                    <i class="fas fa-rotate"></i>
+                </button>
+                <a href="/" target="_blank" title="เปิดในแท็บใหม่">
+                    <i class="fas fa-arrow-up-right-from-square"></i>
+                </a>
+            </div>
+        </div>
+        <iframe id="reyaLandingPreview"
+                src="/?preview=1&_=<?= time() ?>"
+                class="landing-preview-frame"
+                loading="lazy"
+                title="REYA Landing Page Live Preview"></iframe>
+    </aside>
 </div>
+
+<script>
+function reyaReloadLandingPreview() {
+    const fr = document.getElementById('reyaLandingPreview');
+    if (!fr) return;
+    fr.src = '/?preview=1&_=' + Date.now();
+}
+
+// 2026-05-27: listen for "click section in preview → switch tab" messages from iframe
+window.addEventListener('message', function (ev) {
+    const msg = ev && ev.data;
+    if (!msg || msg.type !== 'reya-edit-tab' || !msg.tab) return;
+    // Switch tab by reloading with ?tab=
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', msg.tab);
+    window.location.href = url.toString();
+});
+</script>
 
 <?php require_once ADMIN_BASE_PATH . 'includes/footer.php'; ?>

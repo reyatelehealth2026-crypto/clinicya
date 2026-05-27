@@ -22,14 +22,20 @@ $pageTitle = 'ตั้งค่าร้านค้า';
 $currentBotId = $_SESSION['current_bot_id'] ?? 1;
 $lineAccountId = $_SESSION['line_account_id'] ?? $_SESSION['current_bot_id'] ?? 1;
 
-// Define tabs
+// Define tabs — 2026-05-25: ลบ liff + promotions ออกตามคำขอ (deprecated)
+// Tab "general" ยังเก็บไว้ — แต่ใน /settings.php ก็มี shop_tax tab ทำงานหลักแล้ว
+// ในอนาคต อาจ redirect /shop/settings → /settings?tab=shop_tax ทั้งหมด
 $tabs = [
-    'general' => ['label' => 'ทั่วไป', 'icon' => 'fas fa-store'],
-    'liff' => ['label' => 'LIFF Shop', 'icon' => 'fas fa-mobile-alt'],
-    'promotions' => ['label' => 'ธีม/โปรโมชั่น', 'icon' => 'fas fa-palette'],
+    'general' => ['label' => 'ข้อมูลร้าน', 'icon' => 'fas fa-store'],
 ];
 
 $activeTab = getActiveTab($tabs, 'general');
+
+// Force redirect old tab URLs to new canonical location
+if (isset($_GET['tab']) && in_array($_GET['tab'], ['liff', 'promotions'], true)) {
+    header('Location: /settings.php?tab=shop_tax');
+    exit;
+}
 
 // ==================== Handle AJAX requests for LIFF tab ====================
 if (isset($_GET['ajax']) && $_GET['ajax'] == '1' && $_SERVER['REQUEST_METHOD'] === 'POST') {
