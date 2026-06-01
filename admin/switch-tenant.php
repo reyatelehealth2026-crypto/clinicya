@@ -117,6 +117,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($target['status'] === 'terminated') {
             $flash = ['type' => 'error', 'msg' => 'Tenant นี้ถูกระงับถาวรแล้ว — ห้ามเข้า'];
         } else {
+            // Regenerate session ID on tenant-context change (privilege scope
+            // change) to defend against session fixation.
+            session_regenerate_id(true);
             $_SESSION['admin_switched_to_tenant_id'] = (int) $target['id'];
             TenantContext::setCurrentTenantId((int) $target['id']);
 
@@ -146,7 +149,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($slug === '' || !preg_match('/^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/', $slug)) {
                 throw new \InvalidArgumentException('Slug ต้องเป็น lowercase + ตัวเลข + ขีดกลาง 2-32 ตัวอักษร');
             }
-            if (in_array($slug, ['www','api','admin','platform','app','shop','odoo','stg','dev','mail','cdn','assets','blog','www','support','help','docs'], true)) {
+            // Use the SAME reserved list the subdomain resolver enforces, so a
+            // slug we let through here can never resolve to a reserved name and
+            // strand the new tenant on an unreachable subdomain.
+            if (!function_exists('reya_reserved_subdomains')) {
+                require_once __DIR__ . '/../bootstrap/resolve_subdomain.php';
+            }
+            $reservedSlugs = function_exists('reya_reserved_subdomains')
+                ? reya_reserved_subdomains()
+                : ['www','api','admin','platform','app','shop','odoo','stg','dev'];
+            if (in_array($slug, $reservedSlugs, true)) {
                 throw new \InvalidArgumentException('Slug นี้สงวนไว้ — เลือกชื่ออื่น');
             }
             if ($displayName === '') {

@@ -49,10 +49,11 @@ try {
 $logger = ActivityLogger::getInstance($db);
 
 // Resolve current tenant. Mirror header.php precedence.
+// SECURITY: the tenant is taken ONLY from the authenticated session (and trusted
+// server-side fallbacks). We deliberately do NOT accept ?line_account_id from the
+// request — that was an IDOR letting any admin read/write another tenant's VAT
+// documents. Super-admins select a tenant via admin/switch-tenant.php (session).
 $lineAccountId = (int)($_SESSION['current_bot_id'] ?? $_SESSION['line_account_id'] ?? 0);
-if ($lineAccountId <= 0 && isset($_GET['line_account_id'])) {
-    $lineAccountId = (int)$_GET['line_account_id'];
-}
 // Fallback: derive from admin user's primary tenant (admin_users.line_account_id)
 if ($lineAccountId <= 0 && !empty($_SESSION['user_id'])) {
     try {

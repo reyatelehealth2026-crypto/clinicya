@@ -102,7 +102,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     error_log('[platform-login] audit insert failed: ' . $e->getMessage());
                 }
 
-                // Establish session.
+                // Establish session. Regenerate the session ID on privilege
+                // elevation to defeat session fixation (an attacker who fixed a
+                // pre-auth session ID must not retain a valid super-admin session).
+                session_regenerate_id(true);
+
                 $_SESSION['platform_user_id']    = (int) $user['id'];
                 $_SESSION['platform_user_email'] = (string) $user['email'];
                 $_SESSION['platform_user_name']  = (string) $user['name'];

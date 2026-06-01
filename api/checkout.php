@@ -2067,45 +2067,13 @@ function handleGetOrder() {
     $stmt->execute([$orderId]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // 2026-05-27 — Cross-tenant fallback. If the current DB (likely legacy
-    // because client didn't send line_account_id) doesn't have this order,
-    // scan every active tenant DB via the platform routing table. Lets
-    // pre-fix clients with cached JS keep working.
+    // The order lookup is scoped to the current tenant DB (resolved by
+    // bootstrap/route_by_account.php). We intentionally do NOT scan other
+    // tenants' databases here — doing so was a cross-tenant IDOR that let any
+    // caller enumerate orders (customer name, address, items) across every
+    // tenant by guessing the sequential `id`. If the order is not in this
+    // tenant's DB, it does not belong to this caller.
     if (!$order) {
-        try {
-            $platform = new PDO(
-                'mysql:host=' . DB_HOST . ';dbname=zrismpsz_reya_platform;charset=utf8mb4',
-                DB_USER, DB_PASS,
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-            );
-            $routes = $platform->query(
-                'SELECT DISTINCT tenant_db_name FROM tenant_line_account_routes WHERE is_active = 1'
-            )->fetchAll(PDO::FETCH_COLUMN);
-            foreach ($routes as $dbName) {
-                try {
-                    $t = new PDO(
-                        'mysql:host=' . DB_HOST . ';dbname=' . $dbName . ';charset=utf8mb4',
-                        DB_USER, DB_PASS,
-                        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-                    );
-                    $s = $t->prepare("SELECT * FROM transactions WHERE id = ?");
-                    $s->execute([$orderId]);
-                    $found = $s->fetch(PDO::FETCH_ASSOC);
-                    if ($found) {
-                        $order = $found;
-                        // Pull items from the same DB
-                        $si = $t->prepare("SELECT * FROM transaction_items WHERE transaction_id = ?");
-                        $si->execute([$orderId]);
-                        $order['items'] = $si->fetchAll(PDO::FETCH_ASSOC);
-                        $order['delivery_info'] = json_decode($order['delivery_info'] ?? '{}', true);
-                        jsonResponse(true, '', ['order' => $order]);
-                        return;
-                    }
-                } catch (\Throwable $e) { continue; }
-            }
-        } catch (\Throwable $e) {
-            // Fall through to "not found"
-        }
         jsonResponse(false, 'Order not found');
     }
 

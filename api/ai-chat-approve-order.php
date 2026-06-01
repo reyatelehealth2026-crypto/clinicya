@@ -29,7 +29,7 @@ if (in_array($origin, $allowedOrigins, true)) {
     header('Vary: Origin');
 }
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'POST') === 'OPTIONS') {
     exit;
@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/liff-auth.php';
 
 $raw  = file_get_contents('php://input');
 $body = json_decode($raw, true) ?: [];
@@ -56,6 +57,11 @@ if ($lineUserId === '' || !preg_match('/^U[0-9a-f]{32}$/i', $lineUserId)) {
     echo json_encode(['success' => false, 'error' => 'Invalid line_user_id']);
     exit;
 }
+
+// Fail-closed: only the owner of this line_user_id (proven via LIFF token) may
+// flip their own triage session into pending_approval. Closes the IDOR where
+// any caller could escalate another user's session / spam pharmacists.
+reya_require_liff_user($lineUserId);
 
 try {
     $db = Database::getInstance()->getConnection();

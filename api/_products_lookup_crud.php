@@ -26,6 +26,7 @@ function reya_lookup_crud(PDO $db, int $lineAccountId, array $cfg): void
     $tenantNullable = !empty($cfg['tenant_nullable']); // for drug_interactions: includes NULL rows in list
 
     require_once __DIR__ . '/../classes/ActivityLogger.php';
+    require_once __DIR__ . '/../includes/inventory/_lookup_helpers.php'; // reya_csrf_check()
     $log = ActivityLogger::getInstance($db);
 
     $action = $_REQUEST['action'] ?? 'list';
@@ -52,6 +53,11 @@ function reya_lookup_crud(PDO $db, int $lineAccountId, array $cfg): void
                 return;
             }
             case 'save': {
+                if (!reya_csrf_check()) {
+                    http_response_code(403);
+                    echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
+                    return;
+                }
                 $id   = (int)($_POST['id'] ?? 0);
                 $data = [];
                 foreach ($columns as $c) {
@@ -68,6 +74,17 @@ function reya_lookup_crud(PDO $db, int $lineAccountId, array $cfg): void
                     }
                 }
                 if ($id > 0) {
+                    // Guard against silent no-op: the row must exist AND belong to
+                    // this tenant. Global rows (tenant_col IS NULL, e.g. shared
+                    // drug_interactions) are read-only here — editing them would
+                    // mutate data shared across all tenants.
+                    $own = $db->prepare("SELECT `{$tenantCol}` FROM `{$table}` WHERE id = ?");
+                    $own->execute([$id]);
+                    $owner = $own->fetchColumn();
+                    if ($owner === false)      throw new Exception('ไม่พบรายการที่ต้องการแก้ไข');
+                    if ($owner === null)       throw new Exception('รายการนี้เป็นข้อมูลกลาง (ใช้ร่วมกันทุกร้าน) — แก้ไขไม่ได้');
+                    if ((int)$owner !== $lineAccountId) throw new Exception('ไม่พบรายการในร้านนี้');
+
                     $sets = []; $params = [];
                     foreach ($data as $k => $v) { $sets[] = "`{$k}` = ?"; $params[] = $v; }
                     $params[] = $id; $params[] = $lineAccountId;
@@ -86,7 +103,21 @@ function reya_lookup_crud(PDO $db, int $lineAccountId, array $cfg): void
                 return;
             }
             case 'delete': {
+                if (!reya_csrf_check()) {
+                    http_response_code(403);
+                    echo json_encode(['success' => false, 'error' => 'Invalid CSRF token']);
+                    return;
+                }
                 $id = (int)($_POST['id'] ?? 0);
+                // Same ownership guard as save — never report success on a global
+                // or non-existent row (the old silent no-op).
+                $own = $db->prepare("SELECT `{$tenantCol}` FROM `{$table}` WHERE id = ?");
+                $own->execute([$id]);
+                $owner = $own->fetchColumn();
+                if ($owner === false)      throw new Exception('ไม่พบรายการที่ต้องการลบ');
+                if ($owner === null)       throw new Exception('รายการนี้เป็นข้อมูลกลาง (ใช้ร่วมกันทุกร้าน) — ลบไม่ได้');
+                if ((int)$owner !== $lineAccountId) throw new Exception('ไม่พบรายการในร้านนี้');
+
                 $stmt = $db->prepare("DELETE FROM `{$table}` WHERE id = ? AND {$tenantCol} = ?");
                 $stmt->execute([$id, $lineAccountId]);
                 $log->logAdmin(ActivityLogger::ACTION_DELETE, "Deleted {$entityType} #{$id}", ['entity_type' => $entityType, 'entity_id' => $id]);
