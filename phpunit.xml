@@ -26,6 +26,9 @@
         <testsuite name="VibeSelling Tests">
             <directory>tests/VibeSelling</directory>
         </testsuite>
+        <testsuite name="Onboarding Tests">
+            <directory>tests/Onboarding</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>

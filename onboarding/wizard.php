@@ -14,6 +14,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth_check.php'; // populates $currentUser
+require_once __DIR__ . '/../includes/onboarding/onboarding-helpers.php';
 
 $db = Database::getInstance()->getConnection();
 
@@ -90,7 +91,8 @@ $baseUrl   = defined('BASE_URL') ? rtrim(BASE_URL, '/') : (
     (!empty($_SERVER['HTTPS']) ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? 'localhost')
 );
 $webhookUrl   = $baseUrl . '/webhook.php?account=' . ($lineAccountId ?: '{ACCOUNT_ID}');
-$liffEndpoint = $baseUrl . '/line-mini-app/';
+// Mini App is served at /miniapp/ (Next.js static export), NOT the source dir.
+$liffEndpoint = reya_miniapp_endpoint($baseUrl);
 
 if (empty($_SESSION['onboarding_csrf'])) {
     $_SESSION['onboarding_csrf'] = bin2hex(random_bytes(16));

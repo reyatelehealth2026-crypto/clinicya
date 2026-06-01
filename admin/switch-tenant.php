@@ -28,6 +28,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php'; // pulls in classes/Database.php
 require_once __DIR__ . '/../classes/TenantContext.php';
 require_once __DIR__ . '/../classes/TenantProvisioning.php';
+require_once __DIR__ . '/../includes/onboarding/onboarding-helpers.php';
 
 // ---------------------------------------------------------------------------
 // Auth gate — Platform Owner only.
@@ -255,10 +256,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'db_name'   => $result['db_name'],
             ]);
 
+            $onboardingUrl = reya_onboarding_first_run_url();
             $flash = [
                 'type' => 'ok',
                 'msg'  => "สร้าง tenant สำเร็จ! 🎉 URL: https://{$slug}.re-ya.com/auth/login.php — "
-                        . "Login: {$adminUser} / (password ที่คุณตั้ง)",
+                        . "Login: {$adminUser} / (password ที่คุณตั้ง). "
+                        . "หลัง login ครั้งแรก แอดมินจะถูกพาเข้าหน้าตั้งค่าเริ่มต้น (onboarding) ที่ {$onboardingUrl}",
             ];
         } catch (\Throwable $e) {
             $flash = ['type' => 'error', 'msg' => 'Provisioning failed: ' . $e->getMessage()];
