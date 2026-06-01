@@ -173,8 +173,8 @@ $autoRules = $autoTagManager->getRules();
     <?php else:
         foreach ($recentCustomers as $customer): ?>
             <div class="sc-row">
-                <img src="<?= htmlspecialchars($customer['picture_url'] ?: 'https://via.placeholder.com/40') ?>"
-                    style="width:40px;height:40px;border-radius:12px;object-fit:cover;flex-shrink:0;" alt="">
+                <img src="<?= htmlspecialchars($customer['picture_url'] ?: '/assets/img/avatar-default.svg') ?>"
+                    style="width:40px;height:40px;border-radius:12px;object-fit:cover;flex-shrink:0;" alt="<?= htmlspecialchars($customer['display_name'] ?? 'ลูกค้า') ?>">
                 <div style="flex:1;min-width:0;">
                     <div style="font-size:13px;font-weight:600;color:#132235;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($customer['display_name'] ?? 'Unknown') ?></div>
                     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">

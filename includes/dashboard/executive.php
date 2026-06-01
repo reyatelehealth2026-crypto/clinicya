@@ -23,6 +23,7 @@ try {
     $stmt->execute([$dateStart, $dateEnd]);
     $msgStats = $stmt->fetch(PDO::FETCH_ASSOC) ?: $msgStats;
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 // 2. ลูกค้าที่ติดต่อมาวันนี้
@@ -37,6 +38,7 @@ try {
     $stmt->execute([$dateStart, $dateEnd]);
     $newCustomers = $stmt->fetchColumn() ?: 0;
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 // 3. ออเดอร์วันนี้
@@ -58,6 +60,7 @@ try {
     $stmt->execute([$dateStart, $dateEnd]);
     $orderStats = $stmt->fetch(PDO::FETCH_ASSOC) ?: $orderStats;
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 // 4. เวลาตอบกลับเฉลี่ย
@@ -76,6 +79,7 @@ try {
     $stmt->execute([$dateStart, $dateEnd]);
     $avgResponseTime = round($stmt->fetchColumn() ?: 0);
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 // 5. วิดีโอคอลวันนี้
@@ -89,6 +93,7 @@ try {
     $stmt->execute([$dateStart, $dateEnd]);
     $videoStats = $stmt->fetch(PDO::FETCH_ASSOC) ?: $videoStats;
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 // ==================== PROBLEM DETECTION ====================
@@ -110,6 +115,7 @@ try {
     $stmt->execute(array_merge([$dateStart, $dateEnd], $keywordParams));
     $problemMessages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 // ==================== ADMIN PERFORMANCE ====================
@@ -138,6 +144,7 @@ try {
         $adminPerformance = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 // ==================== RECENT CONVERSATIONS ====================
@@ -158,6 +165,7 @@ try {
     $stmt->execute([$dateStart, $dateEnd]);
     $recentConversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 // ==================== HOURLY ACTIVITY ====================
@@ -174,6 +182,7 @@ try {
         $hourlyActivity[$row['hour']] = $row['count'];
     }
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 // ==================== TOP ISSUES ====================
@@ -204,6 +213,7 @@ try {
     arsort($issueKeywords);
     $topIssues = array_slice($issueKeywords, 0, 5, true);
 } catch (Exception $e) {
+    try { $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, created_at) VALUES ('error', 'analytics.executive', ?, ?, NOW())")->execute([$e->getMessage(), json_encode(['line'=>__LINE__])]); } catch (Exception $_) {}
 }
 
 $responseAccent = $avgResponseTime <= 5 ? 'emerald' : ($avgResponseTime <= 15 ? 'amber' : 'rose');
@@ -229,7 +239,7 @@ $problemCount   = count($problemMessages);
 </div>
 
 <!-- ─── Primary KPI Row ─── -->
-<div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
     <?= renderKpiCard('indigo',  'ข้อความวันนี้', number_format($msgStats['total'] ?? 0),
         'รับ ' . number_format($msgStats['incoming'] ?? 0) . ' / ส่ง ' . number_format($msgStats['outgoing'] ?? 0),
         'fas fa-comments') ?>
@@ -295,7 +305,7 @@ $problemCount   = count($problemMessages);
 
     <?php
     ob_start(); ?>
-        <div style="padding:20px;"><canvas id="hourlyChart" height="200"></canvas></div>
+        <div style="padding:20px;"><div style="position:relative;height:240px"><canvas id="hourlyChart" role="img" aria-label="กราฟกิจกรรมรายชั่วโมง"></canvas></div></div>
     <?php
     echo renderSectionCard('กิจกรรมรายชั่วโมง', 'fas fa-chart-area', ob_get_clean(), null, 'emerald');
     ?>
@@ -313,8 +323,8 @@ $problemCount   = count($problemMessages);
     <?php else:
         foreach ($problemMessages as $msg): ?>
             <div class="sc-row cursor-pointer" onclick="viewChat(<?= (int)$msg['user_id'] ?>)">
-                <img src="<?= htmlspecialchars($msg['picture_url'] ?: 'https://via.placeholder.com/40') ?>"
-                    style="width:40px;height:40px;border-radius:12px;object-fit:cover;flex-shrink:0;" alt="">
+                <img src="<?= htmlspecialchars($msg['picture_url'] ?: '/assets/img/avatar-default.svg') ?>"
+                    style="width:40px;height:40px;border-radius:12px;object-fit:cover;flex-shrink:0;" alt="<?= htmlspecialchars($msg['display_name'] ?? 'ลูกค้า') ?>">
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span style="font-size:13px;font-weight:600;color:#132235;"><?= htmlspecialchars($msg['display_name'] ?: 'ลูกค้า') ?></span>
@@ -343,8 +353,8 @@ $problemCount   = count($problemMessages);
     <?php else:
         foreach ($recentConversations as $conv): ?>
             <div class="sc-row cursor-pointer" onclick="viewChat(<?= (int)$conv['id'] ?>)">
-                <img src="<?= htmlspecialchars($conv['picture_url'] ?: 'https://via.placeholder.com/40') ?>"
-                    style="width:40px;height:40px;border-radius:12px;object-fit:cover;flex-shrink:0;" alt="">
+                <img src="<?= htmlspecialchars($conv['picture_url'] ?: '/assets/img/avatar-default.svg') ?>"
+                    style="width:40px;height:40px;border-radius:12px;object-fit:cover;flex-shrink:0;" alt="<?= htmlspecialchars($conv['display_name'] ?? 'ลูกค้า') ?>">
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:8px;">
                         <span style="font-size:13px;font-weight:600;color:#132235;"><?= htmlspecialchars($conv['display_name'] ?: 'ลูกค้า') ?></span>

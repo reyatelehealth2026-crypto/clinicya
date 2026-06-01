@@ -1765,49 +1765,14 @@ function handleUploadSlip() {
         jsonResponse(false, 'File too large (max 5MB)');
     }
 
-    // Get order info
+    // Get order info — scoped to the current tenant DB only.
+    // SECURITY: the cross-tenant fallback scan that used to live here was an
+    // IDOR (same class as handleGetOrder) — it let a caller upload a slip onto
+    // any tenant's order by guessing the sequential id. Removed. If the order
+    // isn't in this tenant's DB, it doesn't belong to this caller.
     $stmt = $db->prepare("SELECT * FROM transactions WHERE id = ?");
     $stmt->execute([$orderId]);
     $order = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    // 2026-05-27 — Cross-tenant fallback (same as handleGetOrder).
-    // If the order isn't in the current DB (likely legacy because the client
-    // didn't send line_account_id), scan every active tenant DB. When found,
-    // swap $db to that tenant's connection so subsequent UPDATE/INSERTs hit
-    // the right DB.
-    if (!$order) {
-        try {
-            $platform = new PDO(
-                'mysql:host=' . DB_HOST . ';dbname=zrismpsz_reya_platform;charset=utf8mb4',
-                DB_USER, DB_PASS,
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-            );
-            $routes = $platform->query(
-                'SELECT DISTINCT tenant_db_name FROM tenant_line_account_routes WHERE is_active = 1'
-            )->fetchAll(PDO::FETCH_COLUMN);
-            foreach ($routes as $dbName) {
-                try {
-                    $t = new PDO(
-                        'mysql:host=' . DB_HOST . ';dbname=' . $dbName . ';charset=utf8mb4',
-                        DB_USER, DB_PASS,
-                        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
-                    );
-                    $s = $t->prepare("SELECT * FROM transactions WHERE id = ?");
-                    $s->execute([$orderId]);
-                    $found = $s->fetch(PDO::FETCH_ASSOC);
-                    if ($found) {
-                        $order = $found;
-                        // Swap $db pointer so subsequent writes hit the same tenant DB
-                        $db = $t;
-                        error_log("handleUploadSlip: located order {$orderId} in tenant DB '{$dbName}'");
-                        break;
-                    }
-                } catch (\Throwable $e) { continue; }
-            }
-        } catch (\Throwable $e) {
-            error_log('handleUploadSlip cross-tenant scan failed: ' . $e->getMessage());
-        }
-    }
 
     if (!$order) {
         jsonResponse(false, 'Order not found');

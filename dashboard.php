@@ -40,12 +40,18 @@ if (!in_array($activeTab, $validTabs)) {
     $activeTab = 'executive';
 }
 
-// Trigger scheduled broadcasts in background
+// Trigger scheduled broadcasts in background (non-blocking when fastcgi available)
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
 $baseUrl = $protocol . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']);
 $triggerUrl = $baseUrl . '/api/process_scheduled_broadcasts.php';
-$context = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 1]]);
-@file_get_contents($triggerUrl, false, $context);
+$broadcastCtx = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 1]]);
+if (function_exists('fastcgi_finish_request')) {
+    register_shutdown_function(function () use ($triggerUrl, $broadcastCtx) {
+        @file_get_contents($triggerUrl, false, $broadcastCtx);
+    });
+} else {
+    @file_get_contents($triggerUrl, false, $broadcastCtx);
+}
 
 // Set page title based on active tab
 $pageTitles = [

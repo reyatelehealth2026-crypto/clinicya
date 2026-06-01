@@ -653,9 +653,17 @@ function handleCancel($db, $data) {
         jsonResponse(false, 'ไม่พบข้อมูลผู้ใช้');
     }
     
-    // Get appointment
-    $stmt = $db->prepare("SELECT * FROM appointments WHERE appointment_id = ? AND user_id = ?");
-    $stmt->execute([$appointmentId, $user['id']]);
+    // Get appointment — DB ใช้ id (auto-increment) เท่านั้น, ไม่มี column appointment_id แยก
+    // ถ้ามี column appointment_id (เผื่ออนาคต) → รองรับด้วย dynamic where
+    $aptCols = $db->query("SHOW COLUMNS FROM appointments")->fetchAll(PDO::FETCH_COLUMN);
+    $hasAptIdCol = in_array('appointment_id', $aptCols);
+    if ($hasAptIdCol) {
+        $stmt = $db->prepare("SELECT * FROM appointments WHERE (appointment_id = ? OR id = ?) AND user_id = ?");
+        $stmt->execute([$appointmentId, intval($appointmentId), $user['id']]);
+    } else {
+        $stmt = $db->prepare("SELECT * FROM appointments WHERE id = ? AND user_id = ?");
+        $stmt->execute([intval($appointmentId), $user['id']]);
+    }
     $appointment = $stmt->fetch(PDO::FETCH_ASSOC);
     
     if (!$appointment) {
@@ -676,13 +684,17 @@ function handleCancel($db, $data) {
         jsonResponse(false, 'ไม่สามารถยกเลิกนัดหมายที่ผ่านไปแล้ว');
     }
     
-    // Update status
-    $stmt = $db->prepare("
-        UPDATE appointments 
-        SET status = 'cancelled', cancelled_by = 'user', cancelled_reason = ?, updated_at = NOW()
-        WHERE id = ?
-    ");
-    $stmt->execute([$reason, $appointment['id']]);
+    // Update status — dynamic columns เผื่อ DB ไม่มี cancelled_by/cancelled_reason
+    $cancelledByExists = in_array('cancelled_by', $aptCols);
+    $cancelledReasonExists = in_array('cancelled_reason', $aptCols);
+    $setParts = ["status = 'cancelled'", "updated_at = NOW()"];
+    $params = [];
+    if ($cancelledByExists) { $setParts[] = "cancelled_by = ?"; $params[] = 'user'; }
+    if ($cancelledReasonExists) { $setParts[] = "cancelled_reason = ?"; $params[] = $reason; }
+    $params[] = $appointment['id'];
+    $sql = "UPDATE appointments SET " . implode(', ', $setParts) . " WHERE id = ?";
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
     
     jsonResponse(true, 'ยกเลิกนัดหมายสำเร็จ');
 }

@@ -41,6 +41,17 @@ try {
     switch ($action) {
         case 'home_all':
             $data = $service->getHomeAll($surface);
+            // Surface home_theme so React applies [data-theme] without bundle rebuild
+            $homeTheme = 'modern';
+            try {
+                $themeStmt = $db->prepare('SELECT home_theme FROM shop_settings WHERE line_account_id = ? LIMIT 1');
+                $themeStmt->execute([(int) $lineAccountId]);
+                $t = $themeStmt->fetchColumn();
+                if ($t === 'healthcare' || $t === 'modern') $homeTheme = $t;
+            } catch (Throwable $e) { /* column may not exist on legacy DB */ }
+            if (is_array($data)) {
+                $data['home_theme'] = $homeTheme;
+            }
             echo json_encode([
                 'success' => true,
                 'data' => $data,

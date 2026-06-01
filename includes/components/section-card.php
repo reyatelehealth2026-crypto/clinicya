@@ -3,7 +3,7 @@
  * Section Card Component — Archetype B (Dashboard)
  * การ์ดแสดงเนื้อหาพร้อม header stripe, icon, และ action slot
  *
- * @package Clinicya\Components
+ * @package REYA\Components
  * @version 1.0.0
  */
 

@@ -3,7 +3,7 @@
  * Period Selector Component — Archetype B (Dashboard)
  * Time-range chips: วันนี้ / 7 วัน / 30 วัน / กำหนดเอง
  *
- * @package Clinicya\Components
+ * @package REYA\Components
  * @version 1.0.0
  */
 

@@ -124,11 +124,11 @@ try {
             // Guard: เปิด storefront ต้องไม่มีของราคา 0
             if ($enabled === 1) {
                 $checkStmt = $db->prepare(
-                    "SELECT COUNT(*) FROM shop_products
+                    "SELECT COUNT(*) FROM business_items
                      WHERE line_account_id = ?
                        AND id IN ($placeholders)
-                       AND (online_price IS NULL OR online_price = 0)
-                       AND (list_price   IS NULL OR list_price   = 0)"
+                       AND (price IS NULL OR price = 0)
+                       AND (sale_price IS NULL OR sale_price = 0)"
                 );
                 $checkStmt->execute(array_merge([$lineAccountId], $ids));
                 $zeroCount = (int) $checkStmt->fetchColumn();
@@ -143,7 +143,7 @@ try {
 
             if ($dryRun) {
                 $cntStmt = $db->prepare(
-                    "SELECT COUNT(*) FROM shop_products
+                    "SELECT COUNT(*) FROM business_items
                      WHERE line_account_id = ? AND id IN ($placeholders)"
                 );
                 $cntStmt->execute(array_merge([$lineAccountId], $ids));
@@ -156,8 +156,8 @@ try {
             }
 
             $stmt = $db->prepare(
-                "UPDATE shop_products
-                 SET storefront_enabled = ?, updated_at = NOW()
+                "UPDATE business_items
+                 SET is_active = ?, updated_at = NOW()
                  WHERE line_account_id = ? AND id IN ($placeholders)"
             );
             $stmt->execute(array_merge([$enabled, $lineAccountId], $ids));

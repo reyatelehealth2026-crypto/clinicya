@@ -190,17 +190,17 @@ try {
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
     <div class="bg-white rounded-xl shadow-sm p-4">
         <h3 class="font-semibold text-gray-800 mb-4">💬 ข้อความรายวัน</h3>
-        <canvas id="messagesChart" height="180"></canvas>
+        <div style="position:relative;height:240px"><canvas id="messagesChart" role="img" aria-label="กราฟข้อความรายวัน"></canvas></div>
     </div>
-    
+
     <div class="bg-white rounded-xl shadow-sm p-4">
         <h3 class="font-semibold text-gray-800 mb-4">👥 ผู้ติดตามใหม่</h3>
-        <canvas id="followersChart" height="180"></canvas>
+        <div style="position:relative;height:240px"><canvas id="followersChart" role="img" aria-label="กราฟผู้ติดตามใหม่รายวัน"></canvas></div>
     </div>
-    
+
     <div class="bg-white rounded-xl shadow-sm p-4">
         <h3 class="font-semibold text-gray-800 mb-4">💰 รายได้รายวัน</h3>
-        <canvas id="revenueChart" height="180"></canvas>
+        <div style="position:relative;height:240px"><canvas id="revenueChart" role="img" aria-label="กราฟรายได้รายวัน"></canvas></div>
     </div>
 </div>
 
@@ -303,10 +303,11 @@ new Chart(document.getElementById('messagesChart').getContext('2d'), {
             { label: 'ส่ง', data: <?= json_encode(array_column($messagesByDay, 'outgoing')) ?>, backgroundColor: '#10B981' }
         ]
     },
-    options: { 
-        responsive: true, 
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
         plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } },
-        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } 
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } }
     }
 });
 
@@ -324,8 +325,9 @@ new Chart(document.getElementById('followersChart').getContext('2d'), {
             tension: 0.4
         }]
     },
-    options: { 
+    options: {
         responsive: true,
+        maintainAspectRatio: false,
         plugins: { legend: { display: false } },
         scales: { y: { beginAtZero: true } }
     }
@@ -345,14 +347,15 @@ new Chart(document.getElementById('revenueChart').getContext('2d'), {
             tension: 0.4
         }]
     },
-    options: { 
+    options: {
         responsive: true,
+        maintainAspectRatio: false,
         plugins: { legend: { display: false } },
-        scales: { 
-            y: { 
+        scales: {
+            y: {
                 beginAtZero: true,
                 ticks: { callback: function(v) { return '฿' + v.toLocaleString(); } }
-            } 
+            }
         }
     }
 });

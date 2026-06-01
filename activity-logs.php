@@ -268,6 +268,15 @@ include __DIR__ . '/includes/header.php';
             </div>
             <div class="log-count"><?= number_format($totalLogs) ?> รายการ</div>
         </div>
+
+        <?php if ($totalLogs > 0):
+            $rangeStart = (($page - 1) * $perPage) + 1;
+            $rangeEnd   = min($page * $perPage, $totalLogs);
+        ?>
+        <div style="padding:10px 20px;font-size:12px;color:#6b7280;border-bottom:1px solid #e5e7eb;background:#fff;">
+            แสดงรายการที่ <?= number_format($rangeStart) ?>-<?= number_format($rangeEnd) ?> จาก <?= number_format($totalLogs) ?>
+        </div>
+        <?php endif; ?>
         
         <div class="filter-section">
             <form method="GET" class="filter-row">
