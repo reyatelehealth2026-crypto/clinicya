@@ -29,13 +29,29 @@ try {
     $tableExists = true;
 } catch (Exception $e) {}
 
-// Get products with barcode
+// Get the 20 most-recently-adjusted products (not the whole catalog — see WS-3 perf fix).
+// Full search is handled server-side via api/inventory.php?action=search_products.
 $products = [];
 try {
-    $stmt = $db->prepare("SELECT id, name, sku, barcode, stock FROM business_items WHERE is_active = 1 ORDER BY name");
+    $stmt = $db->prepare("
+        SELECT bi.id, bi.name, bi.sku, bi.barcode, bi.stock
+        FROM business_items bi
+        LEFT JOIN stock_adjustments sa ON sa.product_id = bi.id
+        WHERE bi.is_active = 1
+        GROUP BY bi.id, bi.name, bi.sku, bi.barcode, bi.stock
+        ORDER BY MAX(sa.created_at) DESC, bi.id DESC
+        LIMIT 20
+    ");
     $stmt->execute();
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Exception $e) {}
+} catch (Exception $e) {
+    // Fallback if stock_adjustments table is missing
+    try {
+        $stmt = $db->prepare("SELECT id, name, sku, barcode, stock FROM business_items WHERE is_active = 1 ORDER BY id DESC LIMIT 20");
+        $stmt->execute();
+        $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e2) {}
+}
 
 // Get adjustments
 $adjustments = $tableExists ? $inventoryService->getAdjustments(['limit' => 50]) : [];
@@ -127,7 +143,7 @@ if (!$tableExists):
             
             <div>
                 <label class="block text-sm font-medium mb-1">เหตุผล *</label>
-                <select name="reason" required class="w-full px-3 py-2 border rounded-lg">
+                <select name="reason" id="reasonSelect" required class="w-full px-3 py-2 border rounded-lg" onchange="toggleReasonDetail()">
                     <option value="physical_count">นับสต็อกจริง</option>
                     <option value="damaged">สินค้าเสียหาย</option>
                     <option value="expired">สินค้าหมดอายุ</option>
@@ -137,10 +153,13 @@ if (!$tableExists):
                     <option value="other">อื่นๆ</option>
                 </select>
             </div>
-            
+
             <div>
-                <label class="block text-sm font-medium mb-1">รายละเอียดเพิ่มเติม</label>
-                <textarea name="reason_detail" rows="2" class="w-full px-3 py-2 border rounded-lg"></textarea>
+                <label class="block text-sm font-medium mb-1">
+                    รายละเอียดเพิ่มเติม
+                    <span id="reasonDetailRequired" class="text-red-600 hidden">* (ระบุอย่างน้อย 5 ตัวอักษร)</span>
+                </label>
+                <textarea name="reason_detail" id="reasonDetail" rows="2" class="w-full px-3 py-2 border rounded-lg"></textarea>
             </div>
             
             <div class="flex gap-2">
@@ -197,43 +216,64 @@ if (!$tableExists):
 </div>
 
 <script>
-// Product data for search
-const products = <?= json_encode($products, JSON_UNESCAPED_UNICODE) ?>;
+// Initial product data (20 most-recently-adjusted). Search is server-side.
+// Use a Map so newly-fetched products can be merged in and reused by selectProduct().
+const productCache = new Map();
+<?= 'const initialProducts = ' . json_encode($products, JSON_UNESCAPED_UNICODE) . ';' ?>
+initialProducts.forEach(p => productCache.set(String(p.id), p));
 
 // Search functionality
 const searchInput = document.getElementById('productSearch');
 const searchResults = document.getElementById('searchResults');
 const productSelect = document.getElementById('productSelect');
 
+let searchAbortController = null;
+let searchDebounceTimer = null;
+
+function renderSearchResults(matches) {
+    if (!matches || matches.length === 0) {
+        searchResults.innerHTML = '<div class="p-3 text-gray-500 text-sm">ไม่พบสินค้า</div>';
+    } else {
+        searchResults.innerHTML = matches.map(p => {
+            productCache.set(String(p.id), p);
+            return `
+            <div class="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0" onclick="selectProduct(${p.id})">
+                <div class="font-medium">${p.name}</div>
+                <div class="text-xs text-gray-500">
+                    ${p.sku ? 'SKU: ' + p.sku : ''}
+                    ${p.barcode ? '| Barcode: ' + p.barcode : ''}
+                    | <span class="text-blue-600 font-semibold">Stock: ${p.stock}</span>
+                </div>
+            </div>`;
+        }).join('');
+    }
+    searchResults.classList.remove('hidden');
+}
+
+async function doSearch(query) {
+    if (searchAbortController) searchAbortController.abort();
+    searchAbortController = new AbortController();
+    try {
+        const url = '../api/inventory.php?action=search_products&q=' + encodeURIComponent(query) + '&limit=20';
+        const res = await fetch(url, { signal: searchAbortController.signal, credentials: 'same-origin' });
+        const data = await res.json();
+        renderSearchResults(data.products || []);
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            searchResults.innerHTML = '<div class="p-3 text-red-500 text-sm">ค้นหาไม่สำเร็จ</div>';
+            searchResults.classList.remove('hidden');
+        }
+    }
+}
+
 searchInput.addEventListener('input', function() {
-    const query = this.value.toLowerCase().trim();
+    const query = this.value.trim();
     if (query.length < 1) {
         searchResults.classList.add('hidden');
         return;
     }
-    
-    const matches = products.filter(p => {
-        const name = (p.name || '').toLowerCase();
-        const sku = (p.sku || '').toLowerCase();
-        const barcode = (p.barcode || '').toLowerCase();
-        return name.includes(query) || sku.includes(query) || barcode.includes(query) || barcode === query;
-    }).slice(0, 10);
-    
-    if (matches.length === 0) {
-        searchResults.innerHTML = '<div class="p-3 text-gray-500 text-sm">ไม่พบสินค้า</div>';
-    } else {
-        searchResults.innerHTML = matches.map(p => `
-            <div class="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-0" onclick="selectProduct(${p.id})">
-                <div class="font-medium">${p.name}</div>
-                <div class="text-xs text-gray-500">
-                    ${p.sku ? 'SKU: ' + p.sku : ''} 
-                    ${p.barcode ? '| Barcode: ' + p.barcode : ''} 
-                    | <span class="text-blue-600 font-semibold">Stock: ${p.stock}</span>
-                </div>
-            </div>
-        `).join('');
-    }
-    searchResults.classList.remove('hidden');
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => doSearch(query), 200);
 });
 
 searchInput.addEventListener('blur', function() {
@@ -241,27 +281,46 @@ searchInput.addEventListener('blur', function() {
 });
 
 searchInput.addEventListener('focus', function() {
-    if (this.value.length >= 1) {
-        this.dispatchEvent(new Event('input'));
+    if (this.value.trim().length >= 1) {
+        doSearch(this.value.trim());
     }
 });
 
-// Handle Enter key for barcode scanner
-searchInput.addEventListener('keypress', function(e) {
+// Handle Enter key for barcode scanner — exact barcode/SKU match via server.
+searchInput.addEventListener('keypress', async function(e) {
     if (e.key === 'Enter') {
         e.preventDefault();
         const query = this.value.trim();
-        // Find exact barcode match
-        const match = products.find(p => p.barcode === query || p.sku === query);
-        if (match) {
-            selectProduct(match.id);
-            this.value = '';
-        }
+        if (!query) return;
+        try {
+            const res = await fetch('../api/inventory.php?action=search_products&q=' + encodeURIComponent(query) + '&limit=5', { credentials: 'same-origin' });
+            const data = await res.json();
+            const list = data.products || [];
+            const match = list.find(p => p.barcode === query || p.sku === query) || list[0];
+            if (match) {
+                productCache.set(String(match.id), match);
+                selectProduct(match.id);
+                this.value = '';
+            }
+        } catch (_) {}
     }
 });
 
 function selectProduct(id) {
-    productSelect.value = id;
+    const key = String(id);
+    const p   = productCache.get(key);
+    // Ensure <select> has an option for this product (it may not be in the initial 20).
+    if (p && !productSelect.querySelector(`option[value="${key}"]`)) {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.dataset.stock   = p.stock ?? '';
+        opt.dataset.sku     = p.sku ?? '';
+        opt.dataset.barcode = p.barcode ?? '';
+        opt.dataset.name    = p.name ?? '';
+        opt.textContent     = (p.name || '') + (p.sku ? ' (' + p.sku + ')' : '');
+        productSelect.appendChild(opt);
+    }
+    productSelect.value = key;
     updateStock(productSelect);
     searchResults.classList.add('hidden');
     searchInput.value = '';
@@ -345,15 +404,34 @@ function openBarcodeScanner() {
     searchInput.placeholder = '📷 สแกน Barcode หรือพิมพ์รหัส...';
 }
 
+// Reason → reason_detail requirement
+const SENSITIVE_REASONS = ['other', 'lost', 'damaged'];
+function toggleReasonDetail() {
+    const reason = document.getElementById('reasonSelect').value;
+    const required = SENSITIVE_REASONS.includes(reason);
+    document.getElementById('reasonDetailRequired').classList.toggle('hidden', !required);
+    document.getElementById('reasonDetail').required = required;
+}
+toggleReasonDetail();
+
 document.getElementById('adjustmentForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const quantity = parseInt(document.getElementById('adjustmentQuantity').value) || 0;
     if (quantity === 0) {
         alert('ไม่มีการเปลี่ยนแปลงสต็อก (จำนวนที่นับได้ตรงกับสต็อกในระบบ)');
         return;
     }
-    
+
+    // Require detail (>=5 chars) for sensitive reasons
+    const reason = document.getElementById('reasonSelect').value;
+    const detail = (document.getElementById('reasonDetail').value || '').trim();
+    if (SENSITIVE_REASONS.includes(reason) && detail.length < 5) {
+        alert('กรุณาระบุรายละเอียดเพิ่มเติมอย่างน้อย 5 ตัวอักษร สำหรับเหตุผลนี้');
+        document.getElementById('reasonDetail').focus();
+        return;
+    }
+
     const formData = new FormData(this);
     const data = Object.fromEntries(formData);
     // Use calculated values

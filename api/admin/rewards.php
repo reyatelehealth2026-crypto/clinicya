@@ -298,7 +298,7 @@ function createReward($db, $loyalty, $lineAccountId, $data) {
         'image_url' => trim($data['image_url'] ?? ''),
         'points_required' => $pointsRequired,
         'reward_type' => $rewardType,
-        'reward_value' => trim($data['reward_value'] ?? ''),
+        'reward_value' => (($v = trim((string)($data['reward_value'] ?? ''))) === '' ? null : $v),
         'stock' => (int)($data['stock'] ?? -1), // -1 = unlimited (Requirement 24.4)
         'max_per_user' => (int)($data['max_per_user'] ?? 0),
         'is_active' => isset($data['is_active']) ? (int)$data['is_active'] : 1
@@ -337,7 +337,10 @@ function updateReward($db, $loyalty, $id, $data) {
     if (isset($data['image_url'])) $updateData['image_url'] = trim($data['image_url']);
     if (isset($data['points_required'])) $updateData['points_required'] = (int)$data['points_required'];
     if (isset($data['reward_type'])) $updateData['reward_type'] = $data['reward_type'];
-    if (isset($data['reward_value'])) $updateData['reward_value'] = trim($data['reward_value']);
+    if (isset($data['reward_value'])) {
+        $rv = trim((string)$data['reward_value']);
+        $updateData['reward_value'] = $rv === '' ? null : $rv;
+    }
     if (isset($data['stock'])) $updateData['stock'] = (int)$data['stock'];
     if (isset($data['max_per_user'])) $updateData['max_per_user'] = (int)$data['max_per_user'];
     if (isset($data['is_active'])) $updateData['is_active'] = (int)$data['is_active'];

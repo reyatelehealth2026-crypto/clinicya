@@ -95,23 +95,37 @@ CREATE TABLE IF NOT EXISTS `generic_names` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='ชื่อทางการของยา / generic drug names';
 
--- 2.3 Product Units — หน่วยสินค้า (with self-ref conversion)
+-- 2.3 Product Units — หน่วยสินค้า (per-product packaging units)
+-- NOTE: This definition is the CANONICAL schema, identical to
+--   install_complete_latest.sql and migration_2026-05-25_tenant_template.sql.
+-- An earlier draft of this migration used a divergent (`name`/`conversion_ratio`/
+-- `sub_unit_id`) shape that was NEVER applied to any tenant DB — all live tenants
+-- use the `unit_name`/`unit_code`/`factor`/`product_id` columns below. Keeping a
+-- single source of truth here prevents `CREATE TABLE IF NOT EXISTS` from seeding
+-- the wrong shape on a fresh install (the schema-collision bug).
 CREATE TABLE IF NOT EXISTS `product_units` (
-    `id`               INT AUTO_INCREMENT PRIMARY KEY,
-    `line_account_id`  INT NOT NULL,
-    `code`             VARCHAR(50)  NULL COMMENT 'รหัสหน่วย / unit code',
-    `name`             VARCHAR(100) NOT NULL COMMENT 'ชื่อหน่วย (เม็ด, แผง, ขวด ...)',
-    `name_en`          VARCHAR(100) NULL,
-    `sub_unit_id`      INT NULL COMMENT 'self-ref → smaller unit',
-    `conversion_ratio` DECIMAL(10,4) DEFAULT 1.0000 COMMENT 'this unit = ratio × sub_unit',
-    `is_base_unit`     TINYINT(1) DEFAULT 0 COMMENT '1 = smallest/base unit',
-    `is_active`        TINYINT(1) DEFAULT 1,
-    `created_at`       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX `idx_pu_tenant`     (`line_account_id`),
-    INDEX `idx_pu_tenant_code`(`line_account_id`, `code`)
+    `id`                INT(11) NOT NULL AUTO_INCREMENT,
+    `line_account_id`   INT(11) DEFAULT NULL,
+    `product_id`        INT(11) NOT NULL,
+    `unit_name`         VARCHAR(50)  NOT NULL COMMENT 'ชื่อหน่วย เช่น ขวด, โหล, กล่อง',
+    `unit_code`         VARCHAR(20)  DEFAULT NULL COMMENT 'รหัสหน่วย เช่น BTL, DOZ, BOX',
+    `factor`            DECIMAL(10,4) NOT NULL DEFAULT 1.0000 COMMENT 'ตัวคูณเทียบกับหน่วยหลัก เช่น โหล=12',
+    `cost_price`        DECIMAL(10,2) DEFAULT NULL COMMENT 'ราคาทุนต่อหน่วยนี้',
+    `sale_price`        DECIMAL(10,2) DEFAULT NULL COMMENT 'ราคาขายต่อหน่วยนี้',
+    `barcode`           VARCHAR(50)  DEFAULT NULL COMMENT 'บาร์โค้ดของหน่วยนี้',
+    `is_base_unit`      TINYINT(1) DEFAULT 0 COMMENT 'เป็นหน่วยหลักหรือไม่',
+    `is_purchase_unit`  TINYINT(1) DEFAULT 1 COMMENT 'ใช้สำหรับสั่งซื้อ',
+    `is_sale_unit`      TINYINT(1) DEFAULT 1 COMMENT 'ใช้สำหรับขาย',
+    `is_active`         TINYINT(1) DEFAULT 1,
+    `created_at`        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_product_unit` (`product_id`, `unit_name`),
+    KEY `idx_product` (`product_id`),
+    KEY `idx_line_account` (`line_account_id`),
+    KEY `idx_barcode` (`barcode`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='หน่วยสินค้า (กล่อง / แผง / เม็ด) + conversion';
+  COMMENT='หน่วยสินค้า (กล่อง / แผง / เม็ด) ต่อสินค้า + conversion factor';
 
 -- 2.4 Storage Locations — พื้นที่เก็บ
 CREATE TABLE IF NOT EXISTS `storage_locations` (

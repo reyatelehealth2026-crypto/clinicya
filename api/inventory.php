@@ -61,10 +61,55 @@ try {
             echo json_encode(['success' => true, 'movements' => $movements]);
             break;
             
+        // ==================== Product Search (server-side, used by stock-adjustment) ====================
+        case 'search_products':
+            $q     = trim($_GET['q'] ?? $_POST['q'] ?? '');
+            $limit = (int)($_GET['limit'] ?? $_POST['limit'] ?? 20);
+            if ($limit < 1 || $limit > 50) $limit = 20;
+
+            if ($q === '') {
+                echo json_encode(['success' => true, 'products' => []]);
+                break;
+            }
+            $like   = '%' . $q . '%';
+            $sql    = "SELECT id, name, sku, barcode, stock, unit
+                       FROM business_items
+                       WHERE is_active = 1
+                         AND (name LIKE ? OR sku LIKE ? OR barcode LIKE ?)";
+            $params = [$like, $like, $like];
+
+            // Tenant scope (column may not exist on every install)
+            try {
+                $colStmt = $db->query("SHOW COLUMNS FROM business_items LIKE 'line_account_id'");
+                if ($colStmt && $colStmt->rowCount() > 0 && $lineAccountId) {
+                    $sql     .= " AND (line_account_id = ? OR line_account_id IS NULL)";
+                    $params[] = $lineAccountId;
+                }
+            } catch (Exception $e) {}
+
+            // Exact barcode/SKU match first, then name
+            $sql .= " ORDER BY (barcode = ?) DESC, (sku = ?) DESC, name ASC LIMIT " . $limit;
+            $params[] = $q;
+            $params[] = $q;
+
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
+            echo json_encode(['success' => true, 'products' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+            break;
+
         // ==================== Adjustment ====================
         case 'create_adjustment':
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $data['created_by'] = $adminId;
+
+            // Require detail (>= 5 chars) for sensitive reasons (WS-3)
+            $sensitive = ['other', 'lost', 'damaged'];
+            $reason    = $data['reason'] ?? '';
+            $detail    = trim($data['reason_detail'] ?? '');
+            if (in_array($reason, $sensitive, true) && mb_strlen($detail) < 5) {
+                throw new Exception('กรุณาระบุรายละเอียดเพิ่มเติมอย่างน้อย 5 ตัวอักษร สำหรับเหตุผลนี้');
+            }
+
             $result = $inventoryService->createAdjustment($data);
             echo json_encode(['success' => true, 'data' => $result]);
             break;

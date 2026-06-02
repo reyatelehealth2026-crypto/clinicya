@@ -45,13 +45,18 @@ function generateHistoryId(index: number, createdAt: string | undefined): string
  * DELETE server-side conversation history for the given LINE user.
  * Returns true on success (even if zero rows), false on network/server failure.
  */
-export async function clearAIChatHistory(lineUserId: string | null | undefined): Promise<boolean> {
+export async function clearAIChatHistory(
+  lineUserId: string | null | undefined,
+  accessToken?: string | null
+): Promise<boolean> {
   if (!lineUserId) return false
   const url = apiUrl('/api/ai-chat-history.php?action=clear')
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ line_user_id: lineUserId })
     })
     if (!response.ok) return false
@@ -68,7 +73,8 @@ export async function clearAIChatHistory(lineUserId: string | null | undefined):
  */
 export async function fetchAIChatHistory(
   lineUserId: string | null | undefined,
-  limit = 20
+  limit = 20,
+  accessToken?: string | null
 ): Promise<ChatMessage[]> {
   if (!lineUserId) return []
 
@@ -79,9 +85,11 @@ export async function fetchAIChatHistory(
   const url = `${apiUrl('/api/ai-chat-history.php')}?${params.toString()}`
 
   try {
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`
     const response = await fetch(url, {
       method: 'GET',
-      headers: { Accept: 'application/json' }
+      headers
     })
     if (!response.ok) return []
 

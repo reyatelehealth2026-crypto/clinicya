@@ -3,7 +3,7 @@
  * Form Section Component
  * Sectioned form card with optional collapsible header
  *
- * @package Clinicya\Components
+ * @package REYA\Components
  * @version 1.0.0
  */
 

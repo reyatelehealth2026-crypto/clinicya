@@ -456,15 +456,76 @@ $totalUsers = $stmt->fetch()['c'];
                         <input type="datetime-local" name="scheduled_at" id="scheduledAt"
                             class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
                             min="<?= date('Y-m-d\TH:i') ?>">
+                        <span class="inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                            🕐 เวลาประเทศไทย (GMT+7)
+                        </span>
                         <p class="text-xs text-blue-600 mt-1"><i class="fas fa-info-circle mr-1"></i>ข้อความจะถูกส่งเมื่อถึงเวลาที่กำหนด (ระบบตรวจสอบเมื่อมีการเปิดหน้านี้)</p>
                     </div>
                 </div>
 
-                <button type="submit" id="submitBtn" onclick="return confirmSend()"
+                <button type="button" id="submitBtn" onclick="openBroadcastConfirmModal()"
                     class="w-full py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium transition">
                     <i class="fas fa-paper-plane mr-2"></i>ส่ง Broadcast
                 </button>
             </form>
+        </div>
+    </div>
+
+    <!-- WS-2: Type-to-Confirm Broadcast Modal ─────────────────────────────── -->
+    <div id="broadcastConfirmModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" role="dialog" aria-modal="true" aria-labelledby="bcModalTitle">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="px-6 py-4 border-b bg-gradient-to-r from-red-50 to-orange-50">
+                <h3 id="bcModalTitle" class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fas fa-exclamation-triangle text-red-500"></i>
+                    ยืนยันการส่ง Broadcast
+                </h3>
+            </div>
+            <div class="px-6 py-5 space-y-4">
+                <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div class="text-xs text-gray-500 mb-1">จะส่งไปยัง</div>
+                    <div class="text-sm font-medium text-gray-800" id="bcModalTargetLabel">—</div>
+                    <div class="mt-3 flex items-end gap-2">
+                        <span class="text-3xl font-bold text-green-600" id="bcModalCount">0</span>
+                        <span class="text-sm text-gray-500 mb-1">คน</span>
+                    </div>
+                </div>
+
+                <div id="bcModalCostBox" class="hidden p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div class="flex items-center gap-2 text-amber-800 text-sm font-medium">
+                        <i class="fas fa-coins"></i>
+                        <span>ประมาณ ฿<span id="bcModalCost">0</span></span>
+                    </div>
+                    <p class="text-xs text-amber-700 mt-1">ต้นทุน LINE Push หลังโควต้าฟรี (≈ 0.30 ฿/ข้อความ)</p>
+                </div>
+
+                <div id="bcModalScheduleBox" class="hidden p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                    <i class="fas fa-clock mr-1"></i>
+                    ตั้งเวลาส่ง: <span id="bcModalScheduleAt" class="font-medium"></span>
+                    <span class="ml-1 text-xs">(GMT+7)</span>
+                </div>
+
+                <div>
+                    <label for="bcModalConfirmInput" class="block text-sm font-medium text-gray-700 mb-1">
+                        พิมพ์ <span class="font-mono font-bold text-red-600">SEND</span> เพื่อยืนยัน
+                    </label>
+                    <input type="text" id="bcModalConfirmInput" autocomplete="off" spellcheck="false"
+                        class="w-full px-4 py-2 border-2 rounded-lg font-mono uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-red-400"
+                        placeholder="SEND"
+                        oninput="validateBroadcastConfirmInput()">
+                    <p class="text-xs text-gray-500 mt-1">ตัวพิมพ์ใหญ่ทั้งหมด</p>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 border-t flex items-center justify-end gap-2">
+                <button type="button" onclick="closeBroadcastConfirmModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    ยกเลิก
+                </button>
+                <button type="button" id="bcModalConfirmBtn" disabled onclick="submitBroadcastForm()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i class="fas fa-paper-plane mr-1"></i>
+                    ยืนยันส่ง
+                </button>
+            </div>
         </div>
     </div>
 
@@ -659,29 +720,97 @@ $totalUsers = $stmt->fetch()['c'];
         if (broadcastForm) broadcastForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    function confirmSend() {
+    // ── WS-2: Type-to-Confirm Modal ──────────────────────────────────────────
+    const BC_TYPE_NAMES = {
+        'database': 'ผู้ใช้ในฐานข้อมูลทั้งหมด',
+        'all':      'เพื่อนทั้งหมดของ LINE OA',
+        'segment':  'สมาชิกใน Segment ที่เลือก',
+        'tag':      'ผู้ใช้ที่มี Tag ที่เลือก',
+        'group':    'สมาชิกในกลุ่มที่เลือก'
+    };
+
+    function openBroadcastConfirmModal() {
         const targetType = document.querySelector('input[name="target_type"]:checked').value;
         const sendMode   = document.querySelector('input[name="send_mode"]:checked').value;
 
+        // Pre-flight validation (preserve existing behaviour)
         if (targetType === 'tag') {
             const checked = document.querySelectorAll('.tag-checkbox:checked');
             if (checked.length === 0) {
                 alert('กรุณาเลือก Tag อย่างน้อย 1 รายการ');
-                return false;
+                return;
             }
         }
         if (sendMode === 'schedule') {
             const dt = document.getElementById('scheduledAt').value;
-            if (!dt) { alert('กรุณาเลือกวันและเวลาที่ต้องการส่ง'); return false; }
-            return confirm('ยืนยันตั้งเวลาส่ง Broadcast?');
+            if (!dt) { alert('กรุณาเลือกวันและเวลาที่ต้องการส่ง'); return; }
         }
-        const typeNames = {
-            'database': 'ผู้ใช้ในฐานข้อมูลทั้งหมด', 'all': 'เพื่อนทั้งหมดของ LINE OA',
-            'segment': 'สมาชิกใน Segment ที่เลือก', 'tag': 'ผู้ใช้ที่มี Tag ที่เลือก',
-            'group': 'สมาชิกในกลุ่มที่เลือก'
-        };
-        return confirm('ยืนยันการส่ง Broadcast ไปยัง ' + (typeNames[targetType] || targetType) + '?');
+        const title = document.querySelector('input[name="title"]').value.trim();
+        if (!title) { alert('กรุณากรอกหัวข้อ Broadcast'); return; }
+
+        // Read recipient count already displayed on the page (refreshed by updateRecipientCount)
+        const countEl = document.getElementById('recipientCount');
+        const rawCount = (countEl?.textContent || '0').replace(/[^0-9]/g, '');
+        const count = parseInt(rawCount, 10) || 0;
+
+        // Populate modal
+        document.getElementById('bcModalTargetLabel').textContent = BC_TYPE_NAMES[targetType] || targetType;
+        document.getElementById('bcModalCount').textContent = count.toLocaleString();
+
+        // Cost gate: count × 0.30 ฿ when > 500
+        const costBox = document.getElementById('bcModalCostBox');
+        if (count > 500) {
+            const cost = Math.round(count * 0.30);
+            document.getElementById('bcModalCost').textContent = cost.toLocaleString();
+            costBox.classList.remove('hidden');
+        } else {
+            costBox.classList.add('hidden');
+        }
+
+        // Schedule preview
+        const schedBox = document.getElementById('bcModalScheduleBox');
+        if (sendMode === 'schedule') {
+            const dt = document.getElementById('scheduledAt').value;
+            document.getElementById('bcModalScheduleAt').textContent = dt.replace('T', ' ');
+            schedBox.classList.remove('hidden');
+        } else {
+            schedBox.classList.add('hidden');
+        }
+
+        // Reset confirm input + button
+        const input = document.getElementById('bcModalConfirmInput');
+        input.value = '';
+        document.getElementById('bcModalConfirmBtn').disabled = true;
+
+        document.getElementById('broadcastConfirmModal').classList.remove('hidden');
+        setTimeout(() => input.focus(), 50);
     }
+
+    function closeBroadcastConfirmModal() {
+        document.getElementById('broadcastConfirmModal').classList.add('hidden');
+    }
+
+    function validateBroadcastConfirmInput() {
+        const v = document.getElementById('bcModalConfirmInput').value;
+        // Case-sensitive: must equal "SEND"
+        document.getElementById('bcModalConfirmBtn').disabled = (v !== 'SEND');
+    }
+
+    function submitBroadcastForm() {
+        // Final gate: only submit if input is exactly "SEND"
+        const v = document.getElementById('bcModalConfirmInput').value;
+        if (v !== 'SEND') return;
+        closeBroadcastConfirmModal();
+        document.getElementById('broadcastForm').submit();
+    }
+
+    // Close modal on Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const m = document.getElementById('broadcastConfirmModal');
+            if (m && !m.classList.contains('hidden')) closeBroadcastConfirmModal();
+        }
+    });
 
     toggleMessageType();
     toggleTargetType();

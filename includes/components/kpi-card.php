@@ -3,7 +3,7 @@
  * KPI Card Component — Archetype B (Dashboard)
  * แสดงตัวเลข KPI พร้อม accent rail, headline mono, และ footer chip
  *
- * @package Clinicya\Components
+ * @package REYA\Components
  * @version 1.0.0
  */
 

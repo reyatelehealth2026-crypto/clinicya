@@ -33,7 +33,7 @@ class SetupStatusChecker {
             'products' => [
                 'label' => 'เพิ่มสินค้า',
                 'description' => 'เพิ่มสินค้าอย่างน้อย 1 รายการ',
-                'url' => '/shop/products.php',
+                'url' => '/inventory/',
                 'icon' => 'fas fa-box'
             ]
         ],
@@ -41,7 +41,7 @@ class SetupStatusChecker {
             'liff_shop' => [
                 'label' => 'ตั้งค่า LIFF Shop',
                 'description' => 'เปิดใช้งานร้านค้าใน LINE',
-                'url' => '/liff-settings.php',
+                'url' => '/admin/miniapp-settings.php',
                 'icon' => 'fas fa-shopping-bag'
             ],
             'payment' => [

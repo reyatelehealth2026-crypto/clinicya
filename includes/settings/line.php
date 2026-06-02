@@ -215,13 +215,41 @@ $accounts = $manager->getAllAccounts();
                     
                     <div>
                         <label class="block text-sm font-medium mb-1">Channel Secret <span class="text-red-500">*</span></label>
-                        <input type="text" name="channel_secret" id="line_channel_secret" required class="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-green-500 font-mono text-sm">
+                        <div class="relative">
+                            <input type="password" name="channel_secret" id="line_channel_secret" required class="w-full px-4 py-2.5 pr-12 border rounded-lg focus:ring-2 focus:ring-green-500 font-mono text-sm" autocomplete="off">
+                            <button type="button" onclick="ws1ToggleSecret('line_channel_secret', this)" class="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-gray-500 hover:text-gray-700" aria-label="แสดง/ซ่อน Channel Secret">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
-                    
+
                     <div>
                         <label class="block text-sm font-medium mb-1">Channel Access Token <span class="text-red-500">*</span></label>
-                        <textarea name="channel_access_token" id="line_channel_access_token" required rows="3" class="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-green-500 font-mono text-xs"></textarea>
+                        <div class="relative">
+                            <textarea name="channel_access_token" id="line_channel_access_token" required rows="3" class="w-full px-4 py-2.5 pr-12 border rounded-lg focus:ring-2 focus:ring-green-500 font-mono text-xs" autocomplete="off" style="-webkit-text-security:disc;text-security:disc;"></textarea>
+                            <button type="button" onclick="ws1ToggleSecretTextarea('line_channel_access_token', this)" class="absolute right-2 top-2 px-2 py-1 text-gray-500 hover:text-gray-700" aria-label="แสดง/ซ่อน Channel Access Token">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
                     </div>
+
+                    <script>
+                    if (typeof window.ws1ToggleSecret === 'undefined') {
+                        window.ws1ToggleSecret = function(id, btn) {
+                            const el = document.getElementById(id);
+                            const icon = btn.querySelector('i');
+                            if (el.type === 'password') { el.type = 'text'; icon.className = 'fas fa-eye-slash'; }
+                            else { el.type = 'password'; icon.className = 'fas fa-eye'; }
+                        };
+                        window.ws1ToggleSecretTextarea = function(id, btn) {
+                            const el = document.getElementById(id);
+                            const icon = btn.querySelector('i');
+                            const hidden = (el.style.webkitTextSecurity || 'disc') === 'disc';
+                            if (hidden) { el.style.webkitTextSecurity = 'none'; el.style.textSecurity = 'none'; icon.className = 'fas fa-eye-slash'; }
+                            else { el.style.webkitTextSecurity = 'disc'; el.style.textSecurity = 'disc'; icon.className = 'fas fa-eye'; }
+                        };
+                    }
+                    </script>
                     
                     <div class="bg-blue-50 p-4 rounded-xl">
                         <p class="font-medium text-blue-700 mb-2"><i class="fas fa-info-circle mr-1"></i>วิธีรับ Credentials</p>

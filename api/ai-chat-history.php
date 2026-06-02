@@ -28,7 +28,7 @@ if (in_array($origin, $allowedOrigins, true)) {
     header('Vary: Origin');
 }
 header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     exit;
@@ -37,6 +37,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/ai-chat-context.php';
+require_once __DIR__ . '/../includes/liff-auth.php';
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 $isDelete = ($method === 'DELETE') || ($method === 'POST' && (($_GET['action'] ?? '') === 'clear'));
@@ -73,6 +74,11 @@ if ($lineUserId === '' || !preg_match('/^U[0-9a-f]{32}$/i', $lineUserId)) {
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+// Fail-closed: the caller must present a LIFF access token that resolves to the
+// same LINE userId it is asking us to read/clear. Closes the PHI-leak + mass
+// deletion IDOR (line_user_id alone is not a secret).
+reya_require_liff_user($lineUserId);
 
 try {
     $db = Database::getInstance()->getConnection();

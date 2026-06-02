@@ -3,7 +3,7 @@
  * Sticky Save Bar Component
  * Bottom-fixed save/cancel bar — shown only when the form is dirty
  *
- * @package Clinicya\Components
+ * @package REYA\Components
  * @version 1.0.0
  */
 

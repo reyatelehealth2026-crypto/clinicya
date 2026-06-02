@@ -15,6 +15,11 @@
 
 require_once 'config/config.php';
 require_once 'config/database.php';
+require_once 'includes/auth_check.php';
+if (!isAdmin() && !isSuperAdmin()) {
+    header('Location: /');
+    exit;
+}
 require_once 'includes/components/tabs.php';
 require_once 'includes/components/period-selector.php';
 

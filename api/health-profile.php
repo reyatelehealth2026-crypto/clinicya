@@ -110,6 +110,7 @@ function createHealthProfileTables($pdo) {
         id INT AUTO_INCREMENT PRIMARY KEY,
         line_user_id VARCHAR(50) NOT NULL,
         line_account_id INT DEFAULT 0,
+        name VARCHAR(255) DEFAULT NULL,
         age INT DEFAULT NULL,
         gender ENUM('male', 'female', 'other') DEFAULT NULL,
         weight DECIMAL(5,2) DEFAULT NULL,
@@ -121,6 +122,16 @@ function createHealthProfileTables($pdo) {
         UNIQUE KEY unique_user (line_user_id, line_account_id),
         INDEX idx_line_user (line_user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // Backfill: add name column for envs whose table predates the migration
+    try {
+        $colExists = $pdo->query("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_health_profiles' AND COLUMN_NAME = 'name'")->fetchColumn();
+        if ((int) $colExists === 0) {
+            $pdo->exec("ALTER TABLE user_health_profiles ADD COLUMN name VARCHAR(255) DEFAULT NULL AFTER line_account_id");
+        }
+    } catch (PDOException $e) {
+        // best-effort — skip silently
+    }
     
     // Drug allergies table
     $pdo->exec("CREATE TABLE IF NOT EXISTS user_drug_allergies (
@@ -183,6 +194,7 @@ function getHealthProfile($pdo) {
             $profile = [
                 'id' => $pdo->lastInsertId(),
                 'line_user_id' => $lineUserId,
+                'name' => null,
                 'age' => null,
                 'gender' => null,
                 'weight' => null,
@@ -214,6 +226,7 @@ function getHealthProfile($pdo) {
             'success' => true,
             'profile' => [
                 'personal_info' => [
+                    'name' => $profile['name'] ?? null,
                     'age' => $profile['age'],
                     'gender' => $profile['gender'],
                     'weight' => $profile['weight'],
@@ -239,23 +252,24 @@ function getHealthProfile($pdo) {
  * Requirements: 18.10 - Show completion percentage
  */
 function calculateCompletionPercentage($profile, $allergies, $medications) {
-    $totalFields = 8; // age, gender, weight, height, blood_type, conditions, allergies, medications
+    $totalFields = 9; // name, age, gender, weight, height, blood_type, conditions, allergies, medications
     $filledFields = 0;
-    
+
+    if (!empty($profile['name'])) $filledFields++;
     if (!empty($profile['age'])) $filledFields++;
     if (!empty($profile['gender'])) $filledFields++;
     if (!empty($profile['weight'])) $filledFields++;
     if (!empty($profile['height'])) $filledFields++;
     if (!empty($profile['blood_type']) && $profile['blood_type'] !== 'unknown') $filledFields++;
-    
+
     $conditions = is_array($profile['medical_conditions']) ? $profile['medical_conditions'] : [];
     if (!empty($conditions)) $filledFields++;
-    
+
     // Allergies and medications count as filled if user has reviewed them (even if empty)
     // For now, count as filled if they have any entries
     if (!empty($allergies)) $filledFields++;
     if (!empty($medications)) $filledFields++;
-    
+
     return round(($filledFields / $totalFields) * 100);
 }
 
@@ -266,38 +280,46 @@ function calculateCompletionPercentage($profile, $allergies, $medications) {
 function updatePersonalInfo($pdo, $input) {
     $lineUserId = $input['line_user_id'] ?? '';
     $lineAccountId = $input['line_account_id'] ?? 0;
-    
+
     if (empty($lineUserId)) {
         jsonResponse(['success' => false, 'error' => 'Missing line_user_id'], 400);
         return;
     }
-    
+
+    $name = isset($input['name']) ? trim((string) $input['name']) : null;
+    if ($name === '') {
+        $name = null;
+    }
+    if ($name !== null && mb_strlen($name) > 255) {
+        $name = mb_substr($name, 0, 255);
+    }
     $age = isset($input['age']) ? intval($input['age']) : null;
     $gender = $input['gender'] ?? null;
     $weight = isset($input['weight']) ? floatval($input['weight']) : null;
     $height = isset($input['height']) ? floatval($input['height']) : null;
     $bloodType = $input['blood_type'] ?? 'unknown';
-    
+
     // Validate
     if ($age !== null && ($age < 0 || $age > 150)) {
         jsonResponse(['success' => false, 'error' => 'Invalid age'], 400);
         return;
     }
-    
+
     if ($gender !== null && !in_array($gender, ['male', 'female', 'other'])) {
         jsonResponse(['success' => false, 'error' => 'Invalid gender'], 400);
         return;
     }
-    
+
     if (!in_array($bloodType, ['A', 'B', 'AB', 'O', 'unknown'])) {
         $bloodType = 'unknown';
     }
-    
+
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO user_health_profiles (line_user_id, line_account_id, age, gender, weight, height, blood_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO user_health_profiles (line_user_id, line_account_id, name, age, gender, weight, height, blood_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
+                name = VALUES(name),
                 age = VALUES(age),
                 gender = VALUES(gender),
                 weight = VALUES(weight),
@@ -305,14 +327,14 @@ function updatePersonalInfo($pdo, $input) {
                 blood_type = VALUES(blood_type),
                 updated_at = CURRENT_TIMESTAMP
         ");
-        
-        $stmt->execute([$lineUserId, $lineAccountId, $age, $gender, $weight, $height, $bloodType]);
-        
+
+        $stmt->execute([$lineUserId, $lineAccountId, $name, $age, $gender, $weight, $height, $bloodType]);
+
         jsonResponse([
             'success' => true,
             'message' => 'บันทึกข้อมูลส่วนตัวแล้ว'
         ]);
-        
+
     } catch (PDOException $e) {
         error_log("Update personal info error: " . $e->getMessage());
         jsonResponse(['success' => false, 'error' => 'Database error'], 500);

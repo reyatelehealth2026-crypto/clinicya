@@ -266,14 +266,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $accountId = $_GET['account_id'] ?? null;
         $rows = [];
         try {
+            // อ่าน pharmacists table — รับ columns ที่มีจริง
             $cols = $db->query("SHOW COLUMNS FROM pharmacists")->fetchAll(PDO::FETCH_COLUMN);
             $select = ['id', 'name'];
-            if (in_array('image_url', $cols)) $select[] = 'image_url';
-            if (in_array('title', $cols)) $select[] = 'title';
+            if (in_array('image_url', $cols)) {
+                $select[] = 'image_url';
+            }
+            if (in_array('title', $cols)) {
+                $select[] = 'title';
+            }
             $whereParts = [];
             $params = [];
-            if (in_array('is_available', $cols)) $whereParts[] = 'is_available = 1';
-            if (in_array('is_active', $cols)) $whereParts[] = 'is_active = 1';
+            if (in_array('is_available', $cols)) {
+                $whereParts[] = 'is_available = 1';
+            }
+            if (in_array('is_active', $cols)) {
+                $whereParts[] = 'is_active = 1';
+            }
             if ($accountId && in_array('line_account_id', $cols)) {
                 $whereParts[] = '(line_account_id = ? OR line_account_id IS NULL)';
                 $params[] = $accountId;
@@ -293,7 +302,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         } catch (Exception $e) {
             error_log('check_online error: ' . $e->getMessage());
         }
-        echo json_encode(['success' => true, 'online' => !empty($rows), 'pharmacists' => $rows]);
+        echo json_encode([
+            'success' => true,
+            'online' => !empty($rows),
+            'pharmacists' => $rows
+        ]);
+        exit;
+    }
+
+    // History of completed/rejected/ended/missed calls
+    if ($action === 'history') {
+        $accountId = $_GET['account_id'] ?? null;
+        $limit = min(max((int) ($_GET['limit'] ?? 50), 1), 200);
+        $statusFilter = $_GET['status'] ?? ''; // optional: completed|rejected|missed|ended
+        $search = trim((string) ($_GET['q'] ?? ''));
+
+        $where = ["vc.status IN ('completed','rejected','ended','missed','timeout')"];
+        $params = [];
+        if ($accountId) {
+            $where[] = "(vc.line_account_id = ? OR vc.line_account_id IS NULL)";
+            $params[] = $accountId;
+        }
+        if ($statusFilter && in_array($statusFilter, ['completed', 'rejected', 'ended', 'missed', 'timeout'])) {
+            $where = ["vc.status = ?"];
+            $params = [$statusFilter];
+            if ($accountId) {
+                $where[] = "(vc.line_account_id = ? OR vc.line_account_id IS NULL)";
+                $params[] = $accountId;
+            }
+        }
+        if ($search !== '') {
+            $where[] = "(COALESCE(u.display_name, vc.display_name) LIKE ? OR vc.line_user_id LIKE ?)";
+            $params[] = "%$search%";
+            $params[] = "%$search%";
+        }
+        $whereSql = implode(' AND ', $where);
+
+        $sql = "SELECT vc.id, vc.room_id, vc.status,
+                       COALESCE(u.display_name, vc.display_name, 'ลูกค้า') AS display_name,
+                       COALESCE(u.picture_url, vc.picture_url) AS picture_url,
+                       vc.line_user_id, vc.user_id, vc.line_account_id,
+                       vc.duration, vc.started_at, vc.ended_at, vc.created_at
+                FROM video_calls vc
+                LEFT JOIN users u ON vc.user_id = u.id OR vc.line_user_id = u.line_user_id
+                WHERE $whereSql
+                ORDER BY vc.created_at DESC
+                LIMIT $limit";
+        try {
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            $rows = [];
+        }
+
+        // Summary stats (today)
+        $today = date('Y-m-d');
+        $stats = ['today_total' => 0, 'today_completed' => 0, 'today_missed' => 0, 'today_avg_duration' => 0];
+        try {
+            $accFilter = $accountId ? "AND (line_account_id = ? OR line_account_id IS NULL)" : '';
+            $sParams = $accountId ? [$today, $accountId] : [$today];
+            $s = $db->prepare("SELECT
+                COUNT(*) AS total,
+                SUM(status = 'completed') AS completed,
+                SUM(status IN ('missed','rejected','timeout')) AS missed,
+                COALESCE(AVG(NULLIF(duration,0)), 0) AS avg_duration
+                FROM video_calls WHERE DATE(created_at) = ? $accFilter");
+            $s->execute($sParams);
+            $r = $s->fetch(PDO::FETCH_ASSOC);
+            if ($r) {
+                $stats = [
+                    'today_total' => (int) $r['total'],
+                    'today_completed' => (int) $r['completed'],
+                    'today_missed' => (int) $r['missed'],
+                    'today_avg_duration' => (int) round($r['avg_duration'])
+                ];
+            }
+        } catch (Exception $e) {
+        }
+
+        echo json_encode(['success' => true, 'history' => $rows, 'stats' => $stats]);
         exit;
     }
 }
@@ -383,7 +471,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'answer') {
         $callId = $input['call_id'] ?? '';
 
-        $stmt = $db->prepare("UPDATE video_calls SET status = 'active', answered_at = NOW() WHERE id = ? OR room_id = ?");
+        $stmt = $db->prepare("UPDATE video_calls SET status = 'active', started_at = NOW() WHERE id = ? OR room_id = ?");
         $stmt->execute([$callId, $callId]);
 
         echo json_encode(['success' => true]);
@@ -479,6 +567,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit;
     }
+
 }
 
 echo json_encode(['success' => false, 'error' => 'Invalid action']);

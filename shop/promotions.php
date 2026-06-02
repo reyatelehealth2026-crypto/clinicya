@@ -4,8 +4,6 @@
  * - สินค้าเด่น (Featured): แสดงในหน้าแรก
  * - Best Seller: แสดงเป็นสินค้าขายดีในแต่ละหมวดหมู่
  */
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -18,25 +16,9 @@ $db = Database::getInstance()->getConnection();
 $lineAccountId = $_SESSION['line_account_id'] ?? $_SESSION['current_bot_id'] ?? null;
 $pageTitle = 'จัดการสินค้าเด่น / Best Seller';
 
-// Check if columns exist
-$hasIsFeatured = $hasIsBestseller = false;
-try {
-    $cols = $db->query("SHOW COLUMNS FROM business_items")->fetchAll(PDO::FETCH_COLUMN);
-    $hasIsFeatured   = in_array('is_featured', $cols);
-    $hasIsBestseller = in_array('is_bestseller', $cols);
-
-    // Add columns if not exist
-    if (!$hasIsFeatured) {
-        $db->exec("ALTER TABLE business_items ADD COLUMN is_featured TINYINT(1) DEFAULT 0");
-        $hasIsFeatured = true;
-    }
-    if (!$hasIsBestseller) {
-        $db->exec("ALTER TABLE business_items ADD COLUMN is_bestseller TINYINT(1) DEFAULT 0");
-        $hasIsBestseller = true;
-    }
-} catch (Exception $e) {
-    // Columns might already exist or table doesn't exist
-}
+// Columns is_featured / is_bestseller are managed by:
+//   database/migration_2026-05-18_promotions_columns.sql
+$hasIsFeatured = $hasIsBestseller = true;
 
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {

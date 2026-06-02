@@ -35,6 +35,34 @@ $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https'
 $host = $_SERVER['HTTP_HOST'];
 $path = dirname(dirname($_SERVER['REQUEST_URI']));
 $autoUrl = rtrim($protocol . '://' . $host . $path, '/');
+
+// SaaS awareness — Wave 3 is database-per-tenant. If the platform (master) DB is
+// already provisioned, the legacy single-tenant installer no longer models the
+// deployment; new shops are created via /admin/switch-tenant.php instead.
+require_once __DIR__ . '/../includes/onboarding/onboarding-helpers.php';
+$saasNotice = null;
+try {
+    if (is_file(__DIR__ . '/../config/config.php')) {
+        require_once __DIR__ . '/../config/config.php';
+    }
+    $platformConfigured = false;
+    $tcFile = __DIR__ . '/../classes/TenantContext.php';
+    if (defined('DB_HOST') && is_file($tcFile)) {
+        require_once $tcFile;
+        if (class_exists('TenantContext') && defined('TenantContext::PLATFORM_DB_NAME')) {
+            $platformDbName = constant('TenantContext::PLATFORM_DB_NAME');
+            $pdo = new PDO(
+                'mysql:host=' . DB_HOST . ';dbname=' . $platformDbName . ';charset=utf8mb4',
+                DB_USER, DB_PASS,
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 3]
+            );
+            $platformConfigured = (bool) $pdo->query("SHOW TABLES LIKE 'tenants'")->fetchColumn();
+        }
+    }
+    $saasNotice = reya_install_saas_notice($platformConfigured, $isInstalled);
+} catch (\Throwable $e) {
+    $saasNotice = null; // never let detection break the installer
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -580,6 +608,19 @@ $autoUrl = rtrim($protocol . '://' . $host . $path, '/');
 
 <body>
     <div class="container">
+        <?php if (!empty($saasNotice)): ?>
+        <div style="max-width:900px;margin:16px auto 0;padding:16px 20px;border-radius:14px;
+                    background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-weight:500;
+                    box-shadow:0 6px 20px rgba(0,0,0,.08)">
+            <i class="fas fa-triangle-exclamation" style="margin-right:8px"></i>
+            <?= htmlspecialchars($saasNotice, ENT_QUOTES, 'UTF-8') ?>
+            <div style="margin-top:8px">
+                <a href="/admin/switch-tenant.php" style="color:#c2410c;text-decoration:underline">
+                    ไปหน้าสร้างร้าน (provisioning) →
+                </a>
+            </div>
+        </div>
+        <?php endif; ?>
         <!-- Header -->
         <div class="wizard-header">
             <h1>🏥 LINE Telepharmacy CRM</h1>

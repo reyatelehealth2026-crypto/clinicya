@@ -166,7 +166,7 @@ export function AIChatClient() {
         cancelled = true
       }
     }
-    fetchAIChatHistory(userId)
+    fetchAIChatHistory(userId, 20, lineCtx.accessToken)
       .then((history) => {
         if (cancelled) return
         if (history.length === 0) {
@@ -198,7 +198,7 @@ export function AIChatClient() {
     return () => {
       cancelled = true
     }
-  }, [lineCtx.profile?.userId])
+  }, [lineCtx.profile?.userId, lineCtx.accessToken])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -230,9 +230,11 @@ export function AIChatClient() {
     setOrderSending(true)
     try {
       const userId = lineCtx.profile?.userId
+      const approveHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (lineCtx.accessToken) approveHeaders.Authorization = `Bearer ${lineCtx.accessToken}`
       const resp = await fetch(apiUrl('/api/ai-chat-approve-order.php'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: approveHeaders,
         body: JSON.stringify({
           line_user_id: userId,
           last_ai_message: pendingOrderMsg,
@@ -266,7 +268,7 @@ export function AIChatClient() {
     if (typeof window !== 'undefined' && !window.confirm('ลบประวัติการสนทนาทั้งหมดและเริ่มใหม่?')) return
     const userId = lineCtx.profile?.userId
     // Delete server-side history first so it doesn't repopulate on refresh
-    const ok = userId ? await clearAIChatHistory(userId) : true
+    const ok = userId ? await clearAIChatHistory(userId, lineCtx.accessToken) : true
     setMessages([defaultGreetingMessage()])
     setInput('')
     setStreamingContent('')

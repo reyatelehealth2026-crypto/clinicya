@@ -3,7 +3,7 @@
  * Field Component
  * Label + input (text/email/number/select/textarea) + help text + error slot
  *
- * @package Clinicya\Components
+ * @package REYA\Components
  * @version 1.0.0
  */
 

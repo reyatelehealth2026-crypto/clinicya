@@ -129,6 +129,7 @@ if (!defined('SKIP_ONBOARDING_REDIRECT')) {
         strpos($__path, '/api/') === 0
     );
     if (!$__skip && class_exists('Database') && !empty($currentUser['id'])) {
+        require_once __DIR__ . '/onboarding/onboarding-helpers.php';
         try {
             $__db = Database::getInstance()->getConnection();
             $__s = $__db->prepare(
@@ -137,12 +138,9 @@ if (!defined('SKIP_ONBOARDING_REDIRECT')) {
             );
             $__s->execute([':id' => (int)$currentUser['id']]);
             $__ob = $__s->fetch(PDO::FETCH_ASSOC);
-            if ($__ob
-                && (int)$__ob['onboarding_completed'] === 0
-                && (int)$__ob['onboarding_skipped']   === 0
-            ) {
-                $__nextStep = min(7, max(1, (int)$__ob['onboarding_step'] + 1));
-                header('Location: /onboarding/wizard.php?step=' . $__nextStep);
+            if ($__ob && reya_should_onboard($__ob)) {
+                $__nextStep = min(7, max(1, (int)($__ob['onboarding_step'] ?? 0) + 1));
+                header('Location: ' . reya_onboarding_first_run_url() . '?step=' . $__nextStep);
                 exit;
             }
         } catch (Exception $__e) {

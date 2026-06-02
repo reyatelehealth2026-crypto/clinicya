@@ -3,7 +3,7 @@
  * Toggle Component
  * Switch control with label and optional description — Thai-friendly
  *
- * @package Clinicya\Components
+ * @package REYA\Components
  * @version 1.0.0
  */
 

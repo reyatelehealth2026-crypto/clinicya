@@ -366,7 +366,29 @@ if (isset($_GET['pending_slip']) && $_GET['pending_slip'] == '1') {
     $sql .= " AND o.id IN (SELECT DISTINCT transaction_id FROM payment_slips WHERE status = 'pending')";
 }
 
-$sql .= " ORDER BY o.created_at DESC";
+// Pagination
+$page    = max(1, (int)($_GET['page'] ?? 1));
+$perPage = 50;
+$offset  = ($page - 1) * $perPage;
+
+// Total count (mirrors WHERE clauses above for accuracy)
+$countSql = "SELECT COUNT(*) FROM {$_ordersTable} o JOIN users u ON o.user_id = u.id";
+if ($botIdForQuery) {
+    $countSql .= " WHERE (o.line_account_id = ? OR o.line_account_id IS NULL)";
+} else {
+    $countSql .= " WHERE 1=1";
+}
+if ($statusFilter)                  { $countSql .= " AND o.status = ?"; }
+if ($typeFilter && $_useTransactions) { $countSql .= " AND o.transaction_type = ?"; }
+if (isset($_GET['pending_slip']) && $_GET['pending_slip'] == '1') {
+    $countSql .= " AND o.id IN (SELECT DISTINCT transaction_id FROM payment_slips WHERE status = 'pending')";
+}
+$stmt = $db->prepare($countSql);
+$stmt->execute($params);
+$totalOrders = (int)$stmt->fetchColumn();
+$totalPages  = max(1, (int)ceil($totalOrders / $perPage));
+
+$sql .= " ORDER BY o.created_at DESC LIMIT {$perPage} OFFSET {$offset}";
 $stmt = $db->prepare($sql);
 $stmt->execute($params);
 $orders = $stmt->fetchAll();
@@ -604,6 +626,9 @@ $statusColors = [
 <?php if (empty($orders)): ?>
 <?= renderEmptyState('fas fa-shopping-bag', 'ยังไม่มีคำสั่งซื้อ', 'คำสั่งซื้อจาก LINE Shop จะปรากฏที่นี่') ?>
 <?php else: ?>
+<div style="margin-bottom:var(--space-3);font-size:var(--text-sm);color:var(--color-dark-500);">
+    แสดง <?= count($orders) ?> จาก <?= number_format($totalOrders) ?> รายการ
+</div>
 <?php foreach ($orders as $order):
     $transType      = $order['transaction_type'] ?? 'purchase';
     $typeInfo       = $transactionTypes[$transType] ?? $transactionTypes['purchase'];
@@ -675,7 +700,7 @@ $statusColors = [
                 <i class="fas fa-eye"></i>ดูรายละเอียด
             </a>
             <?php if ($order['status'] === 'pending'): ?>
-            <form method="POST" style="display:inline;">
+            <form method="POST" style="display:inline;" onsubmit="return confirm('ยืนยันออเดอร์ #<?= htmlspecialchars($order['order_number'], ENT_QUOTES) ?>? จะส่งข้อความ LINE ถึงลูกค้า');">
                 <input type="hidden" name="action"   value="update_status">
                 <input type="hidden" name="order_id" value="<?= $order['id'] ?>">
                 <input type="hidden" name="status"   value="confirmed">
@@ -688,6 +713,36 @@ $statusColors = [
     </div>
 </div>
 <?php endforeach; ?>
+
+<?php if ($totalPages > 1):
+    $qs       = $_GET;
+    unset($qs['page']);
+    $baseQs   = http_build_query($qs);
+    $linkFor  = function($p) use ($baseQs) {
+        return '?' . ($baseQs ? $baseQs . '&' : '') . 'page=' . $p;
+    };
+    $rangeStart = max(1, $page - 2);
+    $rangeEnd   = min($totalPages, $page + 2);
+?>
+<div style="margin-top:var(--space-6);display:flex;justify-content:center;align-items:center;gap:var(--space-2);flex-wrap:wrap;font-size:var(--text-sm);">
+    <span style="color:var(--color-dark-500);margin-right:var(--space-2);">หน้า <?= $page ?> จาก <?= $totalPages ?></span>
+    <?php if ($page > 1): ?>
+        <a href="<?= $linkFor(1) ?>" class="btn-sm btn-outline">« แรก</a>
+        <a href="<?= $linkFor($page - 1) ?>" class="btn-sm btn-outline">‹ ก่อนหน้า</a>
+    <?php endif; ?>
+    <?php for ($p = $rangeStart; $p <= $rangeEnd; $p++): ?>
+        <?php if ($p === $page): ?>
+            <span class="btn-sm btn-primary-sm" style="cursor:default;"><?= $p ?></span>
+        <?php else: ?>
+            <a href="<?= $linkFor($p) ?>" class="btn-sm btn-outline"><?= $p ?></a>
+        <?php endif; ?>
+    <?php endfor; ?>
+    <?php if ($page < $totalPages): ?>
+        <a href="<?= $linkFor($page + 1) ?>" class="btn-sm btn-outline">ถัดไป ›</a>
+        <a href="<?= $linkFor($totalPages) ?>" class="btn-sm btn-outline">สุดท้าย »</a>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 <?php endif; ?>
 <?php endif; ?>
 
