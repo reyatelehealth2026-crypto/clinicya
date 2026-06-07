@@ -87,6 +87,24 @@ class SlipVerifierTest extends TestCase
         $this->assertSame('account_mismatch', $r['reason']);
     }
 
+    public function testVerifyAcceptsSlipWithoutTopLevelType(): void
+    {
+        // The real GhostX success response may omit the docs-example top-level
+        // "type":"SLIP" — a transactionRef in the transfer is the real signal.
+        $body = json_encode([
+            'slipVerification' => ['transfer' => [
+                'transactionRef' => '202606071Uk8OghbzZ4JYLAQS',
+                'amount' => ['amount' => 198.00],
+                'toAccountNo' => '0141111111111',
+            ]],
+        ]);
+        $v = $this->verifierReturning(200, $body);
+        $r = $v->verify('QRDATA', 198.00, ['9876543210'], false);
+
+        $this->assertTrue($r['verified']);
+        $this->assertSame('202606071Uk8OghbzZ4JYLAQS', $r['ref']);
+    }
+
     public function testVerifyFailsWhenNotASlip(): void
     {
         $v = $this->verifierReturning(200, json_encode(['type' => 'UNKNOWN']));

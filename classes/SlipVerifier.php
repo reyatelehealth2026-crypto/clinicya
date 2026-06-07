@@ -143,7 +143,10 @@ class SlipVerifier
             'data' => $s['raw'] ?? [],
         ];
 
-        if (($s['type'] ?? null) !== 'SLIP' || ($s['ref'] ?? null) === null) {
+        // A valid slip is identified by a transaction reference. The docs-example
+        // top-level "type":"SLIP" is NOT always present in real GhostX responses,
+        // so requiring it would wrongly reject genuine slips.
+        if (($s['ref'] ?? null) === null) {
             $result['reason'] = 'not_a_slip';
             return $result;
         }

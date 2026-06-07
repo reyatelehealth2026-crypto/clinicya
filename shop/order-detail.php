@@ -246,7 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $prior = !empty($slip['verify_data']) ? json_decode($slip['verify_data'], true) : null;
                 // Amount-only: approve on a valid slip whose amount matches the
                 // order; account is shown for a visual check but does not block.
-                if (is_array($prior) && !empty($prior['type'])) {
+                if (is_array($prior) && !empty($prior['slipVerification']['transfer'])) {
                     $vr = $verifier->verifyStored($prior, $expectedAmount, $shopAccounts, false);
                 } else {
                     $vr = $verifier->verify($qr, $expectedAmount, $shopAccounts, false);
