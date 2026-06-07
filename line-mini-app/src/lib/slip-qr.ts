@@ -62,7 +62,9 @@ export async function decodeSlipQr(file: File): Promise<string | null> {
     const img = await fileToImageData(file)
     if (!img) return null
     const { default: jsQR } = await import('jsqr')
-    return decodeQrFromImageData(img, (d, w, h) => jsQR(d, w, h))
+    // attemptBoth also tries an inverted image, which catches more real-world
+    // slip photos (dark-on-light vs light-on-dark) than the default.
+    return decodeQrFromImageData(img, (d, w, h) => jsQR(d, w, h, { inversionAttempts: 'attemptBoth' }))
   } catch {
     return null
   }

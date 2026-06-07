@@ -194,12 +194,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // app at upload time and saved in payment_slips.qr_payload).
     if ($action === 'verify_slip') {
         $slipId = (int) ($_POST['slip_id'] ?? 0);
+        $postedQr = trim((string) ($_POST['qr_data'] ?? ''));
         $reason = 'no_qr';
         try {
             $st = $db->prepare("SELECT * FROM payment_slips WHERE id = ? AND transaction_id = ? LIMIT 1");
             $st->execute([$slipId, $orderId]);
             $slip = $st->fetch(PDO::FETCH_ASSOC);
-            $qr = $slip['qr_payload'] ?? '';
+            // Prefer a QR the admin's browser just decoded from the image; fall
+            // back to the one stored at upload. Persist a freshly decoded one.
+            $qr = $postedQr !== '' ? $postedQr : ($slip['qr_payload'] ?? '');
+            if ($slip && $postedQr !== '' && empty($slip['qr_payload'])) {
+                try {
+                    $db->prepare("UPDATE payment_slips SET qr_payload = ? WHERE id = ?")->execute([$postedQr, $slipId]);
+                } catch (\Throwable $e) { /* qr_payload column may be missing */ }
+            }
 
             if ($slip && $qr !== '') {
                 require_once __DIR__ . '/../classes/SlipVerifier.php';
@@ -1136,7 +1144,15 @@ echo renderPageHeader(
                                         <button type="submit" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;"><i class="fas fa-qrcode" style="margin-right:4px;"></i>ตรวจสอบกับ GhostX</button>
                                     </form>
                                 <?php elseif (empty($qrPayload)): ?>
-                                    <div style="color:var(--color-dark-400);"><i class="fas fa-info-circle" style="margin-right:4px;"></i>สลิปนี้ไม่มีข้อมูล QR (อัปก่อนเปิดระบบ หรือรูปไม่มี QR)</div>
+                                    <div style="color:var(--color-dark-400);margin-bottom:6px;"><i class="fas fa-info-circle" style="margin-right:4px;"></i>ยังไม่มีข้อมูล QR (ลูกค้าอัปผ่านช่องที่ไม่ถอด QR หรือถอดไม่ติด) — ถอดจากรูปได้</div>
+                                    <?php if ($slip['status'] !== 'approved'): ?>
+                                    <form method="POST" id="qrform-<?= (int) $slip['id'] ?>" style="margin:0;">
+                                        <input type="hidden" name="action" value="verify_slip">
+                                        <input type="hidden" name="slip_id" value="<?= (int) $slip['id'] ?>">
+                                        <input type="hidden" name="qr_data" id="qrdata-<?= (int) $slip['id'] ?>">
+                                        <button type="button" onclick="decodeSlipAndVerify(this, <?= (int) $slip['id'] ?>, '<?= htmlspecialchars($slipSrc, ENT_QUOTES) ?>')" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;"><i class="fas fa-qrcode" style="margin-right:4px;"></i>ถอด QR จากรูป &amp; ตรวจสอบ</button>
+                                    </form>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -1206,6 +1222,48 @@ document.getElementById('slipModal')?.addEventListener('click', function(e) {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeSlipModal();
 });
+</script>
+
+<!-- jsQR for admin-side slip QR decoding (works for slips uploaded via any channel) -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+function decodeSlipAndVerify(btn, slipId, imgSrc) {
+    if (typeof jsQR !== 'function') { alert('ตัวถอด QR ยังโหลดไม่เสร็จ ลองใหม่อีกครั้ง'); return; }
+    var original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:4px;"></i>กำลังถอด QR...';
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function () {
+        try {
+            var canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            var code = jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+            if (code && code.data) {
+                document.getElementById('qrdata-' + slipId).value = code.data;
+                document.getElementById('qrform-' + slipId).submit();
+            } else {
+                alert('ถอด QR จากรูปไม่สำเร็จ — รูปอาจไม่ชัด ไม่มี QR ที่อ่านได้ หรือเป็นสลิปคนละแบบ');
+                btn.disabled = false;
+                btn.innerHTML = original;
+            }
+        } catch (e) {
+            alert('เกิดข้อผิดพลาดในการถอด QR: ' + e.message);
+            btn.disabled = false;
+            btn.innerHTML = original;
+        }
+    };
+    img.onerror = function () {
+        alert('โหลดรูปสลิปไม่สำเร็จ');
+        btn.disabled = false;
+        btn.innerHTML = original;
+    };
+    img.src = imgSrc;
+}
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
