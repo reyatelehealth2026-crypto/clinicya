@@ -547,6 +547,29 @@ $stmt = $db->prepare("SELECT * FROM payment_slips WHERE transaction_id = ? ORDER
 $stmt->execute([$orderId]);
 $slips = $stmt->fetchAll();
 
+// Helpers + shop accounts for rendering the GhostX result on each slip card.
+require_once __DIR__ . '/../classes/SlipVerifier.php';
+$shopAccts = [];
+try {
+    $ssStmt = $db->prepare("SELECT promptpay_number, bank_accounts FROM shop_settings WHERE line_account_id = ? LIMIT 1");
+    $ssStmt->execute([$currentBotId]);
+    $ssRow = $ssStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (!empty($ssRow['promptpay_number'])) {
+        $shopAccts[] = (string) $ssRow['promptpay_number'];
+    }
+    if (!empty($ssRow['bank_accounts'])) {
+        $ssDec = json_decode($ssRow['bank_accounts'], true);
+        if (is_array($ssDec)) {
+            foreach ($ssDec as $b) {
+                if (!empty($b['account_number'])) {
+                    $shopAccts[] = (string) $b['account_number'];
+                }
+            }
+        }
+    }
+} catch (\Throwable $e) { /* no shop_settings */ }
+$orderGrandTotal = (float) ($order['grand_total'] ?? $order['total_amount'] ?? 0);
+
 // Transaction type info for V2.5
 $transactionTypes = [
     'purchase'     => ['icon' => '🛒', 'label' => 'ซื้อสินค้า'],
@@ -1055,26 +1078,51 @@ echo renderPageHeader(
                             <?php endif; ?>
                             <?php
                             $vRef = $slip['verify_ref'] ?? null;
-                            $vAmt = $slip['verify_amount'] ?? null;
                             $qrPayload = $slip['qr_payload'] ?? null;
                             $vData = !empty($slip['verify_data']) ? json_decode($slip['verify_data'], true) : null;
-                            $toAcc = $vData['slipVerification']['transfer']['toAccountNo'] ?? null;
+                            $tr = $vData['slipVerification']['transfer'] ?? null;
+                            $slipAmt = isset($tr['amount']['amount']) ? (float) $tr['amount']['amount'] : null;
+                            $toAcc = $tr['toAccountNo'] ?? null;
+                            $fromName = $tr['fromAccountName'] ?? ($tr['fromBankName'] ?? null);
+                            $txRef = $tr['transactionRef'] ?? $vRef;
+                            $txTime = $tr['transactionDateTime'] ?? null;
+                            $amtOk = $slipAmt !== null && SlipVerifier::amountMatches($orderGrandTotal, $slipAmt);
+                            $acctOk = false;
+                            if ($toAcc) { foreach ($shopAccts as $a) { if (SlipVerifier::accountMatches((string) $a, (string) $toAcc)) { $acctOk = true; break; } } }
                             ?>
                             <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--color-slate-200);font-size:var(--text-xs);">
-                                <?php if ($vRef): ?>
-                                    <div style="color:var(--color-emerald-600);font-weight:600;"><i class="fas fa-shield-alt" style="margin-right:4px;"></i>GhostX ยืนยันแล้ว</div>
-                                    <div style="color:var(--color-dark-500);margin-top:2px;">Ref: <?= htmlspecialchars($vRef) ?><?php if ($vAmt): ?> · ฿<?= number_format((float)$vAmt, 2) ?><?php endif; ?><?php if ($toAcc): ?> · เข้าบัญชี <?= htmlspecialchars($toAcc) ?><?php endif; ?></div>
+                                <?php if ($tr): ?>
+                                    <div style="font-weight:600;color:var(--color-dark-700);margin-bottom:4px;"><i class="fas fa-shield-alt" style="margin-right:4px;color:#6366f1;"></i>ผลตรวจสลิป (GhostX)</div>
+                                    <div style="color:var(--color-dark-600);line-height:1.8;">
+                                        <div>ยอดในสลิป: <b>฿<?= number_format((float) $slipAmt, 2) ?></b>
+                                            <?php if ($amtOk): ?><span style="color:var(--color-emerald-600);">✓ ตรง</span><?php else: ?><span style="color:var(--color-rose-500);">✗ ออเดอร์ ฿<?= number_format($orderGrandTotal, 2) ?></span><?php endif; ?>
+                                        </div>
+                                        <?php if ($toAcc): ?>
+                                        <div>เข้าบัญชี: <b><?= htmlspecialchars($toAcc) ?></b>
+                                            <?php if ($acctOk): ?><span style="color:var(--color-emerald-600);">✓ ตรงบัญชีร้าน</span><?php else: ?><span style="color:var(--color-rose-500);">✗ ไม่ตรงบัญชีร้าน</span><?php endif; ?>
+                                        </div>
+                                        <?php endif; ?>
+                                        <?php if ($fromName): ?><div>จาก: <?= htmlspecialchars($fromName) ?></div><?php endif; ?>
+                                        <?php if ($txRef): ?><div style="color:var(--color-dark-400);">Ref: <?= htmlspecialchars($txRef) ?><?php if ($txTime): ?> · <?= htmlspecialchars(date('d/m/Y H:i', strtotime($txTime))) ?><?php endif; ?></div><?php endif; ?>
+                                    </div>
+                                    <?php if ($vRef): ?>
+                                        <div style="color:var(--color-emerald-600);font-weight:600;margin-top:4px;">✅ ยืนยันแล้ว — อนุมัติการชำระอัตโนมัติ</div>
+                                    <?php else: ?>
+                                        <div style="color:var(--color-rose-500);margin-top:4px;">⚠️ ไม่ผ่านอัตโนมัติ<?= (!$amtOk ? ' (ยอดไม่ตรง)' : (!$acctOk ? ' (บัญชีไม่ตรง)' : '')) ?></div>
+                                        <?php if ($slip['status'] !== 'approved'): ?>
+                                        <form method="POST" style="margin:6px 0 0;">
+                                            <input type="hidden" name="action" value="verify_slip">
+                                            <input type="hidden" name="slip_id" value="<?= (int) $slip['id'] ?>">
+                                            <button type="submit" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;"><i class="fas fa-rotate-right" style="margin-right:4px;"></i>ประเมินซ้ำ (หลังแก้บัญชีร้าน)</button>
+                                        </form>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
                                 <?php elseif (!empty($qrPayload) && $slip['status'] !== 'approved'): ?>
                                     <form method="POST" style="margin:0;">
                                         <input type="hidden" name="action" value="verify_slip">
                                         <input type="hidden" name="slip_id" value="<?= (int) $slip['id'] ?>">
-                                        <button type="submit" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;">
-                                            <i class="fas fa-qrcode" style="margin-right:4px;"></i>ตรวจสอบกับ GhostX
-                                        </button>
+                                        <button type="submit" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;"><i class="fas fa-qrcode" style="margin-right:4px;"></i>ตรวจสอบกับ GhostX</button>
                                     </form>
-                                    <?php if ($vData && !empty($vData['type'])): ?>
-                                    <div style="color:var(--color-rose-500);margin-top:4px;"><i class="fas fa-exclamation-circle" style="margin-right:4px;"></i>ตรวจล่าสุด: ยังไม่ผ่าน (ยอด/บัญชีไม่ตรง)</div>
-                                    <?php endif; ?>
                                 <?php elseif (empty($qrPayload)): ?>
                                     <div style="color:var(--color-dark-400);"><i class="fas fa-info-circle" style="margin-right:4px;"></i>สลิปนี้ไม่มีข้อมูล QR (อัปก่อนเปิดระบบ หรือรูปไม่มี QR)</div>
                                 <?php endif; ?>

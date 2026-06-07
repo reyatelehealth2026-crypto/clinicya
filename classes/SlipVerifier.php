@@ -47,11 +47,17 @@ class SlipVerifier
 
         $status = $res['status'] ?? 0;
         $body = $res['body'] ?? '';
-        if ($status !== 200) {
-            throw new RuntimeException("GhostX returned HTTP {$status}");
-        }
 
         $json = json_decode($body, true);
+        // GhostX returns HTTP 409 when a QR was already scanned, but still
+        // includes the slip data in the body — accept any status whose body
+        // carries a valid slip so re-checks of an already-scanned slip work.
+        $hasSlip = is_array($json)
+            && ((($json['type'] ?? null) === 'SLIP') || isset($json['slipVerification']['transfer']));
+
+        if ($status !== 200 && !$hasSlip) {
+            throw new RuntimeException("GhostX returned HTTP {$status}");
+        }
         if (!is_array($json)) {
             throw new RuntimeException('GhostX returned an unparseable body');
         }

@@ -116,6 +116,26 @@ class SlipVerifierTest extends TestCase
         $this->assertStringStartsWith('scan_error', $r['reason']);
     }
 
+    public function testScanAcceptsAlreadyScanned409WithSlipData(): void
+    {
+        // GhostX returns 409 when a QR was already scanned, but still includes
+        // the slip data — we should use it rather than error out.
+        $v = $this->verifierReturning(409, $this->validSlipBody(500.00, '987-6-54321-0'));
+        $r = $v->verify('QRDATA', 500.00, ['9876543210']);
+
+        $this->assertTrue($r['verified']);
+        $this->assertSame('ok', $r['reason']);
+    }
+
+    public function testScanStillThrowsOn409WithoutSlipData(): void
+    {
+        $v = $this->verifierReturning(409, json_encode(['error' => 'already used']));
+        $r = $v->verify('QRDATA', 500.00, ['9876543210']);
+
+        $this->assertFalse($r['verified']);
+        $this->assertStringStartsWith('scan_error', $r['reason']);
+    }
+
     public function testVerifyMatchesAnyOfMultipleShopAccounts(): void
     {
         $v = $this->verifierReturning(200, $this->validSlipBody(500.00, '987-6-54321-0'));
