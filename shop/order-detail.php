@@ -1224,45 +1224,70 @@ document.addEventListener('keydown', function(e) {
 });
 </script>
 
-<!-- jsQR for admin-side slip QR decoding (works for slips uploaded via any channel) -->
+<!-- Admin-side slip QR decoding: native BarcodeDetector (most reliable) + jsQR fallback -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
-function decodeSlipAndVerify(btn, slipId, imgSrc) {
-    if (typeof jsQR !== 'function') { alert('ตัวถอด QR ยังโหลดไม่เสร็จ ลองใหม่อีกครั้ง'); return; }
+function loadImage(src) {
+    return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function () { resolve(img); };
+        img.onerror = function () { reject(new Error('image load failed')); };
+        img.src = src;
+    });
+}
+
+function jsqrAtScale(img, scale) {
+    if (typeof jsQR !== 'function' || !scale || scale <= 0) return null;
+    var w = Math.max(1, Math.round(img.naturalWidth * scale));
+    var h = Math.max(1, Math.round(img.naturalHeight * scale));
+    var canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    var d = ctx.getImageData(0, 0, w, h);
+    var code = jsQR(d.data, w, h, { inversionAttempts: 'attemptBoth' });
+    return (code && code.data) ? code.data : null;
+}
+
+async function detectSlipQR(img) {
+    // 1) Native BarcodeDetector — uses the OS decoder, far more robust than jsQR.
+    try {
+        if ('BarcodeDetector' in window) {
+            var det = new BarcodeDetector({ formats: ['qr_code'] });
+            var codes = await det.detect(img);
+            if (codes && codes.length && codes[0].rawValue) return codes[0].rawValue;
+        }
+    } catch (e) { /* fall through to jsQR */ }
+
+    // 2) jsQR at several scales (small QR in a tall slip often needs downscaling).
+    var maxDim = Math.max(img.naturalWidth, img.naturalHeight);
+    var scales = [1, maxDim > 1200 ? 1200 / maxDim : 0.8, 0.5, 1.5];
+    for (var i = 0; i < scales.length; i++) {
+        var r = jsqrAtScale(img, scales[i]);
+        if (r) return r;
+    }
+    return null;
+}
+
+async function decodeSlipAndVerify(btn, slipId, imgSrc) {
     var original = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right:4px;"></i>กำลังถอด QR...';
-    var img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = function () {
-        try {
-            var canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            var ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
-            var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            var code = jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
-            if (code && code.data) {
-                document.getElementById('qrdata-' + slipId).value = code.data;
-                document.getElementById('qrform-' + slipId).submit();
-            } else {
-                alert('ถอด QR จากรูปไม่สำเร็จ — รูปอาจไม่ชัด ไม่มี QR ที่อ่านได้ หรือเป็นสลิปคนละแบบ');
-                btn.disabled = false;
-                btn.innerHTML = original;
-            }
-        } catch (e) {
-            alert('เกิดข้อผิดพลาดในการถอด QR: ' + e.message);
-            btn.disabled = false;
-            btn.innerHTML = original;
+    try {
+        var img = await loadImage(imgSrc);
+        var qr = await detectSlipQR(img);
+        if (qr) {
+            document.getElementById('qrdata-' + slipId).value = qr;
+            document.getElementById('qrform-' + slipId).submit();
+            return;
         }
-    };
-    img.onerror = function () {
-        alert('โหลดรูปสลิปไม่สำเร็จ');
-        btn.disabled = false;
-        btn.innerHTML = original;
-    };
-    img.src = imgSrc;
+        alert('ถอด QR จากรูปไม่สำเร็จ — ลองเปิดรูปเต็ม (ขยาย) แล้วลองใหม่ หรือกดอนุมัติเพื่อยืนยันเอง');
+    } catch (e) {
+        alert('เกิดข้อผิดพลาดในการถอด QR: ' + e.message);
+    }
+    btn.disabled = false;
+    btn.innerHTML = original;
 }
 </script>
 
