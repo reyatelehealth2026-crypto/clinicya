@@ -56,6 +56,17 @@ class SlipVerifier
             throw new RuntimeException('GhostX returned an unparseable body');
         }
 
+        return self::normalize($json);
+    }
+
+    /**
+     * Normalize a raw GhostX response into the fields the decision logic needs.
+     * Pure — used by both scan() and verifyStored() (no HTTP).
+     *
+     * @return array{type:?string, ref:?string, amount:?float, toAccountNo:?string, raw:array}
+     */
+    public static function normalize(array $json): array
+    {
         $transfer = $json['slipVerification']['transfer'] ?? [];
 
         return [
@@ -90,27 +101,51 @@ class SlipVerifier
             ];
         }
 
+        return $this->evaluate($s, $expectedAmount, $shopAccounts);
+    }
+
+    /**
+     * Re-evaluate a GhostX response we already stored at upload, WITHOUT calling
+     * GhostX again. GhostX rejects re-scans of the same QR with HTTP 409, so the
+     * admin "verify" button reuses the saved response instead of re-scanning.
+     *
+     * @param array $ghostxResponse the raw GhostX payload saved in verify_data
+     * @return array{verified:bool, reason:string, ref:?string, amount:?float, data:array}
+     */
+    public function verifyStored(array $ghostxResponse, float $expectedAmount, array $shopAccounts): array
+    {
+        return $this->evaluate(self::normalize($ghostxResponse), $expectedAmount, $shopAccounts);
+    }
+
+    /**
+     * Decision logic over a normalized scan result. Pure — no HTTP.
+     *
+     * @param array $s normalized result from scan()/normalize()
+     * @return array{verified:bool, reason:string, ref:?string, amount:?float, data:array}
+     */
+    public function evaluate(array $s, float $expectedAmount, array $shopAccounts): array
+    {
         $result = [
             'verified' => false,
             'reason' => '',
-            'ref' => $s['ref'],
-            'amount' => $s['amount'],
-            'data' => $s['raw'],
+            'ref' => $s['ref'] ?? null,
+            'amount' => $s['amount'] ?? null,
+            'data' => $s['raw'] ?? [],
         ];
 
-        if ($s['type'] !== 'SLIP' || $s['ref'] === null) {
+        if (($s['type'] ?? null) !== 'SLIP' || ($s['ref'] ?? null) === null) {
             $result['reason'] = 'not_a_slip';
             return $result;
         }
 
-        if (!self::amountMatches($expectedAmount, (float) $s['amount'])) {
+        if (!self::amountMatches($expectedAmount, (float) ($s['amount'] ?? 0))) {
             $result['reason'] = 'amount_mismatch';
             return $result;
         }
 
         $accountOk = false;
         foreach ($shopAccounts as $acct) {
-            if (self::accountMatches((string) $acct, (string) $s['toAccountNo'])) {
+            if (self::accountMatches((string) $acct, (string) ($s['toAccountNo'] ?? ''))) {
                 $accountOk = true;
                 break;
             }

@@ -1873,8 +1873,12 @@ function handleUploadSlip() {
             } else {
                 // Store raw verification data for admin context; leave verify_ref
                 // NULL so it never collides with the unique index, keep pending.
-                $db->prepare("UPDATE payment_slips SET verify_amount = ?, verify_data = ? WHERE id = ?")
-                   ->execute([$vr['amount'], $verifyData, $slipId]);
+                // Never overwrite a real response with an empty one (e.g. on a
+                // transient scan_error) so admins can still re-evaluate it later.
+                if (!empty($vr['data'])) {
+                    $db->prepare("UPDATE payment_slips SET verify_amount = ?, verify_data = ? WHERE id = ?")
+                       ->execute([$vr['amount'], $verifyData, $slipId]);
+                }
                 $reason = $isDuplicate ? 'duplicate_ref' : $vr['reason'];
                 error_log("Slip {$slipId} not auto-verified (reason={$reason}) — left pending for manual review");
             }

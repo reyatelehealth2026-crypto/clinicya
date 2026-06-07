@@ -231,7 +231,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 } catch (\Throwable $e) { /* no shop_settings */ }
 
-                $vr = (new SlipVerifier())->verify($qr, $expectedAmount, $shopAccounts);
+                // GhostX rejects re-scans of the same QR with HTTP 409. If we
+                // already captured the GhostX response at upload, re-evaluate it
+                // instead of re-scanning; only call GhostX fresh if we have none.
+                $verifier = new SlipVerifier();
+                $prior = !empty($slip['verify_data']) ? json_decode($slip['verify_data'], true) : null;
+                if (is_array($prior) && !empty($prior['type'])) {
+                    $vr = $verifier->verifyStored($prior, $expectedAmount, $shopAccounts);
+                } else {
+                    $vr = $verifier->verify($qr, $expectedAmount, $shopAccounts);
+                }
                 $reason = $vr['reason'];
                 $vd = json_encode($vr['data'], JSON_UNESCAPED_UNICODE);
 
@@ -254,8 +263,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $reason = 'ok';
                 } else {
                     if ($dup) { $reason = 'duplicate_ref'; }
-                    $db->prepare("UPDATE payment_slips SET verify_amount=?, verify_data=? WHERE id=?")
-                       ->execute([$vr['amount'], $vd, $slipId]);
+                    // Never clobber a real stored response with an empty one (a
+                    // re-scan that hit GhostX 409 returns no data) so the saved
+                    // upload-time response stays available for re-evaluation.
+                    if (!empty($vr['data'])) {
+                        $db->prepare("UPDATE payment_slips SET verify_amount=?, verify_data=? WHERE id=?")
+                           ->execute([$vr['amount'], $vd, $slipId]);
+                    }
                 }
             }
         } catch (\Throwable $e) {
@@ -982,7 +996,15 @@ echo renderPageHeader(
                         'no_qr' => ['⚠️ สลิปนี้ไม่มีข้อมูล QR ให้ตรวจสอบ', 'amber'],
                         'error' => ['⚠️ ตรวจสอบไม่สำเร็จ (เชื่อมต่อ GhostX ไม่ได้) ลองใหม่อีกครั้ง', 'amber'],
                     ];
-                    $vRow = $vMsg[$vk] ?? (strpos($vk, 'scan_error') === 0 ? ['⚠️ เชื่อมต่อ GhostX ไม่ได้ ลองใหม่อีกครั้ง', 'amber'] : ['ผลการตรวจสอบ: ' . htmlspecialchars($vk), 'slate']);
+                    if (isset($vMsg[$vk])) {
+                        $vRow = $vMsg[$vk];
+                    } elseif (strpos($vk, '409') !== false) {
+                        $vRow = ['⚠️ สลิปนี้ถูกตรวจสอบกับ GhostX ไปแล้ว (สแกนซ้ำไม่ได้) — ตั้งค่าบัญชีร้านให้ถูกแล้วลองใหม่ หรือกดอนุมัติเพื่อยืนยันเอง', 'amber'];
+                    } elseif (strpos($vk, 'scan_error') === 0) {
+                        $vRow = ['⚠️ เชื่อมต่อ GhostX ไม่ได้ ลองใหม่อีกครั้ง', 'amber'];
+                    } else {
+                        $vRow = ['ผลการตรวจสอบ: ' . htmlspecialchars($vk), 'slate'];
+                    }
                 ?>
                 <div style="margin-bottom:var(--space-4);padding:var(--space-3);border-radius:var(--radius-md);background:var(--color-<?= $vRow[1] ?>-50);border:1px solid var(--color-<?= $vRow[1] ?>-200);color:var(--color-<?= $vRow[1] ?>-700);font-size:var(--text-sm);font-weight:500;">
                     <?= $vRow[0] ?>

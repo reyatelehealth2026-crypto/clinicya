@@ -153,4 +153,44 @@ class SlipVerifierTest extends TestCase
         $this->assertFalse(SlipVerifier::amountMatches(500.01, 500.00));
         $this->assertFalse(SlipVerifier::amountMatches(499.99, 500.00));
     }
+
+    // --- verifyStored: re-evaluate a saved GhostX response, NO new HTTP call --
+
+    /** A verifier whose HTTP transport always throws — proves no network is used. */
+    private function offlineVerifier(): SlipVerifier
+    {
+        return new SlipVerifier('https://test.invalid/qr/scan', function ($url, $payload) {
+            throw new RuntimeException('network must not be called');
+        });
+    }
+
+    private function storedResponse(float $amount = 500.00, string $toAccountNo = '987-6-54321-0'): array
+    {
+        return json_decode($this->validSlipBody($amount, $toAccountNo), true);
+    }
+
+    public function testVerifyStoredApprovesWithoutHttpCall(): void
+    {
+        $r = $this->offlineVerifier()->verifyStored($this->storedResponse(500.00, '987-6-54321-0'), 500.00, ['9876543210']);
+
+        $this->assertTrue($r['verified']);
+        $this->assertSame('ok', $r['reason']);
+        $this->assertSame('202504270001234567', $r['ref']);
+    }
+
+    public function testVerifyStoredRejectsAmountMismatchWithoutHttp(): void
+    {
+        $r = $this->offlineVerifier()->verifyStored($this->storedResponse(499.00, '987-6-54321-0'), 500.00, ['9876543210']);
+
+        $this->assertFalse($r['verified']);
+        $this->assertSame('amount_mismatch', $r['reason']);
+    }
+
+    public function testVerifyStoredRejectsEmptyOrNonSlipData(): void
+    {
+        $r = $this->offlineVerifier()->verifyStored([], 500.00, ['9876543210']);
+
+        $this->assertFalse($r['verified']);
+        $this->assertSame('not_a_slip', $r['reason']);
+    }
 }
