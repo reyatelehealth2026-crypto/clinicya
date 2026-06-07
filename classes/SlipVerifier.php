@@ -56,7 +56,10 @@ class SlipVerifier
             && ((($json['type'] ?? null) === 'SLIP') || isset($json['slipVerification']['transfer']));
 
         if ($status !== 200 && !$hasSlip) {
-            throw new RuntimeException("GhostX returned HTTP {$status}");
+            // Surface GhostX's own error message (e.g. "ไม่มีรหัสอ้างอิงรายการ")
+            // so admins see exactly why a slip could not be verified.
+            $msg = is_array($json) ? (string) ($json['message'] ?? $json['title'] ?? '') : '';
+            throw new RuntimeException('GhostX HTTP ' . $status . ($msg !== '' ? ': ' . $msg : ''));
         }
         if (!is_array($json)) {
             throw new RuntimeException('GhostX returned an unparseable body');
@@ -103,7 +106,8 @@ class SlipVerifier
                 'reason' => 'scan_error: ' . $e->getMessage(),
                 'ref' => null,
                 'amount' => null,
-                'data' => [],
+                // Keep the GhostX message so admins can see what happened.
+                'data' => ['error' => $e->getMessage()],
             ];
         }
 

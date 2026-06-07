@@ -1021,10 +1021,10 @@ echo renderPageHeader(
                     ];
                     if (isset($vMsg[$vk])) {
                         $vRow = $vMsg[$vk];
-                    } elseif (strpos($vk, '409') !== false) {
-                        $vRow = ['⚠️ สลิปนี้ถูกตรวจสอบกับ GhostX ไปแล้ว (สแกนซ้ำไม่ได้) — ตั้งค่าบัญชีร้านให้ถูกแล้วลองใหม่ หรือกดอนุมัติเพื่อยืนยันเอง', 'amber'];
                     } elseif (strpos($vk, 'scan_error') === 0) {
-                        $vRow = ['⚠️ เชื่อมต่อ GhostX ไม่ได้ ลองใหม่อีกครั้ง', 'amber'];
+                        // Surface GhostX's own message (e.g. "ไม่มีรหัสอ้างอิงรายการ").
+                        $detail = trim(substr($vk, strlen('scan_error:')));
+                        $vRow = ['⚠️ GhostX ตรวจสลิปไม่ผ่าน: ' . htmlspecialchars($detail !== '' ? $detail : 'เชื่อมต่อไม่ได้'), 'amber'];
                     } else {
                         $vRow = ['ผลการตรวจสอบ: ' . htmlspecialchars($vk), 'slate'];
                     }
@@ -1089,6 +1089,7 @@ echo renderPageHeader(
                             $amtOk = $slipAmt !== null && SlipVerifier::amountMatches($orderGrandTotal, $slipAmt);
                             $acctOk = false;
                             if ($toAcc) { foreach ($shopAccts as $a) { if (SlipVerifier::accountMatches((string) $a, (string) $toAcc)) { $acctOk = true; break; } } }
+                            $vErr = (!$tr && is_array($vData) && !empty($vData['error'])) ? (string) $vData['error'] : null;
                             ?>
                             <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--color-slate-200);font-size:var(--text-xs);">
                                 <?php if ($tr): ?>
@@ -1116,6 +1117,17 @@ echo renderPageHeader(
                                             <button type="submit" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;"><i class="fas fa-rotate-right" style="margin-right:4px;"></i>ประเมินซ้ำ (หลังแก้บัญชีร้าน)</button>
                                         </form>
                                         <?php endif; ?>
+                                    <?php endif; ?>
+                                <?php elseif ($vErr): ?>
+                                    <div style="font-weight:600;color:var(--color-rose-600);margin-bottom:2px;"><i class="fas fa-triangle-exclamation" style="margin-right:4px;"></i>GhostX ตรวจสลิปไม่ผ่าน</div>
+                                    <div style="color:var(--color-dark-600);">ข้อความจาก GhostX: <b><?= htmlspecialchars($vErr) ?></b></div>
+                                    <div style="color:var(--color-dark-400);margin-top:2px;">มักเกิดจากรูปไม่ใช่สลิปโอนสำเร็จ / QR ไม่มีรหัสอ้างอิงรายการ — ตรวจรูปกับลูกค้า หรือกดอนุมัติเพื่อยืนยันเอง</div>
+                                    <?php if (!empty($qrPayload) && $slip['status'] !== 'approved'): ?>
+                                    <form method="POST" style="margin:6px 0 0;">
+                                        <input type="hidden" name="action" value="verify_slip">
+                                        <input type="hidden" name="slip_id" value="<?= (int) $slip['id'] ?>">
+                                        <button type="submit" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;"><i class="fas fa-rotate-right" style="margin-right:4px;"></i>ลองตรวจกับ GhostX อีกครั้ง</button>
+                                    </form>
                                     <?php endif; ?>
                                 <?php elseif (!empty($qrPayload) && $slip['status'] !== 'approved'): ?>
                                     <form method="POST" style="margin:0;">
