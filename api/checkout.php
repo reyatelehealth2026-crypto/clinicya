@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Checkout API for LIFF
  * Handles cart, order creation, and slip upload
