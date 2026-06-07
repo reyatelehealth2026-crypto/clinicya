@@ -1022,17 +1022,23 @@ echo renderPageHeader(
                         $slipClass = $slip['status'] === 'approved' ? 'slip-card-approved' : ($slip['status'] === 'rejected' ? 'slip-card-rejected' : 'slip-card-pending');
                         $slipBadge = $slip['status'] === 'approved' ? '✅ อนุมัติแล้ว' : ($slip['status'] === 'rejected' ? '❌ ปฏิเสธ' : '⏳ รอตรวจสอบ');
                         $slipBadgeBg = $slip['status'] === 'approved' ? 'var(--color-emerald-500)' : ($slip['status'] === 'rejected' ? 'var(--color-rose-500)' : 'var(--color-amber-500)');
+                        // Render via a same-origin relative path so the image always
+                        // loads on the current host over https, regardless of how the
+                        // stored image_url was built (wrong host / http mixed-content /
+                        // malformed scheme). Files live in the shared /uploads/slips/.
+                        $slipFile = basename((string) (parse_url((string) $slip['image_url'], PHP_URL_PATH) ?: $slip['image_url']));
+                        $slipSrc = $slipFile !== '' ? '/uploads/slips/' . rawurlencode($slipFile) : (string) $slip['image_url'];
                     ?>
                     <div class="slip-card <?= $slipClass ?>">
                         <div style="position:relative;background:var(--color-slate-100);">
-                            <img src="<?= htmlspecialchars($slip['image_url']) ?>"
+                            <img src="<?= htmlspecialchars($slipSrc) ?>"
                                  style="width:100%;max-height:256px;object-fit:contain;cursor:pointer;display:block;"
-                                 onclick="openSlipModal('<?= htmlspecialchars($slip['image_url']) ?>')"
+                                 onclick="openSlipModal('<?= htmlspecialchars($slipSrc) ?>')"
                                  alt="payment slip">
                             <div style="position:absolute;top:8px;right:8px;">
                                 <span style="padding:4px 10px;border-radius:var(--radius-full);font-size:var(--text-xs);font-weight:500;background:<?= $slipBadgeBg ?>;color:#fff;box-shadow:var(--shadow-glass);"><?= $slipBadge ?></span>
                             </div>
-                            <button onclick="openSlipModal('<?= htmlspecialchars($slip['image_url']) ?>')"
+                            <button onclick="openSlipModal('<?= htmlspecialchars($slipSrc) ?>')"
                                     style="position:absolute;bottom:8px;right:8px;padding:4px 10px;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);cursor:pointer;">
                                 <i class="fas fa-expand" style="margin-right:4px;"></i>ขยาย
                             </button>
