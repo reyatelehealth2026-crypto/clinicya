@@ -32,6 +32,9 @@
         <testsuite name="Payment Tests">
             <directory>tests/Payment</directory>
         </testsuite>
+        <testsuite name="AiStudio Tests">
+            <directory>tests/AiStudio</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>

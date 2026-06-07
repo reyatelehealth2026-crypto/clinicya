@@ -163,61 +163,98 @@ try {
         <!-- Image Tab -->
         <div id="studio-tab-image" class="studio-tab-content hidden">
             <div class="grid lg:grid-cols-2 gap-6">
+                <!-- Controls -->
                 <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="bg-gradient-to-r from-pink-500 to-rose-500 p-4 text-white">
-                        <h3 class="font-bold text-lg"><i class="fas fa-magic mr-2"></i>สร้างรูปภาพ</h3>
-                        <p class="text-sm text-pink-200">Imagen 4.0 - สร้างรูปจริงจาก AI</p>
+                        <h3 class="font-bold text-lg"><i class="fas fa-wand-magic-sparkles mr-2"></i>สร้าง &amp; แก้รูปด้วย AI</h3>
+                        <p class="text-sm text-pink-100">Nano Banana — สร้างใหม่ / วางสินค้าในฉาก / แก้รูป / โปสเตอร์</p>
                     </div>
-                    <div class="p-6">
-                        <!-- Template Quick Select -->
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">เทมเพลตสำเร็จรูป</label>
-                            <div class="grid grid-cols-2 gap-2">
-                                <button type="button" onclick="useImageTemplate('product')" class="px-3 py-2 text-sm bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 rounded-lg border border-blue-200 text-left">
-                                    <div class="font-medium">📦 รูปสินค้า</div>
-                                    <div class="text-xs text-gray-600">ถ่ายสินค้าสวยงาม</div>
-                                </button>
-                                <button type="button" onclick="useImageTemplate('food')" class="px-3 py-2 text-sm bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 rounded-lg border border-orange-200 text-left">
-                                    <div class="font-medium">🍔 อาหาร</div>
-                                    <div class="text-xs text-gray-600">ถ่ายอาหารน่าทาน</div>
-                                </button>
-                                <button type="button" onclick="useImageTemplate('promo')" class="px-3 py-2 text-sm bg-gradient-to-r from-pink-50 to-pink-100 hover:from-pink-100 hover:to-pink-200 rounded-lg border border-pink-200 text-left">
-                                    <div class="font-medium">🎉 โปรโมชั่น</div>
-                                    <div class="text-xs text-gray-600">แบนเนอร์โปรโมท</div>
-                                </button>
-                                <button type="button" onclick="useImageTemplate('social')" class="px-3 py-2 text-sm bg-gradient-to-r from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 rounded-lg border border-purple-200 text-left">
-                                    <div class="font-medium">📱 โซเชียล</div>
-                                    <div class="text-xs text-gray-600">โพสต์โซเชียล</div>
-                                </button>
+                    <div class="p-6 space-y-4">
+                        <!-- Mode -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">โหมด</label>
+                            <div class="grid grid-cols-2 gap-2" id="studioImgModes">
+                                <button type="button" data-mode="generate" onclick="setStudioImgMode('generate')" class="studio-mode-btn px-3 py-2 border rounded-lg text-sm text-left">🎨 สร้างใหม่</button>
+                                <button type="button" data-mode="product_scene" onclick="setStudioImgMode('product_scene')" class="studio-mode-btn px-3 py-2 border rounded-lg text-sm text-left">📦 วางสินค้าในฉาก</button>
+                                <button type="button" data-mode="edit" onclick="setStudioImgMode('edit')" class="studio-mode-btn px-3 py-2 border rounded-lg text-sm text-left">✏️ แก้รูปเดิม</button>
+                                <button type="button" data-mode="poster" onclick="setStudioImgMode('poster')" class="studio-mode-btn px-3 py-2 border rounded-lg text-sm text-left">🖼️ โปสเตอร์/แบนเนอร์</button>
                             </div>
                         </div>
-                        
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">รายละเอียดรูปภาพ (Prompt)</label>
-                            <textarea id="studioImagePrompt" rows="4" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-pink-500" placeholder="เช่น: กาแฟลาเต้ร้อน ในถ้วยเซรามิกสีขาว วางบนโต๊ะไม้..."></textarea>
+
+                        <!-- Reference images -->
+                        <div id="studioRefZoneWrap">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">รูปอ้างอิง (reference) <span id="studioRefHint" class="text-xs font-normal text-gray-400"></span></label>
+                            <div id="studioRefDrop" onclick="document.getElementById('studioRefInput').click()" class="border-2 border-dashed border-pink-200 rounded-xl text-center py-5 px-3 cursor-pointer hover:bg-pink-50 transition-colors">
+                                <i class="fas fa-images text-2xl text-pink-300 mb-1"></i>
+                                <p class="text-sm text-gray-500">ลาก-วาง วาง (paste) หรือคลิกเพื่อแนบรูป</p>
+                                <p class="text-xs text-gray-400">สินค้า / โลโก้ / รูปที่จะแก้ — สูงสุด 6 รูป</p>
+                                <input type="file" id="studioRefInput" accept="image/*" multiple class="hidden" onchange="handleStudioRefFiles(event)">
+                            </div>
+                            <div id="studioRefThumbs" class="flex flex-wrap gap-2 mt-2"></div>
                         </div>
-                        
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">สไตล์รูปภาพ</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <button type="button" onclick="setStudioImageStyle('realistic')" class="studio-style-btn active px-3 py-2 border rounded-lg text-sm hover:bg-gray-50">📷 สมจริง</button>
-                                <button type="button" onclick="setStudioImageStyle('artistic')" class="studio-style-btn px-3 py-2 border rounded-lg text-sm hover:bg-gray-50">🎨 ศิลปะ</button>
-                                <button type="button" onclick="setStudioImageStyle('cartoon')" class="studio-style-btn px-3 py-2 border rounded-lg text-sm hover:bg-gray-50">🖼️ การ์ตูน</button>
-                                <button type="button" onclick="setStudioImageStyle('minimal')" class="studio-style-btn px-3 py-2 border rounded-lg text-sm hover:bg-gray-50">⬜ มินิมอล</button>
-                                <button type="button" onclick="setStudioImageStyle('product')" class="studio-style-btn px-3 py-2 border rounded-lg text-sm hover:bg-gray-50">📦 สินค้า</button>
-                                <button type="button" onclick="setStudioImageStyle('food')" class="studio-style-btn px-3 py-2 border rounded-lg text-sm hover:bg-gray-50">🍔 อาหาร</button>
+
+                        <!-- Prompt -->
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="block text-sm font-medium text-gray-700">คำสั่ง (Prompt)</label>
+                                <button type="button" onclick="enhanceStudioPrompt()" id="btnEnhancePrompt" class="text-xs text-purple-600 hover:underline"><i class="fas fa-wand-magic-sparkles mr-1"></i>ช่วยเขียน prompt</button>
+                            </div>
+                            <textarea id="studioImagePrompt" rows="3" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-pink-500" placeholder="เช่น: วางขวดวิตามินบนโต๊ะไม้ พื้นหลังเบลอ แสงธรรมชาติ สไตล์มินิมอล..."></textarea>
+                            <div id="studioImgTemplates" class="flex flex-wrap gap-1 mt-2"></div>
+                        </div>
+
+                        <!-- Settings -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">โมเดล</label>
+                                <select id="studioImgModel" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-pink-500">
+                                    <option value="gemini-3.1-flash-image">Nano Banana 2 (เร็ว+ดี)</option>
+                                    <option value="gemini-3-pro-image">Nano Banana Pro (สวยสุด+ข้อความ)</option>
+                                    <option value="gemini-2.5-flash-image">Nano Banana (ประหยัด)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">สัดส่วน</label>
+                                <select id="studioImgAspect" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-pink-500">
+                                    <option value="1:1">1:1 จัตุรัส</option>
+                                    <option value="4:5">4:5 แนวตั้ง (โพสต์)</option>
+                                    <option value="3:4">3:4 แนวตั้ง</option>
+                                    <option value="9:16">9:16 สตอรี่</option>
+                                    <option value="16:9">16:9 แนวนอน</option>
+                                    <option value="3:2">3:2 แนวนอน</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">ขนาด</label>
+                                <select id="studioImgSize" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-pink-500">
+                                    <option value="1K">1K (เร็ว)</option>
+                                    <option value="2K" selected>2K (แนะนำ)</option>
+                                    <option value="4K">4K (คมชัด)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">จำนวนรูป</label>
+                                <select id="studioImgVariations" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-pink-500">
+                                    <option value="1">1 รูป</option>
+                                    <option value="2">2 รูป</option>
+                                    <option value="3">3 รูป</option>
+                                    <option value="4">4 รูป</option>
+                                </select>
                             </div>
                         </div>
-                        
+
                         <button onclick="generateStudioImage()" id="btnStudioGenImage" class="w-full py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl font-bold hover:opacity-90 transition-all">
                             <i class="fas fa-paint-brush mr-2"></i>สร้างรูปภาพ
                         </button>
+                        <p class="text-xs text-gray-400 text-center">ใช้ Google API key ของร้าน (ตั้งใน ตั้งค่า AI) อัตโนมัติ — ถ้าไม่มีจะให้กรอกเอง</p>
                     </div>
                 </div>
-                
+
+                <!-- Results -->
                 <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div class="p-4 bg-gray-100 border-b">
+                    <div class="p-4 bg-gray-100 border-b flex justify-between items-center">
                         <h3 class="font-bold text-gray-700"><i class="fas fa-image mr-2"></i>ผลลัพธ์</h3>
+                        <span id="studioImgCount" class="text-xs text-gray-400"></span>
                     </div>
                     <div id="studioImageResult" class="p-6 min-h-[400px] flex items-center justify-center">
                         <div class="text-center text-gray-400">
@@ -696,35 +733,132 @@ function useImageTemplate(type) {
     showStudioToast('ใช้เทมเพลต: ' + type);
 }
 
-async function generateStudioImage() {
+// ===== AI Studio image generation (Nano Banana) =====
+let studioRefImages = [];      // array of data URLs (reference images)
+let studioImgMode = 'generate';
+
+const STUDIO_IMG_MODE_CFG = {
+    generate:      { needRef:false, refHint:'(ไม่บังคับ)',          templates:['โลโก้ร้านยาโมเดิร์น มินิมอล','พื้นหลังโปรโมชั่นสีพาสเทล','ไอคอนสุขภาพ/ยา น่ารัก'] },
+    product_scene: { needRef:true,  refHint:'(แนบรูปสินค้า)',        templates:['วางบนโต๊ะไม้ พื้นหลังเบลอ แสงธรรมชาติ','พื้นขาวสะอาดสไตล์สตูดิโอ','ฉากธรรมชาติเขียวสดชื่น','โต๊ะหินอ่อนหรู'] },
+    edit:          { needRef:true,  refHint:'(แนบรูปที่จะแก้)',      templates:['ลบพื้นหลังให้โปร่ง','เปลี่ยนพื้นหลังเป็นสีขาว','เพิ่มความสว่างและคมชัด','เติมข้อความโปรลงบนรูป'] },
+    poster:        { needRef:false, refHint:'(แนบโลโก้/สินค้า ถ้ามี)', templates:['โปสเตอร์โปรโมชั่นลด 20% สดใส','แบนเนอร์เปิดร้านยาใหม่','โปสเตอร์แนะนำวิตามิน พร้อมราคา'] },
+};
+
+function setStudioImgMode(mode) {
+    studioImgMode = mode;
+    document.querySelectorAll('.studio-mode-btn').forEach(b => {
+        const on = b.dataset.mode === mode;
+        ['ring-2','ring-pink-500','bg-pink-50','border-pink-300'].forEach(c => b.classList.toggle(c, on));
+    });
+    const cfg = STUDIO_IMG_MODE_CFG[mode] || STUDIO_IMG_MODE_CFG.generate;
+    const hint = document.getElementById('studioRefHint'); if (hint) hint.textContent = cfg.refHint;
+    const tpl = document.getElementById('studioImgTemplates');
+    if (tpl) tpl.innerHTML = (cfg.templates||[]).map(t =>
+        `<button type="button" onclick="applyStudioTemplate(this)" class="px-2 py-1 text-xs bg-gray-100 hover:bg-pink-100 rounded-full border border-gray-200">${t}</button>`).join('');
+}
+function applyStudioTemplate(btn) {
+    const ta = document.getElementById('studioImagePrompt');
+    ta.value = ta.value.trim() ? (ta.value.trim() + ', ' + btn.textContent) : btn.textContent;
+}
+
+function renderStudioRefThumbs() {
+    const box = document.getElementById('studioRefThumbs');
+    if (!box) return;
+    box.innerHTML = studioRefImages.map((src,i) =>
+        `<div class="relative w-16 h-16"><img src="${src}" class="w-16 h-16 object-cover rounded-lg border"><button type="button" onclick="removeStudioRef(${i})" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs leading-5 text-center">&times;</button></div>`).join('');
+}
+function addStudioRefDataUrl(dataUrl) {
+    if (studioRefImages.length >= 6) { showStudioToast('แนบได้สูงสุด 6 รูป', true); return; }
+    studioRefImages.push(dataUrl); renderStudioRefThumbs();
+}
+function handleStudioRefFiles(e) {
+    [...e.target.files].forEach(f => { if (!f.type.startsWith('image/')) return; const r=new FileReader(); r.onload=ev=>addStudioRefDataUrl(ev.target.result); r.readAsDataURL(f); });
+    e.target.value = '';
+}
+function removeStudioRef(i) { studioRefImages.splice(i,1); renderStudioRefThumbs(); }
+
+// paste image into the studio image tab
+document.addEventListener('paste', function(e) {
+    const imgTab = document.getElementById('studio-tab-image');
+    if (!imgTab || imgTab.classList.contains('hidden')) return;
+    for (const item of (e.clipboardData?.items || [])) {
+        if (item.type.startsWith('image/')) { const f=item.getAsFile(); const r=new FileReader(); r.onload=ev=>addStudioRefDataUrl(ev.target.result); r.readAsDataURL(f); }
+    }
+});
+// drag-drop onto the reference zone
+document.addEventListener('DOMContentLoaded', function() {
+    const dz = document.getElementById('studioRefDrop');
+    if (dz) {
+        ['dragover','dragenter'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('bg-pink-50'); }));
+        ['dragleave'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('bg-pink-50'); }));
+        dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('bg-pink-50'); [...(e.dataTransfer?.files||[])].forEach(f => { if (f.type.startsWith('image/')) { const r=new FileReader(); r.onload=ev=>addStudioRefDataUrl(ev.target.result); r.readAsDataURL(f); } }); });
+    }
+    try { setStudioImgMode('generate'); } catch (e) {}
+});
+
+async function enhanceStudioPrompt() {
+    const ta = document.getElementById('studioImagePrompt'); const cur = ta.value.trim();
+    if (!cur) { showStudioToast('พิมพ์ไอเดียคร่าวๆ ก่อน', true); return; }
     if (!studioCurrentApiKey) { openStudioApiModal(); return; }
+    const btn = document.getElementById('btnEnhancePrompt'); const old = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    try {
+        const out = await callStudioGemini(`ขยายและแปลงไอเดียนี้เป็น prompt ภาษาอังกฤษสำหรับสร้างรูป (โหมด: ${studioImgMode}) ใส่รายละเอียดแสง องค์ประกอบภาพ และสไตล์ให้ออกมาสวยระดับโฆษณา: "${cur}"`, 'Output only the final English image prompt, no explanation or quotes');
+        if (out) ta.value = out.trim();
+    } catch (err) { showStudioToast('ช่วยเขียน prompt ไม่สำเร็จ', true); }
+    finally { btn.disabled = false; btn.innerHTML = old; }
+}
+
+async function generateStudioImage() {
     const prompt = document.getElementById('studioImagePrompt').value.trim();
     if (!prompt) { showStudioToast('กรุณากรอก Prompt', true); return; }
-    
-    const btn = document.getElementById('btnStudioGenImage');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังสร้าง...';
-    document.getElementById('studioImageResult').innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin text-4xl text-pink-500 mb-4"></i><p class="text-gray-600">กำลังสร้างรูปภาพ...</p></div>';
-    
+    const cfg = STUDIO_IMG_MODE_CFG[studioImgMode] || {};
+    if (cfg.needRef && studioRefImages.length === 0) { showStudioToast('โหมดนี้ต้องแนบรูปอ้างอิงอย่างน้อย 1 รูป', true); return; }
+
+    const btn = document.getElementById('btnStudioGenImage'); const oldBtn = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังสร้าง...';
+    document.getElementById('studioImageResult').innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin text-4xl text-pink-500 mb-4"></i><p class="text-gray-600">กำลังสร้างรูปภาพ... (อาจใช้เวลา 10–40 วินาที)</p></div>';
     try {
-        const stylePrompts = { realistic: 'photorealistic, high quality', artistic: 'artistic, creative', cartoon: 'cartoon style', minimal: 'minimalist, clean', product: 'product photography', food: 'food photography' };
-        const enhancedPrompt = await callStudioGemini(`Translate to English and enhance: "${prompt}". Style: ${stylePrompts[studioCurrentImageStyle]}`, 'Output only the enhanced English prompt');
-        
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${studioCurrentApiKey}`;
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instances: [{ prompt: enhancedPrompt }], parameters: { sampleCount: 1 } }) });
-        if (!res.ok) throw new Error('ไม่สามารถสร้างรูปภาพได้');
-        const data = await res.json();
-        const imageUrl = `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
-        
-        document.getElementById('studioImageResult').innerHTML = `<div class="space-y-4"><img src="${imageUrl}" class="max-w-full rounded-xl shadow-lg mx-auto"><div class="flex gap-2 justify-center"><a href="${imageUrl}" download="ai-image.png" class="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"><i class="fas fa-download mr-2"></i>ดาวน์โหลด</a></div></div>`;
-        showStudioToast('สร้างรูปภาพสำเร็จ!');
+        const res = await fetch('api/ai-studio-image.php', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: document.getElementById('studioImgModel').value,
+                prompt, mode: studioImgMode,
+                aspect_ratio: document.getElementById('studioImgAspect').value,
+                image_size: document.getElementById('studioImgSize').value,
+                variations: parseInt(document.getElementById('studioImgVariations').value || '1', 10),
+                reference_images: studioRefImages,
+                api_key: studioCurrentApiKey || ''
+            })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) { showStudioToast('กรุณาเข้าสู่ระบบใหม่', true); throw new Error('กรุณาเข้าสู่ระบบใหม่'); }
+        if (res.status === 422) { openStudioApiModal(); throw new Error(data.error || 'ต้องตั้งค่า API key ก่อน'); }
+        if (!data || !data.success) { throw new Error((data && data.error) || 'สร้างรูปไม่สำเร็จ'); }
+        renderStudioGallery(data.images || []);
+        showStudioToast('สร้างรูปสำเร็จ!');
     } catch (err) {
-        document.getElementById('studioImageResult').innerHTML = `<div class="text-center text-red-500"><i class="fas fa-exclamation-circle text-4xl mb-4"></i><p>${err.message}</p></div>`;
+        document.getElementById('studioImageResult').innerHTML = `<div class="text-center text-red-500 px-4"><i class="fas fa-exclamation-circle text-4xl mb-3"></i><p>${err.message}</p></div>`;
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-paint-brush mr-2"></i>สร้างรูปภาพ';
+        btn.disabled = false; btn.innerHTML = oldBtn;
     }
 }
+
+function renderStudioGallery(images) {
+    const wrap = document.getElementById('studioImageResult');
+    const cnt = document.getElementById('studioImgCount'); if (cnt) cnt.textContent = images.length + ' รูป';
+    wrap.classList.remove('items-center','justify-center');
+    if (!images.length) { wrap.innerHTML = '<p class="text-gray-400">ไม่ได้รูป</p>'; return; }
+    wrap.innerHTML = '<div class="grid grid-cols-1 gap-4 w-full">' + images.map((im,i) => {
+        const url = im.data_url || im.url;
+        return `<div class="border rounded-xl overflow-hidden bg-gray-50">
+            <img src="${url}" class="w-full object-contain max-h-[420px] bg-white">
+            <div class="flex flex-wrap gap-2 p-2">
+                <a href="${url}" download="ai-studio-${Date.now()}-${i}.png" class="px-3 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-800"><i class="fas fa-download mr-1"></i>ดาวน์โหลด</a>
+                <button type="button" onclick="useStudioImageAsRef('${url}')" class="px-3 py-1.5 text-xs bg-pink-100 text-pink-700 rounded-lg hover:bg-pink-200"><i class="fas fa-recycle mr-1"></i>ใช้เป็น reference ต่อ</button>
+            </div></div>`;
+    }).join('') + '</div>';
+}
+function useStudioImageAsRef(dataUrl) { addStudioRefDataUrl(dataUrl); setStudioImgMode('edit'); showStudioToast('เพิ่มเป็น reference แล้ว — ปรับ prompt แล้วสร้างต่อได้'); }
 
 // Flex Functions
 function setStudioFlexColor(color) { studioCurrentFlexColor = color; }
