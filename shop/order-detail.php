@@ -1117,14 +1117,24 @@ echo renderPageHeader(
                                         <?php if ($txRef): ?><div style="color:var(--color-dark-400);">Ref: <?= htmlspecialchars($txRef) ?><?php if ($txTime): ?> · <?= htmlspecialchars(date('d/m/Y H:i', strtotime($txTime))) ?><?php endif; ?></div><?php endif; ?>
                                     </div>
                                     <?php if ($vRef): ?>
-                                        <div style="color:var(--color-emerald-600);font-weight:600;margin-top:4px;">✅ ยืนยันแล้ว — อนุมัติการชำระอัตโนมัติ</div>
-                                    <?php else: ?>
-                                        <div style="color:var(--color-rose-500);margin-top:4px;">⚠️ ไม่ผ่านอัตโนมัติ<?= (!$amtOk ? ' (ยอดไม่ตรง)' : (!$acctOk ? ' (บัญชีไม่ตรง)' : '')) ?></div>
+                                        <div style="color:var(--color-emerald-600);font-weight:600;margin-top:4px;">✅ ยืนยันแล้ว — อนุมัติการชำระแล้ว</div>
+                                    <?php elseif ($amtOk): ?>
+                                        <?php /* amount-only mode: amount match is enough; account is informational */ ?>
+                                        <div style="color:var(--color-emerald-600);font-weight:600;margin-top:4px;">✓ GhostX ยืนยันสลิปจริง + ยอดตรง — พร้อมอนุมัติ<?= ($toAcc && !$acctOk) ? ' (บัญชีปลายทางต่างจากที่ตั้งค่า โปรดตรวจดู)' : '' ?></div>
                                         <?php if ($slip['status'] !== 'approved'): ?>
                                         <form method="POST" style="margin:6px 0 0;">
                                             <input type="hidden" name="action" value="verify_slip">
                                             <input type="hidden" name="slip_id" value="<?= (int) $slip['id'] ?>">
-                                            <button type="submit" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;"><i class="fas fa-rotate-right" style="margin-right:4px;"></i>ประเมินซ้ำ (หลังแก้บัญชีร้าน)</button>
+                                            <button type="submit" style="width:100%;padding:6px 10px;background:#059669;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:600;cursor:pointer;"><i class="fas fa-check-circle" style="margin-right:4px;"></i>อนุมัติ (GhostX + ยอดตรง)</button>
+                                        </form>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <div style="color:var(--color-rose-500);margin-top:4px;">⚠️ ยอดในสลิปไม่ตรงกับออเดอร์ — ตรวจสอบก่อนอนุมัติ</div>
+                                        <?php if ($slip['status'] !== 'approved'): ?>
+                                        <form method="POST" style="margin:6px 0 0;">
+                                            <input type="hidden" name="action" value="verify_slip">
+                                            <input type="hidden" name="slip_id" value="<?= (int) $slip['id'] ?>">
+                                            <button type="submit" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;"><i class="fas fa-rotate-right" style="margin-right:4px;"></i>ประเมินซ้ำ</button>
                                         </form>
                                         <?php endif; ?>
                                     <?php endif; ?>
