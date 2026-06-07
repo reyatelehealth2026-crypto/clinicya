@@ -1853,7 +1853,10 @@ function handleUploadSlip() {
             $expectedAmount = (float) ($order['grand_total'] ?? $order['total_amount'] ?? 0);
             $shopAccounts = getShopPaymentAccounts($db, $order['line_account_id'] ?? null);
 
-            $vr = (new SlipVerifier())->verify($qrData, $expectedAmount, $shopAccounts);
+            // Amount-only auto-approve: a valid GhostX slip whose amount matches
+            // the order is approved; the destination account is recorded for the
+            // admin's visual check but does not block (shop preference).
+            $vr = (new SlipVerifier())->verify($qrData, $expectedAmount, $shopAccounts, false);
             $verifyData = json_encode($vr['data'], JSON_UNESCAPED_UNICODE);
 
             // Guard against the same bank slip being reused on another order.

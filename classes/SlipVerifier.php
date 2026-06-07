@@ -96,7 +96,7 @@ class SlipVerifier
      * @param string[] $shopAccounts Acceptable destination account numbers (digits; formatting ignored)
      * @return array{verified:bool, reason:string, ref:?string, amount:?float, data:array}
      */
-    public function verify(string $qrData, float $expectedAmount, array $shopAccounts): array
+    public function verify(string $qrData, float $expectedAmount, array $shopAccounts, bool $requireAccountMatch = true): array
     {
         try {
             $s = $this->scan($qrData);
@@ -111,7 +111,7 @@ class SlipVerifier
             ];
         }
 
-        return $this->evaluate($s, $expectedAmount, $shopAccounts);
+        return $this->evaluate($s, $expectedAmount, $shopAccounts, $requireAccountMatch);
     }
 
     /**
@@ -122,9 +122,9 @@ class SlipVerifier
      * @param array $ghostxResponse the raw GhostX payload saved in verify_data
      * @return array{verified:bool, reason:string, ref:?string, amount:?float, data:array}
      */
-    public function verifyStored(array $ghostxResponse, float $expectedAmount, array $shopAccounts): array
+    public function verifyStored(array $ghostxResponse, float $expectedAmount, array $shopAccounts, bool $requireAccountMatch = true): array
     {
-        return $this->evaluate(self::normalize($ghostxResponse), $expectedAmount, $shopAccounts);
+        return $this->evaluate(self::normalize($ghostxResponse), $expectedAmount, $shopAccounts, $requireAccountMatch);
     }
 
     /**
@@ -133,7 +133,7 @@ class SlipVerifier
      * @param array $s normalized result from scan()/normalize()
      * @return array{verified:bool, reason:string, ref:?string, amount:?float, data:array}
      */
-    public function evaluate(array $s, float $expectedAmount, array $shopAccounts): array
+    public function evaluate(array $s, float $expectedAmount, array $shopAccounts, bool $requireAccountMatch = true): array
     {
         $result = [
             'verified' => false,
@@ -153,16 +153,21 @@ class SlipVerifier
             return $result;
         }
 
-        $accountOk = false;
-        foreach ($shopAccounts as $acct) {
-            if (self::accountMatches((string) $acct, (string) ($s['toAccountNo'] ?? ''))) {
-                $accountOk = true;
-                break;
+        // Account match is an extra safety check that can be turned off
+        // (amount-only mode). The destination account is still surfaced to the
+        // admin for a visual spot-check either way.
+        if ($requireAccountMatch) {
+            $accountOk = false;
+            foreach ($shopAccounts as $acct) {
+                if (self::accountMatches((string) $acct, (string) ($s['toAccountNo'] ?? ''))) {
+                    $accountOk = true;
+                    break;
+                }
             }
-        }
-        if (!$accountOk) {
-            $result['reason'] = 'account_mismatch';
-            return $result;
+            if (!$accountOk) {
+                $result['reason'] = 'account_mismatch';
+                return $result;
+            }
         }
 
         $result['verified'] = true;

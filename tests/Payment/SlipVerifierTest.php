@@ -222,4 +222,33 @@ class SlipVerifierTest extends TestCase
         $this->assertFalse($r['verified']);
         $this->assertSame('not_a_slip', $r['reason']);
     }
+
+    // --- amount-only mode (requireAccountMatch = false) ---------------------
+
+    public function testAmountOnlyApprovesDespiteAccountMismatch(): void
+    {
+        $v = $this->verifierReturning(200, $this->validSlipBody(500.00, '111-1-11111-1'));
+        $r = $v->verify('QRDATA', 500.00, ['9876543210'], false);
+
+        $this->assertTrue($r['verified']);
+        $this->assertSame('ok', $r['reason']);
+    }
+
+    public function testAmountOnlyStillRejectsAmountMismatch(): void
+    {
+        $v = $this->verifierReturning(200, $this->validSlipBody(499.00, '9876543210'));
+        $r = $v->verify('QRDATA', 500.00, ['9876543210'], false);
+
+        $this->assertFalse($r['verified']);
+        $this->assertSame('amount_mismatch', $r['reason']);
+    }
+
+    public function testAmountOnlyStillRejectsNonSlip(): void
+    {
+        $v = $this->verifierReturning(200, json_encode(['type' => 'UNKNOWN']));
+        $r = $v->verify('QRDATA', 500.00, [], false);
+
+        $this->assertFalse($r['verified']);
+        $this->assertSame('not_a_slip', $r['reason']);
+    }
 }
