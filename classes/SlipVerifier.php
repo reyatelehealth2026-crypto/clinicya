@@ -195,10 +195,16 @@ class SlipVerifier
                 return true;
             }
             $min = min(strlen($e), strlen($a));
-            if ($min < 4) {
-                return false;
+            if ($min >= 4 && substr($e, -$min) === substr($a, -$min)) {
+                return true;
             }
-            return substr($e, -$min) === substr($a, -$min);
+            // PromptPay phone numbers appear in many envelope formats
+            // (0xxxxxxxxx / 66xxxxxxxxx / 0066xxxxxxxxx) — compare trailing 9
+            // digits (the phone without its leading 0) as a fallback.
+            if (strlen($e) >= 9 && strlen($a) >= 9 && substr($e, -9) === substr($a, -9)) {
+                return true;
+            }
+            return false;
         }
 
         // Masked: align position-by-position when lengths match.

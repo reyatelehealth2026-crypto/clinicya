@@ -164,6 +164,15 @@ class SlipVerifierTest extends TestCase
         $this->assertFalse(SlipVerifier::accountMatches('9876543210', '1234567890'));
     }
 
+    public function testAccountMatchesPromptPayPhoneFormats(): void
+    {
+        // Same PromptPay phone in different envelope formats must match.
+        $this->assertTrue(SlipVerifier::accountMatches('0989919556', '66989919556'));
+        $this->assertTrue(SlipVerifier::accountMatches('0989919556', '0066989919556'));
+        // A genuinely different destination must still be rejected.
+        $this->assertFalse(SlipVerifier::accountMatches('0989919556', '0141111111111'));
+    }
+
     public function testAmountMatchesToTwoDecimals(): void
     {
         $this->assertTrue(SlipVerifier::amountMatches(500.0, 500.00));
