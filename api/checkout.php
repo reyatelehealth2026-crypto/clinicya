@@ -1823,6 +1823,55 @@ function handleUploadSlip() {
         }
     }
 
+    $slipId = $slipSaved ? (int) $db->lastInsertId() : null;
+
+    // --- GhostX QR slip auto-verification (optional) ----------------------
+    // The Mini App decodes the slip's QR client-side and sends `qr_data`.
+    // When it verifies against the order amount AND a shop account we
+    // auto-approve; otherwise the slip stays 'pending' for manual admin
+    // review (current behaviour). Any error degrades to manual review.
+    $qrData = trim((string) ($_POST['qr_data'] ?? ''));
+    if ($qrData !== '' && $slipId && hasTableColumn('payment_slips', 'verify_ref')) {
+        try {
+            require_once __DIR__ . '/../classes/SlipVerifier.php';
+            $expectedAmount = (float) ($order['grand_total'] ?? $order['total_amount'] ?? 0);
+            $shopAccounts = getShopPaymentAccounts($db, $order['line_account_id'] ?? null);
+
+            $vr = (new SlipVerifier())->verify($qrData, $expectedAmount, $shopAccounts);
+            $verifyData = json_encode($vr['data'], JSON_UNESCAPED_UNICODE);
+
+            // Guard against the same bank slip being reused on another order.
+            $isDuplicate = false;
+            if ($vr['ref']) {
+                $dup = $db->prepare("SELECT id FROM payment_slips WHERE verify_ref = ? AND id <> ? LIMIT 1");
+                $dup->execute([$vr['ref'], $slipId]);
+                $isDuplicate = (bool) $dup->fetch();
+            }
+
+            if ($vr['verified'] && !$isDuplicate) {
+                $db->prepare(
+                    "UPDATE payment_slips
+                        SET status = 'approved', verify_ref = ?, verify_amount = ?, verify_data = ?, verified_at = NOW()
+                      WHERE id = ?"
+                )->execute([$vr['ref'], $vr['amount'], $verifyData, $slipId]);
+
+                if (hasTableColumn('transactions', 'payment_status')) {
+                    $db->prepare("UPDATE transactions SET payment_status = 'paid' WHERE id = ?")->execute([$orderId]);
+                }
+                error_log("Slip {$slipId} auto-verified via GhostX (ref={$vr['ref']})");
+            } else {
+                // Store raw verification data for admin context; leave verify_ref
+                // NULL so it never collides with the unique index, keep pending.
+                $db->prepare("UPDATE payment_slips SET verify_amount = ?, verify_data = ? WHERE id = ?")
+                   ->execute([$vr['amount'], $verifyData, $slipId]);
+                $reason = $isDuplicate ? 'duplicate_ref' : $vr['reason'];
+                error_log("Slip {$slipId} not auto-verified (reason={$reason}) — left pending for manual review");
+            }
+        } catch (\Throwable $e) {
+            error_log('GhostX slip verification error: ' . $e->getMessage());
+        }
+    }
+
     // Update order status
     $stmt = $db->prepare("UPDATE transactions SET status = 'paid', updated_at = NOW() WHERE id = ?");
     $stmt->execute([$orderId]);
@@ -1853,6 +1902,40 @@ function handleUploadSlip() {
     jsonResponse(true, 'Slip uploaded', [
         'image_url' => $imageUrl
     ]);
+}
+
+/**
+ * Collect the shop's acceptable destination accounts for slip verification.
+ * Returns a flat list of account-number strings (bank accounts + PromptPay).
+ *
+ * @return string[]
+ */
+function getShopPaymentAccounts($db, $lineAccountId) {
+    $accounts = [];
+    try {
+        $stmt = $db->prepare(
+            "SELECT promptpay_number, bank_accounts FROM shop_settings WHERE line_account_id = ? LIMIT 1"
+        );
+        $stmt->execute([$lineAccountId]);
+        $settings = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        if (!empty($settings['promptpay_number'])) {
+            $accounts[] = (string) $settings['promptpay_number'];
+        }
+        if (!empty($settings['bank_accounts'])) {
+            $decoded = json_decode($settings['bank_accounts'], true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $bank) {
+                    if (!empty($bank['account_number'])) {
+                        $accounts[] = (string) $bank['account_number'];
+                    }
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+        error_log('getShopPaymentAccounts error: ' . $e->getMessage());
+    }
+    return array_values(array_unique($accounts));
 }
 
 /**

@@ -1,4 +1,5 @@
 ﻿import { apiUrl, appConfig } from '@/lib/config'
+import { decodeSlipQr } from '@/lib/slip-qr'
 
 const CHECKOUT_URL = apiUrl('/api/checkout.php')
 
@@ -399,6 +400,17 @@ export async function uploadPaymentSlip(orderId: number, file: File): Promise<Up
   fd.append('order_id', String(orderId))
   fd.append('line_account_id', String(appConfig.lineAccountId))
   fd.append('slip', file)
+
+  // Decode the slip's QR client-side so the server can auto-verify it via
+  // GhostX. Best-effort: if no QR is found the slip still uploads and falls
+  // back to manual admin review.
+  try {
+    const qrData = await decodeSlipQr(file)
+    if (qrData) fd.append('qr_data', qrData)
+  } catch {
+    /* ignore — verification is optional */
+  }
+
   const res = await fetch(CHECKOUT_URL, {
     method: 'POST',
     body: fd

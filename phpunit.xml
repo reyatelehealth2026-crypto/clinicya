@@ -29,6 +29,9 @@
         <testsuite name="Onboarding Tests">
             <directory>tests/Onboarding</directory>
         </testsuite>
+        <testsuite name="Payment Tests">
+            <directory>tests/Payment</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>
