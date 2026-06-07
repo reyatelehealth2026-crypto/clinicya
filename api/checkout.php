@@ -1424,6 +1424,16 @@ function handleCreateOrder($data) {
         ])))
     ];
 
+    // Auto-add payment_status column if missing (defensive migration).
+    // MUST run BEFORE beginTransaction: ALTER TABLE causes an implicit COMMIT in
+    // MySQL, which would silently end the order transaction and make the later
+    // $db->commit() throw "There is no active transaction".
+    try {
+        $db->exec("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'");
+    } catch (Exception $e) {
+        // Ignore: column already exists or DB doesn't support IF NOT EXISTS
+    }
+
     // Create order
     $db->beginTransaction();
 
@@ -1435,13 +1445,6 @@ function handleCreateOrder($data) {
         $orderStatus = ($paymentMethod === 'cod') ? 'confirmed' : 'pending';
         // payment_status ต้องอยู่ใน ENUM('pending','paid','failed','refunded') — cod ใช้ pending เหมือนกัน
         $paymentStatus = 'pending';
-
-        // Auto-add payment_status column if missing (defensive migration)
-        try {
-            $db->exec("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'");
-        } catch (Exception $e) {
-            // Ignore: column already exists or DB doesn't support IF NOT EXISTS
-        }
 
         // Level 1: full insert (all columns)
         $inserted = false;
@@ -1589,7 +1592,9 @@ function handleCreateOrder($data) {
             }
         }
 
-        $db->commit();
+        if ($db->inTransaction()) {
+            $db->commit();
+        }
 
         // Hook: Auto-create Account Receivable for credit sales
         // Requirement 8.2: WHEN an Invoice is created from shop order THEN the Accounting System SHALL automatically create corresponding AR record
