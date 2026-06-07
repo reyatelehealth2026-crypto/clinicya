@@ -31,26 +31,32 @@ function applyPaymentSlipsVerification(PDO $pdo): string
         return 'skipped (no payment_slips table)';
     }
 
-    $hasCol = $pdo->query("SHOW COLUMNS FROM payment_slips LIKE 'verify_ref'")->fetch();
-    if ($hasCol) {
-        return 'already migrated';
+    $done = [];
+
+    // Verify columns + unique index.
+    if (!$pdo->query("SHOW COLUMNS FROM payment_slips LIKE 'verify_ref'")->fetch()) {
+        $pdo->exec("
+            ALTER TABLE payment_slips
+            ADD COLUMN verify_ref VARCHAR(100) DEFAULT NULL COMMENT 'GhostX transactionRef (unique)' AFTER status,
+            ADD COLUMN verify_amount DECIMAL(12,2) DEFAULT NULL COMMENT 'Amount confirmed by GhostX' AFTER verify_ref,
+            ADD COLUMN verify_data JSON DEFAULT NULL COMMENT 'Full GhostX response payload' AFTER verify_amount,
+            ADD COLUMN verified_at DATETIME DEFAULT NULL COMMENT 'When verification succeeded' AFTER verify_data
+        ");
+        try {
+            $pdo->exec("ALTER TABLE payment_slips ADD UNIQUE INDEX uniq_verify_ref (verify_ref)");
+        } catch (\Throwable $e) {
+            // Index may already exist from a partial earlier run — non-fatal.
+        }
+        $done[] = 'verify cols';
     }
 
-    $pdo->exec("
-        ALTER TABLE payment_slips
-        ADD COLUMN verify_ref VARCHAR(100) DEFAULT NULL COMMENT 'GhostX transactionRef (unique)' AFTER status,
-        ADD COLUMN verify_amount DECIMAL(12,2) DEFAULT NULL COMMENT 'Amount confirmed by GhostX' AFTER verify_ref,
-        ADD COLUMN verify_data JSON DEFAULT NULL COMMENT 'Full GhostX response payload' AFTER verify_amount,
-        ADD COLUMN verified_at DATETIME DEFAULT NULL COMMENT 'When verification succeeded' AFTER verify_data
-    ");
-
-    try {
-        $pdo->exec("ALTER TABLE payment_slips ADD UNIQUE INDEX uniq_verify_ref (verify_ref)");
-    } catch (\Throwable $e) {
-        // Index may already exist from a partial earlier run — non-fatal.
+    // Raw QR payload the customer's app decoded at upload (lets admins re-verify).
+    if (!$pdo->query("SHOW COLUMNS FROM payment_slips LIKE 'qr_payload'")->fetch()) {
+        $pdo->exec("ALTER TABLE payment_slips ADD COLUMN qr_payload TEXT DEFAULT NULL COMMENT 'Raw QR string from the slip' AFTER verified_at");
+        $done[] = 'qr_payload';
     }
 
-    return 'MIGRATED';
+    return $done ? ('MIGRATED (' . implode(', ', $done) . ')') : 'already migrated';
 }
 
 function connectDb(string $dbName): PDO
@@ -96,7 +102,7 @@ foreach ($dbNames as $dbName) {
     try {
         $pdo = connectDb($dbName);
         $status = applyPaymentSlipsVerification($pdo);
-        if ($status === 'MIGRATED') {
+        if (strpos($status, 'MIGRATED') === 0) {
             $migrated++;
         }
         echo sprintf("  [%-26s] %s\n", $dbName, $status);

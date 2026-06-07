@@ -1825,12 +1825,23 @@ function handleUploadSlip() {
 
     $slipId = $slipSaved ? (int) $db->lastInsertId() : null;
 
+    $qrData = trim((string) ($_POST['qr_data'] ?? ''));
+
+    // Persist the raw QR payload the customer's app decoded so an admin can
+    // re-verify from the order page later — even if auto-verify is skipped.
+    if ($qrData !== '' && $slipId && hasTableColumn('payment_slips', 'qr_payload')) {
+        try {
+            $db->prepare("UPDATE payment_slips SET qr_payload = ? WHERE id = ?")->execute([$qrData, $slipId]);
+        } catch (\Throwable $e) {
+            error_log('qr_payload store error: ' . $e->getMessage());
+        }
+    }
+
     // --- GhostX QR slip auto-verification (optional) ----------------------
     // The Mini App decodes the slip's QR client-side and sends `qr_data`.
     // When it verifies against the order amount AND a shop account we
     // auto-approve; otherwise the slip stays 'pending' for manual admin
     // review (current behaviour). Any error degrades to manual review.
-    $qrData = trim((string) ($_POST['qr_data'] ?? ''));
     if ($qrData !== '' && $slipId && hasTableColumn('payment_slips', 'verify_ref')) {
         try {
             require_once __DIR__ . '/../classes/SlipVerifier.php';

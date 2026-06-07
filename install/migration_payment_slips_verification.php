@@ -26,26 +26,31 @@ try {
     $db = Database::getInstance()->getConnection();
     echo "=== Payment Slips Verification Migration ===\n\n";
 
-    // Idempotent: skip if already applied.
-    $cols = $db->query("SHOW COLUMNS FROM payment_slips LIKE 'verify_ref'")->fetchAll();
-    if (count($cols) > 0) {
-        echo "✓ Columns already exist — skipping migration.\n";
-        exit(0);
+    // Idempotent per-column so re-runs can add later additions (qr_payload).
+    if (!$db->query("SHOW COLUMNS FROM payment_slips LIKE 'verify_ref'")->fetch()) {
+        $db->exec("
+            ALTER TABLE payment_slips
+            ADD COLUMN verify_ref VARCHAR(100) DEFAULT NULL COMMENT 'GhostX transactionRef (unique)' AFTER status,
+            ADD COLUMN verify_amount DECIMAL(12,2) DEFAULT NULL COMMENT 'Amount confirmed by GhostX' AFTER verify_ref,
+            ADD COLUMN verify_data JSON DEFAULT NULL COMMENT 'Full GhostX response payload' AFTER verify_amount,
+            ADD COLUMN verified_at DATETIME DEFAULT NULL COMMENT 'When verification succeeded' AFTER verify_data
+        ");
+        echo "✓ Added columns: verify_ref, verify_amount, verify_data, verified_at\n";
+        // Unique index on verify_ref guards against the same slip being reused.
+        // MySQL allows multiple NULLs in a UNIQUE index, so unverified slips coexist.
+        $db->exec("ALTER TABLE payment_slips ADD UNIQUE INDEX uniq_verify_ref (verify_ref)");
+        echo "✓ Added unique index: uniq_verify_ref\n";
+    } else {
+        echo "✓ verify_* columns already exist.\n";
     }
 
-    $db->exec("
-        ALTER TABLE payment_slips
-        ADD COLUMN verify_ref VARCHAR(100) DEFAULT NULL COMMENT 'GhostX transactionRef (unique)' AFTER status,
-        ADD COLUMN verify_amount DECIMAL(12,2) DEFAULT NULL COMMENT 'Amount confirmed by GhostX' AFTER verify_ref,
-        ADD COLUMN verify_data JSON DEFAULT NULL COMMENT 'Full GhostX response payload' AFTER verify_amount,
-        ADD COLUMN verified_at DATETIME DEFAULT NULL COMMENT 'When verification succeeded' AFTER verify_data
-    ");
-    echo "✓ Added columns: verify_ref, verify_amount, verify_data, verified_at\n";
-
-    // Unique index on verify_ref guards against the same slip being reused.
-    // MySQL allows multiple NULLs in a UNIQUE index, so unverified slips coexist.
-    $db->exec("ALTER TABLE payment_slips ADD UNIQUE INDEX uniq_verify_ref (verify_ref)");
-    echo "✓ Added unique index: uniq_verify_ref\n";
+    // Raw QR payload the customer's app decoded at upload (lets admins re-verify).
+    if (!$db->query("SHOW COLUMNS FROM payment_slips LIKE 'qr_payload'")->fetch()) {
+        $db->exec("ALTER TABLE payment_slips ADD COLUMN qr_payload TEXT DEFAULT NULL COMMENT 'Raw QR string from the slip' AFTER verified_at");
+        echo "✓ Added column: qr_payload\n";
+    } else {
+        echo "✓ qr_payload column already exists.\n";
+    }
 
     echo "\n=== Migration complete ===\n";
 

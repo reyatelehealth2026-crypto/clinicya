@@ -190,6 +190,82 @@ function sendOrderStatusFlex($line, $db, $orderId, $newStatus, $tracking = null)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
+    // Manual GhostX verification of a stored slip QR (decoded by the customer's
+    // app at upload time and saved in payment_slips.qr_payload).
+    if ($action === 'verify_slip') {
+        $slipId = (int) ($_POST['slip_id'] ?? 0);
+        $reason = 'no_qr';
+        try {
+            $st = $db->prepare("SELECT * FROM payment_slips WHERE id = ? AND transaction_id = ? LIMIT 1");
+            $st->execute([$slipId, $orderId]);
+            $slip = $st->fetch(PDO::FETCH_ASSOC);
+            $qr = $slip['qr_payload'] ?? '';
+
+            if ($slip && $qr !== '') {
+                require_once __DIR__ . '/../classes/SlipVerifier.php';
+
+                // Expected amount = order grand_total.
+                $oq = $db->prepare("SELECT grand_total, total_amount FROM {$ordersTable} WHERE id = ? LIMIT 1");
+                $oq->execute([$orderId]);
+                $ord = $oq->fetch(PDO::FETCH_ASSOC) ?: [];
+                $expectedAmount = (float) ($ord['grand_total'] ?? $ord['total_amount'] ?? 0);
+
+                // Shop destination accounts (PromptPay + bank accounts).
+                $shopAccounts = [];
+                try {
+                    $ss = $db->prepare("SELECT promptpay_number, bank_accounts FROM shop_settings WHERE line_account_id = ? LIMIT 1");
+                    $ss->execute([$currentBotId]);
+                    $cfg = $ss->fetch(PDO::FETCH_ASSOC) ?: [];
+                    if (!empty($cfg['promptpay_number'])) {
+                        $shopAccounts[] = (string) $cfg['promptpay_number'];
+                    }
+                    if (!empty($cfg['bank_accounts'])) {
+                        $dec = json_decode($cfg['bank_accounts'], true);
+                        if (is_array($dec)) {
+                            foreach ($dec as $b) {
+                                if (!empty($b['account_number'])) {
+                                    $shopAccounts[] = (string) $b['account_number'];
+                                }
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) { /* no shop_settings */ }
+
+                $vr = (new SlipVerifier())->verify($qr, $expectedAmount, $shopAccounts);
+                $reason = $vr['reason'];
+                $vd = json_encode($vr['data'], JSON_UNESCAPED_UNICODE);
+
+                // Guard against the same slip ref being reused on another order.
+                $dup = false;
+                if ($vr['ref']) {
+                    $dq = $db->prepare("SELECT id FROM payment_slips WHERE verify_ref = ? AND id <> ? LIMIT 1");
+                    $dq->execute([$vr['ref'], $slipId]);
+                    $dup = (bool) $dq->fetch();
+                }
+
+                if ($vr['verified'] && !$dup) {
+                    $db->prepare("UPDATE payment_slips SET status='approved', verify_ref=?, verify_amount=?, verify_data=?, verified_at=NOW() WHERE id=?")
+                       ->execute([$vr['ref'], $vr['amount'], $vd, $slipId]);
+                    $db->prepare("UPDATE {$ordersTable} SET payment_status='paid', status='paid' WHERE id=? AND (line_account_id=? OR line_account_id IS NULL)")
+                       ->execute([$orderId, $currentBotId]);
+                    try {
+                        if ($line) { sendOrderStatusFlex($line, $db, $orderId, 'paid'); }
+                    } catch (Exception $e) { error_log('verify_slip flex error: ' . $e->getMessage()); }
+                    $reason = 'ok';
+                } else {
+                    if ($dup) { $reason = 'duplicate_ref'; }
+                    $db->prepare("UPDATE payment_slips SET verify_amount=?, verify_data=? WHERE id=?")
+                       ->execute([$vr['amount'], $vd, $slipId]);
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('verify_slip error: ' . $e->getMessage());
+            $reason = 'error';
+        }
+        header("Location: order-detail.php?id={$orderId}&verify=" . urlencode($reason));
+        exit;
+    }
+
     if ($action === 'update_status') {
         try {
             $newStatus = $_POST['status'];
@@ -895,6 +971,24 @@ echo renderPageHeader(
                     </div>
                 </div>
 
+                <?php if (isset($_GET['verify'])):
+                    $vk = $_GET['verify'];
+                    $vMsg = [
+                        'ok' => ['✅ ตรวจสอบสำเร็จ — GhostX ยืนยันสลิปและอนุมัติการชำระแล้ว', 'emerald'],
+                        'amount_mismatch' => ['❌ ยอดเงินในสลิปไม่ตรงกับยอดออเดอร์', 'rose'],
+                        'account_mismatch' => ['❌ บัญชีปลายทางในสลิปไม่ตรงกับบัญชีร้าน', 'rose'],
+                        'not_a_slip' => ['❌ QR ไม่ใช่สลิปโอนเงินที่ตรวจสอบได้', 'rose'],
+                        'duplicate_ref' => ['⚠️ สลิปนี้ถูกใช้กับออเดอร์อื่นแล้ว (กันสลิปซ้ำ)', 'amber'],
+                        'no_qr' => ['⚠️ สลิปนี้ไม่มีข้อมูล QR ให้ตรวจสอบ', 'amber'],
+                        'error' => ['⚠️ ตรวจสอบไม่สำเร็จ (เชื่อมต่อ GhostX ไม่ได้) ลองใหม่อีกครั้ง', 'amber'],
+                    ];
+                    $vRow = $vMsg[$vk] ?? (strpos($vk, 'scan_error') === 0 ? ['⚠️ เชื่อมต่อ GhostX ไม่ได้ ลองใหม่อีกครั้ง', 'amber'] : ['ผลการตรวจสอบ: ' . htmlspecialchars($vk), 'slate']);
+                ?>
+                <div style="margin-bottom:var(--space-4);padding:var(--space-3);border-radius:var(--radius-md);background:var(--color-<?= $vRow[1] ?>-50);border:1px solid var(--color-<?= $vRow[1] ?>-200);color:var(--color-<?= $vRow[1] ?>-700);font-size:var(--text-sm);font-weight:500;">
+                    <?= $vRow[0] ?>
+                </div>
+                <?php endif; ?>
+
                 <?php if (empty($slips)): ?>
                 <div style="text-align:center;padding:var(--space-6);background:var(--color-slate-50);border-radius:var(--radius-md);">
                     <i class="fas fa-receipt" style="font-size:36px;color:var(--color-slate-300);display:block;margin-bottom:var(--space-2);"></i>
@@ -931,6 +1025,32 @@ echo renderPageHeader(
                             <?php if ($slip['admin_note']): ?>
                             <p style="font-size:var(--text-xs);color:var(--color-dark-500);margin:4px 0 0;"><i class="fas fa-sticky-note" style="margin-right:4px;"></i><?= htmlspecialchars($slip['admin_note']) ?></p>
                             <?php endif; ?>
+                            <?php
+                            $vRef = $slip['verify_ref'] ?? null;
+                            $vAmt = $slip['verify_amount'] ?? null;
+                            $qrPayload = $slip['qr_payload'] ?? null;
+                            $vData = !empty($slip['verify_data']) ? json_decode($slip['verify_data'], true) : null;
+                            $toAcc = $vData['slipVerification']['transfer']['toAccountNo'] ?? null;
+                            ?>
+                            <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--color-slate-200);font-size:var(--text-xs);">
+                                <?php if ($vRef): ?>
+                                    <div style="color:var(--color-emerald-600);font-weight:600;"><i class="fas fa-shield-alt" style="margin-right:4px;"></i>GhostX ยืนยันแล้ว</div>
+                                    <div style="color:var(--color-dark-500);margin-top:2px;">Ref: <?= htmlspecialchars($vRef) ?><?php if ($vAmt): ?> · ฿<?= number_format((float)$vAmt, 2) ?><?php endif; ?><?php if ($toAcc): ?> · เข้าบัญชี <?= htmlspecialchars($toAcc) ?><?php endif; ?></div>
+                                <?php elseif (!empty($qrPayload) && $slip['status'] !== 'approved'): ?>
+                                    <form method="POST" style="margin:0;">
+                                        <input type="hidden" name="action" value="verify_slip">
+                                        <input type="hidden" name="slip_id" value="<?= (int) $slip['id'] ?>">
+                                        <button type="submit" style="width:100%;padding:6px 10px;background:#6366f1;color:#fff;border:none;border-radius:var(--radius-sm);font-size:var(--text-xs);font-weight:500;cursor:pointer;">
+                                            <i class="fas fa-qrcode" style="margin-right:4px;"></i>ตรวจสอบกับ GhostX
+                                        </button>
+                                    </form>
+                                    <?php if ($vData && !empty($vData['type'])): ?>
+                                    <div style="color:var(--color-rose-500);margin-top:4px;"><i class="fas fa-exclamation-circle" style="margin-right:4px;"></i>ตรวจล่าสุด: ยังไม่ผ่าน (ยอด/บัญชีไม่ตรง)</div>
+                                    <?php endif; ?>
+                                <?php elseif (empty($qrPayload)): ?>
+                                    <div style="color:var(--color-dark-400);"><i class="fas fa-info-circle" style="margin-right:4px;"></i>สลิปนี้ไม่มีข้อมูล QR (อัปก่อนเปิดระบบ หรือรูปไม่มี QR)</div>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
                     <?php endforeach; ?>
