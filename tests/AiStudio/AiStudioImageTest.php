@@ -64,8 +64,8 @@ class AiStudioImageTest extends TestCase
         $this->assertSame('a cat', $parts[0]['text']);
         $this->assertCount(1, $parts); // no reference images
         $this->assertSame(['TEXT', 'IMAGE'], $req['generationConfig']['responseModalities']);
-        $this->assertSame('1:1', $req['generationConfig']['responseFormat']['image']['aspectRatio']);
-        $this->assertSame('2K', $req['generationConfig']['responseFormat']['image']['imageSize']);
+        $this->assertSame('1:1', $req['generationConfig']['imageConfig']['aspectRatio']);
+        $this->assertSame('2K', $req['generationConfig']['imageConfig']['imageSize']);
     }
 
     public function testBuildRequestWithReferenceImages(): void

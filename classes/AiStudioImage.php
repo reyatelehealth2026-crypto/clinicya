@@ -77,10 +77,10 @@ class AiStudioImage
             'contents' => [['parts' => $parts]],
             'generationConfig' => [
                 'responseModalities' => ['TEXT', 'IMAGE'],
-                'responseFormat' => ['image' => [
+                'imageConfig' => [
                     'aspectRatio' => $opts['aspectRatio'] ?? '1:1',
                     'imageSize' => $opts['imageSize'] ?? '2K',
-                ]],
+                ],
             ],
         ];
     }
