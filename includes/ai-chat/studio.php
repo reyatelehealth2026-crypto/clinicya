@@ -345,6 +345,9 @@ try {
                         <button onclick="generateStudioFlex()" id="btnStudioGenFlex" class="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-bold hover:opacity-90 transition-all">
                             <i class="fas fa-magic mr-2"></i>สร้าง Flex Message
                         </button>
+                        <button onclick="editStudioFlexInBuilder()" id="btnStudioEditFlex" class="w-full mt-2 py-3 bg-white border border-purple-500 text-purple-600 rounded-xl font-bold hover:bg-purple-50 transition-all disabled:opacity-40" disabled>
+                            <i class="fas fa-arrows-up-down-left-right mr-2"></i>ลากจัดวาง / แก้ไข (Flex Builder)
+                        </button>
                         <button onclick="saveStudioFlexTemplate()" id="btnStudioSaveFlex" class="w-full mt-2 py-3 bg-white border border-blue-500 text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all disabled:opacity-40" disabled>
                             <i class="fas fa-save mr-2"></i>บันทึกเทมเพลท
                         </button>
@@ -968,6 +971,7 @@ async function generateStudioFlex() {
         renderStudioFlexPreview(studioCurrentFlexJson);
         document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
         document.getElementById('btnStudioSaveFlex').disabled = false;
+        document.getElementById('btnStudioEditFlex').disabled = false;
         showStudioToast('สร้าง Flex Message สำเร็จ!');
     } catch (err) {
         showStudioToast('เกิดข้อผิดพลาด: ' + err.message, true);
@@ -1066,6 +1070,18 @@ async function saveStudioFlexTemplate() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = old;
+    }
+}
+
+// Hand the generated Flex to the existing drag-and-drop Flex Builder.
+// flex-builder.php reads sessionStorage['flex_edit'] when opened with ?edit=1.
+function editStudioFlexInBuilder() {
+    if (!studioCurrentFlexJson) { showStudioToast('ยังไม่มี Flex ให้แก้ไข', true); return; }
+    try {
+        sessionStorage.setItem('flex_edit', JSON.stringify(studioCurrentFlexJson));
+        window.open('flex-builder.php?edit=1', '_blank');
+    } catch (e) {
+        showStudioToast('เปิดตัวแก้ไขไม่สำเร็จ: ' + e.message, true);
     }
 }
 

@@ -117,7 +117,13 @@ if ($refs) {
     if (!is_dir($uploadDir)) {
         @mkdir($uploadDir, 0755, true);
     }
-    $baseUrl = defined('BASE_URL') ? rtrim(BASE_URL, '/') : '';
+    // Build the absolute URL from the ACTUAL request host so the hero image is
+    // same-origin as the admin page (re-ya.com root or a tenant subdomain).
+    // BASE_URL may point at a different host (e.g. clinicya.re-ya.com) that does
+    // not serve /uploads/, which would 404 the hero image inside LINE/preview.
+    $scheme = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') ? 'https' : 'http';
+    $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
+    $baseUrl = $host !== '' ? $scheme . '://' . $host : (defined('BASE_URL') ? rtrim(BASE_URL, '/') : '');
     foreach ($refs as $i => $ref) {
         $raw = base64_decode($ref['data'], true);
         if ($raw === false) {
