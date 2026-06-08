@@ -208,6 +208,26 @@ class AiStudioFlexTest extends TestCase
         $this->assertNull($r['flex']);
     }
 
+    public function testGenerateSurfacesBlockReason(): void
+    {
+        $body = json_encode(['promptFeedback' => ['blockReason' => 'SAFETY']]);
+        $svc = $this->clientReturning(200, $body);
+        $r = $svc->generate('hi', 'sys', [], 'KEY');
+        $this->assertFalse($r['ok']);
+        $this->assertStringContainsString('SAFETY', $r['error']);
+    }
+
+    public function testGenerateHandlesTransportException(): void
+    {
+        $svc = new AiStudioFlex(function ($url, $payload) {
+            throw new RuntimeException('network down');
+        });
+        $r = $svc->generate('hi', 'sys', [], 'KEY');
+        $this->assertFalse($r['ok']);
+        $this->assertNull($r['flex']);
+        $this->assertStringContainsString('network down', $r['error']);
+    }
+
     public function testEndpointUsesFlashModelAndKey(): void
     {
         $svc = new AiStudioFlex();

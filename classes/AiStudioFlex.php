@@ -123,7 +123,7 @@ class AiStudioFlex
     /** Parse model text into a Flex object (bubble or carousel). Null on failure. */
     public static function parseFlexJson(string $text): ?array
     {
-        $cleaned = trim(preg_replace('/```json|```/', '', $text));
+        $cleaned = trim((string) preg_replace('/```json|```/i', '', $text));
         if ($cleaned === '') {
             return null;
         }
