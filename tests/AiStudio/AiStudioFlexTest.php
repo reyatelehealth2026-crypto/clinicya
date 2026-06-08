@@ -71,6 +71,15 @@ class AiStudioFlexTest extends TestCase
         $this->assertStringContainsString('https://x/b.png', $p);
     }
 
+    public function testEditSystemPromptPreservesImageUrlsAndAsksJsonOnly(): void
+    {
+        $p = AiStudioFlex::buildEditSystemPrompt();
+        $this->assertStringContainsString('url', $p);     // instructs to keep image.url
+        $this->assertStringContainsString('JSON', $p);    // JSON-only output
+        $this->assertStringContainsString('bubble', $p);  // valid LINE structure
+        $this->assertStringContainsString('carousel', $p);
+    }
+
     // --- request builder ----------------------------------------------------
 
     public function testBuildRequestSetsJsonMimeAndSystemInstruction(): void

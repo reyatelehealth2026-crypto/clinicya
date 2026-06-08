@@ -78,6 +78,20 @@ class AiStudioFlex
     }
 
     /**
+     * System instruction for editing an existing Flex from a natural-language command.
+     * The user message carries the current Flex JSON plus the edit instruction.
+     */
+    public static function buildEditSystemPrompt(): string
+    {
+        return "คุณคือผู้เชี่ยวชาญ LINE Flex Message. ผู้ใช้จะให้ Flex JSON ปัจจุบันพร้อมคำสั่งแก้ไขเป็นภาษาไทย. "
+            . "แก้ไขตามคำสั่งเท่านั้น และคงเนื้อหา/โครงสร้างส่วนที่ไม่เกี่ยวข้องไว้ตามเดิม. "
+            . "ห้ามเปลี่ยนค่า url ของรูปภาพ (image.url) เว้นแต่ถูกสั่งให้เปลี่ยนหรือเพิ่มรูปใหม่. "
+            . "ผลลัพธ์ต้องถูกต้องตามสเปก LINE — เป็น object ชนิด bubble หรือ carousel เท่านั้น "
+            . "(ห้ามใส่ field altText หรือ type:flex). ข้อความเป็นภาษาไทย. "
+            . "ตอบกลับเป็น Flex JSON ฉบับเต็มที่แก้แล้ว parse ได้เท่านั้น ห้ามมีคำอธิบายหรือ markdown fence.";
+    }
+
+    /**
      * Build the generateContent REST body (text + optional vision images, JSON output).
      *
      * @param array $visionRefs each ['mime'=>string,'data'=>base64]

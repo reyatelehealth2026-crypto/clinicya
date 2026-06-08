@@ -53,6 +53,29 @@ function studio_flex_fail(string $msg, int $code = 400): void
     exit;
 }
 
+/** Resolve the Gemini key: shop's stored key (tenant → any row) → user-provided. */
+function studio_flex_resolve_key(PDO $db, int $lineAccountId, array $input): string
+{
+    $apiKey = '';
+    try {
+        if ($lineAccountId > 0) {
+            $st = $db->prepare("SELECT gemini_api_key FROM ai_settings WHERE line_account_id = ? AND gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> '' LIMIT 1");
+            $st->execute([$lineAccountId]);
+            $apiKey = (string) ($st->fetchColumn() ?: '');
+        }
+        if ($apiKey === '') {
+            $st = $db->query("SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> '' LIMIT 1");
+            $apiKey = (string) ($st->fetchColumn() ?: '');
+        }
+    } catch (\Throwable $e) {
+        // fall through to user-provided key
+    }
+    if ($apiKey === '') {
+        $apiKey = trim((string) ($input['api_key'] ?? ''));
+    }
+    return $apiKey;
+}
+
 if (empty($_SESSION['admin_user'])) {
     studio_flex_fail('กรุณาเข้าสู่ระบบ', 401);
 }
@@ -65,6 +88,30 @@ $input = json_decode(file_get_contents('php://input') ?: '[]', true);
 if (!is_array($input)) {
     studio_flex_fail('รูปแบบคำขอไม่ถูกต้อง');
 }
+
+// --- Edit mode: refine an existing Flex from a natural-language instruction ---
+if ((string) ($input['mode'] ?? '') === 'edit') {
+    $instruction = trim((string) ($input['instruction'] ?? ''));
+    $current = $input['flex'] ?? null;
+    if ($instruction === '' || !is_array($current)) {
+        studio_flex_fail('ต้องมีคำสั่งแก้ไขและ Flex ปัจจุบัน');
+    }
+    $apiKey = studio_flex_resolve_key($db, $lineAccountId, $input);
+    if ($apiKey === '') {
+        studio_flex_fail('ยังไม่ได้ตั้งค่า Google API key', 422);
+    }
+    $editPrompt = "Flex JSON ปัจจุบัน:\n" . json_encode($current, JSON_UNESCAPED_UNICODE)
+        . "\n\nคำสั่งแก้ไข: " . $instruction
+        . "\n\nคืน Flex JSON ฉบับแก้ไขทั้งก้อน";
+    $svc = new AiStudioFlex();
+    $r = $svc->generate($editPrompt, AiStudioFlex::buildEditSystemPrompt(), [], $apiKey);
+    if (!$r['ok']) {
+        studio_flex_fail($r['error'] ?? 'แก้ Flex ไม่สำเร็จ', 200);
+    }
+    echo json_encode(['success' => true, 'flex' => $r['flex']], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $prompt = trim((string) ($input['prompt'] ?? ''));
 if ($prompt === '') {
     studio_flex_fail('กรุณากรอกรายละเอียด');
@@ -88,23 +135,7 @@ foreach ((array) ($input['reference_images'] ?? []) as $dataUrl) {
 }
 
 // --- Resolve API key: shop's stored key first, else the one the user typed ---
-$apiKey = '';
-try {
-    if ($lineAccountId > 0) {
-        $st = $db->prepare("SELECT gemini_api_key FROM ai_settings WHERE line_account_id = ? AND gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> '' LIMIT 1");
-        $st->execute([$lineAccountId]);
-        $apiKey = (string) ($st->fetchColumn() ?: '');
-    }
-    if ($apiKey === '') {
-        $st = $db->query("SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> '' LIMIT 1");
-        $apiKey = (string) ($st->fetchColumn() ?: '');
-    }
-} catch (\Throwable $e) {
-    // fall through to user-provided key
-}
-if ($apiKey === '') {
-    $apiKey = trim((string) ($input['api_key'] ?? ''));
-}
+$apiKey = studio_flex_resolve_key($db, $lineAccountId, $input);
 if ($apiKey === '') {
     studio_flex_fail('ยังไม่ได้ตั้งค่า Google API key', 422);
 }

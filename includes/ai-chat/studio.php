@@ -367,7 +367,26 @@ try {
                     </div>
                 </div>
             </div>
-            
+
+            <!-- AI chat-edit: refine the generated Flex with a natural-language command -->
+            <div id="studioFlexEditBar" class="mt-6 bg-white rounded-2xl shadow-xl overflow-hidden hidden">
+                <div class="p-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white flex items-center gap-3">
+                    <i class="fas fa-wand-magic-sparkles text-xl"></i>
+                    <div>
+                        <h3 class="font-bold">แก้ด้วยคำสั่ง</h3>
+                        <p class="text-xs text-purple-200">พิมพ์บอกสิ่งที่อยากแก้ AI จะปรับให้ทันที (กด Enter เพื่อส่ง)</p>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div id="studioFlexEditChips" class="flex flex-wrap gap-1 mb-3"></div>
+                    <div class="flex gap-2">
+                        <input id="studioFlexEditInput" type="text" onkeydown="if(event.key==='Enter'){event.preventDefault();applyStudioFlexEdit();}" class="flex-1 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-purple-500" placeholder="เช่น ทำราคาตัวใหญ่ขึ้น / เพิ่มปุ่มโทรหาร้าน / เปลี่ยนหัวเป็นสีแดง">
+                        <button onclick="applyStudioFlexEdit()" id="btnStudioFlexEdit" class="px-5 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700"><i class="fas fa-paper-plane mr-1"></i>แก้</button>
+                        <button onclick="undoStudioFlexEdit()" id="btnStudioFlexUndo" class="px-4 py-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 disabled:opacity-40" disabled title="ย้อนกลับ"><i class="fas fa-rotate-left"></i></button>
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-6 bg-white rounded-2xl shadow-xl overflow-hidden">
                 <div class="p-4 bg-gray-800 text-white flex justify-between items-center">
                     <h3 class="font-bold"><i class="fas fa-code mr-2"></i>JSON Code</h3>
@@ -972,6 +991,10 @@ async function generateStudioFlex() {
         document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
         document.getElementById('btnStudioSaveFlex').disabled = false;
         document.getElementById('btnStudioEditFlex').disabled = false;
+        document.getElementById('studioFlexEditBar').classList.remove('hidden');
+        studioFlexHistory = [];
+        document.getElementById('btnStudioFlexUndo').disabled = true;
+        renderStudioFlexEditChips();
         showStudioToast('สร้าง Flex Message สำเร็จ!');
     } catch (err) {
         showStudioToast('เกิดข้อผิดพลาด: ' + err.message, true);
@@ -1083,6 +1106,65 @@ function editStudioFlexInBuilder() {
     } catch (e) {
         showStudioToast('เปิดตัวแก้ไขไม่สำเร็จ: ' + e.message, true);
     }
+}
+
+// ----- AI chat-edit: refine the current Flex from a Thai instruction -----
+let studioFlexHistory = [];   // undo stack of previous Flex JSON states
+
+function renderStudioFlexEditChips() {
+    const box = document.getElementById('studioFlexEditChips');
+    if (!box) return;
+    const chips = ['ทำราคาตัวใหญ่ขึ้น', 'เพิ่มปุ่มโทรหาร้าน', 'เปลี่ยนสีหัวเป็นแดง', 'เพิ่มอีก 1 bubble', 'ทำข้อความให้สั้นกระชับ'];
+    box.innerHTML = chips.map(c =>
+        `<button type="button" onclick="studioFlexEditQuick('${c}')" class="px-2 py-1 text-xs bg-purple-50 text-purple-700 rounded-full border border-purple-200 hover:bg-purple-100">${c}</button>`).join('');
+}
+function studioFlexEditQuick(text) {
+    document.getElementById('studioFlexEditInput').value = text;
+    applyStudioFlexEdit();
+}
+
+async function applyStudioFlexEdit() {
+    if (!studioCurrentFlexJson) { showStudioToast('ยังไม่มี Flex ให้แก้', true); return; }
+    const inp = document.getElementById('studioFlexEditInput');
+    const instruction = inp.value.trim();
+    if (!instruction) { showStudioToast('พิมพ์คำสั่งที่อยากแก้ก่อน', true); return; }
+
+    const btn = document.getElementById('btnStudioFlexEdit');
+    const old = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    try {
+        const res = await fetch('api/ai-studio-flex.php', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'edit', instruction, flex: studioCurrentFlexJson, api_key: studioCurrentApiKey || '' })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) { showStudioToast('กรุณาเข้าสู่ระบบใหม่', true); throw new Error('กรุณาเข้าสู่ระบบใหม่'); }
+        if (res.status === 422) { openStudioApiModal(); throw new Error(data.error || 'ต้องตั้งค่า API key ก่อน'); }
+        if (!data || !data.success) { throw new Error((data && data.error) || 'แก้ไม่สำเร็จ'); }
+
+        studioFlexHistory.push(studioCurrentFlexJson);
+        document.getElementById('btnStudioFlexUndo').disabled = false;
+        studioCurrentFlexJson = data.flex;
+        renderStudioFlexPreview(studioCurrentFlexJson);
+        document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
+        inp.value = '';
+        showStudioToast('แก้ไขแล้ว!');
+    } catch (err) {
+        showStudioToast('แก้ไม่สำเร็จ: ' + err.message, true);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = old;
+    }
+}
+
+function undoStudioFlexEdit() {
+    if (!studioFlexHistory.length) return;
+    studioCurrentFlexJson = studioFlexHistory.pop();
+    renderStudioFlexPreview(studioCurrentFlexJson);
+    document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
+    document.getElementById('btnStudioFlexUndo').disabled = studioFlexHistory.length === 0;
+    showStudioToast('ย้อนกลับแล้ว');
 }
 
 // Caption Functions
