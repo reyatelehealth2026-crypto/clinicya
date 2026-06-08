@@ -235,37 +235,69 @@ try {
                 <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="bg-gradient-to-r from-blue-500 to-cyan-500 p-4 text-white">
                         <h3 class="font-bold text-lg"><i class="fas fa-layer-group mr-2"></i>ออกแบบ Flex Message</h3>
-                        <p class="text-sm text-blue-200">สร้าง LINE Flex Message ด้วย AI</p>
+                        <p class="text-sm text-blue-200">สร้าง LINE Flex Message ด้วย AI ให้เข้ากับการตลาดของร้านยา</p>
                     </div>
                     <div class="p-6">
+                        <!-- Marketing Presets -->
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">ประเภท Flex</label>
-                            <select id="studioFlexType" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
-                                <option value="product">🛍️ โปรโมทสินค้า</option>
-                                <option value="promo">🎉 โปรโมชั่น/ส่วนลด</option>
-                                <option value="menu">📋 เมนูร้านอาหาร</option>
-                                <option value="receipt">🧾 ใบเสร็จ/ออเดอร์</option>
-                                <option value="welcome">👋 ข้อความต้อนรับ</option>
-                                <option value="announce">📢 ประกาศ/ข่าวสาร</option>
-                                <option value="booking">📅 จองคิว/นัดหมาย</option>
-                                <option value="custom">✨ กำหนดเอง</option>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">🎯 แนวคิดการตลาด (Marketing Presets)</label>
+                            <select id="studioFlexMarketingPreset" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500" onchange="applyMarketingPreset()">
+                                <option value="">-- เลือกกลยุทธ์การตลาดเพื่อเริ่มร่าง Prompt --</option>
+                                <option value="pain_outcome">🎯 Pain → Outcome (เปลี่ยนปัญหาเป็นผลลัพธ์ของสินค้า/บริการ)</option>
+                                <option value="symptom_care">🤒 Symptom-Based Broadcast (ดูแลคนไข้และแนะนำยาตามอาการ)</option>
+                                <option value="refill_reminder">🎁 Medication Refill Loop (แจ้งเตือนรับยาต่อเนื่อง/รักษาโรคเรื้อรัง)</option>
+                                <option value="loyalty_points">🏆 Loyalty Points Loop (กระตุ้นกลับมาใช้แต้มสะสมแลกสิทธิพิเศษ)</option>
+                                <option value="special_discount">🎉 Special Promotion (โปรโมชั่นพิเศษ/ซื้อคู่ประหยัดกว่า)</option>
                             </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">ประเภท Flex</label>
+                                <select id="studioFlexType" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
+                                    <option value="product">🛍️ โปรโมทสินค้า</option>
+                                    <option value="promo">🎉 โปรโมชั่น/ส่วนลด</option>
+                                    <option value="menu">📋 เมนูร้านอาหาร</option>
+                                    <option value="receipt">🧾 ใบเสร็จ/ออเดอร์</option>
+                                    <option value="welcome">👋 ข้อความต้อนรับ</option>
+                                    <option value="announce">📢 ประกาศ/ข่าวสาร</option>
+                                    <option value="booking">📅 จองคิว/นัดหมาย</option>
+                                    <option value="custom" selected>✨ กำหนดเอง</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">จำนวนการ์ด (สไลด์)</label>
+                                <input type="number" id="studioFlexBubbleCount" min="1" max="10" value="1" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
+                            </div>
                         </div>
                         
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">รายละเอียด</label>
-                            <textarea id="studioFlexPrompt" rows="4" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500" placeholder="เช่น: โปรโมทกาแฟลาเต้ ราคา 65 บาท ลด 20% เหลือ 52 บาท"></textarea>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">รายละเอียดข้อความ/รายละเอียดการตลาด</label>
+                            <textarea id="studioFlexPrompt" rows="4" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500" placeholder="กรอกข้อมูลที่ต้องการ เช่น: แนะนำอาหารเสริมวิตามินซี หรือเลือกจากแนวคิดการตลาดด้านบน"></textarea>
+                        </div>
+
+                        <!-- Image Upload for Flex -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">📸 รูปภาพสินค้าอ้างอิง (สูงสุด 5 รูป จะใช้เป็นภาพ Hero ของการ์ดแต่ละใบ)</label>
+                            <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-blue-400 transition-colors cursor-pointer" onclick="document.getElementById('studioFlexImageInput').click()">
+                                <input type="file" id="studioFlexImageInput" accept="image/*" multiple class="hidden" onchange="handleStudioFlexImages(event)">
+                                <div id="studioFlexImagePlaceholder">
+                                    <i class="fas fa-images text-gray-400 text-3xl mb-2"></i>
+                                    <p class="text-sm text-gray-500">คลิกเพื่ออัปโหลดรูปภาพสินค้า (เลือกได้หลายรูป)</p>
+                                </div>
+                                <div id="studioFlexImagePreviewContainer" class="flex flex-wrap gap-2 justify-center mt-2 hidden"></div>
+                            </div>
                         </div>
                         
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">สี Theme</label>
                             <div class="flex gap-2">
-                                <button type="button" onclick="setStudioFlexColor('#06C755')" class="w-8 h-8 rounded-full bg-green-500 border-2 border-white shadow"></button>
-                                <button type="button" onclick="setStudioFlexColor('#3B82F6')" class="w-8 h-8 rounded-full bg-blue-500 border-2 border-white shadow"></button>
-                                <button type="button" onclick="setStudioFlexColor('#EF4444')" class="w-8 h-8 rounded-full bg-red-500 border-2 border-white shadow"></button>
-                                <button type="button" onclick="setStudioFlexColor('#F59E0B')" class="w-8 h-8 rounded-full bg-yellow-500 border-2 border-white shadow"></button>
-                                <button type="button" onclick="setStudioFlexColor('#8B5CF6')" class="w-8 h-8 rounded-full bg-purple-500 border-2 border-white shadow"></button>
-                                <button type="button" onclick="setStudioFlexColor('#EC4899')" class="w-8 h-8 rounded-full bg-pink-500 border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#06C755')" class="studio-color-btn w-8 h-8 rounded-full bg-[#06C755] border-2 border-white shadow ring-4 ring-offset-2 ring-blue-400"></button>
+                                <button type="button" onclick="setStudioFlexColor('#3B82F6')" class="studio-color-btn w-8 h-8 rounded-full bg-[#3B82F6] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#EF4444')" class="studio-color-btn w-8 h-8 rounded-full bg-[#EF4444] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#F59E0B')" class="studio-color-btn w-8 h-8 rounded-full bg-[#F59E0B] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#8B5CF6')" class="studio-color-btn w-8 h-8 rounded-full bg-[#8B5CF6] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#EC4899')" class="studio-color-btn w-8 h-8 rounded-full bg-[#EC4899] border-2 border-white shadow"></button>
                             </div>
                         </div>
                         
@@ -275,15 +307,36 @@ try {
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    <div class="p-4 bg-gray-100 border-b flex justify-between items-center">
-                        <h3 class="font-bold text-gray-700"><i class="fas fa-eye mr-2"></i>Preview</h3>
-                        <button onclick="copyStudioFlexJson()" class="text-sm text-blue-600 hover:underline"><i class="far fa-copy mr-1"></i>Copy JSON</button>
+                <div class="flex flex-col gap-6">
+                    <div class="bg-white rounded-2xl shadow-xl overflow-hidden flex-1">
+                        <div class="p-4 bg-gray-100 border-b flex justify-between items-center">
+                            <h3 class="font-bold text-gray-700"><i class="fas fa-eye mr-2"></i>Preview (ตัวอย่างบน LINE)</h3>
+                            <div>
+                                <button onclick="copyStudioFlexJson()" class="text-sm text-blue-600 hover:underline font-medium"><i class="far fa-copy mr-1"></i>Copy JSON</button>
+                                <button id="btnFlexUseBroadcast" onclick="useFlexInBroadcast()" class="hidden text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg ml-2 font-medium transition-all shadow-sm"><i class="fas fa-paper-plane mr-1"></i>ใช้ใน Broadcast</button>
+                            </div>
+                        </div>
+                        <div id="studioFlexPreview" class="p-6 min-h-[400px] bg-gray-800 flex items-center justify-center">
+                            <div class="text-center text-gray-500">
+                                <i class="fas fa-layer-group text-6xl mb-4"></i>
+                                <p>Flex Message จะแสดงที่นี่</p>
+                            </div>
+                        </div>
                     </div>
-                    <div id="studioFlexPreview" class="p-6 min-h-[400px] bg-gray-800 flex items-center justify-center">
-                        <div class="text-center text-gray-500">
-                            <i class="fas fa-layer-group text-6xl mb-4"></i>
-                            <p>Flex Message จะแสดงที่นี่</p>
+
+                    <!-- AI Refinement Section -->
+                    <div id="studioFlexRefineSection" class="hidden bg-white rounded-2xl shadow-xl overflow-hidden border border-teal-100">
+                        <div class="bg-gradient-to-r from-teal-500 to-emerald-500 p-4 text-white">
+                            <h4 class="font-bold text-sm"><i class="fas fa-magic mr-1"></i>ปรับปรุงด้วย AI (AI Refinement)</h4>
+                            <p class="text-xs text-teal-100">ส่งคำสั่งภาษาธรรมชาติเพื่อแก้ไขการ์ดชุดเดิม</p>
+                        </div>
+                        <div class="p-4">
+                            <div class="flex gap-2">
+                                <input type="text" id="studioFlexInstruction" class="flex-1 px-4 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-teal-500" placeholder="เช่น 'เปลี่ยนสีเป็นสีส้ม', 'เปลี่ยนราคาเดิมเป็น 500 บาท'">
+                                <button onclick="refineStudioFlex()" id="btnStudioRefineFlex" class="px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-sm rounded-xl font-bold hover:opacity-90 transition-all flex items-center gap-1.5 shrink-0">
+                                    <i class="fas fa-paper-plane text-xs"></i>ส่งคำสั่ง
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -466,12 +519,14 @@ try {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="assets/js/flex-preview.js"></script>
 <script>
 // State
 let studioCurrentApiKey = '<?= addslashes($geminiApiKey) ?>';
 let studioCurrentImageStyle = 'realistic';
 let studioCurrentFlexColor = '#06C755';
 let studioCurrentFlexJson = null;
+let studioFlexImages = []; // Array of reference image data URLs for Flex
 let studioChatHistory = [];
 let studioChatImageData = null;
 let studioCaptionImageData = null;
@@ -727,10 +782,94 @@ async function generateStudioImage() {
 }
 
 // Flex Functions
-function setStudioFlexColor(color) { studioCurrentFlexColor = color; }
+function setStudioFlexColor(color) { 
+    studioCurrentFlexColor = color; 
+    document.querySelectorAll('.studio-color-btn').forEach(btn => btn.classList.remove('ring-4', 'ring-offset-2', 'ring-blue-400'));
+    event.target.classList.add('ring-4', 'ring-offset-2', 'ring-blue-400');
+}
+
+function applyMarketingPreset() {
+    const preset = document.getElementById('studioFlexMarketingPreset').value;
+    const promptArea = document.getElementById('studioFlexPrompt');
+    const presets = {
+        pain_outcome: `[ปัญหาคนไข้]: เภสัชกรไม่มีเวลาโทรตามคนไข้ หรือคนไข้ลืมกินยา\n[ฟีเจอร์หลัก]: บริการจัดส่งยาถึงบ้านพร้อมระบบแจ้งเตือนผ่าน LINE\n[ผลลัพธ์ที่ได้]: คนไข้ได้รับยาต่อเนื่อง สุขภาพดีขึ้น ร้านยามียอดขายสม่ำเสมอ\n[รายละเอียดเสนอขาย]: แนะนำแพ็กเกจจัดส่งยาโรคเรื้อรังรายเดือน ฟรีค่าส่งและแถมกล่องใส่ยาเตือนความจำ`,
+        symptom_care: `[อาการ/กลุ่มโรค]: มีอาการภูมิแพ้ จาม คัดจมูกช่วงหน้าฝน\n[การดูแลเบื้องต้น]: ล้างจมูกด้วยน้ำเกลือและทานยาแก้แพ้ที่ไม่ง่วง\n[สินค้าแนะนำ]: เซ็ตล้างจมูกและยาแก้แพ้กลุ่มพรีเมียม\n[ข้อเสนอพิเศษ]: ซื้อเซ็ตล้างจมูกคู่ยาแก้แพ้ ลดทันที 15% พร้อมคำปรึกษาจากเภสัชกรฟรีผ่าน LINE`,
+        refill_reminder: `[กลุ่มโรคเรื้อรัง]: คนไข้โรคความดันโลหิตสูง/เบาหวาน ที่ยาใกล้จะหมดรอบ 30 วัน\n[ความสำคัญของการทานยา]: ทานยาต่อเนื่องควบคุมระดับความดัน/น้ำตาล ป้องกันโรคแทรกซ้อน\n[การอำนวยความสะดวก]: บริการจัดยาและส่งตรงถึงบ้าน หรือนัดรับยาที่ร้านล่วงหน้าไม่ต้องรอคิว\n[CTA]: ทักแชทเพื่อแจ้งยืนยันรับยาต่อเนื่องรอบใหม่ได้ทันที`,
+        loyalty_points: `[คะแนนสะสม]: ใช้คะแนนสะสม 100 คะแนน\n[แลกของรางวัล]: แลกรับส่วนลด 50 บาท หรือแลกรับหน้ากากอนามัยแพ็ก 50 ชิ้น ฟรี!\n[ระยะเวลา]: เฉพาะเดือนนี้เท่านั้น\n[ความคุ้มค่า]: คืนกำไรให้ลูกค้าประจำที่สนับสนุนร้านยาของเราเสมอมา`,
+        special_discount: `[รายละเอียดโปรโมชั่น]: โปรโมชั่นดูแลสุขภาพต้อนรับฤดูกาล\n[สินค้าจัดเซ็ต]: วิตามินซี 1000mg + ซิงค์ (Zinc) แพ็กคู่ราคาพิเศษ\n[ราคาปกติ]: 750 บาท\n[ราคาพิเศษ]: 590 บาท (ประหยัด 160 บาท)\n[CTA]: สั่งซื้อด่วนผ่าน LINE Mini App สินค้ามีจำนวนจำกัด`
+    };
+    if (presets[preset]) {
+        promptArea.value = presets[preset];
+        showStudioToast('นำเข้าโครงสร้าง Prompt การตลาดแล้ว!');
+    }
+}
+
+function handleStudioFlexImages(e) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const container = document.getElementById('studioFlexImagePreviewContainer');
+    const placeholder = document.getElementById('studioFlexImagePlaceholder');
+    
+    studioFlexImages = [];
+    container.innerHTML = '';
+    
+    const count = Math.min(files.length, 5);
+    for (let i = 0; i < count; i++) {
+        const file = files[i];
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const dataUrl = event.target.result;
+            studioFlexImages.push(dataUrl);
+            
+            const div = document.createElement('div');
+            div.className = 'relative w-16 h-16 border rounded-lg overflow-hidden group shadow-sm bg-gray-100';
+            div.innerHTML = `
+                <img src="${dataUrl}" class="w-full h-full object-cover">
+                <button type="button" class="absolute top-0 right-0 bg-red-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs opacity-80 hover:opacity-100" onclick="event.stopPropagation(); removeStudioFlexImage(${studioFlexImages.length - 1})">
+                    <i class="fas fa-times text-[10px]"></i>
+                </button>
+            `;
+            container.appendChild(div);
+        };
+        reader.readAsDataURL(file);
+    }
+    
+    placeholder.classList.add('hidden');
+    container.classList.remove('hidden');
+}
+
+function removeStudioFlexImage(index) {
+    studioFlexImages.splice(index, 1);
+    renderStudioFlexImagePreviews();
+}
+
+function renderStudioFlexImagePreviews() {
+    const container = document.getElementById('studioFlexImagePreviewContainer');
+    const placeholder = document.getElementById('studioFlexImagePlaceholder');
+    
+    container.innerHTML = '';
+    if (studioFlexImages.length === 0) {
+        placeholder.classList.remove('hidden');
+        container.classList.add('hidden');
+        document.getElementById('studioFlexImageInput').value = '';
+        return;
+    }
+    
+    studioFlexImages.forEach((dataUrl, i) => {
+        const div = document.createElement('div');
+        div.className = 'relative w-16 h-16 border rounded-lg overflow-hidden group shadow-sm bg-gray-100';
+        div.innerHTML = `
+            <img src="${dataUrl}" class="w-full h-full object-cover">
+            <button type="button" class="absolute top-0 right-0 bg-red-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs opacity-80 hover:opacity-100" onclick="event.stopPropagation(); removeStudioFlexImage(${i})">
+                <i class="fas fa-times text-[10px]"></i>
+            </button>
+        `;
+        container.appendChild(div);
+    });
+}
 
 async function generateStudioFlex() {
-    if (!studioCurrentApiKey) { openStudioApiModal(); return; }
     const prompt = document.getElementById('studioFlexPrompt').value.trim();
     if (!prompt) { showStudioToast('กรุณากรอกรายละเอียด', true); return; }
     
@@ -740,14 +879,47 @@ async function generateStudioFlex() {
     
     try {
         const type = document.getElementById('studioFlexType').value;
-        const systemPrompt = `สร้าง LINE Flex Message JSON สำหรับ ${type} ใช้สี: ${studioCurrentFlexColor} Output JSON เท่านั้น ห้ามใส่ markdown`;
-        const flexJson = await callStudioGemini(prompt, systemPrompt);
+        const bubbleCount = parseInt(document.getElementById('studioFlexBubbleCount').value) || 1;
         
-        const cleaned = flexJson.replace(/```json|```/g, '').trim();
-        studioCurrentFlexJson = JSON.parse(cleaned);
+        const payload = {
+            prompt: prompt,
+            type: type,
+            color: studioCurrentFlexColor,
+            bubble_count: bubbleCount,
+            reference_images: studioFlexImages,
+            api_key: studioCurrentApiKey
+        };
         
-        document.getElementById('studioFlexPreview').innerHTML = '<div class="text-center text-white"><i class="fas fa-check-circle text-green-500 text-3xl mb-2"></i><p>Flex Message สร้างสำเร็จ!</p></div>';
+        const res = await fetch('api/ai-studio-flex.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || `HTTP ${res.status}`);
+        }
+        
+        const data = await res.json();
+        if (!data.success) {
+            throw new Error(data.error || 'สร้าง Flex ไม่สำเร็จ');
+        }
+        
+        studioCurrentFlexJson = data.flex;
+        
+        if (typeof FlexPreview !== 'undefined') {
+            FlexPreview.render('studioFlexPreview', studioCurrentFlexJson);
+        } else {
+            document.getElementById('studioFlexPreview').innerHTML = '<div class="text-center text-white"><i class="fas fa-check-circle text-green-500 text-3xl mb-2"></i><p>Flex Message สร้างสำเร็จ!</p></div>';
+        }
+        
         document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
+        
+        // Show refinement section & broadcast button
+        document.getElementById('studioFlexRefineSection').classList.remove('hidden');
+        document.getElementById('btnFlexUseBroadcast').classList.remove('hidden');
+        
         showStudioToast('สร้าง Flex Message สำเร็จ!');
     } catch (err) {
         showStudioToast('เกิดข้อผิดพลาด: ' + err.message, true);
@@ -757,10 +929,81 @@ async function generateStudioFlex() {
     }
 }
 
+async function refineStudioFlex() {
+    const instruction = document.getElementById('studioFlexInstruction').value.trim();
+    if (!instruction) { showStudioToast('กรุณากรอกคำสั่งปรับปรุง', true); return; }
+    if (!studioCurrentFlexJson) { showStudioToast('ยังไม่มี Flex ปัจจุบันเพื่อแก้ไข', true); return; }
+    
+    const btn = document.getElementById('btnStudioRefineFlex');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังปรับปรุง...';
+    
+    try {
+        const payload = {
+            mode: 'edit',
+            instruction: instruction,
+            flex: studioCurrentFlexJson,
+            api_key: studioCurrentApiKey
+        };
+        
+        const res = await fetch('api/ai-studio-flex.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || `HTTP ${res.status}`);
+        }
+        
+        const data = await res.json();
+        if (!data.success) {
+            throw new Error(data.error || 'ปรับปรุง Flex ไม่สำเร็จ');
+        }
+        
+        studioCurrentFlexJson = data.flex;
+        
+        if (typeof FlexPreview !== 'undefined') {
+            FlexPreview.render('studioFlexPreview', studioCurrentFlexJson);
+        }
+        document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
+        document.getElementById('studioFlexInstruction').value = '';
+        
+        showStudioToast('ปรับปรุง Flex Message สำเร็จ!');
+    } catch (err) {
+        showStudioToast('เกิดข้อผิดพลาด: ' + err.message, true);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>ส่งคำสั่ง';
+    }
+}
+
 function copyStudioFlexJson() {
     if (!studioCurrentFlexJson) { showStudioToast('ยังไม่มี Flex JSON', true); return; }
     navigator.clipboard.writeText(JSON.stringify(studioCurrentFlexJson, null, 2));
     showStudioToast('คัดลอก JSON แล้ว!');
+}
+
+function useFlexInBroadcast() {
+    if (!studioCurrentFlexJson) { showStudioToast('ยังไม่มี Flex JSON', true); return; }
+    
+    let altText = 'แคมเปญพิเศษจากร้านยา';
+    try {
+        if (studioCurrentFlexJson.type === 'bubble') {
+            altText = studioCurrentFlexJson.altText || studioCurrentFlexJson.header?.contents?.[0]?.text || studioCurrentFlexJson.body?.contents?.[0]?.text || altText;
+        } else if (studioCurrentFlexJson.type === 'carousel') {
+            altText = studioCurrentFlexJson.altText || studioCurrentFlexJson.contents?.[0]?.header?.contents?.[0]?.text || altText;
+        }
+    } catch (e) {}
+    
+    sessionStorage.setItem('flex_broadcast', JSON.stringify(studioCurrentFlexJson));
+    sessionStorage.setItem('flex_broadcast_alttext', altText);
+    
+    showStudioToast('ส่งข้อมูลไปยังระบบ Broadcast...');
+    setTimeout(() => {
+        window.location.href = 'broadcast.php?flex=1';
+    }, 800);
 }
 
 // Caption Functions

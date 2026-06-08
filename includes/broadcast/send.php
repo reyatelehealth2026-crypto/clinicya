@@ -812,6 +812,31 @@ $totalUsers = $stmt->fetch()['c'];
         }
     });
 
+    // Load Flex from sessionStorage if redirected from Flex Builder/Studio
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('flex') === '1') {
+        const flexData = sessionStorage.getItem('flex_broadcast');
+        const altText = sessionStorage.getItem('flex_broadcast_alttext');
+        if (flexData) {
+            try {
+                const flexRadio = document.querySelector('input[name="message_type"][value="flex"]');
+                if (flexRadio) flexRadio.checked = true;
+                
+                const flexTextarea = document.getElementById('flexJson');
+                if (flexTextarea) flexTextarea.value = JSON.stringify(JSON.parse(flexData), null, 2);
+                
+                const titleInput = document.querySelector('input[name="title"]');
+                if (titleInput && altText) titleInput.value = altText;
+                
+                // Also clear session storage so refreshing page doesn't keep reloading it
+                sessionStorage.removeItem('flex_broadcast');
+                sessionStorage.removeItem('flex_broadcast_alttext');
+            } catch (e) {
+                console.error('Failed to parse redirected Flex message:', e);
+            }
+        }
+    }
+
     toggleMessageType();
     toggleTargetType();
 

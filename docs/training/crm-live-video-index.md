@@ -63,7 +63,7 @@ gcloud auth application-default login
 ```
 
 หรือใช้ access token/service account ผ่าน environment:
-หรือใช้ส่่วนรัเได้ก็ใช้ เลย apikey google AIzaSyAB8bYeWxEcwqDfiSI_q2KRiD1h9V2Tfkk
+หรือใช้ส่่วนรับได้ก็ใช้ เลย apikey google <google_tts_api_key_redacted>
 ```powershell
 $env:GOOGLE_TTS_ACCESS_TOKEN = "<google oauth access token>"
 # หรือ
