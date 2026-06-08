@@ -339,7 +339,7 @@ $accounts = $manager->getAllAccounts();
                         </label>
                         <input type="text" name="liff_id" id="line_liff_id" class="w-full px-4 py-3 border-2 border-green-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 font-mono text-lg" placeholder="2006xxxxxx-xxxxxxxx">
                         <p class="text-sm text-green-600 mt-2">
-                            <i class="fas fa-link mr-1"></i>Endpoint URL: <code class="bg-white px-2 py-1 rounded"><?= BASE_URL ?>liff-app.php</code>
+                            <i class="fas fa-link mr-1"></i>Endpoint URL: <code class="bg-white px-2 py-1 rounded"><?= BASE_URL ?>miniapp/</code>
                         </p>
                     </div>
                     
@@ -351,7 +351,7 @@ $accounts = $manager->getAllAccounts();
                             <li>ไปที่ LIFF → Add</li>
                             <li>ตั้งชื่อ เช่น "Unified App"</li>
                             <li>Size: <strong>Full</strong> (แนะนำ)</li>
-                            <li>Endpoint URL: <code class="bg-white px-1 rounded"><?= BASE_URL ?>liff-app.php</code></li>
+                            <li>Endpoint URL: <code class="bg-white px-1 rounded"><?= BASE_URL ?>miniapp/</code></li>
                             <li>Scopes: openid, profile</li>
                             <li>คัดลอก LIFF ID มาใส่ในช่องด้านบน</li>
                         </ol>

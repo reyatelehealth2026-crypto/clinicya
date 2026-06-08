@@ -507,9 +507,13 @@ class BusinessBot
             return null;
 
         try {
+            require_once __DIR__ . '/../includes/liff-helper.php';
             $stmt = $this->db->prepare("SELECT liff_id FROM line_accounts WHERE id = ? AND liff_id IS NOT NULL AND liff_id != ''");
             $stmt->execute([$this->lineAccountId]);
-            return $stmt->fetchColumn() ?: null;
+            $liffId = $stmt->fetchColumn() ?: null;
+            // Treat PENDING* placeholders as "no LIFF" → callers fall back to the
+            // native LINE carousel instead of the unconfigured shared Mini App.
+            return ($liffId !== null && reya_is_real_liff_id($liffId)) ? $liffId : null;
         } catch (Exception $e) {
             return null;
         }
@@ -538,8 +542,8 @@ class BusinessBot
         if ($liffId) {
             $shopUrl = "https://liff.line.me/{$liffId}/shop";
         } else {
-            // Fallback to direct URL if no LIFF ID
-            $shopUrl = rtrim($baseUrl, '/') . "/liff-shop.php?user={$userId}";
+            // Fallback to direct URL if no LIFF ID — new Mini App shop
+            $shopUrl = rtrim($baseUrl, '/') . "/miniapp/shop/";
         }
 
         // Get product count
@@ -651,7 +655,7 @@ class BusinessBot
             if ($liffId) {
                 $checkoutUrl = "https://liff.line.me/{$liffId}/checkout";
             } else {
-                $checkoutUrl = rtrim($baseUrl, '/') . "/liff-checkout.php?user={$userId}&action=address";
+                $checkoutUrl = rtrim($baseUrl, '/') . "/miniapp/cart/";
             }
             $bubble['footer']['contents'][] = [
                 'type' => 'button',

@@ -1311,6 +1311,174 @@ class FlexTemplates
     }
 
     /**
+     * Points Receipt - ใบเสร็จรับแต้มสะสม (loyalty point claim confirmation)
+     *
+     * Pushed to the customer's LINE after they scan the give-points QR and claim.
+     * Matches the medicine-label colour scheme (darkGreen #006400 header,
+     * lightGreen #E8F5E9 footer) so the brand feel is consistent.
+     *
+     * @param array  $claim {
+     *     @type string  voucher_no      e.g. "WI20260602-001"
+     *     @type int     points          points credited this transaction
+     *     @type float   amount          sale amount in THB (0 if points entered directly)
+     *     @type string  payment_method  cash|transfer|card|qr (informational)
+     *     @type int     total_points    customer's running balance after credit
+     *     @type string  claimed_at      Y-m-d H:i:s (defaults to now)
+     * }
+     * @param array  $shopInfo  { name, logo, phone }
+     * @param string $customerName
+     * @return array Flex bubble
+     */
+    public static function pointsReceipt($claim, $shopInfo = [], $customerName = '')
+    {
+        $darkGreen = '#006400';
+        $lightGreen = '#E8F5E9';
+        $white = '#FFFFFF';
+        $black = '#000000';
+        $gray = '#666666';
+
+        $shopName = !empty($shopInfo['name']) ? (string) $shopInfo['name'] : 'ร้านยา';
+        $shopPhone = !empty($shopInfo['phone']) ? (string) $shopInfo['phone'] : '';
+        $shopLogo = !empty($shopInfo['logo']) ? (string) $shopInfo['logo'] : '';
+
+        $voucherNo = (string) ($claim['voucher_no'] ?? '');
+        $points = (int) ($claim['points'] ?? 0);
+        $amount = (float) ($claim['amount'] ?? 0);
+        $totalPoints = (int) ($claim['total_points'] ?? 0);
+        $paymentMethod = (string) ($claim['payment_method'] ?? '');
+
+        // Thai Buddhist-year date + time (Asia/Bangkok handled by app config).
+        $ts = !empty($claim['claimed_at']) ? strtotime((string) $claim['claimed_at']) : time();
+        if ($ts === false) {
+            $ts = time();
+        }
+        $thaiDate = date('d/m/', $ts) . ((int) date('Y', $ts) + 543) . ' ' . date('H:i', $ts) . ' น.';
+
+        $paymentLabels = [
+            'cash' => '💵 เงินสด',
+            'transfer' => '📱 โอนเงิน',
+            'card' => '💳 บัตร',
+            'qr' => '📲 QR',
+        ];
+        $paymentText = $paymentLabels[$paymentMethod] ?? ($paymentMethod !== '' ? $paymentMethod : '-');
+
+        // --- Header: optional logo + shop name, centered (darkGreen) ---
+        $headerContents = [];
+        if ($shopLogo !== '') {
+            $headerContents[] = [
+                'type' => 'image',
+                'url' => $shopLogo,
+                'size' => 'xs',
+                'aspectMode' => 'cover',
+                'aspectRatio' => '1:1',
+                'align' => 'center'
+            ];
+        }
+        $headerContents[] = ['type' => 'text', 'text' => $shopName, 'weight' => 'bold', 'size' => 'lg', 'color' => $white, 'align' => 'center', 'wrap' => true, 'margin' => $shopLogo !== '' ? 'sm' : 'none'];
+        $headerContents[] = ['type' => 'text', 'text' => '⭐ ใบรับแต้มสะสม', 'size' => 'xs', 'color' => $white, 'align' => 'center', 'margin' => 'xs'];
+
+        // --- Detail rows helper ---
+        $detailRow = static function (string $label, string $value, string $valueColor = '#000000') use ($gray): array {
+            return [
+                'type' => 'box',
+                'layout' => 'horizontal',
+                'contents' => [
+                    ['type' => 'text', 'text' => $label, 'size' => 'sm', 'color' => $gray, 'flex' => 0],
+                    ['type' => 'text', 'text' => $value, 'size' => 'sm', 'color' => $valueColor, 'align' => 'end', 'flex' => 1, 'wrap' => true]
+                ],
+                'margin' => 'md'
+            ];
+        };
+
+        $bodyContents = [];
+
+        // Success banner
+        $bodyContents[] = [
+            'type' => 'box',
+            'layout' => 'vertical',
+            'contents' => [
+                ['type' => 'text', 'text' => '✅ บันทึกการซื้อสำเร็จ', 'size' => 'md', 'weight' => 'bold', 'color' => $darkGreen, 'align' => 'center']
+            ],
+            'paddingAll' => 'sm'
+        ];
+
+        // Voucher + date
+        if ($voucherNo !== '') {
+            $bodyContents[] = $detailRow('เลขที่', $voucherNo, $black);
+        }
+        $bodyContents[] = $detailRow('วันที่', $thaiDate, $black);
+        $bodyContents[] = ['type' => 'separator', 'color' => '#E5E7EB', 'margin' => 'md'];
+
+        // Amount + payment (amount only when a sale value was recorded)
+        if ($amount > 0) {
+            $bodyContents[] = $detailRow('ยอดที่ชำระ', '฿' . number_format($amount, 2), $black);
+        }
+        $bodyContents[] = $detailRow('วิธีชำระ', $paymentText, $black);
+
+        // Points earned — highlighted box
+        $bodyContents[] = [
+            'type' => 'box',
+            'layout' => 'horizontal',
+            'contents' => [
+                ['type' => 'text', 'text' => 'แต้มที่ได้รับ', 'size' => 'sm', 'color' => $darkGreen, 'weight' => 'bold', 'gravity' => 'center', 'flex' => 1],
+                ['type' => 'text', 'text' => '+' . number_format($points) . ' ⭐', 'size' => 'xl', 'color' => $darkGreen, 'weight' => 'bold', 'align' => 'end', 'flex' => 1]
+            ],
+            'margin' => 'md',
+            'paddingAll' => 'md',
+            'backgroundColor' => $lightGreen,
+            'cornerRadius' => 'md',
+            'borderWidth' => '1px',
+            'borderColor' => $darkGreen
+        ];
+
+        // Running balance
+        $bodyContents[] = $detailRow('แต้มสะสมรวม', number_format($totalPoints) . ' ⭐', $darkGreen);
+
+        // Thank-you + keep-as-proof
+        $bodyContents[] = ['type' => 'separator', 'color' => '#E5E7EB', 'margin' => 'md'];
+        $thankName = $customerName !== '' ? $customerName : 'ลูกค้า';
+        $bodyContents[] = [
+            'type' => 'box',
+            'layout' => 'vertical',
+            'contents' => [
+                ['type' => 'text', 'text' => 'ขอบคุณคุณ ' . $thankName . ' 🙏', 'size' => 'sm', 'color' => $black, 'align' => 'center', 'wrap' => true, 'weight' => 'bold'],
+                ['type' => 'text', 'text' => 'เก็บข้อความนี้ไว้เป็นหลักฐาน', 'size' => 'xxs', 'color' => $gray, 'align' => 'center', 'margin' => 'sm']
+            ],
+            'margin' => 'md'
+        ];
+
+        $bubble = [
+            'type' => 'bubble',
+            'size' => 'mega',
+            'header' => [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'contents' => $headerContents,
+                'backgroundColor' => $darkGreen,
+                'paddingAll' => 'lg'
+            ],
+            'body' => [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'contents' => $bodyContents,
+                'paddingAll' => 'lg',
+                'backgroundColor' => $white
+            ],
+            'footer' => [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'contents' => [
+                    ['type' => 'text', 'text' => $shopPhone !== '' ? ('☎ ' . $shopPhone) : 'สะสมแต้มแลกของรางวัลได้เลย', 'size' => 'xs', 'color' => $darkGreen, 'align' => 'center', 'weight' => 'bold']
+                ],
+                'paddingAll' => 'md',
+                'backgroundColor' => $lightGreen
+            ]
+        ];
+
+        return $bubble;
+    }
+
+    /**
      * Medicine Label - ซองยา/ฉลากยา (Redesigned)
      * - สีเขียวเข้ม ไม่ไล่สี
      * - เวลาทานยาเป็นช่องสี่เหลี่ยมพร้อม ✓

@@ -556,6 +556,14 @@ $items = $stmt->fetchAll();
 $stmt = $db->prepare("SELECT * FROM payment_slips WHERE transaction_id = ? ORDER BY created_at DESC");
 $stmt->execute([$orderId]);
 $slips = $stmt->fetchAll();
+// Repair malformed slip URL scheme ("https:/host" → "https://host") from a
+// typo'd BASE_URL so existing slips still render in the admin <img>.
+foreach ($slips as &$_slip) {
+    if (!empty($_slip['image_url'])) {
+        $_slip['image_url'] = preg_replace('#^(https?):/([^/])#i', '$1://$2', $_slip['image_url']);
+    }
+}
+unset($_slip);
 
 // Helpers + shop accounts for rendering the GhostX result on each slip card.
 require_once __DIR__ . '/../classes/SlipVerifier.php';

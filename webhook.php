@@ -39,6 +39,7 @@ require_once 'classes/LineAccountManager.php';
 require_once 'classes/OpenAI.php';
 require_once 'classes/TelegramAPI.php';
 require_once 'classes/FlexTemplates.php';
+require_once __DIR__ . '/includes/liff-helper.php'; // reya_liff_url_or_oa(): LIFF-or-OA fallback
 
 // V2.5: Load BusinessBot if available, fallback to ShopBot
 if (file_exists(__DIR__ . '/classes/BusinessBot.php')) {
@@ -1160,12 +1161,12 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             $accountInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($accountInfo) {
-                if (!empty($accountInfo['liff_id'])) {
-                    $liffShopUrl = 'https://liff.line.me/' . $accountInfo['liff_id'];
-                }
-                // ใช้ liff_consent_id ถ้ามี หรือใช้ liff_id ปกติ
+                // LIFF-or-OA fallback: real liff_id → Mini App; empty/PENDING → OA chat (or '').
+                // Keeps customers of not-yet-connected tenants out of the broken shared Mini App.
+                $liffShopUrl = reya_liff_url_or_oa($db, (int) $lineAccountId);
+                // ใช้ liff_consent_id ถ้ามี หรือใช้ liff_id ปกติ — gate on a REAL liff id only.
                 $consentLiffId = $accountInfo['liff_consent_id'] ?? $accountInfo['liff_id'] ?? '';
-                if ($consentLiffId) {
+                if (reya_is_real_liff_id($consentLiffId)) {
                     $liffConsentUrl = 'https://liff.line.me/' . $consentLiffId . '?page=consent';
                 }
 
@@ -1255,38 +1256,12 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         }
         */
 
-        // ========== LIFF Menu สำหรับข้อความแรก (หลังจาก consent แล้ว) ==========
-        // ส่ง LIFF Menu เมื่อลูกค้าทักมาครั้งแรก
-        if ($isFirstMessage && $sourceType === 'user' && $hasConsent) {
-            try {
-                // ถ้ามี LIFF URL ให้ส่ง LIFF Menu
-                if ($liffShopUrl) {
-                    $displayName = $user['display_name'] ?: 'คุณลูกค้า';
-                    $liffMenuBubble = FlexTemplates::firstMessageMenu($shopName, $liffShopUrl, $displayName);
-                    $liffMenuMessage = FlexTemplates::toMessage($liffMenuBubble, "ยินดีต้อนรับสู่ {$shopName}");
-
-                    // เพิ่ม Quick Reply
-                    $liffMenuMessage = FlexTemplates::withQuickReply($liffMenuMessage, [
-                        ['label' => '🛒 ดูสินค้า', 'text' => 'shop'],
-                        ['label' => '📋 เมนู', 'text' => 'menu'],
-                        ['label' => '💬 ติดต่อเรา', 'text' => 'contact']
-                    ]);
-
-                    $line->replyMessage($replyToken, [$liffMenuMessage]);
-                    saveOutgoingMessage($db, $user['id'], 'liff_menu');
-
-                    devLog($db, 'info', 'webhook', 'Sent LIFF Menu to new user', [
-                        'user_id' => $user['id'],
-                        'display_name' => $displayName,
-                        'liff_url' => $liffShopUrl
-                    ], $userId);
-
-                    return; // ส่ง LIFF Menu แล้ว ไม่ต้อง process ต่อ
-                }
-            } catch (Exception $e) {
-                logWebhookException($db, 'webhook.php', $e);
-                devLog($db, 'error', 'webhook', 'LIFF Menu error: ' . $e->getMessage(), null, $userId);
-            }
+        // ========== LIFF Menu สำหรับข้อความแรก ==========
+        // 2026-06-02: DISABLED — ไม่ส่งข้อความต้อนรับ/เมนูอัตโนมัติใดๆ ตอนทักครั้งแรก
+        // เจ้าของร้านควบคุมการต้อนรับเองผ่าน welcome_settings (follow event) เท่านั้น
+        // (เดิม block นี้ยิง firstMessageMenu "ยินดีต้อนรับสู่..." โดยไม่ผ่าน owner settings)
+        if (false && $isFirstMessage && $sourceType === 'user' && $hasConsent) {
+            // intentionally disabled — no auto welcome on first message
         }
 
         // ตรวจสอบ bot_mode ก่อน - ถ้าเป็น general ไม่ตอบกลับอะไรเลย
@@ -1710,9 +1685,10 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             }
         }
 
-        // ถ้าเป็นคำสั่งร้านค้า - ส่ง LIFF URL
-        if ($isShopCommand && $liffId) {
-            $liffUrl = "https://liff.line.me/{$liffId}";
+        // ถ้าเป็นคำสั่งร้านค้า - ส่ง LIFF URL (หรือ fallback ไป OA chat ถ้ายังไม่ได้เชื่อม LIFF)
+        // $liffShopUrl ถูกคำนวณผ่าน reya_liff_url_or_oa() ด้านบนแล้ว:
+        //   real liff_id → liff.line.me ; empty/PENDING → line.me/R/ti/p ; ไม่มีอะไรเลย → ''
+        if ($isShopCommand && $liffShopUrl !== '') {
             $shopFlex = [
                 'type' => 'bubble',
                 'body' => [
@@ -1731,7 +1707,7 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                             'type' => 'button',
                             'style' => 'primary',
                             'color' => '#06C755',
-                            'action' => ['type' => 'uri', 'label' => '🛒 เข้าสู่ร้านค้า', 'uri' => $liffUrl]
+                            'action' => ['type' => 'uri', 'label' => '🛒 เข้าสู่ร้านค้า', 'uri' => $liffShopUrl]
                         ]
                     ]
                 ]
@@ -3166,13 +3142,24 @@ function logAnalytics($db, $eventType, $data, $lineAccountId = null)
 function devLog($db, $type, $source, $message, $data = null, $userId = null)
 {
     try {
+        // dev_logs.user_id is an INT column in tenant schemas, but LINE user IDs are
+        // strings ("U…"). Passing a string there throws SQLSTATE[22007]/1366 and crashed
+        // the webhook. Only a numeric id goes in the column; a LINE id is preserved in
+        // `data` so nothing is lost.
+        $userIdInt = is_numeric($userId) ? (int) $userId : null;
+        if ($userId !== null && $userIdInt === null) {
+            if (!is_array($data)) {
+                $data = ($data === null) ? [] : ['detail' => $data];
+            }
+            $data['line_user_id'] = $userId;
+        }
         $stmt = $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, user_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
         $stmt->execute([
             $type,
             $source,
             $message,
             $data ? json_encode($data, JSON_UNESCAPED_UNICODE) : null,
-            $userId
+            $userIdInt
         ]);
     } catch (Exception $e) {
         logWebhookException($db, 'webhook.php', $e);

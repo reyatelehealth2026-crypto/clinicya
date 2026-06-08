@@ -15,33 +15,37 @@ RewriteRule ^sitemap\.xml$ sitemap.php [L]
 RewriteRule ^robots\.txt$ robots.php [L]
 
 # =====================================================
-# Redirect Old LIFF Files to LIFF SPA (/liff/index.php)
+# LIFF entry points → NEW Mini App (/miniapp/, Next.js static export)
+# 2026-06-02: was redirecting to the retired /liff/ SPA. QSA preserves the
+# LIFF `liff.state` query (e.g. ?liff.state=/claim?token=...) so deep links
+# route correctly inside the Mini App. 302 (not 301) so clients don't cache
+# the mapping while channels are migrated to the /miniapp/ endpoint.
 # =====================================================
-# All old liff-*.php files redirect to liff/index.php with page parameter
-RewriteRule ^liff-app\.php$ /liff/index.php?page=app [R=301,L,QSA]
-RewriteRule ^liff-appointment\.php$ /liff/index.php?page=appointment [R=301,L,QSA]
-RewriteRule ^liff-checkout\.php$ /liff/index.php?page=checkout [R=301,L,QSA]
-RewriteRule ^liff-consent\.php$ /liff/index.php?page=consent [R=301,L,QSA]
-RewriteRule ^liff-main\.php$ /liff/index.php?page=main [R=301,L,QSA]
-RewriteRule ^liff-member-card\.php$ /liff/index.php?page=member [R=301,L,QSA]
-RewriteRule ^liff-my-appointments\.php$ /liff/index.php?page=appointments [R=301,L,QSA]
-RewriteRule ^liff-my-orders\.php$ /liff/index.php?page=orders [R=301,L,QSA]
-RewriteRule ^liff-order-detail\.php$ /liff/index.php?page=order-detail [R=301,L,QSA]
-RewriteRule ^liff-pharmacy-consult\.php$ /liff/index.php?page=consult [R=301,L,QSA]
-RewriteRule ^liff-points-history\.php$ /liff/index.php?page=points [R=301,L,QSA]
-RewriteRule ^liff-points-rules\.php$ /liff/index.php?page=points-rules [R=301,L,QSA]
-RewriteRule ^liff-product-detail\.php$ /liff/index.php?page=product [R=301,L,QSA]
-RewriteRule ^liff-promotions\.php$ /liff/index.php?page=promotions [R=301,L,QSA]
-RewriteRule ^liff-redeem-points\.php$ /liff/index.php?page=redeem [R=301,L,QSA]
-RewriteRule ^liff-register\.php$ /liff/index.php?page=register [R=301,L,QSA]
-RewriteRule ^liff-settings\.php$ /liff/index.php?page=settings [R=301,L,QSA]
-RewriteRule ^liff-share\.php$ /liff/index.php?page=share [R=301,L,QSA]
-RewriteRule ^liff-shop\.php$ /liff/index.php?page=shop [R=301,L,QSA]
-RewriteRule ^liff-shop-v3\.php$ /liff/index.php?page=shop [R=301,L,QSA]
-RewriteRule ^liff-symptom-assessment\.php$ /liff/index.php?page=symptom [R=301,L,QSA]
-RewriteRule ^liff-video-call\.php$ /liff/index.php?page=video-call [R=301,L,QSA]
-RewriteRule ^liff-video-call-pro\.php$ /liff/index.php?page=video-call [R=301,L,QSA]
-RewriteRule ^liff-wishlist\.php$ /liff/index.php?page=wishlist [R=301,L,QSA]
+RewriteRule ^liff-app\.php$ /miniapp/ [R=302,L,QSA]
+RewriteRule ^liff-appointment\.php$ /miniapp/appointments/ [R=302,L,QSA]
+RewriteRule ^liff-my-appointments\.php$ /miniapp/appointments/ [R=302,L,QSA]
+RewriteRule ^liff-checkout\.php$ /miniapp/cart/ [R=302,L,QSA]
+RewriteRule ^liff-member-card\.php$ /miniapp/profile/ [R=302,L,QSA]
+RewriteRule ^liff-settings\.php$ /miniapp/profile/ [R=302,L,QSA]
+RewriteRule ^liff-my-orders\.php$ /miniapp/orders/ [R=302,L,QSA]
+RewriteRule ^liff-order-detail\.php$ /miniapp/orders/ [R=302,L,QSA]
+RewriteRule ^liff-pharmacy-consult\.php$ /miniapp/ai-chat/ [R=302,L,QSA]
+RewriteRule ^liff-symptom-assessment\.php$ /miniapp/ai-chat/ [R=302,L,QSA]
+RewriteRule ^liff-points-history\.php$ /miniapp/rewards/history/ [R=302,L,QSA]
+RewriteRule ^liff-points-rules\.php$ /miniapp/rewards/ [R=302,L,QSA]
+RewriteRule ^liff-redeem-points\.php$ /miniapp/rewards/ [R=302,L,QSA]
+RewriteRule ^liff-product-detail\.php$ /miniapp/shop/ [R=302,L,QSA]
+RewriteRule ^liff-promotions\.php$ /miniapp/shop/ [R=302,L,QSA]
+RewriteRule ^liff-shop\.php$ /miniapp/shop/ [R=302,L,QSA]
+RewriteRule ^liff-shop-v3\.php$ /miniapp/shop/ [R=302,L,QSA]
+RewriteRule ^liff-register\.php$ /miniapp/register/ [R=302,L,QSA]
+RewriteRule ^liff-video-call\.php$ /miniapp/video/ [R=302,L,QSA]
+RewriteRule ^liff-video-call-pro\.php$ /miniapp/video/ [R=302,L,QSA]
+RewriteRule ^liff-wishlist\.php$ /miniapp/wishlist/ [R=302,L,QSA]
+RewriteRule ^liff-consent\.php$ /miniapp/ [R=302,L,QSA]
+RewriteRule ^liff-main\.php$ /miniapp/ [R=302,L,QSA]
+# Share keeps its dedicated LIFF (no Mini App equivalent yet)
+RewriteRule ^liff-share\.php$ /liff/index.php?page=share [R=302,L,QSA]
 
 # =====================================================
 # Clean URLs - ไม่ต้องพิมพ์ .php

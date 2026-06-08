@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-03T23:46:49.316Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "02",
+  "title": "Dashboard CRM สำหรับดูภาพรวมร้าน",
+  "audience": "เจ้าของร้าน / ผู้จัดการ / แอดมิน",
+  "output": "videos/crm-manual-v2/crm-02-dashboard-crm.mp4",
+  "frames": 135,
+  "scenes": [
+    {
+      "route": "/dashboard?tab=crm",
+      "caption": "Dashboard CRM: ดู KPI ลูกค้าและภาพรวมงาน CRM"
+    },
+    {
+      "route": "/dashboard?tab=crm",
+      "caption": "อ่าน KPI: ลูกค้าทั้งหมด ลูกค้าใหม่ แท็ก และ Auto Rules"
+    },
+    {
+      "route": "/dashboard?tab=crm",
+      "caption": "Recent Customers: ดูลูกค้าที่เพิ่งเข้าระบบ"
+    },
+    {
+      "route": "/dashboard?tab=crm",
+      "caption": "Quick Actions: เข้า Inbox, Customers, Analytics หรือ Broadcast ได้เร็ว"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

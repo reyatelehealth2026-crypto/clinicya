@@ -334,7 +334,7 @@ function callGeminiForHelp($message, $pageTitle, $pageKey, $db, $lineAccountId) 
 - ถ้าไม่รู้ให้บอกตรงๆ";
     
     try {
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $apiKey;
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $apiKey;
         
         $data = [
             'contents' => [

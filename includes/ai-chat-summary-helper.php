@@ -133,7 +133,7 @@ if (!function_exists('summary_run_for_session')) {
             ],
         ];
 
-        $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . urlencode($apiKey);
+        $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . urlencode($apiKey);
         $ch = curl_init($endpoint);
         curl_setopt_array($ch, [
             CURLOPT_POST           => true,

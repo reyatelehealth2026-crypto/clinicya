@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:12:24.955Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "12",
+  "title": "Sales Pipeline และ Deals",
+  "audience": "เจ้าของร้าน / แอดมิน / ทีมขาย",
+  "output": "videos/crm-manual-v2/crm-12-sales-pipeline-deals.mp4",
+  "frames": 131,
+  "scenes": [
+    {
+      "route": "/crm-advanced",
+      "caption": "CRM Advanced: เข้าเมนูงานขายและการติดตาม"
+    },
+    {
+      "route": "/sales-pipeline",
+      "caption": "Sales Pipeline: ติดตามโอกาสขายที่ยังไม่ปิด"
+    },
+    {
+      "route": "/deals",
+      "caption": "Deal: โอกาสขายหนึ่งรายการพร้อม stage และกิจกรรมติดตาม"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "งานแชทด่วนยังควรเริ่มจาก Inbox แล้วค่อยสร้าง deal ถ้าต้องติดตามหลายวัน"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

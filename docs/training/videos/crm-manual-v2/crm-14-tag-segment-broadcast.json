@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:14:12.365Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "14",
+  "title": "ใช้ Tag และ Segment เพื่อเตรียม Broadcast",
+  "audience": "การตลาด / แอดมิน",
+  "output": "videos/crm-manual-v2/crm-14-tag-segment-broadcast.mp4",
+  "frames": 132,
+  "scenes": [
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "Tag จากหน้าแชทคือจุดเริ่มต้นของการแบ่งกลุ่มลูกค้า"
+    },
+    {
+      "route": "/customer-segments.php",
+      "caption": "Segments: กลุ่มเป้าหมายสำหรับการสื่อสาร"
+    },
+    {
+      "route": "/broadcast",
+      "caption": "Broadcast: เลือกกลุ่มเป้าหมายและตรวจ preview ข้อความ"
+    },
+    {
+      "route": "/broadcast",
+      "caption": "ก่อนส่งจริงต้องตรวจชื่อกลุ่ม จำนวนผู้รับ และความเหมาะสมของเนื้อหา"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

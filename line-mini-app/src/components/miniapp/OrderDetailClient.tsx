@@ -22,7 +22,12 @@ function needsSlipUpload(order: NonNullable<OrderDetailApiResponse['order']>) {
   const method = (order.payment_method || '').toLowerCase()
   const pay = (order.payment_status || '').toLowerCase()
   if (method !== 'transfer') return false
-  return pay === 'pending' || pay === ''
+  if (pay === 'paid') return false
+  const slip = (order.slip_status || '').toLowerCase()
+  // A slip already uploaded and awaiting review (or approved) → don't ask again.
+  if (slip === 'pending' || slip === 'approved') return false
+  // No slip yet, or the previous one was rejected → allow (re)upload.
+  return pay === 'pending' || pay === '' || slip === 'rejected'
 }
 
 export function OrderDetailClient({ orderId }: { orderId: string }) {
@@ -58,15 +63,16 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
       toast.success('อัปโหลดสลิปเรียบร้อย')
       setPreview(null)
       if (fileRef.current) fileRef.current.value = ''
-      // Optimistic update — show "รอตรวจสอบสลิป" immediately instead of waiting
-      // for admin to mark as paid. Real status will overwrite on next refetch.
+      // Optimistic update — flip to "awaiting verification" immediately so the
+      // upload form hides and the customer sees a clear status (the refetch
+      // below confirms it from the server's slip_status).
       queryClient.setQueryData<OrderDetailApiResponse | undefined>(
         ['shop-order', orderId],
         (prev) => {
           if (!prev || !prev.order) return prev
           return {
             ...prev,
-            order: { ...prev.order, payment_status: 'รอตรวจสอบสลิป' }
+            order: { ...prev.order, slip_status: 'pending', slip_image: data.image_url ?? prev.order.slip_image }
           }
         }
       )
@@ -103,6 +109,10 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
   }
 
   const showSlip = order && needsSlipUpload(order)
+  const slipStatus = (order?.slip_status || '').toLowerCase()
+  const awaitingVerification = slipStatus === 'pending'
+  const slipApproved = slipStatus === 'approved'
+  const slipRejected = slipStatus === 'rejected'
 
   return (
     <AppShell title="รายละเอียดออเดอร์" subtitle={order?.order_number}>
@@ -237,6 +247,53 @@ export function OrderDetailClient({ orderId }: { orderId: string }) {
                   <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-700">{order.note}</p>
                 </div>
               ) : null}
+            </div>
+          ) : null}
+
+          {/* Payment verification state (transfer): slip received / approved / rejected */}
+          {awaitingVerification ? (
+            <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-soft">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                <span aria-hidden>⏳</span> รอยืนยันการชำระเงิน
+              </div>
+              <p className="mt-1 text-xs text-amber-800/90">
+                ร้านได้รับสลิปของคุณแล้ว กำลังตรวจสอบการชำระเงิน — ไม่ต้องแนบสลิปซ้ำ
+              </p>
+              {order.slip_image ? (
+                // eslint-disable-next-line @next/next/no-img-element -- external slip URL
+                <img
+                  src={order.slip_image}
+                  alt="สลิปการโอนเงิน"
+                  className="mt-3 max-h-64 w-full rounded-xl border border-amber-100 bg-white object-contain"
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          {slipApproved ? (
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 shadow-soft">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
+                <span aria-hidden>✅</span> ยืนยันการชำระเงินแล้ว
+              </div>
+              {order.slip_image ? (
+                // eslint-disable-next-line @next/next/no-img-element -- external slip URL
+                <img
+                  src={order.slip_image}
+                  alt="สลิปการโอนเงิน"
+                  className="mt-3 max-h-64 w-full rounded-xl border border-emerald-100 bg-white object-contain"
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          {slipRejected ? (
+            <div className="rounded-3xl border border-rose-200 bg-rose-50 p-4 shadow-soft">
+              <div className="flex items-center gap-2 text-sm font-semibold text-rose-800">
+                <span aria-hidden>❌</span> สลิปไม่ผ่านการตรวจสอบ
+              </div>
+              <p className="mt-1 text-xs text-rose-700/90">
+                กรุณาตรวจสอบยอดโอนแล้วแนบสลิปใหม่อีกครั้งด้านล่าง
+              </p>
             </div>
           ) : null}
 

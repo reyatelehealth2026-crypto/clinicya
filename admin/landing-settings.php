@@ -228,15 +228,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Custom HTML action (2026-05-27)
         elseif ($action === 'save_custom_html') {
+            // section = '' → append-at-end block (custom_html); else override a
+            // hardcoded section (custom_html_{section}).
+            $section = preg_replace('/[^a-z]/', '', strtolower((string) ($_POST['section'] ?? '')));
+            $allowedSections = ['hero', 'about', 'features', 'services', 'cta'];
+            $key = in_array($section, $allowedSections, true) ? 'custom_html_' . $section : 'custom_html';
             $html = (string) ($_POST['custom_html'] ?? '');
             $stmt = $db->prepare(
                 "INSERT INTO landing_settings (line_account_id, setting_key, setting_value)
-                 VALUES (?, 'custom_html', ?)
+                 VALUES (?, ?, ?)
                  ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)"
             );
-            $stmt->execute([$currentBotId, $html]);
+            $stmt->execute([$currentBotId, $key, $html]);
             $success = 'บันทึก Custom HTML สำเร็จ!';
             $activeTab = 'custom_html';
+            $_GET['section'] = $section; // keep the editor on the same section after save
         }
 
         // Custom Badges action (Requirements: 10.5)
@@ -419,9 +425,11 @@ function reyaReloadLandingPreview() {
 window.addEventListener('message', function (ev) {
     const msg = ev && ev.data;
     if (!msg || msg.type !== 'reya-edit-tab' || !msg.tab) return;
-    // Switch tab by reloading with ?tab=
+    // Switch tab by reloading with ?tab= (and ?section= for Custom HTML overrides)
     const url = new URL(window.location.href);
     url.searchParams.set('tab', msg.tab);
+    if (msg.section) { url.searchParams.set('section', msg.section); }
+    else { url.searchParams.delete('section'); }
     window.location.href = url.toString();
 });
 </script>

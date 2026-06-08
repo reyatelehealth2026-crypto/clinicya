@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-06-03T23:56:50.766Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "06",
+  "title": "อ่าน CRM HUD ก่อนตอบลูกค้า",
+  "audience": "เภสัชกร / แอดมิน",
+  "output": "videos/crm-manual-v2/crm-06-crm-hud-before-reply.mp4",
+  "frames": 152,
+  "scenes": [
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เปิดแชทที่มีข้อมูลลูกค้าใน CRM HUD"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "ข้อมูลพื้นฐาน: ชื่อ ช่องทางติดต่อ และสถานะลูกค้า"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "Tag และกลุ่มลูกค้า: มีผลต่อการกรองและ Broadcast"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "Note ภายในทีม: ลูกค้าไม่เห็น แต่ทีมอ่านต่อได้"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "ประวัติยา แพ้ยา โรคประจำตัว: ต้องตรวจทุกครั้งก่อนจ่ายซ้ำ"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

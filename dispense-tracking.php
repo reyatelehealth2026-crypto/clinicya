@@ -21,6 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
     require_once __DIR__ . '/includes/auth_check.php';
     require_once __DIR__ . '/classes/LineAPI.php';
     require_once __DIR__ . '/classes/LineAccountManager.php';
+    require_once __DIR__ . '/includes/liff-helper.php'; // reya_liff_url_or_oa()
 
     header('Content-Type: application/json; charset=utf-8');
     $db = Database::getInstance()->getConnection();
@@ -54,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 throw new Exception('LINE account inactive');
             }
 
-            $flexMessage = buildRefillReminderFlex($row, $daysLeft);
+            $flexMessage = buildRefillReminderFlex($row, $daysLeft, $db);
             $result = $line->pushMessage($row['line_user_id'], [$flexMessage]);
             $httpCode = is_array($result) ? ($result['code'] ?? 0) : 0;
             if ($httpCode !== 200) {
@@ -112,8 +113,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
 
 /**
  * Build Flex bubble for refill reminder (mirrors cron/medication_refill_reminder.php)
+ *
+ * @param array    $row      medication_refill_tracking row (+ joined fields)
+ * @param int      $daysLeft days remaining before refill
+ * @param PDO|null $db       connection for LIFF-or-OA resolution
  */
-function buildRefillReminderFlex($row, $daysLeft)
+function buildRefillReminderFlex($row, $daysLeft, $db = null)
 {
     $productName  = $row['product_name'] ?: 'ยา';
     $currentPrice = $row['sale_price'] ?: ($row['price'] ?? 0);
@@ -129,11 +134,16 @@ function buildRefillReminderFlex($row, $daysLeft)
         $urgencyText  = "เหลือ {$daysLeft} วัน";
     }
 
-    $baseUrl = rtrim(defined('BASE_URL') ? BASE_URL : '', '/');
-    if (!$baseUrl && isset($_SERVER['HTTP_HOST'])) {
-        $baseUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
+    // LIFF-or-OA fallback: real liff_id → Mini App product page; empty/PENDING
+    // → OA chat; nothing → '' (URI button omitted below, message button remains).
+    $productUrl = '';
+    if ($db !== null && function_exists('reya_liff_url_or_oa')) {
+        $productUrl = reya_liff_url_or_oa(
+            $db,
+            !empty($row['line_account_id']) ? (int) $row['line_account_id'] : null,
+            '/shop/product?id=' . intval($row['product_id'])
+        );
     }
-    $productUrl = $baseUrl . '/miniapp/shop/product/?id=' . intval($row['product_id']);
 
     $bubble = [
         'type' => 'bubble',
@@ -195,14 +205,16 @@ function buildRefillReminderFlex($row, $daysLeft)
             'type' => 'box',
             'layout' => 'vertical',
             'spacing' => 'sm',
-            'contents' => [
-                [
+            'contents' => array_values(array_filter([
+                // Mini-App button only when a real LIFF / OA URL exists; the
+                // message button below always reaches the pharmacist.
+                $productUrl !== '' ? [
                     'type' => 'button',
                     'action' => ['type' => 'uri', 'label' => '🛒 สั่ง Refill เลย', 'uri' => $productUrl],
                     'style' => 'primary',
                     'color' => '#11B0A6',
                     'height' => 'sm',
-                ],
+                ] : null,
                 [
                     'type' => 'button',
                     'action' => [
@@ -213,7 +225,7 @@ function buildRefillReminderFlex($row, $daysLeft)
                     'style' => 'secondary',
                     'height' => 'sm',
                 ],
-            ],
+            ])),
         ],
     ];
 

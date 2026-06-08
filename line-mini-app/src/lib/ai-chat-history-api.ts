@@ -10,7 +10,7 @@
  * array so the caller can fall back to the default greeting.
  */
 
-import { apiUrl } from '@/lib/config'
+import { apiUrl, appConfig } from '@/lib/config'
 import type { ChatMessage } from '@/types/ai-chat'
 
 interface RawHistoryMessage {
@@ -57,7 +57,7 @@ export async function clearAIChatHistory(
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ line_user_id: lineUserId })
+      body: JSON.stringify({ line_user_id: lineUserId, line_account_id: appConfig.lineAccountId })
     })
     if (!response.ok) return false
     const data = (await response.json()) as { success?: boolean }
@@ -80,6 +80,7 @@ export async function fetchAIChatHistory(
 
   const params = new URLSearchParams({
     line_user_id: lineUserId,
+    line_account_id: String(appConfig.lineAccountId),
     limit: String(limit)
   })
   const url = `${apiUrl('/api/ai-chat-history.php')}?${params.toString()}`

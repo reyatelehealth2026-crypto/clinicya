@@ -13,7 +13,7 @@
  * - No admin session required; we authenticate the caller by checking that
  *   line_user_id belongs to a real row in `users`.
  * - File stored at: public_html/uploads/ai-chat/{YYYY-MM}/{hash}_{ts}.{ext}
- * - Gemini model: gemini-2.0-flash (vision-capable, same family as ai-chat.php).
+ * - Gemini model: gemini-2.5-flash (vision-capable, same family as ai-chat.php).
  *
  * Phase 4 security hardening (2026-05-24):
  *  - CORS allowlist (re-ya.com + liff.line.me) — no wildcard origin.
@@ -44,6 +44,8 @@ error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_WARNING);
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+// Route root-domain (Mini App / LIFF) request to the tenant DB by line_account_id (split-brain fix).
+require_once __DIR__ . '/../bootstrap/route_by_account.php';
 require_once __DIR__ . '/../includes/ai-rate-limit.php';
 
 function vision_fail(string $msg, int $code = 400): void
@@ -263,7 +265,7 @@ try {
         ],
     ];
 
-    $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . urlencode($apiKey);
+    $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . urlencode($apiKey);
     $ch = curl_init($endpoint);
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,

@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-06-03T15:04:23.683Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "route": "/inbox-v2?user=1",
+  "action": "give_direct_points",
+  "mode": "direct",
+  "points_added": 1,
+  "output": "videos/crm-inbox-add-points-click-recording.mp4",
+  "frames": 1150,
+  "note": "This recording performs the real add-points action against tenant-0001."
+}

@@ -445,6 +445,10 @@ export type OrderDetailApiResponse = {
     created_at?: string
     updated_at?: string
     delivery_info?: Record<string, unknown> | null
+    /** Latest uploaded payment slip image URL (from payment_slips). */
+    slip_image?: string | null
+    /** Latest slip review state: pending | approved | rejected. */
+    slip_status?: string | null
     items?: Array<{
       product_name?: string
       quantity: number

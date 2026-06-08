@@ -6,32 +6,64 @@
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
 
 try {
-    $input = json_decode(file_get_contents('php://input'), true);
-    
-    if (empty($input['richMenuId']) || empty($input['imageData'])) {
-        throw new Exception('Missing richMenuId or imageData');
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
     }
-    
-    $richMenuId = $input['richMenuId'];
-    $imageData = $input['imageData'];
-    
+
+    $db = Database::getInstance()->getConnection();
+
+    // Two intake modes:
+    //  1) multipart/form-data (PREFERRED) — image as a binary file part. Sending
+    //     a base64 "data:image/...;base64," blob in a JSON body trips the server
+    //     WAF (ModSecurity → 500), so the client now posts multipart.
+    //  2) JSON base64 (legacy fallback).
+    $richMenuId = null;
+    $imageContent = null;
+    $imageType = null;
+
+    if (!empty($_FILES['image']['tmp_name']) && is_uploaded_file($_FILES['image']['tmp_name'])) {
+        $richMenuId = $_POST['richMenuId'] ?? null;
+        $imageContent = file_get_contents($_FILES['image']['tmp_name']);
+        $info = @getimagesizefromstring($imageContent);
+        $imageType = ($info && ($info['mime'] ?? '') === 'image/png') ? 'png' : 'jpeg';
+    } else {
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('Invalid request: send image as multipart/form-data (field "image")');
+        }
+        $richMenuId = $input['richMenuId'] ?? null;
+        $imageData = $input['imageData'] ?? null;
+        if ($imageData && preg_match('/^data:image\/(\w+);base64,(.+)$/', $imageData, $m)) {
+            $imageType = $m[1];
+            $imageContent = base64_decode($m[2]);
+        }
+    }
+
+    if (empty($richMenuId) || empty($imageContent)) {
+        throw new Exception('Missing richMenuId or image');
+    }
+
     // Get LINE API
-    $stmt = $db->query("SELECT * FROM line_accounts WHERE is_active = 1 LIMIT 1");
+    $currentBotId = $_SESSION['current_bot_id'] ?? null;
+    if ($currentBotId) {
+        $stmt = $db->prepare("SELECT * FROM line_accounts WHERE id = ? AND is_active = 1 LIMIT 1");
+        $stmt->execute([$currentBotId]);
+    } else {
+        $stmt = $db->query("SELECT * FROM line_accounts WHERE is_active = 1 LIMIT 1");
+    }
     $account = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$account && $currentBotId) {
+        $stmt = $db->query("SELECT * FROM line_accounts WHERE is_active = 1 LIMIT 1");
+        $account = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
     
     if (!$account) {
         throw new Exception('No active LINE account');
-    }
-    
-    // Decode base64 image
-    if (preg_match('/^data:image\/(\w+);base64,(.+)$/', $imageData, $matches)) {
-        $imageType = $matches[1];
-        $imageContent = base64_decode($matches[2]);
-    } else {
-        throw new Exception('Invalid image data format');
     }
     
     // บีบอัดเพิ่มถ้าไฟล์ยังใหญ่เกิน 400KB
@@ -79,7 +111,7 @@ try {
         throw new Exception("LINE API error: HTTP {$httpCode} - " . ($response ?: $error));
     }
     
-} catch (Exception $e) {
+} catch (Throwable $e) {
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }

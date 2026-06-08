@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-06-03T23:42:53.612Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "01",
+  "title": "CRM คืออะไร และทีมแต่ละคนใช้ส่วนไหน",
+  "audience": "เจ้าของร้าน / แอดมิน / เภสัชกร / การตลาด",
+  "output": "videos/crm-manual-v2/crm-01-overview-team-roles.mp4",
+  "frames": 1168,
+  "scenes": [
+    {
+      "route": "/dashboard",
+      "caption": "เปิด Dashboard: เห็นภาพรวมร้าน ลูกค้าใหม่ และงานที่ต้องตาม"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "Inbox v2: จุดทำงานรายวันของเภสัชกรและแอดมิน"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "แผงขวา CRM HUD: ดูข้อมูลลูกค้าก่อนตอบหรือจ่ายยา"
+    },
+    {
+      "route": "/users",
+      "caption": "Customers: ฐานลูกค้ารวม ข้อมูลติดต่อ แท็ก โน้ต และประวัติ"
+    },
+    {
+      "route": "/analytics?tab=crm",
+      "caption": "Analytics: ใช้วัดผล CRM และดูแนวโน้มการดูแลลูกค้า"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

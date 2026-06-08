@@ -21,7 +21,7 @@ class PharmacyImageAnalyzerService
     private $model;
     
     // API Configuration
-    const DEFAULT_MODEL = 'gemini-2.0-flash';
+    const DEFAULT_MODEL = 'gemini-2.5-flash';
     const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
     const CACHE_EXPIRY_HOURS = 24;
     

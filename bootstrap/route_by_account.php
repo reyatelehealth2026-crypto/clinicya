@@ -10,8 +10,9 @@
  * Behaviour:
  *   - If TenantContext is already pinned (subdomain hit, or earlier setCurrentTenantId
  *     call) → do nothing.
- *   - Else look for a `line_account_id` (or `account`) in: $_GET, $_POST,
- *     JSON body of POST request. First non-empty wins.
+ *   - Else look for a `line_account_id`, short Mini-App alias `la`, or
+ *     webhook-style `account` in: $_GET, $_POST, JSON body of POST request.
+ *     First non-empty wins.
  *   - If found and the platform routing table has a mapping → pin TenantContext
  *     so subsequent Database::getInstance() resolves to the tenant DB.
  *   - On failure or no signal → silently fall through (legacy DB still works).
@@ -43,12 +44,12 @@ require_once __DIR__ . '/../classes/TenantContext.php';
         return;
     }
 
-    // 1. Query string (?line_account_id=N or ?account=N — webhook style)
-    $candidate = $_GET['line_account_id'] ?? $_GET['account'] ?? null;
+    // 1. Query string (?line_account_id=N, ?la=N — Mini App, or ?account=N — webhook style)
+    $candidate = $_GET['line_account_id'] ?? $_GET['la'] ?? $_GET['account'] ?? null;
 
     // 2. POST form field
     if ($candidate === null || $candidate === '') {
-        $candidate = $_POST['line_account_id'] ?? null;
+        $candidate = $_POST['line_account_id'] ?? $_POST['la'] ?? $_POST['account'] ?? null;
     }
 
     // 3. JSON body for POSTs (line-mini-app uses fetch with JSON content-type)
@@ -56,8 +57,8 @@ require_once __DIR__ . '/../classes/TenantContext.php';
         $raw = @file_get_contents('php://input');
         if (is_string($raw) && $raw !== '') {
             $json = json_decode($raw, true);
-            if (is_array($json) && !empty($json['line_account_id'])) {
-                $candidate = $json['line_account_id'];
+            if (is_array($json)) {
+                $candidate = $json['line_account_id'] ?? $json['la'] ?? $json['account'] ?? null;
             }
         }
     }

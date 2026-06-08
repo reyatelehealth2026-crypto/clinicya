@@ -480,7 +480,9 @@ include __DIR__ . '/includes/header.php';
 </div>
 
 <script>
-    const API_URL = '<?= rtrim(BASE_URL, "/") ?>/api/video-call.php';
+    // Root-relative so it always hits the CURRENT tenant subdomain's origin
+    // (BASE_URL is a single static host → broke as /re-ya.com/api/... 404 under subdomains).
+    const API_URL = '/api/video-call.php';
     const LINE_ACCOUNT_ID = <?= (int) $lineAccountId ?>;
 
     const rtcConfig = {

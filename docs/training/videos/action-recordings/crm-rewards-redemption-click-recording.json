@@ -1,0 +1,9 @@
+{
+  "generated_at": "2026-06-03T15:03:22.585Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "action": "rewards_redemption_overview",
+  "mode": "rewards",
+  "output": "videos/crm-rewards-redemption-click-recording.mp4",
+  "frames": 799,
+  "note": "Read-only recording against tenant-0001; no points or rewards are changed."
+}

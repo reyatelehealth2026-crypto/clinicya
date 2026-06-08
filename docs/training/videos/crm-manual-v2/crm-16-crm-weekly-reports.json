@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:16:00.060Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "16",
+  "title": "Reports และการสรุปงาน CRM รายสัปดาห์",
+  "audience": "เจ้าของร้าน / ผู้จัดการ / แอดมิน",
+  "output": "videos/crm-manual-v2/crm-16-crm-weekly-reports.mp4",
+  "frames": 136,
+  "scenes": [
+    {
+      "route": "/reports",
+      "caption": "Reports: เลือกรายงานลูกค้า แชท งานค้าง หรือยอดติดตาม"
+    },
+    {
+      "route": "/dashboard?tab=crm",
+      "caption": "Dashboard CRM: ใช้สรุปงานรายสัปดาห์ร่วมกับรายงาน"
+    },
+    {
+      "route": "/analytics?tab=crm",
+      "caption": "Weekly review 3 ข้อ: งานค้าง ลูกค้าใหม่ โอกาสปรับปรุง"
+    },
+    {
+      "route": "/reports",
+      "caption": "ใช้รายงานเพื่อปรับ flow งาน ไม่ใช่เพื่อตำหนิรายบุคคล"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

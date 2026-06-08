@@ -1,0 +1,9 @@
+{
+  "generated_at": "2026-06-03T15:02:19.738Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "action": "membership_points_overview",
+  "mode": "membership",
+  "output": "videos/crm-membership-points-click-recording.mp4",
+  "frames": 819,
+  "note": "Read-only recording against tenant-0001; no points or rewards are changed."
+}

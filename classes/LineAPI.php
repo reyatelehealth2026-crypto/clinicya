@@ -360,6 +360,43 @@ class LineAPI
     }
 
     /**
+     * Get the bot's monthly message quota (used to size broadcasts).
+     * GET /message/quota → {"type":"limited"|"none","value":int}
+     * @return array{code:int, body:array}
+     */
+    public function getQuota(): array
+    {
+        return $this->getLineApiJson('/message/quota');
+    }
+
+    /**
+     * Get the number of messages already consumed this month toward the quota.
+     * GET /message/quota/consumption → {"totalUsage":int}
+     * @return array{code:int, body:array}
+     */
+    public function getQuotaConsumption(): array
+    {
+        return $this->getLineApiJson('/message/quota/consumption');
+    }
+
+    /**
+     * Shared GET helper for simple JSON endpoints (auth via channel access token).
+     * @return array{code:int, body:array}
+     */
+    private function getLineApiJson(string $path): array
+    {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->apiEndpoint . $path);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $this->channelAccessToken]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        $response = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        return ['code' => $httpCode, 'body' => json_decode((string) $response, true) ?: []];
+    }
+
+    /**
      * Generate unique retry key for narrowcast
      */
     private function generateRetryKey()

@@ -1110,7 +1110,7 @@ function getSystemContext($db, $botId) {
 }
 
 function callGeminiAPI($apiKey, $systemPrompt, $userMessage) {
-    $models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro'];
+    $models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-pro'];
     
     foreach ($models as $model) {
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";

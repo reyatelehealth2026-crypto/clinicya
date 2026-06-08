@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-03T23:50:12.597Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "05",
+  "title": "ตอบแชท ส่งรูป ใช้ Quick Replies และโอนแชท",
+  "audience": "เภสัชกร / แอดมิน / staff",
+  "output": "videos/crm-manual-v2/crm-05-chat-quick-reply-transfer.mp4",
+  "frames": 126,
+  "scenes": [
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เลือกแชทตัวอย่าง แล้วอ่านบริบทลูกค้าก่อนตอบ"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "กล่องพิมพ์ข้อความ: ใช้ตอบข้อความทั่วไป"
+    },
+    {
+      "route": "/settings?tab=quick-replies",
+      "caption": "Quick Replies: เตรียมข้อความที่ใช้บ่อย ลดเวลาพิมพ์ซ้ำ"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เคสยา อาการป่วย หรือคำถามเฉพาะ ควรส่งต่อเภสัชกร"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

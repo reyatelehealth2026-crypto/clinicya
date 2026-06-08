@@ -56,6 +56,7 @@ export function getPointsHistory(lineUserId: string, limit: number = 50) {
   return phpGet<PointsHistoryResponse>('/api/points-history.php', {
     action: 'history',
     line_user_id: lineUserId,
+    line_account_id: appConfig.lineAccountId,
     limit
   })
 }

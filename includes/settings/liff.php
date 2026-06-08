@@ -16,15 +16,65 @@ $baseUrl = rtrim(BASE_URL, '/');
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_account_liff') {
     $accountId = intval($_POST['account_id']);
-    $liffId = trim($_POST['liff_id']);
+    $liffId = trim($_POST['liff_id']);                          // legacy /liff/ SPA → line_accounts.liff_id
+    $miniappLiffId = trim($_POST['miniapp_liff_id'] ?? '');     // new /miniapp app → routing table
     try {
         $db->prepare("UPDATE line_accounts SET liff_id = ? WHERE id = ?")->execute([$liffId, $accountId]);
-        $success = "บันทึก LIFF ID สำหรับบัญชีสำเร็จ!";
+        // Mini app liff_id is stored in the platform routing table, NOT in line_accounts —
+        // so the two LIFF apps never overwrite each other's id (coexistence, no collision).
+        $miniappSaved = liff_save_miniapp_route_id($accountId, $miniappLiffId);
+        $success = $miniappSaved === false
+            ? "บันทึก LIFF เก่าสำเร็จ — แต่ LIFF mini app ยังบันทึกไม่ได้ (ตรวจ routing table/สิทธิ์ tenant)"
+            : "บันทึก LIFF ID สำเร็จ!";
         // Refresh accounts
         $accounts = $db->query("SELECT * FROM line_accounts WHERE is_active = 1 ORDER BY is_default DESC")->fetchAll(PDO::FETCH_ASSOC);
         $currentAccount = $accounts[0] ?? null;
     } catch (Exception $e) {
         $error = $e->getMessage();
+    }
+}
+
+/**
+ * Write the mini app's liff_id onto the platform routing table for the current tenant.
+ * Returns true on success, false if the route table/tenant context is unavailable,
+ * null if nothing to do. Never throws — legacy liff_id is always saved regardless.
+ */
+function liff_save_miniapp_route_id(int $accountId, string $miniappLiffId)
+{
+    if (!class_exists('TenantContext') || !class_exists('Database')) return null;
+    try {
+        $tenantId = (int) (TenantContext::getCurrentTenantId() ?? 0);
+        if ($tenantId <= 0) return false;
+        $platform = Database::platform()->getConnection();
+        $upd = $platform->prepare(
+            "UPDATE tenant_line_account_routes SET liff_id = ? WHERE line_account_id = ? AND tenant_id = ?"
+        );
+        $upd->execute([$miniappLiffId !== '' ? $miniappLiffId : null, $accountId, $tenantId]);
+        return true;
+    } catch (\Throwable $e) {
+        return false;
+    }
+}
+
+// Load mini app liff_ids (routing table) keyed by line_account_id so each row can show both fields.
+$miniappLiffByAccount = [];
+$routeTableReady = false;
+if (class_exists('TenantContext') && class_exists('Database')) {
+    try {
+        $tenantId = (int) (TenantContext::getCurrentTenantId() ?? 0);
+        if ($tenantId > 0) {
+            $platform = Database::platform()->getConnection();
+            $rs = $platform->prepare(
+                "SELECT line_account_id, liff_id FROM tenant_line_account_routes WHERE tenant_id = ?"
+            );
+            $rs->execute([$tenantId]);
+            foreach ($rs->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $miniappLiffByAccount[(int) $r['line_account_id']] = (string) ($r['liff_id'] ?? '');
+            }
+            $routeTableReady = true;
+        }
+    } catch (\Throwable $e) {
+        $routeTableReady = false; // pre-migration / no platform DB → hide mini app field gracefully
     }
 }
 ?>
@@ -56,9 +106,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                 <div class="bg-white/20 rounded-lg p-4 mb-4">
                     <p class="text-sm font-medium mb-2">Endpoint URL สำหรับสร้าง LIFF (ระบบใหม่):</p>
                     <div class="flex gap-2">
-                        <input type="text" value="<?= $baseUrl ?>/liff/" readonly
+                        <input type="text" value="<?= $baseUrl ?>/miniapp/" readonly
                             class="flex-1 px-3 py-2 bg-white/30 rounded-lg font-mono text-sm" onclick="this.select()">
-                        <button onclick="copyLiffText('<?= $baseUrl ?>/liff/')"
+                        <button onclick="copyLiffText('<?= $baseUrl ?>/miniapp/')"
                             class="px-4 py-2 bg-white/30 hover:bg-white/40 rounded-lg">
                             <i class="fas fa-copy"></i>
                         </button>
@@ -130,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
             <h2 class="font-bold flex items-center">
                 <i class="fab fa-line mr-2"></i>LIFF ID ตามบัญชี LINE
             </h2>
-            <p class="text-indigo-100 text-sm mt-1">แต่ละบัญชี LINE สามารถมี LIFF ID แยกกันได้</p>
+            <p class="text-indigo-100 text-sm mt-1">แต่ละบัญชีตั้ง LIFF ได้ 2 ตัวพร้อมกัน — <b>เก่า (/liff)</b> + <b>mini app ใหม่ (/miniapp)</b> อยู่คู่กันไม่ชนกัน</p>
         </div>
         <div class="p-5">
             <?php if (empty($accounts)): ?>
@@ -161,13 +211,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                                     <span class="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full">⭐ หลัก</span>
                                 <?php endif; ?>
                             </div>
-                            <div class="flex gap-2">
-                                <input type="text" name="liff_id" value="<?= htmlspecialchars($acc['liff_id'] ?? '') ?>"
-                                    class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
-                                    placeholder="LIFF ID เช่น 2001234567-aBcDeFgH">
-                                <button type="submit" class="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">
-                                    <i class="fas fa-save"></i>
-                                </button>
+                            <div class="space-y-2">
+                                <div>
+                                    <label class="block text-xs font-medium text-purple-700 mb-1">
+                                        🛒 LIFF เก่า <span class="text-gray-400">(/liff — SPA เดิม)</span>
+                                    </label>
+                                    <input type="text" name="liff_id" value="<?= htmlspecialchars($acc['liff_id'] ?? '') ?>"
+                                        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                                        placeholder="LIFF ID เก่า เช่น 2001234567-aBcDeFgH">
+                                </div>
+                                <?php if ($routeTableReady): ?>
+                                <div>
+                                    <label class="block text-xs font-medium text-green-700 mb-1">
+                                        🚀 LIFF mini app ใหม่ <span class="text-gray-400">(/miniapp — routing table)</span>
+                                    </label>
+                                    <input type="text" name="miniapp_liff_id" value="<?= htmlspecialchars($miniappLiffByAccount[(int) $acc['id']] ?? '') ?>"
+                                        class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 font-mono text-sm"
+                                        placeholder="LIFF ID ของ mini app ใหม่ (แยกจากตัวเก่า)">
+                                </div>
+                                <?php else: ?>
+                                <input type="hidden" name="miniapp_liff_id" value="">
+                                <p class="text-xs text-amber-600">⚠️ routing table ยังไม่พร้อม — ตั้งค่า LIFF mini app ไม่ได้ (รัน migration_2026-06-02_route_liff_id.sql ก่อน)</p>
+                                <?php endif; ?>
+                                <div class="flex justify-end">
+                                    <button type="submit" class="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">
+                                        <i class="fas fa-save mr-1"></i> บันทึกทั้ง 2 ตัว
+                                    </button>
+                                </div>
                             </div>
                             <?php if (!empty($acc['liff_id'])): ?>
                                 <div class="mt-2 flex items-center gap-2 text-sm">
@@ -270,11 +340,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                         <div class="text-xs text-gray-600">ระบบ LIFF ใหม่ครบทุกฟังก์ชัน</div>
                     </div>
                     <div class="flex-1">
-                        <input type="text" value="<?= $baseUrl ?>/liff/" readonly
+                        <input type="text" value="<?= $baseUrl ?>/miniapp/" readonly
                             class="w-full px-3 py-2 bg-white border rounded-lg font-mono text-xs"
                             onclick="this.select()">
                     </div>
-                    <button onclick="copyLiffText('<?= $baseUrl ?>/liff/')"
+                    <button onclick="copyLiffText('<?= $baseUrl ?>/miniapp/')"
                         class="copy-btn px-3 py-2 bg-green-200 hover:bg-green-300 rounded-lg text-green-700">
                         <i class="fas fa-copy"></i>
                     </button>
@@ -369,7 +439,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                         <div class="bg-gray-50 rounded-lg p-4 mt-2 text-sm">
                             <p><strong>LIFF app name:</strong> LINE Shop</p>
                             <p><strong>Size:</strong> Full</p>
-                            <p><strong>Endpoint URL:</strong> <span class="text-green-600"><?= $baseUrl ?>/liff/</span>
+                            <p><strong>Endpoint URL:</strong> <span class="text-green-600"><?= $baseUrl ?>/miniapp/</span>
                             </p>
                             <p><strong>Scope:</strong> ✅ profile, ✅ openid</p>
                             <p><strong>Bot link feature:</strong> On (Aggressive)</p>

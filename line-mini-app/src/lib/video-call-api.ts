@@ -39,13 +39,15 @@ async function postJson<T>(body: Record<string, unknown>): Promise<T> {
   const res = await fetch(apiUrl(API), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    // line_account_id lets the server route to the tenant DB (split-brain fix).
+    body: JSON.stringify({ line_account_id: appConfig.lineAccountId, ...body })
   })
   return res.json() as Promise<T>
 }
 
 async function getJson<T>(params: Record<string, string | number>): Promise<T> {
-  const qs = new URLSearchParams(params as Record<string, string>).toString()
+  // line_account_id lets the server route to the tenant DB (split-brain fix).
+  const qs = new URLSearchParams({ line_account_id: String(appConfig.lineAccountId), ...params } as Record<string, string>).toString()
   const res = await fetch(`${apiUrl(API)}?${qs}`, { cache: 'no-store' })
   return res.json() as Promise<T>
 }

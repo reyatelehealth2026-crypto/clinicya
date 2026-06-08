@@ -1,0 +1,118 @@
+{
+  "generated_at": "2026-06-03T23:36:45.662Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episodes": [
+    {
+      "id": "01",
+      "title": "CRM คืออะไร และทีมแต่ละคนใช้ส่วนไหน",
+      "audience": "เจ้าของร้าน / แอดมิน / เภสัชกร / การตลาด",
+      "output": "docs/training/videos/crm-manual-v2/crm-01-overview-team-roles.mp4",
+      "scenes": 5
+    },
+    {
+      "id": "02",
+      "title": "Dashboard CRM สำหรับดูภาพรวมร้าน",
+      "audience": "เจ้าของร้าน / ผู้จัดการ / แอดมิน",
+      "output": "docs/training/videos/crm-manual-v2/crm-02-dashboard-crm.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "03",
+      "title": "รู้จัก Inbox v2 แบบ 3 คอลัมน์",
+      "audience": "เภสัชกร / แอดมิน / staff",
+      "output": "docs/training/videos/crm-manual-v2/crm-03-inbox-3-column.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "04",
+      "title": "ค้นหา กรอง และจัดคิวแชทที่ต้องตอบ",
+      "audience": "แอดมิน / เภสัชกร / staff",
+      "output": "docs/training/videos/crm-manual-v2/crm-04-inbox-search-filter-queue.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "05",
+      "title": "ตอบแชท ส่งรูป ใช้ Quick Replies และโอนแชท",
+      "audience": "เภสัชกร / แอดมิน / staff",
+      "output": "docs/training/videos/crm-manual-v2/crm-05-chat-quick-reply-transfer.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "06",
+      "title": "อ่าน CRM HUD ก่อนตอบลูกค้า",
+      "audience": "เภสัชกร / แอดมิน",
+      "output": "docs/training/videos/crm-manual-v2/crm-06-crm-hud-before-reply.mp4",
+      "scenes": 5
+    },
+    {
+      "id": "07",
+      "title": "ติด Tag ลูกค้าและเขียน Note ให้ทีมอ่านต่อได้",
+      "audience": "แอดมิน / เภสัชกร / การตลาด",
+      "output": "docs/training/videos/crm-manual-v2/crm-07-tags-and-notes.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "08",
+      "title": "ดูประวัติออเดอร์ ประวัติยา และการติดตามลูกค้า",
+      "audience": "เภสัชกร / แอดมิน",
+      "output": "docs/training/videos/crm-manual-v2/crm-08-orders-medicine-history.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "09",
+      "title": "จ่ายยาใน Inbox และส่งฉลากยาให้ลูกค้าผ่าน LINE",
+      "audience": "เภสัชกร",
+      "output": "docs/training/videos/crm-manual-v2/crm-09-dispense-line-label.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "10",
+      "title": "เคสติดตาม Refill และการดูแลต่อเนื่อง",
+      "audience": "เภสัชกร / แอดมิน",
+      "output": "docs/training/videos/crm-manual-v2/crm-10-refill-follow-up.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "11",
+      "title": "หน้า Customers สำหรับดูและจัดการลูกค้า",
+      "audience": "แอดมิน / เจ้าของร้าน / การตลาด",
+      "output": "docs/training/videos/crm-manual-v2/crm-11-customers-management.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "12",
+      "title": "Sales Pipeline และ Deals",
+      "audience": "เจ้าของร้าน / แอดมิน / ทีมขาย",
+      "output": "docs/training/videos/crm-manual-v2/crm-12-sales-pipeline-deals.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "13",
+      "title": "Service Center และ Tickets",
+      "audience": "แอดมิน / ผู้จัดการ / บริการลูกค้า",
+      "output": "docs/training/videos/crm-manual-v2/crm-13-service-center-tickets.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "14",
+      "title": "ใช้ Tag และ Segment เพื่อเตรียม Broadcast",
+      "audience": "การตลาด / แอดมิน",
+      "output": "docs/training/videos/crm-manual-v2/crm-14-tag-segment-broadcast.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "15",
+      "title": "CRM Analytics สำหรับอ่านผลลัพธ์",
+      "audience": "เจ้าของร้าน / ผู้จัดการ / การตลาด",
+      "output": "docs/training/videos/crm-manual-v2/crm-15-crm-analytics.mp4",
+      "scenes": 4
+    },
+    {
+      "id": "16",
+      "title": "Reports และการสรุปงาน CRM รายสัปดาห์",
+      "audience": "เจ้าของร้าน / ผู้จัดการ / แอดมิน",
+      "output": "docs/training/videos/crm-manual-v2/crm-16-crm-weekly-reports.mp4",
+      "scenes": 4
+    }
+  ]
+}
