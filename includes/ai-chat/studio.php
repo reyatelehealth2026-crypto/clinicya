@@ -302,7 +302,34 @@ try {
                             <label class="block text-sm font-medium text-gray-700 mb-2">รายละเอียด</label>
                             <textarea id="studioFlexPrompt" rows="4" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500" placeholder="เช่น: โปรโมทกาแฟลาเต้ ราคา 65 บาท ลด 20% เหลือ 52 บาท"></textarea>
                         </div>
-                        
+
+                        <!-- Reference images (become the Flex hero) -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">รูปสินค้า (reference) <span class="text-xs font-normal text-gray-400">— จะใช้เป็นภาพ hero ของ bubble (ไม่บังคับ)</span></label>
+                            <div id="studioFlexRefDrop" onclick="document.getElementById('studioFlexRefInput').click()" class="border-2 border-dashed border-blue-200 rounded-xl text-center py-5 px-3 cursor-pointer hover:bg-blue-50 transition-colors">
+                                <i class="fas fa-images text-2xl text-blue-300 mb-1"></i>
+                                <p class="text-sm text-gray-500">ลาก-วาง วาง (paste) หรือคลิกเพื่อแนบรูป</p>
+                                <p class="text-xs text-gray-400">แต่ละรูปจะกลายเป็น hero ของแต่ละ bubble ตามลำดับ — สูงสุด 10 รูป</p>
+                                <input type="file" id="studioFlexRefInput" accept="image/*" multiple class="hidden" onchange="handleStudioFlexRefFiles(event)">
+                            </div>
+                            <div id="studioFlexRefThumbs" class="flex flex-wrap gap-2 mt-2"></div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">จำนวน bubble</label>
+                            <select id="studioFlexBubbleCount" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
+                                <option value="1">1 bubble (เดี่ยว)</option>
+                                <option value="2">2 bubbles (carousel)</option>
+                                <option value="3">3 bubbles</option>
+                                <option value="4">4 bubbles</option>
+                                <option value="5">5 bubbles</option>
+                                <option value="6">6 bubbles</option>
+                                <option value="8">8 bubbles</option>
+                                <option value="10">10 bubbles</option>
+                            </select>
+                            <p class="text-xs text-gray-400 mt-1">เลือกหลาย bubble เพื่อสร้าง carousel เลื่อนได้ใน LINE</p>
+                        </div>
+
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">สี Theme</label>
                             <div class="flex gap-2">
@@ -317,6 +344,9 @@ try {
                         
                         <button onclick="generateStudioFlex()" id="btnStudioGenFlex" class="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-bold hover:opacity-90 transition-all">
                             <i class="fas fa-magic mr-2"></i>สร้าง Flex Message
+                        </button>
+                        <button onclick="saveStudioFlexTemplate()" id="btnStudioSaveFlex" class="w-full mt-2 py-3 bg-white border border-blue-500 text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all disabled:opacity-40" disabled>
+                            <i class="fas fa-save mr-2"></i>บันทึกเทมเพลท
                         </button>
                     </div>
                 </div>
@@ -872,32 +902,72 @@ function useStudioImageAsRef(dataUrl) { addStudioRefDataUrl(dataUrl); setStudioI
 // Flex Functions
 function setStudioFlexColor(color) { studioCurrentFlexColor = color; }
 
+// ----- Flex reference images (hero) -----
+let studioFlexRefImages = [];   // array of data URLs
+
+function renderStudioFlexRefThumbs() {
+    const box = document.getElementById('studioFlexRefThumbs');
+    if (!box) return;
+    box.innerHTML = studioFlexRefImages.map((src, i) =>
+        `<div class="relative w-16 h-16"><img src="${src}" class="w-16 h-16 object-cover rounded-lg border"><button type="button" onclick="removeStudioFlexRef(${i})" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs leading-5 text-center">&times;</button></div>`).join('');
+}
+function addStudioFlexRefDataUrl(dataUrl) {
+    if (studioFlexRefImages.length >= 10) { showStudioToast('แนบได้สูงสุด 10 รูป', true); return; }
+    studioFlexRefImages.push(dataUrl); renderStudioFlexRefThumbs();
+}
+function handleStudioFlexRefFiles(e) {
+    [...e.target.files].forEach(f => { if (!f.type.startsWith('image/')) return; const r = new FileReader(); r.onload = ev => addStudioFlexRefDataUrl(ev.target.result); r.readAsDataURL(f); });
+    e.target.value = '';
+}
+function removeStudioFlexRef(i) { studioFlexRefImages.splice(i, 1); renderStudioFlexRefThumbs(); }
+
+// paste + drag-drop onto the Flex reference zone
+document.addEventListener('paste', function(e) {
+    const flexTab = document.getElementById('studio-tab-flex');
+    if (!flexTab || flexTab.classList.contains('hidden')) return;
+    for (const item of (e.clipboardData?.items || [])) {
+        if (item.type.startsWith('image/')) { const f = item.getAsFile(); const r = new FileReader(); r.onload = ev => addStudioFlexRefDataUrl(ev.target.result); r.readAsDataURL(f); }
+    }
+});
+document.addEventListener('DOMContentLoaded', function() {
+    const dz = document.getElementById('studioFlexRefDrop');
+    if (dz) {
+        ['dragover','dragenter'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('bg-blue-50'); }));
+        ['dragleave'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('bg-blue-50'); }));
+        dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('bg-blue-50'); [...(e.dataTransfer?.files || [])].forEach(f => { if (f.type.startsWith('image/')) { const r = new FileReader(); r.onload = ev => addStudioFlexRefDataUrl(ev.target.result); r.readAsDataURL(f); } }); });
+    }
+});
+
 async function generateStudioFlex() {
-    // API key resolved server-side from the shop's ai_settings (client key optional)
     const prompt = document.getElementById('studioFlexPrompt').value.trim();
     if (!prompt) { showStudioToast('กรุณากรอกรายละเอียด', true); return; }
-    
+
     const btn = document.getElementById('btnStudioGenFlex');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังสร้าง...';
-    
+    document.getElementById('studioFlexPreview').innerHTML = '<div class="text-center text-blue-300"><i class="fas fa-spinner fa-spin text-4xl mb-3"></i><p>กำลังสร้าง Flex... (10–30 วินาที)</p></div>';
+
     try {
-        const type = document.getElementById('studioFlexType').value;
-        const systemPrompt = `คุณคือผู้เชี่ยวชาญ LINE Flex Message สร้าง Flex "bubble" object ที่ถูกต้องตามสเปก LINE (ห้ามใส่ field altText/type:flex — เอาเฉพาะ bubble object).
-ใช้สีหลัก: ${studioCurrentFlexColor} กับหัวข้อ/ปุ่ม. ประเภท: ${type}.
-โครงสร้างที่แนะนำ: { "type":"bubble", "body":{ "type":"box","layout":"vertical","contents":[...] }, "footer":{...ปุ่ม action type uri/message...} }.
-ถ้าเป็นโปรโมท/สินค้าให้ใส่ราคาเด่นๆ. ข้อความเป็นภาษาไทย. ตอบเป็น JSON ของ bubble object เท่านั้น`;
-        const flexJson = await callStudioGemini(prompt, systemPrompt, null, true);
+        const res = await fetch('api/ai-studio-flex.php', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt,
+                type: document.getElementById('studioFlexType').value,
+                color: studioCurrentFlexColor,
+                bubble_count: parseInt(document.getElementById('studioFlexBubbleCount').value || '1', 10),
+                reference_images: studioFlexRefImages,
+                api_key: studioCurrentApiKey || ''
+            })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) { showStudioToast('กรุณาเข้าสู่ระบบใหม่', true); throw new Error('กรุณาเข้าสู่ระบบใหม่'); }
+        if (res.status === 422) { openStudioApiModal(); throw new Error(data.error || 'ต้องตั้งค่า API key ก่อน'); }
+        if (!data || !data.success) { throw new Error((data && data.error) || 'สร้าง Flex ไม่สำเร็จ'); }
 
-        const cleaned = flexJson.replace(/```json|```/g, '').trim();
-        let parsed = JSON.parse(cleaned);
-        // Accept either a raw bubble, a full flex message, or {flex:...}
-        if (parsed.contents && parsed.type === 'flex') parsed = parsed.contents;
-        if (parsed.bubble) parsed = parsed.bubble;
-        studioCurrentFlexJson = parsed;
-
+        studioCurrentFlexJson = data.flex;
         renderStudioFlexPreview(studioCurrentFlexJson);
         document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
+        document.getElementById('btnStudioSaveFlex').disabled = false;
         showStudioToast('สร้าง Flex Message สำเร็จ!');
     } catch (err) {
         showStudioToast('เกิดข้อผิดพลาด: ' + err.message, true);
@@ -970,6 +1040,10 @@ function copyStudioFlexJson() {
     if (!studioCurrentFlexJson) { showStudioToast('ยังไม่มี Flex JSON', true); return; }
     navigator.clipboard.writeText(JSON.stringify(studioCurrentFlexJson, null, 2));
     showStudioToast('คัดลอก JSON แล้ว!');
+}
+
+function saveStudioFlexTemplate() {
+    showStudioToast('บันทึกเทมเพลทเร็วๆ นี้', false);
 }
 
 // Caption Functions
