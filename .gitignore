@@ -166,6 +166,7 @@ DB_CONNECTION.md
 !docs/training/*.md
 !docs/user-manual.md
 !.claude/agents/*.md
+!.agents/skills/**/*.md
 *.bak*
 *.bak-*
 
