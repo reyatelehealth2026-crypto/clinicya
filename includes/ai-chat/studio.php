@@ -1042,8 +1042,31 @@ function copyStudioFlexJson() {
     showStudioToast('คัดลอก JSON แล้ว!');
 }
 
-function saveStudioFlexTemplate() {
-    showStudioToast('บันทึกเทมเพลทเร็วๆ นี้', false);
+async function saveStudioFlexTemplate() {
+    if (!studioCurrentFlexJson) { showStudioToast('ยังไม่มี Flex ให้บันทึก', true); return; }
+    const name = prompt('ตั้งชื่อเทมเพลท Flex:', 'AI Studio Flex ' + new Date().toLocaleDateString('th-TH'));
+    if (!name) return;
+
+    const btn = document.getElementById('btnStudioSaveFlex');
+    const old = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังบันทึก...';
+    try {
+        const fd = new FormData();
+        fd.append('action', 'save_template');
+        fd.append('name', name);
+        fd.append('category', 'AI Studio');
+        fd.append('flex_json', JSON.stringify(studioCurrentFlexJson));
+        const res = await fetch('flex-builder.php', { method: 'POST', body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!data || !data.success) { throw new Error((data && data.error) || 'บันทึกไม่สำเร็จ'); }
+        showStudioToast('บันทึกเทมเพลทแล้ว!');
+    } catch (err) {
+        showStudioToast('บันทึกไม่สำเร็จ: ' + err.message, true);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = old;
+    }
 }
 
 // Caption Functions
