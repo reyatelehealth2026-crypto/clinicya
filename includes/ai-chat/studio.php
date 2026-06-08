@@ -277,8 +277,8 @@ try {
 
         <!-- Flex Tab -->
         <div id="studio-tab-flex" class="studio-tab-content hidden">
-            <div class="grid lg:grid-cols-2 gap-6">
-                <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+            <div class="grid lg:grid-cols-5 gap-6">
+                <div class="lg:col-span-2 bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="bg-gradient-to-r from-blue-500 to-cyan-500 p-4 text-white">
                         <h3 class="font-bold text-lg"><i class="fas fa-layer-group mr-2"></i>ออกแบบ Flex Message</h3>
                         <p class="text-sm text-blue-200">สร้าง LINE Flex Message ด้วย AI</p>
@@ -346,7 +346,7 @@ try {
                             <i class="fas fa-magic mr-2"></i>สร้าง Flex Message
                         </button>
                         <button onclick="editStudioFlexInBuilder()" id="btnStudioEditFlex" class="w-full mt-2 py-3 bg-white border border-purple-500 text-purple-600 rounded-xl font-bold hover:bg-purple-50 transition-all disabled:opacity-40" disabled>
-                            <i class="fas fa-arrows-up-down-left-right mr-2"></i>ลากจัดวาง / แก้ไข (Flex Builder)
+                            <i class="fas fa-sliders mr-2"></i>ตัวแก้ไขขั้นสูง (Flex Builder)
                         </button>
                         <button onclick="saveStudioFlexTemplate()" id="btnStudioSaveFlex" class="w-full mt-2 py-3 bg-white border border-blue-500 text-blue-600 rounded-xl font-bold hover:bg-blue-50 transition-all disabled:opacity-40" disabled>
                             <i class="fas fa-save mr-2"></i>บันทึกเทมเพลท
@@ -354,18 +354,27 @@ try {
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div class="lg:col-span-3 bg-white rounded-2xl shadow-xl overflow-hidden">
                     <div class="p-4 bg-gray-100 border-b flex justify-between items-center">
                         <h3 class="font-bold text-gray-700"><i class="fas fa-eye mr-2"></i>Preview</h3>
                         <button onclick="copyStudioFlexJson()" class="text-sm text-blue-600 hover:underline"><i class="far fa-copy mr-1"></i>Copy JSON</button>
                     </div>
-                    <div id="studioFlexPreview" class="p-6 min-h-[400px] bg-gray-800 flex items-center justify-center">
+                    <div id="studioFlexPreview" class="p-6 min-h-[520px] bg-gray-800 flex items-center justify-center overflow-x-auto">
                         <div class="text-center text-gray-500">
                             <i class="fas fa-layer-group text-6xl mb-4"></i>
                             <p>Flex Message จะแสดงที่นี่</p>
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Inline bubble arrangement: reorder (drag or buttons), duplicate, delete, add -->
+            <div id="studioFlexArrange" class="mt-6 bg-white rounded-2xl shadow-xl overflow-hidden hidden">
+                <div class="p-4 bg-gray-100 border-b flex justify-between items-center">
+                    <h3 class="font-bold text-gray-700"><i class="fas fa-layer-group mr-2"></i>จัดวาง bubble <span class="text-xs font-normal text-gray-400">— ลากสลับ หรือใช้ปุ่ม</span></h3>
+                    <button onclick="addStudioFlexBubble()" class="text-sm text-blue-600 hover:underline"><i class="fas fa-plus mr-1"></i>เพิ่ม bubble</button>
+                </div>
+                <div id="studioFlexArrangeList" class="p-4 flex flex-wrap gap-3"></div>
             </div>
 
             <!-- AI chat-edit: refine the generated Flex with a natural-language command -->
@@ -992,9 +1001,11 @@ async function generateStudioFlex() {
         document.getElementById('btnStudioSaveFlex').disabled = false;
         document.getElementById('btnStudioEditFlex').disabled = false;
         document.getElementById('studioFlexEditBar').classList.remove('hidden');
+        document.getElementById('studioFlexArrange').classList.remove('hidden');
         studioFlexHistory = [];
         document.getElementById('btnStudioFlexUndo').disabled = true;
         renderStudioFlexEditChips();
+        renderStudioFlexArrange();
         showStudioToast('สร้าง Flex Message สำเร็จ!');
     } catch (err) {
         showStudioToast('เกิดข้อผิดพลาด: ' + err.message, true);
@@ -1148,6 +1159,7 @@ async function applyStudioFlexEdit() {
         studioCurrentFlexJson = data.flex;
         renderStudioFlexPreview(studioCurrentFlexJson);
         document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
+        renderStudioFlexArrange();
         inp.value = '';
         showStudioToast('แก้ไขแล้ว!');
     } catch (err) {
@@ -1163,8 +1175,83 @@ function undoStudioFlexEdit() {
     studioCurrentFlexJson = studioFlexHistory.pop();
     renderStudioFlexPreview(studioCurrentFlexJson);
     document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
+    renderStudioFlexArrange();
     document.getElementById('btnStudioFlexUndo').disabled = studioFlexHistory.length === 0;
     showStudioToast('ย้อนกลับแล้ว');
+}
+
+// ----- Inline bubble arrangement (reorder / duplicate / delete / add) -----
+let studioFlexDragIdx = null;
+
+function getStudioFlexBubbles() {
+    const f = studioCurrentFlexJson;
+    if (!f) return [];
+    if (f.type === 'carousel' && Array.isArray(f.contents)) return f.contents;
+    return [f];
+}
+// Apply a new bubble array, snapshot history for undo, and re-render everything.
+function commitStudioFlexBubbles(bubbles) {
+    studioFlexHistory.push(JSON.parse(JSON.stringify(studioCurrentFlexJson)));
+    document.getElementById('btnStudioFlexUndo').disabled = false;
+    studioCurrentFlexJson = bubbles.length <= 1
+        ? (bubbles[0] || studioCurrentFlexJson)
+        : { type: 'carousel', contents: bubbles };
+    renderStudioFlexPreview(studioCurrentFlexJson);
+    document.getElementById('studioFlexJson').textContent = JSON.stringify(studioCurrentFlexJson, null, 2);
+    renderStudioFlexArrange();
+}
+function renderStudioFlexArrange() {
+    const box = document.getElementById('studioFlexArrangeList');
+    if (!box) return;
+    const bubbles = getStudioFlexBubbles();
+    box.innerHTML = bubbles.map((b, i) => {
+        const hasHero = b && b.hero && b.hero.url;
+        return `<div class="border rounded-xl p-2 w-40 bg-gray-50" draggable="true"
+                ondragstart="studioFlexDragStart(${i})" ondragover="event.preventDefault()" ondrop="studioFlexDrop(${i})" title="ลากเพื่อสลับลำดับ">
+            <div class="text-xs font-semibold text-gray-600 mb-1"><i class="fas fa-grip-vertical text-gray-300 mr-1"></i>Bubble ${i + 1}</div>
+            <div class="text-[10px] mb-2 ${hasHero ? 'text-green-600' : 'text-gray-400'}">${hasHero ? '🖼️ มีรูป hero' : 'ไม่มีรูป hero'}</div>
+            <div class="flex gap-1">
+                <button onclick="moveStudioFlexBubble(${i},-1)" class="flex-1 px-1 py-1.5 text-xs bg-white border rounded hover:bg-gray-100 disabled:opacity-30" title="ย้ายซ้าย" ${i === 0 ? 'disabled' : ''}><i class="fas fa-arrow-left"></i></button>
+                <button onclick="moveStudioFlexBubble(${i},1)" class="flex-1 px-1 py-1.5 text-xs bg-white border rounded hover:bg-gray-100 disabled:opacity-30" title="ย้ายขวา" ${i === bubbles.length - 1 ? 'disabled' : ''}><i class="fas fa-arrow-right"></i></button>
+                <button onclick="duplicateStudioFlexBubble(${i})" class="flex-1 px-1 py-1.5 text-xs bg-white border rounded hover:bg-gray-100" title="ทำซ้ำ"><i class="fas fa-copy"></i></button>
+                <button onclick="deleteStudioFlexBubble(${i})" class="flex-1 px-1 py-1.5 text-xs bg-white border rounded hover:bg-red-50 text-red-500 disabled:opacity-30" title="ลบ" ${bubbles.length <= 1 ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
+            </div>
+        </div>`;
+    }).join('');
+}
+function moveStudioFlexBubble(i, dir) {
+    const b = getStudioFlexBubbles().slice();
+    const j = i + dir;
+    if (j < 0 || j >= b.length) return;
+    [b[i], b[j]] = [b[j], b[i]];
+    commitStudioFlexBubbles(b);
+}
+function duplicateStudioFlexBubble(i) {
+    const b = getStudioFlexBubbles().slice();
+    if (b.length >= 10) { showStudioToast('สูงสุด 10 bubble', true); return; }
+    b.splice(i + 1, 0, JSON.parse(JSON.stringify(b[i])));
+    commitStudioFlexBubbles(b);
+}
+function deleteStudioFlexBubble(i) {
+    const b = getStudioFlexBubbles().slice();
+    if (b.length <= 1) { showStudioToast('ต้องมีอย่างน้อย 1 bubble', true); return; }
+    b.splice(i, 1);
+    commitStudioFlexBubbles(b);
+}
+function addStudioFlexBubble() {
+    const b = getStudioFlexBubbles().slice();
+    if (b.length >= 10) { showStudioToast('สูงสุด 10 bubble', true); return; }
+    b.push(JSON.parse(JSON.stringify(b[b.length - 1])));
+    commitStudioFlexBubbles(b);
+}
+function studioFlexDragStart(i) { studioFlexDragIdx = i; }
+function studioFlexDrop(j) {
+    if (studioFlexDragIdx === null || studioFlexDragIdx === j) { studioFlexDragIdx = null; return; }
+    const b = getStudioFlexBubbles().slice();
+    const [moved] = b.splice(studioFlexDragIdx, 1);
+    b.splice(j, 0, moved);
+    studioFlexDragIdx = null;
+    commitStudioFlexBubbles(b);
 }
 
 // Caption Functions
