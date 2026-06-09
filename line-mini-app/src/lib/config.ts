@@ -156,6 +156,18 @@ export function apiUrl(path: string) {
   return `${appConfig.apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+/**
+ * True when the page is being served from a tenant subdomain (e.g.
+ * banyarimchol.re-ya.com), as opposed to the root domain / localhost. On a
+ * tenant subdomain the build-time NEXT_PUBLIC_LINE_LIFF_ID is ANOTHER tenant's
+ * (tenant-0001's) LIFF id, so it must NEVER be used as a fallback here.
+ */
+export function isReyaTenantSubdomainHost(): boolean {
+  if (typeof window === 'undefined') return false
+  const h = window.location.hostname.toLowerCase()
+  return h.endsWith('.re-ya.com') && !REYA_ROOT_HOSTS.has(h)
+}
+
 // ── LIFF id resolution for the shared Mini App ──────────────────────────────
 // The bundle is served on each tenant's OWN subdomain (clinicya.re-ya.com/miniapp,
 // tenant-0001.re-ya.com/miniapp, ...). The baked NEXT_PUBLIC_LINE_LIFF_ID is only
@@ -208,21 +220,39 @@ export async function resolveLiffId(): Promise<string> {
     }
 
     // Ask the CURRENT host which LIFF it serves (host → tenant subdomain routing).
-    try {
-      const res = await fetch(buildMiniappBootstrapUrl(), { cache: 'no-store' })
-      const d = (await res.json()) as { success?: boolean; liff_id?: string; line_account_id?: number }
-      if (d && d.success && d.liff_id && d.liff_id.trim()) {
-        _resolvedLiffId = d.liff_id.trim()
-        if (Number.isInteger(d.line_account_id) && (d.line_account_id as number) > 0) {
-          setLineAccountId(d.line_account_id as number)
+    // This is the ONLY correct source on a tenant subdomain, so retry a couple
+    // of times: a single transient fetch miss must NOT fall through to the
+    // build-time default, which is another tenant's (tenant-0001) LIFF — initing
+    // that here makes login bounce to tenant-0001 and throws "Invalid LIFF ID".
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(buildMiniappBootstrapUrl(), { cache: 'no-store' })
+        const d = (await res.json()) as { success?: boolean; liff_id?: string; line_account_id?: number }
+        if (d && d.success && d.liff_id && d.liff_id.trim()) {
+          _resolvedLiffId = d.liff_id.trim()
+          if (Number.isInteger(d.line_account_id) && (d.line_account_id as number) > 0) {
+            setLineAccountId(d.line_account_id as number)
+          }
+          return _resolvedLiffId
         }
-        return _resolvedLiffId
+        // success:false → tenant genuinely has no LIFF; stop retrying.
+        break
+      } catch {
+        // network/parse failure — short backoff, then retry.
+        await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)))
       }
-    } catch {
-      /* network/parse failure — fall through to build default */
+    }
+
+    // On a tenant subdomain the build-time default belongs to a DIFFERENT tenant.
+    // Never init it (that is the cross-tenant bounce bug) — return empty and let
+    // the caller surface a real error instead.
+    if (isReyaTenantSubdomainHost()) {
+      _resolvedLiffId = null
+      return ''
     }
   }
 
+  // Root domain / localhost: the build-time default IS the correct tenant.
   _resolvedLiffId = appConfig.liffId
   return _resolvedLiffId
 }
