@@ -149,8 +149,25 @@ try {
 }
 
 // --- Create the initial admin user inside the new tenant DB ---
+// The tenant template does not ship an admin_users table — AdminAuth normally
+// creates it lazily on first login. Create it here so the owner can log in.
 try {
     $tenantPdo = Database::forTenant($newTenantId)->getConnection();
+    $tenantPdo->exec(
+        "CREATE TABLE IF NOT EXISTS admin_users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(50) NOT NULL UNIQUE,
+            password VARCHAR(255) NOT NULL,
+            email VARCHAR(100),
+            display_name VARCHAR(100),
+            role VARCHAR(20) DEFAULT 'admin',
+            is_active TINYINT(1) DEFAULT 1,
+            last_login TIMESTAMP NULL,
+            login_count INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
     $hash = password_hash($adminPass, PASSWORD_BCRYPT);
     $tenantPdo->prepare(
         'INSERT INTO admin_users (username, password, email, display_name, role, is_active, created_at)
