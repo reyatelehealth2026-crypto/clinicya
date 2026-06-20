@@ -2387,7 +2387,7 @@ class BusinessBot
                 ]
             ];
 
-            return $this->line->replyMessage($replyToken, [FlexTemplates::toMessage($pointsCard, 'แต้มสะสม')]);
+            return $this->line->sendMessage($userId, [FlexTemplates::toMessage($pointsCard, 'แต้มสะสม')], $replyToken);
         } catch (Exception $e) {
             $this->logError('showPoints', $e->getMessage());
             return $this->replyText($replyToken, "ระบบแต้มสะสมยังไม่พร้อมใช้งาน");
@@ -2407,7 +2407,7 @@ class BusinessBot
 
             if (empty($rewards)) {
                 $flex = FlexTemplates::info('ยังไม่มีของรางวัล', 'ร้านค้ายังไม่มีของรางวัลให้แลก', [['label' => 'ดูแต้ม', 'text' => 'แต้ม']]);
-                return $this->line->replyMessage($replyToken, [FlexTemplates::toMessage($flex, 'ของรางวัล')]);
+                return $this->line->sendMessage($userId, [FlexTemplates::toMessage($flex, 'ของรางวัล')], $replyToken);
             }
 
             $bubbles = [];
@@ -2442,7 +2442,7 @@ class BusinessBot
             }
 
             $flex = ['type' => 'carousel', 'contents' => $bubbles];
-            return $this->line->replyMessage($replyToken, [FlexTemplates::toMessage($flex, 'ของรางวัล')]);
+            return $this->line->sendMessage($userId, [FlexTemplates::toMessage($flex, 'ของรางวัล')], $replyToken);
         } catch (Exception $e) {
             $this->logError('showRewards', $e->getMessage());
             return $this->replyText($replyToken, "ระบบของรางวัลยังไม่พร้อมใช้งาน");
@@ -2645,7 +2645,7 @@ class BusinessBot
                 ]
             ];
 
-            return $this->line->replyMessage($replyToken, [FlexTemplates::toMessage($memberCard, 'บัตรสมาชิก')]);
+            return $this->line->sendMessage($userId, [FlexTemplates::toMessage($memberCard, 'บัตรสมาชิก')], $replyToken);
         } catch (Exception $e) {
             $this->logError('showMemberCard', $e->getMessage());
             return $this->replyText($replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
@@ -2686,7 +2686,7 @@ class BusinessBot
                     "รหัส: {$result['redemption_code']}\n{$result['reward']['name']}",
                     [['label' => 'ดูแต้มคงเหลือ', 'text' => 'แต้ม']]
                 );
-                return $this->line->replyMessage($replyToken, [FlexTemplates::toMessage($flex, 'แลกของรางวัล')]);
+                return $this->line->sendMessage($userId, [FlexTemplates::toMessage($flex, 'แลกของรางวัล')], $replyToken);
             } else {
                 return $this->replyText($replyToken, "ไม่สามารถแลกได้: {$result['message']}");
             }

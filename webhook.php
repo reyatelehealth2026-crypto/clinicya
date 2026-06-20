@@ -1309,19 +1309,23 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         if (class_exists('BusinessBot') && $isLoyaltyCmd) {
             try {
                 $loyaltyBot = new BusinessBot($db, $line, $lineAccountId);
+                $sendResult = null;
                 if ($isRedeem) {
-                    $loyaltyBot->redeemReward($userId, $user['id'], (int) $redeemMatch[1], $replyToken);
+                    $sendResult = $loyaltyBot->redeemReward($userId, $user['id'], (int) $redeemMatch[1], $replyToken);
                 } elseif (in_array($textLower, $pointsKeywords, true)) {
-                    $loyaltyBot->showPoints($userId, $user['id'], $replyToken);
+                    $sendResult = $loyaltyBot->showPoints($userId, $user['id'], $replyToken);
                 } elseif (in_array($textLower, $memberKeywords, true)) {
-                    $loyaltyBot->showMemberCard($userId, $user['id'], $replyToken);
+                    $sendResult = $loyaltyBot->showMemberCard($userId, $user['id'], $replyToken);
                 } else {
-                    $loyaltyBot->showRewards($userId, $user['id'], $replyToken);
+                    $sendResult = $loyaltyBot->showRewards($userId, $user['id'], $replyToken);
                 }
                 devLog($db, 'info', 'webhook', 'Loyalty command handled (chat)', [
                     'user_id' => $userId,
                     'command' => $textLower,
-                    'bot_mode' => $botMode
+                    'bot_mode' => $botMode,
+                    'send_code' => is_array($sendResult) ? ($sendResult['code'] ?? null) : null,
+                    'send_method' => is_array($sendResult) ? ($sendResult['method'] ?? null) : null,
+                    'send_body' => is_array($sendResult) ? mb_substr((string) ($sendResult['body'] ?? ''), 0, 200) : null
                 ], $userId);
                 return;
             } catch (Exception $e) {
