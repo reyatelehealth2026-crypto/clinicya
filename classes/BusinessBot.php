@@ -111,6 +111,32 @@ class BusinessBot
         return $this->line->replyMessage($replyToken, [FlexTemplates::toMessage($flex, $altText)]);
     }
 
+    /**
+     * Persist a bot-sent message into `messages` so it appears in the admin inbox
+     * (the webhook saveOutgoingMessage() isn't called for BusinessBot replies).
+     * Best-effort: failures are logged, never thrown.
+     */
+    private function saveOutgoing($userDbId, $message, $messageType = 'flex')
+    {
+        try {
+            $content = is_array($message) ? json_encode($message, JSON_UNESCAPED_UNICODE) : (string) $message;
+            $hasSentBy = false;
+            try {
+                $hasSentBy = $this->db->query("SHOW COLUMNS FROM messages LIKE 'sent_by'")->rowCount() > 0;
+            } catch (Exception $e) {
+            }
+            if ($hasSentBy) {
+                $this->db->prepare("INSERT INTO messages (user_id, direction, message_type, content, sent_by) VALUES (?, 'outgoing', ?, ?, 'system:loyalty')")
+                    ->execute([$userDbId, $messageType, $content]);
+            } else {
+                $this->db->prepare("INSERT INTO messages (user_id, direction, message_type, content) VALUES (?, 'outgoing', ?, ?)")
+                    ->execute([$userDbId, $messageType, $content]);
+            }
+        } catch (Exception $e) {
+            $this->logError('saveOutgoing', $e->getMessage());
+        }
+    }
+
     private function loadSettings()
     {
         $this->settings = [];
@@ -2387,7 +2413,9 @@ class BusinessBot
                 ]
             ];
 
-            return $this->line->sendMessage($userId, [FlexTemplates::toMessage($pointsCard, 'แต้มสะสม')], $replyToken);
+            $loyaltyMsg = FlexTemplates::toMessage($pointsCard, 'แต้มสะสม');
+            $this->saveOutgoing($userDbId, $loyaltyMsg);
+            return $this->line->sendMessage($userId, [$loyaltyMsg], $replyToken);
         } catch (Exception $e) {
             $this->logError('showPoints', $e->getMessage());
             return $this->replyText($replyToken, "ระบบแต้มสะสมยังไม่พร้อมใช้งาน");
@@ -2407,7 +2435,9 @@ class BusinessBot
 
             if (empty($rewards)) {
                 $flex = FlexTemplates::info('ยังไม่มีของรางวัล', 'ร้านค้ายังไม่มีของรางวัลให้แลก', [['label' => 'ดูแต้ม', 'text' => 'แต้ม']]);
-                return $this->line->sendMessage($userId, [FlexTemplates::toMessage($flex, 'ของรางวัล')], $replyToken);
+                $loyaltyMsg = FlexTemplates::toMessage($flex, 'ของรางวัล');
+                $this->saveOutgoing($userDbId, $loyaltyMsg);
+                return $this->line->sendMessage($userId, [$loyaltyMsg], $replyToken);
             }
 
             $bubbles = [];
@@ -2442,7 +2472,9 @@ class BusinessBot
             }
 
             $flex = ['type' => 'carousel', 'contents' => $bubbles];
-            return $this->line->sendMessage($userId, [FlexTemplates::toMessage($flex, 'ของรางวัล')], $replyToken);
+            $loyaltyMsg = FlexTemplates::toMessage($flex, 'ของรางวัล');
+            $this->saveOutgoing($userDbId, $loyaltyMsg);
+            return $this->line->sendMessage($userId, [$loyaltyMsg], $replyToken);
         } catch (Exception $e) {
             $this->logError('showRewards', $e->getMessage());
             return $this->replyText($replyToken, "ระบบของรางวัลยังไม่พร้อมใช้งาน");
@@ -2645,7 +2677,9 @@ class BusinessBot
                 ]
             ];
 
-            return $this->line->sendMessage($userId, [FlexTemplates::toMessage($memberCard, 'บัตรสมาชิก')], $replyToken);
+            $loyaltyMsg = FlexTemplates::toMessage($memberCard, 'บัตรสมาชิก');
+            $this->saveOutgoing($userDbId, $loyaltyMsg);
+            return $this->line->sendMessage($userId, [$loyaltyMsg], $replyToken);
         } catch (Exception $e) {
             $this->logError('showMemberCard', $e->getMessage());
             return $this->replyText($replyToken, "เกิดข้อผิดพลาด กรุณาลองใหม่");
@@ -2686,7 +2720,9 @@ class BusinessBot
                     "รหัส: {$result['redemption_code']}\n{$result['reward']['name']}",
                     [['label' => 'ดูแต้มคงเหลือ', 'text' => 'แต้ม']]
                 );
-                return $this->line->sendMessage($userId, [FlexTemplates::toMessage($flex, 'แลกของรางวัล')], $replyToken);
+                $loyaltyMsg = FlexTemplates::toMessage($flex, 'แลกของรางวัล');
+                $this->saveOutgoing($userDbId, $loyaltyMsg);
+                return $this->line->sendMessage($userId, [$loyaltyMsg], $replyToken);
             } else {
                 return $this->replyText($replyToken, "ไม่สามารถแลกได้: {$result['message']}");
             }
