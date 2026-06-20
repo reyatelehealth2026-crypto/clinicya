@@ -106,13 +106,47 @@ foreach ($shops as $s) {
     }
 
     // 4) owner admin_users (username=subdomain, password=phone bcrypt)
+    // The 2026-05-25 tenant TEMPLATE intentionally omits platform-level tables
+    // (admin_users, dev_logs, …), so a freshly-templated tenant DB has no
+    // admin_users. Create it from the canonical DDL (idempotent) before seeding
+    // the owner so per-tenant owner login works like the older tenants.
+    $tdb->exec(
+        "CREATE TABLE IF NOT EXISTS `admin_users` (
+          `id` int(11) NOT NULL AUTO_INCREMENT,
+          `username` varchar(100) NOT NULL,
+          `email` varchar(255) NOT NULL,
+          `phone` varchar(20) DEFAULT NULL,
+          `password` varchar(255) NOT NULL,
+          `display_name` varchar(255) DEFAULT NULL,
+          `avatar_url` varchar(500) DEFAULT NULL,
+          `role` varchar(20) DEFAULT 'admin',
+          `line_account_id` int(11) DEFAULT NULL,
+          `is_active` tinyint(1) DEFAULT 1,
+          `last_login` timestamp NULL DEFAULT NULL,
+          `login_count` int(11) DEFAULT 0,
+          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+          `line_user_id` varchar(50) DEFAULT NULL,
+          `notification_enabled` tinyint(1) DEFAULT 1,
+          PRIMARY KEY (`id`),
+          UNIQUE KEY `username` (`username`),
+          UNIQUE KEY `email` (`email`),
+          KEY `idx_admin_users_role` (`role`),
+          KEY `idx_admin_users_line_account` (`line_account_id`),
+          KEY `idx_line_user` (`line_user_id`),
+          KEY `idx_role_active` (`role`,`is_active`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
     $chk = $tdb->prepare('SELECT id FROM admin_users WHERE username = ? LIMIT 1');
     $chk->execute([$s['slug']]);
     if (!$chk->fetchColumn()) {
+        // email is NOT NULL + UNIQUE; one owner per tenant DB so a slug-based
+        // placeholder is safe and avoids relying on non-strict-mode '' defaults.
         $tdb->prepare(
-            'INSERT INTO admin_users (username, password, phone, display_name, role, is_active, created_at)
-             VALUES (?, ?, ?, ?, "super_admin", 1, NOW())'
-        )->execute([$s['slug'], password_hash($phone, PASSWORD_DEFAULT), $phone, $bizName]);
+            'INSERT INTO admin_users (username, email, password, phone, display_name, role, is_active, created_at)
+             VALUES (?, ?, ?, ?, ?, "super_admin", 1, NOW())'
+        )->execute([$s['slug'], $s['slug'] . '@pending.re-ya.com', password_hash($phone, PASSWORD_DEFAULT), $phone, $bizName]);
         echo "  ✓ admin_users owner (user={$s['slug']})\n";
     } else {
         echo "  • admin_users owner exists — skip\n";
