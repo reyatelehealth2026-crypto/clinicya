@@ -185,6 +185,19 @@ class BusinessBot
             return $this->replyText($replyToken, "✅ รีเซ็ตเรียบร้อยแล้ว\n\nพิมพ์ 'menu' เพื่อดูเมนู หรือ 'shop' เพื่อดูสินค้า");
         }
 
+        // Loyalty via chat (no mini app): "เช็คแต้ม" → designed member-card Flex with the
+        // shop logo + customer info + points balance. Runs before the mode early-returns so
+        // a points check always gets answered. webhook already treats these as special
+        // commands that bypass auto-reply.
+        if (in_array($text, ['แต้ม', 'แต้มสะสม', 'คะแนน', 'คะแนนสะสม', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'])) {
+            $this->showPoints($userId, $userDbId, $replyToken);
+            return true;
+        }
+        if (in_array($text, ['สมาชิก', 'บัตรสมาชิก', 'บัตร', 'member', 'membercard', 'member card'])) {
+            $this->showMemberCard($userId, $userDbId, $replyToken);
+            return true;
+        }
+
         // ถ้าเป็นโหมด auto_reply_only ให้ return null เพื่อให้ AutoReply handler จัดการ
         if ($this->botMode === self::MODE_AUTO_REPLY_ONLY) {
             $this->logDebug('processMessage', 'Auto reply only mode - skipping BusinessBot');
@@ -2167,23 +2180,81 @@ class BusinessBot
                 return $this->replyText($replyToken, "ไม่พบข้อมูลสมาชิก");
             }
 
-            // Get points
-            require_once __DIR__ . '/LoyaltyPoints.php';
-            $loyalty = new \LoyaltyPoints($this->db, $this->lineAccountId);
-            $userPoints = $loyalty->getUserPoints($userDbId);
-            $history = $loyalty->getPointsHistory($userDbId, 5);
+            // Get points (robust: a customer without a points row must still get the card)
+            $userPoints = ['available_points' => 0, 'total_points' => 0, 'used_points' => 0];
+            $history = [];
+            try {
+                require_once __DIR__ . '/LoyaltyPoints.php';
+                $loyalty = new \LoyaltyPoints($this->db, $this->lineAccountId);
+                $userPoints = $loyalty->getUserPoints($userDbId) + $userPoints;
+                $history = $loyalty->getPointsHistory($userDbId, 5);
+            } catch (Exception $e) {
+                $this->logError('showPoints.points', $e->getMessage());
+            }
 
             // Get member tier
             $tier = $this->getMemberTier($userPoints['total_points']);
 
-            // Get shop name
+            // Get shop name + logo (scoped to this LINE account; logo → absolute https URL for Flex)
             $shopName = 'LINE Shop';
+            $shopLogo = '';
             try {
-                $stmt = $this->db->query("SELECT shop_name FROM shop_settings WHERE id = 1");
-                $settings = $stmt->fetch();
-                if ($settings)
-                    $shopName = $settings['shop_name'];
+                $stmt = $this->db->prepare("SELECT shop_name, shop_logo FROM shop_settings WHERE line_account_id = ? LIMIT 1");
+                $stmt->execute([$this->lineAccountId]);
+                $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($settings) {
+                    if (!empty($settings['shop_name'])) {
+                        $shopName = $settings['shop_name'];
+                    }
+                    $rawLogo = trim((string) ($settings['shop_logo'] ?? ''));
+                    if ($rawLogo !== '') {
+                        $shopLogo = preg_match('#^https?://#i', $rawLogo)
+                            ? $rawLogo
+                            : rtrim(defined('BASE_URL') ? BASE_URL : '', '/') . '/' . ltrim($rawLogo, '/');
+                    }
+                }
             } catch (Exception $e) {
+            }
+
+            // Header: shop logo (rounded, on white) + name + card label — falls back to
+            // text-only when the shop has not set a logo.
+            $headerTitle = [
+                ['type' => 'text', 'text' => $shopName, 'color' => '#FFFFFF', 'size' => 'sm', 'wrap' => true],
+                ['type' => 'text', 'text' => '💎 บัตรสมาชิก', 'color' => '#FFFFFF', 'size' => 'xl', 'weight' => 'bold']
+            ];
+            if ($shopLogo !== '') {
+                $headerContents = [[
+                    'type' => 'box',
+                    'layout' => 'horizontal',
+                    'alignItems' => 'center',
+                    'contents' => [
+                        [
+                            'type' => 'box',
+                            'layout' => 'vertical',
+                            'width' => '52px',
+                            'height' => '52px',
+                            'cornerRadius' => '26px',
+                            'backgroundColor' => '#FFFFFF',
+                            'paddingAll' => '4px',
+                            'contents' => [[
+                                'type' => 'image',
+                                'url' => $shopLogo,
+                                'size' => 'full',
+                                'aspectMode' => 'cover',
+                                'aspectRatio' => '1:1'
+                            ]]
+                        ],
+                        [
+                            'type' => 'box',
+                            'layout' => 'vertical',
+                            'flex' => 1,
+                            'margin' => 'md',
+                            'contents' => $headerTitle
+                        ]
+                    ]
+                ]];
+            } else {
+                $headerContents = $headerTitle;
             }
 
             // Build history contents
@@ -2212,10 +2283,7 @@ class BusinessBot
                 'header' => [
                     'type' => 'box',
                     'layout' => 'vertical',
-                    'contents' => [
-                        ['type' => 'text', 'text' => $shopName, 'color' => '#FFFFFF', 'size' => 'sm'],
-                        ['type' => 'text', 'text' => '💎 POINTS CARD', 'color' => '#FFFFFF', 'size' => 'xl', 'weight' => 'bold']
-                    ],
+                    'contents' => $headerContents,
                     'backgroundColor' => $tier['color'],
                     'paddingAll' => 'lg'
                 ],
@@ -2408,14 +2476,64 @@ class BusinessBot
             // Get member tier
             $tier = $this->getMemberTier($points['total_points']);
 
-            // Get shop name
+            // Get shop name + logo (scoped to this LINE account; logo → absolute https URL for Flex)
             $shopName = 'LINE Shop';
+            $shopLogo = '';
             try {
-                $stmt = $this->db->query("SELECT shop_name FROM shop_settings WHERE id = 1");
-                $settings = $stmt->fetch();
-                if ($settings)
-                    $shopName = $settings['shop_name'];
+                $stmt = $this->db->prepare("SELECT shop_name, shop_logo FROM shop_settings WHERE line_account_id = ? LIMIT 1");
+                $stmt->execute([$this->lineAccountId]);
+                $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($settings) {
+                    if (!empty($settings['shop_name'])) {
+                        $shopName = $settings['shop_name'];
+                    }
+                    $rawLogo = trim((string) ($settings['shop_logo'] ?? ''));
+                    if ($rawLogo !== '') {
+                        $shopLogo = preg_match('#^https?://#i', $rawLogo)
+                            ? $rawLogo
+                            : rtrim(defined('BASE_URL') ? BASE_URL : '', '/') . '/' . ltrim($rawLogo, '/');
+                    }
+                }
             } catch (Exception $e) {
+            }
+
+            $headerTitle = [
+                ['type' => 'text', 'text' => $shopName, 'color' => '#FFFFFF', 'size' => 'sm', 'wrap' => true],
+                ['type' => 'text', 'text' => 'MEMBER CARD', 'color' => '#FFFFFF', 'size' => 'xxl', 'weight' => 'bold']
+            ];
+            if ($shopLogo !== '') {
+                $headerContents = [[
+                    'type' => 'box',
+                    'layout' => 'horizontal',
+                    'alignItems' => 'center',
+                    'contents' => [
+                        [
+                            'type' => 'box',
+                            'layout' => 'vertical',
+                            'width' => '52px',
+                            'height' => '52px',
+                            'cornerRadius' => '26px',
+                            'backgroundColor' => '#FFFFFF',
+                            'paddingAll' => '4px',
+                            'contents' => [[
+                                'type' => 'image',
+                                'url' => $shopLogo,
+                                'size' => 'full',
+                                'aspectMode' => 'cover',
+                                'aspectRatio' => '1:1'
+                            ]]
+                        ],
+                        [
+                            'type' => 'box',
+                            'layout' => 'vertical',
+                            'flex' => 1,
+                            'margin' => 'md',
+                            'contents' => $headerTitle
+                        ]
+                    ]
+                ]];
+            } else {
+                $headerContents = $headerTitle;
             }
 
             // Build member card Flex
@@ -2425,10 +2543,7 @@ class BusinessBot
                 'header' => [
                     'type' => 'box',
                     'layout' => 'vertical',
-                    'contents' => [
-                        ['type' => 'text', 'text' => $shopName, 'color' => '#FFFFFF', 'size' => 'sm'],
-                        ['type' => 'text', 'text' => 'MEMBER CARD', 'color' => '#FFFFFF', 'size' => 'xxl', 'weight' => 'bold']
-                    ],
+                    'contents' => $headerContents,
                     'backgroundColor' => $tier['color'],
                     'paddingAll' => 'lg'
                 ],
