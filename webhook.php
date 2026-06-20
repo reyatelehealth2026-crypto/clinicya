@@ -512,6 +512,8 @@ function handleFollow($userId, $replyToken, $db, $line, $lineAccountId = null, $
         saveAccountFollower($db, $lineAccountId, $userId, $dbUserId, $profile, true);
         saveAccountEvent($db, $lineAccountId, 'follow', $userId, $dbUserId, $event);
         updateAccountDailyStats($db, $lineAccountId, 'new_followers');
+        // แอดเพื่อน = เป็นสมาชิกทันที (ไม่ต้องเข้า LIFF ก่อน)
+        ensureMemberRegistered($db, $dbUserId, $lineAccountId);
     }
 
     // V2.5: CRM - Auto-tag new customer & trigger drip campaigns
@@ -3564,6 +3566,76 @@ function getOrCreateUser($db, $line, $userId, $lineAccountId = null, $groupId = 
     }
 
     return $user;
+}
+
+/**
+ * Generate next member_id (M + yy + 5-digit running, per LINE account).
+ * Mirrors api/member.php::generateMemberId so both paths stay consistent.
+ */
+function wfGenerateMemberId($db, $lineAccountId)
+{
+    $prefix = 'M';
+    $year = date('y');
+    $stmt = $db->prepare(
+        "SELECT member_id FROM users WHERE member_id LIKE ? AND (line_account_id = ? OR line_account_id IS NULL) ORDER BY member_id DESC LIMIT 1"
+    );
+    $stmt->execute([$prefix . $year . '%', $lineAccountId]);
+    $last = $stmt->fetch(PDO::FETCH_ASSOC);
+    $next = ($last && preg_match('/^M\d{2}(\d{5})$/', (string) $last['member_id'], $m)) ? (intval($m[1]) + 1) : 1;
+    return $prefix . $year . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+}
+
+/**
+ * Promote a user to a registered member on the spot (e.g. right after they add
+ * the OA as a friend) so they don't need to open the LIFF to "become" a member.
+ * Idempotent: does nothing if the user is already registered. Mirrors
+ * api/member.php::autoUpgradeMember (member_id + is_registered + welcome bonus).
+ */
+function ensureMemberRegistered($db, $userDbId, $lineAccountId)
+{
+    if (!$userDbId) {
+        return;
+    }
+    try {
+        $stmt = $db->prepare("SELECT is_registered FROM users WHERE id = ?");
+        $stmt->execute([$userDbId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row || (int) ($row['is_registered'] ?? 0) === 1) {
+            return; // already a member (or missing) — keep idempotent
+        }
+
+        $cols = [];
+        try {
+            $cols = array_flip($db->query("SHOW COLUMNS FROM users")->fetchAll(PDO::FETCH_COLUMN));
+        } catch (Exception $e) {
+        }
+
+        $memberId = wfGenerateMemberId($db, $lineAccountId);
+        $updates = ['member_id = ?', 'is_registered = 1'];
+        $params = [$memberId];
+        if (isset($cols['registered_at'])) {
+            $updates[] = 'registered_at = NOW()';
+        }
+        if (isset($cols['member_tier'])) {
+            $updates[] = "member_tier = 'bronze'";
+        }
+        if (isset($cols['points'])) {
+            $updates[] = 'points = COALESCE(points, 0) + 50';
+        }
+        $params[] = $userDbId;
+        $db->prepare("UPDATE users SET " . implode(', ', $updates) . " WHERE id = ?")->execute($params);
+
+        // Welcome-bonus ledger entry (best-effort; matches mini-app auto-upgrade).
+        try {
+            $db->prepare(
+                "INSERT INTO points_history (line_account_id, user_id, points, type, description, balance_after)
+                 VALUES (?, ?, 50, 'bonus', 'โบนัสต้อนรับสมาชิก (แอดเพื่อน)', (SELECT COALESCE(points, 50) FROM users WHERE id = ?))"
+            )->execute([$lineAccountId, $userDbId, $userDbId]);
+        } catch (Exception $e) {
+        }
+    } catch (Exception $e) {
+        error_log('ensureMemberRegistered: ' . $e->getMessage());
+    }
 }
 
 /**
