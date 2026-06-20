@@ -1294,20 +1294,31 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             'text_lower' => $textLower
         ], $userId);
 
-        // Loyalty quick-check via chat — works in ALL bot modes (incl. general, which
-        // otherwise returns without reaching BusinessBot). Replies with the member-card
-        // Flex so a customer can check points without opening the mini app.
+        // Loyalty via chat — works in ALL bot modes. In shop mode the webhook returns at
+        // "No matching command" (line ~1769) before reaching BusinessBot, so points /
+        // member card / rewards / redeem are all handled here instead. Replies with the
+        // designed Flex so a customer never needs the mini app for loyalty.
         $pointsKeywords = ['แต้ม', 'แต้มสะสม', 'คะแนน', 'คะแนนสะสม', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'];
         $memberKeywords = ['สมาชิก', 'บัตรสมาชิก', 'บัตร', 'member', 'membercard', 'member card'];
-        if (class_exists('BusinessBot') && (in_array($textLower, $pointsKeywords, true) || in_array($textLower, $memberKeywords, true))) {
+        $rewardKeywords = ['ของรางวัล', 'แลกของรางวัล', 'แลกแต้ม', 'ของแลก', 'rewards', 'reward'];
+        $isRedeem = (bool) preg_match('/^redeem\s+(\d+)$/', $textLower, $redeemMatch);
+        $isLoyaltyCmd = in_array($textLower, $pointsKeywords, true)
+            || in_array($textLower, $memberKeywords, true)
+            || in_array($textLower, $rewardKeywords, true)
+            || $isRedeem;
+        if (class_exists('BusinessBot') && $isLoyaltyCmd) {
             try {
                 $loyaltyBot = new BusinessBot($db, $line, $lineAccountId);
-                if (in_array($textLower, $pointsKeywords, true)) {
+                if ($isRedeem) {
+                    $loyaltyBot->redeemReward($userId, $user['id'], (int) $redeemMatch[1], $replyToken);
+                } elseif (in_array($textLower, $pointsKeywords, true)) {
                     $loyaltyBot->showPoints($userId, $user['id'], $replyToken);
-                } else {
+                } elseif (in_array($textLower, $memberKeywords, true)) {
                     $loyaltyBot->showMemberCard($userId, $user['id'], $replyToken);
+                } else {
+                    $loyaltyBot->showRewards($userId, $user['id'], $replyToken);
                 }
-                devLog($db, 'info', 'webhook', 'Loyalty card sent (chat points check)', [
+                devLog($db, 'info', 'webhook', 'Loyalty command handled (chat)', [
                     'user_id' => $userId,
                     'command' => $textLower,
                     'bot_mode' => $botMode
