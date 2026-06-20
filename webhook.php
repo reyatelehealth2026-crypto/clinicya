@@ -3619,20 +3619,10 @@ function ensureMemberRegistered($db, $userDbId, $lineAccountId)
         if (isset($cols['member_tier'])) {
             $updates[] = "member_tier = 'bronze'";
         }
-        if (isset($cols['points'])) {
-            $updates[] = 'points = COALESCE(points, 0) + 50';
-        }
+        // No welcome-bonus points here — membership only (points stay at the
+        // counter/claim flows so the various point sources don't drift further).
         $params[] = $userDbId;
         $db->prepare("UPDATE users SET " . implode(', ', $updates) . " WHERE id = ?")->execute($params);
-
-        // Welcome-bonus ledger entry (best-effort; matches mini-app auto-upgrade).
-        try {
-            $db->prepare(
-                "INSERT INTO points_history (line_account_id, user_id, points, type, description, balance_after)
-                 VALUES (?, ?, 50, 'bonus', 'โบนัสต้อนรับสมาชิก (แอดเพื่อน)', (SELECT COALESCE(points, 50) FROM users WHERE id = ?))"
-            )->execute([$lineAccountId, $userDbId, $userDbId]);
-        } catch (Exception $e) {
-        }
     } catch (Exception $e) {
         error_log('ensureMemberRegistered: ' . $e->getMessage());
     }
