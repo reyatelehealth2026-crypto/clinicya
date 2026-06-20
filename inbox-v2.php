@@ -152,6 +152,14 @@ $inboxService = new InboxService($db, $currentBotId);
 $analyticsService = new AnalyticsService($db, $currentBotId);
 $templateService = new TemplateService($db, $currentBotId);
 
+// Count of followers who added the LINE OA but never messaged us (for the "เพิ่งแอด" chip badge)
+$uncontactedFollowerCount = 0;
+try {
+    $uncontactedFollowerCount = $inboxService->countUncontactedFollowers((int) $currentBotId);
+} catch (Throwable $e) {
+    $uncontactedFollowerCount = 0;
+}
+
 // Loyalty rate for the "ให้แต้ม" (give points via QR) live preview — read from
 // points_settings.points_per_baht (a multiplier; e.g. 0.04 ⇒ 25฿ = 1 แต้ม).
 // JS only previews; the authoritative points value comes from api/points-claim.php.
@@ -2893,6 +2901,20 @@ function formatThaiDateTime($datetime)
                             <?php endforeach; ?>
                         </select>
                     </div>
+                </div>
+
+                <!-- New-followers segment chip: customers who added the OA but never messaged -->
+                <div class="px-2 py-2 border-b bg-white">
+                    <button type="button" id="newFollowersChip" onclick="toggleNewFollowers()"
+                        class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 transition">
+                        <span>🆕 เพิ่งแอด · ยังไม่ทัก</span>
+                        <span id="newFollowersBadge"
+                            class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-bold <?= $uncontactedFollowerCount > 0 ? '' : 'hidden' ?>"><?= (int) $uncontactedFollowerCount ?></span>
+                    </button>
+                    <button type="button" id="backToNormalChat" onclick="exitNewFollowers()"
+                        class="hidden w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 transition">
+                        ← กลับแชทปกติ
+                    </button>
                 </div>
 
                 <!-- Conversation List -->
@@ -11669,6 +11691,129 @@ function formatThaiDateTime($datetime)
     document.addEventListener('DOMContentLoaded', function () {
         conversationLoader = new ConversationLoader();
     });
+
+    /* ===== New-followers segment (เพิ่งแอด · ยังไม่ทัก) ===== */
+    let newFollowersMode = false;
+
+    function toggleNewFollowers() {
+        if (newFollowersMode) {
+            exitNewFollowers();
+        } else {
+            enterNewFollowers();
+        }
+    }
+
+    // Restore the normal conversation list. Reloading to a clean inbox is the
+    // simplest reliable way to bring back the ConversationLoader, search and filters.
+    function exitNewFollowers() {
+        window.location.href = 'inbox-v2.php';
+    }
+
+    async function enterNewFollowers() {
+        newFollowersMode = true;
+
+        // Stop the progressive loader from appending normal conversations on top
+        if (conversationLoader) {
+            conversationLoader.autoLoadEnabled = false;
+            conversationLoader.hasMore = false;
+            if (conversationLoader.observer) conversationLoader.observer.disconnect();
+        }
+
+        // Hide the normal load-more sentinel + any active search info
+        const sentinel = document.getElementById('loadMoreSentinel');
+        if (sentinel) sentinel.style.display = 'none';
+        if (typeof hideSearchResultsInfo === 'function') hideSearchResultsInfo();
+        if (typeof hideSearchingIndicator === 'function') hideSearchingIndicator();
+
+        // Toggle chip visual state + show "back" control
+        const chip = document.getElementById('newFollowersChip');
+        if (chip) chip.classList.add('bg-amber-100', 'ring-2', 'ring-amber-300');
+        const backBtn = document.getElementById('backToNormalChat');
+        if (backBtn) backBtn.classList.remove('hidden');
+
+        const userList = document.getElementById('userList');
+        if (!userList) return;
+        userList.innerHTML = `
+            <div id="newFollowersLoading" class="px-3 py-3 text-center text-gray-400 text-xs">
+                <i class="fas fa-spinner fa-spin"></i> กำลังโหลดรายชื่อ...
+            </div>`;
+
+        try {
+            const response = await fetch('/api/inbox-v2.php?action=getConversations&segment=new_followers&limit=200');
+            const data = await response.json();
+            renderNewFollowers((data.success && data.data && data.data.conversations) ? data.data.conversations : []);
+        } catch (error) {
+            console.error('[New Followers] Error loading:', error);
+            userList.innerHTML = `
+                <div class="p-6 text-center text-gray-400">
+                    <i class="fas fa-triangle-exclamation text-2xl mb-2"></i>
+                    <p class="text-sm">โหลดรายชื่อไม่สำเร็จ</p>
+                </div>`;
+        }
+    }
+
+    function renderNewFollowers(conversations) {
+        const userList = document.getElementById('userList');
+        if (!userList) return;
+        userList.innerHTML = '';
+
+        if (!conversations.length) {
+            userList.innerHTML = `
+                <div class="p-6 text-center text-gray-400">
+                    <i class="fas fa-user-check text-3xl mb-2"></i>
+                    <p class="text-sm">ไม่มีลูกค้าที่เพิ่งแอดและยังไม่ทัก</p>
+                </div>`;
+            return;
+        }
+
+        conversations.forEach(conv => {
+            userList.appendChild(createNewFollowerElement(conv));
+        });
+    }
+
+    // Row for an uncontacted follower. Reuses buildUserLink + formatThaiTimeLocal +
+    // the shared avatar fallback so clicking opens the chat thread like any normal row.
+    function createNewFollowerElement(conv) {
+        const userId = conv.id || conv.user_id;
+        const displayName = conv.display_name || 'Unknown';
+        const followTime = formatThaiTimeLocal(conv.last_message_at || '');
+        const pictureUrl = conv.picture_url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e5e7eb'/%3E%3Cpath d='M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z' fill='%239ca3af'/%3E%3C/svg%3E";
+
+        const element = document.createElement('a');
+        element.href = buildUserLink(userId);
+        element.className = 'user-item block p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50';
+        element.dataset.userId = userId;
+        element.dataset.name = displayName.toLowerCase();
+        element.tabIndex = 0;
+
+        element.addEventListener('click', function (e) {
+            e.preventDefault();
+            window.location.href = buildUserLink(userId);
+        });
+
+        element.innerHTML = `
+        <div class="flex items-center gap-3">
+            <div class="relative flex-shrink-0">
+                <img src="${pictureUrl}"
+                     class="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                     loading="lazy"
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3Cpath d=%22M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E'">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-baseline">
+                    <h3 class="text-sm font-semibold text-gray-800 truncate">${escapeHtmlLocal(displayName)}</h3>
+                    <span class="last-time text-[10px] text-gray-400">${followTime}</span>
+                </div>
+                <p class="last-msg text-xs text-gray-500 truncate">🆕 เพิ่งแอดเพื่อน · ยังไม่เคยคุย</p>
+                <div class="flex items-center gap-1 mt-1 flex-wrap">
+                    <span class="text-[9px] px-1 py-0.5 bg-amber-50 text-amber-700 rounded">ทักก่อนได้เลย</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+        return element;
+    }
 
     /**
      * Format Thai time (client-side)

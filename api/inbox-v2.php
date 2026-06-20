@@ -2734,11 +2734,18 @@ try {
                 $limit = 200;
             }
 
+            // Segment: 'new_followers' = added the OA but never messaged (reach out first)
+            $segment = isset($_GET['segment']) ? trim($_GET['segment']) : null;
+
             try {
                 require_once __DIR__ . '/../classes/InboxService.php';
                 $inboxService = new InboxService($db, $lineAccountId);
 
-                $result = $inboxService->getConversationsDelta($lineAccountId, $since, $cursor, $limit, $search, $filters);
+                if ($segment === 'new_followers') {
+                    $result = $inboxService->getUncontactedFollowersDelta($lineAccountId, $cursor, $limit, $search);
+                } else {
+                    $result = $inboxService->getConversationsDelta($lineAccountId, $since, $cursor, $limit, $search, $filters);
+                }
 
                 // Don't cache search results (they change frequently)
                 if ($search || !empty($filters)) {
