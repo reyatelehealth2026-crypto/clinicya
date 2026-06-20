@@ -494,8 +494,9 @@ class InboxService
             $params[] = $cursor;
         }
 
-        $sql .= " ORDER BY af.followed_at DESC LIMIT ?";
-        $params[] = $limit + 1;
+        // $limit is capped to an int in [1,100] above, so inlining is injection-safe
+        // and avoids the PDO-emulated-prepares "LIMIT '6'" string-bind failure.
+        $sql .= " ORDER BY af.followed_at DESC LIMIT " . ($limit + 1);
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
