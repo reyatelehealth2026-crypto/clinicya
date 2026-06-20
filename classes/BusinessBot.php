@@ -2242,174 +2242,160 @@ class BusinessBot
             } catch (Exception $e) {
             }
 
-            // Header: shop logo (rounded, on white) + name + card label — falls back to
-            // text-only when the shop has not set a logo.
-            $headerTitle = [
-                ['type' => 'text', 'text' => $shopName, 'color' => '#FFFFFF', 'size' => 'sm', 'wrap' => true],
-                ['type' => 'text', 'text' => '💎 บัตรสมาชิก', 'color' => '#FFFFFF', 'size' => 'xl', 'weight' => 'bold']
-            ];
-            if ($shopLogo !== '') {
-                $headerContents = [[
-                    'type' => 'box',
-                    'layout' => 'horizontal',
-                    'alignItems' => 'center',
-                    'contents' => [
-                        [
-                            'type' => 'box',
-                            'layout' => 'vertical',
-                            'width' => '52px',
-                            'height' => '52px',
-                            'cornerRadius' => '26px',
-                            'backgroundColor' => '#FFFFFF',
-                            'paddingAll' => '4px',
-                            'contents' => [[
-                                'type' => 'image',
-                                'url' => $shopLogo,
-                                'size' => 'full',
-                                'aspectMode' => 'cover',
-                                'aspectRatio' => '1:1'
-                            ]]
-                        ],
-                        [
-                            'type' => 'box',
-                            'layout' => 'vertical',
-                            'flex' => 1,
-                            'margin' => 'md',
-                            'contents' => $headerTitle
-                        ]
-                    ]
-                ]];
-            } else {
-                $headerContents = $headerTitle;
-            }
+            // ---- Premium member card (mirrors line-mini-app MemberCard) ----
+            $displayName = $user['display_name'] ?: 'สมาชิก';
+            $avatarUrl = $user['picture_url']
+                ?: ('https://placehold.co/120x120/187162/ffffff?text=' . rawurlencode(mb_substr($displayName, 0, 1)));
 
-            // Build history contents
-            $historyContents = [];
-            if (!empty($history)) {
-                $historyContents[] = ['type' => 'text', 'text' => 'ประวัติล่าสุด', 'size' => 'sm', 'weight' => 'bold', 'margin' => 'lg', 'color' => '#555555'];
-                foreach (array_slice($history, 0, 3) as $h) {
-                    $sign = $h['type'] === 'earn' ? '+' : '-';
-                    $color = $h['type'] === 'earn' ? '#06C755' : '#EF4444';
-                    $historyContents[] = [
-                        'type' => 'box',
-                        'layout' => 'horizontal',
-                        'margin' => 'sm',
-                        'contents' => [
-                            ['type' => 'text', 'text' => mb_substr($h['description'], 0, 18), 'size' => 'xs', 'color' => '#888888', 'flex' => 3],
-                            ['type' => 'text', 'text' => $sign . number_format(abs($h['points'])), 'size' => 'xs', 'color' => $color, 'align' => 'end', 'flex' => 1]
-                        ]
-                    ];
+            // Tier progress: Bronze→Silver→Gold→Platinum→Diamond
+            $tierSteps = [['Bronze', 0], ['Silver', 500], ['Gold', 2000], ['Platinum', 5000], ['Diamond', 10000]];
+            $total = (int) $userPoints['total_points'];
+            $curIdx = 0;
+            foreach ($tierSteps as $i => $st) {
+                if ($total >= $st[1]) {
+                    $curIdx = $i;
                 }
             }
+            $nextTierName = '';
+            $pointsToNext = 0;
+            $progressPct = 100;
+            if ($curIdx < count($tierSteps) - 1) {
+                $curMin = $tierSteps[$curIdx][1];
+                $nextMin = $tierSteps[$curIdx + 1][1];
+                $nextTierName = $tierSteps[$curIdx + 1][0];
+                $pointsToNext = max(0, $nextMin - $total);
+                $progressPct = $nextMin > $curMin ? (int) round(($total - $curMin) / ($nextMin - $curMin) * 100) : 0;
+                $progressPct = max(2, min(100, $progressPct));
+            }
 
-            // Build Points Card Flex (Member Card Style)
+            // Top-right chip: shop logo on white, else a diamond
+            $cornerChip = $shopLogo !== ''
+                ? [
+                    'type' => 'box', 'layout' => 'vertical', 'width' => '46px', 'height' => '46px',
+                    'cornerRadius' => '12px', 'backgroundColor' => '#FFFFFF', 'paddingAll' => '4px',
+                    'contents' => [['type' => 'image', 'url' => $shopLogo, 'size' => 'full', 'aspectMode' => 'cover', 'aspectRatio' => '1:1']]
+                ]
+                : [
+                    'type' => 'box', 'layout' => 'vertical', 'width' => '46px', 'height' => '46px',
+                    'cornerRadius' => '12px', 'backgroundColor' => '#FFFFFF22', 'justifyContent' => 'center',
+                    'contents' => [['type' => 'text', 'text' => '💎', 'align' => 'center', 'size' => 'lg']]
+                ];
+
+            $progressNote = $nextTierName !== ''
+                ? ['type' => 'text', 'text' => 'เหลืออีก ' . number_format($pointsToNext) . ' แต้ม → ' . $nextTierName, 'size' => 'xxs', 'color' => '#FFFFFFB3', 'margin' => 'md', 'wrap' => true]
+                : ['type' => 'text', 'text' => '🎉 คุณอยู่ในระดับสูงสุดแล้ว', 'size' => 'xxs', 'color' => '#FFFFFF', 'weight' => 'bold', 'margin' => 'md'];
+
             $pointsCard = [
                 'type' => 'bubble',
                 'size' => 'mega',
-                'header' => [
-                    'type' => 'box',
-                    'layout' => 'vertical',
-                    'contents' => $headerContents,
-                    'backgroundColor' => $tier['color'],
-                    'paddingAll' => 'lg'
-                ],
-                'hero' => [
-                    'type' => 'box',
-                    'layout' => 'vertical',
-                    'contents' => [
-                        [
-                            'type' => 'box',
-                            'layout' => 'horizontal',
-                            'contents' => [
-                                [
-                                    'type' => 'box',
-                                    'layout' => 'vertical',
-                                    'contents' => [
-                                        [
-                                            'type' => 'image',
-                                            'url' => $user['picture_url'] ?: 'https://via.placeholder.com/100',
-                                            'size' => 'full',
-                                            'aspectMode' => 'cover',
-                                            'aspectRatio' => '1:1'
-                                        ]
-                                    ],
-                                    'width' => '80px',
-                                    'height' => '80px',
-                                    'cornerRadius' => '40px',
-                                    'borderWidth' => '3px',
-                                    'borderColor' => $tier['color']
-                                ],
-                                [
-                                    'type' => 'box',
-                                    'layout' => 'vertical',
-                                    'contents' => [
-                                        ['type' => 'text', 'text' => $user['display_name'] ?: 'Member', 'weight' => 'bold', 'size' => 'lg', 'wrap' => true],
-                                        ['type' => 'text', 'text' => $tier['icon'] . ' ' . $tier['name'], 'size' => 'sm', 'color' => $tier['color'], 'weight' => 'bold'],
-                                        ['type' => 'text', 'text' => 'ID: ' . str_pad($userDbId, 6, '0', STR_PAD_LEFT), 'size' => 'xs', 'color' => '#888888']
-                                    ],
-                                    'margin' => 'lg',
-                                    'flex' => 1
-                                ]
-                            ],
-                            'alignItems' => 'center'
-                        ]
-                    ],
-                    'paddingAll' => 'lg',
-                    'backgroundColor' => '#FAFAFA'
-                ],
                 'body' => [
                     'type' => 'box',
                     'layout' => 'vertical',
-                    'contents' => array_merge([
+                    'paddingAll' => '20px',
+                    'backgroundColor' => '#0B5F50',
+                    'background' => [
+                        'type' => 'linearGradient',
+                        'angle' => '160deg',
+                        'startColor' => '#0B5F50',
+                        'centerColor' => '#187162',
+                        'endColor' => '#082D28',
+                        'centerPosition' => '55%'
+                    ],
+                    'contents' => [
+                        // brand + tier pill | corner chip
                         [
-                            'type' => 'box',
-                            'layout' => 'horizontal',
+                            'type' => 'box', 'layout' => 'horizontal', 'alignItems' => 'flex-start', 'spacing' => 'md',
                             'contents' => [
                                 [
-                                    'type' => 'box',
-                                    'layout' => 'vertical',
+                                    'type' => 'box', 'layout' => 'vertical', 'flex' => 1, 'spacing' => 'sm',
                                     'contents' => [
-                                        ['type' => 'text', 'text' => 'แต้มคงเหลือ', 'size' => 'xs', 'color' => '#888888', 'align' => 'center'],
-                                        ['type' => 'text', 'text' => number_format($userPoints['available_points']), 'size' => 'xxl', 'weight' => 'bold', 'color' => '#06C755', 'align' => 'center']
-                                    ],
-                                    'flex' => 1
+                                        ['type' => 'text', 'text' => mb_strtoupper($shopName) . ' • MEMBER', 'size' => 'xxs', 'color' => '#FFFFFF99', 'weight' => 'bold', 'wrap' => true],
+                                        [
+                                            'type' => 'box', 'layout' => 'horizontal',
+                                            'contents' => [
+                                                [
+                                                    'type' => 'box', 'layout' => 'horizontal', 'flex' => 0, 'backgroundColor' => '#FFFFFF22',
+                                                    'cornerRadius' => '20px', 'paddingAll' => '6px', 'paddingStart' => '12px', 'paddingEnd' => '12px',
+                                                    'contents' => [['type' => 'text', 'text' => $tier['icon'] . ' ' . $tier['name'], 'size' => 'xs', 'color' => '#FFFFFF', 'weight' => 'bold']]
+                                                ],
+                                                ['type' => 'filler']
+                                            ]
+                                        ]
+                                    ]
                                 ],
-                                ['type' => 'separator'],
+                                $cornerChip
+                            ]
+                        ],
+                        // avatar + name + id
+                        [
+                            'type' => 'box', 'layout' => 'horizontal', 'margin' => 'xl', 'spacing' => 'md', 'alignItems' => 'center',
+                            'contents' => [
                                 [
-                                    'type' => 'box',
-                                    'layout' => 'vertical',
-                                    'contents' => [
-                                        ['type' => 'text', 'text' => 'สะสมทั้งหมด', 'size' => 'xs', 'color' => '#888888', 'align' => 'center'],
-                                        ['type' => 'text', 'text' => number_format($userPoints['total_points']), 'size' => 'xxl', 'weight' => 'bold', 'align' => 'center']
-                                    ],
-                                    'flex' => 1
+                                    'type' => 'box', 'layout' => 'vertical', 'width' => '60px', 'height' => '60px',
+                                    'cornerRadius' => '16px', 'borderWidth' => '2px', 'borderColor' => '#FFFFFF4D',
+                                    'contents' => [['type' => 'image', 'url' => $avatarUrl, 'size' => 'full', 'aspectMode' => 'cover', 'aspectRatio' => '1:1']]
                                 ],
-                                ['type' => 'separator'],
                                 [
-                                    'type' => 'box',
-                                    'layout' => 'vertical',
+                                    'type' => 'box', 'layout' => 'vertical', 'flex' => 1,
                                     'contents' => [
-                                        ['type' => 'text', 'text' => 'ใช้ไปแล้ว', 'size' => 'xs', 'color' => '#888888', 'align' => 'center'],
-                                        ['type' => 'text', 'text' => number_format($userPoints['used_points']), 'size' => 'xxl', 'weight' => 'bold', 'color' => '#EF4444', 'align' => 'center']
-                                    ],
-                                    'flex' => 1
+                                        ['type' => 'text', 'text' => $displayName, 'size' => 'xl', 'weight' => 'bold', 'color' => '#FFFFFF', 'wrap' => true],
+                                        ['type' => 'text', 'text' => 'ID ' . str_pad((string) $userDbId, 6, '0', STR_PAD_LEFT), 'size' => 'xs', 'color' => '#FFFFFF99', 'margin' => 'sm']
+                                    ]
                                 ]
-                            ],
-                            'paddingAll' => 'md',
-                            'backgroundColor' => '#F8F8F8',
-                            'cornerRadius' => 'md'
+                            ]
+                        ],
+                        // points tiles
+                        [
+                            'type' => 'box', 'layout' => 'horizontal', 'margin' => 'xl', 'spacing' => 'md',
+                            'contents' => [
+                                [
+                                    'type' => 'box', 'layout' => 'vertical', 'flex' => 3, 'backgroundColor' => '#FFFFFF24',
+                                    'cornerRadius' => '16px', 'paddingAll' => '14px',
+                                    'contents' => [
+                                        ['type' => 'text', 'text' => 'แต้มสะสม', 'size' => 'xs', 'color' => '#FFFFFFB3'],
+                                        ['type' => 'text', 'text' => number_format((int) $userPoints['available_points']), 'size' => '3xl', 'weight' => 'bold', 'color' => '#FFFFFF', 'margin' => 'xs']
+                                    ]
+                                ],
+                                [
+                                    'type' => 'box', 'layout' => 'vertical', 'flex' => 2, 'backgroundColor' => '#FFFFFF14',
+                                    'cornerRadius' => '16px', 'paddingAll' => '14px',
+                                    'contents' => [
+                                        ['type' => 'text', 'text' => 'สะสมรวม', 'size' => 'xs', 'color' => '#FFFFFFB3'],
+                                        ['type' => 'text', 'text' => number_format($total), 'size' => 'xl', 'weight' => 'bold', 'color' => '#FFFFFF', 'margin' => 'xs']
+                                    ]
+                                ]
+                            ]
+                        ],
+                        // progress to next tier
+                        [
+                            'type' => 'box', 'layout' => 'vertical', 'margin' => 'xl', 'backgroundColor' => '#FFFFFF1A',
+                            'cornerRadius' => '16px', 'paddingAll' => '14px',
+                            'contents' => [
+                                [
+                                    'type' => 'box', 'layout' => 'horizontal',
+                                    'contents' => [
+                                        ['type' => 'text', 'text' => $nextTierName !== '' ? ('ไปยัง ' . $nextTierName) : 'ระดับสูงสุด', 'size' => 'xs', 'color' => '#FFFFFFCC', 'flex' => 1],
+                                        ['type' => 'text', 'text' => $progressPct . '%', 'size' => 'xs', 'color' => '#FFFFFF', 'weight' => 'bold', 'align' => 'end']
+                                    ]
+                                ],
+                                [
+                                    'type' => 'box', 'layout' => 'horizontal', 'height' => '8px', 'margin' => 'md',
+                                    'backgroundColor' => '#FFFFFF33', 'cornerRadius' => '4px',
+                                    'contents' => [
+                                        ['type' => 'box', 'layout' => 'vertical', 'width' => $progressPct . '%', 'backgroundColor' => '#FFFFFF', 'cornerRadius' => '4px', 'contents' => [['type' => 'filler']]]
+                                    ]
+                                ],
+                                $progressNote
+                            ]
                         ]
-                    ], $historyContents),
-                    'paddingAll' => 'lg'
+                    ]
                 ],
                 'footer' => [
-                    'type' => 'box',
-                    'layout' => 'horizontal',
+                    'type' => 'box', 'layout' => 'horizontal', 'spacing' => 'sm', 'paddingAll' => '12px',
                     'contents' => [
                         ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'บัตรสมาชิก', 'text' => 'สมาชิก'], 'style' => 'secondary', 'height' => 'sm', 'flex' => 1],
-                        ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'แลกของรางวัล', 'text' => 'ของรางวัล'], 'style' => 'primary', 'color' => '#06C755', 'height' => 'sm', 'flex' => 1, 'margin' => 'sm']
-                    ],
-                    'paddingAll' => 'md'
+                        ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🎁 แลกของรางวัล', 'text' => 'ของรางวัล'], 'style' => 'primary', 'color' => '#0B5F50', 'height' => 'sm', 'flex' => 1]
+                    ]
                 ]
             ];
 
