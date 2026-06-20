@@ -269,6 +269,7 @@ $quickAccessMenus = [
     'members' => ['icon' => 'fa-id-card', 'label' => 'จัดการสมาชิก', 'url' => '/membership?tab=members', 'page' => 'membership', 'color' => 'rose'],
     'rewards' => ['icon' => 'fa-gift', 'label' => 'รางวัลแลกแต้ม', 'url' => '/membership?tab=rewards', 'page' => 'membership', 'color' => 'fuchsia'],
     'points-settings' => ['icon' => 'fa-coins', 'label' => 'ตั้งค่าแต้ม', 'url' => '/membership?tab=settings', 'page' => 'membership', 'color' => 'yellow'],
+    'loyalty-members' => ['icon' => 'fa-phone', 'label' => 'สมาชิกเบอร์ (จ่ายแต้ม)', 'url' => '/loyalty-members', 'page' => 'loyalty-members', 'color' => 'emerald'],
 
     // ==================== Patient & Journey - Care Journey ====================
     'broadcast' => ['icon' => 'fa-paper-plane', 'label' => 'บรอดแคสต์', 'url' => '/broadcast', 'page' => 'broadcast', 'color' => 'purple', 'roles' => ['admin', 'marketing']],
@@ -418,6 +419,7 @@ $menuGroups = [
             ['title' => 'รายชื่อลูกค้า', 'icon' => '📇', 'href' => '/users'],
             ['title' => 'บรอดแคสต์', 'icon' => '📢', 'href' => '/broadcast'],
             ['title' => 'ระบบสมาชิก', 'icon' => '💳', 'href' => '/membership'],
+            ['title' => 'สมาชิกเบอร์ (จ่ายแต้ม)', 'icon' => '🎁', 'href' => '/loyalty-members'],
         ]
     ],
     [
