@@ -1294,6 +1294,30 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             'text_lower' => $textLower
         ], $userId);
 
+        // Loyalty quick-check via chat — works in ALL bot modes (incl. general, which
+        // otherwise returns without reaching BusinessBot). Replies with the member-card
+        // Flex so a customer can check points without opening the mini app.
+        $pointsKeywords = ['แต้ม', 'แต้มสะสม', 'คะแนน', 'คะแนนสะสม', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'];
+        $memberKeywords = ['สมาชิก', 'บัตรสมาชิก', 'บัตร', 'member', 'membercard', 'member card'];
+        if (class_exists('BusinessBot') && (in_array($textLower, $pointsKeywords, true) || in_array($textLower, $memberKeywords, true))) {
+            try {
+                $loyaltyBot = new BusinessBot($db, $line, $lineAccountId);
+                if (in_array($textLower, $pointsKeywords, true)) {
+                    $loyaltyBot->showPoints($userId, $user['id'], $replyToken);
+                } else {
+                    $loyaltyBot->showMemberCard($userId, $user['id'], $replyToken);
+                }
+                devLog($db, 'info', 'webhook', 'Loyalty card sent (chat points check)', [
+                    'user_id' => $userId,
+                    'command' => $textLower,
+                    'bot_mode' => $botMode
+                ], $userId);
+                return;
+            } catch (Exception $e) {
+                logWebhookException($db, 'webhook.php', $e);
+            }
+        }
+
         // ถ้าเป็นโหมด general - เช็ค Auto Reply ก่อน ถ้าไม่ match ค่อยไม่ตอบ
         if ($botMode === 'general') {
             // Debug: log before checking auto reply
@@ -3162,9 +3186,11 @@ function devLog($db, $type, $source, $message, $data = null, $userId = null)
             $userIdInt
         ]);
     } catch (Exception $e) {
-        logWebhookException($db, 'webhook.php', $e);
-        // Table might not exist - log to error_log instead
-        error_log("[{$type}] [{$source}] {$message} " . ($data ? json_encode($data) : ''));
+        // Do NOT call logWebhookException() here: it calls devLog() again, which
+        // re-enters this catch when dev_logs is missing/broken — an infinite
+        // recursion that exhausts memory and fatals the whole webhook request.
+        // Log straight to error_log instead (no re-entry).
+        error_log("[devLog failed: {$e->getMessage()}] [{$type}] [{$source}] {$message} " . ($data ? json_encode($data) : ''));
     }
 }
 
