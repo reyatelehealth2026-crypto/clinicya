@@ -4628,12 +4628,24 @@ function formatThaiDateTime($datetime)
 
                 let contentHtml = '';
 
-                switch (msg.type) {
+                switch (msg.type || msg.message_type) {
                     case 'image':
                         contentHtml = `<img src="${escapeHtml(msg.content)}" class="max-w-[200px] rounded-lg cursor-pointer" onclick="window.open('${escapeHtml(msg.content)}', '_blank')">`;
                         break;
                     case 'sticker':
                         contentHtml = `<div class="text-4xl">😊</div>`;
+                        break;
+                    case 'flex':
+                        // Render the Flex card immediately (e.g. loyalty/points cards) instead of
+                        // dumping raw JSON — no refresh needed. Wrap in .flex-message-container so
+                        // the CSS strips the chat bubble, matching the server-rendered view.
+                        try {
+                            contentHtml = (typeof renderFlexMessage === 'function')
+                                ? `<div class="flex-message-container">${renderFlexMessage(JSON.parse(msg.content))}</div>`
+                                : `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex</div>`;
+                        } catch (e) {
+                            contentHtml = `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message</div>`;
+                        }
                         break;
                     default:
                         contentHtml = `<div class="whitespace-pre-wrap break-words">${escapeHtml(msg.content)}</div>`;
