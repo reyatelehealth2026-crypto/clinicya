@@ -62,6 +62,24 @@ try {
         case 'give_direct':
             handleGiveDirect($db, $input);
             break;
+        case 'lookup_phone':
+            handleLookupPhone($db, $input);
+            break;
+        case 'member_detail':
+            handleMemberDetail($db, $input);
+            break;
+        case 'give_by_phone':
+            handleGiveByPhone($db, $input);
+            break;
+        case 'list_merge_candidates':
+            handleListMergeCandidates($db, $input);
+            break;
+        case 'confirm_merge':
+            handleConfirmMerge($db, $input);
+            break;
+        case 'dismiss_merge':
+            handleDismissMerge($db, $input);
+            break;
         case 'claim':
             handleClaim($db, $input);
             break;
@@ -493,6 +511,591 @@ function handleGiveDirect(PDO $db, array $data): void
         'user_id' => $userId,
         'shop_name' => $shop['name'],
     ]);
+}
+
+// =============================================================================
+// Phone-keyed counter loyalty (external POS, LINE optional) — 2026-06-20
+// =============================================================================
+
+/**
+ * Normalize a Thai phone number to digits ('+66 81-234-5678' -> '0812345678').
+ */
+function pcNormalizePhone(string $raw): string
+{
+    $digits = preg_replace('/\D+/', '', $raw) ?? '';
+    if (strlen($digits) === 11 && strpos($digits, '66') === 0) {
+        $digits = '0' . substr($digits, 2); // +66xxxxxxxxx -> 0xxxxxxxxx
+    }
+    return $digits;
+}
+
+/** Best display name for a users row (real name first, then parts, then LINE name). */
+function pcCustomerName(array $u): string
+{
+    $real = trim((string) ($u['real_name'] ?? ''));
+    if ($real !== '') {
+        return $real;
+    }
+    $parts = trim(trim((string) ($u['first_name'] ?? '')) . ' ' . trim((string) ($u['last_name'] ?? '')));
+    if ($parts !== '') {
+        return $parts;
+    }
+    $dn = trim((string) ($u['display_name'] ?? ''));
+    return $dn !== '' ? $dn : 'ลูกค้า';
+}
+
+/** True when this users row is a real LINE follower (not a phone-only ghost). */
+function pcIsLineUser(array $u): bool
+{
+    return strpos((string) ($u['line_user_id'] ?? ''), 'offline:') !== 0;
+}
+
+/**
+ * Defensive self-create for the merge-flag table (mirrors
+ * database/migration_2026-06-20_points_phone_members.sql).
+ */
+function ensurePointsMergeTable(PDO $db): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    try {
+        $db->exec(
+            "CREATE TABLE IF NOT EXISTS `points_merge_candidates` (
+                `id` INT NOT NULL AUTO_INCREMENT,
+                `line_account_id` INT NOT NULL,
+                `phone` VARCHAR(20) NOT NULL,
+                `offline_user_id` INT NOT NULL,
+                `line_user_id` INT NOT NULL,
+                `offline_points` INT NOT NULL DEFAULT 0,
+                `status` ENUM('pending','merged','dismissed') NOT NULL DEFAULT 'pending',
+                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `resolved_at` TIMESTAMP NULL DEFAULT NULL,
+                `resolved_by` INT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uniq_pair` (`line_account_id`, `offline_user_id`, `line_user_id`),
+                KEY `idx_account_status` (`line_account_id`, `status`),
+                KEY `idx_phone` (`line_account_id`, `phone`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+    } catch (Throwable $e) {
+        error_log('[points-claim] ensure merge table: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Shared credit core for counter sales: audit row in points_claims (already
+ * 'claimed') + LoyaltyPoints::addPoints ledger entry. Mirrors handleGiveDirect.
+ *
+ * @param array<string,mixed> $user users row (must include id, line_user_id)
+ * @return array{ok:bool, claim_id?:int, voucher_no?:string, balance?:int}
+ */
+function pcCreditCounterSale(
+    PDO $db,
+    LoyaltyPoints $loyalty,
+    int $lineAccountId,
+    array $user,
+    float $amount,
+    int $points,
+    ?string $paymentMethod,
+    ?int $createdBy
+): array {
+    $userId = (int) $user['id'];
+    $voucherNo = pcGenerateVoucherNo($db, $lineAccountId);
+    $token = rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '='); // token col is NOT NULL+UNIQUE
+
+    $db->beginTransaction();
+    try {
+        $ins = $db->prepare(
+            "INSERT INTO points_claims
+                (line_account_id, token, voucher_no, points, amount, payment_method, status,
+                 claimed_by_user_id, claimed_line_user_id, claimed_at, expires_at, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, 'claimed', ?, ?, NOW(), NOW(), ?)"
+        );
+        $ins->execute([
+            $lineAccountId, $token, $voucherNo, $points, $amount, $paymentMethod,
+            $userId, (string) ($user['line_user_id'] ?? ''), $createdBy,
+        ]);
+        $claimId = (int) $db->lastInsertId();
+
+        $credited = $loyalty->addPoints($userId, $points, 'claim', $claimId, 'รับแต้มจากการซื้อหน้าร้าน #' . $voucherNo);
+        if (!$credited) {
+            $db->rollBack();
+            return ['ok' => false];
+        }
+
+        try {
+            $pt = $db->prepare(
+                "SELECT id FROM points_transactions
+                 WHERE user_id = ? AND reference_type = 'claim' AND reference_id = ?
+                 ORDER BY id DESC LIMIT 1"
+            );
+            $pt->execute([$userId, $claimId]);
+            $ptId = $pt->fetchColumn();
+            if ($ptId) {
+                $db->prepare("UPDATE points_claims SET points_transaction_id = ? WHERE id = ?")
+                   ->execute([(int) $ptId, $claimId]);
+            }
+        } catch (Throwable $e) {
+        }
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        error_log('[points-claim] counter credit tx: ' . $e->getMessage());
+        return ['ok' => false];
+    }
+
+    $balance = $points;
+    try {
+        $bal = $loyalty->getUserPoints($userId);
+        $balance = (int) ($bal['available_points'] ?? $points);
+    } catch (Throwable $e) {
+    }
+
+    return ['ok' => true, 'claim_id' => $claimId, 'voucher_no' => $voucherNo, 'balance' => $balance];
+}
+
+/**
+ * lookup_phone — fast counter lookup. Returns every customer sharing the phone
+ * in this tenant (LINE-linked first), each with name + current balance. Doubles
+ * as the "check points" screen. Admin session required.
+ *
+ * @param array<string,mixed> $data
+ */
+function handleLookupPhone(PDO $db, array $data): void
+{
+    if (empty($_SESSION['admin_user'])) {
+        http_response_code(401);
+        pcJson(false, 'กรุณาเข้าสู่ระบบ / Unauthorized');
+    }
+    $lineAccountId = (int) ($data['line_account_id'] ?? \TenantContext::getCurrentTenantId() ?? 0);
+    if ($lineAccountId <= 0) {
+        pcJson(false, 'Missing line_account_id');
+    }
+    $phone = pcNormalizePhone((string) ($data['phone'] ?? ''));
+    if (strlen($phone) < 8) {
+        pcJson(false, 'เบอร์ไม่ถูกต้อง / Invalid phone');
+    }
+
+    $stmt = $db->prepare(
+        "SELECT id, line_user_id, display_name, real_name, first_name, last_name, picture_url, available_points
+         FROM users
+         WHERE line_account_id = ? AND phone = ?
+         ORDER BY (line_user_id LIKE 'offline:%') ASC, available_points DESC, id ASC"
+    );
+    $stmt->execute([$lineAccountId, $phone]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    if (!$rows) {
+        pcJson(true, '', ['found' => false, 'phone' => $phone]);
+    }
+
+    $customers = array_map(static function (array $r): array {
+        $hasLine = pcIsLineUser($r);
+        return [
+            'user_id' => (int) $r['id'],
+            'name' => pcCustomerName($r),
+            'points' => (int) $r['available_points'],
+            'has_line' => $hasLine,
+            'picture_url' => $hasLine ? (string) ($r['picture_url'] ?? '') : '',
+        ];
+    }, $rows);
+
+    pcJson(true, '', ['found' => true, 'phone' => $phone, 'customers' => $customers]);
+}
+
+/**
+ * member_detail — a customer's points summary + recent ledger entries. Used by
+ * the phone-members admin page (loyalty-members.php). Admin session required.
+ *
+ * @param array<string,mixed> $data
+ */
+function handleMemberDetail(PDO $db, array $data): void
+{
+    if (empty($_SESSION['admin_user'])) {
+        http_response_code(401);
+        pcJson(false, 'กรุณาเข้าสู่ระบบ / Unauthorized');
+    }
+    $lineAccountId = (int) ($data['line_account_id'] ?? \TenantContext::getCurrentTenantId() ?? 0);
+    $userId = (int) ($data['user_id'] ?? 0);
+    if ($lineAccountId <= 0 || $userId <= 0) {
+        pcJson(false, 'ข้อมูลไม่ครบ / Missing parameters');
+    }
+
+    $us = $db->prepare(
+        "SELECT id, line_user_id, display_name, real_name, first_name, last_name, phone,
+                available_points, total_points, used_points, created_at
+         FROM users WHERE id = ? AND line_account_id = ? LIMIT 1"
+    );
+    $us->execute([$userId, $lineAccountId]);
+    $u = $us->fetch(PDO::FETCH_ASSOC);
+    if (!$u) {
+        pcJson(false, 'ไม่พบลูกค้า / Customer not found');
+    }
+
+    $tx = [];
+    try {
+        $ts = $db->prepare(
+            "SELECT type, points, balance_after, description, created_at
+             FROM points_transactions
+             WHERE user_id = ? AND line_account_id = ?
+             ORDER BY id DESC LIMIT 50"
+        );
+        $ts->execute([$userId, $lineAccountId]);
+        $tx = $ts->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+    }
+
+    pcJson(true, '', [
+        'customer' => [
+            'user_id' => (int) $u['id'],
+            'name' => pcCustomerName($u),
+            'phone' => (string) ($u['phone'] ?? ''),
+            'has_line' => pcIsLineUser($u),
+            'available_points' => (int) $u['available_points'],
+            'total_points' => (int) $u['total_points'],
+            'used_points' => (int) $u['used_points'],
+            'created_at' => (string) ($u['created_at'] ?? ''),
+        ],
+        'transactions' => array_map(static function (array $t): array {
+            return [
+                'type' => (string) $t['type'],
+                'points' => (int) $t['points'],
+                'balance_after' => (int) $t['balance_after'],
+                'description' => (string) ($t['description'] ?? ''),
+                'created_at' => (string) ($t['created_at'] ?? ''),
+            ];
+        }, $tx),
+    ]);
+}
+
+/**
+ * give_by_phone — credit points to a customer identified by phone. Finds an
+ * existing customer (LINE-linked preferred) or auto-creates a phone-only ghost
+ * (line_user_id = 'offline:<phone>'). When a sale is credited to a LINE user
+ * while a separate ghost with the same phone still holds points, a merge
+ * candidate is flagged for later pharmacist confirmation (never auto-merged).
+ * Admin session required.
+ *
+ * @param array<string,mixed> $data
+ */
+function handleGiveByPhone(PDO $db, array $data): void
+{
+    if (empty($_SESSION['admin_user'])) {
+        http_response_code(401);
+        pcJson(false, 'กรุณาเข้าสู่ระบบ / Unauthorized');
+    }
+    $lineAccountId = (int) ($data['line_account_id'] ?? \TenantContext::getCurrentTenantId() ?? 0);
+    if ($lineAccountId <= 0) {
+        pcJson(false, 'Missing line_account_id');
+    }
+
+    $phone = pcNormalizePhone((string) ($data['phone'] ?? ''));
+    if (strlen($phone) < 8) {
+        pcJson(false, 'กรุณากรอกเบอร์ให้ถูกต้อง / Enter a valid phone');
+    }
+    $name = trim((string) ($data['name'] ?? ''));
+    $explicitUserId = (int) ($data['user_id'] ?? 0); // pharmacist picked a specific match
+
+    $amount = isset($data['amount']) && $data['amount'] !== '' ? (float) $data['amount'] : 0.0;
+    $pointsInput = isset($data['points']) && $data['points'] !== '' ? (int) $data['points'] : 0;
+    $paymentMethod = pcNormalizePayment((string) ($data['payment_method'] ?? ''));
+    if ($amount < 0 || $pointsInput < 0) {
+        pcJson(false, 'ค่าต้องไม่ติดลบ / Values must be positive');
+    }
+
+    $loyalty = new LoyaltyPoints($db, $lineAccountId);
+    if ($pointsInput > 0) {
+        $points = $pointsInput;
+    } elseif ($amount > 0) {
+        $points = $loyalty->calculatePoints($amount);
+    } else {
+        pcJson(false, 'กรุณากรอกยอดเงินหรือแต้ม / Enter an amount or points');
+    }
+    if ($points <= 0) {
+        pcJson(false, 'แต้มที่จะให้ต้องมากกว่า 0 / Points to give must be greater than 0');
+    }
+
+    $cols = 'id, line_user_id, display_name, real_name, first_name, last_name, available_points';
+    $stmt = $db->prepare(
+        "SELECT $cols FROM users
+         WHERE line_account_id = ? AND phone = ?
+         ORDER BY (line_user_id LIKE 'offline:%') ASC, available_points DESC, id ASC"
+    );
+    $stmt->execute([$lineAccountId, $phone]);
+    $matches = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $target = null;
+    if ($explicitUserId > 0) {
+        foreach ($matches as $m) {
+            if ((int) $m['id'] === $explicitUserId) {
+                $target = $m;
+                break;
+            }
+        }
+        if (!$target) {
+            $vs = $db->prepare("SELECT $cols FROM users WHERE id = ? AND line_account_id = ? LIMIT 1");
+            $vs->execute([$explicitUserId, $lineAccountId]);
+            $target = $vs->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+    }
+    if (!$target && $matches) {
+        $target = $matches[0]; // ordering puts LINE-linked first
+    }
+
+    $isNew = false;
+    if (!$target) {
+        $syntheticLineId = 'offline:' . $phone;
+        $displayName = $name !== '' ? $name : ('ลูกค้า ' . substr($phone, -4));
+        try {
+            $ins = $db->prepare(
+                "INSERT INTO users (line_account_id, line_user_id, display_name, real_name, phone, is_registered, source, registered_at, created_at)
+                 VALUES (?, ?, ?, ?, ?, 1, 'counter', NOW(), NOW())"
+            );
+            $ins->execute([$lineAccountId, $syntheticLineId, $displayName, ($name !== '' ? $name : null), $phone]);
+            $newId = (int) $db->lastInsertId();
+            $rs = $db->prepare("SELECT $cols FROM users WHERE id = ? LIMIT 1");
+            $rs->execute([$newId]);
+            $target = $rs->fetch(PDO::FETCH_ASSOC) ?: null;
+            $isNew = true;
+        } catch (Throwable $e) {
+            // unique_line_user race — fetch the row that won
+            $rs = $db->prepare("SELECT $cols FROM users WHERE line_account_id = ? AND line_user_id = ? LIMIT 1");
+            $rs->execute([$lineAccountId, $syntheticLineId]);
+            $target = $rs->fetch(PDO::FETCH_ASSOC) ?: null;
+        }
+        if (!$target) {
+            pcJson(false, 'ไม่สามารถสร้างลูกค้า / Could not create customer');
+        }
+    } elseif ($name !== '' && !pcIsLineUser($target) && trim((string) ($target['real_name'] ?? '')) === '') {
+        // backfill a name onto an unnamed ghost
+        try {
+            $db->prepare("UPDATE users SET real_name = ?, display_name = ? WHERE id = ?")
+               ->execute([$name, $name, (int) $target['id']]);
+            $target['real_name'] = $name;
+            $target['display_name'] = $name;
+        } catch (Throwable $e) {
+        }
+    }
+
+    $createdBy = (int) ($_SESSION['admin_user']['id'] ?? 0) ?: null;
+    $res = pcCreditCounterSale($db, $loyalty, $lineAccountId, $target, $amount, $points, $paymentMethod, $createdBy);
+    if (empty($res['ok'])) {
+        pcJson(false, 'ไม่สามารถให้แต้มได้ / Could not credit points');
+    }
+
+    $targetIsLine = pcIsLineUser($target);
+
+    if ($targetIsLine) {
+        $shop = pcShopInfo($db, $lineAccountId);
+        pcPushReceipt($db, $lineAccountId, (string) $target['line_user_id'], [
+            'voucher_no' => $res['voucher_no'],
+            'points' => $points,
+            'amount' => $amount,
+            'payment_method' => (string) $paymentMethod,
+            'total_points' => $res['balance'],
+            'claimed_at' => date('Y-m-d H:i:s'),
+        ], $shop, pcCustomerName($target), (int) $target['id']);
+    }
+
+    $mergeFlag = $targetIsLine
+        ? pcFlagMergeForPhone($db, $lineAccountId, $phone, (int) $target['id'])
+        : null;
+
+    pcJson(true, 'ให้แต้มสำเร็จ +' . number_format($points) . ' แต้ม', [
+        'state' => 'claimed',
+        'voucher_no' => $res['voucher_no'],
+        'points' => $points,
+        'total_points' => $res['balance'],
+        'user_id' => (int) $target['id'],
+        'customer_name' => pcCustomerName($target),
+        'has_line' => $targetIsLine,
+        'is_new' => $isNew,
+        'merge_flag' => $mergeFlag,
+    ]);
+}
+
+/**
+ * Flag (don't perform) a merge when a LINE user shares a phone with a points-
+ * holding offline ghost. Idempotent via the uniq_pair key.
+ *
+ * @return array{offline_user_id:int, offline_points:int}|null
+ */
+function pcFlagMergeForPhone(PDO $db, int $lineAccountId, string $phone, int $lineUserId): ?array
+{
+    try {
+        ensurePointsMergeTable($db);
+        $st = $db->prepare(
+            "SELECT id, available_points FROM users
+             WHERE line_account_id = ? AND phone = ? AND line_user_id LIKE 'offline:%' AND available_points > 0
+             ORDER BY available_points DESC LIMIT 1"
+        );
+        $st->execute([$lineAccountId, $phone]);
+        $ghost = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$ghost) {
+            return null;
+        }
+        $offlineId = (int) $ghost['id'];
+        if ($offlineId === $lineUserId) {
+            return null;
+        }
+        $pts = (int) $ghost['available_points'];
+
+        $db->prepare(
+            "INSERT INTO points_merge_candidates
+                (line_account_id, phone, offline_user_id, line_user_id, offline_points, status)
+             VALUES (?, ?, ?, ?, ?, 'pending')
+             ON DUPLICATE KEY UPDATE offline_points = VALUES(offline_points),
+                status = IF(status = 'merged', 'merged', 'pending'), resolved_at = NULL, resolved_by = NULL"
+        )->execute([$lineAccountId, $phone, $offlineId, $lineUserId, $pts]);
+
+        return ['offline_user_id' => $offlineId, 'offline_points' => $pts];
+    } catch (Throwable $e) {
+        error_log('[points-claim] flag merge: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * list_merge_candidates — pending phone->LINE merges for the quiet-time review
+ * surface. Admin session required.
+ *
+ * @param array<string,mixed> $data
+ */
+function handleListMergeCandidates(PDO $db, array $data): void
+{
+    if (empty($_SESSION['admin_user'])) {
+        http_response_code(401);
+        pcJson(false, 'กรุณาเข้าสู่ระบบ / Unauthorized');
+    }
+    $lineAccountId = (int) ($data['line_account_id'] ?? \TenantContext::getCurrentTenantId() ?? 0);
+    if ($lineAccountId <= 0) {
+        pcJson(false, 'Missing line_account_id');
+    }
+    ensurePointsMergeTable($db);
+
+    $stmt = $db->prepare(
+        "SELECT mc.id, mc.phone, mc.offline_points,
+                go.real_name AS ghost_name, go.display_name AS ghost_display,
+                lu.real_name AS line_real, lu.display_name AS line_display, lu.available_points AS line_points
+         FROM points_merge_candidates mc
+         JOIN users go ON go.id = mc.offline_user_id
+         JOIN users lu ON lu.id = mc.line_user_id
+         WHERE mc.line_account_id = ? AND mc.status = 'pending'
+         ORDER BY mc.created_at DESC LIMIT 100"
+    );
+    $stmt->execute([$lineAccountId]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $items = array_map(static function (array $r): array {
+        return [
+            'id' => (int) $r['id'],
+            'phone' => (string) $r['phone'],
+            'offline_points' => (int) $r['offline_points'],
+            'ghost_name' => pcCustomerName(['real_name' => $r['ghost_name'], 'display_name' => $r['ghost_display']]),
+            'line_name' => pcCustomerName(['real_name' => $r['line_real'], 'display_name' => $r['line_display']]),
+            'line_points' => (int) $r['line_points'],
+        ];
+    }, $rows);
+
+    pcJson(true, '', ['count' => count($items), 'candidates' => $items]);
+}
+
+/**
+ * confirm_merge — move the ghost's points into the LINE user, then mark merged.
+ * Admin session required.
+ *
+ * @param array<string,mixed> $data
+ */
+function handleConfirmMerge(PDO $db, array $data): void
+{
+    if (empty($_SESSION['admin_user'])) {
+        http_response_code(401);
+        pcJson(false, 'กรุณาเข้าสู่ระบบ / Unauthorized');
+    }
+    $lineAccountId = (int) ($data['line_account_id'] ?? \TenantContext::getCurrentTenantId() ?? 0);
+    $candidateId = (int) ($data['candidate_id'] ?? 0);
+    if ($lineAccountId <= 0 || $candidateId <= 0) {
+        pcJson(false, 'ข้อมูลไม่ครบ / Missing parameters');
+    }
+    ensurePointsMergeTable($db);
+
+    $cs = $db->prepare(
+        "SELECT * FROM points_merge_candidates WHERE id = ? AND line_account_id = ? AND status = 'pending' LIMIT 1"
+    );
+    $cs->execute([$candidateId, $lineAccountId]);
+    $cand = $cs->fetch(PDO::FETCH_ASSOC);
+    if (!$cand) {
+        pcJson(false, 'ไม่พบรายการรอยืนยัน / Candidate not found or already resolved');
+    }
+
+    $offlineId = (int) $cand['offline_user_id'];
+    $lineUserId = (int) $cand['line_user_id'];
+    $loyalty = new LoyaltyPoints($db, $lineAccountId);
+    $resolvedBy = (int) ($_SESSION['admin_user']['id'] ?? 0) ?: null;
+
+    // Re-read the ghost's CURRENT balance (it may have changed since flagging).
+    $gs = $db->prepare("SELECT available_points FROM users WHERE id = ? AND line_account_id = ? LIMIT 1");
+    $gs->execute([$offlineId, $lineAccountId]);
+    $move = (int) ($gs->fetchColumn() ?: 0);
+
+    try {
+        if ($move > 0) {
+            $loyalty->deductPoints($offlineId, $move, 'merge', $candidateId, 'โอนแต้มไปยังบัญชี LINE (รวมร่าง)');
+            $loyalty->addPoints($lineUserId, $move, 'merge', $candidateId, 'รับแต้มจากบัญชีเบอร์เดิม (รวมร่าง)');
+        }
+        $db->prepare(
+            "UPDATE points_merge_candidates
+             SET status = 'merged', offline_points = ?, resolved_at = NOW(), resolved_by = ?
+             WHERE id = ?"
+        )->execute([$move, $resolvedBy, $candidateId]);
+    } catch (Throwable $e) {
+        error_log('[points-claim] confirm merge: ' . $e->getMessage());
+        pcJson(false, 'ไม่สามารถรวมแต้มได้ / Merge failed');
+    }
+
+    $balance = $move;
+    try {
+        $bal = $loyalty->getUserPoints($lineUserId);
+        $balance = (int) ($bal['available_points'] ?? $move);
+    } catch (Throwable $e) {
+    }
+
+    pcJson(true, 'รวมแต้มสำเร็จ +' . number_format($move) . ' แต้ม', [
+        'merged_points' => $move,
+        'line_balance' => $balance,
+    ]);
+}
+
+/**
+ * dismiss_merge — pharmacist decides NOT to merge (e.g. mistyped phone).
+ *
+ * @param array<string,mixed> $data
+ */
+function handleDismissMerge(PDO $db, array $data): void
+{
+    if (empty($_SESSION['admin_user'])) {
+        http_response_code(401);
+        pcJson(false, 'กรุณาเข้าสู่ระบบ / Unauthorized');
+    }
+    $lineAccountId = (int) ($data['line_account_id'] ?? \TenantContext::getCurrentTenantId() ?? 0);
+    $candidateId = (int) ($data['candidate_id'] ?? 0);
+    if ($lineAccountId <= 0 || $candidateId <= 0) {
+        pcJson(false, 'ข้อมูลไม่ครบ / Missing parameters');
+    }
+    ensurePointsMergeTable($db);
+    $resolvedBy = (int) ($_SESSION['admin_user']['id'] ?? 0) ?: null;
+    $db->prepare(
+        "UPDATE points_merge_candidates
+         SET status = 'dismissed', resolved_at = NOW(), resolved_by = ?
+         WHERE id = ? AND line_account_id = ? AND status = 'pending'"
+    )->execute([$resolvedBy, $candidateId, $lineAccountId]);
+    pcJson(true, 'ยกเลิกการรวมแล้ว / Dismissed');
 }
 
 /**

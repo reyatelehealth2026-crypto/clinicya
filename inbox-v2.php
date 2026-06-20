@@ -12136,13 +12136,51 @@ function formatThaiDateTime($datetime)
     <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden max-h-[95vh] flex flex-col">
         <div class="p-3 border-b flex justify-between items-center bg-emerald-50 flex-shrink-0">
             <h3 class="font-bold text-sm text-emerald-700"><i class="fas fa-gift mr-1"></i>🎁 ให้แต้มสะสม</h3>
-            <button onclick="closeGivePointsModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            <div class="flex items-center gap-2">
+                <a href="loyalty-members.php" class="text-[11px] text-emerald-600 hover:text-emerald-800 underline"><i class="fas fa-id-card-clip mr-1"></i>สมาชิกเบอร์</a>
+                <button onclick="closeGivePointsModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
         </div>
 
         <div class="flex-1 overflow-y-auto p-4">
             <!-- Input form (hidden once a QR is generated) -->
             <div id="givePointsForm">
+                <!-- 2026-06-20: quiet-time merge review — only appears when phone-only
+                     records share a phone with a LINE member. Collapsed by default so it
+                     never slows the counter sale. -->
+                <div id="gpMergeBanner" class="hidden mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs text-amber-700"><i class="fas fa-link mr-1"></i><b id="gpMergeCount">0</b> เบอร์รอยืนยันรวมแต้มเข้าบัญชี LINE</span>
+                        <button type="button" onclick="gpToggleMergeList()" id="gpMergeToggleBtn" class="text-xs px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-700 font-medium">ดู</button>
+                    </div>
+                    <div id="gpMergeList" class="hidden mt-2 space-y-2"></div>
+                </div>
+
                 <p id="givePointsIntro" class="text-xs text-gray-500 mb-3">กรอก <b>ยอดเงิน</b> หรือ <b>แต้ม</b> อย่างใดอย่างหนึ่ง แล้วให้ลูกค้าสแกน QR เพื่อรับแต้ม</p>
+
+                <!-- 2026-06-20: phone-first counter loyalty (ขายผ่าน POS นอกระบบ).
+                     Type a phone → instant lookup (doubles as points check). Found = credit
+                     existing customer; not found = create a phone-only member on the fly. -->
+                <div id="gpPhoneBlock" class="mb-3 p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-100">
+                    <label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-phone mr-1 text-emerald-600"></i>เบอร์โทรลูกค้า <span class="text-gray-400">(สะสมแต้มด้วยเบอร์)</span></label>
+                    <div class="flex gap-2">
+                        <input type="tel" inputmode="numeric" id="gpPhoneInput" autocomplete="off"
+                            oninput="gpPhoneOnInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();gpPhoneLookup();}"
+                            class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="08x-xxx-xxxx">
+                        <button type="button" id="gpPhoneSearchBtn" onclick="gpPhoneLookup()"
+                            class="px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-sm font-medium whitespace-nowrap">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <!-- Existing customer match(es) -->
+                    <div id="gpPhoneResult" class="hidden mt-2 space-y-1.5"></div>
+                    <!-- New customer name (shown when phone not found) -->
+                    <div id="gpPhoneNewBox" class="hidden mt-2">
+                        <div class="text-xs text-amber-600 mb-1"><i class="fas fa-user-plus mr-1"></i>ลูกค้าใหม่ — ใส่ชื่อไว้ก็ได้ (ข้ามได้)</div>
+                        <input type="text" id="gpPhoneNewName" autocomplete="off"
+                            class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="ชื่อลูกค้า (ไม่บังคับ)">
+                    </div>
+                </div>
 
                 <!-- 2026-06-02: direct-credit banner — shown only when a customer chat is open.
                      Lets the pharmacist give points straight to this customer (no QR scan). -->
@@ -12206,11 +12244,14 @@ function formatThaiDateTime($datetime)
                 <div class="text-3xl font-extrabold text-emerald-600 my-2">+<span id="gpDirectPoints">0</span> ⭐</div>
                 <div class="text-xs text-gray-500">ยอดแต้มคงเหลือ: <b id="gpDirectBalance">0</b> แต้ม</div>
                 <div class="text-xs text-gray-400 mt-1">เลขที่: <span id="gpDirectVoucher" class="font-mono">-</span></div>
-                <div class="text-[11px] text-gray-400 mt-2">📨 ส่งใบเสร็จแต้มให้ลูกค้าทาง LINE แล้ว และบันทึกในประวัติแต้มของลูกค้าแล้ว</div>
+                <div id="gpDirectNote" class="text-[11px] text-gray-400 mt-2">📨 ส่งใบเสร็จแต้มให้ลูกค้าทาง LINE แล้ว และบันทึกในประวัติแต้มของลูกค้าแล้ว</div>
             </div>
         </div>
 
         <div class="p-3 border-t bg-gray-50 flex-shrink-0 flex gap-2">
+            <button type="button" id="givePointsByPhoneBtn" onclick="givePointsGiveByPhone()" class="hidden flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold text-sm">
+                <i class="fas fa-star mr-1"></i>ให้แต้ม (เบอร์นี้)
+            </button>
             <button type="button" id="givePointsDirectBtn" onclick="givePointsGiveDirect()" class="hidden flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold text-sm">
                 <i class="fas fa-bolt mr-1"></i>ให้ทันที
             </button>
@@ -12807,6 +12848,7 @@ function formatThaiDateTime($datetime)
     window.openGivePointsModal = function () {
         givePointsReset();
         document.getElementById('givePointsModal')?.classList.remove('hidden');
+        gpLoadMergeCandidates(); // refresh the quiet-time merge-review banner
     };
     window.closeGivePointsModal = function () {
         document.getElementById('givePointsModal')?.classList.add('hidden');
@@ -12829,6 +12871,17 @@ function formatThaiDateTime($datetime)
         document.getElementById('givePointsGenerateBtn')?.classList.remove('hidden');
         document.getElementById('givePointsScanBtn')?.classList.add('hidden');
         document.getElementById('givePointsNewBtn')?.classList.add('hidden');
+        // Reset the phone-first block.
+        const phoneInput = document.getElementById('gpPhoneInput');
+        if (phoneInput) phoneInput.value = '';
+        const newName = document.getElementById('gpPhoneNewName');
+        if (newName) newName.value = '';
+        document.getElementById('gpPhoneResult')?.classList.add('hidden');
+        document.getElementById('gpPhoneNewBox')?.classList.add('hidden');
+        document.getElementById('givePointsByPhoneBtn')?.classList.add('hidden');
+        const directNote = document.getElementById('gpDirectNote');
+        if (directNote) directNote.textContent = '📨 ส่งใบเสร็จแต้มให้ลูกค้าทาง LINE แล้ว และบันทึกในประวัติแต้มของลูกค้าแล้ว';
+        window.gpPhoneState = { phone: '', userId: 0, found: false, checked: false, hasLine: false, name: '' };
         gpApplyMode();
     };
 
@@ -13004,6 +13057,292 @@ function formatThaiDateTime($datetime)
             showErr('เกิดข้อผิดพลาดในการเชื่อมต่อ');
         } finally {
             if (btn) { btn.disabled = false; btn.innerHTML = btnHtml; }
+        }
+    };
+
+    // ============================================================
+    // Phone-first counter loyalty — 2026-06-20
+    // Type a phone → lookup_phone (instant balance check) → give_by_phone.
+    // Works with NO open chat (external POS sale). Found = credit the existing
+    // customer; not found = create a phone-only member on the fly.
+    // ============================================================
+    window.gpPhoneState = { phone: '', userId: 0, found: false, checked: false, hasLine: false, name: '' };
+
+    function gpDigits(s) { return String(s || '').replace(/\D+/g, ''); }
+
+    function gpPhoneToggleBtn() {
+        const btn = document.getElementById('givePointsByPhoneBtn');
+        if (!btn) return;
+        const ok = gpDigits(document.getElementById('gpPhoneInput')?.value).length >= 8;
+        btn.classList.toggle('hidden', !ok);
+    }
+
+    window.gpPhoneOnInput = function () {
+        // Phone changed → invalidate the previous lookup.
+        window.gpPhoneState = { phone: '', userId: 0, found: false, checked: false, hasLine: false, name: '' };
+        document.getElementById('gpPhoneResult')?.classList.add('hidden');
+        document.getElementById('gpPhoneNewBox')?.classList.add('hidden');
+        gpPhoneToggleBtn();
+    };
+
+    window.gpPhoneLookup = async function () {
+        const phone = gpDigits(document.getElementById('gpPhoneInput')?.value);
+        const resultBox = document.getElementById('gpPhoneResult');
+        const newBox = document.getElementById('gpPhoneNewBox');
+        const errBox = document.getElementById('givePointsError');
+        errBox?.classList.add('hidden');
+        if (phone.length < 8) { if (errBox) { errBox.textContent = 'กรุณากรอกเบอร์ให้ครบ'; errBox.classList.remove('hidden'); } return; }
+
+        const btn = document.getElementById('gpPhoneSearchBtn');
+        const html = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ action: 'lookup_phone', line_account_id: window.currentBotId, phone: phone })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { if (errBox) { errBox.textContent = data.message || 'ค้นหาไม่สำเร็จ'; errBox.classList.remove('hidden'); } return; }
+
+            window.gpPhoneState.phone = data.phone || phone;
+            window.gpPhoneState.checked = true;
+
+            if (data.found && data.customers && data.customers.length) {
+                newBox?.classList.add('hidden');
+                const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                resultBox.innerHTML = data.customers.map((c) => {
+                    const badge = c.has_line
+                        ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">LINE</span>'
+                        : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">เบอร์</span>';
+                    return '<button type="button" onclick="gpSelectPhoneCustomer(' + c.user_id + ')" data-uid="' + c.user_id + '"'
+                        + ' class="gp-cust-row w-full flex items-center justify-between gap-2 p-2 rounded-lg border border-emerald-200 bg-white hover:bg-emerald-50 text-left">'
+                        + '<span class="text-xs"><b class="text-gray-700">' + esc(c.name) + '</b> ' + badge + '</span>'
+                        + '<span class="text-xs text-emerald-700 font-bold whitespace-nowrap">' + Number(c.points || 0).toLocaleString() + ' แต้ม</span>'
+                        + '</button>';
+                }).join('');
+                resultBox.classList.remove('hidden');
+                if (data.customers.length === 1) {
+                    gpSelectPhoneCustomer(data.customers[0].user_id); // auto-select the only match
+                } else {
+                    window.gpPhoneState.userId = 0;
+                    window.gpPhoneState.found = true;
+                }
+            } else {
+                window.gpPhoneState.found = false;
+                window.gpPhoneState.userId = 0;
+                resultBox.classList.add('hidden');
+                resultBox.innerHTML = '';
+                newBox?.classList.remove('hidden');
+            }
+            gpPhoneToggleBtn();
+        } catch (err) {
+            console.error('lookup_phone error:', err);
+            if (errBox) { errBox.textContent = 'เกิดข้อผิดพลาดในการค้นหา'; errBox.classList.remove('hidden'); }
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = html; }
+        }
+    };
+
+    window.gpSelectPhoneCustomer = function (userId) {
+        window.gpPhoneState.userId = parseInt(userId, 10) || 0;
+        window.gpPhoneState.found = true;
+        document.querySelectorAll('#gpPhoneResult .gp-cust-row').forEach((r) => {
+            const on = parseInt(r.getAttribute('data-uid'), 10) === window.gpPhoneState.userId;
+            r.classList.toggle('ring-2', on);
+            r.classList.toggle('ring-emerald-500', on);
+        });
+        gpPhoneToggleBtn();
+    };
+
+    // Credit points to a phone (existing customer or auto-created phone member).
+    // Server: api/points-claim.php?action=give_by_phone.
+    window.givePointsGiveByPhone = async function () {
+        const errBox = document.getElementById('givePointsError');
+        const showErr = (msg) => { if (errBox) { errBox.textContent = msg; errBox.classList.remove('hidden'); } };
+        errBox?.classList.add('hidden');
+
+        const phone = gpDigits(document.getElementById('gpPhoneInput')?.value);
+        if (phone.length < 8) { showErr('กรุณากรอกเบอร์ให้ถูกต้อง'); return; }
+
+        const amount = parseFloat(document.getElementById('givePointsAmount')?.value || '0');
+        const points = parseInt(document.getElementById('givePointsPoints')?.value || '0', 10);
+        const payment = document.getElementById('givePointsPayment')?.value || '';
+        if (!(amount > 0) && !(points > 0)) { showErr('กรุณากรอกยอดเงินหรือแต้มอย่างน้อยหนึ่งช่อง'); return; }
+
+        // Implicit lookup if the pharmacist typed a phone but never pressed search,
+        // so we reuse an existing customer instead of making a duplicate.
+        if (!window.gpPhoneState.checked || window.gpPhoneState.phone !== phone) {
+            await gpPhoneLookup();
+        }
+
+        const name = document.getElementById('gpPhoneNewName')?.value || '';
+        const btn = document.getElementById('givePointsByPhoneBtn');
+        const btnHtml = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังให้แต้ม...'; }
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({
+                    action: 'give_by_phone',
+                    line_account_id: window.currentBotId,
+                    phone: phone,
+                    user_id: window.gpPhoneState.userId || '',
+                    name: name,
+                    amount: amount > 0 ? amount : '',
+                    points: points > 0 ? points : '',
+                    payment_method: payment
+                })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { showErr(data.message || 'ให้แต้มไม่สำเร็จ'); return; }
+
+            document.getElementById('gpDirectPoints').textContent = Number(data.points || 0).toLocaleString();
+            document.getElementById('gpDirectBalance').textContent = Number(data.total_points || 0).toLocaleString();
+            document.getElementById('gpDirectVoucher').textContent = data.voucher_no || '-';
+
+            // Tailor the sub-note: LINE customer vs phone-only member.
+            const note = document.getElementById('gpDirectNote');
+            if (note) {
+                let msg;
+                if (data.has_line) {
+                    msg = '📨 ส่งใบเสร็จแต้มทาง LINE แล้ว และบันทึกในประวัติแต้มของลูกค้าแล้ว';
+                } else {
+                    msg = '✅ บันทึกแต้มเข้าบัญชีเบอร์ ' + phone + ' แล้ว (ยังไม่มี LINE — เชื่อมภายหลังได้)';
+                }
+                if (data.is_new) msg = '🆕 สร้างลูกค้าใหม่ · ' + msg;
+                if (data.merge_flag && data.merge_flag.offline_points > 0) {
+                    msg += '\n⚠️ เบอร์นี้มีแต้มหน้าร้านค้างอยู่ ' + Number(data.merge_flag.offline_points).toLocaleString() + ' แต้ม — รอยืนยันรวมในเมนูรวมแต้ม';
+                }
+                note.style.whiteSpace = 'pre-line';
+                note.textContent = msg;
+            }
+
+            document.getElementById('givePointsForm')?.classList.add('hidden');
+            document.getElementById('givePointsResult')?.classList.add('hidden');
+            document.getElementById('givePointsDirectResult')?.classList.remove('hidden');
+            document.getElementById('givePointsByPhoneBtn')?.classList.add('hidden');
+            document.getElementById('givePointsDirectBtn')?.classList.add('hidden');
+            document.getElementById('givePointsGenerateBtn')?.classList.add('hidden');
+            document.getElementById('givePointsNewBtn')?.classList.remove('hidden');
+        } catch (err) {
+            console.error('give_by_phone error:', err);
+            showErr('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = btnHtml; }
+        }
+    };
+
+    // ============================================================
+    // Merge review (semi-auto confirm) — 2026-06-20
+    // Lists phone-only records whose phone matches a LINE member, so the
+    // pharmacist can confirm moving the counter points into the LINE profile.
+    // ============================================================
+    window.gpMergeCandidates = [];
+
+    window.gpLoadMergeCandidates = async function () {
+        const banner = document.getElementById('gpMergeBanner');
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ action: 'list_merge_candidates', line_account_id: window.currentBotId })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { banner?.classList.add('hidden'); return; }
+            window.gpMergeCandidates = data.candidates || [];
+            const count = data.count || window.gpMergeCandidates.length;
+            const countEl = document.getElementById('gpMergeCount');
+            if (countEl) countEl.textContent = count;
+            const listEl = document.getElementById('gpMergeList');
+            if (listEl) { listEl.classList.add('hidden'); listEl.innerHTML = ''; }
+            const toggle = document.getElementById('gpMergeToggleBtn');
+            if (toggle) toggle.textContent = 'ดู';
+            banner?.classList.toggle('hidden', count <= 0);
+        } catch (err) {
+            console.error('list_merge_candidates error:', err);
+            banner?.classList.add('hidden');
+        }
+    };
+
+    window.gpToggleMergeList = function () {
+        const listEl = document.getElementById('gpMergeList');
+        const toggle = document.getElementById('gpMergeToggleBtn');
+        if (!listEl) return;
+        const willShow = listEl.classList.contains('hidden');
+        if (toggle) toggle.textContent = willShow ? 'ซ่อน' : 'ดู';
+        if (!willShow) { listEl.classList.add('hidden'); return; }
+        gpRenderMergeList();
+        listEl.classList.remove('hidden');
+    };
+
+    function gpRenderMergeList() {
+        const listEl = document.getElementById('gpMergeList');
+        if (!listEl) return;
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        if (!window.gpMergeCandidates.length) {
+            listEl.innerHTML = '<div class="text-xs text-gray-400 text-center py-1">ไม่มีรายการรอยืนยัน</div>';
+            return;
+        }
+        listEl.innerHTML = window.gpMergeCandidates.map((c) =>
+            '<div class="p-2 rounded-lg bg-white border border-amber-200 text-xs" data-cid="' + c.id + '">'
+            + '<div class="text-gray-600">📞 ' + esc(c.phone) + '</div>'
+            + '<div class="mt-1 flex items-center justify-between gap-2">'
+            + '<span class="text-gray-700">รวม <b class="text-emerald-700">' + Number(c.offline_points || 0).toLocaleString() + ' แต้ม</b> '
+            + 'จาก “' + esc(c.ghost_name) + '” → <b>' + esc(c.line_name) + '</b> (LINE)</span>'
+            + '</div>'
+            + '<div class="mt-2 flex gap-2">'
+            + '<button type="button" onclick="gpConfirmMerge(' + c.id + ',this)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded font-medium"><i class="fas fa-check mr-1"></i>ยืนยันรวม</button>'
+            + '<button type="button" onclick="gpDismissMerge(' + c.id + ',this)" class="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 py-1.5 rounded">ไม่รวม</button>'
+            + '</div></div>'
+        ).join('');
+    }
+
+    function gpRemoveMergeItem(id) {
+        window.gpMergeCandidates = window.gpMergeCandidates.filter((c) => c.id !== id);
+        const countEl = document.getElementById('gpMergeCount');
+        if (countEl) countEl.textContent = window.gpMergeCandidates.length;
+        if (!window.gpMergeCandidates.length) {
+            document.getElementById('gpMergeBanner')?.classList.add('hidden');
+        } else {
+            gpRenderMergeList();
+        }
+    }
+
+    window.gpConfirmMerge = async function (id, btn) {
+        const html = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ action: 'confirm_merge', line_account_id: window.currentBotId, candidate_id: id })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { alert(data.message || 'รวมแต้มไม่สำเร็จ'); if (btn) { btn.disabled = false; btn.innerHTML = html; } return; }
+            gpRemoveMergeItem(id);
+        } catch (err) {
+            console.error('confirm_merge error:', err);
+            alert('เกิดข้อผิดพลาดในการรวมแต้ม');
+            if (btn) { btn.disabled = false; btn.innerHTML = html; }
+        }
+    };
+
+    window.gpDismissMerge = async function (id, btn) {
+        if (btn) btn.disabled = true;
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ action: 'dismiss_merge', line_account_id: window.currentBotId, candidate_id: id })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { alert(data.message || 'ยกเลิกไม่สำเร็จ'); if (btn) btn.disabled = false; return; }
+            gpRemoveMergeItem(id);
+        } catch (err) {
+            console.error('dismiss_merge error:', err);
+            if (btn) btn.disabled = false;
         }
     };
 

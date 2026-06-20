@@ -251,6 +251,12 @@ function handleRegister($db, $data)
   $userId = $db->lastInsertId();
  }
 
+ // 2026-06-20: if this LINE member's phone matches a points-holding phone-only
+ // counter record, flag a merge for pharmacist confirmation (never auto-merge).
+ if (!empty($phone)) {
+  flagPointsMergeOnLink($db, $lineAccountId, $userId, $phone);
+ }
+
  // Add welcome bonus points if points column exists
  $welcomeBonus = 50;
  try {
@@ -683,7 +689,87 @@ function handleUpdateProfile($db, $data)
  $stmt = $db->prepare($sql);
  $stmt->execute($params);
 
+ // 2026-06-20: phone just set/changed → flag a phone-only counter record with
+ // points for merge confirmation.
+ if (!empty($data['phone'])) {
+  try {
+   $u = $db->prepare("SELECT id, line_account_id FROM users WHERE line_user_id = ? LIMIT 1");
+   $u->execute([$lineUserId]);
+   $row = $u->fetch(PDO::FETCH_ASSOC);
+   if ($row) {
+    flagPointsMergeOnLink($db, (int) $row['line_account_id'], (int) $row['id'], (string) $data['phone']);
+   }
+  } catch (Throwable $e) {
+   error_log('[member] update_profile merge flag: ' . $e->getMessage());
+  }
+ }
+
  jsonResponse(true, 'อัพเดทข้อมูลสำเร็จ');
+}
+
+/**
+ * Flag (don't perform) a phone->LINE loyalty merge: when a LINE member's phone
+ * matches a points-holding phone-only counter record ('offline:<digits>'), add
+ * a pending row to points_merge_candidates for a pharmacist to confirm later.
+ * Best-effort — never throws into the caller. Mirrors pcFlagMergeForPhone in
+ * api/points-claim.php and migration_2026-06-20_points_phone_members.sql.
+ */
+function flagPointsMergeOnLink($db, $lineAccountId, $lineUserDbId, $phone): void
+{
+ try {
+  $digits = preg_replace('/\D+/', '', (string) $phone) ?? '';
+  if (strlen($digits) === 11 && strpos($digits, '66') === 0) {
+   $digits = '0' . substr($digits, 2);
+  }
+  $lineAccountId = (int) $lineAccountId;
+  $lineUserDbId = (int) $lineUserDbId;
+  if (strlen($digits) < 8 || $lineAccountId <= 0 || $lineUserDbId <= 0) {
+   return;
+  }
+
+  $st = $db->prepare(
+   "SELECT id, available_points FROM users
+    WHERE line_account_id = ? AND line_user_id = ? AND available_points > 0 LIMIT 1"
+  );
+  $st->execute([$lineAccountId, 'offline:' . $digits]);
+  $ghost = $st->fetch(PDO::FETCH_ASSOC);
+  if (!$ghost) {
+   return;
+  }
+  $offlineId = (int) $ghost['id'];
+  if ($offlineId === $lineUserDbId) {
+   return;
+  }
+
+  $db->exec(
+   "CREATE TABLE IF NOT EXISTS `points_merge_candidates` (
+       `id` INT NOT NULL AUTO_INCREMENT,
+       `line_account_id` INT NOT NULL,
+       `phone` VARCHAR(20) NOT NULL,
+       `offline_user_id` INT NOT NULL,
+       `line_user_id` INT NOT NULL,
+       `offline_points` INT NOT NULL DEFAULT 0,
+       `status` ENUM('pending','merged','dismissed') NOT NULL DEFAULT 'pending',
+       `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       `resolved_at` TIMESTAMP NULL DEFAULT NULL,
+       `resolved_by` INT NULL,
+       PRIMARY KEY (`id`),
+       UNIQUE KEY `uniq_pair` (`line_account_id`, `offline_user_id`, `line_user_id`),
+       KEY `idx_account_status` (`line_account_id`, `status`),
+       KEY `idx_phone` (`line_account_id`, `phone`)
+   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+  );
+
+  $db->prepare(
+   "INSERT INTO points_merge_candidates
+       (line_account_id, phone, offline_user_id, line_user_id, offline_points, status)
+    VALUES (?, ?, ?, ?, ?, 'pending')
+    ON DUPLICATE KEY UPDATE offline_points = VALUES(offline_points),
+       status = IF(status = 'merged', 'merged', 'pending'), resolved_at = NULL, resolved_by = NULL"
+  )->execute([$lineAccountId, $digits, $offlineId, $lineUserDbId, (int) $ghost['available_points']]);
+ } catch (Throwable $e) {
+  error_log('[member] flag merge: ' . $e->getMessage());
+ }
 }
 
 /**
