@@ -126,10 +126,8 @@
     padding:.45rem 1rem;border-radius:999px}
   .hero-eyebrow .av{display:flex}.hero-eyebrow .av span{width:20px;height:20px;border-radius:50%;border:2px solid var(--navy);margin-left:-7px;background:var(--grad)}
   .mock-note{text-align:center;font-size:.74rem;color:rgba(255,255,255,.42);margin-top:1.1rem;padding-bottom:1rem}
-  .hero-stage{position:relative;height:340px;margin-top:3rem;max-width:1000px;margin-inline:auto}
-  @media(max-width:760px){.hero-stage{height:250px}}
+  .hero-stage{position:relative;height:560px;margin-top:3.2rem;max-width:1060px;margin-inline:auto}
   .mk{position:absolute;background:#0c1f33;border:1px solid var(--navy-line);border-radius:1.1rem;box-shadow:var(--shadow);overflow:hidden}
-  .mk-main{left:50%;transform:translateX(-50%);top:0;width:560px;max-width:90vw}
   .mk-bar{display:flex;align-items:center;gap:.4rem;padding:.7rem .9rem;border-bottom:1px solid var(--navy-line)}
   .mk-bar i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.2)}
   .mk-bar i:nth-child(1){background:#ff6058}.mk-bar i:nth-child(2){background:#ffbd2e}.mk-bar i:nth-child(3){background:#28c93f}
@@ -139,17 +137,50 @@
   .mk-kpi .v{font-family:'Lexend',sans-serif;font-weight:700;font-size:1.1rem;color:#fff}.mk-kpi .k{color:rgba(255,255,255,.45);font-size:.7rem}
   .mk-chart{grid-column:1/-1;height:86px;background:rgba(255,255,255,.03);border:1px solid var(--navy-line);border-radius:.7rem;position:relative;overflow:hidden}
   .mk-chart svg{position:absolute;inset:0;width:100%;height:100%}
-  .mk-360{left:4%;top:120px;width:230px;z-index:3}
+  /* dashboard card — flank left, tucked behind the phone */
+  .mk-main{left:0;top:58px;width:340px;max-width:44%;z-index:3;transform:rotate(-1.6deg)}
+  /* customer-360 card — flank right, tucked behind the phone */
+  .mk-360{right:0;top:40px;width:248px;max-width:33%;z-index:3;transform:rotate(1.6deg)}
   .mk-360 .h{display:flex;align-items:center;gap:.5rem;padding:.7rem .8rem;border-bottom:1px solid var(--navy-line)}
   .mk-360 .av{width:30px;height:30px;border-radius:50%;background:var(--grad);color:#04221a;display:grid;place-items:center;font-weight:700;font-size:.72rem}
   .mk-360 .nm{font-size:.78rem;font-weight:600;color:#fff}.mk-360 .sub2{font-size:.64rem;color:rgba(255,255,255,.4)}
   .mk-360 .tags{display:flex;flex-wrap:wrap;gap:.3rem;padding:.7rem .8rem}
   .mk-360 .tg{font-size:.62rem;color:rgba(255,255,255,.7);background:rgba(255,255,255,.07);border-radius:.35rem;padding:.1rem .4rem}
-  .mk-chat{right:3%;top:150px;width:215px;z-index:3;padding:.8rem}
-  .mk-chat .mm{font-size:.72rem;border-radius:.7rem;padding:.45rem .6rem;margin-bottom:.4rem}
-  .mk-chat .them{background:rgba(255,255,255,.08);color:#fff}
-  .mk-chat .ai{background:rgba(6,199,85,.16);color:#dffaee;border-left:2px solid var(--line)}
-  @media(max-width:760px){.mk-360,.mk-chat{display:none}.mk-main{width:94vw}}
+
+  /* === Realistic phone — live LINE chat + dispense Flex label === */
+  .hero-phone{position:absolute;left:50%;top:0;transform:translateX(-50%);width:286px;height:560px;
+    background:#0b0f14;border-radius:46px;padding:10px;z-index:6;
+    box-shadow:0 60px 100px -34px rgba(0,0,0,.65),inset 0 0 0 2px rgba(255,255,255,.06)}
+  .hp-screen{position:relative;width:100%;height:100%;background:#9db3c7;border-radius:37px;overflow:hidden;display:flex;flex-direction:column}
+  .hp-notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:112px;height:24px;background:#0b0f14;border-radius:0 0 15px 15px;z-index:7}
+  .hp-status{display:flex;justify-content:space-between;align-items:center;padding:.5rem 1.15rem .15rem;font-size:.68rem;font-weight:700;color:#0b0f14;background:#fff}
+  .hp-status .r{display:inline-flex;gap:.3rem;align-items:center}
+  .hp-head{background:#06C755;color:#fff;display:flex;align-items:center;gap:.55rem;padding:.5rem .8rem .55rem}
+  .hp-head .pa{width:33px;height:33px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-weight:700;font-size:.78rem;flex:none}
+  .hp-head .nm{font-weight:700;font-size:.84rem;line-height:1.12}
+  .hp-head .st{font-size:.6rem;opacity:.9;display:flex;align-items:center;gap:.28rem}
+  .hp-head .st::before{content:"";width:6px;height:6px;border-radius:50%;background:#c9f7d8;display:inline-block}
+  .hp-head .ic{margin-left:auto;width:1.05rem;height:1.05rem;opacity:.92}
+  .hp-chat{flex:1;padding:.85rem .65rem;display:flex;flex-direction:column;gap:.42rem;overflow:hidden}
+  .hp-b{max-width:80%;font-size:.73rem;line-height:1.4;padding:.42rem .62rem;border-radius:.95rem}
+  .hp-b.them{background:#fff;color:#16202b;align-self:flex-start;border-top-left-radius:.25rem}
+  .hp-b.me{background:#dcf8c6;color:#15351a;align-self:flex-end;border-top-right-radius:.25rem}
+  .hp-flex{align-self:flex-start;width:85%;background:#fff;border-radius:.85rem;overflow:hidden;box-shadow:0 10px 22px -12px rgba(0,0,0,.4)}
+  .hp-flex .hd{background:linear-gradient(135deg,#0a2034 0%,#0c6b4f 100%);color:#fff;padding:.55rem .7rem}
+  .hp-flex .hd b{font-size:.74rem;display:block;letter-spacing:.01em}
+  .hp-flex .hd span{font-size:.56rem;opacity:.82}
+  .hp-flex .bd{padding:.5rem .7rem .55rem}
+  .hp-flex .ln{display:flex;justify-content:space-between;gap:.5rem;font-size:.63rem;color:#5b6b7b;padding:.2rem 0;border-bottom:1px dashed #e6ebee}
+  .hp-flex .ln:last-child{border-bottom:none}
+  .hp-flex .ln b{color:#0a2034;font-weight:600;text-align:right}
+  .hp-flex .ft{padding:.42rem .7rem;background:#eafff3;color:#048a3c;font-size:.59rem;font-weight:600;display:flex;align-items:center;gap:.32rem}
+  .hp-input{display:flex;align-items:center;gap:.5rem;padding:.45rem .65rem;background:#fff;border-top:1px solid #e3e8ec}
+  .hp-input .box{flex:1;background:#eef2f5;border-radius:999px;padding:.4rem .85rem;font-size:.66rem;color:#9aa6af}
+  .hp-input .snd{width:27px;height:27px;border-radius:50%;background:#06C755;display:grid;place-items:center;flex:none}
+  .hp-input .snd .ic{width:.85rem;height:.85rem;color:#fff}
+  @media(max-width:980px){.mk-main{max-width:39%}.mk-360{max-width:29%}}
+  @media(max-width:760px){.hero-stage{height:auto;margin-top:2.4rem}.mk-main,.mk-360{display:none}
+    .hero-phone{position:relative;left:auto;top:auto;transform:none;margin:0 auto}}
 
   /* TRUST */
   .trust{background:#fff;padding:3.5rem 0 4.5rem;text-align:center}
@@ -157,6 +188,14 @@
   .trust-row .n{font-family:'Lexend',sans-serif;font-size:1.9rem;font-weight:700;color:var(--line-700)}
   .trust-row .l{color:var(--slate);font-size:.85rem;margin-top:.3rem}
   @media(max-width:640px){.trust-row{grid-template-columns:1fr 1fr;gap:1.8rem}}
+  .trust-badges{display:flex;flex-wrap:wrap;justify-content:center;gap:.6rem;margin-top:2rem}
+  .tbadge{display:inline-flex;align-items:center;gap:.45rem;font-size:.82rem;font-weight:500;color:var(--slate);
+    background:var(--soft);border:1px solid var(--border);border-radius:999px;padding:.5rem 1rem}
+  .tbadge .ic{width:1.05rem;height:1.05rem;color:var(--line-700)}
+  /* dual-CTA row reused across feature sections */
+  .zig-cta{display:flex;flex-wrap:wrap;align-items:center;gap:.7rem;margin-top:1.6rem}
+  .zig-cta .btn{padding:.72rem 1.35rem;font-size:.95rem}
+  .final-cta{display:flex;flex-wrap:wrap;justify-content:center;gap:.8rem;position:relative}
 
   /* ECOSYSTEM */
   .eco{background:var(--soft);text-align:center;position:relative;overflow:hidden}
@@ -419,10 +458,7 @@
     <p class="hero-trustline">ฟรีถาวรสำหรับผู้ติดตามไม่เกิน 200 คน · ไม่ต้องใช้บัตรเครดิต</p>
   </div>
   <div class="hero-stage reveal">
-    <div class="mk mk-360">
-      <div class="h"><span class="av">สญ</span><div><div class="nm">คุณสมหญิง พ.</div><div class="sub2">VIP · 42 ออเดอร์</div></div></div>
-      <div class="tags"><span class="tg">ความดัน</span><span class="tg">ซื้อประจำ</span><span class="tg">ผู้สูงอายุ</span></div>
-    </div>
+    <!-- dashboard card — flank left, behind phone -->
     <div class="mk mk-main">
       <div class="mk-bar"><i></i><i></i><i></i><small>REYA Dashboard</small></div>
       <div class="mk-body">
@@ -431,22 +467,57 @@
         <div class="mk-chart"><svg viewBox="0 0 300 86" preserveAspectRatio="none"><polyline points="0,72 40,62 80,66 120,42 160,48 200,28 240,32 300,14" fill="none" stroke="#06C755" stroke-width="2.5"/></svg></div>
       </div>
     </div>
-    <div class="mk mk-chat">
-      <div class="mm them">มียาแก้แพ้ไม่ง่วงไหมคะ</div>
-      <div class="mm ai">มีหลายตัวเลือกค่ะ ขอเภสัชแนะนำตัวที่เหมาะกับคุณนะคะ</div>
+    <!-- customer-360 card — flank right, behind phone -->
+    <div class="mk mk-360">
+      <div class="h"><span class="av">สญ</span><div><div class="nm">คุณสมหญิง พ.</div><div class="sub2">VIP · 42 ออเดอร์</div></div></div>
+      <div class="tags"><span class="tg">ความดัน</span><span class="tg">ซื้อประจำ</span><span class="tg">ผู้สูงอายุ</span></div>
+    </div>
+    <!-- live LINE chat on a real phone — front and centre -->
+    <div class="hero-phone" role="img" aria-label="ตัวอย่างการคุยกับลูกค้าและจ่ายยาบน LINE ผ่าน REYA">
+      <div class="hp-notch"></div>
+      <div class="hp-screen">
+        <div class="hp-status"><span>9:41</span><span class="r">5G · 100%</span></div>
+        <div class="hp-head">
+          <span class="pa">R</span>
+          <div><div class="nm">ร้านยา REYA</div><div class="st">ตอบกลับอัตโนมัติ · ออนไลน์</div></div>
+          <svg class="ic" aria-hidden="true"><use href="#i-ai"/></svg>
+        </div>
+        <div class="hp-chat">
+          <div class="hp-b them">สวัสดีค่ะ มียาแก้แพ้แบบไม่ง่วงไหมคะ</div>
+          <div class="hp-b me">มีค่ะ 😊 ขอสอบถามอาการเพิ่มนิดนึง เพื่อให้เภสัชแนะนำตัวที่เหมาะที่สุดนะคะ</div>
+          <div class="hp-b them">คัดจมูก จาม ตอนเช้าค่ะ</div>
+          <div class="hp-flex">
+            <div class="hd"><b>ฉลากยา · Loratadine 10 mg</b><span>จ่ายโดย ภญ. ศิริพร · ร้านยา REYA</span></div>
+            <div class="bd">
+              <div class="ln"><span>วิธีใช้</span><b>วันละ 1 เม็ด ก่อนนอน</b></div>
+              <div class="ln"><span>จำนวน</span><b>10 เม็ด</b></div>
+              <div class="ln"><span>คำเตือน</span><b>อาจง่วงเล็กน้อย</b></div>
+            </div>
+            <div class="ft"><svg class="ic" style="width:.8rem;height:.8rem"><use href="#i-check"/></svg>จ่ายยาแล้ว · ตัดสต็อกอัตโนมัติ</div>
+          </div>
+          <div class="hp-b me">กดสั่งซื้อ/จัดส่งต่อได้เลยนะคะ 🚚</div>
+        </div>
+        <div class="hp-input"><span class="box">พิมพ์ข้อความ…</span><span class="snd"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></span></div>
+      </div>
     </div>
   </div>
-  <p class="mock-note">ภาพหน้าจอเป็นตัวอย่างประกอบ ตัวเลขเป็นข้อมูลจำลอง</p>
+  <p class="mock-note">ภาพจำลองประสบการณ์ใช้งานจริงของ REYA บน LINE · ข้อมูลตัวอย่าง</p>
 </header>
 
 <!-- TRUST -->
 <div class="trust">
   <div class="wrap reveal">
     <div class="trust-row">
-      <div><div class="n">360&deg;</div><div class="l">โปรไฟล์ลูกค้าครบทุกการซื้อ</div></div>
       <div><div class="n">10+</div><div class="l">ฟีเจอร์ในแพลตฟอร์มเดียว</div></div>
       <div><div class="n">24/7</div><div class="l">ตอบ–ขาย–เตือน อัตโนมัติ</div></div>
+      <div><div class="n">360&deg;</div><div class="l">โปรไฟล์ลูกค้าครบทุกการซื้อ</div></div>
       <div><div class="n">1 วัน</div><div class="l">ติดตั้งพร้อมขายจริง</div></div>
+    </div>
+    <div class="trust-badges">
+      <span class="tbadge"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>ดูแลข้อมูลตามแนวทาง PDPA</span>
+      <span class="tbadge"><svg class="ic" aria-hidden="true"><use href="#i-box"/></svg>แยกฐานข้อมูลรายร้าน ไม่ปนกัน</span>
+      <span class="tbadge"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>สำรองข้อมูลอัตโนมัติทุกวัน</span>
+      <span class="tbadge"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg>ใช้งานจริงโดยร้านยาทั่วไทย</span>
     </div>
   </div>
 </div>
@@ -509,7 +580,10 @@
           <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>โปรไฟล์ลูกค้า 360° + แท็ก / แบ่งกลุ่ม</li>
           <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>งานติดตามลูกค้า ไม่พลาดงานตาม</li>
         </ul>
-        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="learn">เริ่มใช้ CRM Inbox ฟรี <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <div class="zig-cta">
+          <a href="/signup.php" class="btn btn-grad">สมัครฟรี<span class="btn-arrow"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></span></a>
+          <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-ghost">ดูตัวอย่างบน LINE</a>
+        </div>
       </div>
       <div class="fz-media">
         <div class="media">
@@ -548,7 +622,10 @@
           <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>เตือนยาตีกัน + ธงแดงอัตโนมัติ</li>
           <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>เภสัชกรเป็นผู้ตัดสินใจสุดท้ายเสมอ</li>
         </ul>
-        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="learn" style="color:var(--cyan)">เริ่มใช้ AI Pharmacist ฟรี <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <div class="zig-cta">
+          <a href="/signup.php" class="btn btn-grad">สมัครฟรี<span class="btn-arrow"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></span></a>
+          <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-ghost on-dark">ดูตัวอย่างบน LINE</a>
+        </div>
       </div>
     </div>
   </div>
@@ -567,7 +644,10 @@
           <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>เตือนเติมยาล่วงหน้า ~3 วันก่อนหมด</li>
           <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>ยอดขายซ้ำจากคนไข้โรคเรื้อรัง</li>
         </ul>
-        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="learn">เริ่มใช้ระบบจ่ายยาฟรี <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <div class="zig-cta">
+          <a href="/signup.php" class="btn btn-grad">สมัครฟรี<span class="btn-arrow"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></span></a>
+          <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-ghost">ดูตัวอย่างบน LINE</a>
+        </div>
       </div>
       <div class="fz-media">
         <div class="media">
@@ -606,7 +686,10 @@
           <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>บรอดแคสต์ตามแท็ก ไม่สแปมทั้งร้าน</li>
           <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>วัดผลแคมเปญ เปรียบเทียบหาสูตรที่เวิร์ก</li>
         </ul>
-        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="learn" style="color:var(--cyan)">เริ่มใช้ Loyalty ฟรี <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <div class="zig-cta">
+          <a href="/signup.php" class="btn btn-grad">สมัครฟรี<span class="btn-arrow"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></span></a>
+          <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-ghost on-dark">ดูตัวอย่างบน LINE</a>
+        </div>
       </div>
     </div>
   </div>
@@ -860,7 +943,10 @@
   <div class="wrap reveal">
     <h2>พร้อมเริ่มต้นแล้วหรือยัง</h2>
     <p>เปลี่ยน LINE OA ร้านยาของคุณให้เป็นระบบขายครบวงจรตั้งแต่วันนี้ เริ่มฟรี ติดตั้งใน 1 วัน</p>
-    <a href="/signup.php" class="btn btn-grad"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg>สมัครเปิดร้านฟรี</a>
+    <div class="final-cta">
+      <a href="/signup.php" class="btn btn-grad"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg>สมัครเปิดร้านฟรี</a>
+      <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-ghost on-dark">ดูตัวอย่างบน LINE</a>
+    </div>
     <div class="rs-setup">
       <div class="l">
         <div class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></div>
