@@ -161,7 +161,16 @@ class AdminAuth
         // Set session
         unset($user['password']);
         $_SESSION[$this->sessionKey] = $user;
-        
+
+        // Platform-owner activity feed + Telegram (best-effort).
+        if (@is_file(__DIR__ . '/TenantActivity.php')) {
+            require_once __DIR__ . '/TenantActivity.php';
+            TenantActivity::log(
+                TenantActivity::currentTenantId(), 'login',
+                (string) ($user['display_name'] ?? $user['username'] ?? ''), 'เข้าสู่ระบบ'
+            );
+        }
+
         // Log activity (both old and new logger)
         $this->logActivity($user['id'], null, 'login', 'User logged in');
         

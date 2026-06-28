@@ -8,6 +8,38 @@
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 4.1, 4.2, 4.3, 5.1, 5.2, 5.3
  */
 
+// --- Apex marketing landing override (safe: apex root only) ---
+// Serve the static REYA marketing landing for the main domain re-ya.com at "/" only.
+// Tenant subdomains (tenant-XXXX.re-ya.com), /api, /admin, and every other path/host
+// fall through to the normal logic below — nothing else is affected.
+$__host = strtolower(preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? ''));
+$__path = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
+if (in_array($__host, ['re-ya.com', 'www.re-ya.com'], true)
+    && ($__path === '/' || $__path === '/index.php')) {
+    $__landing = __DIR__ . '/landing-reya-pharmacy.html';
+    if (is_file($__landing)) {
+        header('Content-Type: text/html; charset=UTF-8');
+        readfile($__landing);
+        // Flush the page to the visitor FIRST, then do the best-effort new-IP
+        // alert so it never adds to TTFB. (PHP-FPM only; degrades gracefully.)
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        try {
+            if (!defined('REYA_SKIP_SUBDOMAIN_RESOLUTION')) {
+                define('REYA_SKIP_SUBDOMAIN_RESOLUTION', true);
+            }
+            require_once __DIR__ . '/config/config.php';
+            require_once __DIR__ . '/config/database.php';
+            require_once __DIR__ . '/classes/SiteNotifier.php';
+            SiteNotifier::trackLandingVisit();
+        } catch (\Throwable $eApex) {
+            error_log('[apex-landing] new-ip notify: ' . $eApex->getMessage());
+        }
+        exit;
+    }
+}
+
 // Check if installed
 if (!file_exists('config/installed.lock') && file_exists('install/index.php')) {
     header('Location: install/');
@@ -123,7 +155,7 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="<?= htmlspecialchars($primaryColor) ?>">
-    
+
     <!-- PWA Manifest -->
     <link rel="manifest" href="api/manifest.php">
     
@@ -1540,7 +1572,6 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
         </div>
     </section>
     <?php endif; ?>
-
     <!-- Footer (Requirements: 3.1, 3.2) -->
     <footer class="landing-footer">
         <div class="container">

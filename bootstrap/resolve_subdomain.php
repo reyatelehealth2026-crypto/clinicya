@@ -207,7 +207,19 @@ if (!function_exists('reya_resolve_tenant_from_host')) {
             }
 
             $status = (string)($row['status'] ?? '');
-            if ($status === 'suspended' || $status === 'terminated' || $status === 'pending_setup') {
+
+            // Self-serve shops created via Google signup sit in pending_setup until a
+            // platform admin approves them. Instead of locking them out, they get
+            // FULL access in DEMO mode: the app runs normally but header.php paints a
+            // "ข้อมูลตัวอย่าง / DEMO" watermark + "contact admin to activate" banner.
+            // Approval flips status to 'active' → REYA_DEMO_MODE is no longer defined.
+            // The master/root domain is never demo-flagged.
+            if ($status === 'pending_setup') {
+                if (!$isRoot && !defined('REYA_DEMO_MODE')) {
+                    define('REYA_DEMO_MODE', true);
+                }
+                // fall through → return the tenant id (full access)
+            } elseif ($status === 'suspended' || $status === 'terminated') {
                 // Never take the master/root domain offline on a status glitch —
                 // fall through to legacy so re-ya.com always serves something.
                 if ($isRoot) {
@@ -218,9 +230,7 @@ if (!function_exists('reya_resolve_tenant_from_host')) {
                 $name = htmlspecialchars((string)$row['display_name'], ENT_QUOTES, 'UTF-8');
                 $msg  = $status === 'suspended'
                     ? 'บัญชีของร้านนี้ถูกระงับชั่วคราว — กรุณาติดต่อทีมงาน REYA'
-                    : ($status === 'terminated'
-                        ? 'บัญชีของร้านนี้ถูกปิดแล้ว'
-                        : 'ร้านยังอยู่ระหว่างการตั้งค่า กรุณารอสักครู่');
+                    : 'บัญชีของร้านนี้ถูกปิดแล้ว';
                 echo '<!doctype html><meta charset="utf-8"><title>ระงับ — ' . $name . '</title>'
                    . '<style>body{font-family:sans-serif;max-width:560px;margin:80px auto;text-align:center;color:#475569}</style>'
                    . '<h1 style="color:#dc2626">' . $name . '</h1>'

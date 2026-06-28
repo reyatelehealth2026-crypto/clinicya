@@ -271,6 +271,27 @@ try {
                             </div>
                         </div>
                         
+                        <!-- Real Product Picker (Hybrid builder) -->
+                        <div class="mb-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
+                            <div class="flex items-center justify-between gap-2">
+                                <label class="block text-sm font-bold text-emerald-800"><i class="fas fa-pills mr-1"></i>เลือกสินค้าจริง <span class="font-normal text-emerald-600 text-xs">(ราคา/รูป/รหัส จากระบบ 100%)</span></label>
+                                <button type="button" onclick="openProductPicker()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg font-medium shadow-sm transition-all whitespace-nowrap"><i class="fas fa-plus mr-1"></i>เลือกสินค้า</button>
+                            </div>
+                            <div id="studioPickedChips" class="flex flex-wrap gap-2 mt-2"></div>
+                            <div id="studioPickedEmpty" class="text-xs text-emerald-700/70 mt-1">ยังไม่ได้เลือกสินค้า — เลือกแล้วระบบจะสร้าง Flex จากข้อมูลจริง (ถ้าไม่เลือก จะใช้ AI ล้วนตามรายละเอียดด้านล่าง)</div>
+                            <div id="studioProductOptions" class="hidden mt-3 flex flex-wrap items-center gap-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-medium text-gray-600">เลย์เอาต์:</span>
+                                    <select id="studioFlexLayout" onchange="if(studioPickedProducts.length) buildFlexFromProducts()" class="px-3 py-1.5 border rounded-lg text-sm">
+                                        <option value="2up">2 สินค้า/การ์ด</option>
+                                        <option value="1up">1 สินค้า/การ์ด</option>
+                                    </select>
+                                </div>
+                                <button type="button" onclick="generateFlexCopy()" id="btnStudioGenCopy" class="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm rounded-lg font-medium transition-all"><i class="fas fa-wand-magic-sparkles mr-1"></i>ให้ AI เขียนคำโปรย</button>
+                                <span id="studioCopyStatus" class="text-xs text-gray-500"></span>
+                            </div>
+                        </div>
+
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">รายละเอียดข้อความ/รายละเอียดการตลาด</label>
                             <textarea id="studioFlexPrompt" rows="4" class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500" placeholder="กรอกข้อมูลที่ต้องการ เช่น: แนะนำอาหารเสริมวิตามินซี หรือเลือกจากแนวคิดการตลาดด้านบน"></textarea>
@@ -278,7 +299,7 @@ try {
 
                         <!-- Image Upload for Flex -->
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">📸 รูปภาพสินค้าอ้างอิง (สูงสุด 5 รูป จะใช้เป็นภาพ Hero ของการ์ดแต่ละใบ)</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">📸 รูปภาพสินค้าอ้างอิง (สูงสุด 10 รูป จะใช้เป็นภาพ Hero ของการ์ดแต่ละใบ)</label>
                             <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-blue-400 transition-colors cursor-pointer" onclick="document.getElementById('studioFlexImageInput').click()">
                                 <input type="file" id="studioFlexImageInput" accept="image/*" multiple class="hidden" onchange="handleStudioFlexImages(event)">
                                 <div id="studioFlexImagePlaceholder">
@@ -291,13 +312,35 @@ try {
                         
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">สี Theme</label>
-                            <div class="flex gap-2">
-                                <button type="button" onclick="setStudioFlexColor('#06C755')" class="studio-color-btn w-8 h-8 rounded-full bg-[#06C755] border-2 border-white shadow ring-4 ring-offset-2 ring-blue-400"></button>
-                                <button type="button" onclick="setStudioFlexColor('#3B82F6')" class="studio-color-btn w-8 h-8 rounded-full bg-[#3B82F6] border-2 border-white shadow"></button>
-                                <button type="button" onclick="setStudioFlexColor('#EF4444')" class="studio-color-btn w-8 h-8 rounded-full bg-[#EF4444] border-2 border-white shadow"></button>
-                                <button type="button" onclick="setStudioFlexColor('#F59E0B')" class="studio-color-btn w-8 h-8 rounded-full bg-[#F59E0B] border-2 border-white shadow"></button>
-                                <button type="button" onclick="setStudioFlexColor('#8B5CF6')" class="studio-color-btn w-8 h-8 rounded-full bg-[#8B5CF6] border-2 border-white shadow"></button>
-                                <button type="button" onclick="setStudioFlexColor('#EC4899')" class="studio-color-btn w-8 h-8 rounded-full bg-[#EC4899] border-2 border-white shadow"></button>
+                            <div id="studioFlexColorRow" class="flex flex-wrap gap-2 items-center">
+                                <!-- เขียว -->
+                                <button type="button" onclick="setStudioFlexColor('#06C755')" data-color="#06C755" class="studio-color-btn w-8 h-8 rounded-full bg-[#06C755] border-2 border-white shadow ring-4 ring-offset-2 ring-blue-400" title="LINE Green"></button>
+                                <button type="button" onclick="setStudioFlexColor('#15803D')" data-color="#15803D" class="studio-color-btn w-8 h-8 rounded-full bg-[#15803D] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#059669')" data-color="#059669" class="studio-color-btn w-8 h-8 rounded-full bg-[#059669] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#10B981')" data-color="#10B981" class="studio-color-btn w-8 h-8 rounded-full bg-[#10B981] border-2 border-white shadow"></button>
+                                <!-- ฟ้า/เทอร์ควอยซ์ -->
+                                <button type="button" onclick="setStudioFlexColor('#3B82F6')" data-color="#3B82F6" class="studio-color-btn w-8 h-8 rounded-full bg-[#3B82F6] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#2563EB')" data-color="#2563EB" class="studio-color-btn w-8 h-8 rounded-full bg-[#2563EB] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#0EA5E9')" data-color="#0EA5E9" class="studio-color-btn w-8 h-8 rounded-full bg-[#0EA5E9] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#14B8A6')" data-color="#14B8A6" class="studio-color-btn w-8 h-8 rounded-full bg-[#14B8A6] border-2 border-white shadow"></button>
+                                <!-- แดง/ชมพู -->
+                                <button type="button" onclick="setStudioFlexColor('#EF4444')" data-color="#EF4444" class="studio-color-btn w-8 h-8 rounded-full bg-[#EF4444] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#E53E3E')" data-color="#E53E3E" class="studio-color-btn w-8 h-8 rounded-full bg-[#E53E3E] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#EC4899')" data-color="#EC4899" class="studio-color-btn w-8 h-8 rounded-full bg-[#EC4899] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#F43F5E')" data-color="#F43F5E" class="studio-color-btn w-8 h-8 rounded-full bg-[#F43F5E] border-2 border-white shadow"></button>
+                                <!-- ส้ม/เหลือง -->
+                                <button type="button" onclick="setStudioFlexColor('#F59E0B')" data-color="#F59E0B" class="studio-color-btn w-8 h-8 rounded-full bg-[#F59E0B] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#F97316')" data-color="#F97316" class="studio-color-btn w-8 h-8 rounded-full bg-[#F97316] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#EAB308')" data-color="#EAB308" class="studio-color-btn w-8 h-8 rounded-full bg-[#EAB308] border-2 border-white shadow"></button>
+                                <!-- ม่วง/เข้ม -->
+                                <button type="button" onclick="setStudioFlexColor('#8B5CF6')" data-color="#8B5CF6" class="studio-color-btn w-8 h-8 rounded-full bg-[#8B5CF6] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#7C3AED')" data-color="#7C3AED" class="studio-color-btn w-8 h-8 rounded-full bg-[#7C3AED] border-2 border-white shadow"></button>
+                                <button type="button" onclick="setStudioFlexColor('#1F2937')" data-color="#1F2937" class="studio-color-btn w-8 h-8 rounded-full bg-[#1F2937] border-2 border-white shadow"></button>
+                                <!-- กำหนดเอง -->
+                                <label class="relative w-8 h-8 rounded-full border-2 border-dashed border-gray-300 shadow flex items-center justify-center cursor-pointer hover:border-gray-400" title="กำหนดสีเอง">
+                                    <i class="fas fa-eye-dropper text-gray-400 text-xs"></i>
+                                    <input type="color" id="studioFlexColorCustom" onchange="setStudioFlexColor(this.value, true)" class="absolute inset-0 opacity-0 cursor-pointer">
+                                </label>
                             </div>
                         </div>
                         
@@ -520,6 +563,7 @@ try {
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="assets/js/flex-preview.js"></script>
+<script src="assets/js/flex-product-builder.js"></script>
 <script>
 // State
 let studioCurrentApiKey = '<?= addslashes($geminiApiKey) ?>';
@@ -527,9 +571,29 @@ let studioCurrentImageStyle = 'realistic';
 let studioCurrentFlexColor = '#06C755';
 let studioCurrentFlexJson = null;
 let studioFlexImages = []; // Array of reference image data URLs for Flex
+let studioPickedProducts = []; // Real products chosen from the product picker
+let studioFlexCopy = {};       // AI-written (or default) marketing copy for the product builder
 let studioChatHistory = [];
 let studioChatImageData = null;
 let studioCaptionImageData = null;
+
+// --- Product picker handoff (popup postMessage + sessionStorage fallback) ---
+window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin) return;
+    if (!e.data || e.data.type !== 'reya:products') return;
+    if (e.data.returnTo && e.data.returnTo !== 'studio') return;
+    applyPickedProducts(e.data.products || []);
+});
+
+function applyPickedProducts(products) {
+    studioPickedProducts = Array.isArray(products) ? products : [];
+    renderStudioPickedChips();
+    if (studioPickedProducts.length) {
+        switchStudioTab('flex');
+        buildFlexFromProducts();
+        showStudioToast('นำเข้าสินค้า ' + studioPickedProducts.length + ' ชิ้นแล้ว');
+    }
+}
 
 // Tab Switching
 function switchStudioTab(tab) {
@@ -782,10 +846,14 @@ async function generateStudioImage() {
 }
 
 // Flex Functions
-function setStudioFlexColor(color) { 
-    studioCurrentFlexColor = color; 
-    document.querySelectorAll('.studio-color-btn').forEach(btn => btn.classList.remove('ring-4', 'ring-offset-2', 'ring-blue-400'));
-    event.target.classList.add('ring-4', 'ring-offset-2', 'ring-blue-400');
+function setStudioFlexColor(color, isCustom) {
+    studioCurrentFlexColor = color;
+    document.querySelectorAll('.studio-color-btn').forEach(btn => {
+        btn.classList.toggle('ring-4', !isCustom && btn.dataset.color === color);
+        btn.classList.toggle('ring-offset-2', !isCustom && btn.dataset.color === color);
+        btn.classList.toggle('ring-blue-400', !isCustom && btn.dataset.color === color);
+    });
+    if (studioPickedProducts.length) buildFlexFromProducts();
 }
 
 function applyMarketingPreset() {
@@ -814,7 +882,7 @@ function handleStudioFlexImages(e) {
     studioFlexImages = [];
     container.innerHTML = '';
     
-    const count = Math.min(files.length, 5);
+    const count = Math.min(files.length, 10);
     for (let i = 0; i < count; i++) {
         const file = files[i];
         const reader = new FileReader();
@@ -869,10 +937,113 @@ function renderStudioFlexImagePreviews() {
     });
 }
 
+// ===== Real-product picker + hybrid builder =====
+function escapeStudioHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function openProductPicker() {
+    const w = 980, h = 740;
+    const left = Math.max(0, (screen.width - w) / 2), top = Math.max(0, (screen.height - h) / 2);
+    const popup = window.open('product-picker.php?return=studio', 'reyaProductPicker',
+        `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+    if (!popup) showStudioToast('เบราว์เซอร์บล็อก popup — โปรดอนุญาตแล้วลองอีกครั้ง', true);
+}
+
+function renderStudioPickedChips() {
+    const wrap = document.getElementById('studioPickedChips');
+    const empty = document.getElementById('studioPickedEmpty');
+    const opts = document.getElementById('studioProductOptions');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!studioPickedProducts.length) {
+        empty.classList.remove('hidden');
+        opts.classList.add('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+    opts.classList.remove('hidden');
+    studioPickedProducts.forEach((p, i) => {
+        const price = p.promotionPrice != null ? p.promotionPrice : p.basePrice;
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center gap-1.5 bg-white border border-emerald-300 rounded-full pl-1 pr-2 py-1 text-xs shadow-sm';
+        chip.innerHTML =
+            `<img src="${escapeStudioHtml(p.image)}" class="w-6 h-6 rounded-full object-cover bg-gray-100" onerror="this.style.visibility='hidden'">` +
+            `<span class="font-medium text-gray-700 max-w-[150px] truncate" title="${escapeStudioHtml(p.name)}">${escapeStudioHtml(p.name)}</span>` +
+            `<span class="text-emerald-600 font-bold">฿${Math.round(price)}</span>` +
+            `<button type="button" onclick="removePickedProduct(${i})" class="text-gray-400 hover:text-red-500 ml-0.5"><i class="fas fa-times-circle"></i></button>`;
+        wrap.appendChild(chip);
+    });
+}
+
+function removePickedProduct(index) {
+    studioPickedProducts.splice(index, 1);
+    renderStudioPickedChips();
+    if (studioPickedProducts.length) buildFlexFromProducts();
+}
+
+// Assemble the Flex from real products (deterministic) + current copy. No network.
+function buildFlexFromProducts() {
+    if (!studioPickedProducts.length) { showStudioToast('ยังไม่ได้เลือกสินค้า', true); return; }
+    if (typeof FlexProductBuilder === 'undefined') { showStudioToast('ตัวสร้าง Flex ยังไม่พร้อม', true); return; }
+    const type = document.getElementById('studioFlexType').value;
+    const layout = (document.getElementById('studioFlexLayout') || {}).value || '2up';
+    const flex = FlexProductBuilder.build({
+        products: studioPickedProducts,
+        copy: studioFlexCopy,
+        theme: type,
+        color: studioCurrentFlexColor,
+        layout: layout,
+    });
+    if (!flex) { showStudioToast('สร้าง Flex ไม่สำเร็จ', true); return; }
+    studioCurrentFlexJson = flex;
+    if (typeof FlexPreview !== 'undefined') FlexPreview.render('studioFlexPreview', flex);
+    document.getElementById('studioFlexJson').textContent = JSON.stringify(flex, null, 2);
+    document.getElementById('studioFlexRefineSection').classList.remove('hidden');
+    document.getElementById('btnFlexUseBroadcast').classList.remove('hidden');
+}
+
+// Hybrid: ask Gemini for marketing copy only (no prices), then rebuild deterministically.
+async function generateFlexCopy() {
+    if (!studioPickedProducts.length) { showStudioToast('เลือกสินค้าก่อนให้ AI เขียนคำโปรย', true); return; }
+    const btn = document.getElementById('btnStudioGenCopy');
+    const status = document.getElementById('studioCopyStatus');
+    btn.disabled = true;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังเขียน...';
+    if (status) status.textContent = '';
+    try {
+        const payload = {
+            mode: 'copy',
+            type: document.getElementById('studioFlexType').value,
+            theme: document.getElementById('studioFlexType').value,
+            product_names: studioPickedProducts.map(p => p.name).filter(Boolean),
+            hint: document.getElementById('studioFlexPrompt').value.trim(),
+            api_key: studioCurrentApiKey,
+        };
+        const res = await fetch('api/ai-studio-flex.php', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+        studioFlexCopy = data.copy || {};
+        buildFlexFromProducts();
+        if (status) status.textContent = '✓ เขียนคำโปรยแล้ว';
+        showStudioToast('AI เขียนคำโปรยให้แล้ว!');
+    } catch (err) {
+        showStudioToast('เขียนคำโปรยไม่สำเร็จ: ' + err.message, true);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+}
+
 async function generateStudioFlex() {
+    // Real products selected → deterministic builder (prices locked). AI path otherwise.
+    if (studioPickedProducts.length) { buildFlexFromProducts(); return; }
     const prompt = document.getElementById('studioFlexPrompt').value.trim();
-    if (!prompt) { showStudioToast('กรุณากรอกรายละเอียด', true); return; }
-    
+    if (!prompt) { showStudioToast('กรุณากรอกรายละเอียด หรือเลือกสินค้าจริง', true); return; }
+
     const btn = document.getElementById('btnStudioGenFlex');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังสร้าง...';
@@ -933,11 +1104,45 @@ async function refineStudioFlex() {
     const instruction = document.getElementById('studioFlexInstruction').value.trim();
     if (!instruction) { showStudioToast('กรุณากรอกคำสั่งปรับปรุง', true); return; }
     if (!studioCurrentFlexJson) { showStudioToast('ยังไม่มี Flex ปัจจุบันเพื่อแก้ไข', true); return; }
-    
+
+    // Product-built Flex → refine COPY only, then rebuild deterministically so
+    // prices/SKUs/images stay locked. AI can never corrupt the numbers.
+    if (studioPickedProducts.length) {
+        const btnP = document.getElementById('btnStudioRefineFlex');
+        btnP.disabled = true;
+        const origP = btnP.innerHTML;
+        btnP.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังปรับปรุง...';
+        try {
+            const res = await fetch('api/ai-studio-flex.php', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode: 'copy',
+                    type: document.getElementById('studioFlexType').value,
+                    theme: document.getElementById('studioFlexType').value,
+                    product_names: studioPickedProducts.map(p => p.name).filter(Boolean),
+                    hint: instruction,
+                    api_key: studioCurrentApiKey,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+            studioFlexCopy = data.copy || studioFlexCopy;
+            buildFlexFromProducts();
+            document.getElementById('studioFlexInstruction').value = '';
+            showStudioToast('ปรับปรุงคำโปรยแล้ว (ราคาคงเดิม)');
+        } catch (err) {
+            showStudioToast('ปรับปรุงไม่สำเร็จ: ' + err.message, true);
+        } finally {
+            btnP.disabled = false;
+            btnP.innerHTML = origP;
+        }
+        return;
+    }
+
     const btn = document.getElementById('btnStudioRefineFlex');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังปรับปรุง...';
-    
+
     try {
         const payload = {
             mode: 'edit',
@@ -1105,4 +1310,15 @@ function copyStudioTranslateResult() {
     navigator.clipboard.writeText(document.getElementById('studioTranslateResult').innerText);
     showStudioToast('คัดลอกผลลัพธ์แล้ว!');
 }
+
+// Fallback: consume products handed off via sessionStorage when popup was blocked.
+(function consumePickedFromSession() {
+    try {
+        const raw = sessionStorage.getItem('reya_picked_products');
+        if (!raw) return;
+        sessionStorage.removeItem('reya_picked_products');
+        const products = JSON.parse(raw);
+        if (Array.isArray(products) && products.length) applyPickedProducts(products);
+    } catch (e) { /* ignore */ }
+})();
 </script>

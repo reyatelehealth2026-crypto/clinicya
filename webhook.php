@@ -1327,7 +1327,7 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                     'bot_mode' => $botMode,
                     'send_code' => is_array($sendResult) ? ($sendResult['code'] ?? null) : null,
                     'send_method' => is_array($sendResult) ? ($sendResult['method'] ?? null) : null,
-                    'send_body' => is_array($sendResult) ? mb_substr((string) ($sendResult['body'] ?? ''), 0, 200) : null
+                    'send_body' => is_array($sendResult) ? mb_substr(is_array($sendResult['body'] ?? null) ? (json_encode($sendResult['body'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') : (string) ($sendResult['body'] ?? ''), 0, 200) : null
                 ], $userId);
                 return;
             } catch (Exception $e) {

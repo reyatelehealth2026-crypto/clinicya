@@ -21,6 +21,20 @@ class EmailService
         $this->db = $db;
         $this->loadSettings();
     }
+
+    /**
+     * Override the From identity (deliverability: use a real hosted-domain
+     * sender so the cPanel mail server can DKIM/SPF-sign it).
+     */
+    public function setFrom(string $email, ?string $name = null): void
+    {
+        if ($email !== '') {
+            $this->fromEmail = $email;
+        }
+        if ($name !== null && $name !== '') {
+            $this->fromName = $name;
+        }
+    }
     
     /**
      * โหลดการตั้งค่า SMTP จาก database หรือ config
@@ -86,9 +100,24 @@ class EmailService
             $headers[] = 'Content-type: text/plain; charset=UTF-8';
         }
         
-        $headers[] = 'From: ' . $this->fromName . ' <' . $this->fromEmail . '>';
-        
-        $result = @mail($to, $subject, $body, implode("\r\n", $headers));
+        $fromName = preg_match('/[\x80-\xFF]/', (string) $this->fromName)
+            ? '=?UTF-8?B?' . base64_encode((string) $this->fromName) . '?='
+            : $this->fromName;
+        $headers[] = 'From: ' . $fromName . ' <' . $this->fromEmail . '>';
+        $headers[] = 'Reply-To: ' . $this->fromEmail;
+
+        // RFC 2047-encode a non-ASCII (Thai) subject — a raw UTF-8 Subject header
+        // is malformed and a strong spam signal.
+        $encSubject = '=?UTF-8?B?' . base64_encode((string) $subject) . '?=';
+
+        // Set the envelope sender (-f) so Return-Path aligns with the From
+        // domain → SPF passes (critical for Gmail inbox delivery). Only when the
+        // From is a well-formed address.
+        $params = '';
+        if (filter_var($this->fromEmail, FILTER_VALIDATE_EMAIL)) {
+            $params = '-f' . $this->fromEmail;
+        }
+        $result = @mail($to, $encSubject, $body, implode("\r\n", $headers), $params);
         
         if (!$result) {
             error_log("EmailService mail() failed to: {$to}");
@@ -162,16 +191,32 @@ class EmailService
             fputs($socket, "DATA\r\n");
             $this->getSmtpResponse($socket);
             
-            // Headers
-            $contentType = $isHtml ? 'text/html' : 'text/plain';
-            $headers = "From: {$this->fromName} <{$this->fromEmail}>\r\n";
+            // Headers — RFC-compliant for inbox deliverability:
+            //  - MIME-encode non-ASCII Subject / From name (RFC 2047) so Gmail
+            //    doesn't reject a raw-UTF-8 header as malformed (a strong spam signal)
+            //  - include Date + Message-ID (their absence is a spam signal)
+            //  - base64 the body (proper encoding + avoids SMTP dot-stuffing issues)
+            $contentType  = $isHtml ? 'text/html' : 'text/plain';
+            $encSubject   = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+            $encFromName  = preg_match('/[\x80-\xFF]/', (string) $this->fromName)
+                ? '=?UTF-8?B?' . base64_encode((string) $this->fromName) . '?='
+                : $this->fromName;
+            $fromDomain   = substr((string) strrchr($this->fromEmail, '@'), 1) ?: 're-ya.com';
+            $messageId    = '<' . bin2hex(random_bytes(16)) . '@' . $fromDomain . '>';
+            $encBody      = rtrim(chunk_split(base64_encode($body)));
+
+            $headers  = 'Date: ' . date('r') . "\r\n";
+            $headers .= "Message-ID: {$messageId}\r\n";
+            $headers .= "From: {$encFromName} <{$this->fromEmail}>\r\n";
             $headers .= "To: {$to}\r\n";
-            $headers .= "Subject: {$subject}\r\n";
+            $headers .= "Reply-To: {$this->fromEmail}\r\n";
+            $headers .= "Subject: {$encSubject}\r\n";
             $headers .= "MIME-Version: 1.0\r\n";
             $headers .= "Content-Type: {$contentType}; charset=UTF-8\r\n";
+            $headers .= "Content-Transfer-Encoding: base64\r\n";
             $headers .= "\r\n";
-            
-            fputs($socket, $headers . $body . "\r\n.\r\n");
+
+            fputs($socket, $headers . $encBody . "\r\n.\r\n");
             $response = $this->getSmtpResponse($socket);
             
             // QUIT

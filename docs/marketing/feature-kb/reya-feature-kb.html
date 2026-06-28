@@ -1,0 +1,2033 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Re-ya — Feature Knowledge Base</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#0891b2; --teal-d:#0e7490; --green:#06813a; --green-dk:#006400;
+    --ink:#15242b; --muted:#5b7079; --line:#e2ebee; --bg:#f5f8f9; --card:#ffffff;
+    --accent:#0891b2; --warn-bg:#fff7e6; --warn-bd:#f0c36d; --danger:#b42318;
+    --sidebar:300px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:'Sarabun','Leelawadee UI','Noto Sans Thai',Tahoma,sans-serif;
+    color:var(--ink);background:var(--bg);line-height:1.65;font-size:16px}
+  code,pre{font-family:'IBM Plex Mono',Consolas,monospace}
+
+  /* ---- layout ---- */
+  .layout{display:flex;align-items:flex-start}
+  aside{position:sticky;top:0;height:100vh;width:var(--sidebar);flex:0 0 var(--sidebar);
+    overflow-y:auto;background:linear-gradient(180deg,#0e7490,#075063);color:#eaf6f9;
+    padding:22px 16px 40px}
+  aside .brand{font-weight:700;font-size:18px;color:#fff;letter-spacing:.2px}
+  aside .brand small{display:block;font-weight:400;font-size:12.5px;color:#bfe6ef;margin-top:3px}
+  .search{margin:16px 0 12px}
+  .search input{width:100%;padding:9px 12px;border-radius:9px;border:1px solid rgba(255,255,255,.25);
+    background:rgba(255,255,255,.12);color:#fff;font-size:14px;font-family:inherit}
+  .search input::placeholder{color:#cfeaf1}
+  .toc-group{margin-bottom:4px}
+  .toc-top{display:block;color:#fff;text-decoration:none;font-weight:600;font-size:14.5px;
+    padding:7px 10px;border-radius:8px}
+  .toc-top:hover{background:rgba(255,255,255,.12)}
+  .toc-subs{display:none;margin:2px 0 6px 8px;border-left:1px solid rgba(255,255,255,.18);padding-left:8px}
+  .toc-group.open .toc-subs{display:block}
+  .toc-sub{display:block;color:#cfeaf1;text-decoration:none;font-size:13px;padding:4px 8px;border-radius:6px}
+  .toc-sub:hover{background:rgba(255,255,255,.1);color:#fff}
+  .toc-sub.active,.toc-top.active{background:rgba(255,255,255,.2);color:#fff}
+
+  main{flex:1 1 auto;min-width:0;padding:38px 48px 90px;max-width:980px;margin:0 auto}
+
+  /* ---- typography ---- */
+  h1{font-size:27px;font-weight:700;color:var(--green-dk);margin:48px 0 14px;
+    padding-bottom:10px;border-bottom:3px solid var(--teal)}
+  section.doc:first-child h1{margin-top:0}
+  h2{font-size:20px;font-weight:700;color:var(--teal-d);margin:30px 0 10px;
+    padding-left:11px;border-left:4px solid var(--teal)}
+  h3{font-size:16.5px;font-weight:600;color:var(--ink);margin:20px 0 8px}
+  p{margin:9px 0}
+  a{color:var(--teal-d)}
+  strong{color:#0c1c22}
+  ul,ol{margin:8px 0 8px 4px;padding-left:22px}
+  li{margin:4px 0}
+  hr{border:0;border-top:1px solid var(--line);margin:30px 0}
+
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px;
+    box-shadow:0 1px 0 var(--line);border-radius:10px;overflow:hidden}
+  th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:#eef6f8;color:var(--teal-d);font-weight:600}
+  tr:nth-child(even) td{background:#fafcfd}
+
+  blockquote{margin:14px 0;padding:12px 16px;background:var(--warn-bg);
+    border:1px solid var(--warn-bd);border-left:4px solid #e0a93f;border-radius:8px;color:#5a4413}
+  blockquote p{margin:4px 0}
+  blockquote code{background:#fbedcf}
+
+  code{background:#eef3f5;color:#0c4a55;padding:1.5px 6px;border-radius:5px;font-size:13px}
+  pre{background:#0f2b33;color:#dbeef3;padding:15px 18px;border-radius:11px;overflow:auto;font-size:13px;line-height:1.55}
+  pre code{background:none;color:inherit;padding:0}
+
+  /* badges สำหรับ [ค่าเริ่มต้น]/[ตัวอย่าง] (เน้นด้วยตา) */
+  .layout .tag-default{background:#eaf3ff;color:#1b4f9c;border:1px solid #bcd6ff;
+    padding:1px 7px;border-radius:20px;font-size:12px;white-space:nowrap}
+
+  .hidden{display:none !important}
+
+  /* mobile */
+  @media (max-width:880px){
+    aside{position:static;height:auto;width:100%;flex-basis:auto}
+    .toc-subs{display:none !important}
+    main{padding:24px 18px 60px}
+    .layout{flex-direction:column}
+  }
+
+  /* ---- print / PDF ---- */
+  @media print{
+    :root{--sidebar:0}
+    body{background:#fff;font-size:11.5pt;line-height:1.5}
+    aside,.search,.no-print{display:none !important}
+    main{max-width:none;margin:0;padding:0 6mm}
+    section.doc{break-before:page}
+    section.doc:first-child{break-before:auto}
+    h1{break-after:avoid;color:#006400;font-size:18pt}
+    h2,h3{break-after:avoid}
+    table,pre,blockquote,li{break-inside:avoid}
+    a{color:#0e7490;text-decoration:none}
+    pre{background:#f1f6f7;color:#10333b;border:1px solid #d7e6ea}
+    @page{margin:14mm 12mm;size:A4}
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand">Re-ya · Feature KB<small>คลังความรู้ฟีเจอร์สำหรับ AI โพสต์คอนเทนต์</small></div>
+    <div class="search no-print"><input id="q" type="search" placeholder="🔍 ค้นหาหัวข้อ..." autocomplete="off"></div>
+    <nav id="toc"><div class="toc-group"><a class="toc-top" href="#sec-0" data-text="ภาพรวม &amp; วิธีใช้">ภาพรวม &amp; วิธีใช้</a><div class="toc-subs"><a class="toc-sub" href="#sec-0-1" data-text="วิธีที่ ai ควรใช้คลังนี้">วิธีที่ AI ควรใช้คลังนี้</a><a class="toc-sub" href="#sec-0-2" data-text="⚠️ กติกาความแม่นยำ (อ่านก่อนเขียนโฆษณา)">⚠️ กติกาความแม่นยำ (อ่านก่อนเขียนโฆษณา)</a><a class="toc-sub" href="#sec-0-3" data-text="แพลตฟอร์มคืออะไร (elevator pitch)">แพลตฟอร์มคืออะไร (Elevator pitch)</a><a class="toc-sub" href="#sec-0-4" data-text="persona ลูกค้า (ใช้เลือกมุมการเขียน)">Persona ลูกค้า (ใช้เลือกมุมการเขียน)</a><a class="toc-sub" href="#sec-0-5" data-text="โทนแบรนด์ (brand voice)">โทนแบรนด์ (Brand voice)</a><a class="toc-sub" href="#sec-0-6" data-text="คำศัพท์มาตรฐาน (ใช้ให้ตรงกันทุกโพสต์)">คำศัพท์มาตรฐาน (ใช้ให้ตรงกันทุกโพสต์)</a><a class="toc-sub" href="#sec-0-7" data-text="สารบัญ">สารบัญ</a><a class="toc-sub" href="#sec-0-8" data-text="เทมเพลตมาตรฐานของแต่ละฟีเจอร์ (รูปแบบที่จะเจอในทุกไฟล์)">เทมเพลตมาตรฐานของแต่ละฟีเจอร์ (รูปแบบที่จะเจอในทุกไฟล์)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-1" data-text="01 · line oa &amp; อินบ็อกซ์">01 · LINE OA &amp; อินบ็อกซ์</a><div class="toc-subs"><a class="toc-sub" href="#sec-1-1" data-text="ฟีเจอร์: จัดการ line oa หลายบัญชีในที่เดียว (multi-account line oa)">ฟีเจอร์: จัดการ LINE OA หลายบัญชีในที่เดียว (Multi-Account LINE OA)</a><a class="toc-sub" href="#sec-1-2" data-text="ฟีเจอร์: ตอบกลับอัตโนมัติ &amp;amp; ประหยัดโควต้า (auto-reply / reply-token fallback)">ฟีเจอร์: ตอบกลับอัตโนมัติ &amp;amp; ประหยัดโควต้า (Auto-reply / Reply-token fallback)</a><a class="toc-sub" href="#sec-1-3" data-text="ฟีเจอร์: กล่องข้อความรวมแบบเรียลไทม์ (unified inbox)">ฟีเจอร์: กล่องข้อความรวมแบบเรียลไทม์ (Unified Inbox)</a><a class="toc-sub" href="#sec-1-4" data-text="ฟีเจอร์: ตัวกรอง &amp;amp; ค้นหาบทสนทนา (filters &amp;amp; search)">ฟีเจอร์: ตัวกรอง &amp;amp; ค้นหาบทสนทนา (Filters &amp;amp; Search)</a><a class="toc-sub" href="#sec-1-5" data-text="ฟีเจอร์: แท็กลูกค้า &amp;amp; ติดแท็กอัตโนมัติ (customer tags &amp;amp; auto-tagging)">ฟีเจอร์: แท็กลูกค้า &amp;amp; ติดแท็กอัตโนมัติ (Customer Tags &amp;amp; Auto-tagging)</a><a class="toc-sub" href="#sec-1-6" data-text="ฟีเจอร์: โน้ตลูกค้า &amp;amp; ข้อมูลโปรไฟล์ (customer notes &amp;amp; profile)">ฟีเจอร์: โน้ตลูกค้า &amp;amp; ข้อมูลโปรไฟล์ (Customer Notes &amp;amp; Profile)</a><a class="toc-sub" href="#sec-1-7" data-text="ฟีเจอร์: มอบหมายงาน &amp;amp; สถานะงาน (assignment &amp;amp; chat status)">ฟีเจอร์: มอบหมายงาน &amp;amp; สถานะงาน (Assignment &amp;amp; Chat Status)</a><a class="toc-sub" href="#sec-1-8" data-text="ฟีเจอร์: แม่แบบข้อความ &amp;amp; ปุ่มตอบด่วน (templates &amp;amp; quick replies)">ฟีเจอร์: แม่แบบข้อความ &amp;amp; ปุ่มตอบด่วน (Templates &amp;amp; Quick Replies)</a><a class="toc-sub" href="#sec-1-9" data-text="ฟีเจอร์: ค้นหายาในแชท (drug search in inbox)">ฟีเจอร์: ค้นหายาในแชท (Drug Search in Inbox)</a><a class="toc-sub" href="#sec-1-10" data-text="ฟีเจอร์: rich menu อัจฉริยะ (dynamic rich menu)">ฟีเจอร์: Rich Menu อัจฉริยะ (Dynamic Rich Menu)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-2" data-text="02 · ระบบจ่ายยา">02 · ระบบจ่ายยา</a><div class="toc-subs"><a class="toc-sub" href="#sec-2-1" data-text="ฟีเจอร์: ระบบจ่ายยา (dispense / ระบบจ่ายยา)">ฟีเจอร์: ระบบจ่ายยา (Dispense / ระบบจ่ายยา)</a><a class="toc-sub" href="#sec-2-2" data-text="ฟีเจอร์: ฉลากยา flex (flex medicine label)">ฟีเจอร์: ฉลากยา Flex (Flex Medicine Label)</a><a class="toc-sub" href="#sec-2-3" data-text="ฟีเจอร์: 4 โหมดชำระเงินหน้าร้าน (dispense payment modes)">ฟีเจอร์: 4 โหมดชำระเงินหน้าร้าน (Dispense Payment Modes)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-3" data-text="03 · ร้านค้า &amp; เช็กเอาต์">03 · ร้านค้า &amp; เช็กเอาต์</a><div class="toc-subs"><a class="toc-sub" href="#sec-3-1" data-text="ฟีเจอร์: หน้าร้านออนไลน์ใน line (storefront / mini app)">ฟีเจอร์: หน้าร้านออนไลน์ใน LINE (Storefront / Mini App)</a><a class="toc-sub" href="#sec-3-2" data-text="ฟีเจอร์: รายละเอียดสินค้า &amp;amp; สินค้าหลายหน่วย (product detail &amp;amp; multi-unit)">ฟีเจอร์: รายละเอียดสินค้า &amp;amp; สินค้าหลายหน่วย (Product Detail &amp;amp; Multi-unit)</a><a class="toc-sub" href="#sec-3-3" data-text="ฟีเจอร์: ตะกร้าสินค้า (shopping cart)">ฟีเจอร์: ตะกร้าสินค้า (Shopping Cart)</a><a class="toc-sub" href="#sec-3-4" data-text="ฟีเจอร์: เช็กเอาต์ &amp;amp; โค้ดส่วนลด (checkout &amp;amp; promo code)">ฟีเจอร์: เช็กเอาต์ &amp;amp; โค้ดส่วนลด (Checkout &amp;amp; Promo Code)</a><a class="toc-sub" href="#sec-3-5" data-text="ฟีเจอร์: ช่องทางชำระเงิน — โอน / promptpay / cod / อัปสลิป">ฟีเจอร์: ช่องทางชำระเงิน — โอน / PromptPay / COD / อัปสลิป</a><a class="toc-sub" href="#sec-3-6" data-text="ฟีเจอร์: สมัครสมาชิก &amp;amp; โปรไฟล์สุขภาพ (registration &amp;amp; health profile)">ฟีเจอร์: สมัครสมาชิก &amp;amp; โปรไฟล์สุขภาพ (Registration &amp;amp; Health Profile)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-4" data-text="04 · คลังสินค้า &amp; ข้อมูลยา">04 · คลังสินค้า &amp; ข้อมูลยา</a><div class="toc-subs"><a class="toc-sub" href="#sec-4-1" data-text="ฟีเจอร์: ศูนย์รวมสินค้า &amp;amp; สต็อก (consolidated inventory hub)">ฟีเจอร์: ศูนย์รวมสินค้า &amp;amp; สต็อก (Consolidated Inventory Hub)</a><a class="toc-sub" href="#sec-4-2" data-text="ฟีเจอร์: แจ้งเตือนสินค้าใกล้หมด &amp;amp; จุดสั่งซื้อ (low-stock alert / rop)">ฟีเจอร์: แจ้งเตือนสินค้าใกล้หมด &amp;amp; จุดสั่งซื้อ (Low-stock Alert / ROP)</a><a class="toc-sub" href="#sec-4-3" data-text="ฟีเจอร์: กลุ่มยา (drug groups)">ฟีเจอร์: กลุ่มยา (Drug Groups)</a><a class="toc-sub" href="#sec-4-4" data-text="ฟีเจอร์: ชื่อสามัญทางยา (generic names / inn)">ฟีเจอร์: ชื่อสามัญทางยา (Generic Names / INN)</a><a class="toc-sub" href="#sec-4-5" data-text="ฟีเจอร์: เทมเพลตฉลากยา (drug label templates)">ฟีเจอร์: เทมเพลตฉลากยา (Drug Label Templates)</a><a class="toc-sub" href="#sec-4-6" data-text="ฟีเจอร์: ฐานข้อมูลยาตีกัน (drug interactions)">ฟีเจอร์: ฐานข้อมูลยาตีกัน (Drug Interactions)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-5" data-text="05 · ai เภสัช &amp; ตรวจสลิป">05 · AI เภสัช &amp; ตรวจสลิป</a><div class="toc-subs"><a class="toc-sub" href="#sec-5-1" data-text="ฟีเจอร์: ai เภสัชกรผู้ช่วย (ai pharmacist consultation)">ฟีเจอร์: AI เภสัชกรผู้ช่วย (AI Pharmacist Consultation)</a><a class="toc-sub" href="#sec-5-2" data-text="ฟีเจอร์: เตือนเคสฉุกเฉิน &amp;amp; ส่งต่อเภสัช (red-flag detection &amp;amp; escalation)">ฟีเจอร์: เตือนเคสฉุกเฉิน &amp;amp; ส่งต่อเภสัช (Red-flag Detection &amp;amp; Escalation)</a><a class="toc-sub" href="#sec-5-3" data-text="ฟีเจอร์: เช็กยาตีกัน/แพ้ยาในบทสนทนา (drug interaction checker)">ฟีเจอร์: เช็กยาตีกัน/แพ้ยาในบทสนทนา (Drug Interaction Checker)</a><a class="toc-sub" href="#sec-5-4" data-text="ฟีเจอร์: ai อ่านรูป (vision / image consultation)">ฟีเจอร์: AI อ่านรูป (Vision / Image Consultation)</a><a class="toc-sub" href="#sec-5-5" data-text="ฟีเจอร์: สรุปแชทอัตโนมัติ (auto chief-complaint summary)">ฟีเจอร์: สรุปแชทอัตโนมัติ (Auto Chief-complaint Summary)</a><a class="toc-sub" href="#sec-5-6" data-text="ฟีเจอร์: ส่งให้เภสัชอนุมัติ → สั่งยา (pharmacist approval / approve order)">ฟีเจอร์: ส่งให้เภสัชอนุมัติ → สั่งยา (Pharmacist Approval / Approve Order)</a><a class="toc-sub" href="#sec-5-7" data-text="ฟีเจอร์: ตรวจสลิปอัตโนมัติ (automated slip verification)">ฟีเจอร์: ตรวจสลิปอัตโนมัติ (Automated Slip Verification)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-6" data-text="06 · สมาชิก &amp; สะสมแต้ม">06 · สมาชิก &amp; สะสมแต้ม</a><div class="toc-subs"><a class="toc-sub" href="#sec-6-1" data-text="ฟีเจอร์: สมัครสมาชิกอัตโนมัติเมื่อกดติดตาม (auto-register on follow)">ฟีเจอร์: สมัครสมาชิกอัตโนมัติเมื่อกดติดตาม (Auto-register on Follow)</a><a class="toc-sub" href="#sec-6-2" data-text="ฟีเจอร์: ระดับสมาชิก (membership tiers)">ฟีเจอร์: ระดับสมาชิก (Membership Tiers)</a><a class="toc-sub" href="#sec-6-3" data-text="ฟีเจอร์: แต้มสะสม (loyalty points)">ฟีเจอร์: แต้มสะสม (Loyalty Points)</a><a class="toc-sub" href="#sec-6-4" data-text="ฟีเจอร์: แลกของรางวัล (rewards &amp;amp; redemption)">ฟีเจอร์: แลกของรางวัล (Rewards &amp;amp; Redemption)</a><a class="toc-sub" href="#sec-6-5" data-text="ฟีเจอร์: บัตรสมาชิกดิจิทัล (member card)">ฟีเจอร์: บัตรสมาชิกดิจิทัล (Member Card)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-7" data-text="07 · บรอดแคสต์ &amp; ai studio">07 · บรอดแคสต์ &amp; AI Studio</a><div class="toc-subs"><a class="toc-sub" href="#sec-7-1" data-text="ฟีเจอร์: บรอดแคสต์เจาะกลุ่ม (targeted broadcast)">ฟีเจอร์: บรอดแคสต์เจาะกลุ่ม (Targeted Broadcast)</a><a class="toc-sub" href="#sec-7-2" data-text="ฟีเจอร์: ตั้งเวลาส่ง &amp;amp; ระบบคิวอัตโนมัติ (scheduling &amp;amp; queue)">ฟีเจอร์: ตั้งเวลาส่ง &amp;amp; ระบบคิวอัตโนมัติ (Scheduling &amp;amp; Queue)</a><a class="toc-sub" href="#sec-7-3" data-text="ฟีเจอร์: ai studio สร้างการ์ด flex (ai flex builder)">ฟีเจอร์: AI Studio สร้างการ์ด Flex (AI Flex Builder)</a><a class="toc-sub" href="#sec-7-4" data-text="ฟีเจอร์: flex builder (สร้างการ์ดแบบจัดเอง)">ฟีเจอร์: Flex Builder (สร้างการ์ดแบบจัดเอง)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-8" data-text="08 · เอกสาร/odoo/saas">08 · เอกสาร/Odoo/SaaS</a><div class="toc-subs"><a class="toc-sub" href="#sec-8-1" data-text="ฟีเจอร์: เอกสารภาษี vat แบบไทย (thai vat documents)">ฟีเจอร์: เอกสารภาษี VAT แบบไทย (Thai VAT Documents)</a><a class="toc-sub" href="#sec-8-2" data-text="ฟีเจอร์: เชื่อม odoo erp &amp;amp; แดชบอร์ดบัญชี (odoo integration &amp;amp; dashboard)">ฟีเจอร์: เชื่อม Odoo ERP &amp;amp; แดชบอร์ดบัญชี (Odoo Integration &amp;amp; Dashboard)</a><a class="toc-sub" href="#sec-8-3" data-text="ฟีเจอร์: แจ้งเตือนหลายช่องทาง (multi-channel notifications)">ฟีเจอร์: แจ้งเตือนหลายช่องทาง (Multi-channel Notifications)</a><a class="toc-sub" href="#sec-8-4" data-text="ฟีเจอร์: saas หลายร้าน — ข้อมูลแยกปลอดภัย (multi-tenant architecture)">ฟีเจอร์: SaaS หลายร้าน — ข้อมูลแยกปลอดภัย (Multi-tenant Architecture)</a><a class="toc-sub" href="#sec-8-5" data-text="ฟีเจอร์: ตั้งค่าร้านรวมศูนย์ (settings hub)">ฟีเจอร์: ตั้งค่าร้านรวมศูนย์ (Settings Hub)</a><a class="toc-sub" href="#sec-8-6" data-text="ฟีเจอร์: หน้าแลนดิ้ง &amp;amp; แบรนด์ร้าน (landing &amp;amp; branding)">ฟีเจอร์: หน้าแลนดิ้ง &amp;amp; แบรนด์ร้าน (Landing &amp;amp; Branding)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-9" data-text="09 · นัดหมาย/วิดีโอคอล/เตือน">09 · นัดหมาย/วิดีโอคอล/เตือน</a><div class="toc-subs"><a class="toc-sub" href="#sec-9-1" data-text="ฟีเจอร์: ระบบนัดหมายปรึกษาเภสัช (appointment booking / นัดหมาย)">ฟีเจอร์: ระบบนัดหมายปรึกษาเภสัช (Appointment Booking / นัดหมาย)</a><a class="toc-sub" href="#sec-9-2" data-text="ฟีเจอร์: วิดีโอคอลปรึกษาเภสัช (video consultation / telepharmacy)">ฟีเจอร์: วิดีโอคอลปรึกษาเภสัช (Video Consultation / Telepharmacy)</a><a class="toc-sub" href="#sec-9-3" data-text="ฟีเจอร์: เตือนนัดหมายอัตโนมัติ (appointment reminders)">ฟีเจอร์: เตือนนัดหมายอัตโนมัติ (Appointment Reminders)</a><a class="toc-sub" href="#sec-9-4" data-text="ฟีเจอร์: เตือนกินยา (medication take reminders)">ฟีเจอร์: เตือนกินยา (Medication Take Reminders)</a><a class="toc-sub" href="#sec-9-5" data-text="ฟีเจอร์: เตือนเติมยา / refill (medication refill reminders)">ฟีเจอร์: เตือนเติมยา / Refill (Medication Refill Reminders)</a><a class="toc-sub" href="#sec-9-6" data-text="ฟีเจอร์: ความยินยอม &amp;amp; ความเป็นส่วนตัว (consent &amp;amp; pdpa)">ฟีเจอร์: ความยินยอม &amp;amp; ความเป็นส่วนตัว (Consent &amp;amp; PDPA)</a><a class="toc-sub" href="#sec-9-7" data-text="ฟีเจอร์: สถิติ &amp;amp; การแบ่งกลุ่มลูกค้า (analytics &amp;amp; segmentation)">ฟีเจอร์: สถิติ &amp;amp; การแบ่งกลุ่มลูกค้า (Analytics &amp;amp; Segmentation)</a></div></div>
+<div class="toc-group"><a class="toc-top" href="#sec-10" data-text="10 · content playbook">10 · Content Playbook</a><div class="toc-subs"><a class="toc-sub" href="#sec-10-1" data-text="1. ประเภทคอนเทนต์ที่ผลิตได้ (เลือกตามเป้าหมาย)">1. ประเภทคอนเทนต์ที่ผลิตได้ (เลือกตามเป้าหมาย)</a><a class="toc-sub" href="#sec-10-2" data-text="2. โครงโพสต์มาตรฐาน (เลือกใช้ตามบริบท)">2. โครงโพสต์มาตรฐาน (เลือกใช้ตามบริบท)</a><a class="toc-sub" href="#sec-10-3" data-text="3. คลัง hook (หัวข้อเปิดที่ดึงความสนใจ)">3. คลัง Hook (หัวข้อเปิดที่ดึงความสนใจ)</a><a class="toc-sub" href="#sec-10-4" data-text="4. คลัง cta (ปิดท้าย เลือกตามเป้าหมาย)">4. คลัง CTA (ปิดท้าย เลือกตามเป้าหมาย)</a><a class="toc-sub" href="#sec-10-5" data-text="5. hashtag (เลือก 3–8 อันต่อโพสต์ ตามแพลตฟอร์ม)">5. Hashtag (เลือก 3–8 อันต่อโพสต์ ตามแพลตฟอร์ม)</a><a class="toc-sub" href="#sec-10-6" data-text="6. จับคู่ persona → มุมที่ควรพูด">6. จับคู่ Persona → มุมที่ควรพูด</a><a class="toc-sub" href="#sec-10-7" data-text="7. ปฏิทินคอนเทนต์ตัวอย่าง (1 สัปดาห์)">7. ปฏิทินคอนเทนต์ตัวอย่าง (1 สัปดาห์)</a><a class="toc-sub" href="#sec-10-8" data-text="8. ทริคเวลาส่ง (สำหรับบรอดแคสต์/โพสต์)">8. ทริคเวลาส่ง (สำหรับบรอดแคสต์/โพสต์)</a><a class="toc-sub" href="#sec-10-9" data-text="9. do / don&#x27;t (สำคัญมากสำหรับ ai)">9. Do / Don&#x27;t (สำคัญมากสำหรับ AI)</a><a class="toc-sub" href="#sec-10-10" data-text="10. ตัวอย่างโพสต์สำเร็จรูป (ก๊อปไปปรับได้)">10. ตัวอย่างโพสต์สำเร็จรูป (ก๊อปไปปรับได้)</a><a class="toc-sub" href="#sec-10-11" data-text="11. เช็กลิสต์ก่อนโพสต์ (ai ต้องผ่านทุกข้อ)">11. เช็กลิสต์ก่อนโพสต์ (AI ต้องผ่านทุกข้อ)</a></div></div></nav>
+  </aside>
+  <main id="content">
+<section class="doc" data-file="README.md">
+<h1 id="sec-0">Re-ya — Feature Knowledge Base (สำหรับเทรน AI โพสต์คอนเทนต์)</h1>
+<blockquote>
+<p><strong>วัตถุประสงค์:</strong> เอกสารชุดนี้คือ "คลังความรู้ฟีเจอร์" ของแพลตฟอร์ม Re-ya สำหรับป้อนให้ AI ใช้เขียน/โพสต์คอนเทนต์การตลาด — โพสต์ขายระบบ, สอนใช้ฟีเจอร์, ทิป&amp;ทริค, แคปชัน LINE/Facebook, ใบขายฟีเจอร์ (one-pager), สคริปต์แก้ข้อโต้แย้ง ฯลฯ</p>
+<p><strong>กลุ่มเป้าหมายของคอนเทนต์:</strong> เจ้าของร้านยา / คลินิก / ธุรกิจสุขภาพในไทย (ภาษาไทยเป็นหลัก, โซน Asia/Bangkok)</p>
+</blockquote>
+<hr />
+<h2 id="sec-0-1">วิธีที่ AI ควรใช้คลังนี้</h2>
+<ol type="1">
+<li><strong>อ่าน README นี้ก่อนเสมอ</strong> เพื่อจับ persona, โทนแบรนด์, คำศัพท์มาตรฐาน และกติกาความแม่นยำ</li>
+<li>เลือกไฟล์ฟีเจอร์ที่ตรงกับหัวข้อโพสต์ (ดู <a href="#สารบัญ">สารบัญ</a>)</li>
+<li>ในแต่ละฟีเจอร์ ใช้บล็อก <strong>"มุมคอนเทนต์ที่โพสต์ได้"</strong> เป็นจุดตั้งต้นไอเดีย และ <strong>"ทิป &amp; ทริค"</strong> เป็นเนื้อหาสอนใช้งานเชิงลึก</li>
+<li>ดึง <strong>"ตัวเลข/คำศัพท์ที่อ้างได้"</strong> มาเสริมความน่าเชื่อถือ — แต่ต้องเช็กกติกาความแม่นยำด้านล่างก่อน</li>
+<li>ปิดท้ายด้วย CTA ตาม <a href="10-content-playbook.md">10-content-playbook.md</a></li>
+</ol>
+<hr />
+<h2 id="sec-0-2">⚠️ กติกาความแม่นยำ (อ่านก่อนเขียนโฆษณา)</h2>
+<p>เอกสารนี้สรุปจากโค้ดจริง แต่ <strong>ตัวเลขบางอย่างเป็น "ค่าเริ่มต้น (default)" ที่ปรับได้ต่อร้าน</strong> เช่น แต้มสะสม, เกณฑ์ระดับสมาชิก, ค่าส่ง, ขั้นต่ำส่งฟรี</p>
+<ul>
+<li>✅ พูดถึง <strong>ความสามารถ</strong> ของฟีเจอร์ได้เต็มที่ ("ระบบสะสมแต้มอัตโนมัติ", "ตรวจสลิปอัตโนมัติ")</li>
+<li>⚠️ ตัวเลขที่ตามด้วยป้าย <strong><code><span class="tag-default">[ค่าเริ่มต้น]</span></code></strong> หรือ <strong><code><span class="tag-default">[ตัวอย่าง]</span></code></strong> = อย่านำไปโฆษณาเป็นตัวเลขตายตัว ให้พูดแบบยืดหยุ่น ("ตั้งค่าได้เอง", "เช่น...") หรือยืนยันกับเจ้าของร้านก่อน</li>
+<li>⚠️ <strong>ตัวเลขด้านเวลา/ความเร็ว/ประสิทธิภาพ</strong> (เช่น "ตรวจสลิป ~30 วินาที", "แดชบอร์ดโหลด ~2 วิ") เป็น <strong>ตัวอย่างเชิงเปรียบเทียบ</strong> ไม่ใช่การรับประกัน — ให้ใช้คำว่า "ภายในไม่กี่วินาที", "เร็วขึ้นมาก" แทนการพูดตัวเลขเป๊ะ</li>
+<li>🚫 ห้ามกล่าวอ้างเชิงการแพทย์เกินจริง — AI ปรึกษาเภสัชเป็น "ผู้ช่วย" ไม่ใช่แทนเภสัชกร/แพทย์ และมีระบบส่งต่อเคสฉุกเฉินให้คนจริงเสมอ</li>
+<li>🚫 ห้ามเปิดเผยข้อมูลเทคนิคที่อ่อนไหว (ชื่อ DB, endpoint, token, โครง schema) ในคอนเทนต์สาธารณะ — ข้อมูลพวกนี้มีไว้ให้ AI "เข้าใจ" ฟีเจอร์ ไม่ใช่เอาไปโพสต์</li>
+<li>🚫 <strong>คำภาษาอังกฤษในวงเล็บ</strong> ที่อยู่ในไฟล์ฟีเจอร์ (เช่น <code>(line_account_id)</code>, <code>(sale_price)</code>, <code>(multicast)</code>, <code>(WebRTC)</code>, <code>(RFM)</code>) มีไว้ให้ AI "เข้าใจ" เท่านั้น — <strong>ห้ามลอกไปใส่ในโพสต์</strong> ให้ใช้คำไทยที่อยู่ข้างหน้าแทนเสมอ</li>
+</ul>
+<hr />
+<h2 id="sec-0-3">แพลตฟอร์มคืออะไร (Elevator pitch)</h2>
+<p><strong>Re-ya</strong> คือระบบ CRM + ร้านค้าออนไลน์ + ผู้ช่วย AI ครบวงจรสำหรับร้านยา/คลินิกไทย ที่ทำงานบน <strong>LINE Official Account</strong> เป็นหลัก รวมทุกอย่างไว้ที่เดียว:</p>
+<ul>
+<li>💬 <strong>กล่องข้อความรวม (Omni-channel Inbox)</strong> — คุยกับลูกค้าจาก LINE/Facebook/TikTok ในจอเดียว พร้อมแท็ก, มอบหมายงาน, สถานะงาน</li>
+<li>💊 <strong>ระบบจ่ายยา (Dispense)</strong> — เลือกยา คิดเงิน ออกฉลากยา Flex ส่งให้ลูกค้าใน LINE</li>
+<li>🛒 <strong>ร้านค้า LINE Mini App</strong> — หน้าร้าน ตะกร้า เช็กเอาต์ หลายช่องทางจ่ายเงิน</li>
+<li>🤖 <strong>AI เภสัชกรผู้ช่วย 24 ชม.</strong> — คัดกรองอาการ แนะนำยา ตรวจยาตีกัน ส่งต่อเภสัชเมื่อฉุกเฉิน</li>
+<li>🎁 <strong>ระบบสมาชิก &amp; สะสมแต้ม</strong> — สมัครอัตโนมัติเมื่อกดติดตาม, ระดับสมาชิก, แลกของรางวัล</li>
+<li>📣 <strong>บรอดแคสต์ + AI Studio</strong> — ส่งโปรหาลูกค้าแบบเจาะกลุ่ม, สร้างการ์ด Flex สวยด้วย AI</li>
+<li>🧾 <strong>เอกสารภาษี (VAT)</strong> — ใบเสร็จ/ใบกำกับภาษี/ใบเสนอราคา แบบไทยถูกกฎหมาย + เชื่อม Odoo ERP</li>
+<li>🏢 <strong>SaaS หลายร้าน (Multi-tenant)</strong> — แต่ละร้านมีฐานข้อมูลแยก ปลอดภัย ไม่ปนกัน</li>
+</ul>
+<hr />
+<h2 id="sec-0-4">Persona ลูกค้า (ใช้เลือกมุมการเขียน)</h2>
+<table>
+<thead>
+<tr>
+<th>Persona</th>
+<th>ใครคือคนนี้</th>
+<th>เจ็บปวดเรื่องอะไร</th>
+<th>มุมที่โดน</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>เจ้าของร้านยาเดี่ยว</strong></td>
+<td>ทำเองเกือบทุกอย่าง เวลาน้อย</td>
+<td>ตอบแชทไม่ทัน, ตรวจสลิปเอง, สต็อกมั่ว</td>
+<td>"ให้ระบบช่วยตอบ + ตรวจสลิป + คุมสต็อกแทนคุณ"</td>
+</tr>
+<tr>
+<td><strong>ร้านยาหลายสาขา</strong></td>
+<td>มีพนักงานหลายคน</td>
+<td>งานซ้ำซ้อน ใครคุยกับใครไม่รู้</td>
+<td>"มอบหมายงาน + สถานะลูกค้า + รายงานรวมทุกสาขา"</td>
+</tr>
+<tr>
+<td><strong>เภสัชกร</strong></td>
+<td>เน้นความปลอดภัยผู้ป่วย</td>
+<td>กลัวจ่ายยาผิด/ยาตีกัน</td>
+<td>"เช็กแพ้ยา/ยาตีกันอัตโนมัติ + ฉลากยามาตรฐาน"</td>
+</tr>
+<tr>
+<td><strong>คลินิก/ธุรกิจสุขภาพ</strong></td>
+<td>มีนัดหมาย + ขายสินค้า</td>
+<td>จัดการนัด + ขายของ + ใบเสร็จ</td>
+<td>"ครบทั้งนัดหมาย ร้านค้า และใบกำกับภาษี"</td>
+</tr>
+<tr>
+<td><strong>ร้านที่ underuse ระบบ</strong></td>
+<td>ซื้อแล้วใช้ไม่คุ้ม</td>
+<td>ใช้แค่แชท ไม่ได้ใช้ฟีเจอร์ลึก</td>
+<td>คอนเทนต์สอน "ใช้ CRM ให้โปร" (retention)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="sec-0-5">โทนแบรนด์ (Brand voice)</h2>
+<ul>
+<li><strong>น้ำเสียง:</strong> มืออาชีพแต่เข้าถึงง่าย, อบอุ่นแบบร้านยาใกล้บ้าน, น่าเชื่อถือเชิงสุขภาพ</li>
+<li><strong>โทนสี/ภาพ:</strong> พรีเมียม dark-teal/เขียวเภสัช (อ้างอิงธีมในระบบ เช่น เขียว <code>#06C755</code> ของ LINE, teal <code>#0891b2</code>, เขียวเข้ม <code>#006400</code>)</li>
+<li><strong>ภาษา:</strong> ไทยเป็นหลัก กระชับ มี emoji พอดี ๆ ไม่รก, เลี่ยงศัพท์เทคนิคหนักกับลูกค้าปลายทาง</li>
+<li><strong>หลีกเลี่ยง:</strong> สัญญาเกินจริง, เคลมทางการแพทย์, ตัวเลขที่ยังไม่ยืนยัน, ศัพท์ dev</li>
+</ul>
+<hr />
+<h2 id="sec-0-6">คำศัพท์มาตรฐาน (ใช้ให้ตรงกันทุกโพสต์)</h2>
+<table>
+<thead>
+<tr>
+<th>ใช้คำนี้</th>
+<th>ไม่ใช้ / ระวัง</th>
+<th>หมายเหตุ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ระบบจ่ายยา</td>
+<td>"dispense module"</td>
+<td>ภาษาลูกค้า</td>
+</tr>
+<tr>
+<td>กล่องข้อความรวม / อินบ็อกซ์</td>
+<td>"inbox-v2", "CRM HUD"</td>
+<td>ชื่อภายใน อย่าโพสต์</td>
+</tr>
+<tr>
+<td>AI เภสัชกรผู้ช่วย</td>
+<td>"AI หมอ", "AI วินิจฉัย"</td>
+<td>ต้องเลี่ยงคำว่าวินิจฉัย/รักษา</td>
+</tr>
+<tr>
+<td>ตรวจสลิปอัตโนมัติ</td>
+<td>"GhostX"</td>
+<td>GhostX คือผู้ให้บริการเบื้องหลัง ไม่ต้องโชว์</td>
+</tr>
+<tr>
+<td>ร้านค้า LINE (Mini App)</td>
+<td>"LIFF", "Next.js"</td>
+<td>ภาษาลูกค้า</td>
+</tr>
+<tr>
+<td>ระบบสมาชิก/สะสมแต้ม</td>
+<td>"loyalty engine"</td>
+<td></td>
+</tr>
+<tr>
+<td>บรอดแคสต์ / ส่งโปรเจาะกลุ่ม</td>
+<td>"multicast"</td>
+<td></td>
+</tr>
+<tr>
+<td>ใบกำกับภาษี/ใบเสร็จ</td>
+<td>"VAT doc suite"</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="sec-0-7">สารบัญ</h2>
+<table>
+<thead>
+<tr>
+<th>ไฟล์</th>
+<th>ครอบคลุมฟีเจอร์</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="01-line-oa-inbox-crm.md">01-line-oa-inbox-crm.md</a></td>
+<td>LINE OA หลายบัญชี, ตอบกลับอัตโนมัติ, กล่องข้อความรวม, ตัวกรอง/ค้นหา, มอบหมายงาน, สถานะลูกค้า, แท็ก, โน้ตลูกค้า, แม่แบบ/Quick Reply, Rich Menu ไดนามิก</td>
+</tr>
+<tr>
+<td><a href="02-dispense-pharmacy.md">02-dispense-pharmacy.md</a></td>
+<td>ระบบจ่ายยา, ค้นหายา, ฉลากยา Flex, 4 โหมดชำระเงินหน้าร้าน, บันทึกการจ่ายยา</td>
+</tr>
+<tr>
+<td><a href="03-shop-miniapp-checkout.md">03-shop-miniapp-checkout.md</a></td>
+<td>หน้าร้าน LINE Mini App, ค้นหา/หมวดหมู่, รายละเอียดสินค้า, สินค้าหลายหน่วย, ตะกร้า, เช็กเอาต์, ช่องทางจ่ายเงิน, อัปสลิป, สมัคร/โปรไฟล์</td>
+</tr>
+<tr>
+<td><a href="04-inventory-products.md">04-inventory-products.md</a></td>
+<td>ศูนย์รวมสินค้า/สต็อก, กลุ่มยา, ชื่อสามัญ, ฉลากยา (เทมเพลต), ฐานข้อมูลยาตีกัน, แจ้งของใกล้หมด</td>
+</tr>
+<tr>
+<td><a href="05-ai-consultation-slip.md">05-ai-consultation-slip.md</a></td>
+<td>AI เภสัชกร (คัดกรอง→แนะนำยา→ความปลอดภัย→ส่งต่อ), AI อ่านรูป, สรุปแชท, ส่งให้เภสัชอนุมัติ, ตรวจสลิปอัตโนมัติ</td>
+</tr>
+<tr>
+<td><a href="06-loyalty-membership.md">06-loyalty-membership.md</a></td>
+<td>สมัครสมาชิกอัตโนมัติเมื่อติดตาม, ระดับสมาชิก, แต้มสะสม, แลกของรางวัล, บัตรสมาชิก</td>
+</tr>
+<tr>
+<td><a href="07-broadcast-aistudio.md">07-broadcast-aistudio.md</a></td>
+<td>บรอดแคสต์เจาะกลุ่ม, ตั้งเวลาส่ง, นับคลิก, AI Studio สร้าง Flex, Flex builder</td>
+</tr>
+<tr>
+<td><a href="08-documents-odoo-platform.md">08-documents-odoo-platform.md</a></td>
+<td>เอกสาร VAT, รายงานภาษีขาย, เชื่อม Odoo ERP, แดชบอร์ดบัญชี, การแจ้งเตือนหลายช่องทาง, SaaS หลายร้าน, ตั้งค่า, แลนดิ้ง</td>
+</tr>
+<tr>
+<td><a href="09-appointments-telepharmacy-reminders.md">09-appointments-telepharmacy-reminders.md</a></td>
+<td>นัดหมายปรึกษาเภสัช, วิดีโอคอลเทเลฟาร์มาซี, เตือนนัด/เตือนกินยา/เตือนเติมยา, ความยินยอม &amp; PDPA, สถิติ/แบ่งกลุ่มลูกค้า</td>
+</tr>
+<tr>
+<td><a href="10-content-playbook.md">10-content-playbook.md</a></td>
+<td>คู่มือเขียนโพสต์: เทมเพลตโพสต์, hooks, hashtag, CTA, mapping persona→ฟีเจอร์, do/don't, ปฏิทินคอนเทนต์</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="sec-0-8">เทมเพลตมาตรฐานของแต่ละฟีเจอร์ (รูปแบบที่จะเจอในทุกไฟล์)</h2>
+<pre><code>## ฟีเจอร์: &lt;ชื่อไทย&gt; (&lt;English&gt;)
+**คืออะไร:** อธิบายสั้น ภาษาลูกค้า
+**แก้ปัญหาอะไร (จุดขาย):** pain → gain
+**ความสามารถหลัก:** bullet
+**วิธีใช้ (ขั้นตอน):** 1-2-3
+**ทิป &amp; ทริค:** เกร็ดเชิงลึก/power-user/กันพลาด
+**มุมคอนเทนต์ที่โพสต์ได้:** ไอเดียหัวข้อโพสต์
+**ตัวเลข/คำศัพท์ที่อ้างได้:** ค่าจริง (ติดป้าย <span class="tag-default">[ค่าเริ่มต้น]</span>/<span class="tag-default">[ตัวอย่าง]</span> เมื่อปรับได้)</code></pre>
+
+</section>
+<section class="doc" data-file="01-line-oa-inbox-crm.md">
+<h1 id="sec-1">01 — LINE OA &amp; กล่องข้อความรวม (Inbox / CRM)</h1>
+<blockquote>
+<p>หมวดนี้คือหัวใจการ "คุยกับลูกค้า" ทั้งหมด: รับ-ตอบข้อความหลายช่องทาง, จัดระเบียบลูกค้าด้วยแท็ก/โน้ต, แบ่งงานในทีม, และเมนู Rich Menu อัจฉริยะ</p>
+</blockquote>
+<hr />
+<h2 id="sec-1-1">ฟีเจอร์: จัดการ LINE OA หลายบัญชีในที่เดียว (Multi-Account LINE OA)</h2>
+<p><strong>คืออะไร:</strong> ร้านที่มีหลาย LINE OA (เช่น หลายสาขา/หลายแบรนด์) จัดการได้จากแดชบอร์ดเดียว ข้อมูลลูกค้า/แชท/ตั้งค่าของแต่ละบัญชีแยกกันสะอาด</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ไม่ต้องสลับเครื่อง/สลับแอปไปมา หลายสาขาดูรวมที่เดียวแต่ข้อมูลไม่ปนกัน</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ทุกฟีเจอร์ผูกกับ "บัญชี LINE" ของร้าน แยกข้อมูลแต่ละบัญชีชัดเจน</li>
+<li>ตรวจสอบความถูกต้องของ webhook ด้วยลายเซ็น (HMAC-SHA256) ทุกข้อความ → ปลอดภัย ปลอมไม่ได้</li>
+<li>เก็บสถิติรายวันต่อบัญชี: ผู้ติดตามใหม่, เลิกติดตาม, จำนวนข้อความ, การโต้ตอบ</li>
+<li>รองรับหลายแพลตฟอร์มในอินบ็อกซ์เดียว: LINE / Facebook / TikTok</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>เพิ่มบัญชี LINE OA ในหน้า ตั้งค่า → ใส่ Channel Access Token + Channel Secret</li>
+<li>ตั้งค่า Webhook ใน LINE Developers ให้ชี้มาที่ระบบ</li>
+<li>ระบบแยกข้อความเข้าแต่ละบัญชีอัตโนมัติ</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ทุกบัญชีมีสถิติแยกของตัวเอง → เอามาเทียบ performance ระหว่างสาขาได้</li>
+<li>เชื่อม Facebook/TikTok เพิ่มได้ในหน้าตั้งค่า "การเชื่อมต่อแพลตฟอร์ม" → ตอบลูกค้าทุกช่องทางในจอเดียว</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ร้านมีหลายสาขา? คุยลูกค้าทุก LINE OA ในจอเดียว ไม่ต้องสลับมือถือ"</li>
+<li>"รวมแชท LINE + Facebook + TikTok ไว้ที่เดียว — ตอบทุกช่องไม่ตกหล่น"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong></p>
+<ul>
+<li>รองรับ 3 แพลตฟอร์ม: LINE, Facebook, TikTok</li>
+<li>ยืนยันตัวตนข้อความด้วยลายเซ็นดิจิทัลทุกครั้ง</li>
+</ul>
+<hr />
+<h2 id="sec-1-2">ฟีเจอร์: ตอบกลับอัตโนมัติ &amp; ประหยัดโควต้า (Auto-reply / Reply-token fallback)</h2>
+<p><strong>คืออะไร:</strong> ระบบตอบลูกค้าอัตโนมัติเมื่อมีเหตุการณ์ (ทักมา, ติดตาม, กดปุ่มโปร) และเลือกวิธีส่งที่ "ฟรี" ก่อนเสมอเพื่อประหยัดโควต้าข้อความ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ตอบไว 24 ชม. แม้ไม่มีคนเฝ้า + ประหยัดค่าข้อความ (LINE คิดเงินเฉพาะ push)</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>จับเหตุการณ์ครบ: ติดตาม (follow), เลิกติดตาม (unfollow), ข้อความ (text/รูป/วิดีโอ/สติกเกอร์/ตำแหน่ง), กดปุ่มโปร (postback), อ่านแล้ว (read), เข้า/ออกกลุ่ม</li>
+<li><strong>กลไกประหยัดโควต้า:</strong> พยายามตอบด้วย reply token (ฟรี) ก่อน ถ้าหมดอายุค่อย fallback ไป push (เสียโควต้า)</li>
+<li>เล่นอนิเมชัน "กำลังพิมพ์..." ระหว่าง AI ประมวลผล → ลูกค้ารู้สึกว่าระบบกำลังทำงาน</li>
+<li>กันข้อความซ้ำ (กันประมวลผลซ้ำซ้อนต่อ event)</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong> ทำงานอัตโนมัติเบื้องหลัง — ตั้งค่าข้อความต้อนรับได้ในหน้า ตั้งค่า → ข้อความต้อนรับ</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>reply token มีอายุสั้นมาก (~50 วินาที) ระบบจึงเซฟทันทีและ fallback ให้อัตโนมัติ → คอนเทนต์ขายได้ว่า "ตอบไวจนทันโควต้าฟรี ช่วยลดต้นทุนข้อความ"</li>
+<li>ฟีเจอร์ "อ่านแล้ว" จะใช้ได้เมื่อเปิด Chat ใน LINE OA Manager เท่านั้น</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้าทักตอนตี 2 ก็ได้คำตอบ — ระบบตอบอัตโนมัติ 24 ชม."</li>
+<li>"รู้ไหม? การตอบแชทมีต้นทุน ระบบเราเลือกวิธีส่งแบบประหยัดโควต้าให้อัตโนมัติ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong></p>
+<ul>
+<li>จับเหตุการณ์ลูกค้า 8+ ประเภท</li>
+<li>ตอบฟรีก่อน (reply) แล้วค่อย push เมื่อจำเป็น</li>
+</ul>
+<hr />
+<h2 id="sec-1-3">ฟีเจอร์: กล่องข้อความรวมแบบเรียลไทม์ (Unified Inbox)</h2>
+<p><strong>คืออะไร:</strong> หน้ารวมทุกบทสนทนา เรียงตามล่าสุด อัปเดตแบบเรียลไทม์ พร้อมป้ายยังไม่ได้อ่าน/ตัวอย่างข้อความล่าสุด/รูปโปรไฟล์</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เห็นทุกแชทในที่เดียว ไม่พลาดลูกค้า งานไหลลื่นแม้แชทเยอะ</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>เรียงตามข้อความล่าสุด (ลูกค้าที่เพิ่งทักอยู่บนสุด)</li>
+<li>โหลดเร็วแบบ cursor pagination + แคชอัจฉริยะ → ลื่นแม้มีลูกค้าหลายพันคน</li>
+<li>อัปเดตเฉพาะส่วนที่เปลี่ยน (delta) → ประหยัดเน็ต ไม่ต้องรีโหลดทั้งหน้า</li>
+<li>แสดงจำนวนยังไม่อ่าน, ตัวอย่างข้อความล่าสุด, ทิศทาง (เข้า/ออก), แท็ก, ผู้รับผิดชอบ, สถานะงาน</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>เปิดหน้ากล่องข้อความ → เห็นรายการลูกค้าทั้งหมด</li>
+<li>คลิกลูกค้า → อ่านประวัติแชท + แผงข้อมูลลูกค้า (CRM)</li>
+<li>พิมพ์ตอบ / แนบไฟล์ / ส่งแม่แบบ / จ่ายยา ได้จากหน้าเดียว</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>หน้าแรกโหลด 200 แชท แล้วโหลดเพิ่มอัตโนมัติเป็นชุด ๆ → ลูกค้าเก่าไม่หาย (เคยปรับเพดานจาก 100 → 500 เพื่อให้เห็นลูกค้าเก่าครบ)</li>
+<li>มีกลุ่มพิเศษ "ผู้ติดตามที่ยังไม่เคยทัก" → เอาไว้ยิงทักก่อนเพื่อเปลี่ยนผู้ติดตามเย็น ๆ ให้เป็นลูกค้า</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"แชทเยอะจนสับสน? กล่องข้อความรวมเรียงให้คนเพิ่งทักอยู่บนสุดเสมอ"</li>
+<li>"ทริค: ดึงรายชื่อ 'คนที่กดติดตามแต่ยังไม่เคยทัก' มายิงโปรก่อนใคร"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong></p>
+<ul>
+<li>โหลด 200 แชทแรก แล้วโหลดเพิ่มทีละ 200 (สูงสุด 500/ครั้ง)</li>
+<li>อัปเดตแบบเรียลไทม์ (delta + แคช 30 วินาที)</li>
+</ul>
+<hr />
+<h2 id="sec-1-4">ฟีเจอร์: ตัวกรอง &amp; ค้นหาบทสนทนา (Filters &amp; Search)</h2>
+<p><strong>คืออะไร:</strong> กรอง/ค้นหาลูกค้าได้หลายเงื่อนไขพร้อมกัน เพื่อโฟกัสงานที่สำคัญ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> หาลูกค้าที่ต้องดูแลก่อนได้ใน 2 วินาที แทนที่จะเลื่อนหาเอง</p>
+<p><strong>ความสามารถหลัก (กรองได้ตาม):</strong></p>
+<ul>
+<li>สถานะงาน: รอดำเนินการ / เสร็จ / กำลังจัดส่ง / ติดตามพัสดุ / รอวางบิล</li>
+<li>เฉพาะที่ยังไม่อ่าน</li>
+<li>แท็กลูกค้า (เช่น VIP, แพ้ยา)</li>
+<li>ผู้รับผิดชอบ (รวมตัวเลือก "ยังไม่มีคนรับ")</li>
+<li>ช่วงวันที่</li>
+<li>ค้นหาข้อความ: ชื่อลูกค้า / เนื้อหาข้อความล่าสุด / ชื่อแท็ก</li>
+<li>แพลตฟอร์ม: LINE / Facebook / TikTok</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong> เลือกตัวกรองด้านบนกล่องข้อความ → ผสมหลายเงื่อนไขได้ (เป็น AND ทุกเงื่อนไขต้องจริง)</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ผสม <strong>แท็ก + สถานะงาน</strong> = ตัวกรองทรงพลัง เช่น "VIP + รอดำเนินการ" = ลูกค้ามูลค่าสูงที่กำลังรอเรา → จัดการก่อน</li>
+<li>กรอง "ยังไม่มีคนรับ" ทุกเช้า = เคลียร์ลูกค้าที่ตกหล่นไม่มีใครดูแล</li>
+<li>กรองช่วงวันที่ = ทำรายงานรายวัน/รายสัปดาห์ได้</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ทริคจัดคิวงานเช้า: กรอง 'ยังไม่มีคนรับ' + 'ยังไม่อ่าน' แล้วเคลียร์ให้หมดก่อนเปิดร้าน"</li>
+<li>"หาลูกค้า VIP ที่กำลังรอตอบใน 2 วิ ด้วยตัวกรองซ้อนกัน"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> กรองพร้อมกันได้ 7 มิติ + ค้นหา 3 แบบ (ชื่อ/ข้อความ/แท็ก)</p>
+<hr />
+<h2 id="sec-1-5">ฟีเจอร์: แท็กลูกค้า &amp; ติดแท็กอัตโนมัติ (Customer Tags &amp; Auto-tagging)</h2>
+<p><strong>คืออะไร:</strong> จัดกลุ่มลูกค้าด้วยป้ายสี (เช่น VIP, ลูกค้าใหม่, แพ้ยา, ตะกร้าค้าง) ทั้งติดเองและให้ระบบติดอัตโนมัติตามพฤติกรรม</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> รู้จักลูกค้าแต่ละคนทันทีที่เปิดแชท + ยิงโปรเจาะกลุ่มได้แม่น</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>แท็กมีชื่อ + สีกำหนดเอง + คำอธิบาย</li>
+<li>ติดแท็กอัตโนมัติเมื่อ: กดติดตาม (เช่น "ลูกค้าใหม่"), กดปุ่มสินค้าในบรอดแคสต์, ซื้อสินค้า</li>
+<li>กันติดซ้ำ (ติดแท็กเดิมซ้ำไม่ได้)</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>สร้างแท็ก + เลือกสี</li>
+<li>ติดเองจากแผงลูกค้า หรือ ตั้งกฎติดอัตโนมัติ</li>
+<li>นำแท็กไปใช้กรองอินบ็อกซ์ หรือเป็นกลุ่มเป้าหมายบรอดแคสต์</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้ง "ติดแท็กอัตโนมัติเมื่อกดปุ่มในบรอดแคสต์" → ลูกค้าสนใจสินค้าไหน ระบบจัดกลุ่มให้ทันที เอาไป remarketing ต่อได้</li>
+<li>ใช้แท็กสี = สแกนสายตาเร็ว เห็น VIP (สีแดง) ปุ๊บรู้ปั๊บ</li>
+<li>แท็ก "แพ้ยา" = เตือนเภสัชก่อนจ่ายยา (ความปลอดภัย)</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้ากดดูครีมกันแดดในโปร = ระบบติดแท็ก 'สนใจกันแดด' ให้อัตโนมัติ พร้อมยิงโปรรอบหน้า"</li>
+<li>"ติดแท็กลูกค้า = ทำการตลาดเจาะกลุ่มได้จริง ไม่ใช่หว่านส่งทุกคน"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ติดแท็กอัตโนมัติได้ 3 จังหวะ (ติดตาม / กดปุ่มโปร / ซื้อ)</p>
+<hr />
+<h2 id="sec-1-6">ฟีเจอร์: โน้ตลูกค้า &amp; ข้อมูลโปรไฟล์ (Customer Notes &amp; Profile)</h2>
+<p><strong>คืออะไร:</strong> บันทึกข้อมูลลูกค้าแต่ละคน (ชื่อจริง, เบอร์, ที่อยู่, วันเกิด, โน้ตภายใน เช่น "แพ้เพนนิซิลลิน") ทีมเห็นตรงกัน</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ความรู้เรื่องลูกค้าอยู่ในระบบ ไม่ใช่ในหัวพนักงานคนเดียว — เปลี่ยนคนดูแลก็ไม่หลุด</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>แก้ไขได้: ชื่อแสดง, เบอร์, อีเมล, ที่อยู่, ชื่อจริง, วันเกิด, จังหวัด/อำเภอ/รหัสไปรษณีย์, เพศ, โน้ต, รหัสสมาชิก</li>
+<li>ชื่อที่แก้เองจะถูกเก็บแยก เพื่อไม่ให้ LINE เขียนทับ</li>
+<li>โน้ตหลายบรรทัด ทีมเห็นร่วมกัน</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong> เปิดแชทลูกค้า → แผงข้อมูลด้านข้าง → แก้ไขฟิลด์ที่ต้องการ → บันทึก</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ใช้โน้ตเก็บ "ข้อมูลที่ขายของได้" เช่น โรคประจำตัว, ยาที่กินประจำ, ลูกค้าชอบยี่ห้อไหน → ครั้งหน้าเสนอได้ตรงใจ</li>
+<li>แก้ "ชื่อแสดง" เป็นชื่อจริง/ชื่อเล่นที่จำได้ จะไม่โดน LINE เขียนทับ</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"พนักงานลาออกแล้วข้อมูลลูกค้าหายไปด้วย? ไม่อีกต่อไป — ทุกโน้ตอยู่ในระบบ ทีมเห็นตรงกัน"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> บันทึกข้อมูลลูกค้าได้ 11+ ฟิลด์ต่อคน</p>
+<hr />
+<h2 id="sec-1-7">ฟีเจอร์: มอบหมายงาน &amp; สถานะงาน (Assignment &amp; Chat Status)</h2>
+<p><strong>คืออะไร:</strong> มอบหมายลูกค้าให้พนักงาน (หลายคนได้) + ติดสถานะงานของแต่ละบทสนทนา</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ทีมไม่ทำงานซ้ำ ไม่มีลูกค้าตกหล่น รู้ว่าใครดูแลใคร งานถึงไหนแล้ว</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>มอบหมายลูกค้า 1 คนให้พนักงานได้หลายคน (เช่น เภสัช + แอดมินจัดส่ง)</li>
+<li>สถานะมอบหมาย: กำลังทำ / เสร็จ / ส่งต่อ + โน้ตเหตุผล</li>
+<li>สถานะงานบทสนทนา: รอดำเนินการ / เสร็จ / กำลังจัดส่ง / ติดตามพัสดุ / รอวางบิล (เพิ่มเองได้)</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong> ในแชท → เลือกผู้รับผิดชอบ + ตั้งสถานะงาน → กรองดูภายหลังตามคน/สถานะ</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ใช้สถานะงานเป็น "คัมบัง" ของร้าน: เช้าดู "รอดำเนินการ", เที่ยงดู "กำลังจัดส่ง" — จัดคิวงานทั้งวันได้</li>
+<li>สถานะต้องตั้งเอง (ไม่เปลี่ยนอัตโนมัติ) → ใช้เป็นวินัยทีม</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ร้านหลายคนทำงาน? มอบหมายลูกค้าให้แต่ละคน ไม่ตอบซ้ำ ไม่มีใครตกหล่น"</li>
+<li>"จัดคิวงานร้านยาเหมือนบอร์ดคัมบัง ด้วยสถานะลูกค้า 5 แบบ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> มอบหมายได้หลายคน/ลูกค้า, สถานะงานเริ่มต้น 5 แบบ + เพิ่มเองได้</p>
+<hr />
+<h2 id="sec-1-8">ฟีเจอร์: แม่แบบข้อความ &amp; ปุ่มตอบด่วน (Templates &amp; Quick Replies)</h2>
+<p><strong>คืออะไร:</strong> เก็บข้อความที่ใช้บ่อยเป็นแม่แบบ พร้อมปุ่มตอบด่วน → ส่งให้ลูกค้าได้ในคลิกเดียว</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ไม่ต้องพิมพ์ซ้ำ ตอบเร็วขึ้นมาก คุณภาพข้อความสม่ำเสมอ</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>แม่แบบมีชื่อ + เนื้อหา + หมวด + ปุ่มตอบด่วน</li>
+<li>ปุ่มตอบด่วนรองรับหลายชนิด: ส่งข้อความ, postback, เปิดลิงก์, เปิดกล้อง, ส่งตำแหน่ง</li>
+<li>ชุดปุ่มสำเร็จรูป เช่น เมนูหลัก, ช้อปปิ้ง, ออเดอร์, ซัพพอร์ต</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>สร้างแม่แบบ + ใส่ปุ่มตอบด่วน</li>
+<li>ในแชท เลือกแม่แบบ → ส่งได้ทันที</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ทำแม่แบบ "ยืนยันจ่ายยาเรียบร้อย + ปุ่ม [ชำระเงิน]/[สอบถาม]" → ปิดการขายเร็วขึ้น</li>
+<li>LINE จำกัดปุ่มตอบด่วนสูงสุด 13 ปุ่ม/ข้อความ — จัดเรียงให้สำคัญสุดก่อน</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"พิมพ์คำเดิมวันละ 50 รอบ? ทำแม่แบบไว้ คลิกเดียวจบ"</li>
+<li>"ปุ่มตอบด่วน = ลูกค้าแตะเลือกเอง ไม่ต้องพิมพ์ ปิดการขายไวขึ้น"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ปุ่มตอบด่วนสูงสุด 13 ปุ่ม/ข้อความ, ปุ่มได้ 6 ชนิด</p>
+<hr />
+<h2 id="sec-1-9">ฟีเจอร์: ค้นหายาในแชท (Drug Search in Inbox)</h2>
+<p><strong>คืออะไร:</strong> ค้นหายา/สินค้าได้ทันทีในแชท (ตามชื่อ/ชื่อสามัญ/SKU) เห็นราคา สต็อก ข้อควรระวัง</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เภสัชหาข้อมูลยาได้เร็วระหว่างคุยลูกค้า ไม่ต้องเปิดอีกหน้า</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ค้นแบบ autocomplete ตามชื่อ/ชื่อสามัญ/SKU</li>
+<li>แสดงราคาขาย (ราคาโปรทับราคาปกติถ้ามี), สต็อก, หน่วย, ผู้ผลิต, ข้อห้ามใช้</li>
+<li>กรองเฉพาะสินค้าที่เปิดขายอยู่</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>พิมพ์ "ชื่อสามัญ" ค้นได้ → เจอยี่ห้อที่มีตัวยาเดียวกันทั้งหมด เสนอทางเลือกราคาประหยัดให้ลูกค้าได้</li>
+<li>ค้นขั้นต่ำ 2 ตัวอักษร</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"เภสัชค้นข้อมูลยาได้ทันทีในแชท — ราคา สต็อก ข้อควรระวัง ครบในที่เดียว"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ค้นได้ทันที (ขั้นต่ำ 2 ตัวอักษร), เห็นราคา/สต็อก/ข้อห้ามใช้</p>
+<hr />
+<h2 id="sec-1-10">ฟีเจอร์: Rich Menu อัจฉริยะ (Dynamic Rich Menu)</h2>
+<p><strong>คืออะไร:</strong> เมนูปุ่มด้านล่างแชท LINE ที่เปลี่ยนให้ลูกค้าแต่ละกลุ่มไม่เหมือนกันโดยอัตโนมัติ (เช่น เมนู VIP, เมนูต้อนรับลูกค้าใหม่, เมนูดึงลูกค้าหาย)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลูกค้าแต่ละกลุ่มเห็นเมนูที่เหมาะกับตัวเอง → กดใช้งานมากขึ้น ขายได้มากขึ้น</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>หลายเมนู: VIP / ต้อนรับ / ดึงกลับ / ค่าเริ่มต้น</li>
+<li>กำหนดกฎสลับเมนูตามแท็ก, ประวัติซื้อ, วันที่โต้ตอบล่าสุด</li>
+<li>ลูกค้า 1 คนมีเมนูที่ใช้งานอยู่ 1 อันเสมอ + เก็บประวัติว่าใครเปลี่ยนเพราะกฎอะไร</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>สร้าง Rich Menu ใน LINE → นำ ID มาลงทะเบียนในระบบ</li>
+<li>ตั้งกฎ (เช่น มีแท็ก VIP + ซื้อ ≥ 5 ครั้งใน 30 วัน → เมนู VIP)</li>
+<li>ระบบสลับเมนูอัตโนมัติเมื่อเข้าเงื่อนไข</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้งเมนูต้อนรับให้ลูกค้าใหม่อัตโนมัติเมื่อกดติดตาม → first impression ดี</li>
+<li>เมนู "ดึงกลับ" สำหรับคนหายไปนาน → ใส่ปุ่มโปรพิเศษ</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้า VIP เห็นเมนูพิเศษ ลูกค้าใหม่เห็นเมนูต้อนรับ — เมนู LINE ที่ฉลาดกว่าเดิม"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เมนูเปลี่ยนตามกฎอัตโนมัติ, 1 ลูกค้า = 1 เมนูที่ใช้งานอยู่</p>
+
+</section>
+<section class="doc" data-file="02-dispense-pharmacy.md">
+<h1 id="sec-2">02 — ระบบจ่ายยา &amp; ชำระเงินหน้าร้าน (Dispense &amp; POS Payment)</h1>
+<blockquote>
+<p>หัวใจของงานเภสัชกร: เลือกยา → ระบุวิธีใช้ → คิดเงิน → ส่งฉลากยาสวย ๆ เข้า LINE ลูกค้า ครบในไม่กี่คลิก</p>
+</blockquote>
+<hr />
+<h2 id="sec-2-1">ฟีเจอร์: ระบบจ่ายยา (Dispense / ระบบจ่ายยา)</h2>
+<p><strong>คืออะไร:</strong> เภสัชเลือกยาจากคลัง ระบุขนาด-เวลา-วิธีใช้ คิดราคารวม แล้วส่ง "ฉลากยา" แบบการ์ด Flex เข้า LINE ลูกค้าทันที พร้อมบันทึกประวัติการจ่ายยา</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เลิกเขียนฉลากด้วยมือ/ปริ้นต์แยก — จ่ายยาเป็นมืออาชีพ ลูกค้าได้ข้อมูลยาชัดเจนในมือถือ ลดการกินยาผิด</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ค้นหายาแบบ autocomplete (ชื่อ/ชื่อสามัญ/SKU) เห็นราคา/สต็อก</li>
+<li>การ์ดยาที่เลือก: ชื่อยา + ชื่อสามัญ, ราคา/หน่วย, จำนวน, <strong>ปุ่มเวลา เช้า/กลางวัน/เย็น/ก่อนนอน</strong> (เลือกหลายช่วงได้), ช่องวิธีใช้, ช่องคำเตือน</li>
+<li>คิดราคารวมอัตโนมัติ (ราคา × จำนวน ของทุกตัว)</li>
+<li>บันทึกข้อมูลเภสัช: ชื่อ, เลขใบอนุญาต, คำแนะนำถึงลูกค้า</li>
+<li>ดึงข้อมูลผู้ป่วยจากเซสชันปรึกษา (อาการ, แพ้ยา, โรคประจำตัว) มาช่วยตัดสินใจ</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>เปิดแชทลูกค้า → กดจ่ายยา (หรือมาจากเซสชันปรึกษา AI)</li>
+<li>ค้นหายา → เพิ่มลงรายการ</li>
+<li>ใส่จำนวน + เลือกช่วงเวลา + วิธีใช้ + คำเตือน</li>
+<li>ใส่เลขใบอนุญาต/โน้ตเภสัช</li>
+<li>ยืนยัน → ระบบส่งฉลากยา Flex เข้า LINE + สร้างรายการชำระเงิน + บันทึกประวัติ</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>เลือกยาหลายตัว ระบบจะรวมเป็น <strong>การ์ดเลื่อน (carousel) อัตโนมัติ</strong> เมื่อมีมากกว่า 1 ตัว — ไม่ต้องทำเอง</li>
+<li>ราคาโปรจะถูกใช้แทนราคาปกติอัตโนมัติถ้าตั้งไว้</li>
+<li>ใส่เลขใบอนุญาตเภสัช = ฉลากดูน่าเชื่อถือเป็นทางการ</li>
+<li>ฉลากที่ส่งไปจะถูกบันทึกในประวัติแชทด้วย (ระบุที่มาว่ามาจากระบบจ่ายยา)</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"จ่ายยาเสร็จ ลูกค้าได้ฉลากยาสวย ๆ ในมือถือทันที — เช้า/กลางวัน/เย็น/ก่อนนอน ชัดเจน ไม่กินผิด"</li>
+<li>"เลิกเขียนฉลากด้วยมือ! เลือกยา ใส่วิธีใช้ ส่งเข้า LINE จบใน 1 นาที"</li>
+<li>"จ่ายยา 3 ตัว = การ์ดเลื่อนสวย ๆ 3 ใบ อัตโนมัติ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong></p>
+<ul>
+<li>เลือกช่วงเวลายาได้ 4 ช่วง (เช้า/กลางวัน/เย็น/ก่อนนอน) เลือกซ้อนได้</li>
+<li>หลายตัว = การ์ดเลื่อนอัตโนมัติ</li>
+</ul>
+<hr />
+<h2 id="sec-2-2">ฟีเจอร์: ฉลากยา Flex (Flex Medicine Label)</h2>
+<p><strong>คืออะไร:</strong> การ์ดฉลากยาดีไซน์พรีเมียม (หัวการ์ดเขียวเข้ม) ที่ส่งเข้า LINE ลูกค้า แสดงชื่อยา ชื่อสามัญ ขนาด เวลา วิธีใช้ ราคา พร้อมปุ่มยืนยัน/ปฏิเสธ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลูกค้าเก็บข้อมูลยาไว้ในแชทดูย้อนหลังได้ตลอด — ไม่หาย ไม่ลืมวิธีกิน</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>หัวการ์ด "💊 ใบจ่ายยา" สีเขียวเข้ม</li>
+<li>เนื้อหา: ชื่อยา (ตัวหนา), ชื่อสามัญ (สี teal), ขนาด เช่น "1 เม็ด × 3 เวลา", ป้ายช่วงเวลา, วิธีใช้, ราคา</li>
+<li>ปุ่ม: ยืนยัน (เขียว) / ปฏิเสธ</li>
+<li>หลายตัว → carousel อัตโนมัติ</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ฉลากนี้คือ "touchpoint" ที่ลูกค้าเปิดดูซ้ำ → เป็นโอกาสตอกย้ำแบรนด์ร้าน</li>
+<li>ดีไซน์สอดคล้องกับการ์ดสมาชิกในมินิแอป (โทนเดียวกันทั้งระบบ)</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ฉลากยาดิจิทัลที่ลูกค้าเปิดดูได้ตลอด — กินยาเช้า/เย็น เท่าไหร่ ดูในมือถือได้เลย"</li>
+<li>before/after: "ฉลากเขียนมือ vs ฉลากดิจิทัล Re-ya"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> การ์ด Flex มาตรฐาน, รองรับ carousel หลายใบ</p>
+<hr />
+<h2 id="sec-2-3">ฟีเจอร์: 4 โหมดชำระเงินหน้าร้าน (Dispense Payment Modes)</h2>
+<p><strong>คืออะไร:</strong> ตอนจ่ายยา/ขายของหน้าร้าน เลือกวิธีรับเงินได้ 4 แบบ ระบบจัดการสถานะให้อัตโนมัติ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> รองรับทุกวิธีจ่ายของลูกค้าไทย + ระบบติดตามหนี้ค้าง (ลูกหนี้) ให้อัตโนมัติ</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ol type="1">
+<li><strong>เงินสด</strong> — กรอกเงินรับ ระบบคิดเงินทอนให้, มีปุ่มลัด 100/500/1000/2000 <span class="tag-default">[ตัวอย่าง]</span></li>
+<li><strong>โอนเงิน</strong> — ใส่เลขอ้างอิง + วันที่โอน, เลือกบัญชีธนาคารจากตั้งค่า</li>
+<li><strong>บัตรเครดิต</strong> — เก็บข้อมูลการยืนยัน</li>
+<li><strong>จ่ายทีหลัง (เครดิต)</strong> — สร้างรายการลูกหนี้ (AR) อัตโนมัติ พร้อมกำหนดชำระ <span class="tag-default">[ค่าเริ่มต้น: 30 วัน]</span></li>
+</ol>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong> หลังเลือกยา → กดชำระเงิน → เลือกวิธี → กรอกข้อมูล → ยืนยัน</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>โหมด "จ่ายทีหลัง" เหมาะกับลูกค้าประจำ/ลูกค้าองค์กร — ระบบสร้างลูกหนี้และจัดอายุหนี้ (0-30/31-60/61-90/90+ วัน) ให้เอง ไม่ต้องจดสมุด</li>
+<li>เงินสดคิดเงินทอนอัตโนมัติ ลดผิดพลาด</li>
+<li>ใส่เลขอ้างอิงการโอนช่วยกระทบยอดบัญชีง่ายขึ้น</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ขายเชื่อให้ลูกค้าประจำ? ระบบจดลูกหนี้ + เตือนครบกำหนดให้อัตโนมัติ ไม่ต้องจำเอง"</li>
+<li>"เงินสด/โอน/บัตร/เครดิต รับครบทุกแบบ ระบบคิดเงินทอน-จดหนี้ให้เสร็จ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong></p>
+<ul>
+<li>4 โหมด: เงินสด / โอน / บัตรเครดิต / จ่ายทีหลัง</li>
+<li>จัดอายุลูกหนี้ 4 ช่วง (0-30, 31-60, 61-90, 90+ วัน)</li>
+<li>เครดิตเริ่มต้น 30 วัน <code><span class="tag-default">[ค่าเริ่มต้น]</span></code></li>
+</ul>
+
+</section>
+<section class="doc" data-file="03-shop-miniapp-checkout.md">
+<h1 id="sec-3">03 — ร้านค้า LINE Mini App, ตะกร้า &amp; เช็กเอาต์ (Shop / Cart / Checkout)</h1>
+<blockquote>
+<p>ร้านค้าออนไลน์ที่อยู่ใน LINE เลย ลูกค้าไม่ต้องโหลดแอปเพิ่ม — เลือกของ ใส่ตะกร้า จ่ายเงิน ส่งสลิป ครบในแชท</p>
+</blockquote>
+<hr />
+<h2 id="sec-3-1">ฟีเจอร์: หน้าร้านออนไลน์ใน LINE (Storefront / Mini App)</h2>
+<p><strong>คืออะไร:</strong> ร้านค้าออนไลน์ที่เปิดในแอป LINE ทันที (ไม่ต้องดาวน์โหลดแอปใหม่) แสดงแคตตาล็อกสินค้าพร้อมรูป ราคา โปรโมชัน</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เปลี่ยน LINE OA ให้เป็นร้านค้า 24 ชม. — ลูกค้าซื้อเองได้ ไม่ต้องรอแอดมินพิมพ์ราคาทีละคน</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>แสดงสินค้าเป็นการ์ด: รูป (แกลเลอรีหลายรูป), ชื่อ, ราคา, ราคาโปร, ป้าย (เช่น -50%, Flash Sale), ป้ายโปรโมชัน, สถานะสต็อก</li>
+<li>ค้นหา: ชื่อ/รายละเอียด/SKU/ผู้ผลิต/ชื่อสามัญ</li>
+<li>กรองหมวดหมู่ + แบรนด์ + กลุ่มแคตตาล็อก (เช่น มาใหม่, ขายดี)</li>
+<li>เรียงลำดับ: ล่าสุด / ส่วนลด / ราคาน้อย→มาก / ราคามาก→น้อย / ชื่อ</li>
+<li>ปุ่มเพิ่มลงตะกร้าคลิกเดียว + หัวใจ (wishlist)</li>
+<li>แบนเนอร์ฮีโร่ + เซ็กชันสินค้าตามธีม (flash sale, แนะนำ)</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>ลูกค้าเปิดร้านจากเมนู LINE / ลิงก์</li>
+<li>ค้นหา/เลือกหมวด → เรียงลำดับ</li>
+<li>แตะสินค้า → ดูรายละเอียด/แกลเลอรี → ใส่ตะกร้า</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ส่วนลดคำนวณป้ายอัตโนมัติจากราคาปกติ vs ราคาโปร → ตั้งราคาโปรแล้วป้าย "-30%" ขึ้นเอง</li>
+<li>สินค้าหมดสต็อกยังกดดูได้ (ขึ้นป้าย "หมด") → ลูกค้ารู้ว่ามีของนี้ รอเติมได้</li>
+<li>สินค้าราคา 0 จะแสดง "สอบถามราคา" แทนซ่อน → ใช้กับสินค้าที่ต้องคุยราคา</li>
+<li>ทุกครั้งที่อัปเดตหน้าร้าน ระบบมี cache-buster กันลูกค้าเห็นของเก่าค้าง</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"เปลี่ยน LINE ร้านคุณให้เป็นร้านค้า 24 ชม. ลูกค้าเลือกของ-จ่ายเงินเองได้"</li>
+<li>"ตั้งราคาโปรปุ๊บ ป้ายส่วนลดขึ้นเอง — ลูกค้าเห็นแล้วอยากกด"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ค้นหา 5 ฟิลด์, เรียง 5 แบบ, แสดง 12 สินค้า/หน้า <code><span class="tag-default">[ค่าเริ่มต้น]</span></code></p>
+<hr />
+<h2 id="sec-3-2">ฟีเจอร์: รายละเอียดสินค้า &amp; สินค้าหลายหน่วย (Product Detail &amp; Multi-unit)</h2>
+<p><strong>คืออะไร:</strong> หน้ารายละเอียดสินค้าพร้อมแกลเลอรีรูปเลื่อนได้ + ขายได้หลายขนาดบรรจุ (เช่น 10 เม็ด / 30 เม็ด / 100 เม็ด ราคาต่างกัน)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ขายยกแผง/ยกกล่อง/ยกโหล ในสินค้าเดียว ราคาต่างกันตามขนาด — ลูกค้าเลือกเองได้</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ข้อมูลเต็ม: วิธีใช้, ชื่อสามัญ, ผู้ผลิต, แกลเลอรีรูป</li>
+<li>เลือกหน่วย/แพ็กจาก dropdown (แต่ละหน่วยมีราคา/บาร์โค้ดของตัวเอง)</li>
+<li>ปุ่มหัวใจเพิ่ม wishlist (ต้องล็อกอิน LINE)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้งราคายกแพ็กถูกกว่า → กระตุ้นซื้อเยอะขึ้น (เช่น 10 เม็ด ฿50, 30 เม็ด ฿120)</li>
+<li>ใส่รูปหลายมุม/หลายรูป = ลูกค้ามั่นใจ ซื้อง่ายขึ้น</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ขายยกแผง ยกกล่อง ยกโหล ในสินค้าเดียว ลูกค้าเลือกขนาดเองได้"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> สินค้าหลายหน่วย (แต่ละหน่วยมีราคา/บาร์โค้ดแยก) + wishlist</p>
+<hr />
+<h2 id="sec-3-3">ฟีเจอร์: ตะกร้าสินค้า (Shopping Cart)</h2>
+<p><strong>คืออะไร:</strong> ตะกร้าที่จำของข้ามอุปกรณ์/ข้ามครั้งได้ (เก็บในระบบ ไม่ใช่แค่ในเครื่อง) คิดยอด-ค่าส่ง-ส่งฟรีให้อัตโนมัติ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลูกค้าใส่ตะกร้าวันนี้ พรุ่งนี้กลับมาของยังอยู่ → ไม่หลุดการขาย</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>เก็บตะกร้าในระบบ (ข้ามเครื่อง/ข้ามครั้ง)</li>
+<li>เพิ่ม/แก้จำนวน/ลบ/ล้างตะกร้า</li>
+<li>คิดยอดรวม + ค่าส่ง + ส่งฟรีเมื่อถึงขั้นต่ำ</li>
+<li>รองรับสินค้าหลายหน่วย (ระบุหน่วยในแต่ละรายการ)</li>
+<li>ตรวจสินค้าซ้ำตอนเปิดตะกร้า (ของที่ถูกลบจะถูกคัดออก)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้ง "ส่งฟรีเมื่อซื้อครบ X บาท" → ดันยอดเฉลี่ยต่อบิลให้สูงขึ้น (เช่น ส่งฟรีเมื่อครบ ฿500 <code><span class="tag-default">[ค่าเริ่มต้น]</span></code>)</li>
+<li>สต็อกจะตัดตอน "ยืนยันออเดอร์" ไม่ใช่ตอนใส่ตะกร้า → คอนเทนต์ทริค: เร่งปิดการขายก่อนของหมด</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ตั้งส่งฟรีเมื่อครบ 500.- ลูกค้าซื้อเพิ่มเองเพื่อให้ถึงยอด — ยอดต่อบิลพุ่ง"</li>
+<li>"ลูกค้าใส่ตะกร้าแล้วหายไป? ของยังอยู่ กลับมาซื้อต่อได้เลย"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ค่าส่ง ฿50 <code><span class="tag-default">[ค่าเริ่มต้น]</span></code>, ส่งฟรีเมื่อครบ ฿500 <code><span class="tag-default">[ค่าเริ่มต้น]</span></code> (ปรับได้ต่อร้าน)</p>
+<hr />
+<h2 id="sec-3-4">ฟีเจอร์: เช็กเอาต์ &amp; โค้ดส่วนลด (Checkout &amp; Promo Code)</h2>
+<p><strong>คืออะไร:</strong> ขั้นตอนสั่งซื้อ: กรอกที่อยู่ (เติมอัตโนมัติจากออเดอร์ก่อน), ใส่โค้ดส่วนลด, เลือกวิธีจ่าย, ยืนยัน → ได้เลขออเดอร์</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> สั่งซื้อจบในไม่กี่จิ้ม ลดการทิ้งตะกร้า</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>เติมที่อยู่อัตโนมัติจากออเดอร์ล่าสุด</li>
+<li>ตรวจความถูกต้อง: ชื่อ/เบอร์/ที่อยู่ (เบอร์ต้องขึ้นต้น 0 และ 9-10 หลัก)</li>
+<li>โค้ดส่วนลด: ตรวจสอบจริงฝั่งเซิร์ฟเวอร์ + คิดค่าส่งใหม่หลังหักส่วนลด</li>
+<li>เลือกวิธีจ่าย: โอน / เก็บปลายทาง (COD) / ผ่อน-ทีหลัง</li>
+<li>สร้างเลขออเดอร์ + ล้างตะกร้า + หน้าจอยืนยัน</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>COD จะตั้งสถานะ "ยืนยันแล้ว" ทันที (ข้ามรอจ่าย) → เริ่มแพ็คส่งได้เลย</li>
+<li>โอน/ผ่อน จะเป็น "รอชำระ" จนกว่าจะอัปสลิป/อนุมัติ</li>
+<li>หลังใส่โค้ดส่วนลด ถ้ายอดใหม่ถึงขั้นต่ำส่งฟรี ระบบให้ส่งฟรีอัตโนมัติ</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้าสั่งซื้อจบใน 3 จิ้ม — ที่อยู่เติมให้อัตโนมัติ"</li>
+<li>"แจกโค้ดส่วนลดในแคมเปญ ระบบตรวจโค้ด-คิดส่วนลดให้เอง"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> 3 วิธีจ่ายในมินิแอป (โอน/COD/ทีหลัง), ตรวจเบอร์-อีเมลอัตโนมัติ</p>
+<hr />
+<h2 id="sec-3-5">ฟีเจอร์: ช่องทางชำระเงิน — โอน / PromptPay / COD / อัปสลิป</h2>
+<p><strong>คืออะไร:</strong> รองรับการจ่ายเงินแบบไทย ๆ ครบ พร้อมระบบอัปโหลดสลิปให้แอดมินตรวจ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลูกค้าจ่ายแบบที่สะดวก ร้านได้เงินครบ ตรวจสลิปง่าย</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li><strong>โอนเงิน:</strong> แสดงชื่อบัญชี/เลขบัญชี/ชื่อบัญชี + ปุ่มก๊อปเลขบัญชี</li>
+<li><strong>PromptPay QR:</strong> สร้าง QR ตามยอดออเดอร์ สแกนแล้วเด้งยอดอัตโนมัติ</li>
+<li><strong>COD เก็บปลายทาง:</strong> ออเดอร์ยืนยันทันที จ่ายตอนของถึง</li>
+<li><strong>อัปสลิป:</strong> ลูกค้าอัปรูปสลิป → สถานะ "รอตรวจสอบ" → แอดมินยืนยัน/ปฏิเสธ</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ข้อมูลบัญชีธนาคารจะโชว์เฉพาะเมื่อเลือก "โอน" เท่านั้น — COD ไม่เห็น (กันข้อมูลรั่ว)</li>
+<li>PromptPay QR ใส่ยอดเป๊ะ ลดเคสโอนผิดจำนวน</li>
+<li>จับคู่กับ "ตรวจสลิปอัตโนมัติ" (ดู <a href="05-ai-consultation-slip.md">05</a>) เพื่อย่นเวลาตรวจจาก 10 นาที → 30 วินาที</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"PromptPay QR ใส่ยอดให้อัตโนมัติ ลูกค้าสแกนจ่ายเป๊ะ ไม่โอนผิด"</li>
+<li>"ลูกค้าอัปสลิปในแชท แอดมินกดยืนยันจบ — ไม่ต้องไล่หาสลิปในห้องแชท"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> โอน / PromptPay QR / COD / อัปสลิป; ไฟล์สลิปสูงสุด 5 MB (JPEG/PNG)</p>
+<hr />
+<h2 id="sec-3-6">ฟีเจอร์: สมัครสมาชิก &amp; โปรไฟล์สุขภาพ (Registration &amp; Health Profile)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้าสมัครสมาชิกในมินิแอป กรอกข้อมูลพื้นฐาน + ข้อมูลสุขภาพ (น้ำหนัก/ส่วนสูง/โรคประจำตัว/แพ้ยา) เพื่อให้บริการได้ปลอดภัยขึ้น</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ร้านมีฐานข้อมูลลูกค้า + ข้อมูลสุขภาพ → จ่ายยาปลอดภัยขึ้น + ทำตลาดได้ตรงคน</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ฟิลด์จำเป็น: ชื่อ-สกุล, วันเกิด, เพศ</li>
+<li>ฟิลด์เสริม: เบอร์, อีเมล, น้ำหนัก, ส่วนสูง, โรคประจำตัว, ประวัติแพ้ยา, ที่อยู่</li>
+<li>สร้างรหัสสมาชิกอัตโนมัติ</li>
+<li>แก้ไขโปรไฟล์ภายหลังได้ (เบอร์/อีเมล/ข้อมูลสุขภาพ/ที่อยู่)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ข้อมูล "แพ้ยา/โรคประจำตัว" จะถูก AI เภสัชและเภสัชกรนำมาใช้เช็กความปลอดภัยก่อนแนะนำ/จ่ายยา → จุดขายด้านความปลอดภัย</li>
+<li>วันเกิด = ใช้ทำแคมเปญอวยพรวันเกิด + ส่วนลดวันเกิดได้</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"สมาชิกกรอกประวัติแพ้ยาไว้ครั้งเดียว ระบบเตือนทุกครั้งที่จ่ายยา — ปลอดภัยกว่าเดิม"</li>
+<li>"เก็บวันเกิดลูกค้า = ส่งโปรวันเกิดอัตโนมัติ มัดใจลูกค้าประจำ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เก็บข้อมูลสุขภาพ (แพ้ยา/โรคประจำตัว/น้ำหนัก/ส่วนสูง), รหัสสมาชิกอัตโนมัติ</p>
+
+</section>
+<section class="doc" data-file="04-inventory-products.md">
+<h1 id="sec-4">04 — คลังสินค้า, สต็อก &amp; ข้อมูลยา (Inventory &amp; Drug Master)</h1>
+<blockquote>
+<p>ศูนย์รวมจัดการสินค้า/สต็อก/ข้อมูลยาทั้งหมดในที่เดียว — ตั้งแต่หน้าร้าน, สต็อก, กลุ่มยา, ชื่อสามัญ, ฉลากยา ไปจนถึงฐานข้อมูลยาตีกัน</p>
+</blockquote>
+<blockquote>
+<p>💡 ทุกแท็บอยู่ในศูนย์รวมเดียว (หน้า "สินค้า/สต็อก") — ภาษาลูกค้าให้เรียกว่า "ศูนย์จัดการสินค้าและสต็อก"</p>
+</blockquote>
+<hr />
+<h2 id="sec-4-1">ฟีเจอร์: ศูนย์รวมสินค้า &amp; สต็อก (Consolidated Inventory Hub)</h2>
+<p><strong>คืออะไร:</strong> หน้าจัดการสินค้าทั้งหมดแบบรวมศูนย์ มีหลายแท็บ: หน้าร้าน, สต็อก, การเคลื่อนไหว, ปรับสต็อก, ของใกล้หมด, ตำแหน่งจัดเก็บ, ล็อต/วันหมดอายุ, กลุ่มยา, ชื่อสามัญ, ฉลากยา, ยาตีกัน, รายงาน</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> จบเรื่องสินค้า-สต็อก-ข้อมูลยาในหน้าเดียว ไม่ต้องเปิดหลายระบบ</p>
+<p><strong>ความสามารถหลัก (ไฮไลต์):</strong></p>
+<ul>
+<li><strong>หน้าร้าน:</strong> เพิ่ม/แก้สินค้า, ราคา, ราคาโปร, สต็อก, แกลเลอรีรูป, เปิด/ปิดขายหน้าร้าน (toggle), แก้เป็นชุด (bulk)</li>
+<li><strong>สต็อก &amp; การเคลื่อนไหว:</strong> ดูสต็อกปัจจุบัน + ประวัติเข้า-ออก (รับของ/ขาย/ปรับยอด)</li>
+<li><strong>ปรับสต็อก:</strong> นับสต็อก-ปรับยอดด้วยมือ</li>
+<li><strong>ของใกล้หมด:</strong> แจ้งเตือน + ตั้งจุดสั่งซื้อใหม่ (ROP)</li>
+<li><strong>ตำแหน่งจัดเก็บ + ล็อต/วันหมดอายุ:</strong> ติดตามที่เก็บและวันหมดอายุระดับล็อต</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong> เปิดศูนย์สินค้า → เลือกแท็บ → จัดการ</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>แกลเลอรีรูป: วาง URL หลายอันทีละบรรทัด ระบบแปลงให้เอง → มินิแอปแสดงเป็นสไลด์</li>
+<li>bulk ปิดหน้าร้าน: เลือก "ปิดสินค้าราคา 0 ทั้งหมด" ได้ในคลิกเดียว → กันสินค้าราคาเพี้ยนโผล่หน้าร้าน</li>
+<li>สต็อกตัดตอนยืนยันออเดอร์เท่านั้น</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"จบเรื่องสต็อกในหน้าเดียว — เพิ่มสินค้า ปรับราคา เช็กของใกล้หมด พร้อมแจ้งเตือน"</li>
+<li>"ติดตามวันหมดอายุยาเป็นล็อต — ของใกล้หมดอายุไม่ค้างสต็อก"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ศูนย์รวมหลายแท็บ (หน้าร้าน/สต็อก/เคลื่อนไหว/ปรับ/ใกล้หมด/ตำแหน่ง/ล็อต/กลุ่มยา/ชื่อสามัญ/ฉลาก/ยาตีกัน/รายงาน)</p>
+<hr />
+<h2 id="sec-4-2">ฟีเจอร์: แจ้งเตือนสินค้าใกล้หมด &amp; จุดสั่งซื้อ (Low-stock Alert / ROP)</h2>
+<p><strong>คืออะไร:</strong> ระบบเตือนเมื่อสินค้าเหลือน้อยกว่าจุดที่ตั้งไว้ เพื่อสั่งของทันเวลา</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ไม่ขายไม่ได้เพราะของหมด + ไม่สต็อกเกินจนเงินจม</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้งจุดสั่งซื้อ (ROP) ตามยอดขายเฉลี่ย → ระบบเตือนพอดีเวลา</li>
+<li>ผูกกับการแจ้งเตือน (LINE/อีเมล) ให้เด้งหาเจ้าของอัตโนมัติ (ดู <a href="08-documents-odoo-platform.md">08</a>)</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ของใกล้หมดระบบเตือนก่อน — ไม่มีคำว่า 'ขอโทษค่ะ ของหมด' อีกต่อไป"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ตั้งจุดสั่งซื้อใหม่ (ROP) + แจ้งเตือนอัตโนมัติ</p>
+<hr />
+<h2 id="sec-4-3">ฟีเจอร์: กลุ่มยา (Drug Groups)</h2>
+<p><strong>คืออะไร:</strong> จัดหมวดยาตามประเภท (เช่น ยาปฏิชีวนะ, ยาแก้ปวด, ยาแก้แพ้, วิตามิน) ชื่อไทย-อังกฤษ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> จัดร้านเป็นระบบ + ใช้คุมการขาย/จ่ายยาตามประเภท (เช่น ยาควบคุม)</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ผูกหมวดยากับกฎหมาย (OTC / ยาอันตราย / ยาควบคุม) → ใช้คุมการจ่าย</li>
+<li>ตั้งฉลากยาเริ่มต้นต่อกลุ่มยาได้ (ดูหัวข้อฉลากยา)</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"จัดยาเป็นกลุ่มเป็นหมวด — หาเร็ว ขายเป็นระบบ คุมยาควบคุมได้"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> กลุ่มยาชื่อไทย-อังกฤษ, ผูกกับหมวดกฎหมายยาได้</p>
+<hr />
+<h2 id="sec-4-4">ฟีเจอร์: ชื่อสามัญทางยา (Generic Names / INN)</h2>
+<p><strong>คืออะไร:</strong> คลังชื่อสามัญทางยา (เช่น Paracetamol, Ibuprofen) เชื่อมกับสินค้า ใช้เป็นฐานเช็กยาตีกัน/แพ้ยา</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เช็กความปลอดภัยตามตัวยา ไม่ใช่ตามยี่ห้อ → แม่นกว่า + เสนอยาทดแทนได้</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้งชื่อสามัญให้สินค้าครบ = ระบบเช็กยาตีกัน/แพ้ยาทำงานได้เต็มประสิทธิภาพ (ถ้าไม่ตั้ง การเช็กจะข้ามเงียบ ๆ)</li>
+<li>ใช้เสนอ "ยาตัวเดียวกัน ราคาประหยัดกว่า" ให้ลูกค้า</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ระบบรู้จัก 'ตัวยา' ไม่ใช่แค่ยี่ห้อ — เช็กแพ้ยา/ยาตีกันได้แม่นยำ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> อิงมาตรฐานชื่อสามัญ (INN), เชื่อมสินค้า↔︎ตัวยา</p>
+<hr />
+<h2 id="sec-4-5">ฟีเจอร์: เทมเพลตฉลากยา (Drug Label Templates)</h2>
+<p><strong>คืออะไร:</strong> สร้างแม่แบบฉลากยา (ข้อความ + ช่องตัวแปร) ใช้พิมพ์/ส่งฉลากได้สม่ำเสมอ ตั้งต่อกลุ่มยา/ตัวยา/ทั้งร้านได้</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ฉลากยาเป็นมาตรฐานเดียวทั้งร้าน ดูเป็นมืออาชีพ ถูกต้อง</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ช่องตัวแปร: ชื่อร้าน, ชื่อผู้ป่วย, ชื่อยา, ขนาด, วิธีใช้, วันที่, ชื่อเภสัช</li>
+<li>ภาษาไทย/อังกฤษ, ดูตัวอย่างสด</li>
+<li>ตั้งขอบเขต: ต่อตัวยา / ต่อกลุ่มยา / ทั้งร้าน</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ทำเทมเพลตแยกสำหรับ OTC vs ยาตามใบสั่ง → ฉลากเหมาะกับประเภทยา</li>
+<li>ตั้งฉลากเริ่มต้นต่อกลุ่มยา → จ่ายยาเร็วขึ้น ไม่ต้องเลือกทุกครั้ง</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ฉลากยามาตรฐานเดียวทั้งร้าน — ใส่ชื่อผู้ป่วย/วิธีใช้อัตโนมัติ ดูโปรทุกใบ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ตัวแปรฉลาก 7 ช่อง, ตั้งขอบเขตได้ 3 ระดับ (ตัวยา/กลุ่ม/ทั้งร้าน)</p>
+<hr />
+<h2 id="sec-4-6">ฟีเจอร์: ฐานข้อมูลยาตีกัน (Drug Interactions)</h2>
+<p><strong>คืออะไร:</strong> ฐานข้อมูลคู่ยาที่ห้ามใช้ร่วม/ต้องระวัง พร้อมระดับความรุนแรงและคำแนะนำ ทำงานคู่กับ AI/ระบบจ่ายยาเพื่อเตือนเภสัช</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลดความเสี่ยงจ่ายยาตีกัน = ความปลอดภัยผู้ป่วย + ความน่าเชื่อถือร้าน</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ระดับความรุนแรง 4 ระดับ: เล็กน้อย (เหลือง) / ปานกลาง (ส้ม) / รุนแรง (แดง) / ห้ามใช้ร่วม (แดงเข้ม)</li>
+<li>เก็บกลไก + คำแนะนำการจัดการ</li>
+<li>ตรวจสองทาง (A↔︎B และ B↔︎A)</li>
+<li>มีชุดข้อมูลกลาง + ปรับเฉพาะร้านได้ (คัดลอกจากกลางมาแก้)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>เภสัชเลือกยาที่ลูกค้ากินอยู่ → ระบบเตือนคู่ที่ตีกันแบบเรียลไทม์ + ระบุความรุนแรง</li>
+<li>คู่ "ห้ามใช้ร่วม" สามารถบล็อกการจ่ายได้</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"เตือนยาตีกันอัตโนมัติก่อนจ่าย — เภสัชมั่นใจ ลูกค้าปลอดภัย"</li>
+<li>คอนเทนต์ให้ความรู้: "5 คู่ยาที่คนไทยมักกินร่วมกันโดยไม่รู้ว่าตีกัน" (อิงฐานข้อมูลจริงของร้าน)</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> 4 ระดับความรุนแรง, ตรวจสองทาง, มีข้อมูลกลาง+ปรับต่อร้านได้</p>
+
+</section>
+<section class="doc" data-file="05-ai-consultation-slip.md">
+<h1 id="sec-5">05 — AI เภสัชกรผู้ช่วย &amp; ตรวจสลิปอัตโนมัติ (AI Consultation &amp; Slip Verify)</h1>
+<blockquote>
+<p>ผู้ช่วย AI ที่คุยกับลูกค้าได้ 24 ชม. คัดกรองอาการ แนะนำยา เช็กความปลอดภัย และส่งต่อเภสัชเมื่อจำเป็น + ระบบตรวจสลิปโอนเงินอัตโนมัติ</p>
+</blockquote>
+<blockquote>
+<p>⚠️ <strong>กรอบการสื่อสาร:</strong> AI เป็น "ผู้ช่วยเภสัชกร" ไม่ใช่แทนเภสัช/แพทย์ ห้ามใช้คำว่า "วินิจฉัย/รักษาโรค" ในคอนเทนต์ เน้น "ช่วยคัดกรอง-ให้ข้อมูลเบื้องต้น-ส่งต่อเภสัช"</p>
+</blockquote>
+<hr />
+<h2 id="sec-5-1">ฟีเจอร์: AI เภสัชกรผู้ช่วย (AI Pharmacist Consultation)</h2>
+<p><strong>คืออะไร:</strong> ผู้ช่วย AI ที่คุยกับลูกค้าในมินิแอป ถาม-ตอบเรื่องอาการ คัดกรอง แนะนำยาเบื้องต้น โดยรู้ประวัติแพ้ยา/โรคประจำตัวของลูกค้า และตอบแบบสตรีมเรียลไทม์ (พิมพ์ทีละคำเหมือนคนพิมพ์)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลูกค้าได้คำตอบทันที 24 ชม. โดยไม่ต้องรอเภสัชว่าง — ร้านไม่พลาดลูกค้านอกเวลา และเภสัชโฟกัสเคสสำคัญ</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ตอบแบบสตรีมเรียลไทม์ (เห็นคำตอบทันที ลดความรู้สึกรอ)</li>
+<li>รู้บริบทผู้ป่วย: ดึงประวัติแพ้ยา/ยาที่กินอยู่/โรคประจำตัว มาประกอบคำแนะนำ → เลี่ยงแนะนำยาที่เสี่ยง</li>
+<li>คัดกรองอาการแบบเป็นขั้น (triage): ถามอาการหลัก → ระยะเวลา → ความรุนแรง → อาการร่วม → แพ้ยา → โรคประจำตัว → แนะนำ → ยืนยัน</li>
+<li>ดึงความรู้จากคลังความรู้ยา (RAG) มาตอบให้มีหลักฐานอ้างอิง</li>
+<li>มีระบบสำรอง: ถ้า AI หลักล่ม สลับไปตัวสำรองอัตโนมัติ (ลูกค้าไม่สะดุด)</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>ลูกค้าเปิดแชทปรึกษาในมินิแอป → พิมพ์อาการ</li>
+<li>AI ถามต่อเป็นขั้น ๆ + แสดง "ป้ายข้อมูลที่รู้" (เช่น รู้ว่าแพ้ยาอะไร)</li>
+<li>AI แนะนำยา/วิธีดูแลเบื้องต้น</li>
+<li>ลูกค้ากด "ส่งให้เภสัชกร" เพื่อให้เภสัชอนุมัติ/จ่ายจริง</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>AI บันทึกบทสนทนาก่อนเรียก AI ตอบ → แม้ AI ช้า/ล่ม ประวัติแชทก็ไม่หาย</li>
+<li>ลูกค้าไม่ได้ล็อกอินก็ยังคุย triage ต่อเนื่องในวันเดียวได้ (ระบบสร้าง ID ชั่วคราว)</li>
+<li>โหมดของ AI แยกชัด: โหมดลูกค้า (consult) เน้นแนะนำยา vs โหมดแอดมิน (ถามยอดขาย/ออเดอร์) — ค่าเริ่มต้นคือโหมดลูกค้า</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้าปวดหัวตอนตี 2 ก็ปรึกษาได้ — AI เภสัชผู้ช่วยตอบทันที 24 ชม."</li>
+<li>"AI ที่รู้ว่าลูกค้าแพ้ยาอะไร — แนะนำยาได้ปลอดภัยกว่าการเดา"</li>
+<li>คอนเทนต์เบื้องหลัง: "AI ของเราไม่ได้แค่ตอบมั่ว — มีคลังความรู้ยาอ้างอิง + ส่งต่อเภสัชเสมอเมื่อจำเป็น"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ตอบ 24 ชม., คัดกรองเป็นขั้น 8+ สเตต, รู้ประวัติแพ้ยา/โรคประจำตัว, มี AI สำรองอัตโนมัติ</p>
+<hr />
+<h2 id="sec-5-2">ฟีเจอร์: เตือนเคสฉุกเฉิน &amp; ส่งต่อเภสัช (Red-flag Detection &amp; Escalation)</h2>
+<p><strong>คืออะไร:</strong> ระบบจับ "สัญญาณอันตราย" (เช่น เจ็บหน้าอก หายใจไม่ออก อาการสโตรก) ตั้งแต่ก่อนให้ AI ตอบ → เด้งเตือนฉุกเฉินและส่งต่อเภสัชเวรทันที</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ความปลอดภัยมาก่อน — เคสอันตรายไม่ถูกปล่อยให้ AI ตอบเอง แต่ดันขึ้นหาคนทันที</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ตรวจ red-flag ก่อน AI ประมวลผล → ถ้าเจอระดับวิกฤต เด้ง event ฉุกเฉิน + แจ้งเภสัชเวรทาง LINE</li>
+<li>ปรับสถานะเซสชันเป็น "ส่งต่อ" (escalate)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong> จุดนี้คือ "หลักประกันความปลอดภัย" ที่ทำให้การโฆษณา AI ปรึกษาไม่สุ่มเสี่ยง — เน้นได้ว่า "ฉุกเฉิน = ถึงมือคนทันที"</p>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"AI ที่รู้ว่าเมื่อไหร่ต้อง 'หยุดแล้วเรียกเภสัช' — เจ็บหน้าอก/หายใจไม่ออก ส่งต่อคนทันที"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ตรวจสัญญาณอันตรายก่อนตอบ + แจ้งเภสัชเวรทันที</p>
+<hr />
+<h2 id="sec-5-3">ฟีเจอร์: เช็กยาตีกัน/แพ้ยาในบทสนทนา (Drug Interaction Checker)</h2>
+<p><strong>คืออะไร:</strong> เมื่อ AI พูดถึงยา ระบบจะเทียบกับ "ยาที่ลูกค้ากินอยู่ + ประวัติแพ้ยา" แล้วเด้งการ์ดเตือนถ้าเสี่ยง</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> กันแนะนำยาที่ตีกับยาเดิม/ยาที่ลูกค้าแพ้</p>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"AI เตือนยาตีกันให้ก่อนแนะนำ — ปลอดภัยตั้งแต่ก่อนซื้อ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เช็กยาตีกัน/แพ้ยาแบบเรียลไทม์ในแชท</p>
+<hr />
+<h2 id="sec-5-4">ฟีเจอร์: AI อ่านรูป (Vision / Image Consultation)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้าถ่ายรูปฉลากยา/ผื่น/แผล ส่งให้ AI อธิบายว่าเห็นอะไร (เช่น ชื่อยา ยี่ห้อ ปริมาณ)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลูกค้าไม่รู้จะพิมพ์ชื่อยายังไง ก็ถ่ายรูปส่งมาได้ — คัดกรองเร็วขึ้น</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>รองรับ jpg/png/webp, ไฟล์สูงสุด 5 MB</li>
+<li>มีลิมิตการใช้งานกันสแปม (ต่อคน/ต่อ IP)</li>
+<li>อธิบายเป็นภาษาไทย หากเป็นยาจะบอกชื่อ/ยี่ห้อ/ปริมาณ</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong> เหมาะกับลูกค้าสูงอายุที่พิมพ์ยาก — ถ่ายรูปกล่องยาส่งมาได้เลย</p>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ไม่รู้ว่ายาอะไร? ถ่ายรูปส่งมา AI อ่านให้ — สะดวกแม้คุณพ่อคุณแม่"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> รับรูปสูงสุด 5 MB (jpg/png/webp), มีลิมิตกันสแปม</p>
+<hr />
+<h2 id="sec-5-5">ฟีเจอร์: สรุปแชทอัตโนมัติ (Auto Chief-complaint Summary)</h2>
+<p><strong>คืออะไร:</strong> สรุปบทสนทนาปรึกษาเป็น "อาการหลัก" 1 บรรทัด ให้เภสัชเห็นในอินบ็อกซ์โดยไม่ต้องอ่านแชทยาว</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เภสัชดูเคสได้เร็วเป็นชุด — รู้ทันทีว่าลูกค้าแต่ละคนปรึกษาเรื่องอะไร</p>
+<p><strong>ทิป &amp; ทริค:</strong> ทำงานอัตโนมัติหลังจบเซสชัน + มี cron กวาดเก็บเซสชันที่ตกหล่นตอนกลางคืน</p>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"เภสัชเปิดอินบ็อกซ์ เห็นสรุปอาการลูกค้าทุกคนใน 1 บรรทัด — จัดคิวเคสได้ไว"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> สรุปอาการหลักอัตโนมัติ 1 บรรทัด/เซสชัน</p>
+<hr />
+<h2 id="sec-5-6">ฟีเจอร์: ส่งให้เภสัชอนุมัติ → สั่งยา (Pharmacist Approval / Approve Order)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้ากด "ส่งให้เภสัชกร" หลัง AI แนะนำยา → สร้างเคสรออนุมัติให้เภสัชเห็นในอินบ็อกซ์ → เภสัชตรวจ + จ่ายยาจริง</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> AI ช่วยคัดกรอง แต่ "คนจริง" เป็นผู้อนุมัติเสมอ → ปลอดภัย ถูกต้องตามวิชาชีพ + ปิดการขายเป็นออเดอร์</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ยืนยันตัวตนลูกค้า (เฉพาะเจ้าของบัญชีถึงส่งเคสตัวเองได้)</li>
+<li>รวมคำแนะนำยา + สรุปเข้าเคสเดียว</li>
+<li>เภสัชเห็นในอินบ็อกซ์ → เปิดดูแชท AI เต็ม + คำแนะนำ → จ่ายยาผ่านระบบจ่ายยา</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong> นี่คือสะพานเชื่อม "AI คัดกรอง → เภสัชจ่ายจริง → ขายได้" — เล่าเป็น flow ขายของได้ดี</p>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"AI คัดกรอง เภสัชอนุมัติ — เทคโนโลยี + วิชาชีพ ทำงานร่วมกัน"</li>
+<li>"จากแชทปรึกษา → กลายเป็นออเดอร์ในคลิกเดียว"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เภสัชเป็นผู้อนุมัติเสมอ, ยืนยันตัวตนลูกค้าก่อนส่งเคส</p>
+<hr />
+<h2 id="sec-5-7">ฟีเจอร์: ตรวจสลิปอัตโนมัติ (Automated Slip Verification)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้าส่งสลิปโอนเงิน (มี QR) → ระบบสแกน QR ตรวจยอด/บัญชีปลายทางอัตโนมัติ → ยืนยันการจ่ายได้ภายในไม่กี่วินาที (ถ้าระบบล่มก็ตรวจมือแทนได้)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เลิกนั่งเพ่งสลิปทีละใบ — ตรวจอัตโนมัติเร็วกว่าตรวจมือมาก + กันสลิปปลอม</p>
+<blockquote>
+<p>💬 ตัวเลขเปรียบเทียบ <code><span class="tag-default">[ตัวอย่าง]</span></code>: "จากตรวจมือ ~10 นาที เหลือ ~30 วินาที" — ใช้เป็นภาพประกอบได้ แต่อย่าโฆษณาเป็นการรับประกัน ให้พูด "เร็วขึ้นมาก/ภายในไม่กี่วินาที"</p>
+</blockquote>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>สแกน QR ในสลิป (ไม่ใช่แค่ดูรูปภาพ) → แม่นกว่าดูตาเปล่า</li>
+<li>ตรรกะตัดสิน: ต้องมีเลขอ้างอิงรายการ + เทียบยอดให้ตรงออเดอร์ (ถึงระดับสตางค์) + เทียบบัญชีปลายทาง</li>
+<li>โหมด "ตรวจเฉพาะยอด" — รับสลิปถ้ายอดตรง แม้บัญชีปลายทางจะ mask/หลายบัญชี</li>
+<li>เก็บผลตรวจไว้ตรวจซ้ำได้โดยไม่ต้องสแกนใหม่</li>
+<li>ถ้าระบบภายนอกล่ม → ตรวจมือแทนได้ ไม่ค้างงาน</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>ลูกค้าอัปสลิปในแชท/มินิแอป</li>
+<li>ระบบสแกน QR → ตัดสินผล: ✅ ตรง / ⚠️ ยอดไม่ตรง / ⚠️ บัญชีไม่ตรง / ❌ ไม่ใช่สลิป</li>
+<li>ถ้าตรง → ยืนยันการชำระอัตโนมัติ; ถ้าไม่ตรง → ขึ้นให้แอดมินตัดสิน</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>เทียบยอดถึงระดับสตางค์ (กันโอนขาด/เกิน) — เน้นความแม่นในคอนเทนต์ได้</li>
+<li>โหมด "ตรวจเฉพาะยอด" เหมาะกับร้านที่มีหลายบัญชี/เลขบัญชีโดน mask</li>
+<li>ผลตรวจเก็บไว้ → กดตรวจซ้ำได้ ไม่ต้องสแกน QR เดิมใหม่ (กันเคสซ้ำ)</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้าโอนเงินส่งสลิป ระบบยืนยันให้ใน 30 วินาที — ไม่ต้องเพ่งสลิปทีละใบ"</li>
+<li>"สลิปปลอมไม่รอด — ระบบสแกน QR เทียบยอดถึงสตางค์"</li>
+<li>before/after: "ตรวจสลิปมือ 10 นาที vs ระบบอัตโนมัติ 30 วินาที"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ตรวจอัตโนมัติ "ภายในไม่กี่วินาที" (เปรียบเทียบ ~30 วิ vs ~10 นาทีตรวจมือ <code><span class="tag-default">[ตัวอย่าง]</span></code>), เทียบยอดถึงระดับสตางค์, มีโหมดตรวจเฉพาะยอด</p>
+
+</section>
+<section class="doc" data-file="06-loyalty-membership.md">
+<h1 id="sec-6">06 — ระบบสมาชิก &amp; สะสมแต้ม (Loyalty &amp; Membership)</h1>
+<blockquote>
+<p>เปลี่ยนผู้ติดตามให้เป็นสมาชิก เปลี่ยนสมาชิกให้เป็นลูกค้าประจำ — สมัครอัตโนมัติ สะสมแต้ม เลื่อนระดับ แลกของรางวัล</p>
+</blockquote>
+<blockquote>
+<p>⚠️ ตัวเลขแต้ม/ระดับ/ส่วนลดด้านล่างเป็น <strong>ค่าเริ่มต้น/ตัวอย่าง</strong> ปรับได้ต่อร้าน — อย่านำไปโฆษณาเป็นตัวเลขตายตัวโดยไม่ยืนยันกับเจ้าของร้าน</p>
+</blockquote>
+<hr />
+<h2 id="sec-6-1">ฟีเจอร์: สมัครสมาชิกอัตโนมัติเมื่อกดติดตาม (Auto-register on Follow)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้ากดติดตาม LINE OA ปุ๊บ = เป็นสมาชิกทันที (ระดับเริ่มต้น) ได้รหัสสมาชิก โดยไม่ต้องกรอกฟอร์ม</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ฐานสมาชิกโตเองทุกวันโดยไม่มีแรงเสียดทาน — ลูกค้าไม่ต้องสมัครยุ่งยาก ร้านได้สมาชิกฟรี</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ติดตาม → สร้างสมาชิกระดับเริ่มต้น + รหัสสมาชิกอัตโนมัติ</li>
+<li>ทำงานครั้งเดียว (ถ้าเป็นสมาชิกแล้วไม่ทำซ้ำ)</li>
+<li>(เวอร์ชันปัจจุบันเน้น auto-register เป็นสมาชิก — รายละเอียดโบนัสต้อนรับ/แต้มแรกเข้าตรวจสอบกับการตั้งค่าร้านก่อนโฆษณา)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>จุดขายคือ "zero-friction signup" — ไม่ต้องให้ลูกค้ากรอกอะไรเลยก็ได้สมาชิก</li>
+<li>ต่อยอดด้วยข้อความต้อนรับ + เมนูต้อนรับ (Rich Menu) ให้ครบลูป</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"กดติดตาม = เป็นสมาชิกทันที ไม่ต้องกรอกฟอร์มให้วุ่นวาย"</li>
+<li>"ฐานสมาชิกร้านคุณโตเองทุกวัน — ทุกคนที่ทักมากลายเป็นสมาชิกอัตโนมัติ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> สมัครอัตโนมัติเมื่อติดตาม, ได้รหัสสมาชิกทันที</p>
+<hr />
+<h2 id="sec-6-2">ฟีเจอร์: ระดับสมาชิก (Membership Tiers)</h2>
+<p><strong>คืออะไร:</strong> จัดระดับลูกค้าตามแต้มสะสม (เช่น Bronze → Silver → Gold → Platinum) แต่ละระดับมีสิทธิประโยชน์/ส่วนลดต่างกัน</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> กระตุ้นให้ลูกค้าซื้อซ้ำเพื่อเลื่อนระดับ + รักษาลูกค้าชั้นดีด้วยสิทธิพิเศษ</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>หลายระดับ พร้อมไอคอน/สี/ส่วนลดต่อระดับ</li>
+<li>คำนวณระดับจากแต้มสะสม + แสดง "ความคืบหน้าสู่ระดับถัดไป"</li>
+</ul>
+<p><strong>ตัวอย่างโครงระดับ <code><span class="tag-default">[ตัวอย่าง — ปรับได้]</span></code>:</strong> | ระดับ | แต้มขั้นต่ำ | ส่วนลด | |-------|------------|--------| | 🥉 Bronze | 0 | 0% | | 🥈 Silver | 1,000 | 3% | | 🥇 Gold | 5,000 | 5% | | 💎 Platinum | 15,000 | 10% |</p>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>แสดง "อีก 750 แต้มเลื่อนเป็น Gold (ลด 5%)" → กระตุ้นซื้อเพิ่มเพื่อให้ถึงระดับ</li>
+<li>ให้สิทธิ Platinum เด่น ๆ (เช่น ส่งฟรี + ส่วนลดสูงสุด) เพื่อสร้างแรงจูงใจไต่ระดับ</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ยิ่งซื้อยิ่งได้ส่วนลด — ลูกค้าไต่ระดับ Bronze → Platinum เอง"</li>
+<li>"สมาชิก Gold ขึ้นไป รับส่วนลดทุกบิล — ลูกค้าอยากอยู่กับร้านคุณนาน ๆ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> หลายระดับสมาชิก + ส่วนลดต่อระดับ + แถบความคืบหน้า (ตัวเลขปรับได้)</p>
+<hr />
+<h2 id="sec-6-3">ฟีเจอร์: แต้มสะสม (Loyalty Points)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้าได้แต้มจากการซื้อ เก็บเป็นบัญชีแต้ม ใช้แลกส่วนลด/ของรางวัล มีประวัติแต้มครบ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> สร้างเหตุผลให้ลูกค้ากลับมาซื้อซ้ำ + วัดมูลค่าลูกค้าตลอดอายุ (LTV)</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ได้แต้มอัตโนมัติเมื่อซื้อ (สูตร/อัตราปรับได้ต่อร้าน)</li>
+<li>บัญชีแต้มมีประเภทรายการ: ได้จากออเดอร์ / ใช้แลก / ปรับโดยแอดมิน / โบนัสโปรโมชัน</li>
+<li>ตั้งวันหมดอายุแต้มได้ <code><span class="tag-default">[ค่าเริ่มต้น: 365 วัน]</span></code></li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้งโบนัสแต้มช่วงโปร (เช่น "แต้มคูณ 2 เดือนนี้") กระตุ้นยอด</li>
+<li>ใช้ประวัติแต้มดูลูกค้าชั้นดี → เสนอ upsell</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ทุกการซื้อ = แต้มสะสม แลกส่วนลดได้จริง ลูกค้ากลับมาเรื่อย ๆ"</li>
+<li>"จัดโปร 'แต้มคูณ 2' กระตุ้นยอดช่วงปลายเดือน"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ได้แต้มอัตโนมัติทุกการซื้อ, ประวัติแต้มครบ, ตั้งวันหมดอายุได้ (เริ่มต้น 365 วัน <code><span class="tag-default">[ค่าเริ่มต้น]</span></code>)</p>
+<hr />
+<h2 id="sec-6-4">ฟีเจอร์: แลกของรางวัล (Rewards &amp; Redemption)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้านำแต้มมาแลกของรางวัล/ส่วนลด/ส่งฟรี/คูปอง ผ่านขั้นตอนขออนุมัติ-อนุมัติ-รับของ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ปิดลูปสะสมแต้มให้สมบูรณ์ — แต้มมีค่าจริง ลูกค้าจึงสะสมต่อ</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>แค็ตตาล็อกของรางวัล (ส่วนลด/ส่งฟรี/ของแถม/สินค้า/คูปอง/วอเชอร์)</li>
+<li>ขั้นตอน: ลูกค้าขอแลก → แอดมินอนุมัติ → ทำเครื่องหมายมอบของ → ตัดแต้ม</li>
+<li>แจ้งเตือนสถานะการแลกผ่าน LINE</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้งของรางวัลแต้มต่ำ (ใกล้เอื้อม) เพื่อให้ลูกค้าได้ลิ้มรสการแลก → ติดใจสะสมต่อ</li>
+<li>ใช้ "ส่งฟรี" เป็นรางวัลยอดนิยม ต้นทุนคุมได้</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"เอาแต้มมาแลกส่วนลด/ของแถม/ส่งฟรี — แต้มที่มีค่าจริง"</li>
+<li>"ลูกค้าใกล้ครบแต้มแลกของ? เตือนให้ซื้ออีกนิดเพื่อแลกเลย"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ของรางวัลหลายชนิด (ส่วนลด/ส่งฟรี/ของแถม/คูปอง/วอเชอร์), มีขั้นตอนอนุมัติ</p>
+<hr />
+<h2 id="sec-6-5">ฟีเจอร์: บัตรสมาชิกดิจิทัล (Member Card)</h2>
+<p><strong>คืออะไร:</strong> การ์ดสมาชิกในมินิแอป/LINE แสดงชื่อ ระดับ แต้มคงเหลือ ความคืบหน้าระดับถัดไป + QR รหัสสมาชิก (ดีไซน์พรีเมียมโทนเดียวกับทั้งระบบ)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลูกค้าเห็นสถานะสมาชิกตัวเองตลอด + ใช้ที่หน้าร้านได้ (โชว์ QR ให้แคชเชียร์)</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>แสดง: ชื่อ, ป้ายระดับ (สีตามระดับ), แต้ม "4,250 / 5,000", แถบความคืบหน้า, "อีก 750 แต้มเป็น Gold"</li>
+<li>ปุ่มลัด: ประวัติแต้ม, แลกของรางวัล</li>
+<li>QR รหัสสมาชิกใช้ที่หน้าร้าน</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>บัตรสมาชิกคือ touchpoint ที่ลูกค้าเปิดดูบ่อย → ใส่ CTA แลกแต้ม/โปรได้</li>
+<li>ดีไซน์การ์ดเข้าชุดกับฉลากยา Flex → แบรนด์ดูเป็นอันหนึ่งอันเดียวกัน</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"บัตรสมาชิกดิจิทัลอยู่ใน LINE — โชว์ QR ที่ร้านสะสมแต้มได้เลย ไม่ต้องพกบัตร"</li>
+<li>"ลูกค้าเห็นแต้มตัวเองทุกวัน เห็นว่าอีกนิดได้เลื่อนระดับ — กระตุ้นซื้อในตัว"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> บัตรดิจิทัลแสดงระดับ+แต้ม+ความคืบหน้า+QR, ใช้ที่หน้าร้านได้</p>
+
+</section>
+<section class="doc" data-file="07-broadcast-aistudio.md">
+<h1 id="sec-7">07 — บรอดแคสต์ &amp; AI Studio (Broadcast &amp; Flex Builder)</h1>
+<blockquote>
+<p>ส่งโปร/ข่าวสารหาลูกค้าแบบเจาะกลุ่ม ตั้งเวลาได้ นับคลิกได้ + สร้างการ์ด Flex สวย ๆ ด้วย AI โดยไม่ต้องเขียนโค้ด</p>
+</blockquote>
+<hr />
+<h2 id="sec-7-1">ฟีเจอร์: บรอดแคสต์เจาะกลุ่ม (Targeted Broadcast)</h2>
+<p><strong>คืออะไร:</strong> ส่งข้อความ/การ์ดสินค้า (รูป ปุ่ม คารูเซล) หาลูกค้าได้แบบเจาะกลุ่ม ตามแท็ก/ระดับสมาชิก/กลุ่ม พร้อมตั้งเวลาส่งและนับคลิก</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ส่งโปร "ตรงคน ตรงเวลา" แทนการหว่านส่งทุกคน → ยอดตอบรับสูง ต้นทุนข้อความคุ้ม</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ประเภทข้อความ: ข้อความ / รูป / Flex (การ์ดเดี่ยวหรือคารูเซล)</li>
+<li>กลุ่มเป้าหมาย: ทั้งฐาน / กลุ่ม (segment) / ตามแท็ก / ตามระดับสมาชิก</li>
+<li>ส่งทันที หรือ ตั้งเวลา</li>
+<li>ส่งแบบ multicast (กลุ่มละมาก ๆ ต่อครั้ง) เร็วกว่าส่งทีละคน + มีระบบคิว/จำกัดอัตรากันบัญชีโดนบล็อก</li>
+<li>นับคลิก: ปุ่มในการ์ดผ่านลิงก์ติดตาม → รู้ว่าโปรไหนคนกดเยอะ</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>สร้างแคมเปญ → เลือกประเภทข้อความ + ใส่เนื้อหา (สร้างด้วย AI Studio ได้)</li>
+<li>เลือกกลุ่มเป้าหมาย (เช่น แท็ก "ลูกค้ากันแดด" + ระดับ Platinum)</li>
+<li>ส่งทันที หรือ ตั้งเวลา</li>
+<li>ดูสถิติคลิกในแดชบอร์ด</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>เลือกหลายสินค้า = ระบบทำเป็นการ์ดคารูเซลอัตโนมัติ (LINE รองรับสูงสุด 10 ใบ/คารูเซล)</li>
+<li>ตั้งติดแท็กอัตโนมัติเมื่อลูกค้ากดปุ่มในบรอดแคสต์ → ได้กลุ่มคนสนใจมาทำ remarketing ต่อ</li>
+<li>ตั้งเวลาส่งช่วงคนเล่นมือถือเยอะ (ดูทริคเวลาส่งใน playbook) → ยอดเปิดสูงขึ้น</li>
+<li>ใช้ "ตามระดับสมาชิก" ยิงโปร VIP ให้ Platinum โดยเฉพาะ</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"เลิกหว่านส่งทุกคน — ยิงโปรครีมกันแดดเฉพาะคนที่เคยสนใจกันแดด"</li>
+<li>"ส่งโปร VIP ให้สมาชิก Platinum เท่านั้น — ลูกค้าชั้นดีรู้สึกพิเศษ"</li>
+<li>"รู้ว่าโปรไหนเวิร์ก — ระบบนับคลิกทุกปุ่มให้"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เจาะกลุ่ม 4 แบบ (ทั้งฐาน/กลุ่ม/แท็ก/ระดับสมาชิก), คารูเซลสูงสุด 10 ใบ, multicast 500 คน/ครั้ง, นับคลิกได้</p>
+<hr />
+<h2 id="sec-7-2">ฟีเจอร์: ตั้งเวลาส่ง &amp; ระบบคิวอัตโนมัติ (Scheduling &amp; Queue)</h2>
+<p><strong>คืออะไร:</strong> ตั้งวัน-เวลาส่งล่วงหน้า ระบบส่งให้เองตามเวลา ผ่านระบบคิวเบื้องหลัง (ส่งไม่สำเร็จมีระบบลองใหม่)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เตรียมแคมเปญล่วงหน้า ส่งตรงเวลาทอง โดยไม่ต้องมานั่งกดเอง</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ตั้งเวลาส่ง → ระบบประมวลผลคิวทุกนาที</li>
+<li>ถ้า multicast ล้มเหลว fallback ไปส่งทีละคน (เชื่อถือได้)</li>
+<li>กระทบยอดสถานะส่งจาก event ของ LINE</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>เตรียมแคมเปญทั้งสัปดาห์ล่วงหน้า ตั้งเวลายิงทีละวัน</li>
+<li>ส่งช่วงเย็น ๆ/หลังเลิกงานมักได้ยอดเปิดดี (ดู playbook)</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ตั้งเวลาส่งโปร 1 ทุ่ม แล้วไปทำอย่างอื่น — ระบบส่งให้ตรงเวลา"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ตั้งเวลาส่งล่วงหน้า + คิวอัตโนมัติ + fallback ส่งทีละคน</p>
+<hr />
+<h2 id="sec-7-3">ฟีเจอร์: AI Studio สร้างการ์ด Flex (AI Flex Builder)</h2>
+<p><strong>คืออะไร:</strong> แอดมินพิมพ์อธิบายเป็นภาษาไทย → AI สร้างการ์ด Flex สวยงามระดับมืออาชีพให้ (สร้างใหม่ทั้งใบ / เขียนแคปชันอย่างเดียว / แก้ของเดิม) แนบรูปสินค้าเป็นต้นแบบได้</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ไม่ต้องจ้างกราฟิก/เขียนโค้ด — บอกสิ่งที่อยากได้เป็นคำพูด ได้การ์ดโปรสวย ๆ ใน 10 วินาที</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>3 โหมด:
+<ol type="1">
+<li><strong>สร้างใหม่</strong> — อธิบายข้อความ → AI ออกการ์ด Flex เต็มใบ</li>
+<li><strong>เขียนแคปชันอย่างเดียว</strong> — ใส่รายชื่อสินค้า + คำใบ้ → AI เขียนแต่ข้อความขาย (ราคา/รูปคงเดิมเป๊ะ ไม่เพี้ยน)</li>
+<li><strong>แก้ของเดิม</strong> — ใส่การ์ดเดิม + คำสั่งแก้ → AI ปรับให้โดยไม่แตะส่วนอื่น</li>
+</ol></li>
+<li>แนบรูปอ้างอิงได้ (เป็นบริบทภาพ + ใส่เป็นรูปฮีโร่ในการ์ด)</li>
+<li>ปรับสีธีม, จำนวนการ์ด (1–10), ประเภท (สินค้า/โปร/เมนู/ใบเสร็จ/ต้อนรับ)</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>เปิด AI Studio → เลือกประเภท + สี + จำนวนการ์ด</li>
+<li>พิมพ์รายละเอียด (เช่น "แนะนำยาแก้หวัด 3 อันดับ พร้อมราคา") + แนบรูป (ถ้ามี)</li>
+<li>AI สร้างการ์ด → ดูตัวอย่าง → เซฟ → นำไปส่งบรอดแคสต์</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>โหมด "เขียนแคปชันอย่างเดียว" ปลอดภัยสุดสำหรับโปรที่ตัวเลขต้องเป๊ะ — AI แตะแค่คำขาย ราคาคุมเอง</li>
+<li>แนบรูปสินค้าจริง → AI วางเป็นรูปฮีโร่ในแต่ละการ์ดให้อัตโนมัติ</li>
+<li>โหมด "แก้ของเดิม" ใช้ปรับ title ให้สั้นลง/เปลี่ยนโทนได้โดยไม่ต้องทำใหม่</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"พิมพ์ว่า 'แนะนำวิตามิน 3 ตัว' → ได้การ์ดโปรสวย ๆ ใน 10 วินาที ไม่ต้องจ้างกราฟิก"</li>
+<li>"แนบรูปสินค้า AI จัดการ์ดให้ — เจ้าของร้านทำเองได้ ไม่ต้องพึ่งดีไซเนอร์"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> 3 โหมด (สร้าง/เขียนแคปชัน/แก้), การ์ด 1–10 ใบ, แนบรูปอ้างอิงได้, เลือกสีธีม</p>
+<hr />
+<h2 id="sec-7-4">ฟีเจอร์: Flex Builder (สร้างการ์ดแบบจัดเอง)</h2>
+<p><strong>คืออะไร:</strong> เครื่องมือสร้าง/แต่งการ์ด Flex แบบกำหนดเองสำหรับคนที่อยากคุมดีไซน์ละเอียด</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> อยากได้การ์ดเป๊ะ ๆ ตามต้องการ ก็จัดเองได้ ไม่ต้องพึ่ง AI</p>
+<p><strong>ทิป &amp; ทริค:</strong> ใช้คู่กับ AI Studio — ให้ AI ร่างให้ก่อน แล้วมาจัดละเอียดใน Flex Builder</p>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"อยากคุมดีไซน์เอง? Flex Builder ให้คุณจัดการ์ดได้ทุกจุด"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เครื่องมือจัดการ์ด Flex แบบกำหนดเอง</p>
+
+</section>
+<section class="doc" data-file="08-documents-odoo-platform.md">
+<h1 id="sec-8">08 — เอกสารภาษี, Odoo ERP, แจ้งเตือน &amp; ระบบ SaaS หลายร้าน</h1>
+<blockquote>
+<p>หลังบ้านครบเครื่อง: ออกเอกสารภาษีไทยถูกกฎหมาย, เชื่อม Odoo ERP, แจ้งเตือนหลายช่องทาง, และสถาปัตยกรรม SaaS ที่แต่ละร้านข้อมูลแยกกันปลอดภัย</p>
+</blockquote>
+<hr />
+<h2 id="sec-8-1">ฟีเจอร์: เอกสารภาษี VAT แบบไทย (Thai VAT Documents)</h2>
+<p><strong>คืออะไร:</strong> ออกเอกสารบัญชี/ภาษีครบชุดแบบไทย: ใบเสนอราคา, ใบวางบิล, ใบแจ้งหนี้, ใบเสร็จรับเงิน, ใบกำกับภาษี, ใบเพิ่ม/ลดหนี้, ใบสั่งซื้อ ฯลฯ พร้อมเลขที่รันอัตโนมัติ + คำนวณ VAT + วันที่แบบไทย (พ.ศ.)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เลิกทำเอกสารภาษีด้วย Excel — ออกใบกำกับภาษีถูกต้องตามสรรพากร พร้อม PDF เก็บหลักฐาน</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>เอกสารหลายชนิด (ขาย: QT/BL/INV/RE/TAX/DN/CN, ซื้อ: PO/GR/…)</li>
+<li>เลขที่เอกสารรันอัตโนมัติ รูปแบบ <code>{PREFIX}-{ปีเดือน}-{ลำดับ}</code> รีเซ็ตลำดับรายเดือน ป้องกันเลขซ้ำ (atomic)</li>
+<li>คำนวณ VAT อัตโนมัติ (เริ่มต้น 7% ปรับได้, รองรับทั้งราคารวม/แยก VAT)</li>
+<li>วันที่แบบไทย เช่น "24 พ.ค. 2569" (พุทธศักราช)</li>
+<li>เวิร์กโฟลว์: สร้าง (รออนุมัติ) → อนุมัติ → ออก PDF/ส่งออก หรือยกเลิก; อนุมัติแล้วล็อกแก้ไม่ได้ (ความถูกต้อง)</li>
+<li>แปลงเอกสารต่อเนื่อง: ใบเสนอราคา → ใบแจ้งหนี้ → ใบกำกับภาษี (ก๊อปรายการ + คิดยอดใหม่)</li>
+<li>ข้อมูลลูกค้า "แช่แข็ง" ตอนสร้างเอกสาร (เก็บเป็น snapshot) เพื่อความถูกต้องทางกฎหมาย</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>เลขเอกสารรีเซ็ตรายเดือนเป็น design ที่ตั้งใจ (ตามแนวสรรพากร)</li>
+<li>ใช้ "รายงานภาษีขาย" (รายการ TAX) สรุปยอด VAT สำหรับยื่นภาษีรายเดือน/ไตรมาส</li>
+<li>ตั้งข้อมูลร้าน (ชื่อ, เลขผู้เสียภาษี, สาขา, ผู้มีอำนาจลงนาม) ในตั้งค่าก่อน แล้วเอกสารดึงให้อัตโนมัติ</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ออกใบกำกับภาษีถูกต้องตามสรรพากร — เลขรันอัตโนมัติ วันที่ พ.ศ. VAT คำนวณให้เสร็จ"</li>
+<li>"เลิกทำใบเสร็จด้วย Excel — ใบเสนอราคา/ใบแจ้งหนี้/ใบกำกับภาษี ครบในระบบเดียว"</li>
+<li>"ทริคยื่น VAT: ดึงรายงานภาษีขายรายเดือน คลิกเดียวสรุปยอดให้"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เอกสาร 10+ ชนิด, VAT เริ่มต้น 7% (ปรับได้), เลขรันอัตโนมัติรีเซ็ตรายเดือน, วันที่ พ.ศ.</p>
+<hr />
+<h2 id="sec-8-2">ฟีเจอร์: เชื่อม Odoo ERP &amp; แดชบอร์ดบัญชี (Odoo Integration &amp; Dashboard)</h2>
+<p><strong>คืออะไร:</strong> เชื่อมข้อมูลกับ Odoo ERP (ออเดอร์/ใบแจ้งหนี้/การชำระ/การจัดส่ง) แบบเรียลไทม์ และสรุปเป็นแดชบอร์ด KPI ให้เจ้าของดูโดยไม่ต้องเข้า Odoo</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เห็นภาพรวมการเงิน-ออเดอร์ของร้านในจอเดียว ตัดสินใจได้เร็ว ไม่ต้องสลับระบบ</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>รับสถานะออเดอร์แบบเรียลไทม์ผ่าน webhook: ยืนยัน → เก็บของ → แพ็ค → จัดส่ง → ส่งสำเร็จ ฯลฯ</li>
+<li>แดชบอร์ดบัญชี: ยอดเจ้าหนี้/ลูกหนี้, สถานะเงินสุทธิ, ยอดเกินกำหนด, กำไร/ขาดทุน, แนวโน้มย้อนหลัง</li>
+<li>ดึงข้อมูลแบบขนาน (โหลดหลายอย่างพร้อมกัน) → หน้าโหลดเร็วขึ้นมาก <code><span class="tag-default">[ตัวอย่างเปรียบเทียบ: ~2 วิ แทน ~15 วิ — อย่าโฆษณาเป็นตัวเลขรับประกัน]</span></code></li>
+<li>มี kill-switch เปิด/ปิดการเชื่อม Odoo ต่อระบบ → ร้านที่ไม่ใช้ Odoo ก็ไม่เห็นวิดเจ็ตที่ใช้ไม่ได้</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>แดชบอร์ดอ่านจาก cache → เร็วและไม่ถล่ม Odoo; ข้อมูลอาจ "ณ เวลาเมื่อครู่"</li>
+<li>ออเดอร์มีหลายสถานะย่อย แต่ระบบ "เงียบ" สถานะกลาง ๆ ไม่กวนลูกค้า แจ้งเฉพาะหมุดสำคัญ (ดูหัวข้อแจ้งเตือน)</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"เห็นยอดขาย-ลูกหนี้-กำไร ของร้านในจอเดียว ไม่ต้องเปิด Odoo"</li>
+<li>"ออเดอร์ถึงไหนแล้ว ลูกค้ารู้เรียลไทม์ — เก็บของ/แพ็ค/จัดส่ง อัปเดตอัตโนมัติ"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เชื่อม Odoo เรียลไทม์, แดชบอร์ดโหลดเร็ว (ดึงข้อมูลขนาน), เปิด/ปิดการเชื่อมได้</p>
+<blockquote>
+<p>หมายเหตุ: Odoo เป็นฟีเจอร์เสริมสำหรับร้านที่ใช้ ERP — สำหรับร้านทั่วไปให้เน้นฟีเจอร์ CRM/ร้านค้า/AI ก่อน</p>
+</blockquote>
+<hr />
+<h2 id="sec-8-3">ฟีเจอร์: แจ้งเตือนหลายช่องทาง (Multi-channel Notifications)</h2>
+<p><strong>คืออะไร:</strong> ส่งแจ้งเตือนถึงเจ้าของ/พนักงาน/ลูกค้า ผ่าน LINE, อีเมล, Telegram โดยเลือกได้ว่าเหตุการณ์ไหนแจ้งช่องไหน</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ไม่พลาดเรื่องสำคัญ (ออเดอร์ใหม่, จ่ายเงิน, เคสฉุกเฉิน, ของใกล้หมด) แต่ไม่สแปมจนรำคาญ</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ช่องทาง: LINE / อีเมล / Telegram / แจ้งผ่าน LIFF</li>
+<li>ตั้งเปิด-ปิดต่อประเภทเหตุการณ์: ออเดอร์ใหม่, การชำระเงิน, เคสฉุกเฉิน, นัดหมาย, ของใกล้หมด, สรุปประจำวัน</li>
+<li>เลือกแอดมินที่จะรับแจ้งเตือนเคสด่วนได้</li>
+<li>"เงียบ" เหตุการณ์ระหว่างทาง รวบแจ้งเฉพาะหมุดสำคัญ → ไม่รก</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้งให้เภสัชรับเฉพาะเคสฉุกเฉิน (red flag) / ผู้จัดการรับสรุปยอดรายวัน → แต่ละคนได้เฉพาะที่เกี่ยวกับตัว</li>
+<li>ของใกล้หมด → เด้งเข้า LINE เจ้าของอัตโนมัติ</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ออเดอร์ใหม่/เงินเข้า/ของใกล้หมด เด้งเตือนถึงมือคุณทันที"</li>
+<li>"เลือกได้ว่าใครรับแจ้งอะไร — เภสัชรับเคสด่วน เจ้าของรับยอดขาย ไม่ปนกัน"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> 4 ช่องทาง (LINE/อีเมล/Telegram/LIFF), ตั้งเปิด-ปิดต่อเหตุการณ์, เลือกผู้รับได้</p>
+<hr />
+<h2 id="sec-8-4">ฟีเจอร์: SaaS หลายร้าน — ข้อมูลแยกปลอดภัย (Multi-tenant Architecture)</h2>
+<p><strong>คืออะไร:</strong> แต่ละร้านมี "ฐานข้อมูลของตัวเอง" แยกขาดจากร้านอื่น เข้าผ่านซับโดเมนของร้าน — ปลอดภัย ขยายได้ ไม่ปนกัน</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ข้อมูลลูกค้า/ยอดขายของร้านคุณไม่ปนกับร้านอื่นแน่นอน — ความเป็นส่วนตัว + ความปลอดภัยระดับองค์กร</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ฐานข้อมูลแยกต่อร้าน (database-per-tenant) → ร้านหนึ่งมีปัญหาไม่กระทบร้านอื่น</li>
+<li>เข้าผ่านซับโดเมนของร้าน (เช่น <code>ร้านคุณ.re-ya.com</code>)</li>
+<li>สำรองข้อมูล/อัปเกรดแยกต่อร้านได้</li>
+<li>มีบันทึก audit การกระทำของผู้ดูแลแพลตฟอร์มทุกครั้ง</li>
+</ul>
+<p><strong>ทิป &amp; ทริค (มุมขายความน่าเชื่อถือ):</strong></p>
+<ul>
+<li>เน้นได้ว่า "ข้อมูลแยกจริง ไม่ใช่แค่กรองด้วยสิทธิ์" → ปลอดภัยกว่าระบบที่ผสมข้อมูลทุกร้านในที่เดียว</li>
+<li>รองรับการขยายหลายสาขา/หลายแบรนด์</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ข้อมูลร้านคุณอยู่ในฐานข้อมูลของคุณเอง — ไม่ปนกับใคร ปลอดภัยระดับองค์กร"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ฐานข้อมูลแยกต่อร้าน, เข้าผ่านซับโดเมน, มี audit log</p>
+<hr />
+<h2 id="sec-8-5">ฟีเจอร์: ตั้งค่าร้านรวมศูนย์ (Settings Hub)</h2>
+<p><strong>คืออะไร:</strong> หน้าตั้งค่าเดียวจบทุกอย่าง: บัญชี LINE/Facebook/TikTok, ข้อมูลร้าน, ข้อมูลภาษี, ข้อความต้อนรับ, LIFF, AI chat, Telegram, อีเมล/SMTP, การแจ้งเตือน, ความยินยอม (consent)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ปรับแต่งร้านได้เองทุกจุด ไม่ต้องง้อช่าง</p>
+<p><strong>ความสามารถหลัก (แท็บเด่น):</strong></p>
+<ul>
+<li>เชื่อมต่อแพลตฟอร์ม: LINE/Facebook/TikTok พร้อมปุ่มทดสอบการเชื่อมต่อ</li>
+<li>ข้อมูลร้าน + โลโก้ + ลิงก์โซเชียล</li>
+<li>ข้อมูลภาษี (สำหรับใบกำกับภาษี)</li>
+<li>ข้อความต้อนรับ, LIFF, การแจ้งเตือน, consent (PDPA/ความเป็นส่วนตัว)</li>
+<li>ธีมสี/แบรนด์ของร้าน (ใช้กับแลนดิ้ง/มินิแอป/ใบเสร็จ/บรอดแคสต์)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้งสีแบรนด์ครั้งเดียว ใช้ทั้งระบบ (แลนดิ้ง/มินิแอป/การ์ด)</li>
+<li>ตั้ง consent ให้ครบเพื่อรองรับ PDPA</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ปรับแต่งร้านได้เองทุกจุด — สี โลโก้ ข้อความต้อนรับ ข้อมูลภาษี ไม่ต้องง้อช่าง"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ตั้งค่ารวมศูนย์ 10+ แท็บ, เชื่อม 3 แพลตฟอร์ม, รองรับ PDPA consent</p>
+<hr />
+<h2 id="sec-8-6">ฟีเจอร์: หน้าแลนดิ้ง &amp; แบรนด์ร้าน (Landing &amp; Branding)</h2>
+<p><strong>คืออะไร:</strong> หน้าเว็บสาธารณะของร้าน/แพลตฟอร์ม สำหรับดึงลูกค้า/ผู้สนใจสมัคร พร้อมปรับแบรนด์ (โลโก้/สี/ข้อความ) ต่อร้าน</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> มีหน้าเว็บมืออาชีพดึง traffic + แปลงเป็นผู้สนใจ/ลูกค้า</p>
+<p><strong>ทิป &amp; ทริค:</strong> ปุ่ม CTA เปิดมินิแอป/สมัครได้ตามสถานะร้าน; ตั้ง meta/OG ให้แชร์โซเชียลสวย</p>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ร้านคุณมีหน้าเว็บมืออาชีพของตัวเอง — แชร์ในโซเชียลก็สวย"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> หน้าแลนดิ้งปรับแบรนด์ต่อร้าน + SEO/OG</p>
+
+</section>
+<section class="doc" data-file="09-appointments-telepharmacy-reminders.md">
+<h1 id="sec-9">09 — นัดหมาย, วิดีโอคอลเภสัช, เตือนยา/นัด &amp; ความเป็นส่วนตัว</h1>
+<blockquote>
+<p>หมวด "เทเลฟาร์มาซี" เต็มรูปแบบ: ลูกค้าจองนัด → วิดีโอคอลปรึกษาเภสัชสด → ระบบเตือนนัด/เตือนกินยา/เตือนเติมยาอัตโนมัติ + การจัดการความยินยอม (PDPA)</p>
+</blockquote>
+<blockquote>
+<p>⚠️ <strong>ข้อควรระวังคอนเทนต์:</strong> วิดีโอคอลเป็นการ "ปรึกษาสดแบบเรียลไทม์" (peer-to-peer) — <strong>ไม่ได้บันทึกวิดีโอไว้ที่เซิร์ฟเวอร์</strong> อย่าโฆษณาว่า "เก็บบันทึกการปรึกษา/ย้อนดูได้" และอย่าเคลมว่าเป็นระบบ telemedicine ที่ผ่านมาตรฐานทางการแพทย์เต็มรูปแบบ</p>
+</blockquote>
+<hr />
+<h2 id="sec-9-1">ฟีเจอร์: ระบบนัดหมายปรึกษาเภสัช (Appointment Booking / นัดหมาย)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้าจองเวลาปรึกษาเภสัชกรล่วงหน้าได้เองในมินิแอป เลือกเภสัช-วัน-เวลา เภสัช/แอดมินเห็นคิวนัดทั้งหมดในแดชบอร์ด</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เลิกรับนัดทางโทร/แชทแล้วลืม — ลูกค้าจองเอง ระบบกันชนเวลาซ้ำ + เตือนอัตโนมัติ ลดการไม่มาตามนัด (no-show)</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>จองล่วงหน้าได้สูงสุด 30 วัน</li>
+<li>เภสัชตั้งเวลาทำการรายวัน (เช่น จ–ศ 9:00–17:00, ส 9:00–12:00, อา หยุด) + ตั้งวันหยุดได้</li>
+<li>ระบบสร้างช่วงเวลาว่างอัตโนมัติ (ทีละ ~15 นาที <code><span class="tag-default">[ค่าเริ่มต้น]</span></code>) ตามเวลาทำการ-คิวที่จองแล้ว</li>
+<li>สถานะนัด: รอยืนยัน / ยืนยัน / กำลังปรึกษา / เสร็จ / ยกเลิก / ไม่มาตามนัด</li>
+<li>แสดงค่าบริการปรึกษา + ความเชี่ยวชาญ + คะแนนรีวิว (1–5 ดาว) ของเภสัชก่อนจอง</li>
+<li>ลูกค้ายกเลิกได้ก่อนเวลานัด <code><span class="tag-default">[ค่าเริ่มต้น: 2 ชม.]</span></code></li>
+<li>หลังปรึกษาเสร็จ ลูกค้าให้คะแนน + รีวิวได้</li>
+<li>ผูกกับวิดีโอคอล: เปิดนัด → กดเริ่มวิดีโอคอลได้เลย เภสัชเห็นบริบทนัด</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>ลูกค้าเปิดมินิแอป → เลือกเภสัช → ดูความเชี่ยวชาญ/ค่าบริการ/คะแนน</li>
+<li>เลือกวัน → ระบบโชว์ช่วงเวลาว่าง → เลือกเวลา + กรอกอาการ/เหตุผล</li>
+<li>ยืนยัน → ได้เลขนัด + ระบบเตือนก่อนถึงเวลา</li>
+<li>เภสัช/แอดมินดูคิวนัดวันนี้/สัปดาห์นี้ + อัปเดตสถานะ</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ตั้งวันหยุด/เวลาทำการให้ครบ ระบบจะไม่ปล่อยให้จองช่วงที่ปิด</li>
+<li>เชื่อมนัด → วิดีโอคอล = ลูกค้าจองแล้วได้คุยจริงในแอปเดียว ไม่ต้องนัดผ่านช่องทางอื่น</li>
+<li>ใช้คะแนนรีวิวเภสัชเป็นจุดขายความน่าเชื่อถือ</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้าจองคิวปรึกษาเภสัชเองได้ในมือถือ — ไม่ต้องโทร ไม่ต้องรอ"</li>
+<li>"ลดลูกค้าไม่มาตามนัด — ระบบเตือนให้อัตโนมัติก่อนถึงเวลา"</li>
+<li>"เลือกเภสัชจากคะแนนรีวิว แล้วจองเวลาที่สะดวก"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> จองล่วงหน้าได้ถึง 30 วัน, ช่วงเวลา ~15 นาที <code><span class="tag-default">[ค่าเริ่มต้น]</span></code>, 6 สถานะนัด, รีวิว 1–5 ดาว</p>
+<hr />
+<h2 id="sec-9-2">ฟีเจอร์: วิดีโอคอลปรึกษาเภสัช (Video Consultation / Telepharmacy)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้าปรึกษาเภสัชกรผ่านวิดีโอคอลสดในมินิแอป (เห็นหน้า-เสียงเรียลไทม์) เภสัชรับสายจากแดชบอร์ด พร้อมแชร์หน้าจอ/ส่งข้อความระหว่างคุยได้</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลูกค้าได้คำปรึกษาจากเภสัชตัวจริงโดยไม่ต้องเดินทาง — โชว์ฉลากยา/อาการให้เภสัชดูได้ เหมือนมาที่ร้าน</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>วิดีโอ + เสียงสดแบบเรียลไทม์ (เทคโนโลยี WebRTC)</li>
+<li>เภสัชเห็นสายเข้าในแดชบอร์ด (มีเสียงเรียก + แจ้งเตือนเบราว์เซอร์) แสดงชื่อ-รูป-อาการ-เลขนัดของลูกค้า</li>
+<li>ระหว่างคุย: ปิดไมค์, สลับกล้อง, แชร์หน้าจอ, ส่งข้อความ overlay ขึ้นจอลูกค้า</li>
+<li>ประวัติการโทร + สถิติ: จำนวนสายวันนี้/สำเร็จ/พลาด/เวลาเฉลี่ย</li>
+<li>ปุ่ม "โทรกลับ" สำหรับสายที่พลาด</li>
+</ul>
+<p><strong>วิธีใช้ (ขั้นตอน):</strong></p>
+<ol type="1">
+<li>ลูกค้าเปิดนัด (สถานะยืนยันแล้ว) → กด "เริ่มวิดีโอคอล"</li>
+<li>อนุญาตกล้อง/ไมค์ → ระบบต่อสายหาเภสัช</li>
+<li>เภสัชกด "รับสาย" → คุยสดได้ทันที</li>
+<li>คุยเสร็จ → วางสาย ระบบบันทึกเวลาคุยในประวัติ</li>
+</ol>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>เภสัชส่ง "ข้อความทักทาย/ขอสักครู่" เด้งขึ้นจอลูกค้าได้ระหว่างเตรียมตัว → ประสบการณ์ลื่น</li>
+<li>แชร์หน้าจอใช้โชว์ข้อมูลยา/วิธีใช้ให้ลูกค้าเห็นชัด</li>
+<li><strong>อย่าโฆษณาว่าบันทึกวิดีโอ</strong> — ระบบไม่เก็บไฟล์ที่เซิร์ฟเวอร์ (เป็นการคุยสด เป็นส่วนตัว) → ใช้มุม "ปรึกษาสด เป็นส่วนตัว" แทน</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ปรึกษาเภสัชตัวจริงผ่านวิดีโอคอล — โชว์ฉลากยา/อาการให้ดูได้ เหมือนมาที่ร้าน"</li>
+<li>"อยู่บ้านก็ปรึกษาเภสัชได้ เห็นหน้า คุยสด ไม่ต้องเดินทาง"</li>
+<li>"คุยสด เป็นส่วนตัว — เหมาะกับเรื่องสุขภาพที่อยากปรึกษาแบบเห็นหน้า"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> วิดีโอ+เสียงสดเรียลไทม์, แชร์หน้าจอได้, มีประวัติ/สถิติการโทร, ปุ่มโทรกลับ</p>
+<blockquote>
+<p>ห้ามอ้าง: บันทึกวิดีโอ/ย้อนดูการปรึกษา, มาตรฐาน telemedicine เต็มรูปแบบ</p>
+</blockquote>
+<hr />
+<h2 id="sec-9-3">ฟีเจอร์: เตือนนัดหมายอัตโนมัติ (Appointment Reminders)</h2>
+<p><strong>คืออะไร:</strong> ระบบส่งเตือนลูกค้าก่อนถึงเวลานัด (เตือนล่วงหน้า + เตือนถึงเวลา) เป็นการ์ด Flex ใน LINE</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลดลูกค้าลืมนัด/ไม่มาตามนัด → คิวเภสัชไม่เสียเปล่า</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>เตือนล่วงหน้า ~10 นาที (การ์ดส้ม: รูปเภสัช เวลา ทิปเตรียมตัว)</li>
+<li>เตือนเมื่อถึงเวลา (การ์ดเขียว + ปุ่ม "เริ่มวิดีโอคอลเลย!")</li>
+<li>กันส่งซ้ำ (มีธงบันทึกว่าส่งแล้ว)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong> เตือนถึงเวลามีปุ่มเริ่มวิดีโอคอลในตัว → ลูกค้าแตะเข้าคุยได้ทันที ไม่หลุดคิว</p>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้าไม่ลืมนัดอีกต่อไป — ระบบเตือนก่อน 10 นาที พร้อมปุ่มเข้าคุยเลย"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เตือน 2 จังหวะ (~10 นาทีก่อน + เมื่อถึงเวลา), ส่งผ่าน LINE</p>
+<hr />
+<h2 id="sec-9-4">ฟีเจอร์: เตือนกินยา (Medication Take Reminders)</h2>
+<p><strong>คืออะไร:</strong> ระบบเตือนลูกค้าให้กินยาตามเวลาที่กำหนด (เช่น 08:00 / 12:00 / 18:00) เป็นการ์ด Flex มีปุ่ม "ทานแล้ว"</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ช่วยลูกค้ากินยาตรงเวลา/ครบโดส = ผลการรักษาดีขึ้น + ลูกค้าผูกพันกับร้าน</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ตั้งเวลาเตือนได้หลายช่วง/วัน</li>
+<li>ความถี่: ครั้งเดียว / ทุกวัน / วันละ 2 / วันละ 3 / รายสัปดาห์ / เมื่อจำเป็น</li>
+<li>ปุ่ม "ทานแล้ว" / "เตือนอีกครั้ง"</li>
+<li>ส่งเฉพาะลูกค้าที่เปิดรับการเตือน (consent)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong> เหมาะมากกับลูกค้ายาโรคเรื้อรัง (ความดัน/เบาหวาน) → สร้าง engagement ระยะยาว</p>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้ายาประจำลืมกินยา? ระบบเตือนให้ทุกมื้อ — กดยืนยัน 'ทานแล้ว' ได้เลย"</li>
+<li>"ดูแลลูกค้าโรคเรื้อรังเหมือนมีเภสัชส่วนตัว"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ความถี่ 6 แบบ, ตั้งหลายเวลา/วัน, มีปุ่มยืนยัน, เคารพ consent</p>
+<hr />
+<h2 id="sec-9-5">ฟีเจอร์: เตือนเติมยา / Refill (Medication Refill Reminders)</h2>
+<p><strong>คืออะไร:</strong> ระบบคำนวณว่ายาของลูกค้าใกล้หมด (จากจำนวนที่ซื้อ ÷ ขนาดต่อวัน) แล้วเตือนให้สั่งเติมก่อนยาหมด พร้อมปุ่มสั่งซื้อ</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> ลูกค้าไม่ขาดยา + ร้านได้ยอดขายซ้ำอัตโนมัติ (retention/repeat revenue) — นี่คือฟีเจอร์ทำเงินที่หลายร้านมองข้าม</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>คำนวณวันยาหมดโดยประมาณจากจำนวนซื้อ + ขนาดต่อวัน</li>
+<li>เตือนช่วงใกล้หมด (ภายใน ~3 วันก่อนหมด) การ์ดส้ม: รูปสินค้า, เหลือกี่วัน, ราคา</li>
+<li>ปุ่ม "สั่ง Refill เลย" (เปิดร้านค้า) / "ติดต่อเภสัช"</li>
+<li>กันเตือนถี่เกิน (เว้นช่วงก่อนเตือนซ้ำ)</li>
+<li>ส่งเฉพาะลูกค้าที่เปิดรับ (consent)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ฟีเจอร์นี้ = "เครื่องพิมพ์ยอดขายซ้ำ" — ลูกค้ายาประจำจะสั่งเติมเรื่อย ๆ โดยไม่ต้องตามตื๊อ</li>
+<li>คำนวณแม่นเมื่อกรอกขนาดต่อวันถูกต้อง</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ยาลูกค้าใกล้หมด ระบบเตือนให้สั่งเติม — ลูกค้าไม่ขาดยา ร้านได้ยอดซ้ำ"</li>
+<li>"ทริคเพิ่มยอดร้านยา: เตือนเติมยาอัตโนมัติ = ลูกค้าประจำกลับมาเอง"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> เตือนภายใน ~3 วันก่อนยาหมด, คำนวณจาก จำนวนซื้อ ÷ ขนาดต่อวัน, มีปุ่มสั่งเติม</p>
+<hr />
+<h2 id="sec-9-6">ฟีเจอร์: ความยินยอม &amp; ความเป็นส่วนตัว (Consent &amp; PDPA)</h2>
+<p><strong>คืออะไร:</strong> ลูกค้าควบคุมได้ว่าจะรับการแจ้งเตือนประเภทไหนบ้าง + มีหน้าขอลบข้อมูลส่วนบุคคล (รองรับ PDPA ไทย)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> สร้างความไว้วางใจ + ลดความเสี่ยงด้านกฎหมาย (ข้อมูลสุขภาพเป็นข้อมูลอ่อนไหว)</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>ลูกค้าตั้งค่ารับ/ไม่รับการแจ้งเตือนได้หลายหมวด (อัปเดตออเดอร์, โปรโมชัน, เตือนนัด, เตือนยา, เกร็ดสุขภาพ, แจ้งลดราคา, แจ้งของกลับมาขาย)</li>
+<li>"เกร็ดสุขภาพ" ปิดเป็นค่าเริ่มต้น (opt-in) เพื่อความเป็นส่วนตัว</li>
+<li>หน้าขอลบข้อมูลสาธารณะ (ภาษาไทย/อังกฤษ) — ดำเนินการภายใน 30 วัน</li>
+<li>ระบบเตือนทุกตัวเคารพ consent (ปิดรับ = ไม่ส่ง)</li>
+</ul>
+<p><strong>ทิป &amp; ทริค (มุมขายความน่าเชื่อถือ):</strong></p>
+<ul>
+<li>เน้นได้ว่า "ลูกค้าคุมการแจ้งเตือนเองได้ + ขอลบข้อมูลได้" = ร้านใส่ใจความเป็นส่วนตัว</li>
+<li>⚠️ การลบข้อมูลเป็นกระบวนการที่ "ร้านต้องดำเนินการ" (ไม่ใช่ลบอัตโนมัติทันที) — อย่าโฆษณาว่า "ลบทันทีอัตโนมัติ"</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"ลูกค้าเลือกเองได้ว่าจะรับข่าวสารแบบไหน — เคารพความเป็นส่วนตัว ตาม PDPA"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ตั้งค่าการแจ้งเตือน 7 หมวด, ขอลบข้อมูลได้ (ดำเนินการภายใน 30 วัน), รองรับ PDPA</p>
+<blockquote>
+<p>ห้ามอ้าง: ลบข้อมูลอัตโนมัติทันที, ผ่านการรับรองมาตรฐาน PDPA อย่างเป็นทางการ</p>
+</blockquote>
+<hr />
+<h2 id="sec-9-7">ฟีเจอร์: สถิติ &amp; การแบ่งกลุ่มลูกค้า (Analytics &amp; Segmentation)</h2>
+<p><strong>คืออะไร:</strong> หน้าสถิติสำหรับแอดมิน: ผู้ใช้/ข้อความ/ออเดอร์/รายได้/นัด/วิดีโอคอล + ดูข้อมูลเชิงลูกค้า (CRM)</p>
+<p><strong>แก้ปัญหาอะไร (จุดขาย):</strong> เจ้าของเห็นภาพรวมร้านและพฤติกรรมลูกค้า → ตัดสินใจด้วยข้อมูล</p>
+<p><strong>ความสามารถหลัก:</strong></p>
+<ul>
+<li>แดชบอร์ดสถิติ: ผู้ใช้ใหม่, ข้อความเข้า-ออก, ออเดอร์, รายได้ (เลือกช่วง 7/30/90 วัน)</li>
+<li>สถิตินัด (สถานะ/no-show), สถิติวิดีโอคอล (สำเร็จ/พลาด/เวลาเฉลี่ย)</li>
+<li>ข้อมูลเชิงลูกค้า (recency/frequency/monetary) ใช้แบ่งกลุ่มลูกค้าได้</li>
+</ul>
+<p><strong>ทิป &amp; ทริค:</strong></p>
+<ul>
+<li>ใช้ร่วมกับ "แท็ก + ตัวกรอง" ในอินบ็อกซ์ เพื่อแบ่งกลุ่มลูกค้า (เช่น ลูกค้าหายนาน, ลูกค้ามูลค่าสูง) แล้วยิงบรอดแคสต์เจาะกลุ่ม</li>
+<li>⚠️ ยังไม่มี "แดชบอร์ด RFM สำเร็จรูป" แบบกดดูคะแนนทันที — การแบ่งกลุ่มทำผ่านแท็ก/ตัวกรอง/รายงาน อย่าโฆษณาว่ามีหน้าจอ RFM อัตโนมัติ</li>
+</ul>
+<p><strong>มุมคอนเทนต์ที่โพสต์ได้:</strong></p>
+<ul>
+<li>"เห็นภาพรวมร้าน — ลูกค้าใหม่ ยอดขาย นัด วิดีโอคอล ครบในหน้าเดียว"</li>
+<li>"แบ่งกลุ่มลูกค้าด้วยแท็ก แล้วยิงโปรเฉพาะกลุ่ม — การตลาดที่ใช้ข้อมูลจริง"</li>
+</ul>
+<p><strong>ตัวเลข/คำศัพท์ที่อ้างได้:</strong> ช่วงข้อมูล 7/30/90 วัน, สถิติผู้ใช้/ข้อความ/ออเดอร์/รายได้/นัด/วิดีโอคอล</p>
+<blockquote>
+<p>ห้ามอ้าง: แดชบอร์ด RFM สำเร็จรูป / ตัวสร้างแคมเปญตามเซกเมนต์อัตโนมัติ (ยังไม่มี)</p>
+</blockquote>
+
+</section>
+<section class="doc" data-file="10-content-playbook.md">
+<h1 id="sec-10">10 — Content Playbook (คู่มือเขียน/โพสต์คอนเทนต์)</h1>
+<blockquote>
+<p>ไฟล์นี้สอน AI ว่า "เอาความรู้ฟีเจอร์ไปทำเป็นโพสต์ยังไง" — มีเทมเพลตโพสต์, hook, CTA, hashtag, การจับคู่ persona→ฟีเจอร์, ปฏิทินคอนเทนต์ และตัวอย่างโพสต์จริง</p>
+</blockquote>
+<hr />
+<h2 id="sec-10-1">1. ประเภทคอนเทนต์ที่ผลิตได้ (เลือกตามเป้าหมาย)</h2>
+<table>
+<thead>
+<tr>
+<th>เป้าหมาย</th>
+<th>ประเภทคอนเทนต์</th>
+<th>ฟีเจอร์ที่ดึงมาใช้</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ขายระบบ (acquisition)</strong></td>
+<td>โพสต์ pain→solution, ใบขายฟีเจอร์, เคสตัวอย่าง</td>
+<td>ทุกหมวด เน้นจุดเจ็บปวด</td>
+</tr>
+<tr>
+<td><strong>สอนใช้งาน (adoption/retention)</strong></td>
+<td>"ทริคใช้ฟีเจอร์ X", how-to step-by-step</td>
+<td>ดึง "วิธีใช้" + "ทิป&amp;ทริค"</td>
+</tr>
+<tr>
+<td><strong>ให้ความรู้ (authority)</strong></td>
+<td>ความรู้สุขภาพ/ยา/บริหารร้าน</td>
+<td>ยาตีกัน, แพ้ยา, การจัดสต็อก</td>
+</tr>
+<tr>
+<td><strong>กระตุ้นแอ็กชัน (conversion)</strong></td>
+<td>โปร, แคมเปญ, แจ้งฟีเจอร์ใหม่</td>
+<td>บรอดแคสต์, สะสมแต้ม, ร้านค้า</td>
+</tr>
+<tr>
+<td><strong>มัดใจลูกค้าเดิม (engagement)</strong></td>
+<td>เกร็ดเล็ก ๆ, behind-the-scenes</td>
+<td>AI, ตรวจสลิป, ฉลากยา</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="sec-10-2">2. โครงโพสต์มาตรฐาน (เลือกใช้ตามบริบท)</h2>
+<h3 id="a-pain--solution-ขายระบบ">A) Pain → Solution (ขายระบบ)</h3>
+<pre><code>[Hook จี้จุดเจ็บปวด]
+&quot;ตอบแชทลูกค้าไม่ทันจนเสียลูกค้า?&quot;
+
+[ขยายปัญหา 1-2 บรรทัด]
+ลูกค้าทักตอนดึก กว่าจะตอบเช้า ลูกค้าไปร้านอื่นแล้ว
+
+[ฟีเจอร์ที่แก้ + ประโยชน์]
+Re-ya มี AI เภสัชผู้ช่วยตอบ 24 ชม. + ตอบกลับอัตโนมัติ ลูกค้าได้คำตอบทันที
+
+[ทิปเสริมความน่าเชื่อถือ]
+เคสฉุกเฉินส่งต่อเภสัชจริงทันที — ปลอดภัย ไม่ใช่บอตตอบมั่ว
+
+[CTA]
+ทักมาทดลองใช้ฟรี 👉</code></pre>
+<h3 id="b-how-to--ทริค-สอนใช้งาน">B) How-to / ทริค (สอนใช้งาน)</h3>
+<pre><code>[Hook: สัญญาว่าจะได้อะไร]
+&quot;ทริค: ดึงลูกค้าที่กดติดตามแต่ไม่เคยทัก มาปิดการขาย&quot;
+
+[ขั้นตอน 1-2-3]
+1. เปิดกล่องข้อความ → เลือก segment &quot;ผู้ติดตามที่ยังไม่เคยทัก&quot;
+2. ส่งข้อความทักทาย + โปรต้อนรับ
+3. ติดแท็กไว้ remarketing รอบหน้า
+
+[ผลลัพธ์]
+เปลี่ยนผู้ติดตามเย็น ๆ ให้เป็นลูกค้าจ่ายเงิน
+
+[CTA: ชวนลองทำ]
+ลองทำวันนี้ แล้วบอกเราว่าได้กี่ออเดอร์ 👇</code></pre>
+<h3 id="c-ความรู้-authority">C) ความรู้ (authority)</h3>
+<pre><code>[Hook: ความรู้ที่คนอยากรู้]
+&quot;5 คู่ยาที่คนไทยมักกินร่วมกันโดยไม่รู้ว่าตีกัน&quot;
+
+[เนื้อหาความรู้ — กระชับ เป็นข้อ]
+...
+
+[เชื่อมเข้าฟีเจอร์เนียน ๆ]
+ที่ร้านเรามีระบบเตือนยาตีกันอัตโนมัติก่อนจ่ายทุกครั้ง
+
+[CTA อ่อน]
+ปรึกษาเภสัชเราได้เลยถ้าไม่แน่ใจ 💊</code></pre>
+<h3 id="d-feature-spotlight-แจกทีละฟีเจอร์">D) Feature spotlight (แจกทีละฟีเจอร์)</h3>
+<pre><code>[ชื่อฟีเจอร์ + 1 ประโยคว่าทำอะไร]
+[3 bullets ความสามารถ/ประโยชน์]
+[1 ทิป power-user]
+[ภาพ/การ์ดประกอบ]
+[CTA]</code></pre>
+<hr />
+<h2 id="sec-10-3">3. คลัง Hook (หัวข้อเปิดที่ดึงความสนใจ)</h2>
+<p><strong>จี้ปัญหา:</strong></p>
+<ul>
+<li>"ตอบแชทไม่ทันจนเสียลูกค้า?"</li>
+<li>"ตรวจสลิปทีละใบจนตาลาย?"</li>
+<li>"พนักงานลาออก ข้อมูลลูกค้าหายไปด้วย?"</li>
+<li>"สต็อกหมดตอนลูกค้าจะซื้อพอดี?"</li>
+<li>"ขายเชื่อแล้วลืมไปว่าใครค้างเท่าไหร่?"</li>
+</ul>
+<p><strong>ชวนสงสัย/อยากรู้:</strong></p>
+<ul>
+<li>"รู้ไหม การตอบแชทมีต้นทุนซ่อนอยู่"</li>
+<li>"ทริคที่ร้านยาเก่ง ๆ ใช้ดึงลูกค้ากลับ"</li>
+<li>"ลูกค้า 1 คนทำไมร้านนี้ขายได้ซ้ำ ๆ"</li>
+</ul>
+<p><strong>ตัวเลข/ผลลัพธ์:</strong></p>
+<ul>
+<li>"ตรวจสลิปอัตโนมัติ เร็วกว่าเพ่งเองทีละใบมาก" (เลี่ยงตัวเลขรับประกัน — ดู Don't ข้อ 6)</li>
+<li>"ร้านค้าออนไลน์ 24 ชม. ใน LINE ที่มีอยู่แล้ว"</li>
+</ul>
+<p><strong>สถานการณ์ relatable:</strong></p>
+<ul>
+<li>"ลูกค้าทักตอนตี 2 ว่า 'ปวดหัวกินอะไรดี'"</li>
+<li>"ตอนสิ้นเดือนต้องนั่งทำใบกำกับภาษีใน Excel"</li>
+</ul>
+<hr />
+<h2 id="sec-10-4">4. คลัง CTA (ปิดท้าย เลือกตามเป้าหมาย)</h2>
+<table>
+<thead>
+<tr>
+<th>เป้าหมาย</th>
+<th>CTA</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ทดลองใช้</td>
+<td>"ทักมาทดลองใช้ฟรี 👉", "ขอเดโมระบบ คลิกเลย"</td>
+</tr>
+<tr>
+<td>สอน/มีส่วนร่วม</td>
+<td>"ลองทำตามแล้วบอกผลด้วยนะ 👇", "เซฟโพสต์นี้ไว้ใช้"</td>
+</tr>
+<tr>
+<td>ขายของให้ลูกค้าร้าน</td>
+<td>"สั่งซื้อในแชทได้เลย 🛒", "สมาชิกรับส่วนลดทันที"</td>
+</tr>
+<tr>
+<td>ปรึกษา</td>
+<td>"ปรึกษาเภสัชเราฟรี 💊", "ส่งอาการมาได้เลย"</td>
+</tr>
+<tr>
+<td>สร้าง lead</td>
+<td>"สนใจระบบสำหรับร้านยา/คลินิก ทักแชท"</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="sec-10-5">5. Hashtag (เลือก 3–8 อันต่อโพสต์ ตามแพลตฟอร์ม)</h2>
+<p><strong>กลุ่มธุรกิจร้านยา:</strong> #ร้านยา #เภสัชกร #ธุรกิจร้านยา #ร้านขายยา #คลินิก #เทเลฟาร์มาซี <strong>กลุ่มเครื่องมือ/ระบบ:</strong> #ระบบร้านยา #CRMร้านยา #LINEOA #ขายของผ่านLINE #ระบบสมาชิก #ร้านค้าออนไลน์ <strong>กลุ่มความรู้สุขภาพ:</strong> #สุขภาพ #ความรู้เรื่องยา #ปรึกษาเภสัชกร #ใช้ยาอย่างปลอดภัย <strong>แบรนด์:</strong> #Reya #ReyaPharmacy (ปรับตามแบรนด์จริงของลูกค้า)</p>
+<blockquote>
+<p>ทริค: Facebook ใช้ hashtag น้อย (2–3), Instagram/TikTok ใช้ได้มากกว่า (5–10), LINE ไม่เน้น hashtag</p>
+</blockquote>
+<hr />
+<h2 id="sec-10-6">6. จับคู่ Persona → มุมที่ควรพูด</h2>
+<table>
+<thead>
+<tr>
+<th>Persona</th>
+<th>จุดเจ็บปวด</th>
+<th>ฟีเจอร์ที่ชู</th>
+<th>มุมข้อความ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>เจ้าของร้านยาเดี่ยว</td>
+<td>เวลาน้อย ทำคนเดียว</td>
+<td>AI ตอบ 24 ชม., ตรวจสลิปอัตโนมัติ, ร้านค้าขายเอง</td>
+<td>"ให้ระบบเป็นพนักงานคนที่ 2 ของคุณ"</td>
+</tr>
+<tr>
+<td>ร้านหลายสาขา</td>
+<td>ทีมงานซ้ำซ้อน</td>
+<td>มอบหมายงาน, สถานะลูกค้า, หลาย OA, รายงานรวม</td>
+<td>"คุมทุกสาขาในจอเดียว"</td>
+</tr>
+<tr>
+<td>เภสัชกร</td>
+<td>กลัวจ่ายยาผิด</td>
+<td>เช็กแพ้ยา/ยาตีกัน, ฉลากยา, ส่งต่อเภสัช</td>
+<td>"เทคโนโลยีช่วยให้ปลอดภัยขึ้น"</td>
+</tr>
+<tr>
+<td>คลินิก/ธุรกิจสุขภาพ</td>
+<td>จัดการนัด+ขาย+ใบเสร็จ</td>
+<td>ร้านค้า, สะสมแต้ม, เอกสารภาษี</td>
+<td>"ครบตั้งแต่ขายยันออกใบกำกับภาษี"</td>
+</tr>
+<tr>
+<td>ลูกค้าที่ใช้ไม่คุ้ม</td>
+<td>ใช้แค่แชท</td>
+<td>ทริคใช้ฟีเจอร์ลึก (แท็ก, segment, บรอดแคสต์)</td>
+<td>"คุณจ่ายค่าระบบไปแล้ว ใช้ให้คุ้มกว่านี้"</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="sec-10-7">7. ปฏิทินคอนเทนต์ตัวอย่าง (1 สัปดาห์)</h2>
+<table>
+<thead>
+<tr>
+<th>วัน</th>
+<th>ประเภท</th>
+<th>หัวข้อตัวอย่าง</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>จันทร์</td>
+<td>ความรู้</td>
+<td>"ยาแก้แพ้ทำให้ง่วง? เลือกตัวไหนดี" → เชื่อม AI ปรึกษา</td>
+</tr>
+<tr>
+<td>อังคาร</td>
+<td>Feature spotlight</td>
+<td>"ระบบจ่ายยา: ฉลากยาดิจิทัลส่งเข้า LINE"</td>
+</tr>
+<tr>
+<td>พุธ</td>
+<td>ทริค/how-to</td>
+<td>"ทริคติดแท็กลูกค้า ยิงโปรให้ตรงคน"</td>
+</tr>
+<tr>
+<td>พฤหัส</td>
+<td>Pain→Solution</td>
+<td>"ตรวจสลิปทีละใบจนตาลาย? มีทางออก"</td>
+</tr>
+<tr>
+<td>ศุกร์</td>
+<td>โปร/แคมเปญ</td>
+<td>"ศุกร์นี้ สมาชิกรับแต้มคูณ 2" (บรอดแคสต์)</td>
+</tr>
+<tr>
+<td>เสาร์</td>
+<td>เคส/เล่าเรื่อง</td>
+<td>"ร้านยา X ใช้ระบบสมาชิกแล้วลูกค้ากลับมาซ้ำ"</td>
+</tr>
+<tr>
+<td>อาทิตย์</td>
+<td>engagement เบา ๆ</td>
+<td>"behind the scenes: AI ของเราทำงานยังไง"</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="sec-10-8">8. ทริคเวลาส่ง (สำหรับบรอดแคสต์/โพสต์)</h2>
+<ul>
+<li>ช่วงคนเล่นมือถือเยอะ: <strong>11:00–13:00</strong> (พักเที่ยง), <strong>19:00–21:30</strong> (หลังเลิกงาน/ก่อนนอน)</li>
+<li>โปรร้านยา/สุขภาพ: เย็น–ค่ำ มักได้ยอดเปิดดี</li>
+<li>หลีกเลี่ยงส่งถี่เกินจนลูกค้ารำคาญ → ใช้การเจาะกลุ่ม (แท็ก/ระดับสมาชิก) แทนการหว่าน</li>
+<li>ตั้งเวลาส่งล่วงหน้าได้ในระบบบรอดแคสต์ → เตรียมทั้งสัปดาห์ทีเดียว</li>
+</ul>
+<hr />
+<h2 id="sec-10-9">9. Do / Don't (สำคัญมากสำหรับ AI)</h2>
+<p><strong>✅ DO</strong></p>
+<ul>
+<li>พูดถึง "ประโยชน์/ผลลัพธ์" ก่อน "ฟีเจอร์"</li>
+<li>ใช้ภาษาลูกค้า (คำในตาราง <a href="README.md">README</a>) ไม่ใช้ศัพท์ dev/ชื่อภายใน</li>
+<li>ใส่ทิปที่ทำตามได้จริง 1 ข้อต่อโพสต์</li>
+<li>ระบุว่า AI เป็น "ผู้ช่วย" + มีเภสัช/คนจริงเสมอ</li>
+<li>ปิดด้วย CTA ชัดเจน 1 อัน</li>
+</ul>
+<p><strong>🚫 DON'T</strong></p>
+<ul>
+<li>อย่าเคลม "วินิจฉัย/รักษาโรค" หรือสัญญาผลทางการแพทย์</li>
+<li>อย่าโพสต์ตัวเลข <code><span class="tag-default">[ค่าเริ่มต้น]</span></code>/<code><span class="tag-default">[ตัวอย่าง]</span></code> เป็นข้อเท็จจริงตายตัว (แต้ม/ราคา/ระดับ) โดยไม่ยืนยัน</li>
+<li>อย่าเปิดเผยชื่อภายใน/เทคนิค (inbox-v2, GhostX, Odoo schema, endpoint, token, ชื่อ DB) หรือลอกคำอังกฤษในวงเล็บจากไฟล์ฟีเจอร์มาใส่โพสต์</li>
+<li>อย่าหว่านโปรหาทุกคน — ชูการเจาะกลุ่มแทน</li>
+<li>อย่าใส่ CTA หลายอันจนสับสน</li>
+<li><strong>(ข้อ 6) อย่าพูดตัวเลขเวลา/ความเร็วเป็นการรับประกัน</strong> (เช่น "ตรวจสลิปใน 30 วินาที", "โหลดใน 2 วิ") — ใช้ "ภายในไม่กี่วินาที / เร็วขึ้นมาก" แทน</li>
+<li><strong>อย่ารวมจำนวนวิธีชำระเงินข้ามบริบท</strong> — หน้าร้าน/จ่ายยามี 4 โหมด (เงินสด/โอน/บัตร/ทีหลัง), เช็กเอาต์มินิแอปมี 3 (โอน/COD/ทีหลัง) อย่าเขียนรวมเป็น "รับเงิน 7 แบบ"</li>
+<li><strong>อย่าอ้างฟีเจอร์ที่ยังไม่มี:</strong> บันทึก/ย้อนดูวิดีโอคอล, ลบข้อมูลอัตโนมัติทันที, แดชบอร์ด RFM สำเร็จรูป, ส่งเตือนทาง SMS/อีเมล (ระบบเตือนใช้ LINE)</li>
+</ul>
+<hr />
+<h2 id="sec-10-10">10. ตัวอย่างโพสต์สำเร็จรูป (ก๊อปไปปรับได้)</h2>
+<h3 id="ตัวอย่าง-1--ขายระบบ-ai--ตรวจสลิป">ตัวอย่าง 1 — ขายระบบ (AI + ตรวจสลิป)</h3>
+<pre><code>ลูกค้าทักตอนตี 2 ว่า &quot;ปวดหัวกินอะไรดี&quot; 😵
+กว่าจะตอบเช้า... ลูกค้าไปร้านอื่นแล้ว
+
+Re-ya ช่วยร้านคุณ:
+🤖 AI เภสัชผู้ช่วยตอบทันที 24 ชม. (เคสฉุกเฉินส่งต่อเภสัชจริง)
+✅ ลูกค้าโอนเงิน ระบบตรวจสลิปให้อัตโนมัติภายในไม่กี่วินาที
+💊 จ่ายยาเสร็จ ส่งฉลากยาเข้า LINE ลูกค้าทันที
+
+ร้านยายุคใหม่ ไม่พลาดลูกค้าแม้นอกเวลา
+👉 ทักมาทดลองใช้ฟรี
+#ร้านยา #ระบบร้านยา #LINEOA</code></pre>
+<h3 id="ตัวอย่าง-2--สอนใช้งาน-ทริคแท็ก--บรอดแคสต์">ตัวอย่าง 2 — สอนใช้งาน (ทริคแท็ก + บรอดแคสต์)</h3>
+<pre><code>ทริคร้านยา: ยิงโปร &quot;ตรงคน&quot; ยอดตอบรับพุ่ง 📈
+
+แทนที่จะส่งโปรครีมกันแดดหาทุกคน...
+1. ตั้งให้ระบบติดแท็ก &quot;สนใจกันแดด&quot; เมื่อลูกค้ากดดูสินค้านั้น
+2. รอบหน้า ยิงโปรเฉพาะกลุ่มนี้
+3. ดูสถิติคลิก รู้เลยว่าเวิร์กไหม
+
+ส่งน้อยลง แต่ขายได้มากขึ้น
+เซฟโพสต์นี้ไว้ลองทำ 👇
+#CRMร้านยา #การตลาดร้านยา</code></pre>
+<h3 id="ตัวอย่าง-3--ความรู้-authority">ตัวอย่าง 3 — ความรู้ (authority)</h3>
+<pre><code>รู้ไหม? ยาบางคู่ห้ามกินร่วมกัน 💊⚠️
+
+เช่น ยาบางชนิด + ยาละลายลิ่มเลือด อาจเสี่ยงเลือดออกง่าย
+หลายคนซื้อกินเองโดยไม่รู้
+
+ที่ร้านเรา ระบบเตือน &quot;ยาตีกัน&quot; อัตโนมัติก่อนจ่ายยาทุกครั้ง
+เภสัชมั่นใจ ลูกค้าปลอดภัย
+
+ไม่แน่ใจว่ายาที่กินอยู่ตีกันไหม? ปรึกษาเภสัชเราได้เลย 💬
+#ความรู้เรื่องยา #ใช้ยาอย่างปลอดภัย #เภสัชกร</code></pre>
+<h3 id="ตัวอย่าง-4--feature-spotlight-ระบบสมาชิก">ตัวอย่าง 4 — Feature spotlight (ระบบสมาชิก)</h3>
+<pre><code>🎁 เปลี่ยน &quot;คนกดติดตาม&quot; ให้เป็น &quot;ลูกค้าประจำ&quot;
+
+ระบบสมาชิก Re-ya:
+• กดติดตาม = เป็นสมาชิกอัตโนมัติ ไม่ต้องกรอกฟอร์ม
+• ทุกการซื้อ = สะสมแต้ม แลกส่วนลด/ของแถมได้
+• ยิ่งซื้อยิ่งเลื่อนระดับ รับสิทธิพิเศษมากขึ้น
+
+ลูกค้ามีเหตุผลให้กลับมาซื้อซ้ำ
+👉 อยากได้ระบบสมาชิกแบบนี้ ทักเลย
+#ระบบสมาชิก #สะสมแต้ม #ร้านยา</code></pre>
+<hr />
+<h2 id="sec-10-11">11. เช็กลิสต์ก่อนโพสต์ (AI ต้องผ่านทุกข้อ)</h2>
+<ul class="task-list">
+<li><label><input type="checkbox" />มี Hook ใน 1 บรรทัดแรก</label></li>
+<li><label><input type="checkbox" />พูดประโยชน์ก่อนฟีเจอร์</label></li>
+<li><label><input type="checkbox" />ใช้ภาษาลูกค้า ไม่มีศัพท์ dev/ชื่อภายใน</label></li>
+<li><label><input type="checkbox" />ไม่มีเคลมการแพทย์เกินจริง / ระบุว่ามีเภสัชจริง</label></li>
+<li><label><input type="checkbox" />ตัวเลขที่ปรับได้ไม่ถูกพูดเป็นข้อเท็จจริงตายตัว</label></li>
+<li><label><input type="checkbox" />มี CTA ชัด 1 อัน</label></li>
+<li><label><input type="checkbox" />hashtag เหมาะกับแพลตฟอร์ม</label></li>
+<li><label><input type="checkbox" />ความยาวเหมาะกับช่องทาง (LINE สั้น, FB กลาง, บล็อกยาวได้)</label></li>
+</ul>
+<pre><code></code></pre>
+
+</section>
+  </main>
+</div>
+<script>
+  // เปิด/ปิดกลุ่มสารบัญเมื่อคลิกหัวข้อไฟล์
+  document.querySelectorAll('.toc-group').forEach(function(g){
+    var top=g.querySelector('.toc-top');
+    top.addEventListener('click',function(){g.classList.add('open');});
+  });
+  // เปิดกลุ่มแรกไว้
+  var first=document.querySelector('.toc-group'); if(first) first.classList.add('open');
+
+  // ค้นหา/กรองสารบัญ
+  var q=document.getElementById('q');
+  q && q.addEventListener('input',function(){
+    var t=this.value.trim().toLowerCase();
+    document.querySelectorAll('.toc-group').forEach(function(g){
+      var top=g.querySelector('.toc-top');
+      var subs=g.querySelectorAll('.toc-sub');
+      var anyVisible=false;
+      var topMatch=top.dataset.text.indexOf(t)>-1;
+      subs.forEach(function(s){
+        var m=t===''||s.dataset.text.indexOf(t)>-1||topMatch;
+        s.classList.toggle('hidden',!m); if(m)anyVisible=true;
+      });
+      var show=t===''||topMatch||anyVisible;
+      g.classList.toggle('hidden',!show);
+      if(t!=='') g.classList.add('open');
+    });
+  });
+
+  // ไฮไลต์หัวข้อที่กำลังอ่าน (scroll spy)
+  var links={};
+  document.querySelectorAll('#toc a').forEach(function(a){links[a.getAttribute('href').slice(1)]=a;});
+  var heads=document.querySelectorAll('section.doc h1[id], section.doc h2[id]');
+  var obs=new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(e.isIntersecting){
+        var a=links[e.target.id]; if(!a)return;
+        document.querySelectorAll('#toc a.active').forEach(x=>x.classList.remove('active'));
+        a.classList.add('active');
+        var grp=a.closest('.toc-group'); if(grp)grp.classList.add('open');
+        a.scrollIntoView({block:'nearest'});
+      }
+    });
+  },{rootMargin:'-10% 0px -80% 0px'});
+  heads.forEach(h=>obs.observe(h));
+</script>
+</body>
+</html>

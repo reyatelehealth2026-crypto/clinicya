@@ -1,6 +1,8 @@
 # Configuration (contains sensitive data)
 config/config.php
 config/installed.lock
+config/google_oauth.php
+config/notify_config.php
 .env
 .env.local
 .env.*.local
@@ -149,6 +151,12 @@ database/*.sql
 !database/migration_2026-06-02_points_claims.sql
 !database/migration_2026-06-02_route_liff_id.sql
 !database/migration_2026-06-20_points_phone_members.sql
+!database/migration_2026-06-28_self_serve_signup.sql
+!database/migration_2026-06-28_site_visitor_ips.sql
+!database/migration_2026-06-04_platform_billing.sql
+!database/migration_2026-06-04_platform_billing_details.sql
+!database/migration_2026-06-28_tenant_activity_log.sql
+!database/migration_2026-06-28_site_visitor_ips_geo.sql
 !docs/adr/*.md
 !CONTEXT.md
 !CONTEXT-MAP.md
@@ -201,3 +209,12 @@ demo-capture/
 /REYA_Fresh_Veggie_*.pdf
 /REYA_Fresh_Veggie_*.pptx
 _prod_backups/
+
+# Build/scratch artifacts — not source (excluded from the session commit)
+generated/
+docs/training/videos/line-setup/yt-frames/
+g_err.txt
+g_out.txt
+# Session/cost reports — throwaway, may contain tokens (Vercel PAT found in one)
+session-report-*.html
+cost-by-*.csv

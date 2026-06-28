@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือเชื่อม LINE OA เข้ากับระบบ REYA — ทำตามทีละขั้น</title>
+<meta name="description" content="คู่มือเชื่อมต่อ LINE Official Account เข้ากับระบบ REYA แบบละเอียดทีละขั้นตอน สำหรับผู้ใช้ทั่วไป ไม่ต้องมีความรู้ด้านเทคนิค">
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  body{font-family:'Sarabun',sans-serif;background:#f1f5f9;color:#1e293b;line-height:1.75}
+  .step-num{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.2rem;flex-shrink:0}
+  .mock{border:1px solid #e2e8f0;border-radius:14px;background:#fff;box-shadow:0 10px 30px -16px rgba(15,23,42,.25);overflow:hidden}
+  .mock-bar{background:#1e293b;padding:.5rem .8rem;display:flex;align-items:center;gap:.4rem}
+  .mock-dot{width:10px;height:10px;border-radius:50%}
+  .tag{display:inline-flex;align-items:center;gap:.35rem;font-size:.78rem;font-weight:700;padding:.2rem .6rem;border-radius:999px}
+  .field{border:1px solid #cbd5e1;border-radius:8px;padding:.5rem .7rem;font-family:ui-monospace,monospace;font-size:.8rem;background:#f8fafc;color:#334155}
+  .pin{position:relative}
+  .pin-badge{position:absolute;right:-10px;top:-10px;background:#ef4444;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;box-shadow:0 4px 10px -2px rgba(239,68,68,.5)}
+  .callout{border-radius:12px;padding:1rem 1.1rem;display:flex;gap:.7rem;align-items:flex-start;font-size:.92rem}
+  @media print{ .no-print{display:none!important} body{background:#fff} .mock{box-shadow:none} section{break-inside:avoid} }
+  html{scroll-behavior:smooth}
+  .progress-link.active{background:#059669;color:#fff}
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-30">
+  <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-extrabold">R</div>
+      <div class="leading-tight">
+        <div class="font-bold text-slate-900 text-sm">คู่มือเชื่อม LINE</div>
+        <div class="text-[11px] text-slate-400">REYA Pharmacy CRM</div>
+      </div>
+    </div>
+    <button onclick="window.print()" class="no-print text-sm text-slate-500 hover:text-slate-800 flex items-center gap-1.5"><i class="fas fa-print"></i> พิมพ์ / บันทึก PDF</button>
+  </div>
+</header>
+
+<main class="max-w-3xl mx-auto px-4 py-8">
+
+  <!-- Hero -->
+  <div class="text-center mb-8">
+    <div class="inline-flex items-center gap-2 tag bg-emerald-100 text-emerald-700 mb-3"><i class="fab fa-line"></i> เชื่อม LINE OA</div>
+    <h1 class="text-3xl font-extrabold text-slate-900 leading-snug">เชื่อม LINE ของร้าน<br>เข้ากับระบบ REYA</h1>
+    <p class="text-slate-500 mt-3">ทำตามทีละขั้น ใช้เวลาประมาณ <b class="text-slate-700">15 นาที</b> · ไม่ต้องมีความรู้ด้านเทคนิค</p>
+    <p class="text-slate-400 text-sm mt-1">ถ้าติดตรงไหน ดูหัวข้อ "แก้ปัญหาที่เจอบ่อย" ด้านล่างสุด หรือทักทีมงาน REYA ได้เลย</p>
+  </div>
+
+  <!-- Video walkthrough -->
+  <section class="mock overflow-hidden mb-8">
+    <div class="bg-slate-900 px-4 py-2.5 flex items-center gap-2 text-white text-sm">
+      <i class="fas fa-circle-play text-emerald-400"></i> <b>วิดีโอพาทำตามทีละขั้น</b> <span class="text-slate-400 text-xs">· ~5 นาที · มีเสียงบรรยายไทย · ภาพหน้าจอจริง</span>
+    </div>
+    <video controls preload="metadata" class="w-full bg-black" style="max-height:520px">
+      <source src="/help/videos/line-setup-walkthrough.mp4?v=2" type="video/mp4">
+      เบราว์เซอร์ของคุณไม่รองรับการเล่นวิดีโอ — <a href="/help/videos/line-setup-walkthrough.mp4?v=2" class="underline">กดดาวน์โหลดวิดีโอ</a>
+    </video>
+  </section>
+
+  <!-- What you need -->
+  <section class="mock p-5 mb-6">
+    <h2 class="font-bold text-slate-800 mb-3"><i class="fas fa-clipboard-check text-emerald-500 mr-1.5"></i> สิ่งที่ต้องเตรียม</h2>
+    <ul class="space-y-2 text-sm text-slate-600">
+      <li class="flex gap-2"><i class="fas fa-check text-emerald-500 mt-1"></i> คอมพิวเตอร์ หรือมือถือ + อินเทอร์เน็ต</li>
+      <li class="flex gap-2"><i class="fas fa-check text-emerald-500 mt-1"></i> บัญชี LINE ส่วนตัว (ไว้ล็อกอินเข้าระบบของ LINE)</li>
+      <li class="flex gap-2"><i class="fas fa-check text-emerald-500 mt-1"></i> บัญชี LINE Official Account ของร้าน (ถ้ายังไม่มี ดู <b>ขั้นที่ 1</b> เราสอนสร้าง)</li>
+      <li class="flex gap-2"><i class="fas fa-check text-emerald-500 mt-1"></i> เข้าระบบ REYA ของร้านได้ (เช่น <span class="font-mono text-emerald-700">ชื่อร้าน.re-ya.com</span>)</li>
+    </ul>
+  </section>
+
+  <!-- Overview -->
+  <section class="mb-8">
+    <h2 class="font-bold text-slate-800 mb-3 text-center">ภาพรวม 5 ขั้นตอน</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 no-print">
+      <a href="#s1" class="mock p-3 text-center text-xs hover:bg-emerald-50"><div class="font-extrabold text-emerald-600 text-lg">1</div>สร้าง LINE OA</a>
+      <a href="#s2" class="mock p-3 text-center text-xs hover:bg-emerald-50"><div class="font-extrabold text-emerald-600 text-lg">2</div>เปิด Developers</a>
+      <a href="#s3" class="mock p-3 text-center text-xs hover:bg-emerald-50"><div class="font-extrabold text-emerald-600 text-lg">3</div>คัดลอกรหัส 3 ตัว</a>
+      <a href="#s4" class="mock p-3 text-center text-xs hover:bg-emerald-50"><div class="font-extrabold text-emerald-600 text-lg">4</div>ใส่รหัสใน REYA</a>
+      <a href="#s5" class="mock p-3 text-center text-xs hover:bg-emerald-50"><div class="font-extrabold text-emerald-600 text-lg">5</div>ตั้ง Webhook + ทดสอบ</a>
+    </div>
+  </section>
+
+  <!-- glossary -->
+  <section class="callout bg-blue-50 text-blue-800 mb-8">
+    <i class="fas fa-lightbulb text-blue-500 text-lg mt-0.5"></i>
+    <div>
+      <b>คำศัพท์ที่จะเจอ (เข้าใจง่ายๆ)</b>
+      <ul class="text-sm mt-1.5 space-y-1">
+        <li>• <b>Channel (แชนแนล)</b> = "ช่องทาง" ของ LINE ที่ให้ระบบอื่นมาเชื่อมได้</li>
+        <li>• <b>Channel ID / Secret / Access Token</b> = "รหัส 3 ตัว" เหมือนกุญแจให้ REYA คุยกับ LINE ได้ (ต้องเก็บเป็นความลับ)</li>
+        <li>• <b>Webhook (เว็บฮุก)</b> = "สายเชื่อม" ให้ LINE ส่งข้อความที่ลูกค้าทักเข้ามาที่ REYA</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- STEP 1 -->
+  <section id="s1" class="mb-10">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="step-num bg-emerald-600 text-white">1</div>
+      <div><h2 class="text-xl font-extrabold text-slate-900">สร้างบัญชี LINE Official Account</h2><p class="text-sm text-slate-400">ถ้ามีอยู่แล้ว ข้ามไปขั้นที่ 2 ได้เลย</p></div>
+    </div>
+    <ol class="space-y-3 text-slate-700 mb-4">
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">1.1</span> เปิดเว็บ <a href="https://manager.line.biz" target="_blank" class="text-emerald-700 underline font-semibold">manager.line.biz</a> แล้วล็อกอินด้วยบัญชี LINE ส่วนตัว</li>
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">1.2</span> กดปุ่ม <b>"สร้างบัญชีใหม่ (Create)"</b></li>
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">1.3</span> กรอกชื่อร้าน, ประเภทธุรกิจ (เลือก "ร้านขายยา/สุขภาพ") แล้วกดยืนยัน</li>
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">1.4</span> เสร็จแล้วจะได้ <b>LINE Official Account</b> ของร้าน (มีชื่อขึ้นต้นด้วย <span class="font-mono">@</span> เช่น <span class="font-mono text-emerald-700">@yourshop</span>)</li>
+    </ol>
+    <div class="callout bg-amber-50 text-amber-800"><i class="fas fa-triangle-exclamation text-amber-500 mt-0.5"></i><div><b>จำ Basic ID ไว้</b> — ชื่อที่ขึ้นต้นด้วย <span class="font-mono">@</span> (เช่น <span class="font-mono">@yourshop</span>) จะใช้ในขั้นที่ 4</div></div>
+  </section>
+
+  <!-- STEP 2 -->
+  <section id="s2" class="mb-10">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="step-num bg-emerald-600 text-white">2</div>
+      <div><h2 class="text-xl font-extrabold text-slate-900">สร้าง Provider + เปิด Messaging API</h2><p class="text-sm text-slate-400">"Provider" และ "Messaging API channel" คืออะไร และทำยังไง</p></div>
+    </div>
+
+    <!-- อธิบายศัพท์ -->
+    <div class="callout bg-blue-50 text-blue-800 mb-4">
+      <i class="fas fa-circle-info text-blue-500 text-lg mt-0.5"></i>
+      <div>
+        <b>เข้าใจ 2 คำนี้ก่อน (ง่ายๆ)</b>
+        <ul class="text-sm mt-1.5 space-y-1">
+          <li>• <b>Provider (ผู้ให้บริการ)</b> = "เจ้าของ/บริษัท" ที่เป็นเจ้าของ LINE ร้านคุณ — เหมือนโฟลเดอร์ที่เก็บช่องทางต่างๆ ของร้านไว้รวมกัน ตั้งชื่อเป็นชื่อร้านหรือชื่อบริษัทก็ได้</li>
+          <li>• <b>Messaging API channel</b> = "ช่องทางให้ระบบอื่น (REYA) คุยกับ LINE ร้านได้" — เปิดอันนี้แล้วถึงจะได้รหัส 3 ตัวในขั้นที่ 3</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- วิธีแนะนำ: ผ่าน OA Manager -->
+    <div class="mock p-5 mb-4 border-2 border-emerald-200">
+      <div class="tag bg-emerald-100 text-emerald-700 mb-2"><i class="fas fa-star"></i> วิธีที่แนะนำ (ง่ายสุด) — เปิดผ่าน OA Manager</div>
+      <ol class="space-y-2.5 text-slate-700 text-sm">
+        <li class="flex gap-2.5"><span class="font-bold text-emerald-600">ก.</span> เข้า <a href="https://manager.line.biz" target="_blank" class="text-emerald-700 underline font-semibold">manager.line.biz</a> → เลือก OA ของร้าน → เมนู <b>ตั้งค่า (Settings)</b></li>
+        <li class="flex gap-2.5"><span class="font-bold text-emerald-600">ข.</span> เลือกหัวข้อ <b>Messaging API</b> → กดปุ่ม <b>"ใช้งาน Messaging API" (Enable / Use Messaging API)</b></li>
+        <li class="flex gap-2.5"><span class="font-bold text-emerald-600">ค.</span> ระบบจะให้เลือก <b>Provider</b> — ถ้ายังไม่มี ให้พิมพ์ชื่อร้าน/บริษัทเพื่อสร้างใหม่ → ยืนยัน</li>
+        <li class="flex gap-2.5"><span class="font-bold text-emerald-600">ง.</span> กรอกชื่อ-อีเมลผู้พัฒนา (ถ้าถาม) → ยอมรับข้อตกลง → <b>เสร็จ!</b> ระบบจะสร้าง channel ให้อัตโนมัติ</li>
+      </ol>
+    </div>
+
+    <!-- ภาพหน้าจอจริง -->
+    <div class="grid sm:grid-cols-2 gap-3 mb-4">
+      <figure class="mock overflow-hidden">
+        <img src="/help/images/line/01-enable.png" alt="ปุ่ม Enable Messaging API ใน LINE OA Manager" class="w-full" loading="lazy">
+        <figcaption class="text-xs text-slate-500 px-3 py-2 bg-slate-50"><b class="text-emerald-600">ภาพจริง ①</b> ใน OA Manager → ตั้งค่า → Messaging API → กดปุ่มเขียว <b>Enable Messaging API</b> (กรอบแดง)</figcaption>
+      </figure>
+      <figure class="mock overflow-hidden">
+        <img src="/help/images/line/02-provider.png" alt="หน้าต่าง Select provider ของ LINE" class="w-full" loading="lazy">
+        <figcaption class="text-xs text-slate-500 px-3 py-2 bg-slate-50"><b class="text-emerald-600">ภาพจริง ②</b> เลือก <b>New provider</b> → พิมพ์ชื่อร้าน/บริษัท → กด <b>Agree</b></figcaption>
+      </figure>
+    </div>
+
+    <!-- ข้อควรระวัง provider -->
+    <div class="callout bg-red-50 text-red-700 mb-4">
+      <i class="fas fa-triangle-exclamation text-red-500 mt-0.5"></i>
+      <div><b>สำคัญมาก:</b> เมื่อเลือก Provider ให้ดูแล OA แล้ว <b>จะเปลี่ยนหรือยกเลิก Provider ทีหลังไม่ได้</b> — เลือกชื่อให้ถูก (ชื่อร้าน/บริษัทของคุณเอง อย่าไปเลือก provider ของคนอื่น)</div>
+    </div>
+
+    <figure class="mock overflow-hidden mb-4">
+      <img src="/help/images/line/03-channels.png" alt="หน้า Provider แสดง channel ใน LINE Developers Console" class="w-full" loading="lazy">
+      <figcaption class="text-xs text-slate-500 px-3 py-2 bg-slate-50"><b class="text-emerald-600">ภาพจริง ③</b> ใน LINE Developers Console → Provider จะเก็บ channel ของร้านไว้ · กด <b>Create a new channel</b> (กรอบแดง) เพื่อเพิ่มช่องทาง</figcaption>
+    </figure>
+
+    <!-- วิธีที่ 2: ผ่าน Developers Console -->
+    <details class="mock p-5">
+      <summary class="font-semibold text-slate-800 cursor-pointer"><i class="fas fa-code-branch text-slate-400 mr-1.5"></i> อีกวิธี — สร้างจาก LINE Developers Console โดยตรง (สำหรับคนถนัดเทค)</summary>
+      <ol class="space-y-2.5 text-slate-700 text-sm mt-3">
+        <li class="flex gap-2.5"><span class="font-bold text-emerald-600">1.</span> เข้า <a href="https://developers.line.biz/console/" target="_blank" class="text-emerald-700 underline font-semibold">developers.line.biz/console</a> ล็อกอินด้วยบัญชี LINE <b>เดียวกับที่สร้าง OA</b></li>
+        <li class="flex gap-2.5"><span class="font-bold text-emerald-600">2.</span> กด <b>Create a new provider</b> → พิมพ์ชื่อร้าน/บริษัท → Create</li>
+        <li class="flex gap-2.5"><span class="font-bold text-emerald-600">3.</span> ในหน้า provider กด <b>Create a Messaging API channel</b></li>
+        <li class="flex gap-2.5"><span class="font-bold text-emerald-600">4.</span> กรอกข้อมูล channel:
+          <ul class="mt-1.5 ml-1 space-y-1 text-slate-600">
+            <li>– <b>Channel name</b> (ชื่อ) — <span class="text-red-600">ห้ามมีคำว่า "LINE" และเปลี่ยนไม่ได้ภายใน 7 วันแรก</span></li>
+            <li>– <b>Channel description</b> (คำอธิบายสั้นๆ)</li>
+            <li>– <b>Category / Subcategory</b> (หมวดหมู่ — เลือก "ร้านค้า/สุขภาพ" ให้ใกล้เคียง)</li>
+            <li>– <b>Email address</b> (อีเมลติดต่อ)</li>
+            <li>– <b>Region</b> เลือก <b>Thailand</b> (ถ้ามีให้เลือก)</li>
+          </ul>
+        </li>
+        <li class="flex gap-2.5"><span class="font-bold text-emerald-600">5.</span> ติ๊กยอมรับข้อตกลง 2 ช่อง → <b>Create</b></li>
+      </ol>
+    </details>
+
+    <div class="callout bg-emerald-50 text-emerald-800 mt-4"><i class="fas fa-circle-check text-emerald-500 mt-0.5"></i><div>ถ้าร้านเคยเปิด Messaging API ไว้แล้ว ก็แค่เข้าไปที่ channel เดิมในขั้นที่ 3 ได้เลย ไม่ต้องสร้างใหม่</div></div>
+  </section>
+
+  <!-- STEP 3 -->
+  <section id="s3" class="mb-10">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="step-num bg-emerald-600 text-white">3</div>
+      <div><h2 class="text-xl font-extrabold text-slate-900">คัดลอก "รหัส 3 ตัว"</h2><p class="text-sm text-slate-400">Channel ID · Channel Secret · Channel Access Token</p></div>
+    </div>
+
+    <p class="text-slate-600 mb-3">เปิด channel ที่เพิ่งสร้าง จะเห็นแท็บด้านบน 2 แท็บที่เราจะใช้:</p>
+
+    <!-- mock: Basic settings — replica of the real LINE Developers console -->
+    <div class="mb-4">
+      <div class="text-xs font-semibold text-slate-400 mb-1">📍 แท็บ "Basic settings" — เห็น Channel ID + Channel secret</div>
+      <div class="mock overflow-hidden">
+        <div class="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
+          <span class="font-bold text-slate-800 text-sm">LINE <span class="font-normal text-slate-400">Developers</span></span>
+          <span class="ml-auto text-[10px] text-slate-300 font-mono">developers.line.biz</span>
+        </div>
+        <div class="flex">
+          <div class="w-32 border-r border-slate-100 p-3 text-[11px] text-slate-500 space-y-1.5 hidden sm:block">
+            <div>Console home</div>
+            <div class="text-emerald-600 font-semibold">Providers</div>
+            <div class="pl-2 text-slate-400">ร้านยา ABC</div>
+          </div>
+          <div class="flex-1 p-4">
+            <div class="text-[11px] text-slate-400 mb-1">TOP › ร้านยา ABC › ร้านยา ABC</div>
+            <div class="font-bold text-slate-800 mb-2">ร้านยา ABC</div>
+            <div class="flex gap-4 text-xs border-b border-slate-100 mb-3">
+              <span class="text-emerald-600 font-semibold border-b-2 border-emerald-500 pb-1.5">Basic settings</span>
+              <span class="text-slate-400 pb-1.5">Messaging API</span>
+              <span class="text-slate-400 pb-1.5">LIFF</span>
+            </div>
+            <div class="space-y-3">
+              <div class="pin flex items-center gap-3">
+                <span class="text-xs text-slate-500 w-24 flex-shrink-0">Channel ID</span>
+                <span class="field flex-1 flex items-center justify-between">1657xxxxxx <i class="fas fa-copy text-slate-400"></i></span>
+                <span class="pin-badge">1</span>
+              </div>
+              <div class="pin flex items-center gap-3">
+                <span class="text-xs text-slate-500 w-24 flex-shrink-0">Channel secret</span>
+                <span class="field flex-1 flex items-center justify-between">a1b2c3d4e5f6········ <i class="fas fa-copy text-slate-400"></i></span>
+                <span class="pin-badge">2</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="text-sm text-slate-600 mt-2 flex gap-2 flex-wrap"><span class="tag bg-red-100 text-red-700">1</span> คัดลอก <b>Channel ID</b> &nbsp; <span class="tag bg-red-100 text-red-700">2</span> คัดลอก <b>Channel secret</b> (กดไอคอนคัดลอก 📋 เก็บไว้)</p>
+    </div>
+
+    <!-- mock: Messaging API token -->
+    <div class="mb-4">
+      <div class="text-xs font-semibold text-slate-400 mb-1">📍 แท็บ "Messaging API" → เลื่อนลงล่างสุด หา "Channel access token"</div>
+      <div class="mock overflow-hidden">
+        <div class="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
+          <span class="font-bold text-slate-800 text-sm">LINE <span class="font-normal text-slate-400">Developers</span></span>
+        </div>
+        <div class="p-4">
+          <div class="flex gap-4 text-xs border-b border-slate-100 mb-3">
+            <span class="text-slate-400 pb-1.5">Basic settings</span>
+            <span class="text-emerald-600 font-semibold border-b-2 border-emerald-500 pb-1.5">Messaging API</span>
+            <span class="text-slate-400 pb-1.5">LIFF</span>
+          </div>
+          <div class="text-xs font-semibold text-slate-600 mb-1.5">Channel access token (long-lived)</div>
+          <div class="pin flex items-center gap-3">
+            <span class="field flex-1 text-slate-300 italic">— ยังไม่มี กดปุ่ม Issue เพื่อสร้าง —</span>
+            <button class="bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-lg flex-shrink-0">Issue</button>
+            <span class="pin-badge">3</span>
+          </div>
+        </div>
+      </div>
+      <p class="text-sm text-slate-600 mt-2 flex gap-2"><span class="tag bg-red-100 text-red-700">3</span> กดปุ่ม <b>Issue</b> → ได้ <b>Channel access token</b> (รหัสยาวมาก) → กด <b>คัดลอกทั้งหมด</b> เก็บไว้</p>
+    </div>
+
+    <div class="callout bg-red-50 text-red-700"><i class="fas fa-shield-halved text-red-500 mt-0.5"></i><div><b>รหัส 3 ตัวนี้เป็นความลับ</b> — อย่าส่งให้คนอื่น อย่าโพสต์ในที่สาธารณะ (รวมถึงในแชต/ภาพหน้าจอ) ใครได้ไปจะควบคุม LINE ร้านคุณได้ · ถ้าเผลอหลุด ให้กด <b>Issue/Reissue</b> เพื่อออกรหัสใหม่ทันที</div></div>
+  </section>
+
+  <!-- ตั้งค่าในหน้า channel -->
+  <section class="mb-10">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="step-num bg-slate-700 text-white"><i class="fas fa-sliders"></i></div>
+      <div><h2 class="text-xl font-extrabold text-slate-900">รู้จักการตั้งค่าในหน้า channel</h2><p class="text-sm text-slate-400">ช่องไหนทำอะไร · อันไหนต้องเปิด/ปิด · ส่วนใหญ่ปล่อยค่าเริ่มต้นได้</p></div>
+    </div>
+
+    <!-- Basic settings table -->
+    <div class="text-xs font-semibold text-slate-400 mb-1">📍 แท็บ "Basic settings"</div>
+    <div class="mock overflow-hidden mb-4">
+      <table class="w-full text-sm">
+        <tbody class="divide-y divide-slate-100">
+          <tr><td class="px-4 py-2.5 font-semibold text-slate-700 w-44">Channel ID</td><td class="px-4 py-2.5 text-slate-500">เลขประจำช่องทาง — <b>คัดลอกไปใส่ REYA</b></td></tr>
+          <tr><td class="px-4 py-2.5 font-semibold text-slate-700">Channel secret</td><td class="px-4 py-2.5 text-slate-500">รหัสลับ — <b>คัดลอกไปใส่ REYA</b> · ปุ่ม <b>Issue</b> = ออกรหัสใหม่ (ของเก่าจะใช้ไม่ได้)</td></tr>
+          <tr><td class="px-4 py-2.5 font-semibold text-slate-700">App types</td><td class="px-4 py-2.5 text-slate-500">เป็น <b>Bot</b> อยู่แล้ว — ไม่ต้องแก้</td></tr>
+          <tr><td class="px-4 py-2.5 font-semibold text-slate-700">Permissions</td><td class="px-4 py-2.5 text-slate-500">สิทธิ์ของแชนแนล (เช่น PROFILE) — ปล่อยค่าเริ่มต้น</td></tr>
+          <tr><td class="px-4 py-2.5 font-semibold text-slate-700">Your user ID</td><td class="px-4 py-2.5 text-slate-500">ID ของคุณเอง — <b>ไม่ต้องใช้กับ REYA</b></td></tr>
+          <tr><td class="px-4 py-2.5 font-semibold text-slate-700">Terms of use URL</td><td class="px-4 py-2.5 text-slate-500">ไม่บังคับ (optional) — เว้นว่างได้</td></tr>
+          <tr><td class="px-4 py-2.5 font-semibold text-red-600">Delete this channel</td><td class="px-4 py-2.5 text-red-500">⚠️ ปุ่มลบแชนแนล — <b>อย่ากด</b> เด็ดขาด (ลบแล้วต้องเริ่มใหม่หมด)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Messaging API features -->
+    <div class="text-xs font-semibold text-slate-400 mb-1">📍 แท็บ "Messaging API" → หัวข้อ "LINE Official Account features"</div>
+    <div class="mock overflow-hidden mb-3">
+      <table class="w-full text-sm">
+        <tbody class="divide-y divide-slate-100">
+          <tr><td class="px-4 py-2.5 font-semibold text-slate-700 w-56">Allow bot to join group chats</td><td class="px-4 py-2.5"><span class="text-slate-500">ให้บอทเข้ากลุ่มได้ — เปิดหรือปิดก็ได้ ตามต้องการ</span></td></tr>
+          <tr class="bg-red-50/40"><td class="px-4 py-2.5 font-semibold text-slate-700">Auto-reply messages</td><td class="px-4 py-2.5"><span class="pf-pill" style="background:#fee2e2;color:#b91c1c">ต้องปิด (Disabled)</span> <span class="text-slate-500">— กด Edit → ปิด ไม่งั้น LINE ตอบเองแทน REYA</span></td></tr>
+          <tr class="bg-red-50/40"><td class="px-4 py-2.5 font-semibold text-slate-700">Greeting messages</td><td class="px-4 py-2.5"><span class="pf-pill" style="background:#fee2e2;color:#b91c1c">ต้องปิด (Disabled)</span> <span class="text-slate-500">— กด Edit → ปิด ให้ REYA เป็นคนต้อนรับแทน</span></td></tr>
+          <tr><td class="px-4 py-2.5 font-semibold text-slate-700">Channel access token (long-lived)</td><td class="px-4 py-2.5 text-slate-500">โทเคนยาว — <b>คัดลอกไปใส่ REYA</b> · ปุ่ม <b>Reissue</b> = ออกใหม่ (ของเก่าจะใช้ไม่ได้)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout bg-emerald-50 text-emerald-800"><i class="fas fa-circle-check text-emerald-500 mt-0.5"></i><div><b>สรุปที่ต้องแตะ:</b> คัดลอก 3 รหัส (Channel ID, Secret, Access token) · เปิด Webhook (ขั้น 5) · <b>ปิด Auto-reply + Greeting</b> · ที่เหลือปล่อยค่าเริ่มต้นได้หมด</div></div>
+  </section>
+
+  <!-- STEP 4 -->
+  <section id="s4" class="mb-10">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="step-num bg-emerald-600 text-white">4</div>
+      <div><h2 class="text-xl font-extrabold text-slate-900">นำรหัสมาใส่ในระบบ REYA</h2><p class="text-sm text-slate-400">เมนู ตั้งค่า → LINE → เพิ่มบัญชี LINE</p></div>
+    </div>
+    <ol class="space-y-3 text-slate-700 mb-4">
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">4.1</span> เข้าระบบ REYA ของร้าน → เมนู <b>ตั้งค่า (Settings)</b> → แท็บ <b>LINE</b></li>
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">4.2</span> กดปุ่มเขียว <b><i class="fas fa-plus"></i> เพิ่มบัญชี LINE</b></li>
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">4.3</span> กรอกข้อมูลตามนี้ (ดูภาพ) แล้วกด <b>บันทึก</b></li>
+    </ol>
+
+    <!-- mock: REYA modal -->
+    <div class="mock max-w-md mx-auto mb-4">
+      <div class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-3 font-bold"><i class="fab fa-line mr-2"></i>เพิ่มบัญชี LINE</div>
+      <div class="p-5 space-y-3">
+        <div><div class="text-xs font-semibold text-slate-600 mb-1">ชื่อบัญชี <span class="text-red-500">*</span></div><div class="field">ร้านยา ABC</div><div class="text-[11px] text-slate-400 mt-0.5">ตั้งชื่ออะไรก็ได้ ให้คุณจำได้</div></div>
+        <div><div class="text-xs font-semibold text-slate-600 mb-1">LINE Basic ID</div><div class="field">@yourshop</div><div class="text-[11px] text-slate-400 mt-0.5">จากขั้นที่ 1</div></div>
+        <div><div class="text-xs font-semibold text-slate-600 mb-1">Channel ID</div><div class="field bg-red-50 border-red-200">1657xxxxxx &nbsp;← วางรหัสตัวที่ 1</div></div>
+        <div><div class="text-xs font-semibold text-slate-600 mb-1">Channel Secret <span class="text-red-500">*</span></div><div class="field bg-red-50 border-red-200">a1b2c3... &nbsp;← วางรหัสตัวที่ 2</div></div>
+        <div><div class="text-xs font-semibold text-slate-600 mb-1">Channel Access Token <span class="text-red-500">*</span></div><div class="field bg-red-50 border-red-200 break-all">eyJhbGci... &nbsp;← วางรหัสตัวที่ 3 (ยาวๆ)</div></div>
+        <button class="w-full bg-green-500 text-white font-semibold py-2.5 rounded-lg"><i class="fas fa-save mr-1"></i> บันทึก</button>
+      </div>
+    </div>
+    <div class="callout bg-emerald-50 text-emerald-800"><i class="fas fa-circle-check text-emerald-500 mt-0.5"></i><div>ช่องที่มี <span class="text-red-500 font-bold">*</span> ต้องกรอก ที่เหลือไม่บังคับ · ถ้าอยากให้เป็นโหมดร้านค้าเต็มรูปแบบ ในแท็บ "ตั้งค่า" เลือก <b>🛒 โหมดร้านค้า</b> ไว้ (ค่าเริ่มต้นถูกอยู่แล้ว)</div></div>
+  </section>
+
+  <!-- STEP 5 -->
+  <section id="s5" class="mb-10">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="step-num bg-emerald-600 text-white">5</div>
+      <div><h2 class="text-xl font-extrabold text-slate-900">ตั้ง Webhook + ปิด Auto-reply + ทดสอบ</h2><p class="text-sm text-slate-400">ขั้นสุดท้าย ให้ LINE ส่งข้อความเข้ามาที่ REYA</p></div>
+    </div>
+
+    <ol class="space-y-3 text-slate-700 mb-4">
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">5.1</span> หลังบันทึกในขั้นที่ 4 การ์ดบัญชีจะมีช่อง <b>Webhook URL</b> — กดปุ่ม <i class="fas fa-copy"></i> เพื่อคัดลอก (หน้าตาแบบ <span class="font-mono text-xs text-emerald-700 break-all">https://ชื่อร้าน.re-ya.com/webhook.php?account=1</span>)</li>
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">5.2</span> กลับไปที่ <b>LINE Developers</b> → แท็บ <b>Messaging API</b> → ช่อง <b>Webhook URL</b> → กด Edit → <b>วาง</b> URL ที่คัดลอกมา → Update</li>
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">5.3</span> เปิดสวิตช์ <b>"Use webhook"</b> ให้เป็นสีเขียว (เปิด)</li>
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">5.4</span> เลื่อนหา <b>"Auto-reply messages"</b> และ <b>"Greeting messages"</b> → กด Edit → <b>ปิด (Disabled)</b> ทั้งคู่ (เพื่อให้ REYA เป็นคนตอบแทน)</li>
+    </ol>
+
+    <!-- mock: webhook setting -->
+    <div class="mock mb-4">
+      <div class="mock-bar"><span class="mock-dot bg-red-400"></span><span class="mock-dot bg-amber-400"></span><span class="mock-dot bg-green-400"></span><span class="text-slate-300 text-xs ml-2 font-mono">developers.line.biz · Messaging API</span></div>
+      <div class="p-5 space-y-3">
+        <div class="text-xs text-slate-500">Webhook URL</div>
+        <div class="field bg-emerald-50 border-emerald-200 break-all">https://ชื่อร้าน.re-ya.com/webhook.php?account=1</div>
+        <div class="flex items-center justify-between border-t pt-3">
+          <span class="text-sm font-semibold text-slate-700">Use webhook</span>
+          <span class="w-11 h-6 rounded-full bg-emerald-500 relative"><span class="absolute right-0.5 top-0.5 w-5 h-5 bg-white rounded-full"></span></span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-700">Auto-reply messages</span>
+          <span class="w-11 h-6 rounded-full bg-slate-300 relative"><span class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full"></span></span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-700">Greeting messages</span>
+          <span class="w-11 h-6 rounded-full bg-slate-300 relative"><span class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full"></span></span>
+        </div>
+        <p class="text-[11px] text-slate-400">✅ Use webhook = เปิด &nbsp;·&nbsp; ❌ Auto-reply / Greeting = ปิด</p>
+      </div>
+    </div>
+
+    <ol class="space-y-3 text-slate-700 mb-4" start="5">
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">5.5</span> กลับมาที่ REYA → ที่การ์ดบัญชี LINE กดปุ่ม <b><i class="fas fa-plug text-blue-500"></i> ทดสอบ</b> → ถ้าขึ้น <b class="text-emerald-600">✓ เชื่อมต่อสำเร็จ</b> พร้อมชื่อ OA = เรียบร้อย!</li>
+      <li class="flex gap-3"><span class="font-bold text-emerald-600">5.6</span> ลองเพิ่ม OA ร้านเป็นเพื่อนใน LINE แล้วพิมพ์ทักไป → ระบบ REYA ควรตอบกลับ และข้อความจะโผล่ในกล่องข้อความ (Inbox) ของ REYA</li>
+    </ol>
+
+    <div class="callout bg-emerald-50 text-emerald-800"><i class="fas fa-party-horn text-emerald-500 mt-0.5"></i><div><b>เสร็จแล้ว!</b> ตอนนี้ลูกค้าทักเข้า LINE ร้าน จะเข้าระบบ REYA ทั้งหมด — ตอบแชต, ขายของ, สะสมแต้ม, จ่ายยา ได้ครบ</div></div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="mb-10">
+    <h2 class="text-xl font-extrabold text-slate-900 mb-4"><i class="fas fa-circle-question text-emerald-500 mr-1.5"></i> แก้ปัญหาที่เจอบ่อย</h2>
+    <div class="space-y-3">
+      <details class="mock p-4"><summary class="font-semibold text-slate-800 cursor-pointer">กดทดสอบแล้วขึ้น "เชื่อมต่อไม่สำเร็จ"</summary><p class="text-sm text-slate-600 mt-2">เกือบทุกครั้งเกิดจาก <b>Channel Access Token คัดลอกไม่ครบ</b> (รหัสยาวมาก) — กลับไปขั้นที่ 3 คัดลอกใหม่ทั้งหมด แล้ววางในขั้นที่ 4 อีกครั้ง · ตรวจ Channel Secret ด้วยว่าตรง</p></details>
+      <details class="mock p-4"><summary class="font-semibold text-slate-800 cursor-pointer">ทักไปแล้วบอทไม่ตอบ</summary><p class="text-sm text-slate-600 mt-2">เช็ค 3 อย่างในขั้นที่ 5: (1) <b>Use webhook เปิด</b>อยู่ไหม (2) <b>Webhook URL วางถูก</b>ไหม (3) <b>Auto-reply / Greeting ปิด</b>แล้วหรือยัง — ถ้า Auto-reply ยังเปิด LINE จะตอบเองแทน REYA</p></details>
+      <details class="mock p-4"><summary class="font-semibold text-slate-800 cursor-pointer">หา "รหัส 3 ตัว" ไม่เจอ</summary><p class="text-sm text-slate-600 mt-2">Channel ID + Secret อยู่แท็บ <b>Basic settings</b> · Access Token อยู่แท็บ <b>Messaging API</b> เลื่อนลงล่างสุด แล้วกด <b>Issue</b> ถ้ายังไม่มี</p></details>
+      <details class="mock p-4"><summary class="font-semibold text-slate-800 cursor-pointer">มี LINE OA หลายอัน/ หลายสาขา</summary><p class="text-sm text-slate-600 mt-2">ทำซ้ำขั้นที่ 2–5 สำหรับแต่ละ OA ได้เลย ระบบ REYA รองรับหลายบัญชี LINE — แต่ละอันจะมี Webhook URL ของตัวเอง (เลข account ต่างกัน)</p></details>
+    </div>
+  </section>
+
+  <!-- contact -->
+  <section class="mock p-6 text-center bg-gradient-to-br from-emerald-50 to-white">
+    <i class="fas fa-headset text-3xl text-emerald-500 mb-2"></i>
+    <h2 class="font-bold text-slate-800">ติดอยู่ตรงไหน? ทีมงานช่วยได้</h2>
+    <p class="text-sm text-slate-500 mt-1">ส่งภาพหน้าจอจุดที่ติด มาให้ทีมงาน REYA แล้วเราจะช่วยรีโมทดูให้</p>
+    <a href="https://line.me/R/ti/p/%40reya" target="_blank" class="inline-flex items-center gap-2 mt-3 bg-emerald-600 text-white font-semibold px-5 py-2.5 rounded-xl no-print"><i class="fab fa-line"></i> ทักทีมงาน REYA</a>
+  </section>
+
+  <p class="text-center text-xs text-slate-400 mt-8">REYA Pharmacy CRM · คู่มือเชื่อม LINE Official Account</p>
+  <p class="text-center text-[11px] text-slate-300 mt-1">ภาพหน้าจอ LINE บางส่วนอ้างอิงจากคลิปสอนทางการ "LINE Developers Secret Tips #7" โดย LINE Developers Thailand</p>
+</main>
+
+</body>
+</html>

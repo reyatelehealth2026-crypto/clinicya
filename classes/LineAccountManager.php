@@ -149,6 +149,15 @@ class LineAccountManager
 
         $accountId = $this->db->lastInsertId();
 
+        // Platform-owner activity feed + Telegram (best-effort).
+        if (@is_file(__DIR__ . '/TenantActivity.php')) {
+            require_once __DIR__ . '/TenantActivity.php';
+            TenantActivity::log(
+                TenantActivity::currentTenantId(), 'line_connect',
+                (string) ($data['name'] ?? ''), 'เชื่อมบัญชี LINE: ' . (string) ($data['name'] ?? '')
+            );
+        }
+
         // If this is default, unset other defaults
         if (!empty($data['is_default'])) {
             $this->setDefault($accountId);

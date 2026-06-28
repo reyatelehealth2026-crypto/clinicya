@@ -39,9 +39,14 @@ $accounts = $manager->getAllAccounts();
         <h2 class="text-xl font-bold text-gray-800">บัญชี LINE Official Account</h2>
         <p class="text-gray-600">จัดการบัญชี LINE OA และตั้งค่าต่างๆ</p>
     </div>
-    <button onclick="openLineModal()" class="px-5 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 shadow-lg hover:shadow-xl transition">
-        <i class="fas fa-plus mr-2"></i>เพิ่มบัญชี LINE
-    </button>
+    <div class="flex items-center gap-2">
+        <a href="/help/line-setup.html" target="_blank" class="px-5 py-2.5 bg-white border border-green-500 text-green-600 rounded-lg hover:bg-green-50 transition inline-flex items-center">
+            <i class="fas fa-book-open mr-2"></i>คู่มือเชื่อม LINE
+        </a>
+        <button onclick="openLineModal()" class="px-5 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-plus mr-2"></i>เพิ่มบัญชี LINE
+        </button>
+    </div>
 </div>
 
 <?php if (isset($_GET['success'])): ?>

@@ -89,6 +89,42 @@ if (!is_array($input)) {
     studio_flex_fail('รูปแบบคำขอไม่ถูกต้อง');
 }
 
+// --- Copy mode: write ONLY the marketing wording for a product Flex (Hybrid). ---
+// Prices/SKUs/images stay in the deterministic client builder; the model never
+// sees or emits a number here.
+if ((string) ($input['mode'] ?? '') === 'copy') {
+    $names = [];
+    foreach ((array) ($input['product_names'] ?? []) as $n) {
+        $n = trim((string) $n);
+        if ($n !== '') {
+            $names[] = $n;
+        }
+        if (count($names) >= 30) {
+            break;
+        }
+    }
+    $hint = trim((string) ($input['hint'] ?? ''));
+    if (!$names && $hint === '') {
+        studio_flex_fail('ต้องมีรายชื่อสินค้าหรือบริบทอย่างน้อยหนึ่งอย่าง');
+    }
+    $apiKey = studio_flex_resolve_key($db, $lineAccountId, $input);
+    if ($apiKey === '') {
+        studio_flex_fail('ยังไม่ได้ตั้งค่า Google API key', 422);
+    }
+    $type = (string) ($input['type'] ?? 'product');
+    $theme = (string) ($input['theme'] ?? 'promotion');
+    $userPrompt = "รายชื่อสินค้า:\n" . ($names ? '- ' . implode("\n- ", $names) : '(ไม่ระบุ)')
+        . ($hint !== '' ? "\n\nบริบท/ความต้องการเพิ่มเติม: " . $hint : '')
+        . "\n\nเขียนคำโปรยการตลาดตามคีย์ที่กำหนด";
+    $svc = new AiStudioFlex();
+    $r = $svc->generateCopy($userPrompt, AiStudioFlex::buildCopySystemPrompt($type, $theme), $apiKey);
+    if (!$r['ok']) {
+        studio_flex_fail($r['error'] ?? 'เขียนคำโปรยไม่สำเร็จ', 200);
+    }
+    echo json_encode(['success' => true, 'copy' => $r['copy']], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // --- Edit mode: refine an existing Flex from a natural-language instruction ---
 if ((string) ($input['mode'] ?? '') === 'edit') {
     $instruction = trim((string) ($input['instruction'] ?? ''));

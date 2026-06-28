@@ -2191,6 +2191,36 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
 </head>
 
 <body>
+<?php if (defined('REYA_DEMO_MODE') && REYA_DEMO_MODE):
+    $supportUrl = defined('REYA_SUPPORT_CONTACT_URL') ? REYA_SUPPORT_CONTACT_URL : 'https://re-ya.com';
+?>
+    <!-- DEMO MODE overlay (shop is pending_setup — sample data, real UI) -->
+    <style>
+        #demoWatermark{position:fixed;inset:-20%;z-index:9998;pointer-events:none;overflow:hidden;
+            display:flex;flex-direction:column;justify-content:center;align-items:center;
+            transform:rotate(-28deg);background:rgba(220,38,38,.045);}
+        #demoWatermark .dw{white-space:nowrap;font-weight:800;font-size:40px;letter-spacing:10px;
+            line-height:2.6;color:rgba(0,0,0,.10);text-transform:uppercase;}
+        #demoBanner{position:fixed;left:0;right:0;bottom:0;z-index:9999;
+            background:#dc2626;color:#000;font-weight:700;font-size:14px;
+            display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;
+            padding:9px 16px;box-shadow:0 -4px 14px rgba(0,0,0,.18);font-family:Sarabun,sans-serif;}
+        #demoBanner a{background:#000;color:#fff;text-decoration:none;font-weight:700;
+            padding:6px 14px;border-radius:999px;font-size:13px;white-space:nowrap;}
+        #demoBanner .x{position:absolute;right:12px;color:#000;cursor:pointer;font-weight:800;opacity:.6;}
+        body{padding-bottom:46px;}
+    </style>
+    <div id="demoWatermark" aria-hidden="true">
+        <?php for ($i = 0; $i < 16; $i++): ?>
+        <div class="dw">ข้อมูลตัวอย่าง · DEMO · ข้อมูลตัวอย่าง · DEMO · ข้อมูลตัวอย่าง · DEMO</div>
+        <?php endfor; ?>
+    </div>
+    <div id="demoBanner">
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;margin-right:7px;vertical-align:middle"></span>โหมดทดลอง · ข้อมูลตัวอย่าง (DEMO) — ระบบจะใช้งานจริงหลังได้รับอนุมัติ</span>
+        <a href="<?= htmlspecialchars($supportUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank">ติดต่อผู้ดูแลเพื่อเปิดใช้ระบบ</a>
+        <span class="x" onclick="document.getElementById('demoBanner').style.display='none'" title="ซ่อน">✕</span>
+    </div>
+<?php endif; ?>
     <div id="mobileOverlay" class="mobile-overlay" onclick="toggleSidebar()"></div>
 
     <div class="app-layout">

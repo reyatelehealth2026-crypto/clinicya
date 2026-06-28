@@ -91,6 +91,83 @@ class AiStudioFlex
             . "ตอบกลับเป็น Flex JSON ฉบับเต็มที่แก้แล้ว parse ได้เท่านั้น ห้ามมีคำอธิบายหรือ markdown fence.";
     }
 
+    /** The six copy fields the model may write — never any price or product field. */
+    public const COPY_FIELDS = ['title', 'intro', 'ctaLabel', 'badgeText', 'footerText', 'closingText'];
+
+    /**
+     * System instruction for the Hybrid "copy" mode: the model writes ONLY the
+     * marketing wording for a product Flex. Prices/SKUs come from the database and
+     * are assembled by the deterministic builder, so the model must not emit them.
+     */
+    public static function buildCopySystemPrompt(string $type, string $theme): string
+    {
+        $type = $type !== '' ? $type : 'product';
+        $theme = $theme !== '' ? $theme : 'promotion';
+
+        return "คุณคือนักเขียนคำโฆษณาการตลาดสำหรับร้านยาบน LINE. "
+            . "ผู้ใช้จะให้รายชื่อสินค้าและบริบท. เขียน 'คำโปรย' การตลาดภาษาไทยที่กระชับ น่าซื้อ และสุภาพ. "
+            . "ประเภทเนื้อหา: {$type}. ธีม: {$theme}.\n"
+            . "ตอบกลับเป็น JSON object เท่านั้น มีคีย์เหล่านี้: "
+            . "title (หัวข้อสั้น), intro (เกริ่นนำ 1 ประโยค), ctaLabel (ข้อความบนปุ่ม สั้นมาก), "
+            . "badgeText (ป้ายสั้น ตัวพิมพ์ใหญ่ภาษาอังกฤษได้), footerText (บรรทัดปิดท้ายการ์ด), "
+            . "closingText (ข้อความปิดท้ายชวนทักแชท).\n"
+            . "ห้ามใส่ราคา ตัวเลข รหัสสินค้า หรือชื่อสินค้าตรง ๆ ในคำตอบ — เขียนเฉพาะคำการตลาดเท่านั้น. "
+            . "ห้ามมีคำอธิบายหรือ markdown fence ตอบเป็น JSON ที่ parse ได้อย่างเดียว.";
+    }
+
+    /** Parse model text into a whitelisted copy object (string fields only). Null on failure. */
+    public static function parseCopyJson(string $text): ?array
+    {
+        $cleaned = trim((string) preg_replace('/```json|```/i', '', $text));
+        if ($cleaned === '') {
+            return null;
+        }
+        $parsed = json_decode($cleaned, true);
+        if (!is_array($parsed)) {
+            return null;
+        }
+        $copy = [];
+        foreach (self::COPY_FIELDS as $k) {
+            if (isset($parsed[$k]) && is_string($parsed[$k])) {
+                $copy[$k] = trim($parsed[$k]);
+            }
+        }
+        return $copy !== [] ? $copy : null;
+    }
+
+    /**
+     * Generate marketing copy only (Hybrid mode). Never throws.
+     *
+     * @return array{ok:bool, copy:?array, error:?string}
+     */
+    public function generateCopy(string $userPrompt, string $system, string $apiKey): array
+    {
+        $request = self::buildRequest($userPrompt, $system, []);
+        try {
+            $client = $this->httpClient ?? [$this, 'defaultHttpPost'];
+            $res = $client($this->endpoint($apiKey), $request);
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'copy' => null, 'error' => 'เชื่อมต่อ Google ไม่ได้: ' . $e->getMessage()];
+        }
+
+        $status = $res['status'] ?? 0;
+        $json = json_decode($res['body'] ?? '', true);
+        if ($status !== 200) {
+            $msg = is_array($json) ? ($json['error']['message'] ?? '') : '';
+            return ['ok' => false, 'copy' => null, 'error' => 'Google HTTP ' . $status . ($msg !== '' ? ': ' . $msg : '')];
+        }
+        if (!is_array($json)) {
+            return ['ok' => false, 'copy' => null, 'error' => 'ผลลัพธ์จาก Google อ่านไม่ได้'];
+        }
+
+        $copy = self::parseCopyJson(self::extractText($json));
+        if ($copy === null) {
+            $block = $json['promptFeedback']['blockReason'] ?? null;
+            return ['ok' => false, 'copy' => null, 'error' => $block ? ('ถูกบล็อก: ' . $block) : 'โมเดลไม่ได้ตอบเป็น JSON ที่ใช้ได้'];
+        }
+        return ['ok' => true, 'copy' => $copy, 'error' => null];
+    }
+
     /**
      * Build the generateContent REST body (text + optional vision images, JSON output).
      *

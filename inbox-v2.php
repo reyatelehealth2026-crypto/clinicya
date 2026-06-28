@@ -239,20 +239,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 if (!$userId || !$message)
                     throw new Exception("Invalid data");
 
-                $stmt = $db->prepare("SELECT line_user_id, line_account_id, reply_token, reply_token_expires FROM users WHERE id = ?");
+                $stmt = $db->prepare("SELECT * FROM users WHERE id = ?");
                 $stmt->execute([$userId]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 if (!$user)
                     throw new Exception("User not found");
 
-                $lineManager = new LineAccountManager($db);
-                $line = $lineManager->getLineAPI($user['line_account_id']);
+                $userPlatform = $user['platform'] ?? 'line';
 
-                if (method_exists($line, 'sendMessage')) {
-                    $result = $line->sendMessage($user['line_user_id'], $message, $user['reply_token'] ?? null, $user['reply_token_expires'] ?? null, $db, $userId);
+                if ($userPlatform === 'facebook') {
+                    // Route the reply through Facebook Messenger (not LINE push)
+                    require_once 'classes/FacebookMessengerAPI.php';
+                    $fbAcc = null;
+                    if (!empty($user['facebook_account_id'])) {
+                        $fbStmt = $db->prepare("SELECT * FROM facebook_accounts WHERE id = ? LIMIT 1");
+                        $fbStmt->execute([$user['facebook_account_id']]);
+                        $fbAcc = $fbStmt->fetch(PDO::FETCH_ASSOC);
+                    }
+                    if (!$fbAcc) {
+                        $fbAcc = $db->query("SELECT * FROM facebook_accounts WHERE is_active = 1 LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                    }
+                    if (!$fbAcc) {
+                        throw new Exception("ไม่พบการเชื่อมต่อ Facebook (ตั้งค่าในแท็บ การเชื่อมต่อแพลตฟอร์ม ก่อน)");
+                    }
+                    $psid = $user['platform_user_id'] ?: $user['line_user_id'];
+                    $fbApi = new FacebookMessengerAPI($fbAcc);
+                    $fbResp = $fbApi->sendTextMessage((string) $psid, $message);
+                    if (empty($fbResp['success'])) {
+                        $fbErr = is_array($fbResp['error'] ?? null) ? ($fbResp['error']['message'] ?? '') : ($fbResp['error'] ?? '');
+                        throw new Exception('ส่ง Facebook ไม่สำเร็จ: ' . ($fbErr !== '' ? $fbErr : 'HTTP ' . ($fbResp['http_code'] ?? '?')));
+                    }
+                    $result = ['code' => 200, 'method' => 'facebook'];
+                } elseif ($userPlatform === 'tiktok') {
+                    throw new Exception("ยังไม่รองรับการตอบ TikTok จากหน้านี้");
                 } else {
-                    $result = $line->pushMessage($user['line_user_id'], [['type' => 'text', 'text' => $message]]);
-                    $result['method'] = 'push';
+                    $lineManager = new LineAccountManager($db);
+                    $line = $lineManager->getLineAPI($user['line_account_id']);
+
+                    if (method_exists($line, 'sendMessage')) {
+                        $result = $line->sendMessage($user['line_user_id'], $message, $user['reply_token'] ?? null, $user['reply_token_expires'] ?? null, $db, $userId);
+                    } else {
+                        $result = $line->pushMessage($user['line_user_id'], [['type' => 'text', 'text' => $message]]);
+                        $result['method'] = 'push';
+                    }
                 }
 
                 if ($result['code'] === 200) {
@@ -967,10 +996,45 @@ $conversationLimit = 200; // Initial load limit (can be adjusted)
 $hasMoreConversations = false;
 $totalConversations = 0;
 
+// Multi-platform channel switcher (LINE default; Facebook/TikTok via ?platform=).
+// users.platform exists only after migration_add_platforms — degrade to LINE-only if absent.
+$hasPlatformColumn = false;
+try {
+    $hasPlatformColumn = (bool) $db->query("SHOW COLUMNS FROM users LIKE 'platform'")->fetch();
+} catch (Exception $e) {
+}
+$selectedPlatform = $_GET['platform'] ?? 'line';
+if (!$hasPlatformColumn || !in_array($selectedPlatform, ['line', 'facebook', 'tiktok'], true)) {
+    $selectedPlatform = 'line';
+}
+$isLinePlatform = ($selectedPlatform === 'line');
+
+// Conversation-count badges for the non-LINE channels
+$platformCounts = ['facebook' => 0, 'tiktok' => 0];
+if ($hasPlatformColumn) {
+    foreach (['facebook', 'tiktok'] as $pf) {
+        try {
+            $pcStmt = $db->prepare("SELECT COUNT(*) FROM users u WHERE u.platform = ? AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)");
+            $pcStmt->execute([$pf]);
+            $platformCounts[$pf] = (int) $pcStmt->fetchColumn();
+        } catch (Exception $e) {
+        }
+    }
+}
+
+// Scope: LINE → line_account_id; other platforms → users.platform
+if ($isLinePlatform) {
+    $platformWhere  = "u.line_account_id = ?";
+    $platformParams = [$currentBotId];
+} else {
+    $platformWhere  = "u.platform = ?";
+    $platformParams = [$selectedPlatform];
+}
+
 // First, get total count for UI indicator
-$countSql = "SELECT COUNT(*) FROM users u WHERE u.line_account_id = ? AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)";
+$countSql = "SELECT COUNT(*) FROM users u WHERE {$platformWhere} AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)";
 $countStmt = $db->prepare($countSql);
-$countStmt->execute([$currentBotId]);
+$countStmt->execute($platformParams);
 $totalConversations = (int) $countStmt->fetchColumn();
 $hasMoreConversations = $totalConversations > $conversationLimit;
 
@@ -983,12 +1047,12 @@ $sql = "SELECT u.*,
         (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_time,
         (SELECT COUNT(*) FROM messages WHERE user_id = u.id AND direction = 'incoming' AND is_read = 0) as unread
         FROM users u
-        WHERE u.line_account_id = ?
+        WHERE {$platformWhere}
         AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)
         ORDER BY last_time DESC
         LIMIT ?";
 $stmt = $db->prepare($sql);
-$stmt->execute([$currentBotId, $conversationLimit]);
+$stmt->execute(array_merge($platformParams, [$conversationLimit]));
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get last conversation timestamp for cursor-based pagination
@@ -2845,6 +2909,31 @@ function formatThaiDateTime($datetime)
                     </div>
                 </div>
 
+                <?php if ($hasPlatformColumn): ?>
+                <!-- Channel switcher: LINE / Facebook Messenger / TikTok -->
+                <div class="p-2 border-b bg-white flex gap-1.5" id="platformSwitcher">
+                    <?php
+                    $channelTabs = [
+                        'line'     => ['label' => 'LINE',      'icon' => 'fab fa-line',               'bg' => '#06C755'],
+                        'facebook' => ['label' => 'Messenger', 'icon' => 'fab fa-facebook-messenger', 'bg' => '#0084FF'],
+                        'tiktok'   => ['label' => 'TikTok',    'icon' => 'fab fa-tiktok',             'bg' => '#111827'],
+                    ];
+                    foreach ($channelTabs as $ck => $ci):
+                        $isActive = ($selectedPlatform === $ck);
+                        $cnt = $platformCounts[$ck] ?? 0;
+                    ?>
+                        <a href="inbox-v2.php?platform=<?= $ck ?>"
+                           class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold transition <?= $isActive ? 'text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200' ?>"
+                           <?= $isActive ? 'style="background:' . $ci['bg'] . '"' : '' ?>>
+                            <i class="<?= $ci['icon'] ?>"></i><span><?= $ci['label'] ?></span>
+                            <?php if ($ck !== 'line' && $cnt > 0): ?>
+                                <span class="inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-full text-[10px] font-bold <?= $isActive ? 'bg-white/30 text-white' : 'bg-blue-500 text-white' ?>"><?= $cnt ?></span>
+                            <?php endif; ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+
                 <!-- 2026-06-02: Always-visible "ให้แต้ม (ขายหน้าร้าน)" — opens QR modal without needing an open chat -->
                 <div class="p-2 border-b">
                     <button type="button" onclick="openGivePointsModal()"
@@ -2903,8 +2992,8 @@ function formatThaiDateTime($datetime)
                     </div>
                 </div>
 
-                <!-- New-followers segment chip: customers who added the OA but never messaged -->
-                <div class="px-2 py-2 border-b bg-white">
+                <!-- New-followers segment chip: customers who added the OA but never messaged (LINE only) -->
+                <div class="px-2 py-2 border-b bg-white"<?= $isLinePlatform ? '' : ' style="display:none"' ?>>
                     <button type="button" id="newFollowersChip" onclick="toggleNewFollowers()"
                         class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 transition">
                         <span>🆕 เพิ่งแอด · ยังไม่ทัก</span>
@@ -7509,7 +7598,7 @@ function formatThaiDateTime($datetime)
                     const status = document.getElementById('filterStatus')?.value || '';
 
                     // Build URL with search and filters
-                    let url = `/api/inbox-v2.php?action=getConversations&limit=200&search=${encodeURIComponent(query)}`;
+                    let url = `/api/inbox-v2.php?action=getConversations&limit=200&search=${encodeURIComponent(query)}<?= $isLinePlatform ? '' : '&platform=' . $selectedPlatform ?>`;
                     if (chatStatus) url += `&chatStatus=${encodeURIComponent(chatStatus)}`;
                     if (tagId) url += `&tagId=${encodeURIComponent(tagId)}`;
                     if (assigneeId) url += `&assigneeId=${encodeURIComponent(assigneeId)}`;
@@ -11375,7 +11464,7 @@ function formatThaiDateTime($datetime)
                 console.log(`[Progressive Load] Loading batch ${batchCount}...`);
 
                 try {
-                    const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200`);
+                    const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200<?= $isLinePlatform ? '' : '&platform=' . $selectedPlatform ?>`);
                     const data = await response.json();
 
                     console.log('[Progressive Load] API response:', data.success, 'has_more:', data.data?.has_more, 'count:', data.data?.conversations?.length);
@@ -11462,7 +11551,7 @@ function formatThaiDateTime($datetime)
             this.showLoadingSpinner();
 
             try {
-                const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200`);
+                const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200<?= $isLinePlatform ? '' : '&platform=' . $selectedPlatform ?>`);
                 const data = await response.json();
 
                 if (data.success && data.data && data.data.conversations) {

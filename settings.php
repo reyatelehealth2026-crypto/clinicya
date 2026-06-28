@@ -32,6 +32,7 @@ $error = null;
 // Tab configuration
 $tabs = [
     'line' => ['label' => 'LINE Accounts', 'icon' => 'fab fa-line'],
+    'platform' => ['label' => 'การเชื่อมต่อแพลตฟอร์ม', 'icon' => 'fas fa-plug'],
     'general' => ['label' => 'ข้อมูลร้าน', 'icon' => 'fas fa-store'],
     'shop_tax' => ['label' => 'ข้อมูลร้าน / ใบกำกับภาษี', 'icon' => 'fas fa-file-invoice'],
     'welcome' => ['label' => 'ข้อความต้อนรับ', 'icon' => 'fas fa-hand-sparkles'],
@@ -303,6 +304,178 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $manager->setDefault($_POST['id']);
         header('Location: settings.php?tab=line&success=default');
         exit;
+    }
+
+    // Platform connection actions (Facebook Messenger / TikTok Shop)
+    elseif ($action === 'save_facebook') {
+        try {
+            $fbId = (int) ($_POST['fb_id'] ?? 0);
+            $fields = [
+                'name'              => trim($_POST['name'] ?? ''),
+                'page_id'           => trim($_POST['page_id'] ?? ''),
+                'app_id'            => trim($_POST['app_id'] ?? ''),
+                'app_secret'        => trim($_POST['app_secret'] ?? ''),
+                'page_access_token' => trim($_POST['page_access_token'] ?? ''),
+                'verify_token'      => trim($_POST['verify_token'] ?? ''),
+                'is_active'         => isset($_POST['is_active']) ? 1 : 0,
+            ];
+            if ($fields['name'] === '' || $fields['page_id'] === '' || $fields['page_access_token'] === '') {
+                throw new Exception('กรุณากรอกชื่อเพจ, Page ID และ Page Access Token');
+            }
+
+            if ($fbId > 0) {
+                $stmt = $db->prepare("UPDATE facebook_accounts SET name = ?, page_id = ?, app_id = ?, app_secret = ?, page_access_token = ?, verify_token = ?, is_active = ? WHERE id = ?");
+                $stmt->execute([$fields['name'], $fields['page_id'], $fields['app_id'], $fields['app_secret'], $fields['page_access_token'], $fields['verify_token'], $fields['is_active'], $fbId]);
+                $success = 'อัปเดตการเชื่อมต่อ Facebook Messenger สำเร็จ';
+            } else {
+                $stmt = $db->prepare("INSERT INTO facebook_accounts (name, page_id, app_id, app_secret, page_access_token, verify_token, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$fields['name'], $fields['page_id'], $fields['app_id'], $fields['app_secret'], $fields['page_access_token'], $fields['verify_token'], $fields['is_active']]);
+                $success = 'เพิ่มการเชื่อมต่อ Facebook Messenger สำเร็จ';
+            }
+
+            $activityLogger->logData(ActivityLogger::ACTION_UPDATE, 'ตั้งค่าการเชื่อมต่อ Facebook Messenger', [
+                'entity_type' => 'facebook_accounts',
+                'new_value'   => ['name' => $fields['name'], 'page_id' => $fields['page_id']]
+            ]);
+        } catch (Exception $e) {
+            $error = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
+        }
+        $activeTab = 'platform';
+    } elseif ($action === 'delete_facebook') {
+        try {
+            $stmt = $db->prepare("DELETE FROM facebook_accounts WHERE id = ?");
+            $stmt->execute([(int) ($_POST['fb_id'] ?? 0)]);
+            $success = 'ลบการเชื่อมต่อ Facebook Messenger แล้ว';
+        } catch (Exception $e) {
+            $error = 'ลบไม่สำเร็จ: ' . $e->getMessage();
+        }
+        $activeTab = 'platform';
+    } elseif ($action === 'test_facebook') {
+        try {
+            $stmt = $db->prepare("SELECT * FROM facebook_accounts WHERE id = ?");
+            $stmt->execute([(int) ($_POST['fb_id'] ?? 0)]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                throw new Exception('ไม่พบเพจที่ต้องการทดสอบ (บันทึกก่อนทดสอบ)');
+            }
+            // Validate the page token via debug_token (uses the app token, so it works
+            // even when the page token lacks pages_read_engagement — a messaging-only
+            // token is still valid). Falls back to /me?fields=name if app creds are unset.
+            $pageToken = (string) $row['page_access_token'];
+            $appId     = trim((string) ($row['app_id'] ?? ''));
+            $appSecret = trim((string) ($row['app_secret'] ?? ''));
+
+            if ($appId !== '' && $appSecret !== '') {
+                $verifyUrl = 'https://graph.facebook.com/v19.0/debug_token?input_token='
+                    . urlencode($pageToken) . '&access_token=' . urlencode($appId . '|' . $appSecret);
+            } else {
+                $verifyUrl = 'https://graph.facebook.com/v19.0/me?fields=name&access_token=' . urlencode($pageToken);
+            }
+
+            $ch = curl_init($verifyUrl);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 15,
+            ]);
+            $resp = curl_exec($ch);
+            $curlErr = curl_error($ch);
+            curl_close($ch);
+            $res = json_decode((string) $resp, true) ?? [];
+
+            if ($curlErr) {
+                $error = 'เชื่อมต่อไม่สำเร็จ: ' . $curlErr;
+            } elseif (isset($res['data']['is_valid'])) {
+                $d = $res['data'];
+                if (!empty($d['is_valid'])) {
+                    $pid = (string) ($d['profile_id'] ?? '');
+                    if ($pid !== '' && $pid !== (string) $row['page_id']) {
+                        $error = 'Token ใช้ได้ แต่เป็นของเพจอื่น (Page ID ' . $pid . ') — ต้องตรงกับ ' . $row['page_id'];
+                    } else {
+                        $scopes = is_array($d['scopes'] ?? null) ? implode(', ', array_slice($d['scopes'], 0, 8)) : '';
+                        $hasMsg = strpos($scopes, 'pages_messaging') !== false;
+                        $success = 'เชื่อมต่อ Facebook สำเร็จ: token ใช้งานได้'
+                            . ($hasMsg ? ' (มีสิทธิ์ pages_messaging ✓)' : '')
+                            . ($scopes !== '' ? ' — scopes: ' . $scopes : '');
+                    }
+                } else {
+                    $msg = $d['error']['message'] ?? 'token หมดอายุหรือถูกเพิกถอน';
+                    $error = 'เชื่อมต่อไม่สำเร็จ: ' . $msg;
+                }
+            } elseif (!empty($res['name'])) {
+                $success = 'เชื่อมต่อ Facebook สำเร็จ: ' . $res['name'];
+            } else {
+                $msg = $res['error']['message'] ?? '';
+                $error = 'เชื่อมต่อไม่สำเร็จ: ' . ($msg !== '' ? $msg : 'ตรวจสอบ Page Access Token / App Secret');
+            }
+        } catch (Exception $e) {
+            $error = 'ทดสอบไม่สำเร็จ: ' . $e->getMessage();
+        }
+        $activeTab = 'platform';
+    } elseif ($action === 'save_tiktok') {
+        try {
+            $ttId = (int) ($_POST['tt_id'] ?? 0);
+            $fields = [
+                'name'          => trim($_POST['name'] ?? ''),
+                'shop_id'       => trim($_POST['shop_id'] ?? ''),
+                'app_key'       => trim($_POST['app_key'] ?? ''),
+                'app_secret'    => trim($_POST['app_secret'] ?? ''),
+                'access_token'  => trim($_POST['access_token'] ?? ''),
+                'refresh_token' => trim($_POST['refresh_token'] ?? ''),
+                'shop_cipher'   => trim($_POST['shop_cipher'] ?? ''),
+                'is_active'     => isset($_POST['is_active']) ? 1 : 0,
+            ];
+            if ($fields['name'] === '' || $fields['shop_id'] === '' || $fields['access_token'] === '') {
+                throw new Exception('กรุณากรอกชื่อร้าน, Shop ID และ Access Token');
+            }
+
+            if ($ttId > 0) {
+                $stmt = $db->prepare("UPDATE tiktok_shop_accounts SET name = ?, shop_id = ?, app_key = ?, app_secret = ?, access_token = ?, refresh_token = ?, shop_cipher = ?, is_active = ? WHERE id = ?");
+                $stmt->execute([$fields['name'], $fields['shop_id'], $fields['app_key'], $fields['app_secret'], $fields['access_token'], $fields['refresh_token'], $fields['shop_cipher'], $fields['is_active'], $ttId]);
+                $success = 'อัปเดตการเชื่อมต่อ TikTok Shop สำเร็จ';
+            } else {
+                $stmt = $db->prepare("INSERT INTO tiktok_shop_accounts (name, shop_id, app_key, app_secret, access_token, refresh_token, shop_cipher, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$fields['name'], $fields['shop_id'], $fields['app_key'], $fields['app_secret'], $fields['access_token'], $fields['refresh_token'], $fields['shop_cipher'], $fields['is_active']]);
+                $success = 'เพิ่มการเชื่อมต่อ TikTok Shop สำเร็จ';
+            }
+
+            $activityLogger->logData(ActivityLogger::ACTION_UPDATE, 'ตั้งค่าการเชื่อมต่อ TikTok Shop', [
+                'entity_type' => 'tiktok_shop_accounts',
+                'new_value'   => ['name' => $fields['name'], 'shop_id' => $fields['shop_id']]
+            ]);
+        } catch (Exception $e) {
+            $error = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
+        }
+        $activeTab = 'platform';
+    } elseif ($action === 'delete_tiktok') {
+        try {
+            $stmt = $db->prepare("DELETE FROM tiktok_shop_accounts WHERE id = ?");
+            $stmt->execute([(int) ($_POST['tt_id'] ?? 0)]);
+            $success = 'ลบการเชื่อมต่อ TikTok Shop แล้ว';
+        } catch (Exception $e) {
+            $error = 'ลบไม่สำเร็จ: ' . $e->getMessage();
+        }
+        $activeTab = 'platform';
+    } elseif ($action === 'test_tiktok') {
+        try {
+            $stmt = $db->prepare("SELECT * FROM tiktok_shop_accounts WHERE id = ?");
+            $stmt->execute([(int) ($_POST['tt_id'] ?? 0)]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                throw new Exception('ไม่พบร้านที่ต้องการทดสอบ (บันทึกก่อนทดสอบ)');
+            }
+            require_once 'classes/TikTokShopAPI.php';
+            $api = new TikTokShopAPI($row);
+            $res = $api->getConversations(1);
+            if ($res['success'] ?? false) {
+                $success = 'เชื่อมต่อ TikTok Shop สำเร็จ: ' . $row['name'];
+            } else {
+                $msg = $res['message'] ?? (is_array($res['error'] ?? null) ? '' : ($res['error'] ?? ''));
+                $error = 'เชื่อมต่อไม่สำเร็จ: ' . ($msg !== '' ? $msg : 'ตรวจสอบ Access Token / App Key / Shop Cipher');
+            }
+        } catch (Exception $e) {
+            $error = 'ทดสอบไม่สำเร็จ: ' . $e->getMessage();
+        }
+        $activeTab = 'platform';
     }
 
     // Welcome message actions
@@ -737,6 +910,9 @@ echo getStickySaveBarStyles();
                 break;
             case 'vibe-selling':
                 include 'includes/settings/vibe-selling.php';
+                break;
+            case 'platform':
+                include 'includes/settings/platform.php';
                 break;
             case 'telegram':
                 include 'includes/settings/telegram.php';
