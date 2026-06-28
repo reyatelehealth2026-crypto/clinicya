@@ -1,0 +1,18 @@
+﻿{
+    "run_id":  "20260604-070933",
+    "dry_run":  false,
+    "base_url":  "https://tenant-0001.re-ya.com",
+    "episodes_requested":  [
+                               "10"
+                           ],
+    "log":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-070933.log",
+    "summary":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-070933.summary.json",
+    "manifest":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-manual-v2-manifest.json",
+    "status":  {
+                   "episode":  "10",
+                   "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-10-refill-follow-up.mp4",
+                   "exists":  true,
+                   "size_mb":  0.98,
+                   "duration_seconds":  31.767
+               }
+}

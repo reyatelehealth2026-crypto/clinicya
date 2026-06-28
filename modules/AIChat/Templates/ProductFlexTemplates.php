@@ -56,8 +56,8 @@ class ProductFlexTemplates
         // รูปภาพ
         $imageUrl = $this->getProductImage($product);
         
-        // LIFF Shop URL
-        $liffShopUrl = $this->baseUrl . '/liff-shop.php';
+        // Shop URL — new Mini App (not the retired /liff-shop.php SPA)
+        $liffShopUrl = $this->baseUrl . '/miniapp/shop/';
         
         // CNY Product Detail URL
         $cnyDetailUrl = 'https://www.cnypharmacy.com/Pre-product/' . urlencode($sku);

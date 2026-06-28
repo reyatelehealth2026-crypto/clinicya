@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:11:32.451Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "11",
+  "title": "หน้า Customers สำหรับดูและจัดการลูกค้า",
+  "audience": "แอดมิน / เจ้าของร้าน / การตลาด",
+  "output": "videos/crm-manual-v2/crm-11-customers-management.mp4",
+  "frames": 121,
+  "scenes": [
+    {
+      "route": "/users",
+      "caption": "Customers: ฐานลูกค้ารวมสำหรับค้นหาและดูข้อมูลหลายราย"
+    },
+    {
+      "route": "/users",
+      "caption": "ค้นหาจากชื่อ เบอร์โทร หรือข้อมูลตัวอย่าง"
+    },
+    {
+      "route": "/users",
+      "caption": "เปิดรายละเอียดลูกค้า: tag, note, ประวัติซื้อ และสถานะล่าสุด"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "กลับไป Inbox เพื่อแสดงว่าข้อมูลเชื่อมกับงานแชท"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

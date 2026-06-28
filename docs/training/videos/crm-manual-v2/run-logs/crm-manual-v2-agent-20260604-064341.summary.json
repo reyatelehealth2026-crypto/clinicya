@@ -1,0 +1,6 @@
+﻿{
+    "run_id":  "20260604-064341",
+    "failed":  true,
+    "error":  "Set CLINICYA_TRAINING_USERNAME and CLINICYA_TRAINING_PASSWORD, or pass -Username / -Password.",
+    "log":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-064341.log"
+}

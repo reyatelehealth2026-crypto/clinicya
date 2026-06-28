@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
+require_once __DIR__ . '/../includes/liff-helper.php'; // reya_liff_url_or_oa()
 
 $db = Database::getInstance()->getConnection();
 
@@ -132,8 +133,13 @@ function createRefillReminderFlex($item, $daysLeft) {
         $urgencyText = "เหลือ {$daysLeft} วัน";
     }
 
-    $baseUrl = rtrim(defined('BASE_URL') ? BASE_URL : '', '/');
-    $productUrl = $baseUrl . '/miniapp/shop/product/?id=' . intval($item['product_id']);
+    // LIFF-or-OA fallback: real liff_id → Mini App product page; empty/PENDING
+    // → OA chat; nothing → '' (button is gated below so it is simply omitted).
+    $productUrl = reya_liff_url_or_oa(
+        $db,
+        !empty($item['line_account_id']) ? (int) $item['line_account_id'] : null,
+        '/shop/product?id=' . intval($item['product_id'])
+    );
 
     $bubble = [
         'type' => 'bubble',
@@ -195,14 +201,17 @@ function createRefillReminderFlex($item, $daysLeft) {
             'type' => 'box',
             'layout' => 'vertical',
             'spacing' => 'sm',
-            'contents' => [
-                [
+            'contents' => array_values(array_filter([
+                // Only show the Mini-App "order refill" button when we have a real
+                // LIFF / OA URL. Otherwise the message button below still lets the
+                // customer reach the pharmacist — no broken Mini App link.
+                $productUrl !== '' ? [
                     'type' => 'button',
                     'action' => ['type' => 'uri', 'label' => '🛒 สั่ง Refill เลย', 'uri' => $productUrl],
                     'style' => 'primary',
                     'color' => '#11B0A6',
                     'height' => 'sm'
-                ],
+                ] : null,
                 [
                     'type' => 'button',
                     'action' => [
@@ -213,7 +222,7 @@ function createRefillReminderFlex($item, $daysLeft) {
                     'style' => 'secondary',
                     'height' => 'sm'
                 ]
-            ]
+            ]))
         ]
     ];
 

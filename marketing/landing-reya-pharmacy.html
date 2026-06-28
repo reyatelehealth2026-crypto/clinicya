@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REYA Pharmacy CRM — ระบบเดียวที่รวมทุกงานร้านยาไว้บน LINE</title>
+<meta name="description" content="REYA Pharmacy CRM เปลี่ยน LINE OA ร้านยาให้เป็นระบบขายครบวงจร — CRM Inbox, AI Pharmacist, ระบบจ่ายยา, Loyalty, Broadcast, Inventory และ Dashboard ในแพลตฟอร์มเดียว เริ่มฟรี">
+<meta property="og:type" content="website">
+<meta property="og:title" content="REYA Pharmacy CRM — ระบบเดียวที่รวมทุกงานร้านยาไว้บน LINE">
+<meta property="og:description" content="CRM, AI เภสัชกร, จ่ายยา, ร้านค้าออนไลน์, Loyalty และ Dashboard บนแพลตฟอร์มเดียว เริ่มฟรี">
+<meta property="og:url" content="https://re-ya.com/">
+<meta property="og:image" content="https://re-ya.com/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="REYA Pharmacy CRM — ระบบเดียวที่รวมทุกงานร้านยาไว้บน LINE">
+<meta name="twitter:description" content="CRM, AI เภสัชกร, จ่ายยา, Loyalty และ Dashboard บนแพลตฟอร์มเดียว เริ่มฟรี">
+<meta name="twitter:image" content="https://re-ya.com/og-image.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai+Looped:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&family=Lexend:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.cdnfonts.com" crossorigin>
+<link href="https://fonts.cdnfonts.com/css/line-seed-sans-th" rel="stylesheet">
+<style>
+  :root{
+    --navy:#041527; --navy-2:#0a2034; --navy-line:rgba(255,255,255,.10);
+    --ink:#0f172a; --slate:#5b6b7b; --bg:#ffffff; --soft:#f4f7f8;
+    --line:#06C755; --line-700:#048a3c; --teal:#11b0a6; --cyan:#3dd7c4;
+    --border:rgba(15,23,42,.10);
+    --grad:linear-gradient(100deg,#06C755 0%,#11b0a6 60%,#3dd7c4 100%);
+    --maxw:1180px; --ease:cubic-bezier(.16,1,.3,1);
+    --shadow:0 30px 70px -30px rgba(4,21,39,.4);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{font-family:'Sukhumvit Set','SukhumvitSet','LINE Seed Sans TH','IBM Plex Sans Thai Looped','Sarabun',system-ui,sans-serif;background:var(--bg);color:var(--ink);
+    line-height:1.7;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  section{padding:6rem 0}
+  a{color:inherit;text-decoration:none}
+  .ic{width:1.4em;height:1.4em;stroke:currentColor;stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+  .badge{display:inline-flex;align-items:center;gap:.45rem;font-size:.78rem;font-weight:600;
+    padding:.4rem .9rem;border-radius:999px;background:var(--soft);border:1px solid var(--border);color:var(--ink)}
+  .badge.dark{background:rgba(255,255,255,.08);border-color:var(--navy-line);color:#fff}
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--line)}
+
+  h1,h2,h3{font-family:'Sukhumvit Set','SukhumvitSet','LINE Seed Sans TH','IBM Plex Sans Thai Looped','Lexend','Sarabun',sans-serif;font-weight:700;line-height:1.18;letter-spacing:-.01em}
+  h2{font-size:clamp(1.9rem,4.4vw,2.9rem)}
+  .grad-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .sec-head{text-align:center;max-width:760px;margin:0 auto}
+  .sec-head .badge{margin-bottom:1.2rem}
+  .sec-head p{color:var(--slate);font-size:1.1rem;margin-top:1rem}
+
+  .btn{display:inline-flex;align-items:center;gap:.55rem;font-family:inherit;font-weight:600;font-size:1rem;
+    border-radius:999px;padding:.9rem 1.7rem;border:1.5px solid transparent;cursor:pointer;
+    transition:transform .25s var(--ease),box-shadow .25s var(--ease),background .2s}
+  .btn .ic{width:1.15em;height:1.15em}
+  .btn-grad{background:var(--grad);color:#04221a;box-shadow:0 14px 30px -12px rgba(6,199,85,.55)}
+  .btn-grad:hover{transform:translateY(-2px);box-shadow:0 20px 40px -12px rgba(6,199,85,.6)}
+  .btn-grad:active{transform:translateY(0) scale(.985)}
+  .btn-ghost{background:transparent;color:var(--ink);border-color:var(--border)}
+  .btn-ghost:hover{border-color:var(--ink);transform:translateY(-2px)}
+  .btn-ghost.on-dark{color:#fff;border-color:rgba(255,255,255,.25)}
+  .btn-ghost.on-dark:hover{border-color:#fff;background:rgba(255,255,255,.06)}
+  .learn{display:inline-flex;align-items:center;gap:.45rem;font-weight:600;color:var(--line-700);margin-top:1.6rem}
+  .learn .ic{width:1.1em;height:1.1em;transition:transform .25s var(--ease)}
+  .learn:hover .ic{transform:translateX(4px)}
+
+  nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+  .nav-in{position:relative;display:flex;align-items:center;justify-content:space-between;max-width:var(--maxw);margin:0 auto;padding:.85rem 24px}
+  .nav-right{display:flex;align-items:center;gap:.6rem}
+  .nav-burger{display:none;background:none;border:none;cursor:pointer;padding:.35rem;color:var(--ink);border-radius:.5rem}
+  .nav-burger:hover{background:var(--soft)}
+  .brand{display:flex;align-items:center;gap:.5rem;font-family:'Sukhumvit Set','SukhumvitSet','LINE Seed Sans TH','IBM Plex Sans Thai Looped','Lexend',sans-serif;font-weight:700;font-size:1.1rem}
+  .brand .mark{width:30px;height:30px;border-radius:9px;background:var(--grad);color:#04221a;display:grid;place-items:center;font-weight:700;font-size:.85rem}
+  .brand .lt{color:var(--slate);font-weight:500}
+  .nav-links{display:flex;gap:1.7rem;font-size:.93rem;color:var(--slate);font-weight:500}
+  .nav-links a:hover{color:var(--ink)}
+  @media(max-width:900px){
+    .nav-burger{display:inline-flex}
+    .nav-links{position:absolute;top:100%;left:0;right:0;background:rgba(255,255,255,.97);backdrop-filter:blur(14px);
+      border-bottom:1px solid var(--border);flex-direction:column;gap:0;padding:.4rem 24px 1rem;display:none}
+    .nav-links.open{display:flex}
+    .nav-links a{padding:.85rem 0;border-bottom:1px solid var(--border);font-size:1rem}
+    .nav-links a:last-child{border-bottom:none}
+  }
+
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
+  .reveal.in{opacity:1;transform:none}
+  @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+
+  /* HERO */
+  .hero{position:relative;background:var(--navy);color:#fff;text-align:center;padding:5.5rem 0 0;overflow:hidden}
+  .hero::before{content:"";position:absolute;top:-12%;left:50%;transform:translateX(-50%);width:900px;height:560px;
+    background:radial-gradient(ellipse at center,rgba(17,176,166,.28),rgba(6,199,85,.12) 40%,transparent 70%);filter:blur(10px)}
+  .hero-in{position:relative;max-width:880px;margin:0 auto;padding:0 24px}
+  .hero h1{font-size:clamp(2.3rem,5.6vw,3.8rem);margin:1.5rem 0}
+  .hero p.sub{color:rgba(255,255,255,.7);font-size:1.18rem;max-width:580px;margin:0 auto 2rem}
+  .hero-actions{display:flex;gap:.8rem;justify-content:center;flex-wrap:wrap}
+  .hero-eyebrow{display:inline-flex;align-items:center;gap:.5rem;font-size:.82rem;font-weight:600;letter-spacing:.06em;
+    color:rgba(255,255,255,.6)}
+  .hero-eyebrow .av{display:flex}.hero-eyebrow .av span{width:22px;height:22px;border-radius:50%;border:2px solid var(--navy);margin-left:-7px;background:var(--grad)}
+  .mock-note{text-align:center;font-size:.74rem;color:rgba(255,255,255,.42);margin-top:1.1rem;padding-bottom:1rem}
+  .hero-stage{position:relative;height:340px;margin-top:3rem;max-width:1000px;margin-inline:auto}
+  @media(max-width:760px){.hero-stage{height:250px}}
+  .mk{position:absolute;background:#0c1f33;border:1px solid var(--navy-line);border-radius:1.1rem;box-shadow:var(--shadow);overflow:hidden}
+  .mk-main{left:50%;transform:translateX(-50%);top:0;width:560px;max-width:90vw}
+  .mk-bar{display:flex;align-items:center;gap:.4rem;padding:.7rem .9rem;border-bottom:1px solid var(--navy-line)}
+  .mk-bar i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.2)}
+  .mk-bar i:nth-child(1){background:#ff6058}.mk-bar i:nth-child(2){background:#ffbd2e}.mk-bar i:nth-child(3){background:#28c93f}
+  .mk-bar small{margin-left:auto;color:rgba(255,255,255,.4);font-size:.7rem}
+  .mk-body{padding:1rem;display:grid;grid-template-columns:1fr 1fr;gap:.8rem}
+  .mk-kpi{background:rgba(255,255,255,.04);border:1px solid var(--navy-line);border-radius:.7rem;padding:.7rem .8rem}
+  .mk-kpi .v{font-family:'Lexend',sans-serif;font-weight:700;font-size:1.1rem;color:#fff}.mk-kpi .k{color:rgba(255,255,255,.45);font-size:.7rem}
+  .mk-chart{grid-column:1/-1;height:86px;background:rgba(255,255,255,.03);border:1px solid var(--navy-line);border-radius:.7rem;position:relative;overflow:hidden}
+  .mk-chart svg{position:absolute;inset:0;width:100%;height:100%}
+  .mk-360{left:4%;top:120px;width:230px;z-index:3}
+  .mk-360 .h{display:flex;align-items:center;gap:.5rem;padding:.7rem .8rem;border-bottom:1px solid var(--navy-line)}
+  .mk-360 .av{width:30px;height:30px;border-radius:50%;background:var(--grad);color:#04221a;display:grid;place-items:center;font-weight:700;font-size:.72rem}
+  .mk-360 .nm{font-size:.78rem;font-weight:600;color:#fff}.mk-360 .sub2{font-size:.64rem;color:rgba(255,255,255,.4)}
+  .mk-360 .tags{display:flex;flex-wrap:wrap;gap:.3rem;padding:.7rem .8rem}
+  .mk-360 .tg{font-size:.62rem;color:rgba(255,255,255,.7);background:rgba(255,255,255,.07);border-radius:.35rem;padding:.1rem .4rem}
+  .mk-chat{right:3%;top:150px;width:215px;z-index:3;padding:.8rem}
+  .mk-chat .mm{font-size:.72rem;border-radius:.7rem;padding:.45rem .6rem;margin-bottom:.4rem}
+  .mk-chat .them{background:rgba(255,255,255,.08);color:#fff}
+  .mk-chat .ai{background:rgba(6,199,85,.16);color:#dffaee;border-left:2px solid var(--line)}
+  @media(max-width:760px){.mk-360,.mk-chat{display:none}.mk-main{width:94vw}}
+
+  /* TRUST */
+  .trust{background:#fff;padding:3.5rem 0 4.5rem;text-align:center}
+  .trust-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;max-width:840px;margin:0 auto}
+  .trust-row .n{font-family:'Lexend',sans-serif;font-size:1.9rem;font-weight:700;color:var(--line-700)}
+  .trust-row .l{color:var(--slate);font-size:.85rem;margin-top:.3rem}
+  @media(max-width:640px){.trust-row{grid-template-columns:1fr 1fr;gap:1.8rem}}
+
+  /* ECOSYSTEM */
+  .eco{background:var(--soft);text-align:center;position:relative;overflow:hidden}
+  .eco::before{content:"";position:absolute;top:8%;left:50%;transform:translateX(-50%);width:600px;height:380px;
+    background:radial-gradient(ellipse at center,rgba(6,199,85,.10),transparent 68%)}
+  .eco .sec-head p{color:var(--slate)}
+  .eco-hub{position:relative;margin-top:3rem;display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;max-width:780px;margin-inline:auto}
+  .eco-orb{grid-column:2;display:grid;place-items:center;order:2}
+  .eco-orb .orb{width:96px;height:96px;border-radius:50%;background:var(--grad);display:grid;place-items:center;
+    font-family:'Lexend',sans-serif;font-weight:700;color:#04221a;box-shadow:0 0 60px rgba(6,199,85,.5)}
+  .eco-node{background:#fff;border:1px solid var(--border);border-radius:.9rem;padding:1rem;
+    display:flex;align-items:center;gap:.6rem;font-size:.9rem;font-weight:600}
+  .eco-node .ic{width:1.3rem;height:1.3rem;color:var(--teal)}
+  @media(max-width:680px){.eco-hub{grid-template-columns:1fr 1fr}.eco-orb{grid-column:1/-1;order:0;margin-bottom:.5rem}}
+
+  /* WORKSPACE */
+  .ws-mock{margin-top:3rem;background:#fff;border:1px solid var(--border);border-radius:1.4rem;box-shadow:var(--shadow);overflow:hidden;max-width:1000px;margin-inline:auto}
+  .ws-top{display:flex;align-items:center;gap:.5rem;padding:.8rem 1rem;border-bottom:1px solid var(--border);background:var(--soft)}
+  .ws-top i{width:9px;height:9px;border-radius:50%;background:#d4dadf}
+  .ws-top small{margin-left:auto;color:var(--slate);font-size:.72rem}
+  .ws-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)}
+  .ws-app{background:#fff;padding:1.2rem;display:flex;flex-direction:column;gap:.4rem;min-height:120px}
+  .ws-app .ico{width:34px;height:34px;border-radius:9px;background:var(--soft);display:grid;place-items:center;color:var(--ink)}
+  .ws-app .ico .ic{width:1.15rem;height:1.15rem}
+  .ws-app b{font-size:.9rem}.ws-app span{color:var(--slate);font-size:.76rem}
+  @media(max-width:760px){.ws-grid{grid-template-columns:1fr 1fr}}
+
+  /* ZIG-ZAG */
+  .fz{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:center}
+  @media(max-width:860px){.fz{grid-template-columns:1fr;gap:2.2rem}.fz .fz-media{order:-1}}
+  .fz h2{margin:1.1rem 0}
+  .fz p.d{color:var(--slate);font-size:1.08rem}
+  .fz .pts{list-style:none;margin-top:1.4rem;display:flex;flex-direction:column;gap:.7rem}
+  .fz .pts li{display:flex;align-items:center;gap:.6rem;font-weight:500}
+  .fz .pts .ic{width:1.2rem;height:1.2rem;color:var(--line-700)}
+  .sec-dark{background:var(--navy);color:#fff}
+  .sec-dark .fz p.d{color:rgba(255,255,255,.66)}
+  .sec-dark .fz .pts .ic{color:var(--cyan)}
+  .media{background:#fff;border:1px solid var(--border);border-radius:1.3rem;box-shadow:var(--shadow);overflow:hidden}
+  .sec-dark .media{background:#0c1f33;border-color:var(--navy-line)}
+  .m-top{display:flex;align-items:center;gap:.5rem;padding:.8rem 1rem;border-bottom:1px solid var(--border);font-size:.82rem;color:var(--slate)}
+  .sec-dark .m-top{border-color:var(--navy-line);color:rgba(255,255,255,.6)}
+  .m-top .ic{width:1.15em;height:1.15em;color:var(--line-700)}
+  .m-top .mono{margin-left:auto;font-family:'Lexend',sans-serif;font-size:.72rem}
+  .m-body{padding:1.2rem}
+  .m-bub{border-radius:.8rem;padding:.6rem .8rem;font-size:.86rem;margin-bottom:.55rem;background:var(--soft)}
+  .sec-dark .m-bub{background:rgba(255,255,255,.06);color:#fff}
+  .m-bub.me{background:var(--navy);color:#fff;margin-left:1.6rem}
+  .sec-dark .m-bub.me{background:var(--grad);color:#04221a}
+  .m-row{display:flex;align-items:center;gap:.6rem;padding:.55rem 0;border-top:1px dashed var(--border);font-size:.86rem}
+  .sec-dark .m-row{border-color:var(--navy-line);color:#fff}
+  .m-row:first-of-type{border-top:none}
+  .m-row .pill{margin-left:auto;font-size:.72rem;font-weight:600;color:var(--line-700);background:rgba(6,199,85,.12);border-radius:.4rem;padding:.1rem .5rem}
+  .m-meter{height:8px;border-radius:99px;background:var(--soft);overflow:hidden;margin:.5rem 0}
+  .sec-dark .m-meter{background:rgba(255,255,255,.1)}
+  .m-meter i{display:block;height:100%;background:var(--grad);border-radius:99px}
+  .m-360{display:flex;align-items:center;gap:.7rem;margin-bottom:.9rem}
+  .m-360 .av{width:42px;height:42px;border-radius:50%;background:var(--grad);color:#04221a;display:grid;place-items:center;font-weight:700;font-size:.82rem}
+  .m-360 .nm{font-weight:600}.m-360 .lv{margin-left:auto;font-size:.7rem;font-weight:600;color:var(--line-700);border:1px solid var(--line);border-radius:.4rem;padding:.1rem .5rem}
+  .m-tags{display:flex;flex-wrap:wrap;gap:.4rem}
+  .m-tags span{font-size:.72rem;background:var(--soft);border:1px solid var(--border);border-radius:.45rem;padding:.18rem .5rem;color:var(--slate)}
+  .sec-dark .m-tags span{background:rgba(255,255,255,.07);border-color:var(--navy-line);color:rgba(255,255,255,.8)}
+
+  /* BENTO */
+  .bgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:3rem}
+  .bcard{background:#fff;border:1px solid var(--border);border-radius:1.4rem;padding:1.6rem;display:flex;flex-direction:column;transition:transform .3s var(--ease),box-shadow .3s var(--ease)}
+  .bcard:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+  .bcard.span2{grid-column:span 2}
+  .bcard.hero-card{background:var(--grad);color:#04221a;border:none}
+  .bcard.dark{background:var(--navy);color:#fff;border:none}
+  .bico{width:46px;height:46px;border-radius:13px;background:var(--soft);display:grid;place-items:center;color:var(--ink)}
+  .bico .ic{width:1.5rem;height:1.5rem}
+  .hero-card .bico{background:rgba(4,34,26,.16);color:#04221a}.dark .bico{background:rgba(255,255,255,.14);color:#fff}
+  .bcard h3{font-size:1.12rem;margin:1rem 0 .45rem}
+  .bcard p{font-size:.9rem;color:var(--slate);line-height:1.6}
+  .hero-card p{color:rgba(4,34,26,.78)}.dark p{color:rgba(255,255,255,.78)}
+  .blist{list-style:none;margin-top:1.1rem;display:flex;flex-direction:column;gap:.55rem}
+  .blist li{display:flex;align-items:center;gap:.55rem;font-size:.86rem}
+  .blist li::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--line);flex:none}
+  .hero-card .blist li::before{background:#04221a}.dark .blist li::before{background:var(--line)}
+  .tabchips{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:auto;padding-top:1.3rem}
+  .tabchip{background:rgba(4,34,26,.14);border-radius:.6rem;padding:.4rem .85rem;font-size:.82rem;font-weight:600}
+  .exec-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;margin-top:auto;padding-top:1.3rem}
+  .exec-tile{background:rgba(255,255,255,.07);border:1px solid var(--navy-line);border-radius:.85rem;padding:.95rem 1rem}
+  .exec-tile b{display:block;font-family:'Lexend',sans-serif;font-size:1rem}.exec-tile span{color:rgba(255,255,255,.5);font-size:.76rem}
+  @media(max-width:900px){.bgrid{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.bgrid{grid-template-columns:1fr}.bcard.span2{grid-column:auto}}
+
+  /* PRICING */
+  .plans{display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem;margin-top:3rem}
+  @media(max-width:820px){.plans{grid-template-columns:1fr;max-width:420px;margin-inline:auto}}
+  .plan{background:#fff;border:1px solid var(--border);border-radius:1.4rem;padding:1.9rem;display:flex;flex-direction:column}
+  .plan.feat{border:none;background:var(--navy);color:#fff;box-shadow:var(--shadow);position:relative}
+  .plan.feat .badge{background:var(--grad);border:none;color:#04221a;position:absolute;top:-.8rem;left:1.9rem}
+  .plan h3{font-size:1.12rem}
+  .plan .price{font-family:'Lexend',sans-serif;font-size:2.3rem;font-weight:700;margin:.45rem 0 .1rem}
+  .plan .price small{font-size:1rem;font-weight:500;color:var(--slate)}
+  .plan.feat .price small{color:rgba(255,255,255,.6)}
+  .plan .desc{color:var(--slate);font-size:.88rem;margin-bottom:1.2rem}
+  .plan.feat .desc{color:rgba(255,255,255,.6)}
+  .plan ul{list-style:none;display:flex;flex-direction:column;gap:.65rem;margin:.3rem 0 1.5rem;flex:1}
+  .plan li{display:flex;gap:.55rem;font-size:.93rem;align-items:flex-start}
+  .plan li .ic{width:1.1em;height:1.1em;color:var(--line-700);margin-top:.3em}
+  .plan.feat li .ic{color:var(--cyan)}
+  .plan .btn{width:100%;justify-content:center}
+
+  /* FAQ */
+  .faq{max-width:780px;margin:0 auto}
+  details{border-top:1px solid var(--border);padding:.25rem 0}
+  details:last-child{border-bottom:1px solid var(--border)}
+  summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1.15rem 0;font-weight:600;font-size:1.02rem}
+  summary::-webkit-details-marker{display:none}
+  summary .ic{width:1.3em;height:1.3em;color:var(--slate);transition:transform .3s var(--ease);flex:none}
+  details[open] summary .ic{transform:rotate(45deg);color:var(--line-700)}
+  details p{color:var(--slate);padding:0 0 1.25rem;max-width:64ch}
+
+  /* FINAL */
+  .final{background:var(--navy);color:#fff;text-align:center;position:relative;overflow:hidden}
+  .final::before{content:"";position:absolute;bottom:-40%;left:50%;transform:translateX(-50%);width:700px;height:500px;
+    background:radial-gradient(ellipse at center,rgba(6,199,85,.25),transparent 68%)}
+  .final h2{position:relative}.final p{color:rgba(255,255,255,.66);max-width:48ch;margin:1rem auto 2rem;position:relative}
+  .final .btn{position:relative}.final .mini{margin-top:1rem;font-size:.84rem;color:rgba(255,255,255,.45);position:relative}
+
+  footer{background:var(--navy);color:rgba(255,255,255,.5);padding:2.5rem 0;text-align:center;font-size:.86rem;border-top:1px solid var(--navy-line)}
+
+  /* TESTIMONIALS */
+  .tcards{display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem;margin-top:3rem}
+  @media(max-width:820px){.tcards{grid-template-columns:1fr;max-width:460px;margin-inline:auto}}
+  .tcard{background:#fff;border:1px solid var(--border);border-radius:1.3rem;padding:1.8rem;display:flex;flex-direction:column}
+  .tcard p{font-size:1rem;line-height:1.6;flex:1}
+  .tcard .who{display:flex;align-items:center;gap:.7rem;margin-top:1.3rem}
+  .tcard .av{width:2.6rem;height:2.6rem;border-radius:50%;background:var(--soft);display:grid;place-items:center;color:var(--slate);font-weight:700;font-size:.8rem}
+  .tcard .nm{font-weight:600;font-size:.92rem}.tcard .who small{color:var(--slate);font-size:.82rem}
+  .ph-note{text-align:center;color:var(--slate);font-size:.84rem;margin-top:1.4rem;font-style:italic}
+  /* ===== Storefront showcase (ตัวอย่างหน้าร้าน) ===== */
+  .rs-win{margin-top:3rem;background:#fff;border:1px solid var(--border);border-radius:1.4rem;box-shadow:var(--shadow);overflow:hidden;max-width:1000px;margin-inline:auto}
+  .rs-bar{display:flex;align-items:center;gap:.9rem;padding:.95rem 1.2rem;border-bottom:1px solid var(--border)}
+  .rs-dots{display:flex;gap:.4rem}.rs-dots i{width:11px;height:11px;border-radius:50%;display:block}
+  .rs-dots i:nth-child(1){background:#f2675a}.rs-dots i:nth-child(2){background:#f6be4f}.rs-dots i:nth-child(3){background:#5bd07e}
+  .rs-search{flex:1;background:var(--soft);border-radius:.6rem;padding:.5rem .9rem;font-size:.85rem;color:var(--slate);display:flex;align-items:center;gap:.5rem}
+  .rs-search .ic{width:1rem;height:1rem;color:var(--line-700)}
+  .rs-fulfill{display:flex;background:var(--soft);border-radius:999px;padding:3px;gap:2px}
+  .rs-fulfill button{border:0;background:transparent;cursor:pointer;font-family:inherit;font-weight:600;font-size:.8rem;color:var(--slate);padding:.4rem .85rem;border-radius:999px;transition:.2s}
+  .rs-fulfill button.on{background:var(--grad);color:#04221a}
+  .rs-inner{padding:1.2rem 1.3rem 1.5rem}
+  .rs-cats{display:flex;gap:.5rem;overflow-x:auto;padding-bottom:.9rem;scrollbar-width:none}.rs-cats::-webkit-scrollbar{display:none}
+  .rs-cat{white-space:nowrap;font-weight:600;font-size:.85rem;padding:.5rem 1rem;border-radius:999px;background:var(--soft);color:var(--slate);border:1px solid var(--border)}
+  .rs-cat.on{background:var(--grad);color:#04221a;border-color:transparent}
+  .rs-flash{margin:.4rem 0 1.3rem;border-radius:1rem;padding:1rem 1.3rem;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+    background:linear-gradient(120deg,#FF6A3D,#FF8F3D);box-shadow:0 16px 30px -16px rgba(255,106,61,.5);position:relative;overflow:hidden}
+  .rs-flash .fl-l{display:flex;align-items:center;gap:.8rem}
+  .rs-bolt{width:42px;height:42px;border-radius:.7rem;background:rgba(255,255,255,.22);display:grid;place-items:center;font-size:1.3rem;flex:none}
+  .rs-ft b{font-family:'Lexend',sans-serif;font-weight:700;font-size:1.1rem;display:block;letter-spacing:.02em}
+  .rs-ft span{font-size:.85rem;opacity:.95}
+  .rs-timer{display:flex;align-items:center;gap:.4rem;font-family:'Lexend',sans-serif;font-weight:700}
+  .rs-timer .cl{opacity:.75}
+  .rs-seg{background:rgba(0,0,0,.22);border-radius:.5rem;padding:.4rem .55rem;min-width:42px;text-align:center;font-size:1.1rem;line-height:1}
+  .rs-seg small{display:block;font-size:.56rem;font-weight:500;opacity:.85;margin-top:3px;letter-spacing:.03em}
+  .rs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+  .rs-prod{border:1px solid var(--border);border-radius:1rem;overflow:hidden;background:#fff;transition:transform .25s var(--ease),box-shadow .25s var(--ease);position:relative}
+  .rs-prod:hover{transform:translateY(-5px);box-shadow:var(--shadow)}
+  .rs-img{height:140px;background:#fff;position:relative;overflow:hidden;display:grid;place-items:center}
+  .rs-img img{width:100%;height:100%;object-fit:contain;padding:.7rem;display:block}
+  .rs-img.noimg{background:var(--soft)}.rs-img.noimg::after{content:"💊";font-size:40px;opacity:.4}
+  .rs-badge{position:absolute;top:.6rem;left:.6rem;background:#FF5E45;color:#fff;font-family:'Lexend',sans-serif;font-weight:700;font-size:.72rem;padding:.25rem .55rem;border-radius:.45rem;z-index:2}
+  .rs-badge.hot{background:var(--grad);color:#04221a}
+  .rs-pbody{padding:.8rem .9rem .9rem}
+  .rs-pcat{font-size:.72rem;color:var(--line-700);font-weight:600}
+  .rs-pname{font-weight:600;font-size:.92rem;color:var(--ink);margin:.2rem 0 .6rem;line-height:1.35}
+  .rs-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:.6rem}
+  .rs-old{font-size:.75rem;color:#9aa6af;text-decoration:line-through}
+  .rs-new{font-family:'Lexend',sans-serif;font-weight:700;font-size:1.15rem;color:#FF5E45;line-height:1;display:block}
+  .rs-add{width:38px;height:38px;border-radius:.7rem;border:0;cursor:pointer;background:var(--grad);color:#04221a;display:grid;place-items:center;flex:none;transition:.2s}
+  .rs-add:hover{transform:scale(1.08)}.rs-add .ic{width:1.2rem;height:1.2rem}
+  .rs-note{text-align:center;margin-top:1.4rem;font-size:.92rem;color:var(--slate)}.rs-note b{color:var(--line-700)}
+  .rs-setup{margin:1.6rem auto 0;max-width:760px;text-align:left;background:rgba(255,255,255,.05);border:1px solid var(--navy-line);
+    border-radius:1.1rem;padding:1.3rem 1.5rem;display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;justify-content:space-between;position:relative}
+  .rs-setup .l{display:flex;align-items:center;gap:1rem;flex:1;min-width:260px}
+  .rs-setup .ic-box{width:48px;height:48px;border-radius:.8rem;background:rgba(6,199,85,.15);display:grid;place-items:center;flex:none}
+  .rs-setup .ic-box .ic{width:1.5rem;height:1.5rem;color:#3dd7c4}
+  .rs-setup h4{font-size:1.05rem;font-weight:700;color:#fff;margin-bottom:.2rem}
+  .rs-setup h4 em{font-style:normal;color:#3dd7c4;font-weight:600;font-size:.92rem}
+  .rs-setup p{color:rgba(255,255,255,.62);font-size:.9rem;line-height:1.55;margin:0;max-width:520px}
+  .rs-setup p b{color:rgba(255,255,255,.92)}
+  .rs-setup .chip{font-family:'Lexend',sans-serif;font-weight:700;font-size:1.35rem;color:#fff;white-space:nowrap;text-align:right}
+  .rs-setup .chip small{display:block;font-family:inherit;font-size:.72rem;font-weight:500;color:rgba(255,255,255,.45)}
+  @media(max-width:600px){.rs-setup{justify-content:flex-start}.rs-setup .chip{text-align:left}}
+  .plan .was{font-size:.82rem;color:var(--slate);margin-top:-.3rem}.plan .was s{color:#9aa6af}
+  .plan .save-tag{display:inline-block;background:rgba(6,199,85,.12);color:var(--line-700);font-weight:600;font-size:.8rem;padding:.2rem .7rem;border-radius:999px;margin-top:.4rem}
+  .rs-custombox{margin-top:2.6rem;background:var(--soft);border:1px solid var(--border);border-radius:1.4rem;padding:2rem 1.8rem}
+  .rs-cust-head{text-align:center;max-width:660px;margin:0 auto 1.7rem}
+  .rs-cust-head h3{font-size:1.45rem;font-weight:700}.rs-cust-head p{color:var(--slate);font-size:.96rem;margin-top:.5rem}
+  .rs-cust-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+  .rs-cust{background:#fff;border:1px solid var(--border);border-radius:1rem;padding:1.2rem 1.1rem;transition:transform .25s var(--ease),box-shadow .25s var(--ease)}
+  .rs-cust:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+  .rs-cust h4{font-size:1rem;font-weight:700}
+  .rs-cust .p{font-family:'Lexend',sans-serif;font-weight:700;font-size:1.18rem;color:var(--line-700);margin:.3rem 0 .55rem}
+  .rs-cust>p{color:var(--slate);font-size:.86rem;line-height:1.5}
+  .rs-cond{text-align:center;color:var(--slate);font-size:.82rem;margin:1.5rem auto 0;max-width:780px;line-height:1.65}
+  @media(max-width:860px){.rs-cust-grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:480px){.rs-cust-grid{grid-template-columns:1fr}}
+  @media(max-width:760px){.rs-grid{grid-template-columns:1fr 1fr}.rs-search{display:none}}
+  @media(max-width:460px){.rs-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-ai" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M9 3v4M15 3v4M9 13h.01M15 13h.01M9 16h6"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2.5l2.2 12.4A2 2 0 0 0 8.7 17H18a2 2 0 0 0 2-1.6L21.5 8H6"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 5-7"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v4h-4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0M16 5.2a3 3 0 0 1 0 5.6M18 20a6 6 0 0 0-3-5.2"/></symbol>
+  <symbol id="i-mega" viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15 8a4 4 0 0 1 0 8"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3"/></symbol>
+  <symbol id="i-pill" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(45 12 12)"/><path d="M8.5 8.5l7 7"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 3 3 7.5v9L12 21l9-4.5v-9z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></symbol>
+</svg>
+
+<nav aria-label="เมนูหลัก">
+  <div class="nav-in">
+    <div class="brand"><span class="mark">R</span>REYA <span class="lt">Pharmacy CRM</span></div>
+    <div class="nav-links" id="navLinks">
+      <a href="#platform">แพลตฟอร์ม</a>
+      <a href="#features">ความสามารถ</a>
+      <a href="#products">10 ฟีเจอร์</a>
+      <a href="#price">ราคา</a>
+    </div>
+    <div class="nav-right">
+      <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-grad">เริ่มใช้ฟรี</a>
+      <button class="nav-burger" id="navBurger" aria-label="เปิดเมนู" aria-expanded="false" aria-controls="navLinks">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<main>
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-in reveal">
+    <div class="hero-eyebrow"><span class="av"><span></span><span></span><span></span></span>ออกแบบมาเพื่อร้านยาไทยโดยเฉพาะ</div>
+    <h1>ระบบเดียว ที่รวม<span class="grad-text">ทุกงานร้านยา</span><br>ไว้บน LINE</h1>
+    <p class="sub">CRM, AI เภสัชกร, จ่ายยา, ร้านค้าออนไลน์, Loyalty และ Dashboard เชื่อมต่อกันอย่างราบรื่นบนแพลตฟอร์มเดียว</p>
+    <div class="hero-actions">
+      <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-grad"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg>เริ่มใช้ฟรี ไม่ต้องใช้บัตร</a>
+      <a href="#features" class="btn btn-ghost on-dark">ดูความสามารถ</a>
+    </div>
+  </div>
+  <div class="hero-stage reveal">
+    <div class="mk mk-360">
+      <div class="h"><span class="av">สญ</span><div><div class="nm">คุณสมหญิง พ.</div><div class="sub2">VIP · 42 ออเดอร์</div></div></div>
+      <div class="tags"><span class="tg">ความดัน</span><span class="tg">ซื้อประจำ</span><span class="tg">ผู้สูงอายุ</span></div>
+    </div>
+    <div class="mk mk-main">
+      <div class="mk-bar"><i></i><i></i><i></i><small>REYA Dashboard</small></div>
+      <div class="mk-body">
+        <div class="mk-kpi"><div class="v">฿128,400</div><div class="k">ยอดขายเดือนนี้</div></div>
+        <div class="mk-kpi"><div class="v">+18%</div><div class="k">ลูกค้ากลับมาซื้อซ้ำ</div></div>
+        <div class="mk-chart"><svg viewBox="0 0 300 86" preserveAspectRatio="none"><polyline points="0,72 40,62 80,66 120,42 160,48 200,28 240,32 300,14" fill="none" stroke="#06C755" stroke-width="2.5"/></svg></div>
+      </div>
+    </div>
+    <div class="mk mk-chat">
+      <div class="mm them">มียาแก้แพ้ไม่ง่วงไหมคะ</div>
+      <div class="mm ai">มีหลายตัวเลือกค่ะ ขอเภสัชแนะนำตัวที่เหมาะกับคุณนะคะ</div>
+    </div>
+  </div>
+  <p class="mock-note">ภาพหน้าจอเป็นตัวอย่างประกอบ ตัวเลขเป็นข้อมูลจำลอง</p>
+</header>
+
+<!-- TRUST -->
+<div class="trust">
+  <div class="wrap reveal">
+    <div class="trust-row">
+      <div><div class="n">360&deg;</div><div class="l">โปรไฟล์ลูกค้าครบทุกการซื้อ</div></div>
+      <div><div class="n">10+</div><div class="l">ฟีเจอร์ในแพลตฟอร์มเดียว</div></div>
+      <div><div class="n">24/7</div><div class="l">ตอบ–ขาย–เตือน อัตโนมัติ</div></div>
+      <div><div class="n">1 วัน</div><div class="l">ติดตั้งพร้อมขายจริง</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ECOSYSTEM -->
+<section class="eco" id="platform">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="badge"><span class="dot"></span>REYA Platform</span>
+      <h2>แพลตฟอร์มศูนย์กลางร้านยาอัจฉริยะ</h2>
+      <p>ดูแลลูกค้า (CRM) ขับเคลื่อนยอดขาย (Shop &amp; POS) ควบคุมสต็อก (Inventory) และกระตุ้นซื้อซ้ำด้วย AI — ทำงานร่วมกันบนข้อมูลชุดเดียว</p>
+    </div>
+    <div class="eco-hub reveal">
+      <div class="eco-node"><svg class="ic" aria-hidden="true"><use href="#i-inbox"/></svg>CRM Inbox</div>
+      <div class="eco-orb"><div class="orb">REYA</div></div>
+      <div class="eco-node"><svg class="ic" aria-hidden="true"><use href="#i-cart"/></svg>Smart Shop</div>
+      <div class="eco-node"><svg class="ic" aria-hidden="true"><use href="#i-ai"/></svg>AI Pharmacist</div>
+      <div class="eco-node"><svg class="ic" aria-hidden="true"><use href="#i-pill"/></svg>Dispensing</div>
+      <div class="eco-node"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg>Loyalty</div>
+      <div class="eco-node"><svg class="ic" aria-hidden="true"><use href="#i-box"/></svg>Inventory</div>
+      <div class="eco-node"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Dashboard</div>
+    </div>
+  </div>
+</section>
+
+<!-- WORKSPACE -->
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="badge"><span class="dot"></span>พื้นที่ทำงาน</span>
+      <h2>ปลดล็อกการเติบโต ด้วยระบบร้านยาครบวงจร</h2>
+      <p>รวมทุกแอปที่ร้านยาต้องใช้ ไว้ในเวิร์กสเปซเดียวที่ใช้งานง่ายและดูพรีเมียม</p>
+    </div>
+    <div class="ws-mock reveal">
+      <div class="ws-top"><i></i><i></i><i></i><small>REYA Workspace · 10 applications</small></div>
+      <div class="ws-grid">
+        <div class="ws-app"><div class="ico"><svg class="ic" aria-hidden="true"><use href="#i-inbox"/></svg></div><b>CRM Inbox</b><span>แชตรวม + ลูกค้า 360°</span></div>
+        <div class="ws-app"><div class="ico"><svg class="ic" aria-hidden="true"><use href="#i-ai"/></svg></div><b>AI Pharmacist</b><span>ตอบ 24/7 ส่งต่อเภสัช</span></div>
+        <div class="ws-app"><div class="ico"><svg class="ic" aria-hidden="true"><use href="#i-cart"/></svg></div><b>Smart Shop</b><span>ร้านค้าใน LINE</span></div>
+        <div class="ws-app"><div class="ico"><svg class="ic" aria-hidden="true"><use href="#i-pill"/></svg></div><b>Dispensing</b><span>จ่ายยา + ฉลาก</span></div>
+        <div class="ws-app"><div class="ico"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></div><b>Loyalty</b><span>แต้ม + รางวัล</span></div>
+        <div class="ws-app"><div class="ico"><svg class="ic" aria-hidden="true"><use href="#i-mega"/></svg></div><b>Broadcast</b><span>ยิงโปรตรงกลุ่ม</span></div>
+        <div class="ws-app"><div class="ico"><svg class="ic" aria-hidden="true"><use href="#i-box"/></svg></div><b>Inventory</b><span>คลังยา/สต็อก</span></div>
+        <div class="ws-app"><div class="ico"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg></div><b>Dashboard</b><span>ยอดขาย + สถิติ</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ZIG 1: CRM Inbox -->
+<section>
+  <div class="wrap">
+    <div class="fz reveal">
+      <div>
+        <span class="badge"><span class="dot"></span>CRM Inbox</span>
+        <h2>ยกระดับการดูแลลูกค้า<br>เปลี่ยนผู้ติดตามเป็นลูกค้าประจำ</h2>
+        <p class="d">กล่องแชตรวมศูนย์ที่เห็นโปรไฟล์ลูกค้า 360° ขณะคุย ติดแท็กแบ่งกลุ่ม และจ่ายยาได้ในที่เดียว</p>
+        <ul class="pts">
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>รวมแชต LINE OA ทุกบทสนทนา</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>โปรไฟล์ลูกค้า 360° + แท็ก / แบ่งกลุ่ม</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>งานติดตามลูกค้า ไม่พลาดงานตาม</li>
+        </ul>
+        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="learn">เริ่มใช้ CRM Inbox ฟรี <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+      <div class="fz-media">
+        <div class="media">
+          <div class="m-top"><svg class="ic" aria-hidden="true"><use href="#i-inbox"/></svg>CRM Inbox<span class="mono">VIP · 42 ออเดอร์</span></div>
+          <div class="m-body">
+            <div class="m-360"><span class="av">สญ</span><div><div class="nm">คุณสมหญิง พ.</div><small style="color:var(--slate)">ลูกค้าตั้งแต่ ปี 2567</small></div><span class="lv">VIP</span></div>
+            <div class="m-tags"><span>ความดัน</span><span>ซื้อประจำ</span><span>ผู้สูงอายุ</span><span>แพ้ Aspirin</span></div>
+            <div class="m-row" style="margin-top:.9rem"><svg class="ic" style="color:var(--line-700)"><use href="#i-refresh"/></svg>ยาความดันใกล้หมด<span class="pill">เตือนแล้ว</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ZIG 2: AI Pharmacist (dark) -->
+<section class="sec-dark">
+  <div class="wrap">
+    <div class="fz reveal">
+      <div class="fz-media">
+        <div class="media">
+          <div class="m-top"><svg class="ic" aria-hidden="true"><use href="#i-ai"/></svg>AI Pharmacist<span class="mono">ออนไลน์ 24/7</span></div>
+          <div class="m-body">
+            <div class="m-bub">ปวดหัวข้างเดียว ตาพร่า มา 2 วันค่ะ</div>
+            <div class="m-bub me">อาการนี้มีธงแดงค่ะ ขอส่งต่อเภสัชกรเวรดูแลทันทีนะคะ</div>
+            <div class="m-row"><svg class="ic" style="color:var(--cyan)"><use href="#i-shield"/></svg>ส่งต่อเภสัชกรเวร<span class="pill">red-flag</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <span class="badge dark">AI Pharmacist</span>
+        <h2>ตอบลูกค้าได้ทุกเวลา<br>AI ช่วย 24/7 แต่ส่งต่อเภสัชเสมอ</h2>
+        <p class="d">AI ช่วยซักอาการเบื้องต้น เตือนธงแดงและยาตีกัน แล้วส่งต่อเภสัชกรจริงเมื่อจำเป็น คุณไม่พลาดแชตแม้นอกเวลาทำการ</p>
+        <ul class="pts">
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>ตอบลูกค้าตลอด 24 ชั่วโมง</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>เตือนยาตีกัน + ธงแดงอัตโนมัติ</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>เภสัชกรเป็นผู้ตัดสินใจสุดท้ายเสมอ</li>
+        </ul>
+        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="learn" style="color:var(--cyan)">เริ่มใช้ AI Pharmacist ฟรี <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ZIG 3: Dispensing -->
+<section>
+  <div class="wrap">
+    <div class="fz reveal">
+      <div>
+        <span class="badge"><span class="dot"></span>Dispensing &amp; Refill</span>
+        <h2>จ่ายยาในแชต ออกฉลากดิจิทัล<br>เปลี่ยนคนไข้ประจำเป็นยอดซื้อซ้ำ</h2>
+        <p class="d">จ่ายยาพร้อมส่งฉลาก Flex ในคลิกเดียว ตัดสต็อกอัตโนมัติ และตั้งเตือนเติมยาล่วงหน้าให้คนไข้กลับมาเอง</p>
+        <ul class="pts">
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>ฉลากยาดิจิทัล + ตัดสต็อกอัตโนมัติ</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>เตือนเติมยาล่วงหน้า ~3 วันก่อนหมด</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>ยอดขายซ้ำจากคนไข้โรคเรื้อรัง</li>
+        </ul>
+        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="learn">เริ่มใช้ระบบจ่ายยาฟรี <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+      <div class="fz-media">
+        <div class="media">
+          <div class="m-top"><svg class="ic" aria-hidden="true"><use href="#i-pill"/></svg>ฉลากยา · Amlodipine 5mg<span class="mono">Rx</span></div>
+          <div class="m-body">
+            <div class="m-row">วันละ 1 เม็ด หลังอาหารเช้า<span class="pill">x30</span></div>
+            <div class="m-row">คุณสมหญิง พ.<span class="pill">฿150</span></div>
+            <div class="m-row"><svg class="ic" style="color:var(--line-700)"><use href="#i-refresh"/></svg>ตั้งเตือนเติมยา · อีก 27 วัน<span class="pill">อัตโนมัติ</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ZIG 4: Loyalty (dark) -->
+<section class="sec-dark">
+  <div class="wrap">
+    <div class="fz reveal">
+      <div class="fz-media">
+        <div class="media">
+          <div class="m-top"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg>Loyalty · คุณสมหญิง<span class="mono">1,240 แต้ม</span></div>
+          <div class="m-body">
+            <div class="m-row" style="border:none">ความคืบหน้าสู่ระดับถัดไป</div>
+            <div class="m-meter"><i style="width:74%"></i></div>
+            <div class="m-row"><svg class="ic" style="color:var(--cyan)"><use href="#i-mega"/></svg>บรอดแคสต์กลุ่ม “ความดัน”<span class="pill">เปิดอ่าน 68%</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <span class="badge dark">Loyalty &amp; Broadcast</span>
+        <h2>เปลี่ยนลูกค้าครั้งเดียว ให้กลับมาซื้อซ้ำ<br>ด้วยแต้มและโปรตรงกลุ่ม</h2>
+        <p class="d">ตั้งแต้มสะสม ระดับสมาชิก และยิงบรอดแคสต์เฉพาะกลุ่มที่ใช่ พร้อมวัดผล open/click เพื่อหาสูตรที่เวิร์ก</p>
+        <ul class="pts">
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>แต้มสะสม + ระดับสมาชิก + ของรางวัล</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>บรอดแคสต์ตามแท็ก ไม่สแปมทั้งร้าน</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>วัดผลแคมเปญ เปรียบเทียบหาสูตรที่เวิร์ก</li>
+        </ul>
+        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="learn" style="color:var(--cyan)">เริ่มใช้ Loyalty ฟรี <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 FEATURES BENTO -->
+<section id="products" style="background:var(--soft)">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="badge"><span class="dot"></span>REYA Pharmacy System</span>
+      <h2>10 ฟีเจอร์ระบบร้านยาแบบครบวงจร</h2>
+      <p>รวม LINE Mini App, CRM, AI เภสัชกร, ระบบจ่ายยา, Loyalty, Broadcast, Inventory และ Dashboard ไว้ในประสบการณ์เดียว</p>
+    </div>
+    <div class="bgrid reveal">
+      <div class="bcard hero-card span2">
+        <div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg></div>
+        <h3>LINE Mini App Experience</h3>
+        <p>ลูกค้าเปิดใช้งานผ่าน LINE ได้ทันที ตั้งแต่ดูสินค้า สั่งซื้อ ปรึกษาเภสัชกร ดูแต้ม ติดตามออเดอร์ และซื้อซ้ำ โดยไม่ต้องโหลดแอปใหม่</p>
+        <div class="tabchips"><span class="tabchip">Home</span><span class="tabchip">Shop</span><span class="tabchip">Cart</span><span class="tabchip">Orders</span><span class="tabchip">Profile</span></div>
+      </div>
+      <div class="bcard"><div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-cart"/></svg></div><h3>Smart LINE Shop</h3><p>หน้าร้านออนไลน์ใน LINE พร้อมหมวดสินค้า โปรโมชัน ตะกร้า คูปอง และการจัดส่ง</p><ul class="blist"><li>ค้นหาสินค้าและหมวดหมู่</li><li>ลดราคา / คูปอง</li><li>รับที่ร้านหรือจัดส่ง</li></ul></div>
+      <div class="bcard"><div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-ai"/></svg></div><h3>AI Pharmacist</h3><p>AI ช่วยตอบคำถามเบื้องต้น คัดกรองอาการ และส่งต่อเภสัชกรจริงเมื่อจำเป็น</p><ul class="blist"><li>ตอบลูกค้า 24/7</li><li>ช่วยร่างคำตอบให้ทีม</li><li>เชื่อมกับข้อมูลลูกค้า</li></ul></div>
+      <div class="bcard"><div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-inbox"/></svg></div><h3>CRM Inbox</h3><p>กล่องแชตรวมศูนย์ เห็นข้อความ ประวัติลูกค้า แท็ก งานติดตาม และออเดอร์ในหน้าเดียว</p><ul class="blist"><li>รวมแชต LINE OA</li><li>โปรไฟล์ลูกค้า 360&deg;</li><li>งานติดตามลูกค้า</li></ul></div>
+      <div class="bcard"><div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-pill"/></svg></div><h3>Dispensing System</h3><p>ระบบช่วยบันทึกการจ่ายยา ออกฉลาก เก็บเคส และลดงานคีย์ซ้ำของเภสัชกร</p><ul class="blist"><li>บันทึกยาและคำแนะนำ</li><li>ฉลากยาดิจิทัล</li><li>ประวัติบริการ</li></ul></div>
+      <div class="bcard"><div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg></div><h3>Customer Profile</h3><p>ฐานข้อมูลลูกค้าแบบ 360&deg; สำหรับดูแลต่อเนื่อง แบ่งกลุ่ม และสร้างยอดซื้อซ้ำ</p><ul class="blist"><li>ประวัติซื้อสินค้า</li><li>ข้อมูลสุขภาพ</li><li>แท็ก / Segment</li></ul></div>
+      <div class="bcard"><div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-star"/></svg></div><h3>Loyalty &amp; Rewards</h3><p>ระบบแต้ม ระดับสมาชิก คูปอง และของรางวัล เพื่อให้ลูกค้ากลับมาซื้อซ้ำ</p><ul class="blist"><li>สะสมและแลกแต้ม</li><li>ระดับสมาชิก</li><li>ของรางวัลเฉพาะคน</li></ul></div>
+      <div class="bcard"><div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-mega"/></svg></div><h3>Broadcast Campaign</h3><p>ส่งโปรโมชันแบบเลือกกลุ่ม วัดผลคลิก ยอดขาย และการกลับมาซื้อซ้ำจากแคมเปญ</p><ul class="blist"><li>เลือกกลุ่มเป้าหมาย</li><li>ตั้งเวลาส่ง</li><li>วัดผลแคมเปญ</li></ul></div>
+      <div class="bcard"><div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-box"/></svg></div><h3>Order &amp; Inventory</h3><p>จัดการออเดอร์ สถานะชำระเงิน การจัดส่ง และสต็อกสินค้า เชื่อมงานหลังบ้าน</p><ul class="blist"><li>ขั้นตอนออเดอร์</li><li>ติดตามสต็อก</li><li>ตรวจสลิปโอน</li></ul></div>
+      <div class="bcard dark span2"><div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg></div><h3>Executive Dashboard</h3><p>เจ้าของร้านเห็นยอดขาย ลูกค้าใหม่ ลูกค้าซื้อซ้ำ สินค้าขายดี และผลลัพธ์แคมเปญแบบเข้าใจง่าย</p><div class="exec-tiles"><div class="exec-tile"><b>Sales</b><span>ยอดขาย</span></div><div class="exec-tile"><b>Repeat</b><span>ซื้อซ้ำ</span></div><div class="exec-tile"><b>คุ้มทุน</b><span>แคมเปญ</span></div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- STOREFRONT SHOWCASE -->
+<section id="storefront">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="badge"><span class="dot"></span>หน้าร้านบน LINE</span>
+      <h2>ลูกค้าเลือกซื้อง่าย <span class="grad-text">เหมือนช้อปในแอป</span></h2>
+      <p>หน้าร้านพร้อมหมวดหมู่ Flash Sale คูปอง และเลือกรับที่ร้านหรือจัดส่ง — ทั้งหมดอยู่ในแชต LINE</p>
+    </div>
+
+    <div class="rs-win reveal">
+      <div class="rs-bar">
+        <div class="rs-dots"><i></i><i></i><i></i></div>
+        <div class="rs-search"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>ร้านยา REYA · ค้นหาสินค้า…</div>
+        <div class="rs-fulfill"><button class="on">🏪 รับที่ร้าน</button><button>🛵 จัดส่ง</button></div>
+      </div>
+      <div class="rs-inner">
+        <div class="rs-cats">
+          <span class="rs-cat on">✨ ทั้งหมด</span>
+          <span class="rs-cat">🍊 วิตามิน &amp; อาหารเสริม</span>
+          <span class="rs-cat">🧴 ดูแลผิว</span>
+          <span class="rs-cat">🍼 แม่ &amp; เด็ก</span>
+          <span class="rs-cat">🩺 อุปกรณ์การแพทย์</span>
+        </div>
+
+        <div class="rs-flash">
+          <div class="fl-l">
+            <div class="rs-bolt">⚡</div>
+            <div class="rs-ft"><b>FLASH SALE</b><span>ลดสูงสุด 40% เฉพาะวันนี้ · ใช้คูปอง <b>REYA40</b></span></div>
+          </div>
+          <div class="rs-timer">
+            <div><div class="rs-seg" id="rsfh">02</div><small>ชม.</small></div><span class="cl">:</span>
+            <div><div class="rs-seg" id="rsfm">45</div><small>นาที</small></div><span class="cl">:</span>
+            <div><div class="rs-seg" id="rsfs">30</div><small>วินาที</small></div>
+          </div>
+        </div>
+
+        <div class="rs-grid">
+          <div class="rs-prod">
+            <div class="rs-img"><span class="rs-badge">-25%</span><img src="https://manager.cnypharmacy.com/uploads/product_photo/0139.jpg" alt="คลีนมาส์ก หน้ากากอนามัย" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();this.parentNode.classList.add('noimg')"></div>
+            <div class="rs-pbody"><div class="rs-pcat">อุปกรณ์การแพทย์</div><div class="rs-pname">คลีนมาส์ก หน้ากากอนามัย (เขียว)</div>
+              <div class="rs-foot"><div><span class="rs-old">฿60</span><span class="rs-new">฿45</span></div><button class="rs-add" aria-label="เพิ่มลงตะกร้า"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button></div></div>
+          </div>
+          <div class="rs-prod">
+            <div class="rs-img"><span class="rs-badge hot">🔥 ขายดี</span><img src="https://manager.cnypharmacy.com/uploads/product_photo/0131.jpg" alt="นิวฟาร์วิต วิตามินรวม" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();this.parentNode.classList.add('noimg')"></div>
+            <div class="rs-pbody"><div class="rs-pcat">วิตามิน &amp; อาหารเสริม</div><div class="rs-pname">นิวฟาร์วิต วิตามินรวม (100 เม็ด)</div>
+              <div class="rs-foot"><div><span class="rs-old">฿132</span><span class="rs-new">฿109</span></div><button class="rs-add" aria-label="เพิ่มลงตะกร้า"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button></div></div>
+          </div>
+          <div class="rs-prod">
+            <div class="rs-img"><span class="rs-badge">-20%</span><img src="https://manager.cnypharmacy.com/uploads/product_photo/1686546279_1.jpg" alt="ยูเซอริน พีเอช5 โลชั่น" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();this.parentNode.classList.add('noimg')"></div>
+            <div class="rs-pbody"><div class="rs-pcat">ดูแลผิว</div><div class="rs-pname">ยูเซอริน พีเอช5 โลชั่นบำรุงผิว 400มล.</div>
+              <div class="rs-foot"><div><span class="rs-old">฿852</span><span class="rs-new">฿682</span></div><button class="rs-add" aria-label="เพิ่มลงตะกร้า"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button></div></div>
+          </div>
+          <div class="rs-prod">
+            <div class="rs-img"><span class="rs-badge">-18%</span><img src="https://manager.cnypharmacy.com/uploads/product_photo/0426.jpg" alt="สมูทอี เบบี้ เฟซ ครีม" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();this.parentNode.classList.add('noimg')"></div>
+            <div class="rs-pbody"><div class="rs-pcat">แม่ &amp; เด็ก</div><div class="rs-pname">สมูทอี เบบี้ เฟซ ครีม 12 กรัม</div>
+              <div class="rs-foot"><div><span class="rs-old">฿218</span><span class="rs-new">฿179</span></div><button class="rs-add" aria-label="เพิ่มลงตะกร้า"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button></div></div>
+          </div>
+          <div class="rs-prod">
+            <div class="rs-img"><span class="rs-badge">-18%</span><img src="https://manager.cnypharmacy.com/uploads/product_photo/0732.jpg" alt="สำลีก้อนกลม แคริสม่า" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();this.parentNode.classList.add('noimg')"></div>
+            <div class="rs-pbody"><div class="rs-pcat">อุปกรณ์การแพทย์</div><div class="rs-pname">สำลีก้อนกลม แคริสม่า 40 กรัม</div>
+              <div class="rs-foot"><div><span class="rs-old">฿34</span><span class="rs-new">฿28</span></div><button class="rs-add" aria-label="เพิ่มลงตะกร้า"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button></div></div>
+          </div>
+          <div class="rs-prod">
+            <div class="rs-img"><span class="rs-badge">-17%</span><img src="https://manager.cnypharmacy.com/uploads/product_photo/0132.jpg" alt="นิวฟาร์วิต พลัส วิตามินรวม" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();this.parentNode.classList.add('noimg')"></div>
+            <div class="rs-pbody"><div class="rs-pcat">วิตามิน &amp; อาหารเสริม</div><div class="rs-pname">นิวฟาร์วิต พลัส วิตามินรวม (100 เม็ด)</div>
+              <div class="rs-foot"><div><span class="rs-old">฿186</span><span class="rs-new">฿155</span></div><button class="rs-add" aria-label="เพิ่มลงตะกร้า"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button></div></div>
+          </div>
+        </div>
+
+        <div class="rs-note">🛒 ลูกค้ากดสั่งซื้อ เลือก <b>รับที่ร้าน</b> หรือ <b>จัดส่ง</b> แล้วชำระเงิน — ออเดอร์เข้าหลังบ้าน REYA ทันที</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAIN / MULTI-BRANCH -->
+<section class="sec-dark" id="chain">
+  <div class="wrap">
+    <div class="fz reveal">
+      <div>
+        <span class="badge dark"><span class="dot"></span>หลายสาขา / เชน</span>
+        <h2>ขยายจาก 1 ร้าน เป็นเชน<br>โดยไม่ต้องเปลี่ยนระบบ</h2>
+        <p class="d">REYA โตไปกับร้านคุณ — แต่ละสาขาแยกข้อมูลชัดเจน ปลอดภัย แต่เจ้าของเห็นภาพรวมข้ามสาขาในที่เดียว</p>
+        <ul class="pts">
+          <li><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>แยกข้อมูล–สต็อก–ทีม ของแต่ละสาขาออกจากกัน</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>แดชบอร์ดรวมเห็นยอดทุกสาขาในจอเดียว</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-box"/></svg>เชื่อม Odoo ERP + คลังยา + จัดซื้อ + บัญชี</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg>ทีมงานช่วยย้ายฐานลูกค้าเดิมเข้าระบบให้</li>
+        </ul>
+        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-grad" style="margin-top:1.6rem"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg>นัดคุยกับทีม · ดูราคาต่อสาขา</a>
+      </div>
+      <div class="fz-media">
+        <div class="media">
+          <div class="m-top"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>ภาพรวมทุกสาขา<span class="mono">4 สาขา</span></div>
+          <div class="m-body">
+            <div class="m-row">สาขาสีลม<span class="pill">฿42,800</span></div>
+            <div class="m-row">สาขารัชดา<span class="pill">฿38,100</span></div>
+            <div class="m-row">สาขาบางนา<span class="pill">฿29,400</span></div>
+            <div class="m-row">สาขานนทบุรี<span class="pill">฿18,100</span></div>
+          </div>
+        </div>
+        <p class="mock-note" style="text-align:left">ภาพประกอบ · ตัวเลขจำลอง</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="price">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="badge"><span class="dot"></span>ราคา</span>
+      <h2>เริ่มฟรี จ่ายเมื่อพร้อมโต</h2>
+      <p>เริ่มใช้ฟรีสำหรับบัญชีที่มีผู้ติดตามไม่เกิน 200 คน · ปลดล็อกทุกฟีเจอร์เพียง <b>599 บาท/เดือน</b> หรือ <b>5,990 บาท/ปี</b> (จากราคาปกติ 899 บาท/เดือน) พร้อมบริการ Custom สำหรับธุรกิจที่ต้องการปรับระบบให้เหมาะกับการทำงานจริง</p>
+    </div>
+    <div class="plans reveal">
+      <div class="plan">
+        <h3>Free</h3>
+        <div class="price">฿0<small>/ตลอดไป</small></div>
+        <div class="desc">สำหรับบัญชีที่มีผู้ติดตามไม่เกิน 200 คน</div>
+        <ul>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>CRM Inbox 1 LINE OA</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>ร้านค้าออนไลน์ + รับออเดอร์</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>ระบบจ่ายยา + ฉลากดิจิทัล</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>โปรไฟล์ลูกค้า + แท็ก</li>
+        </ul>
+        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-ghost">เริ่มฟรีเลย</a>
+      </div>
+      <div class="plan feat">
+        <span class="badge">แนะนำ · ยอดนิยม</span>
+        <h3>Monthly</h3>
+        <div class="price">฿599<small>/เดือน</small></div>
+        <div class="was">จากราคาปกติ <s>฿899</s>/เดือน</div>
+        <div class="desc">เปิดใช้ทุกฟีเจอร์ ไม่จำกัดผู้ติดตาม</div>
+        <ul>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><b>ทุกฟีเจอร์ของ REYA</b></li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>บรอดแคสต์ตรงกลุ่ม + แต้ม/สมาชิก</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>AI Pharmacist + ข้อความอัตโนมัติ</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>นัดหมาย + เอกสาร/ใบกำกับภาษี</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>ยกเลิกได้ทุกเมื่อ ไม่ผูกมัด</li>
+        </ul>
+        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-grad">สมัครรายเดือน</a>
+      </div>
+      <div class="plan">
+        <h3>Yearly</h3>
+        <div class="price">฿5,990<small>/ปี</small></div>
+        <div class="was">เฉลี่ย ~฿499/เดือน</div>
+        <span class="save-tag">ประหยัด ฿1,198/ปี · เหมือนได้ฟรี 2 เดือน</span>
+        <ul>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>ทุกอย่างในแพ็ก Monthly</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>จ่ายครั้งเดียว คุ้มกว่าทั้งปี</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>ราคาคงที่ ไม่ต้องต่อรายเดือน</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>เหมาะกับร้านที่โตต่อเนื่อง</li>
+        </ul>
+        <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-ghost">สมัครรายปี</a>
+      </div>
+    </div>
+
+    <div class="rs-custombox reveal">
+      <div class="rs-cust-head">
+        <h3>บริการ Custom เพิ่มเติม</h3>
+        <p>สำหรับธุรกิจที่ต้องการปรับระบบให้เหมาะกับการทำงานจริง — เลือกใช้ได้เมื่อสมัครแพ็ก Monthly หรือ Yearly</p>
+      </div>
+      <div class="rs-cust-grid">
+        <div class="rs-cust"><h4>Starter Setup</h4><div class="p">฿2,000</div><p>ช่วยตั้งค่าระบบเบื้องต้น / onboarding ให้พร้อมใช้งานจริง</p></div>
+        <div class="rs-cust"><h4>Custom Template</h4><div class="p">฿7,900</div><p>ปรับเทมเพลต ข้อความ พร้อมโดเมนส่วนตัว และหน้าตาให้เข้ากับแบรนด์</p></div>
+        <div class="rs-cust"><h4>Custom Workflow</h4><div class="p">เริ่ม ฿19,900</div><p>วาง flow, automation และ rule เฉพาะธุรกิจของคุณ</p></div>
+        <div class="rs-cust"><h4>Advanced Integration</h4><div class="p">เริ่ม ฿39,900</div><p>เชื่อมระบบภายนอก เช่น LINE OA, CRM, Google Sheet, API</p></div>
+      </div>
+      <p class="rs-cond">* ค่า Custom ไม่รวมค่า Subscription · งาน Custom รวมแก้ไข 1–2 รอบ · งานนอกขอบเขตคิดเพิ่มตามตกลง · งานที่ต้องดูแลต่อเนื่องคิด Maintenance แยก เริ่ม ฿2,000–5,000/เดือน หรือ 10–20% ของมูลค่างาน</p>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section style="background:var(--soft)">
+  <div class="wrap">
+    <div class="sec-head reveal" style="margin-bottom:2.5rem"><span class="badge"><span class="dot"></span>คำถามที่พบบ่อย</span><h2>ยังลังเลอยู่ใช่ไหม</h2></div>
+    <div class="faq reveal">
+      <details open><summary>กลัวยุ่งยาก ใช้ไม่เป็น / ไม่มีเวลา<svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></summary><p>ระบบเป็นภาษาไทยทั้งหมด ออกแบบให้เภสัชและพนักงานหน้าร้านใช้ได้ ทุกงานจบใน 2–3 ขั้น ตอนเริ่มทีมงานช่วยตั้งค่าให้ คุณคุยกับเราแค่รอบเดียว ส่วนใหญ่ใช้คล่องในไม่กี่วัน</p></details>
+      <details><summary>ลูกค้าต้องโหลดแอปใหม่ไหม<svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></summary><p>ไม่ต้อง ทุกอย่างทำงานบน LINE ที่ลูกค้าใช้อยู่แล้ว ลูกค้าแค่ทักร้าน เลือกซื้อ และจ่ายเงินผ่าน LINE ได้เลย</p></details>
+      <details><summary>กลัวข้อมูลคนไข้รั่ว / ปนกับร้านอื่น<svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></summary><p>ข้อมูลของแต่ละร้านแยกออกจากกัน ไม่ปนกับใคร เข้าถึงได้เฉพาะคนที่ได้รับสิทธิ์ มีฟอร์มขอความยินยอม PDPA ในตัว และมีบันทึกว่าใครในทีมทำอะไรเมื่อไหร่</p></details>
+      <details><summary>AI ตอบมั่ว / จ่ายยาแทนเภสัชเลยหรือเปล่า<svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></summary><p>ไม่ AI ไม่ตัดสินใจแทนเภสัชกร มันเป็นตัวช่วยซักอาการเบื้องต้น เตือนธงแดงและยาตีกัน แล้วส่งต่อให้เภสัชกรเสมอเมื่อเจอเคสที่ต้องระวัง การตัดสินใจสุดท้ายอยู่ที่เภสัช</p></details>
+      <details><summary>แพง / ยังไม่อยากเสียเงินก่อนเห็นผล<svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></summary><p>เริ่มฟรี ไม่ต้องใช้บัตรเครดิตได้เลย ให้ลองจนเห็นว่าช่วยร้านได้จริงก่อน ไม่มีสัญญาผูกมัด ยกเลิกได้ทุกเมื่อ</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- WHY REYA (honest value cards — สลับเป็นรีวิวจริงได้เมื่อมีข้อมูล: เปลี่ยน p เป็นคำพูดลูกค้า + .who เป็นชื่อ/ร้านจริง) -->
+<section style="background:#fff">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="badge"><span class="dot"></span>ทำไมต้อง REYA</span>
+      <h2>ออกแบบจากปัญหาจริงของร้านยา</h2>
+    </div>
+    <div class="tcards reveal">
+      <div class="tcard">
+        <div class="av" style="background:var(--soft)"><svg class="ic" aria-hidden="true" style="color:var(--line-700)"><use href="#i-shield"/></svg></div>
+        <p style="margin-top:1rem">ปลอดภัยต่อวิชาชีพ — AI เป็นแค่ตัวช่วยซักอาการ <b>ส่งต่อเภสัชกรเสมอ</b> เภสัชเป็นผู้ตัดสินใจสุดท้าย</p>
+        <div class="who"><div><div class="nm">มั่นใจเรื่องจรรยาบรรณ</div><small>เภสัชควบคุมทุกการจ่ายยา</small></div></div>
+      </div>
+      <div class="tcard">
+        <div class="av" style="background:var(--soft)"><svg class="ic" aria-hidden="true" style="color:var(--line-700)"><use href="#i-users"/></svg></div>
+        <p style="margin-top:1rem">ข้อมูลคนไข้แต่ละร้าน <b>แยกจากกันชัดเจน</b> มีฟอร์มยินยอม PDPA และบันทึกการใช้งานของทีม</p>
+        <div class="who"><div><div class="nm">ปลอดภัยตาม PDPA</div><small>ข้อมูลไม่ปนกับร้านอื่น</small></div></div>
+      </div>
+      <div class="tcard">
+        <div class="av" style="background:var(--soft)"><svg class="ic" aria-hidden="true" style="color:var(--line-700)"><use href="#i-check"/></svg></div>
+        <p style="margin-top:1rem">ภาษาไทยทั้งระบบ <b>ทีมไทยช่วยตั้งค่าให้</b> เริ่มขายได้ภายใน 1 วัน ไม่ต้องมีความรู้เทคนิค</p>
+        <div class="who"><div><div class="nm">เริ่มง่าย ใช้เป็นไว</div><small>มีทีมดูแลตลอด</small></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL -->
+<section class="final">
+  <div class="wrap reveal">
+    <h2>พร้อมเริ่มต้นแล้วหรือยัง</h2>
+    <p>เปลี่ยน LINE OA ร้านยาของคุณให้เป็นระบบขายครบวงจรตั้งแต่วันนี้ เริ่มฟรี ติดตั้งใน 1 วัน</p>
+    <a href="https://line.me/R/ti/p/%40reya" target="_blank" rel="noopener" class="btn btn-grad"><svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg>เริ่มใช้ REYA ฟรี</a>
+    <div class="rs-setup">
+      <div class="l">
+        <div class="ic-box"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></div>
+        <div>
+          <h4>บริการ Starter Setup <em>(เสริม)</em></h4>
+          <p>อยากให้ทีมช่วยตั้งค่าระบบเริ่มต้นไหม? เราออกแบบ <b>ข้อความต้อนรับ · ริชเมนู · แลนดิ้งเพจ · หน้าร้าน</b> ให้ตรงตามแบรนด์ร้านคุณ พร้อมใช้งานจริง</p>
+        </div>
+      </div>
+      <div class="chip">฿2,000<small>ครั้งเดียว</small></div>
+    </div>
+  </div>
+</section>
+
+</main>
+<footer>REYA Pharmacy CRM — ระบบบริหารร้านยายุคใหม่บน LINE OA · re-ya.com</footer>
+
+<script>
+  (function(){
+    var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var els=[].slice.call(document.querySelectorAll('.reveal'));
+    if(reduce||!('IntersectionObserver' in window)){els.forEach(function(e){e.classList.add('in')});return;}
+    var io=new IntersectionObserver(function(en){en.forEach(function(x){if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target);}});if(!document.querySelector('.reveal:not(.in)'))io.disconnect();},{threshold:.12,rootMargin:'0px 0px -8% 0px'});
+    els.forEach(function(e){io.observe(e)});
+  })();
+  // mobile menu toggle
+  (function(){
+    var b=document.getElementById('navBurger'), m=document.getElementById('navLinks');
+    if(!b||!m)return;
+    b.addEventListener('click',function(){
+      var open=m.classList.toggle('open');
+      b.setAttribute('aria-expanded',open?'true':'false');
+    });
+    m.addEventListener('click',function(e){
+      if(e.target.tagName==='A'){m.classList.remove('open');b.setAttribute('aria-expanded','false');}
+    });
+  })();
+</script>
+<script>
+  // Storefront: flash countdown + add-to-cart toast
+  (function(){
+    var fh=document.getElementById('rsfh'),fm=document.getElementById('rsfm'),fs=document.getElementById('rsfs');
+    if(fh){ var reset=2*3600+45*60+30,t=reset,p=function(n){return(n<10?'0':'')+n;};
+      setInterval(function(){ t=t>0?t-1:reset; fh.textContent=p(t/3600|0); fm.textContent=p((t%3600)/60|0); fs.textContent=p(t%60); },1000); }
+    var toast;
+    [].forEach.call(document.querySelectorAll('.rs-add'),function(b){ b.addEventListener('click',function(){
+      if(!toast){ toast=document.createElement('div'); toast.style.cssText=
+        'position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);z-index:99;'+
+        'background:#041527;color:#fff;font-family:inherit;font-weight:600;font-size:.95rem;'+
+        'padding:.8rem 1.4rem;border-radius:999px;box-shadow:0 18px 40px -16px rgba(4,21,39,.6);opacity:0;'+
+        'transition:opacity .3s,transform .3s;pointer-events:none';
+        document.body.appendChild(toast); }
+      toast.innerHTML='🛒 เพิ่มลงตะกร้าแล้ว <span style="color:#3dd7c4">✓</span>';
+      requestAnimationFrame(function(){ toast.style.opacity='1'; toast.style.transform='translateX(-50%) translateY(0)'; });
+      clearTimeout(toast._t); toast._t=setTimeout(function(){ toast.style.opacity='0'; toast.style.transform='translateX(-50%) translateY(20px)'; },1600);
+    }); });
+  })();
+</script>
+</body>
+</html>

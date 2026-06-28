@@ -15,8 +15,8 @@
 <div class="wz-field">
   <label>โมเดล</label>
   <input type="text" name="model" maxlength="50"
-         value="<?= htmlspecialchars($p['model'] ?? 'gemini-2.0-flash') ?>"
-         placeholder="เช่น gemini-2.0-flash, gpt-4o-mini">
+         value="<?= htmlspecialchars($p['model'] ?? 'gemini-2.5-flash') ?>"
+         placeholder="เช่น gemini-2.5-flash, gpt-4o-mini">
 </div>
 
 <div class="wz-field">

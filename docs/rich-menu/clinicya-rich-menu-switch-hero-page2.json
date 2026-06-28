@@ -1,0 +1,68 @@
+{
+  "size": {
+    "width": 2500,
+    "height": 1686
+  },
+  "selected": false,
+  "name": "ClinicYa Switch Hero Page 2",
+  "chatBarText": "เมนูบริการ",
+  "areas": [
+    {
+      "bounds": { "x": 0, "y": 0, "width": 833, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "ออเดอร์ของฉัน",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/orders"
+      }
+    },
+    {
+      "bounds": { "x": 833, "y": 0, "width": 834, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "ชำระ/แจ้งสลิป",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/orders"
+      }
+    },
+    {
+      "bounds": { "x": 1667, "y": 0, "width": 833, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "นัดหมายเภสัช",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/appointments"
+      }
+    },
+    {
+      "bounds": { "x": 0, "y": 753, "width": 833, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "เตือนทานยา",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/notifications"
+      }
+    },
+    {
+      "bounds": { "x": 833, "y": 753, "width": 834, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "แต้ม/คูปอง",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/rewards"
+      }
+    },
+    {
+      "bounds": { "x": 1667, "y": 753, "width": 833, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "ข้อมูลสุขภาพ",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/health"
+      }
+    },
+    {
+      "bounds": { "x": 0, "y": 1506, "width": 1250, "height": 180 },
+      "action": {
+        "type": "richmenuswitch",
+        "label": "กลับหน้า 1",
+        "richMenuAliasId": "clinicya-page-1",
+        "data": "richmenu=clinicya-page-1"
+      }
+    }
+  ]
+}

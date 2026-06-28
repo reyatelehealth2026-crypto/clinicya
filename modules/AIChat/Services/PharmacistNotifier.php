@@ -1043,7 +1043,7 @@ class PharmacistNotifier
             error_log("getCheckoutUrl error: " . $e->getMessage());
         }
         
-        // Fallback to direct URL
-        return "https://cny.re-ya.com/liff/";
+        // Fallback to direct URL — new Mini App (not the retired cny.re-ya.com/liff/)
+        return "https://re-ya.com/miniapp/";
     }
 }

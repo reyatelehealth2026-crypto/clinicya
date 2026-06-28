@@ -1,3 +1,4 @@
+import { appConfig } from '@/lib/config'
 import { phpGet, phpPost } from '@/lib/php-bridge'
 
 export type MedicationReminder = {
@@ -33,7 +34,8 @@ export const FREQUENCY_LABELS: Record<string, string> = {
 export function getReminders(lineUserId: string) {
   return phpGet<RemindersResponse>('/api/medication-reminders.php', {
     action: 'list',
-    line_user_id: lineUserId
+    line_user_id: lineUserId,
+    line_account_id: appConfig.lineAccountId
   })
 }
 
@@ -49,6 +51,7 @@ export function addReminder(lineUserId: string, data: {
   return phpPost<{ success: boolean; reminder_id?: number; message?: string }>('/api/medication-reminders.php', {
     action: 'add',
     line_user_id: lineUserId,
+    line_account_id: appConfig.lineAccountId,
     ...data
   })
 }
@@ -57,6 +60,7 @@ export function deleteReminder(lineUserId: string, reminderId: number) {
   return phpPost<{ success: boolean; message?: string }>('/api/medication-reminders.php', {
     action: 'delete',
     line_user_id: lineUserId,
+    line_account_id: appConfig.lineAccountId,
     reminder_id: reminderId
   })
 }
@@ -65,6 +69,7 @@ export function markTaken(lineUserId: string, reminderId: number, scheduledTime?
   return phpPost<{ success: boolean; message?: string }>('/api/medication-reminders.php', {
     action: 'mark_taken',
     line_user_id: lineUserId,
+    line_account_id: appConfig.lineAccountId,
     reminder_id: reminderId,
     scheduled_time: scheduledTime,
     status: 'taken'

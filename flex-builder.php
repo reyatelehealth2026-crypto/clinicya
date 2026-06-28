@@ -55,6 +55,7 @@ require_once 'includes/header.php';
 ?>
 
 <script src="assets/js/flex-preview.js"></script>
+<script src="assets/js/flex-product-builder.js"></script>
 
 <!-- Toast Container -->
 <div id="toast-container" class="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
@@ -206,6 +207,9 @@ require_once 'includes/header.php';
             </button>
             <button onclick="showFullJson()" class="act-btn">
                 📄 ดู JSON เต็ม
+            </button>
+            <button onclick="openBuilderProductPicker()" class="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition inline-flex items-center gap-1">
+                🛒 เลือกสินค้าจริง
             </button>
             <a href="https://developers.line.biz/flex-simulator/" target="_blank" rel="noopener" class="act-btn inline-flex items-center gap-1">
                 🔗 Flex Simulator
@@ -1354,6 +1358,46 @@ function useBuiltinTemplate(name) {
         toast('โหลดเทมเพลตแล้ว');
     }
 }
+
+// ===== Real product picker → load a product Flex (deterministic) into the builder =====
+function openBuilderProductPicker() {
+    const w = 980, h = 740;
+    const left = Math.max(0,(screen.width-w)/2), top = Math.max(0,(screen.height-h)/2);
+    const popup = window.open('product-picker.php?return=builder','reyaProductPicker',
+        `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+    if(!popup) toast('เบราว์เซอร์บล็อก popup — โปรดอนุญาตแล้วลองใหม่');
+}
+
+function loadProductsIntoBuilder(products) {
+    if(!Array.isArray(products) || !products.length) return;
+    if(typeof FlexProductBuilder === 'undefined') { toast('ตัวสร้าง Flex ยังไม่พร้อม'); return; }
+    const flex = FlexProductBuilder.build({ products, theme:'product_catalog', layout:'2up' });
+    if(!flex) { toast('สร้าง Flex ไม่สำเร็จ'); return; }
+    pushHistory();
+    flexData = deepClone(flex);
+    const alt = document.getElementById('alt-text-input');
+    if(alt) alt.value = FlexProductBuilder.altText({});
+    updateAll();
+    toast('นำเข้าสินค้า ' + products.length + ' ชิ้นแล้ว แก้ไขต่อได้เลย');
+}
+
+window.addEventListener('message', function(e){
+    if(e.origin !== location.origin) return;
+    if(!e.data || e.data.type !== 'reya:products') return;
+    if(e.data.returnTo && e.data.returnTo !== 'builder') return;
+    loadProductsIntoBuilder(e.data.products || []);
+});
+
+// Fallback: products handed off via sessionStorage when popup was blocked.
+(function(){
+    try {
+        const raw = sessionStorage.getItem('reya_picked_products');
+        if(!raw) return;
+        sessionStorage.removeItem('reya_picked_products');
+        const products = JSON.parse(raw);
+        if(Array.isArray(products) && products.length) loadProductsIntoBuilder(products);
+    } catch(e){}
+})();
 
 function loadSavedTemplates() {
     const list = document.getElementById('saved-templates-list');

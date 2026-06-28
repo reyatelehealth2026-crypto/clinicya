@@ -208,3 +208,17 @@ Three graph snapshots coexist; pick the one matching the task:
 - **`graphify-out/`** — full god-node / community report. Read `graphify-out/GRAPH_REPORT.md` first for cross-module / "how does X relate to Y" questions. Use `graphify query "…"`, `graphify path "A" "B"`, `graphify explain "concept"` over grep when traversing relationships. Run `graphify update .` after non-trivial code changes (AST-only, no API cost).
 - **`.understand-anything/knowledge-graph.json`** — JSON graph powering the `/understand-anything:understand-dashboard` Vite dashboard. Launch with that slash command; the dashboard prints a tokenised URL (`http://127.0.0.1:PORT/?token=…`) — share the full URL or the token gate blocks access.
 - **`.codegraph/codegraph.db`** — SQLite graph used by codegraph CLI; ad-hoc.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as GitHub issues on `reyatelehealth2026-crypto/clinicya` (via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical five-state vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

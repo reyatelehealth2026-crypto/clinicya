@@ -1,0 +1,60 @@
+﻿{
+    "run_id":  "20260604-071038",
+    "dry_run":  false,
+    "base_url":  "https://tenant-0001.re-ya.com",
+    "episodes_requested":  [
+                               "11",
+                               "12",
+                               "13",
+                               "14",
+                               "15",
+                               "16"
+                           ],
+    "log":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-071038.log",
+    "summary":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-071038.summary.json",
+    "manifest":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-manual-v2-manifest.json",
+    "status":  [
+                   {
+                       "episode":  "11",
+                       "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-11-customers-management.mp4",
+                       "exists":  true,
+                       "size_mb":  0.79,
+                       "duration_seconds":  30.267
+                   },
+                   {
+                       "episode":  "12",
+                       "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-12-sales-pipeline-deals.mp4",
+                       "exists":  true,
+                       "size_mb":  0.46,
+                       "duration_seconds":  32.767
+                   },
+                   {
+                       "episode":  "13",
+                       "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-13-service-center-tickets.mp4",
+                       "exists":  true,
+                       "size_mb":  0.48,
+                       "duration_seconds":  32.767
+                   },
+                   {
+                       "episode":  "14",
+                       "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-14-tag-segment-broadcast.mp4",
+                       "exists":  true,
+                       "size_mb":  0.85,
+                       "duration_seconds":  33
+                   },
+                   {
+                       "episode":  "15",
+                       "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-15-crm-analytics.mp4",
+                       "exists":  true,
+                       "size_mb":  1.14,
+                       "duration_seconds":  33.267
+                   },
+                   {
+                       "episode":  "16",
+                       "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-16-crm-weekly-reports.mp4",
+                       "exists":  true,
+                       "size_mb":  0.68,
+                       "duration_seconds":  34
+                   }
+               ]
+}

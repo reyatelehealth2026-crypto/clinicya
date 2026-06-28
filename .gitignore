@@ -1,6 +1,8 @@
 # Configuration (contains sensitive data)
 config/config.php
 config/installed.lock
+config/google_oauth.php
+config/notify_config.php
 .env
 .env.local
 .env.*.local
@@ -146,20 +148,34 @@ database/*.sql
 !database/migration_2026-05-25_beta_signups.sql
 !database/migration_2026-05-27_master_products.sql
 !database/migration_2026-05-27_tenant_line_account_routes.sql
+!database/migration_2026-06-02_points_claims.sql
+!database/migration_2026-06-02_route_liff_id.sql
+!database/migration_2026-06-20_points_phone_members.sql
+!database/migration_2026-06-28_self_serve_signup.sql
+!database/migration_2026-06-28_site_visitor_ips.sql
+!database/migration_2026-06-04_platform_billing.sql
+!database/migration_2026-06-04_platform_billing_details.sql
+!database/migration_2026-06-28_tenant_activity_log.sql
+!database/migration_2026-06-28_site_visitor_ips_geo.sql
 !docs/adr/*.md
 !CONTEXT.md
 !CONTEXT-MAP.md
 *.png
 DB_CONNECTION.md
 *.md
+!ONTOLOGY.md
+!REFLECTIONS.md
+!PROACTIVE.md
 !docs/plans/2026-04-12-line-mini-app-implementation-checklist.md
 !docs/plans/2026-04-13-line-mini-app-100pct-subagent-orchestration.md
 !docs/plans/2026-04-13-line-mini-app-human-vs-ai.md
 !docs/plans/UAT-line-mini-app-b4.md
 !docs/plans/2026-04-13-line-mini-app-gap-closure.md
 !docs/admin-tutorials/*.md
+!docs/training/*.md
 !docs/user-manual.md
 !.claude/agents/*.md
+!.agents/skills/**/*.md
 *.bak*
 *.bak-*
 
@@ -192,3 +208,13 @@ demo-capture/
 /Fresh_Veggie_*.pptx
 /REYA_Fresh_Veggie_*.pdf
 /REYA_Fresh_Veggie_*.pptx
+_prod_backups/
+
+# Build/scratch artifacts — not source (excluded from the session commit)
+generated/
+docs/training/videos/line-setup/yt-frames/
+g_err.txt
+g_out.txt
+# Session/cost reports — throwaway, may contain tokens (Vercel PAT found in one)
+session-report-*.html
+cost-by-*.csv

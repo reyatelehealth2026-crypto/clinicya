@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:13:17.348Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "13",
+  "title": "Service Center และ Tickets",
+  "audience": "แอดมิน / ผู้จัดการ / บริการลูกค้า",
+  "output": "videos/crm-manual-v2/crm-13-service-center-tickets.mp4",
+  "frames": 131,
+  "scenes": [
+    {
+      "route": "/service-center",
+      "caption": "Service Center: ใช้ดูปัญหาหรือคำขอที่ต้องตามต่อ"
+    },
+    {
+      "route": "/tickets",
+      "caption": "Ticket: มีสถานะ ผู้รับผิดชอบ และประวัติการแก้ไข"
+    },
+    {
+      "route": "/tickets",
+      "caption": "ใช้ filter เพื่อดูงานค้าง งานเร่งด่วน หรือ ticket ตามผู้รับผิดชอบ"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "ถ้าเป็นคำถามทั่วไปในแชท ไม่จำเป็นต้องเปิด ticket ทุกครั้ง"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

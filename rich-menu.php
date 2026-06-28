@@ -43,6 +43,18 @@ $tabs = [
 // Get active tab
 $activeTab = getActiveTab($tabs, 'static');
 
+// Handle the Static-tab POST (create/update/delete/...) BEFORE header.php so it
+// returns pure JSON / redirect and exits. Also match on the action name: the
+// AJAX "create" posts via fetch and must NOT fall through to the full-page
+// render — that would emit header.php HTML before the JSON and the client would
+// see "invalid server response". (dynamic/switch use different action names.)
+$rmAction = $_POST['action'] ?? '';
+$rmStaticActions = ['create', 'update', 'delete', 'set_default', 'sync_from_line'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($activeTab === 'static' || in_array($rmAction, $rmStaticActions, true))) {
+    include 'includes/rich-menu/static.php';
+    exit;
+}
+
 require_once 'includes/header.php';
 ?>
 

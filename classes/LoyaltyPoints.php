@@ -187,6 +187,15 @@ class LoyaltyPoints
 
         $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description, expires_at) VALUES (?, ?, 'earn', ?, ?, ?, ?, ?, ?)");
         $stmt->execute([$userId, $this->lineAccountId, $points, $newBalance, $referenceType, $referenceIdValue, $description ?? "Earned {$points} points", $expiresAt]);
+
+        // Platform-owner activity feed + (throttled) Telegram (best-effort).
+        if (@is_file(__DIR__ . '/TenantActivity.php')) {
+            require_once __DIR__ . '/TenantActivity.php';
+            TenantActivity::log(
+                TenantActivity::currentTenantId(), 'points_award',
+                'ลูกค้า #' . (int) $userId, '+' . (int) $points . ' แต้ม', true, 300
+            );
+        }
         return true;
     }
 

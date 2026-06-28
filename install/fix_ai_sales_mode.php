@@ -109,7 +109,7 @@ if (isset($_POST['fix'])) {
             echo "<p class='ok'>✅ อัพเดท ai_settings สำเร็จ!</p>";
         } else {
             // Insert new
-            $stmt = $db->prepare("INSERT INTO ai_settings (line_account_id, is_enabled, ai_mode, gemini_api_key, model, temperature, max_tokens) VALUES (?, 1, 'sales', ?, 'gemini-2.0-flash', 0.7, 500)");
+            $stmt = $db->prepare("INSERT INTO ai_settings (line_account_id, is_enabled, ai_mode, gemini_api_key, model, temperature, max_tokens) VALUES (?, 1, 'sales', ?, 'gemini-2.5-flash', 0.7, 500)");
             $stmt->execute([$lineAccountId, $apiKey]);
             
             echo "<p class='ok'>✅ สร้าง ai_settings ใหม่สำเร็จ!</p>";

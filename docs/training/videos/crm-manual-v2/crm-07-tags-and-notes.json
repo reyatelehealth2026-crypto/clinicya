@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:05:49.388Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "07",
+  "title": "ติด Tag ลูกค้าและเขียน Note ให้ทีมอ่านต่อได้",
+  "audience": "แอดมิน / เภสัชกร / การตลาด",
+  "output": "videos/crm-manual-v2/crm-07-tags-and-notes.mp4",
+  "frames": 91,
+  "scenes": [
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เลือกลูกค้าหนึ่งราย แล้วดู tag ปัจจุบัน"
+    },
+    {
+      "route": "/user-tags.php",
+      "caption": "หน้าจัดการ Tags: ตั้งชื่อให้ทีมเข้าใจและไม่ซ้ำหลายแบบ"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "ตัวอย่าง tag: VIP, ต้องติดตาม, refill, สนใจโปรโมชัน, เคสเภสัชกร"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "Note ที่ดี: วันที่ เหตุการณ์ และสิ่งที่ต้องทำต่อ"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

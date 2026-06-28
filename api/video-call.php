@@ -30,6 +30,8 @@ register_shutdown_function(function () {
 try {
     require_once '../config/config.php';
     require_once '../config/database.php';
+    // Route root-domain (Mini App / LIFF) request to the tenant DB by line_account_id (split-brain fix).
+    require_once '../bootstrap/route_by_account.php';
     require_once '../classes/ActivityLogger.php';
 
     $db = Database::getInstance()->getConnection();

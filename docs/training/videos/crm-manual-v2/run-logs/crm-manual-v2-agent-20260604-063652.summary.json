@@ -1,0 +1,18 @@
+﻿{
+    "run_id":  "20260604-063652",
+    "dry_run":  false,
+    "base_url":  "https://tenant-0001.re-ya.com",
+    "episodes_requested":  [
+                               "01"
+                           ],
+    "log":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-063652.log",
+    "summary":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-063652.summary.json",
+    "manifest":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-manual-v2-manifest.json",
+    "status":  {
+                   "episode":  "01",
+                   "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-01-overview-team-roles.mp4",
+                   "exists":  true,
+                   "size_mb":  2.39,
+                   "duration_seconds":  96.6
+               }
+}

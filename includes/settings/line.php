@@ -39,9 +39,14 @@ $accounts = $manager->getAllAccounts();
         <h2 class="text-xl font-bold text-gray-800">บัญชี LINE Official Account</h2>
         <p class="text-gray-600">จัดการบัญชี LINE OA และตั้งค่าต่างๆ</p>
     </div>
-    <button onclick="openLineModal()" class="px-5 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 shadow-lg hover:shadow-xl transition">
-        <i class="fas fa-plus mr-2"></i>เพิ่มบัญชี LINE
-    </button>
+    <div class="flex items-center gap-2">
+        <a href="/help/line-setup.html" target="_blank" class="px-5 py-2.5 bg-white border border-green-500 text-green-600 rounded-lg hover:bg-green-50 transition inline-flex items-center">
+            <i class="fas fa-book-open mr-2"></i>คู่มือเชื่อม LINE
+        </a>
+        <button onclick="openLineModal()" class="px-5 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 shadow-lg hover:shadow-xl transition">
+            <i class="fas fa-plus mr-2"></i>เพิ่มบัญชี LINE
+        </button>
+    </div>
 </div>
 
 <?php if (isset($_GET['success'])): ?>
@@ -339,7 +344,7 @@ $accounts = $manager->getAllAccounts();
                         </label>
                         <input type="text" name="liff_id" id="line_liff_id" class="w-full px-4 py-3 border-2 border-green-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 font-mono text-lg" placeholder="2006xxxxxx-xxxxxxxx">
                         <p class="text-sm text-green-600 mt-2">
-                            <i class="fas fa-link mr-1"></i>Endpoint URL: <code class="bg-white px-2 py-1 rounded"><?= BASE_URL ?>liff-app.php</code>
+                            <i class="fas fa-link mr-1"></i>Endpoint URL: <code class="bg-white px-2 py-1 rounded"><?= BASE_URL ?>miniapp/</code>
                         </p>
                     </div>
                     
@@ -351,7 +356,7 @@ $accounts = $manager->getAllAccounts();
                             <li>ไปที่ LIFF → Add</li>
                             <li>ตั้งชื่อ เช่น "Unified App"</li>
                             <li>Size: <strong>Full</strong> (แนะนำ)</li>
-                            <li>Endpoint URL: <code class="bg-white px-1 rounded"><?= BASE_URL ?>liff-app.php</code></li>
+                            <li>Endpoint URL: <code class="bg-white px-1 rounded"><?= BASE_URL ?>miniapp/</code></li>
                             <li>Scopes: openid, profile</li>
                             <li>คัดลอก LIFF ID มาใส่ในช่องด้านบน</li>
                         </ol>

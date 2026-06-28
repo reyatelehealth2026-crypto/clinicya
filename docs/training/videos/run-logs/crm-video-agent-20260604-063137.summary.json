@@ -1,0 +1,76 @@
+﻿{
+    "run_id":  "20260604-063137",
+    "dry_run":  false,
+    "base_url":  "https://tenant-0001.re-ya.com",
+    "include_state_changing":  true,
+    "modes_requested":  [
+                            "overview",
+                            "membership",
+                            "rewards",
+                            "direct",
+                            "qr"
+                        ],
+    "tts_provider":  "auto",
+    "log":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\run-logs\\crm-video-agent-20260604-063137.log",
+    "summary":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\run-logs\\crm-video-agent-20260604-063137.summary.json",
+    "source_videos":  [
+                          {
+                              "mode":  "overview",
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-overview-click-recording.mp4",
+                              "exists":  true,
+                              "duration_seconds":  72.6
+                          },
+                          {
+                              "mode":  "membership",
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-membership-points-click-recording.mp4",
+                              "exists":  true,
+                              "duration_seconds":  68.267
+                          },
+                          {
+                              "mode":  "rewards",
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-rewards-redemption-click-recording.mp4",
+                              "exists":  true,
+                              "duration_seconds":  66.6
+                          },
+                          {
+                              "mode":  "direct",
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-inbox-add-points-click-recording.mp4",
+                              "exists":  true,
+                              "duration_seconds":  95.833
+                          },
+                          {
+                              "mode":  "qr",
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-inbox-points-qr-click-recording.mp4",
+                              "exists":  true,
+                              "duration_seconds":  95.167
+                          }
+                      ],
+    "edited_videos":  [
+                          {
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\edited\\crm-inbox-add-points-edited-voiceover.mp4",
+                              "size_mb":  1.4,
+                              "duration_seconds":  119.8
+                          },
+                          {
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\edited\\crm-inbox-points-qr-edited-voiceover.mp4",
+                              "size_mb":  1.6,
+                              "duration_seconds":  119
+                          },
+                          {
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\edited\\crm-membership-points-edited-voiceover.mp4",
+                              "size_mb":  1.71,
+                              "duration_seconds":  86.72
+                          },
+                          {
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\edited\\crm-overview-edited-voiceover.mp4",
+                              "size_mb":  1.91,
+                              "duration_seconds":  91.92
+                          },
+                          {
+                              "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\edited\\crm-rewards-redemption-edited-voiceover.mp4",
+                              "size_mb":  1.56,
+                              "duration_seconds":  84.72
+                          }
+                      ],
+    "manifest":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\edited\\edited-voiceover-manifest.json"
+}

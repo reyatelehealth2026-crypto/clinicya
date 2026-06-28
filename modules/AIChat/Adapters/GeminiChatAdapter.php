@@ -88,6 +88,9 @@ class GeminiChatAdapter
         }
         
         try {
+            // 0. ตรวจจับ+จดจำข้อมูลสุขภาพสำคัญจากข้อความ (แพ้ยา/โรคประจำตัว) เป็น note advisory
+            $this->historyModel->recordHealthMentions($userId, $userMessage);
+
             // 1. ดึงประวัติการสนทนา
             $history = $this->historyModel->getRecentHistory($userId, 10);
             

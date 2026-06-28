@@ -13,6 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit; }
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+// Route root-domain (Mini App / LIFF) request to the tenant DB by line_account_id (split-brain fix).
+require_once __DIR__ . '/../bootstrap/route_by_account.php';
 require_once __DIR__ . '/../includes/ai-chat-context.php';
 session_write_close();
 

@@ -17,6 +17,8 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 require_once '../config/config.php';
 require_once '../config/database.php';
+// Route root-domain (Mini App / LIFF) request to the tenant DB by line_account_id (split-brain fix).
+require_once '../bootstrap/route_by_account.php';
 
 $db = Database::getInstance()->getConnection();
 

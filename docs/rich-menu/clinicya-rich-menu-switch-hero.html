@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=2500, height=1686">
+  <title>ClinicYa Rich Menu Switch Hero</title>
+  <style>
+    @font-face {
+      font-family: "LINESeedTH";
+      src: url("../../assets/fonts/reya/LINESeedSansTH_Rg.ttf") format("truetype");
+      font-weight: 400;
+    }
+
+    @font-face {
+      font-family: "LINESeedTH";
+      src: url("../../assets/fonts/reya/LINESeedSansTH_Bd.ttf") format("truetype");
+      font-weight: 700;
+    }
+
+    @font-face {
+      font-family: "LINESeedTH";
+      src: url("../../assets/fonts/reya/LINESeedSansTH_XBd.ttf") format("truetype");
+      font-weight: 800;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 2500px;
+      height: 1686px;
+      margin: 0;
+      overflow: hidden;
+      font-family: "LINESeedTH", sans-serif;
+      background: #eaf7f5;
+      color: #0f172a;
+    }
+
+    .artboard {
+      position: relative;
+      width: 2500px;
+      height: 1686px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 8% 10%, rgba(45, 212, 191, 0.28), transparent 26%),
+        radial-gradient(circle at 88% 18%, rgba(96, 165, 250, 0.20), transparent 22%),
+        linear-gradient(135deg, #eaf7f5 0%, #eef6ff 46%, #fff7ed 100%);
+    }
+
+    .soft-line {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(15, 118, 110, 0.05) 2px, transparent 2px),
+        linear-gradient(90deg, rgba(15, 118, 110, 0.05) 2px, transparent 2px);
+      background-size: 96px 96px;
+      opacity: 0.45;
+    }
+
+    .tile {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 46px;
+      border: 5px solid rgba(255, 255, 255, 0.74);
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 24px 54px rgba(15, 23, 42, 0.12);
+      overflow: hidden;
+    }
+
+    .tile::after {
+      content: "";
+      position: absolute;
+      inset: auto -120px -160px auto;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      background: var(--glow);
+      opacity: 0.42;
+    }
+
+    .hero {
+      padding: 62px 66px;
+      background: linear-gradient(135deg, #ffffff 0%, #e6fffb 58%, #eff6ff 100%);
+    }
+
+    .hero .copy {
+      max-width: 940px;
+      position: relative;
+      z-index: 3;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 24px;
+      margin-bottom: 18px;
+      border-radius: 999px;
+      background: rgba(20, 184, 166, 0.12);
+      color: #0f766e;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 98px;
+      line-height: 1.04;
+      font-weight: 800;
+      letter-spacing: 0;
+      color: #0f172a;
+    }
+
+    .subtitle {
+      margin-top: 18px;
+      font-size: 43px;
+      line-height: 1.22;
+      color: #475569;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .badges {
+      display: flex;
+      gap: 16px;
+      margin-top: 34px;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 54px;
+      padding: 0 22px;
+      border-radius: 999px;
+      background: #ffffff;
+      color: #0f766e;
+      font-size: 27px;
+      font-weight: 800;
+      box-shadow: inset 0 0 0 2px rgba(20, 184, 166, 0.16);
+    }
+
+    .primary-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 20px;
+      height: 86px;
+      margin-top: 38px;
+      padding: 0 36px;
+      border-radius: 24px;
+      background: #0f766e;
+      color: #ffffff;
+      font-size: 42px;
+      font-weight: 800;
+      box-shadow: 0 18px 32px rgba(15, 118, 110, 0.28);
+    }
+
+    .doctor-card {
+      position: absolute;
+      right: 70px;
+      bottom: 58px;
+      width: 460px;
+      height: 558px;
+      border-radius: 34px;
+      background: linear-gradient(180deg, #ffffff 0%, #d9fbf7 100%);
+      box-shadow: 0 22px 42px rgba(15, 23, 42, 0.16);
+      overflow: hidden;
+      z-index: 2;
+    }
+
+    .doctor-card::before {
+      content: "";
+      position: absolute;
+      left: 120px;
+      top: 68px;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: #ffe2c6;
+      box-shadow: 0 0 0 28px #ccfbf1;
+    }
+
+    .doctor-card::after {
+      content: "";
+      position: absolute;
+      left: 68px;
+      bottom: 0;
+      width: 330px;
+      height: 270px;
+      border-radius: 150px 150px 0 0;
+      background: #ffffff;
+      box-shadow: inset 0 0 0 22px #14b8a6;
+    }
+
+    .doctor-hair {
+      position: absolute;
+      left: 112px;
+      top: 54px;
+      width: 236px;
+      height: 170px;
+      border-radius: 120px 120px 70px 70px;
+      background: #1e293b;
+      z-index: 2;
+    }
+
+    .doctor-face {
+      position: absolute;
+      left: 142px;
+      top: 106px;
+      width: 176px;
+      height: 180px;
+      border-radius: 90px;
+      background: #ffd7b5;
+      z-index: 3;
+    }
+
+    .doctor-badge {
+      position: absolute;
+      left: 76px;
+      bottom: 64px;
+      z-index: 4;
+      padding: 12px 24px;
+      border-radius: 999px;
+      background: #0f766e;
+      color: #ffffff;
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .tile-top {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 28px;
+    }
+
+    .icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 112px;
+      height: 112px;
+      border-radius: 30px;
+      background: var(--accent);
+      box-shadow: 0 18px 36px var(--shadow);
+    }
+
+    .icon svg {
+      width: 66px;
+      height: 66px;
+      stroke: #ffffff;
+      stroke-width: 7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    .tile-title {
+      position: relative;
+      z-index: 3;
+      margin-top: 28px;
+      font-size: 60px;
+      line-height: 1.04;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: 0;
+    }
+
+    .tile-sub {
+      position: relative;
+      z-index: 3;
+      margin-top: 16px;
+      font-size: 31px;
+      line-height: 1.23;
+      font-weight: 700;
+      color: #64748b;
+      letter-spacing: 0;
+    }
+
+    .mini-title { font-size: 52px; }
+    .mini-sub { font-size: 27px; }
+
+    .visual {
+      position: relative;
+      z-index: 3;
+      align-self: flex-end;
+      width: 280px;
+      height: 220px;
+    }
+
+    .bag {
+      position: absolute;
+      inset: 46px 20px 0 44px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, #ccfbf1, #ffffff);
+      box-shadow: inset 0 0 0 12px var(--accent), 0 18px 30px rgba(15, 23, 42, 0.10);
+    }
+
+    .bag::before {
+      content: "";
+      position: absolute;
+      left: 68px;
+      top: -52px;
+      width: 82px;
+      height: 72px;
+      border: 12px solid var(--accent);
+      border-bottom: none;
+      border-radius: 42px 42px 0 0;
+    }
+
+    .bag::after {
+      content: "+";
+      position: absolute;
+      left: 76px;
+      top: 42px;
+      color: var(--accent);
+      font-size: 84px;
+      line-height: 1;
+      font-weight: 800;
+    }
+
+    .switchbar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 180px;
+      background: rgba(255, 255, 255, 0.92);
+      border-top: 5px solid rgba(15, 118, 110, 0.10);
+      box-shadow: 0 -18px 38px rgba(15, 23, 42, 0.10);
+      display: flex;
+      align-items: center;
+      padding: 18px 76px;
+      gap: 34px;
+    }
+
+    .page-pill {
+      height: 116px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      border-radius: 999px;
+      font-size: 45px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .page-current {
+      width: 770px;
+      color: #0f766e;
+      background: #ccfbf1;
+      box-shadow: inset 0 0 0 5px rgba(15, 118, 110, 0.16);
+    }
+
+    .page-switch {
+      width: 1130px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #0f766e 0%, #16a34a 100%);
+      box-shadow: 0 18px 34px rgba(15, 118, 110, 0.30);
+    }
+
+    .switch-note {
+      min-width: 300px;
+      color: #64748b;
+      font-size: 29px;
+      line-height: 1.12;
+      font-weight: 700;
+    }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.22);
+      font-size: 52px;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+  <main id="artboard" class="artboard">
+    <div class="soft-line"></div>
+  </main>
+
+  <script>
+    const page = new URLSearchParams(location.search).get('page') === '2' ? 2 : 1;
+    const root = document.getElementById('artboard');
+
+    const icons = {
+      consult: '<svg viewBox="0 0 100 100"><path d="M22 24h56v40H42L26 78V64H22z"/><path d="M50 34v20M40 44h20"/></svg>',
+      shop: '<svg viewBox="0 0 100 100"><path d="M26 40h48l-6 42H32z"/><path d="M36 40a14 14 0 0 1 28 0"/><path d="M50 52v18M41 61h18"/></svg>',
+      ai: '<svg viewBox="0 0 100 100"><path d="M28 18h44v64H28z"/><path d="M38 36h24M38 52h12"/><path d="M58 60l8 8 14-20"/></svg>',
+      promo: '<svg viewBox="0 0 100 100"><path d="M20 46l30-30h26v26L46 72z"/><path d="M66 26h1"/><path d="M34 68l34-34"/></svg>',
+      order: '<svg viewBox="0 0 100 100"><path d="M16 34h42v32H16z"/><path d="M58 46h16l10 14v6H58z"/><path d="M28 76a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM72 76a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/></svg>',
+      member: '<svg viewBox="0 0 100 100"><path d="M20 26h60v48H20z"/><path d="M34 44a10 10 0 1 0 0-20 10 10 0 0 0 0 20z"/><path d="M24 66c4-12 24-12 28 0"/><path d="M58 40h18M58 54h18"/></svg>',
+      pay: '<svg viewBox="0 0 100 100"><path d="M20 30h60v44H20z"/><path d="M20 42h60"/><path d="M34 62h16"/><path d="M64 61l8 8 14-18"/></svg>',
+      calendar: '<svg viewBox="0 0 100 100"><path d="M24 26h52v54H24z"/><path d="M24 42h52M36 18v16M64 18v16"/><path d="M40 58l8 8 18-20"/></svg>',
+      reminder: '<svg viewBox="0 0 100 100"><path d="M30 42a20 20 0 0 1 40 0v22l8 10H22l8-10z"/><path d="M43 80a8 8 0 0 0 14 0"/></svg>',
+      health: '<svg viewBox="0 0 100 100"><path d="M50 82s-30-18-30-42a17 17 0 0 1 30-11 17 17 0 0 1 30 11c0 24-30 42-30 42z"/><path d="M31 51h13l6-14 9 26 6-12h10"/></svg>'
+    };
+
+    function tile(t) {
+      const formatText = (text) => String(text || '').replace(/\\n/g, '<br>');
+      const el = document.createElement('section');
+      el.className = `tile ${t.hero ? 'hero' : ''}`;
+      el.style.left = `${t.x}px`;
+      el.style.top = `${t.y}px`;
+      el.style.width = `${t.w}px`;
+      el.style.height = `${t.h}px`;
+      el.style.setProperty('--accent', t.accent);
+      el.style.setProperty('--shadow', t.shadow);
+      el.style.setProperty('--glow', t.glow);
+
+      if (t.hero) {
+        el.innerHTML = `
+          <div class="copy">
+            <div class="eyebrow">บริการเด่น</div>
+            <h1>${t.title}</h1>
+            <div class="subtitle">${formatText(t.sub)}</div>
+            <div class="badges">${t.badges.map(b => `<span class="badge">${b}</span>`).join('')}</div>
+            <div class="primary-pill">เปิดปรึกษา <span>→</span></div>
+          </div>
+          <div class="doctor-card">
+            <div class="doctor-hair"></div>
+            <div class="doctor-face"></div>
+            <div class="doctor-badge">เภสัชกรพร้อมดูแล</div>
+          </div>`;
+        return el;
+      }
+
+      el.innerHTML = `
+        <div class="tile-top">
+          <div>
+            <div class="icon">${icons[t.icon]}</div>
+            <div class="tile-title ${t.mini ? 'mini-title' : ''}">${t.title}</div>
+            <div class="tile-sub ${t.mini ? 'mini-sub' : ''}">${formatText(t.sub)}</div>
+          </div>
+        </div>
+        <div class="visual"><div class="bag"></div></div>`;
+      return el;
+    }
+
+    const page1 = [
+      { hero: true, x: 32, y: 32, w: 1603, h: 710, title: 'ปรึกษาเภสัชทันที', sub: 'วิดีโอคอลหรือแชทกับเภสัชกร\\nปลอดภัย ตอบไว ดูแลเป็นส่วนตัว', badges: ['ตอบไว', 'ปลอดภัย', 'ดูแลโดยผู้เชี่ยวชาญ'], accent: '#0f766e', shadow: 'rgba(15,118,110,.22)', glow: 'linear-gradient(135deg,#99f6e4,#bfdbfe)' },
+      { x: 1699, y: 32, w: 769, h: 710, title: 'ซื้อยา', sub: 'ร้านยาออนไลน์\\nสั่งง่าย ส่งถึงบ้าน', icon: 'shop', accent: '#059669', shadow: 'rgba(5,150,105,.22)', glow: 'linear-gradient(135deg,#bbf7d0,#d9f99d)' },
+      { x: 32, y: 785, w: 561, h: 710, title: 'ตรวจอาการ AI', sub: 'เช็คอาการเบื้องต้น\\nก่อนปรึกษา', icon: 'ai', mini: true, accent: '#ef4444', shadow: 'rgba(239,68,68,.20)', glow: 'linear-gradient(135deg,#fecaca,#fed7aa)' },
+      { x: 657, y: 785, w: 561, h: 710, title: 'โปรโมชัน', sub: 'แต้มและคูปอง\\nประหยัดกว่า', icon: 'promo', mini: true, accent: '#f59e0b', shadow: 'rgba(245,158,11,.22)', glow: 'linear-gradient(135deg,#fde68a,#fef3c7)' },
+      { x: 1282, y: 785, w: 561, h: 710, title: 'ติดตามออเดอร์', sub: 'สถานะชำระเงิน\\nและจัดส่ง', icon: 'order', mini: true, accent: '#0891b2', shadow: 'rgba(8,145,178,.20)', glow: 'linear-gradient(135deg,#bae6fd,#ccfbf1)' },
+      { x: 1907, y: 785, w: 561, h: 710, title: 'สมาชิก', sub: 'โปรไฟล์สุขภาพ\\nและสิทธิ์สมาชิก', icon: 'member', mini: true, accent: '#7c3aed', shadow: 'rgba(124,58,237,.20)', glow: 'linear-gradient(135deg,#ddd6fe,#ede9fe)' }
+    ];
+
+    const page2 = [
+      { x: 32, y: 32, w: 769, h: 710, title: 'ออเดอร์ของฉัน', sub: 'ดูประวัติและ\\nสถานะล่าสุด', icon: 'order', accent: '#2563eb', shadow: 'rgba(37,99,235,.20)', glow: 'linear-gradient(135deg,#bfdbfe,#dbeafe)' },
+      { x: 865, y: 32, w: 770, h: 710, title: 'ชำระ/แจ้งสลิป', sub: 'แนบหลักฐาน\\nชำระเงินได้ทันที', icon: 'pay', accent: '#ef4444', shadow: 'rgba(239,68,68,.20)', glow: 'linear-gradient(135deg,#fecaca,#fee2e2)' },
+      { x: 1699, y: 32, w: 769, h: 710, title: 'นัดหมายเภสัช', sub: 'จองเวลาปรึกษา\\nกับผู้เชี่ยวชาญ', icon: 'calendar', accent: '#14b8a6', shadow: 'rgba(20,184,166,.22)', glow: 'linear-gradient(135deg,#99f6e4,#ccfbf1)' },
+      { x: 32, y: 785, w: 769, h: 710, title: 'เตือนทานยา', sub: 'จัดเวลายาและ\\nแจ้งเตือนรายวัน', icon: 'reminder', accent: '#f59e0b', shadow: 'rgba(245,158,11,.22)', glow: 'linear-gradient(135deg,#fde68a,#fef3c7)' },
+      { x: 865, y: 785, w: 770, h: 710, title: 'แต้ม/คูปอง', sub: 'ดูแต้มสะสม\\nแลกรางวัล', icon: 'promo', accent: '#22c55e', shadow: 'rgba(34,197,94,.20)', glow: 'linear-gradient(135deg,#bbf7d0,#dcfce7)' },
+      { x: 1699, y: 785, w: 769, h: 710, title: 'ข้อมูลสุขภาพ', sub: 'แพ้ยา โรคประจำตัว\\nและประวัติสำคัญ', icon: 'health', accent: '#8b5cf6', shadow: 'rgba(139,92,246,.20)', glow: 'linear-gradient(135deg,#ddd6fe,#f5d0fe)' }
+    ];
+
+    (page === 1 ? page1 : page2).forEach(t => root.appendChild(tile(t)));
+
+    const switchbar = document.createElement('nav');
+    switchbar.className = 'switchbar';
+    if (page === 1) {
+      switchbar.innerHTML = `
+        <div class="page-pill page-current">หน้า 1 เมนูหลัก</div>
+        <div class="switch-note">แตะปุ่มสีเขียวเพื่อสลับหน้า</div>
+        <div class="page-pill page-switch">ไปหน้า 2 บริการเสริม <span class="arrow">›</span></div>`;
+    } else {
+      switchbar.innerHTML = `
+        <div class="page-pill page-switch"><span class="arrow">‹</span> กลับหน้า 1 เมนูหลัก</div>
+        <div class="switch-note">สลับกลับเมนูหลักได้ทันที</div>
+        <div class="page-pill page-current">หน้า 2 บริการเสริม</div>`;
+    }
+    root.appendChild(switchbar);
+  </script>
+</body>
+</html>

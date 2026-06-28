@@ -38,12 +38,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+// Route this root-domain (Mini App / LIFF) request to the correct tenant DB by
+// line_account_id — otherwise it falls back to the legacy DB and the customer
+// sees a different points balance/history than the admin tenant view (split-brain).
+require_once __DIR__ . '/../bootstrap/route_by_account.php';
 require_once __DIR__ . '/../classes/LoyaltyPoints.php';
 
 $db = Database::getInstance()->getConnection();
 
 $action = $_GET['action'] ?? $_POST['action'] ?? 'history';
 $lineUserId = $_GET['line_user_id'] ?? $_POST['line_user_id'] ?? null;
+$lineAccountId = (int) ($_GET['line_account_id'] ?? $_POST['line_account_id'] ?? 0);
 
 if (!$lineUserId) {
     ob_clean();
@@ -53,10 +58,23 @@ if (!$lineUserId) {
 }
 
 try {
-    // Get user info
-    $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, points, display_name FROM users WHERE line_user_id = ?");
-    $stmt->execute([$lineUserId]);
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Get user info — scope by line_account_id when provided so we pick the
+    // right member row (a LINE user can exist under multiple OAs within a tenant).
+    if ($lineAccountId > 0) {
+        $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, points, display_name FROM users WHERE line_user_id = ? AND line_account_id = ? LIMIT 1");
+        $stmt->execute([$lineUserId, $lineAccountId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        // Fallback: same person, no account scoping (legacy rows without line_account_id).
+        if (!$user) {
+            $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, points, display_name FROM users WHERE line_user_id = ? LIMIT 1");
+            $stmt->execute([$lineUserId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        }
+    } else {
+        $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, points, display_name FROM users WHERE line_user_id = ? LIMIT 1");
+        $stmt->execute([$lineUserId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    }
 
     if (!$user) {
         ob_clean();

@@ -8,6 +8,38 @@
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 4.1, 4.2, 4.3, 5.1, 5.2, 5.3
  */
 
+// --- Apex marketing landing override (safe: apex root only) ---
+// Serve the static REYA marketing landing for the main domain re-ya.com at "/" only.
+// Tenant subdomains (tenant-XXXX.re-ya.com), /api, /admin, and every other path/host
+// fall through to the normal logic below — nothing else is affected.
+$__host = strtolower(preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? ''));
+$__path = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
+if (in_array($__host, ['re-ya.com', 'www.re-ya.com'], true)
+    && ($__path === '/' || $__path === '/index.php')) {
+    $__landing = __DIR__ . '/landing-reya-pharmacy.html';
+    if (is_file($__landing)) {
+        header('Content-Type: text/html; charset=UTF-8');
+        readfile($__landing);
+        // Flush the page to the visitor FIRST, then do the best-effort new-IP
+        // alert so it never adds to TTFB. (PHP-FPM only; degrades gracefully.)
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        try {
+            if (!defined('REYA_SKIP_SUBDOMAIN_RESOLUTION')) {
+                define('REYA_SKIP_SUBDOMAIN_RESOLUTION', true);
+            }
+            require_once __DIR__ . '/config/config.php';
+            require_once __DIR__ . '/config/database.php';
+            require_once __DIR__ . '/classes/SiteNotifier.php';
+            SiteNotifier::trackLandingVisit();
+        } catch (\Throwable $eApex) {
+            error_log('[apex-landing] new-ip notify: ' . $eApex->getMessage());
+        }
+        exit;
+    }
+}
+
 // Check if installed
 if (!file_exists('config/installed.lock') && file_exists('install/index.php')) {
     header('Location: install/');
@@ -102,8 +134,11 @@ try {
     $promotions = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Exception $e) {}
 
-// Build LIFF URL
-$liffUrl = $liffId ? "https://liff.line.me/{$liffId}" : null;
+// Build LIFF URL — only for a REAL liff_id. Empty/PENDING tenants render the
+// "Coming Soon" CTA (handled by the ?: null branches below) instead of a link
+// into a broken shared Mini App.
+require_once __DIR__ . '/includes/liff-helper.php';
+$liffUrl = ($liffId && reya_is_real_liff_id($liffId)) ? "https://liff.line.me/{$liffId}" : null;
 $baseUrl = rtrim(BASE_URL, '/');
 
 // Initialize landing page services (Requirements: 1.1-1.5, 2.1-2.4, 3.1-3.5, 4.1-4.5, 5.1-5.5)
@@ -120,7 +155,7 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="<?= htmlspecialchars($primaryColor) ?>">
-    
+
     <!-- PWA Manifest -->
     <link rel="manifest" href="api/manifest.php">
     
@@ -1326,8 +1361,35 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
     </header>
     
     <?php include 'includes/landing/banner-slider.php'; ?>
-    
-    <section class="pharm-hero" aria-labelledby="pharm-hero-title">
+
+    <?php
+    // Per-section HTML overrides (2026-06-02) — admin can replace ANY hardcoded
+    // landing section with their own HTML via /admin/landing-settings → Custom HTML
+    // (เลือก section). Saved to landing_settings[setting_key = custom_html_{section}].
+    if (!isset($__secOv)) {
+        $__secOv = [];
+        try {
+            $__ovStmt = $db->prepare(
+                'SELECT setting_key, setting_value FROM landing_settings
+                  WHERE setting_key LIKE "custom_html_%"
+                    AND (line_account_id = ? OR line_account_id IS NULL)
+                  ORDER BY line_account_id IS NULL ASC'
+            );
+            $__ovStmt->execute([$lineAccountId]);
+            foreach ($__ovStmt->fetchAll(PDO::FETCH_ASSOC) as $__r) {
+                $__k = substr($__r['setting_key'], strlen('custom_html_'));
+                if ($__k !== '' && !isset($__secOv[$__k]) && trim((string) $__r['setting_value']) !== '') {
+                    $__secOv[$__k] = $__r['setting_value'];
+                }
+            }
+        } catch (\Throwable $__e) { /* table may not exist yet — skip */ }
+    }
+    if (!function_exists('reya_sec')) {
+        function reya_sec(string $k): string { global $__secOv; return $__secOv[$k] ?? ''; }
+    }
+    ?>
+
+    <section class="pharm-hero" aria-labelledby="pharm-hero-title"><?php if (reya_sec('hero') !== ''): ?><?= reya_sec('hero') ?><?php else: ?>
         <div class="container pharm-hero-inner">
             <h1 class="pharm-hero__title" id="pharm-hero-title">ปรึกษาเภสัชกรและสั่งยากับ <?= htmlspecialchars($shopName) ?> ได้ในไม่กี่ขั้นตอน</h1>
             <p class="pharm-hero__subtitle">คุยกับทีมร้านยา ตรวจสอบสินค้า และติดตามออเดอร์ผ่าน LINE/LIFF ในประสบการณ์เดียวที่ออกแบบมาสำหรับคนไข้ไทย</p>
@@ -1353,9 +1415,9 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
                 </a>
             </div>
         </div>
-    </section>
-    
-    <section class="about-intro-section" id="about">
+    <?php endif; ?></section>
+
+    <section class="about-intro-section" id="about"><?php if (reya_sec('about') !== ''): ?><?= reya_sec('about') ?><?php else: ?>
         <div class="container">
             <div class="about-intro-grid">
                 <div class="about-intro-text">
@@ -1375,9 +1437,9 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
                 </div>
             </div>
         </div>
-    </section>
-    
-    <section class="features-section" id="features">
+    <?php endif; ?></section>
+
+    <section class="features-section" id="features"><?php if (reya_sec('features') !== ''): ?><?= reya_sec('features') ?><?php else: ?>
         <div class="container">
             <div class="section-title">
                 <h2>คุณสมบัติเด่นของแพลตฟอร์ม</h2>
@@ -1416,10 +1478,10 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
                 </div>
             </div>
         </div>
-    </section>
-    
+    <?php endif; ?></section>
+
     <!-- Services Section (Requirements: 1.4, 5.1) -->
-    <section class="services-section" id="services">
+    <section class="services-section" id="services"><?php if (reya_sec('services') !== ''): ?><?= reya_sec('services') ?><?php else: ?>
         <div class="container">
             <div class="section-title">
                 <h2>บริการของเรา</h2>
@@ -1455,8 +1517,8 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
                 </a>
             </div>
         </div>
-    </section>
-    
+    <?php endif; ?></section>
+
     <?php include 'includes/landing/featured-products.php'; ?>
     
     <!-- Contact Section with Operating Hours, Phone/LINE Links, and Map (Requirements: 7.1, 7.2, 7.3, 7.4, 7.5) -->
@@ -1474,7 +1536,7 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
     
     <!-- CTA Section -->
     <?php if ($liffUrl): ?>
-    <section class="cta-section">
+    <section class="cta-section"><?php if (reya_sec('cta') !== ''): ?><?= reya_sec('cta') ?><?php else: ?>
         <div class="container">
             <h2>พร้อมเริ่มต้นแล้วหรือยัง?</h2>
             <p>ไม่ว่าคุณจะอยู่ในกรุงเทพฯ หรือต่างจังหวัด <?= htmlspecialchars($shopName) ?> พร้อมเป็นร้านขายยาออนไลน์ที่อยู่เคียงข้างคุณ โดยสามารถเข้าถึงยาและคำแนะนำด้านสุขภาพที่มีคุณภาพได้อย่างทันท่วงที</p>
@@ -1483,7 +1545,7 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
                 เปิดแอปเลย
             </a>
         </div>
-    </section>
+    <?php endif; ?></section>
     <?php endif; ?>
     
     <!-- Custom HTML block (2026-05-27) — admin-managed via /admin/landing-settings → Custom HTML tab -->
@@ -1510,7 +1572,6 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
         </div>
     </section>
     <?php endif; ?>
-
     <!-- Footer (Requirements: 3.1, 3.2) -->
     <footer class="landing-footer">
         <div class="container">
@@ -1848,13 +1909,15 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
             { sel: '#trust-badges, .trust-badges-section',          tab: 'trust',       label: 'Trust Badges' },
             { sel: '.landing-custom-html',                          tab: 'custom_html', label: 'Custom HTML' },
         ];
+        // Previously hardcoded sections — now editable as HTML via the Custom HTML
+        // tab (each maps to a section override key, edited in that tab).
         const noTabMap = [
-            { sel: '.pharm-hero',           label: 'Hero (ปรึกษาเภสัชกร)' },
-            { sel: '.about-intro-section',  label: 'แนะนำบริการ' },
-            { sel: '.features-section',     label: 'จุดเด่น' },
-            { sel: '.services-section',     label: 'บริการ' },
+            { sel: '.pharm-hero',           label: 'Hero', tab: 'custom_html', section: 'hero' },
+            { sel: '.about-intro-section',  label: 'แนะนำบริการ', tab: 'custom_html', section: 'about' },
+            { sel: '.features-section',     label: 'จุดเด่น', tab: 'custom_html', section: 'features' },
+            { sel: '.services-section',     label: 'บริการ', tab: 'custom_html', section: 'services' },
+            { sel: '.cta-section',          label: 'CTA', tab: 'custom_html', section: 'cta' },
             { sel: '.contact-section',      label: 'ติดต่อ' },
-            { sel: '.cta-section',          label: 'CTA' },
             { sel: '.landing-footer',       label: 'Footer (SEO tab)', tab: 'seo' }  // footer info comes from SEO settings
         ];
 
@@ -1869,6 +1932,7 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
                 if (m.tab) {
                     el.setAttribute('data-edit-tab', m.tab);
                     el.setAttribute('data-edit-label', m.label);
+                    if (m.section) el.setAttribute('data-edit-section', m.section);
                 } else {
                     el.setAttribute('data-edit-disabled', '1');
                     el.setAttribute('data-edit-label', m.label);
@@ -1876,7 +1940,7 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
             });
         });
 
-        // Click → tell parent admin to switch tab
+        // Click → tell parent admin to switch tab (and which section to edit)
         document.addEventListener('click', function (e) {
             const target = e.target.closest('[data-edit-tab]');
             if (!target) return;
@@ -1884,8 +1948,9 @@ $featuredProductService = new FeaturedProductService($db, $lineAccountId);
             e.stopPropagation();
             const tab = target.getAttribute('data-edit-tab');
             const label = target.getAttribute('data-edit-label') || tab;
+            const section = target.getAttribute('data-edit-section') || '';
             try {
-                window.parent.postMessage({ type: 'reya-edit-tab', tab: tab, label: label }, '*');
+                window.parent.postMessage({ type: 'reya-edit-tab', tab: tab, label: label, section: section }, '*');
             } catch (err) {}
         }, true);
 

@@ -1,0 +1,43 @@
+{
+  "generated_at": "2026-06-03T23:31:38.097543Z",
+  "voice_policy": "Auto provider order: Google Cloud TTS when configured, then OpenAI, then Edge fallback.",
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "missing_sources": [],
+  "videos": [
+    {
+      "id": "crm-overview",
+      "source": "docs/training/videos/crm-overview-click-recording.mp4",
+      "output": "docs/training/videos/edited/crm-overview-edited-voiceover.mp4",
+      "title": "ภาพรวม CRM ของร้าน",
+      "dry_run": true
+    },
+    {
+      "id": "crm-membership-points",
+      "source": "docs/training/videos/crm-membership-points-click-recording.mp4",
+      "output": "docs/training/videos/edited/crm-membership-points-edited-voiceover.mp4",
+      "title": "ระบบสมาชิกและแต้มสะสม",
+      "dry_run": true
+    },
+    {
+      "id": "crm-inbox-add-points",
+      "source": "docs/training/videos/crm-inbox-add-points-click-recording.mp4",
+      "output": "docs/training/videos/edited/crm-inbox-add-points-edited-voiceover.mp4",
+      "title": "เพิ่มแต้มให้ลูกค้าทันทีจาก Inbox",
+      "dry_run": true
+    },
+    {
+      "id": "crm-inbox-points-qr",
+      "source": "docs/training/videos/crm-inbox-points-qr-click-recording.mp4",
+      "output": "docs/training/videos/edited/crm-inbox-points-qr-edited-voiceover.mp4",
+      "title": "สร้าง QR รับแต้มจาก Inbox",
+      "dry_run": true
+    },
+    {
+      "id": "crm-rewards-redemption",
+      "source": "docs/training/videos/crm-rewards-redemption-click-recording.mp4",
+      "output": "docs/training/videos/edited/crm-rewards-redemption-edited-voiceover.mp4",
+      "title": "รางวัลแลกแต้มและการติดตามการแลก",
+      "dry_run": true
+    }
+  ]
+}

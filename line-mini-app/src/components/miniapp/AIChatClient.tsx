@@ -16,7 +16,7 @@ import { MIMSInfoCard } from '@/components/miniapp/MIMSInfoCard'
 import { PharmacistConsultCTA } from '@/components/miniapp/PharmacistConsultCTA'
 import { streamAIChat } from '@/lib/ai-chat-api'
 import { fetchAIChatHistory, clearAIChatHistory } from '@/lib/ai-chat-history-api'
-import { apiUrl } from '@/lib/config'
+import { apiUrl, appConfig } from '@/lib/config'
 import { scanEmergency, type EmergencyPayload, type EmergencySeverity } from '@/lib/emergency-scan'
 import { toTriageState, type TriageState } from '@/lib/state-labels'
 import { useToast } from '@/lib/toast'
@@ -237,6 +237,7 @@ export function AIChatClient() {
         headers: approveHeaders,
         body: JSON.stringify({
           line_user_id: userId,
+          line_account_id: appConfig.lineAccountId,
           last_ai_message: pendingOrderMsg,
           summary: pendingOrderMsg.split('\n').slice(0, 3).join(' ').slice(0, 500)
         })

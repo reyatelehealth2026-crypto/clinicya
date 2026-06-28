@@ -42,7 +42,11 @@ class GeminiAPI
                 'temperature' => $this->settings->getTemperature(),
                 'maxOutputTokens' => $this->settings->getMaxTokens(),
                 'topP' => 0.9,
-                'topK' => 20
+                'topK' => 20,
+                // gemini-2.5-* spends output tokens on internal "thinking", which left
+                // almost nothing for the visible reply (answers cut off mid-sentence).
+                // Disable it so the full answer fits the token budget and stays fast/direct.
+                'thinkingConfig' => ['thinkingBudget' => 0]
             ],
             'safetySettings' => $this->getSafetySettings()
         ];
@@ -139,7 +143,7 @@ class GeminiAPI
             return ['success' => false, 'error' => 'No API Key'];
         }
         
-        $url = self::API_BASE . 'gemini-2.0-flash:generateContent?key=' . $apiKey;
+        $url = self::API_BASE . 'gemini-2.5-flash:generateContent?key=' . $apiKey;
         
         $data = [
             'contents' => [

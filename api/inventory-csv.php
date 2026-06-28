@@ -236,6 +236,55 @@ if ($action === 'export') {
     exit;
 }
 
+// ─── action=delete ─────────────────────────────────────────────────────────────
+// Safe delete: if the product was ever referenced in an order (transaction_items),
+// soft-disable it (is_active=0) instead of hard-deleting to avoid FK / history loss.
+if ($action === 'delete') {
+    header('Content-Type: application/json; charset=utf-8');
+    $id = (int) ($_POST['id'] ?? $_GET['id'] ?? 0);
+    if ($id <= 0) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'no_id']);
+        exit;
+    }
+    try {
+        // Confirm the item belongs to this tenant/line account
+        $chk = $db->prepare('SELECT id FROM business_items WHERE id = ? AND line_account_id = ? LIMIT 1');
+        $chk->execute([$id, $lineAccountId]);
+        if (!$chk->fetchColumn()) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'error' => 'not_found']);
+            exit;
+        }
+
+        // Used in any order?
+        $used = 0;
+        try {
+            $u = $db->prepare('SELECT COUNT(*) FROM transaction_items WHERE product_id = ?');
+            $u->execute([$id]);
+            $used = (int) $u->fetchColumn();
+        } catch (\Throwable $e) { $used = 0; }
+
+        if ($used > 0) {
+            // Soft-disable — keep history intact
+            $db->prepare('UPDATE business_items SET is_active = 0, enable = 0, updated_at = NOW() WHERE id = ? AND line_account_id = ?')
+                ->execute([$id, $lineAccountId]);
+            echo json_encode(['ok' => true, 'soft' => true, 'used_in_orders' => $used]);
+        } else {
+            // Hard delete + cascade lightweight children (product_units, cart entries)
+            try { $db->prepare('DELETE FROM product_units WHERE product_id = ?')->execute([$id]); } catch (\Throwable $e) {}
+            try { $db->prepare('DELETE FROM cart WHERE product_id = ? AND line_account_id = ?')->execute([$id, $lineAccountId]); } catch (\Throwable $e) {}
+            $db->prepare('DELETE FROM business_items WHERE id = ? AND line_account_id = ?')->execute([$id, $lineAccountId]);
+            echo json_encode(['ok' => true, 'soft' => false]);
+        }
+    } catch (\Throwable $e) {
+        error_log('[inventory-csv delete] ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'delete_failed', 'message' => $e->getMessage()]);
+    }
+    exit;
+}
+
 // ─── action=import ────────────────────────────────────────────────────────────
 header('Content-Type: application/json; charset=utf-8');
 

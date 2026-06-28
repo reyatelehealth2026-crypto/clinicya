@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:08:11.856Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "09",
+  "title": "จ่ายยาใน Inbox และส่งฉลากยาให้ลูกค้าผ่าน LINE",
+  "audience": "เภสัชกร",
+  "output": "videos/crm-manual-v2/crm-09-dispense-line-label.mp4",
+  "frames": 124,
+  "scenes": [
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เริ่มจาก Inbox และตรวจแพ้ยา โรคประจำตัว ประวัติเดิมก่อนจ่ายยา"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เปิด modal จ่ายยา: เลือกยา จำนวน ขนาดยา มื้อยา ก่อนหรือหลังอาหาร"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เลือกวิธีชำระเงินตาม flow ร้าน เช่น เงินสด โอน เครดิต หรือจ่ายทีหลัง"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "หลังยืนยัน ระบบส่งฉลากยาแบบ LINE Flex และบันทึกประวัติจ่ายยา"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:07:13.248Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "08",
+  "title": "ดูประวัติออเดอร์ ประวัติยา และการติดตามลูกค้า",
+  "audience": "เภสัชกร / แอดมิน",
+  "output": "videos/crm-manual-v2/crm-08-orders-medicine-history.mp4",
+  "frames": 130,
+  "scenes": [
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เปิดลูกค้าที่มีประวัติ แล้วดู CRM HUD"
+    },
+    {
+      "route": "/orders",
+      "caption": "Orders: ดูรายการออเดอร์ สถานะ และช่องทางชำระเงิน"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "ประวัติยา: ใช้ประกอบการตอบคำถามและการจ่ายซ้ำ"
+    },
+    {
+      "route": "/users",
+      "caption": "Customers: ใช้ดูภาพรวมลูกค้าหลายรายและติดตามต่อ"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

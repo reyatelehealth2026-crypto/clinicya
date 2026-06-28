@@ -567,17 +567,19 @@ class LiffMessageHandler {
      * Get LIFF URL for order tracking.
      * Uses path-based routing compatible with line-mini-app Next.js App Router.
      * Route: src/app/order/[id]/page.tsx
+     *
+     * LIFF-or-OA fallback: tenants with a real liff_id get the Mini App deep
+     * link (tagged with ?la= so the shared app resolves the tenant); tenants
+     * without one fall back to OA chat, or '' (→ no tracking button rendered).
      */
     private function getLiffTrackingUrl($orderId) {
+        require_once __DIR__ . '/../includes/liff-helper.php';
         try {
-            if ($this->lineAccountId) {
-                $stmt = $this->db->prepare("SELECT liff_id FROM line_accounts WHERE id = ?");
-                $stmt->execute([$this->lineAccountId]);
-                $account = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($account && !empty($account['liff_id'])) {
-                    return "https://liff.line.me/{$account['liff_id']}/order/{$orderId}";
-                }
-            }
+            return reya_liff_url_or_oa(
+                $this->db,
+                $this->lineAccountId ? (int) $this->lineAccountId : null,
+                '/order/' . $orderId
+            );
         } catch (Exception $e) {}
 
         return '';

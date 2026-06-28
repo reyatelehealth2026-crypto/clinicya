@@ -93,6 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
     $action = $_POST['action'] ?? '';
     $errorMessage = '';
     $skipImage = !empty($_POST['skip_image']);
+    $isAjax = strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest';
+    $ajaxRichMenuId = null;
     
     if ($action === 'create') {
         // ถ้า skip_image ไม่ต้องตรวจสอบรูป
@@ -134,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
             
             if ($result['code'] === 200 && isset($result['body']['richMenuId'])) {
                 $richMenuId = $result['body']['richMenuId'];
+                $ajaxRichMenuId = $richMenuId;
                 
                 // Upload image if provided (not skipped)
                 if (!$skipImage && !empty($_FILES['image']['tmp_name'])) {
@@ -182,7 +185,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
                     
                     // Return richMenuId for JavaScript to upload image
                     if ($skipImage) {
-                        echo "richMenuId: " . $richMenuId;
+                        if (!$isAjax) {
+                            echo "richMenuId: " . $richMenuId;
+                        }
                         $_SESSION['rich_menu_success'] = 'สร้าง Rich Menu สำเร็จ (รอ upload รูป)';
                     } else {
                         $_SESSION['rich_menu_success'] = 'สร้าง Rich Menu สำเร็จ';
@@ -314,6 +319,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
             
             if ($result['code'] === 200 && isset($result['body']['richMenuId'])) {
                 $newRichMenuId = $result['body']['richMenuId'];
+                $ajaxRichMenuId = $newRichMenuId;
                 $imageUploaded = false;
                 
                 // ตรวจสอบว่ามีรูปใหม่ upload มาหรือไม่
@@ -468,6 +474,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? 'static') === 'sta
     } else {
         $_SESSION['rich_menu_success'] = 'บันทึกสำเร็จ';
     }
+
+    if ($isAjax) {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!empty($errorMessage)) {
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error' => $errorMessage,
+            ], JSON_UNESCAPED_UNICODE);
+        } else {
+            echo json_encode([
+                'success' => true,
+                'richMenuId' => $ajaxRichMenuId,
+                'message' => $_SESSION['rich_menu_success'] ?? 'บันทึกสำเร็จ',
+            ], JSON_UNESCAPED_UNICODE);
+        }
+        exit;
+    }
+
     // Use JavaScript redirect since headers may already be sent
     echo '<script>window.location.href = "rich-menu.php?tab=static";</script>';
     exit;
@@ -671,7 +696,10 @@ try {
                 
                 <!-- Right: Visual Editor -->
                 <div>
-                    <label class="block text-sm font-medium mb-2">พื้นที่คลิก <span class="text-gray-400">(คลิกที่ช่องเพื่อตั้งค่า)</span></label>
+                    <label class="text-sm font-medium mb-2 flex items-center justify-between gap-2">
+                        <span>พื้นที่คลิก <span class="text-gray-400 text-xs">(ลากเมาส์บนภาพเพื่อวาดเอง · คลิกช่องเพื่อตั้งค่า)</span></span>
+                        <button type="button" onclick="addCustomArea()" class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"><i class="fas fa-plus mr-1"></i>เพิ่มพื้นที่เอง</button>
+                    </label>
                     <div class="relative border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-gray-100" id="canvasContainer">
                         <img id="previewImage" src="" class="w-full hidden">
                         <div id="areasOverlay" class="absolute inset-0"></div>
@@ -731,6 +759,16 @@ try {
             <div>
                 <label class="block text-sm font-medium mb-1">ป้ายกำกับ (แสดงใน Editor)</label>
                 <input type="text" id="actionLabel" class="w-full px-4 py-2 border rounded-lg" placeholder="เช่น ดูสินค้า">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">ตำแหน่ง/ขนาดพื้นที่ <span class="text-gray-400 text-xs">(px — ภาพกว้าง 2500)</span></label>
+                <div class="grid grid-cols-4 gap-2">
+                    <input type="number" id="areaX" class="px-2 py-2 border rounded-lg text-sm" placeholder="X" title="ซ้าย (X)">
+                    <input type="number" id="areaY" class="px-2 py-2 border rounded-lg text-sm" placeholder="Y" title="บน (Y)">
+                    <input type="number" id="areaW" class="px-2 py-2 border rounded-lg text-sm" placeholder="กว้าง" title="กว้าง">
+                    <input type="number" id="areaH" class="px-2 py-2 border rounded-lg text-sm" placeholder="สูง" title="สูง">
+                </div>
+                <p class="text-[11px] text-gray-400 mt-1">ลากวาดบนภาพได้เลย หรือปรับเลขตรงนี้เพื่อกำหนดพื้นที่กดเอง</p>
             </div>
         </div>
         <div class="p-4 border-t flex justify-end space-x-2">
@@ -811,20 +849,49 @@ async function compressImageToBase64(file, maxWidth, maxHeight, maxSizeKB = 800)
 
 // Upload image via API (bypass nginx limit)
 async function uploadImageViaAPI(richMenuId, base64Data) {
+    // Send the image as multipart binary (NOT base64 JSON) — a base64
+    // "data:image/...;base64," blob in a JSON body is blocked by the server WAF
+    // (ModSecurity → HTTP 500). A real file part passes through cleanly.
+    const blob = await (await fetch(base64Data)).blob();
+    const fd = new FormData();
+    fd.append('richMenuId', richMenuId);
+    fd.append('image', blob, 'richmenu.jpg');
     const response = await fetch('api/rich-menu-upload.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            richMenuId: richMenuId,
-            imageData: base64Data
-        })
+        body: fd
     });
-    
-    const result = await response.json();
-    if (!result.success) {
-        throw new Error(result.error || 'Upload failed');
+
+    let result;
+    try {
+        result = await response.json();
+    } catch (err) {
+        const body = await response.text().catch(() => '');
+        throw new Error(body || 'Upload failed: invalid server response');
+    }
+
+    if (!response.ok || !result.success) {
+        throw new Error(result.error || `Upload failed (HTTP ${response.status})`);
     }
     return result;
+}
+
+function validateRichMenuBeforeSubmit() {
+    if (areas.length === 0) {
+        alert('กรุณาเลือกเทมเพลตหรือสร้างพื้นที่คลิกอย่างน้อย 1 พื้นที่');
+        return false;
+    }
+
+    const emptyIndex = areas.findIndex((a) => !a.action.text && !a.action.uri && !a.action.data && !a.action.richMenuAliasId);
+    if (emptyIndex !== -1) {
+        alert(`กรุณาตั้งค่า Action ให้ครบทุกพื้นที่ (ปุ่ม ${emptyIndex + 1} ยังไม่ได้ตั้งค่า)`);
+        return false;
+    }
+
+    document.getElementById('areasJson').value = JSON.stringify(areas.map((a) => ({
+        bounds: a.bounds,
+        action: a.action
+    })));
+    return true;
 }
 
 // Handle image selection - compress immediately
@@ -856,10 +923,21 @@ document.addEventListener('DOMContentLoaded', function() {
     if (form) {
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
+            if (!validateRichMenuBeforeSubmit()) {
+                return;
+            }
+
+            // Warn if no image selected — menu will be blank until uploaded later
+            if (!pendingImageBase64) {
+                if (!confirm('ยังไม่ได้เลือกรูปภาพ\n\nสร้างได้เลย แต่ต้อง Upload รูปทีหลังผ่านปุ่ม "เลือก Upload รูป"\nต้องการดำเนินการต่อไหม?')) {
+                    return;
+                }
+            }
+
             const submitBtn = document.getElementById('submitBtn');
             const originalText = submitBtn.innerHTML;
-            
+
             try {
                 // Step 1: Create Rich Menu (without image)
                 submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังสร้าง Rich Menu...';
@@ -869,21 +947,39 @@ document.addEventListener('DOMContentLoaded', function() {
                 formData.delete('image'); // Remove image from form
                 formData.set('skip_image', '1'); // Flag to skip image upload
                 
-                const createResponse = await fetch(form.action, {
+                // NOTE: use getAttribute('action') — `form.action` is shadowed by the
+                // hidden <input name="action"> (returns the element → "[object HTMLInputElement]").
+                const createResponse = await fetch(form.getAttribute('action') || 'rich-menu.php?tab=static', {
                     method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
                     body: formData
                 });
-                
-                const responseText = await createResponse.text();
-                
-                // Extract richMenuId from response if available
-                const richMenuIdMatch = responseText.match(/richMenuId['":\s]+([a-zA-Z0-9-]+)/);
-                
-                // Step 2: Upload image via API if we have pending image
-                if (pendingImageBase64 && richMenuIdMatch) {
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังอัพโหลดรูป...';
-                    await uploadImageViaAPI(richMenuIdMatch[1], pendingImageBase64);
+
+                let createResult;
+                try {
+                    createResult = await createResponse.json();
+                } catch (err) {
+                    const body = await createResponse.text().catch(() => '');
+                    throw new Error(body || 'Create failed: invalid server response');
                 }
+
+                if (!createResponse.ok || !createResult.success) {
+                    throw new Error(createResult.error || `Create failed (HTTP ${createResponse.status})`);
+                }
+
+                if (!createResult.richMenuId) {
+                    throw new Error('LINE did not return a richMenuId. Please check the action areas and try again.');
+                }
+                
+                // Step 2: Upload image if one was selected and compressed
+                if (pendingImageBase64 && typeof pendingImageBase64 === 'string' && pendingImageBase64.startsWith('data:')) {
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังอัพโหลดรูป...';
+                    await uploadImageViaAPI(createResult.richMenuId, pendingImageBase64);
+                } else if (pendingImageBase64) {
+                    // Has a value but not a valid data URL — skip silently (upload later)
+                    console.warn('[rich-menu] pendingImageBase64 invalid, skipping upload');
+                }
+                // No image selected = intentional skip (can upload later via "Upload รูป" button)
                 
                 // Redirect
                 window.location.href = 'rich-menu.php?tab=static';
@@ -1109,7 +1205,11 @@ function editArea(index) {
     document.getElementById('actionData').value = area.action.data || '';
     document.getElementById('actionAlias').value = area.action.richMenuAliasId || '';
     document.getElementById('actionLabel').value = area.label || '';
-    
+    document.getElementById('areaX').value = area.bounds.x;
+    document.getElementById('areaY').value = area.bounds.y;
+    document.getElementById('areaW').value = area.bounds.width;
+    document.getElementById('areaH').value = area.bounds.height;
+
     toggleActionFields();
     
     document.getElementById('areaModal').classList.remove('hidden');
@@ -1139,17 +1239,48 @@ function saveAreaAction() {
     let action = { type };
     if (type === 'message') {
         action.text = document.getElementById('actionText').value;
+        if (!action.text.trim()) {
+            alert('กรุณาใส่ข้อความที่จะส่ง');
+            return;
+        }
     } else if (type === 'uri') {
         action.uri = document.getElementById('actionUri').value;
+        if (!action.uri.trim()) {
+            alert('กรุณาใส่ URL');
+            return;
+        }
+        try {
+            new URL(action.uri);
+        } catch (e) {
+            alert('URL ไม่ถูกต้อง ต้องขึ้นต้นด้วย https:// หรือรูปแบบ URL ที่ LINE รองรับ');
+            return;
+        }
     } else if (type === 'postback') {
         action.data = document.getElementById('actionData').value;
+        if (!action.data.trim()) {
+            alert('กรุณาใส่ Postback Data');
+            return;
+        }
     } else if (type === 'richmenuswitch') {
         action.richMenuAliasId = document.getElementById('actionAlias').value;
+        if (!action.richMenuAliasId.trim()) {
+            alert('กรุณาใส่ Rich Menu Alias ID');
+            return;
+        }
     }
     
+    // Apply edited bounds (freedom to place the tap area anywhere)
+    const bx = parseInt(document.getElementById('areaX').value, 10);
+    const by = parseInt(document.getElementById('areaY').value, 10);
+    const bw = parseInt(document.getElementById('areaW').value, 10);
+    const bh = parseInt(document.getElementById('areaH').value, 10);
+    if ([bx, by, bw, bh].every(Number.isFinite) && bw > 0 && bh > 0) {
+        areas[currentAreaIndex].bounds = { x: Math.max(0, bx), y: Math.max(0, by), width: bw, height: bh };
+    }
+
     areas[currentAreaIndex].action = action;
     areas[currentAreaIndex].label = label || areas[currentAreaIndex].label;
-    
+
     updateAreasDisplay();
     closeAreaModal();
 }
@@ -1160,6 +1291,70 @@ function deleteArea(index) {
         updateAreasDisplay();
     }
 }
+
+// --- Freedom: add a custom tap area (then set its action) ---
+function addCustomArea() {
+    const w = Math.round(CANVAS_WIDTH * 0.4);
+    const h = Math.round(canvasHeight * 0.3);
+    areas.push({
+        bounds: { x: Math.round((CANVAS_WIDTH - w) / 2), y: Math.round((canvasHeight - h) / 2), width: w, height: h },
+        action: { type: 'message', text: '' },
+        label: 'ปุ่ม ' + (areas.length + 1)
+    });
+    updateAreasDisplay();
+    editArea(areas.length - 1);
+}
+
+// --- Freedom: drag a rectangle on the image to draw a tap area ---
+document.addEventListener('DOMContentLoaded', function() {
+    const overlay = document.getElementById('areasOverlay');
+    if (!overlay) return;
+    let drawing = false, sx = 0, sy = 0, rectEl = null;
+    const pct = (e) => {
+        const r = overlay.getBoundingClientRect();
+        const cx = e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX;
+        const cy = e.touches && e.touches[0] ? e.touches[0].clientY : e.clientY;
+        return { x: Math.min(Math.max((cx - r.left) / r.width, 0), 1), y: Math.min(Math.max((cy - r.top) / r.height, 0), 1) };
+    };
+    const start = (e) => {
+        if (e.target !== overlay) return; // only on empty background, not an existing area
+        drawing = true; const p = pct(e); sx = p.x; sy = p.y;
+        rectEl = document.createElement('div');
+        rectEl.style.cssText = 'position:absolute;border:2px dashed #16a34a;background:rgba(34,197,94,.25);pointer-events:none;z-index:5;';
+        overlay.appendChild(rectEl);
+        e.preventDefault();
+    };
+    const move = (e) => {
+        if (!drawing || !rectEl) return;
+        const p = pct(e);
+        const x = Math.min(sx, p.x), y = Math.min(sy, p.y), w = Math.abs(p.x - sx), h = Math.abs(p.y - sy);
+        rectEl.style.left = (x * 100) + '%'; rectEl.style.top = (y * 100) + '%';
+        rectEl.style.width = (w * 100) + '%'; rectEl.style.height = (h * 100) + '%';
+    };
+    const end = (e) => {
+        if (!drawing) return; drawing = false;
+        const p = pct(e);
+        const x = Math.min(sx, p.x), y = Math.min(sy, p.y), w = Math.abs(p.x - sx), h = Math.abs(p.y - sy);
+        if (rectEl) { rectEl.remove(); rectEl = null; }
+        if (w < 0.03 || h < 0.03) return; // ignore tiny drags (treated as a click)
+        areas.push({
+            bounds: {
+                x: Math.round(x * CANVAS_WIDTH), y: Math.round(y * canvasHeight),
+                width: Math.round(w * CANVAS_WIDTH), height: Math.round(h * canvasHeight)
+            },
+            action: { type: 'message', text: '' },
+            label: 'ปุ่ม ' + (areas.length + 1)
+        });
+        updateAreasDisplay();
+        editArea(areas.length - 1);
+    };
+    overlay.addEventListener('mousedown', start);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    overlay.addEventListener('touchstart', start, { passive: false });
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', end);
+});
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -1188,21 +1383,6 @@ function validateImage(input) {
     img.src = URL.createObjectURL(file);
 }
 
-// Form validation
-document.getElementById('richMenuForm').addEventListener('submit', function(e) {
-    if (areas.length === 0) {
-        e.preventDefault();
-        alert('กรุณาเลือกเทมเพลตหรือสร้างพื้นที่คลิกอย่างน้อย 1 พื้นที่');
-        return false;
-    }
-    
-    const hasEmptyAction = areas.some(a => !a.action.text && !a.action.uri && !a.action.data && !a.action.richMenuAliasId);
-    if (hasEmptyAction) {
-        e.preventDefault();
-        alert('กรุณาตั้งค่า Action ให้ครบทุกพื้นที่');
-        return false;
-    }
-});
 </script>
 
 <style>

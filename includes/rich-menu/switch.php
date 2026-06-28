@@ -129,11 +129,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_GET['tab'] ?? '') === 'switch') 
                 $stmt = $db->prepare("SELECT * FROM rich_menu_switch_pages WHERE switch_set_id = ? ORDER BY page_number");
                 $stmt->execute([$setId]);
                 $pages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
+
                 if (count($pages) < 2) {
                     throw new Exception('ต้องมีอย่างน้อย 2 หน้าเพื่อสลับ');
                 }
-                
+
+                // Resolve the CURRENT LINE rich menu id from rich_menus for each
+                // page. The cached page.line_rich_menu_id goes STALE when a menu
+                // is recreated/re-uploaded (its LINE id changes), which makes the
+                // alias point at a deleted menu → switching silently fails.
+                foreach ($pages as &$_p) {
+                    if (!empty($_p['rich_menu_id'])) {
+                        $rs = $db->prepare("SELECT line_rich_menu_id FROM rich_menus WHERE id = ?");
+                        $rs->execute([$_p['rich_menu_id']]);
+                        $cur = $rs->fetchColumn();
+                        if ($cur && $cur !== $_p['line_rich_menu_id']) {
+                            $_p['line_rich_menu_id'] = $cur;
+                            $db->prepare("UPDATE rich_menu_switch_pages SET line_rich_menu_id = ? WHERE id = ?")
+                               ->execute([$cur, $_p['id']]);
+                        }
+                    }
+                }
+                unset($_p);
+
                 // ตรวจสอบว่าทุกหน้ามี Rich Menu
                 foreach ($pages as $page) {
                     if (!$page['line_rich_menu_id']) {

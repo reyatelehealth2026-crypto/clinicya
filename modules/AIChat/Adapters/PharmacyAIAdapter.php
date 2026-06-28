@@ -22,7 +22,7 @@ class PharmacyAIAdapter
     private ?int $lineAccountId;
     private ?int $userId = null;
     private ?string $apiKey = null;
-    private string $model = 'gemini-2.0-flash';
+    private string $model = 'gemini-2.5-flash';
     private RedFlagDetector $redFlagDetector;
     private PharmacyRAG $rag;
     private ProductFlexTemplates $flexTemplates;

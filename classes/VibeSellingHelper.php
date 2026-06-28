@@ -57,7 +57,7 @@ class VibeSellingHelper
             
             if (!$tableExists) {
                 $this->settings = [
-                    'v2_enabled' => '0',
+                    'v2_enabled' => '1', // 2026-06-02: v2 is now the default inbox — no per-tenant setup
                     'auto_switch_on_error' => '1',
                     'show_v2_badge' => '1'
                 ];
@@ -77,7 +77,7 @@ class VibeSellingHelper
             
             // Set defaults if not found
             if (!isset($this->settings['v2_enabled'])) {
-                $this->settings['v2_enabled'] = '0';
+                $this->settings['v2_enabled'] = '1'; // default v2 on
             }
             if (!isset($this->settings['auto_switch_on_error'])) {
                 $this->settings['auto_switch_on_error'] = '1';

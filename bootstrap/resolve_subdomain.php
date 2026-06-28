@@ -95,6 +95,55 @@ if (!function_exists('reya_resolve_tenant_from_host')) {
     }
 
     /**
+     * True only when the request is for the BARE root domain (re-ya.com) or its
+     * www alias — i.e. NOT a tenant subdomain and NOT another reserved subdomain
+     * (api/admin/shop/…). Used to map the master/HQ tenant onto the root domain.
+     */
+    function reya_is_root_host(): bool
+    {
+        $host = strtolower(trim($_SERVER['HTTP_HOST'] ?? ''));
+        if ($host === '') {
+            return false;
+        }
+        $host = preg_replace('/:\d+$/', '', $host);
+        $base = strtolower(reya_base_domain());
+        return $host === $base || $host === 'www.' . $base;
+    }
+
+    /**
+     * The tenant slug that the root domain (re-ya.com) should serve. The master
+     * branch lives here. Adjustable via env REYA_ROOT_TENANT_SLUG. Default:
+     * tenant-0001 (master.tenants id 1 → zrismpsz_reya_t_0001).
+     */
+    /**
+     * True when the request carries an explicit line-account routing signal
+     * (?account=N from the LINE webhook, ?la / ?line_account_id from Mini-App
+     * deep links). On the root domain such requests must be routed by
+     * route_by_account.php instead of being pinned to the root-default tenant,
+     * else every tenant's webhook would resolve to tenant-0001.
+     */
+    function reya_has_explicit_account_signal(): bool
+    {
+        foreach (['account', 'la', 'line_account_id'] as $k) {
+            if (isset($_GET[$k]) && $_GET[$k] !== '') {
+                return true;
+            }
+            if (isset($_POST[$k]) && $_POST[$k] !== '') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function reya_root_tenant_slug(): ?string
+    {
+        $env = getenv('REYA_ROOT_TENANT_SLUG');
+        $slug = ($env !== false && $env !== '') ? $env : 'tenant-0001';
+        $slug = strtolower(trim($slug));
+        return $slug !== '' ? $slug : null;
+    }
+
+    /**
      * Resolve subdomain → tenant_id via master DB.
      * Returns tenant_id when matched + active. null otherwise.
      * Side effect: emits 503 + exit when tenant is suspended/terminated.
@@ -102,8 +151,19 @@ if (!function_exists('reya_resolve_tenant_from_host')) {
     function reya_resolve_tenant_from_host(): ?int
     {
         $sub = reya_extract_subdomain();
+        $isRoot = false;
         if ($sub === null) {
-            return null;
+            // Root domain (re-ya.com / www.re-ya.com) is the master/HQ tenant's
+            // home — map it to the configured root tenant (default tenant-0001).
+            // Any OTHER null (a reserved subdomain like api/admin/shop) stays null
+            // so it keeps falling through to the legacy default connection.
+            if (reya_is_root_host() && !reya_has_explicit_account_signal()) {
+                $sub = reya_root_tenant_slug();
+                $isRoot = true;
+            }
+            if ($sub === null) {
+                return null;
+            }
         }
 
         // Need classes/Database.php loaded by now (caller in config/database.php
@@ -124,6 +184,11 @@ if (!function_exists('reya_resolve_tenant_from_host')) {
             $stmt->execute([$sub]);
             $row = $stmt->fetch(\PDO::FETCH_ASSOC);
             if (!$row) {
+                // Root domain must NEVER 404 — fall through to the legacy landing
+                // (config'd root tenant missing → treat as unconfigured, not broken).
+                if ($isRoot) {
+                    return null;
+                }
                 // Subdomain looks like a tenant slug but no tenant exists — return 404
                 // to prevent users from probing tenant existence + avoid serving the
                 // root-domain content under a stranger's URL.
@@ -142,15 +207,30 @@ if (!function_exists('reya_resolve_tenant_from_host')) {
             }
 
             $status = (string)($row['status'] ?? '');
-            if ($status === 'suspended' || $status === 'terminated' || $status === 'pending_setup') {
+
+            // Self-serve shops created via Google signup sit in pending_setup until a
+            // platform admin approves them. Instead of locking them out, they get
+            // FULL access in DEMO mode: the app runs normally but header.php paints a
+            // "ข้อมูลตัวอย่าง / DEMO" watermark + "contact admin to activate" banner.
+            // Approval flips status to 'active' → REYA_DEMO_MODE is no longer defined.
+            // The master/root domain is never demo-flagged.
+            if ($status === 'pending_setup') {
+                if (!$isRoot && !defined('REYA_DEMO_MODE')) {
+                    define('REYA_DEMO_MODE', true);
+                }
+                // fall through → return the tenant id (full access)
+            } elseif ($status === 'suspended' || $status === 'terminated') {
+                // Never take the master/root domain offline on a status glitch —
+                // fall through to legacy so re-ya.com always serves something.
+                if ($isRoot) {
+                    return null;
+                }
                 http_response_code(503);
                 header('Content-Type: text/html; charset=utf-8');
                 $name = htmlspecialchars((string)$row['display_name'], ENT_QUOTES, 'UTF-8');
                 $msg  = $status === 'suspended'
                     ? 'บัญชีของร้านนี้ถูกระงับชั่วคราว — กรุณาติดต่อทีมงาน REYA'
-                    : ($status === 'terminated'
-                        ? 'บัญชีของร้านนี้ถูกปิดแล้ว'
-                        : 'ร้านยังอยู่ระหว่างการตั้งค่า กรุณารอสักครู่');
+                    : 'บัญชีของร้านนี้ถูกปิดแล้ว';
                 echo '<!doctype html><meta charset="utf-8"><title>ระงับ — ' . $name . '</title>'
                    . '<style>body{font-family:sans-serif;max-width:560px;margin:80px auto;text-align:center;color:#475569}</style>'
                    . '<h1 style="color:#dc2626">' . $name . '</h1>'

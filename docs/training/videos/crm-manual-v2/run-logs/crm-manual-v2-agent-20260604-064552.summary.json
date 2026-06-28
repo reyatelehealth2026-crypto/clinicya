@@ -1,0 +1,18 @@
+﻿{
+    "run_id":  "20260604-064552",
+    "dry_run":  false,
+    "base_url":  "https://tenant-0001.re-ya.com",
+    "episodes_requested":  [
+                               "02"
+                           ],
+    "log":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-064552.log",
+    "summary":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-064552.summary.json",
+    "manifest":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-manual-v2-manifest.json",
+    "status":  {
+                   "episode":  "02",
+                   "path":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\crm-02-dashboard-crm.mp4",
+                   "exists":  true,
+                   "size_mb":  1.13,
+                   "duration_seconds":  33.767
+               }
+}

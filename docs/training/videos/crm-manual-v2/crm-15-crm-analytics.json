@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:15:07.078Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "15",
+  "title": "CRM Analytics สำหรับอ่านผลลัพธ์",
+  "audience": "เจ้าของร้าน / ผู้จัดการ / การตลาด",
+  "output": "videos/crm-manual-v2/crm-15-crm-analytics.mp4",
+  "frames": 133,
+  "scenes": [
+    {
+      "route": "/analytics?tab=crm",
+      "caption": "CRM Analytics: เลือกช่วงเวลา 7 วัน 30 วัน หรือ 90 วัน"
+    },
+    {
+      "route": "/analytics?tab=crm",
+      "caption": "อ่านจำนวนลูกค้า การเติบโตของลูกค้า tag และ segment"
+    },
+    {
+      "route": "/analytics?tab=crm",
+      "caption": "ใช้ตัวเลขตอบคำถามธุรกิจ เช่น ลูกค้าใหม่เพิ่มไหม หรือ tag ไหนใช้บ่อย"
+    },
+    {
+      "route": "/dashboard?tab=crm",
+      "caption": "ถ้าตัวเลขผิดปกติ ให้ตรวจช่วงเวลา filter และข้อมูลที่กรอกใน CRM"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

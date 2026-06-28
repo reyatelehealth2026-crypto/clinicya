@@ -270,7 +270,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
             exit;
         } elseif ($action === 'dispense') {
             require_once __DIR__ . '/classes/FlexTemplates.php';
-            
+            require_once __DIR__ . '/includes/liff-helper.php'; // reya_liff_url_or_oa()
+
             $userId = $_POST['user_id'] ?? null;
             if (!$userId) {
                 throw new Exception('User ID is required');
@@ -401,22 +402,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 
                 error_log("Dispense: LINE API initialized for account " . $user['line_account_id']);
                 
-                // Build checkout URL — ชี้ไปหน้า order ใน mini app ใหม่ พร้อม transaction id
-                $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
-                $checkoutUrl = !empty($transactionId)
-                    ? $baseUrl . '/miniapp/order/?id=' . $transactionId
-                    : $baseUrl . '/miniapp/orders/';
-
-                // ถ้ามี LIFF wrapper สำหรับ mini app → ห่อด้วย liff.line.me เพื่อให้ LIFF init auto
+                // Build checkout URL with LIFF-or-OA fallback.
+                // Priority: dedicated liff_apps wrapper → line_accounts.liff_id
+                // (via helper) → OA chat → '' (no checkout button rendered).
+                // Customers of tenants without a real LIFF must NOT be sent to the
+                // shared Mini App without LIFF context.
+                $deepLink = !empty($transactionId) ? '/order?id=' . $transactionId : '/orders';
+                $checkoutUrl = '';
+                // 1. Dedicated LIFF wrapper for the Mini App, if configured.
                 try {
                     $stmt = $db->prepare("SELECT liff_id FROM liff_apps WHERE line_account_id = ? AND is_active = 1 AND (name IN ('miniapp','order','checkout') OR endpoint_url LIKE '%/miniapp%') ORDER BY FIELD(name,'order','checkout','miniapp') LIMIT 1");
                     $stmt->execute([$user['line_account_id']]);
                     $liffApp = $stmt->fetch(PDO::FETCH_ASSOC);
-                    if ($liffApp && !empty($liffApp['liff_id'])) {
-                        $deepLink = !empty($transactionId) ? '/order?id=' . $transactionId : '/orders';
-                        $checkoutUrl = 'https://liff.line.me/' . $liffApp['liff_id'] . $deepLink;
+                    if ($liffApp && reya_is_real_liff_id($liffApp['liff_id'] ?? null)) {
+                        $sep = (strpos($deepLink, '?') !== false) ? '&' : '?';
+                        $checkoutUrl = 'https://liff.line.me/' . $liffApp['liff_id'] . $deepLink . $sep . 'la=' . (int) $user['line_account_id'];
                     }
                 } catch (Exception $e) {}
+                // 2. Fall back to line_accounts.liff_id, else OA chat, else ''.
+                if ($checkoutUrl === '') {
+                    $checkoutUrl = reya_liff_url_or_oa($db, (int) $user['line_account_id'], $deepLink);
+                }
                 
                 // Add product images to items
                 foreach ($itemsArr as &$item) {

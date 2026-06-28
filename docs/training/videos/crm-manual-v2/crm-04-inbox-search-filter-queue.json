@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-03T23:49:13.881Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "04",
+  "title": "ค้นหา กรอง และจัดคิวแชทที่ต้องตอบ",
+  "audience": "แอดมิน / เภสัชกร / staff",
+  "output": "videos/crm-manual-v2/crm-04-inbox-search-filter-queue.mp4",
+  "frames": 124,
+  "scenes": [
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เริ่มจากรายการแชทด้านซ้าย: ดู unread และเวลาล่าสุด"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "ค้นหาจากชื่อ เบอร์โทร หรือ LINE user id"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "ใช้ filter เพื่อหางานค้าง เช่น ยังไม่อ่าน ยังไม่ตอบ หรือมี tag"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "จัดลำดับจากความเร่งด่วนและบริบทลูกค้า ไม่ใช่จาก filter อย่างเดียว"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

@@ -98,7 +98,7 @@ if ($action === 'list') {
 
     // Page
     $listStmt = $platformDb->prepare(
-        "SELECT id, sku, name, name_en, manufacturer, variant, generic_name, unit, pack_size, image_url
+        "SELECT id, sku, barcode, name, name_en, manufacturer, category, generic_name, unit, pack_size, price, image_url
          FROM master_products {$whereSql}
          ORDER BY name ASC
          LIMIT {$perPage} OFFSET {$offset}"
@@ -165,11 +165,21 @@ if ($action === 'import') {
     $defaultStock = isset($body['default_stock']) ? (int)   $body['default_stock'] : 0;
     $activate     = !empty($body['activate']);
 
+    // master_products may carry the full CNY price/unit array as JSON (product_price);
+    // include it only if the column exists so we degrade gracefully on older schemas.
+    $hasProductPrice = false;
+    try {
+        $hasProductPrice = (bool) $platformDb->query("SHOW COLUMNS FROM master_products LIKE 'product_price'")->fetch();
+    } catch (\Throwable $e) {
+        $hasProductPrice = false;
+    }
+    $ppSelect = $hasProductPrice ? ', product_price' : '';
+
     // Fetch master rows
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $stmt = $platformDb->prepare(
-        "SELECT id, sku, name, name_en, manufacturer, variant, generic_name, unit, pack_size,
-                usage_instructions, description, image_url
+        "SELECT id, sku, barcode, name, name_en, manufacturer, category, generic_name, unit, pack_size,
+                price, sale_price, usage_instructions, warning, description, image_url{$ppSelect}
          FROM master_products WHERE id IN ({$placeholders}) AND is_active = 1"
     );
     $stmt->execute($ids);
@@ -185,33 +195,114 @@ if ($action === 'import') {
     $skipped  = 0;
     $errors   = [];
 
+    // 2026-06-02: resolve master.category (string) → business_categories.id, create if missing.
+    $catCache = [];
+    $resolveCat = function (?string $name) use ($tenantDb, $lineAccountId, &$catCache): ?int {
+        $name = trim((string) $name);
+        if ($name === '') return null;
+        $key = mb_strtolower($name);
+        if (array_key_exists($key, $catCache)) return $catCache[$key];
+        try {
+            $s = $tenantDb->prepare('SELECT id FROM business_categories WHERE line_account_id = ? AND LOWER(name) = ? LIMIT 1');
+            $s->execute([$lineAccountId, $key]);
+            $id = (int) ($s->fetchColumn() ?: 0);
+            if ($id === 0) {
+                $tenantDb->prepare('INSERT INTO business_categories (line_account_id, name, is_active, created_at) VALUES (?, ?, 1, NOW())')
+                    ->execute([$lineAccountId, $name]);
+                $id = (int) $tenantDb->lastInsertId();
+            }
+        } catch (\Throwable $e) { $id = 0; }
+        return $catCache[$key] = ($id ?: null);
+    };
+
     $checkStmt = $tenantDb->prepare('SELECT id FROM business_items WHERE line_account_id = ? AND sku = ? LIMIT 1');
     $insertStmt = $tenantDb->prepare(
         'INSERT INTO business_items
-            (line_account_id, sku, name, name_en, manufacturer, dosage_form, generic_name, active_ingredient,
-             unit, base_unit, strength, usage_instructions, default_usage_text, description, image_url, photo_path,
+            (line_account_id, sku, barcode, name, name_en, manufacturer, category_id, generic_name, active_ingredient,
+             unit, base_unit, strength, usage_instructions, default_usage_text, warnings, description, image_url, photo_path,
              price, sale_price, stock, is_active, created_at)
          VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NOW())'
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
     );
-    // For existing SKUs we only refresh the drug-detail fields; never touch
-    // the tenant's price/stock/is_active (they may have customised those).
+    // Existing SKUs: refresh drug detail + fill category/barcode if empty; never overwrite tenant price/stock/is_active.
     $refreshStmt = $tenantDb->prepare(
         'UPDATE business_items
-            SET name = ?, name_en = ?, manufacturer = ?, dosage_form = ?, generic_name = ?,
-                active_ingredient = ?, unit = COALESCE(NULLIF(unit, ""), ?),
-                base_unit = COALESCE(NULLIF(base_unit, ""), ?),
-                strength = ?, usage_instructions = ?, default_usage_text = ?,
+            SET name = ?, name_en = ?, manufacturer = ?,
+                category_id = COALESCE(category_id, ?),
+                barcode = COALESCE(NULLIF(barcode, ""), ?),
+                generic_name = ?, active_ingredient = ?,
+                unit = COALESCE(NULLIF(unit, ""), ?), base_unit = COALESCE(NULLIF(base_unit, ""), ?),
+                strength = ?, usage_instructions = ?, default_usage_text = ?, warnings = ?,
                 description = ?, image_url = COALESCE(NULLIF(image_url, ""), ?),
                 photo_path = COALESCE(NULLIF(photo_path, ""), ?),
                 updated_at = NOW()
           WHERE id = ?'
     );
 
+    // ── Multi-unit seeding ──────────────────────────────────────────────────────
+    // The CNY master carries multiple units per product (e.g. ขวด=1, โหล=12) in the
+    // product_price[] array. The branch shows units from product_units, which the old
+    // import never populated. We seed product_units from the master's units, but only
+    // for products that have none yet — never clobber a tenant's own unit edits.
+    $unitCountStmt  = $tenantDb->prepare('SELECT COUNT(*) FROM product_units WHERE product_id = ? AND is_active = 1');
+    $unitInsertStmt = $tenantDb->prepare(
+        'INSERT INTO product_units
+            (line_account_id, product_id, unit_name, factor, sale_price, is_base_unit,
+             is_purchase_unit, is_sale_unit, is_active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, 1, 1, NOW())
+         ON DUPLICATE KEY UPDATE
+            factor = VALUES(factor), sale_price = VALUES(sale_price),
+            is_base_unit = VALUES(is_base_unit), is_active = 1, updated_at = NOW()'
+    );
+
+    // "ขวด[60ML]" → "ขวด"; clamp to product_units.unit_name length (VARCHAR 50)
+    $cleanUnitName = static function (string $raw): string {
+        $name = preg_replace('/\s*\[[^\]]*\]\s*/u', '', $raw);
+        return mb_substr(trim((string) $name), 0, 50);
+    };
+    // Build the distinct unit list for one master row (multi-unit from product_price,
+    // else a single base unit from the legacy `unit` column).
+    $buildUnits = static function (array $m) use ($cleanUnitName): array {
+        $pp = $m['product_price'] ?? null;
+        $list = is_string($pp) ? json_decode($pp, true) : (is_array($pp) ? $pp : null);
+
+        $rows = [];
+        if (is_array($list) && !empty($list)) {
+            $byUnit = [];
+            foreach ($list as $r) {
+                if (!is_array($r)) continue;
+                $name = $cleanUnitName((string) ($r['unit'] ?? ''));
+                if ($name === '') continue;
+                $factor = (float) ($r['unit_num'] ?? 1) ?: 1.0;
+                $price  = (float) ($r['price'] ?? 0);
+                $isGen  = stripos((string) ($r['customer_group'] ?? ''), 'GEN') !== false;
+                // Prefer the GEN (retail) price tier; otherwise keep the first seen.
+                if (!isset($byUnit[$name]) || ($isGen && empty($byUnit[$name]['is_gen']))) {
+                    $byUnit[$name] = ['unit_name' => $name, 'factor' => $factor, 'price' => $price ?: null, 'is_gen' => $isGen];
+                }
+            }
+            $rows = array_values($byUnit);
+        }
+        if (empty($rows)) {
+            $base = $cleanUnitName((string) ($m['unit'] ?? '')) ?: 'ชิ้น';
+            $rows = [['unit_name' => $base, 'factor' => 1.0, 'price' => null]];
+        }
+        // smallest factor = base unit
+        usort($rows, static fn ($a, $b) => $a['factor'] <=> $b['factor']);
+        foreach ($rows as $i => &$r) { $r['is_base_unit'] = $i === 0 ? 1 : 0; }
+        unset($r);
+        return $rows;
+    };
+    $unitsSeeded = 0;
+
     try {
         $tenantDb->beginTransaction();
         foreach ($masters as $m) {
             $sku = (string) $m['sku'];
+            $catId = $resolveCat($m['category'] ?? null);
+            // price: user-entered default wins if set (>0), else master price
+            $mPrice = (float) ($m['price'] ?? 0);
+            $usePrice = $defaultPrice > 0 ? $defaultPrice : $mPrice;
 
             $checkStmt->execute([$lineAccountId, $sku]);
             $existingId = (int) ($checkStmt->fetchColumn() ?: 0);
@@ -219,23 +310,40 @@ if ($action === 'import') {
             if ($existingId > 0) {
                 $refreshStmt->execute([
                     $m['name'], $m['name_en'] ?: null, $m['manufacturer'] ?: null,
-                    $m['variant'] ?: null, $m['generic_name'] ?: null, $m['generic_name'] ?: null,
+                    $catId,
+                    $m['barcode'] ?: null,
+                    $m['generic_name'] ?: null, $m['generic_name'] ?: null,
                     $m['unit'] ?: null, $m['unit'] ?: null,
                     $m['pack_size'] ?: null, $m['usage_instructions'] ?: null, $m['usage_instructions'] ?: null,
+                    $m['warning'] ?: null,
                     $m['description'] ?: null, $m['image_url'] ?: null, $m['image_url'] ?: null,
                     $existingId,
                 ]);
+                $productId = $existingId;
                 $updated++;
             } else {
                 $insertStmt->execute([
-                    $lineAccountId, $sku, $m['name'], $m['name_en'] ?: null, $m['manufacturer'] ?: null,
-                    $m['variant'] ?: null, $m['generic_name'] ?: null, $m['generic_name'] ?: null,
+                    $lineAccountId, $sku, $m['barcode'] ?: null, $m['name'], $m['name_en'] ?: null, $m['manufacturer'] ?: null,
+                    $catId, $m['generic_name'] ?: null, $m['generic_name'] ?: null,
                     $m['unit'] ?: null, $m['unit'] ?: null, $m['pack_size'] ?: null,
-                    $m['usage_instructions'] ?: null, $m['usage_instructions'] ?: null,
+                    $m['usage_instructions'] ?: null, $m['usage_instructions'] ?: null, $m['warning'] ?: null,
                     $m['description'] ?: null, $m['image_url'] ?: null, $m['image_url'] ?: null,
-                    $defaultPrice, $defaultStock, $activate ? 1 : 0,
+                    $usePrice, (float) ($m['sale_price'] ?? 0) ?: null, $defaultStock, $activate ? 1 : 0,
                 ]);
+                $productId = (int) $tenantDb->lastInsertId();
                 $inserted++;
+            }
+
+            // Seed units only when the product has none — keeps tenant customisations intact.
+            $unitCountStmt->execute([$productId]);
+            if ((int) $unitCountStmt->fetchColumn() === 0) {
+                foreach ($buildUnits($m) as $u) {
+                    $unitInsertStmt->execute([
+                        $lineAccountId, $productId, $u['unit_name'], $u['factor'],
+                        $u['price'], $u['is_base_unit'],
+                    ]);
+                    $unitsSeeded++;
+                }
             }
         }
         $tenantDb->commit();
@@ -254,12 +362,13 @@ if ($action === 'import') {
     }
 
     echo json_encode([
-        'ok'       => true,
-        'inserted' => $inserted,
-        'updated'  => $updated,
-        'skipped'  => $skipped,
-        'errors'   => $errors,
-        'activated'=> $activate,
+        'ok'          => true,
+        'inserted'    => $inserted,
+        'updated'     => $updated,
+        'skipped'     => $skipped,
+        'units_seeded'=> $unitsSeeded,
+        'errors'      => $errors,
+        'activated'   => $activate,
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }

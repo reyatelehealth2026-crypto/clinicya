@@ -1807,8 +1807,8 @@ class TriageEngine
     
     private function getCheckoutUrl(): string
     {
-        // Use actual LIFF URL
-        return "https://cny.re-ya.com/liff/";
+        // New Mini App (not the retired cny.re-ya.com/liff/ SPA)
+        return "https://re-ya.com/miniapp/";
     }
     
     // ==================== Utility Methods ====================

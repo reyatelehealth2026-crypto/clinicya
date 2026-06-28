@@ -1,0 +1,6 @@
+﻿{
+    "run_id":  "20260604-064713",
+    "failed":  true,
+    "error":  "capture failed: {\"code\":-32000,\"message\":\"Not attached to an active page\"}",
+    "log":  "C:\\Users\\Administrator\\clinicya\\docs\\training\\videos\\crm-manual-v2\\run-logs\\crm-manual-v2-agent-20260604-064713.log"
+}

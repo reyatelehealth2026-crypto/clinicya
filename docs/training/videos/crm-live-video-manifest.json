@@ -1,0 +1,327 @@
+{
+  "generated_at": "2026-06-03T10:07:03.981Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "privacy": "Live tenant screenshots are used without redaction per user instruction.",
+  "videos": [
+    {
+      "id": "crm-01-overview",
+      "title": "ตอนที่ 1: ภาพรวม CRM ของร้าน",
+      "audience": "Owner, Admin, Pharmacist",
+      "file": "videos/crm-01-overview.mp4",
+      "scenes": [
+        {
+          "pageKey": "dashboard-crm",
+          "heading": "เริ่มจาก Dashboard CRM"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "Inbox คือหัวใจของ CRM"
+        },
+        {
+          "pageKey": "users",
+          "heading": "ฐานลูกค้าเชื่อมกับทุกงาน"
+        }
+      ]
+    },
+    {
+      "id": "crm-02-dashboard",
+      "title": "ตอนที่ 2: อ่าน Dashboard CRM",
+      "audience": "Owner, Admin",
+      "file": "videos/crm-02-dashboard.mp4",
+      "scenes": [
+        {
+          "pageKey": "dashboard-crm",
+          "heading": "ดู KPI ลูกค้าและ Automation"
+        },
+        {
+          "pageKey": "dashboard-crm",
+          "heading": "Recent Customers และ Quick Actions"
+        },
+        {
+          "pageKey": "analytics-crm",
+          "heading": "เชื่อมต่อไป Analytics"
+        }
+      ]
+    },
+    {
+      "id": "crm-03-inbox-layout",
+      "title": "ตอนที่ 3: รู้จัก Inbox v2 แบบ 3 คอลัมน์",
+      "audience": "Pharmacist, Admin, Staff",
+      "file": "videos/crm-03-inbox-layout.mp4",
+      "scenes": [
+        {
+          "pageKey": "inbox-main",
+          "heading": "คอลัมน์ซ้าย: รายการแชท"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "คอลัมน์กลาง: ห้องสนทนา"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "คอลัมน์ขวา: CRM HUD"
+        }
+      ]
+    },
+    {
+      "id": "crm-04-inbox-queue",
+      "title": "ตอนที่ 4: ค้นหา กรอง และจัดคิวแชท",
+      "audience": "Admin, Pharmacist, Staff",
+      "file": "videos/crm-04-inbox-queue.mp4",
+      "scenes": [
+        {
+          "pageKey": "inbox-main",
+          "heading": "ค้นหาแชทจากรายการซ้าย"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "ใช้ filter เพื่อโฟกัสงานค้าง"
+        },
+        {
+          "pageKey": "inbox-analytics",
+          "heading": "ตรวจภาพรวมแชท"
+        }
+      ]
+    },
+    {
+      "id": "crm-05-chat-replies",
+      "title": "ตอนที่ 5: ตอบแชทและใช้ข้อความช่วยตอบ",
+      "audience": "Pharmacist, Admin, Staff",
+      "file": "videos/crm-05-chat-replies.mp4",
+      "scenes": [
+        {
+          "pageKey": "inbox-main",
+          "heading": "ตอบแชทจากหน้าหลัก"
+        },
+        {
+          "pageKey": "quick-replies",
+          "heading": "ใช้ Quick Access / Replies"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "โอนเคสให้คนที่เกี่ยวข้อง"
+        }
+      ]
+    },
+    {
+      "id": "crm-06-crm-hud",
+      "title": "ตอนที่ 6: อ่าน CRM HUD ก่อนตอบลูกค้า",
+      "audience": "Pharmacist, Admin",
+      "file": "videos/crm-06-crm-hud.mp4",
+      "scenes": [
+        {
+          "pageKey": "inbox-main",
+          "heading": "ดูข้อมูลลูกค้าทางขวา"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "อ่านประวัติยาและประวัติออเดอร์"
+        },
+        {
+          "pageKey": "dispense-tracking",
+          "heading": "ตรวจประวัติ Dispense เพิ่มเติม"
+        }
+      ]
+    },
+    {
+      "id": "crm-07-tags-notes",
+      "title": "ตอนที่ 7: ใช้ Tag และ Note ให้ทีมทำงานต่อได้",
+      "audience": "Admin, Pharmacist, Marketing",
+      "file": "videos/crm-07-tags-notes.mp4",
+      "scenes": [
+        {
+          "pageKey": "user-tags",
+          "heading": "จัดการ Tag ลูกค้า"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "ติด tag จากหน้า Inbox"
+        },
+        {
+          "pageKey": "auto-tag-rules",
+          "heading": "Auto Tag Rules"
+        }
+      ]
+    },
+    {
+      "id": "crm-08-history",
+      "title": "ตอนที่ 8: ดูประวัติออเดอร์และประวัติลูกค้า",
+      "audience": "Pharmacist, Admin",
+      "file": "videos/crm-08-history.mp4",
+      "scenes": [
+        {
+          "pageKey": "users",
+          "heading": "เปิดฐานลูกค้า"
+        },
+        {
+          "pageKey": "shop-orders",
+          "heading": "ดูออเดอร์ของร้าน"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "กลับมาที่แชทเพื่อคุยต่อ"
+        }
+      ]
+    },
+    {
+      "id": "crm-09-dispense",
+      "title": "ตอนที่ 9: จ่ายยาและส่งฉลากผ่าน LINE",
+      "audience": "Pharmacist",
+      "file": "videos/crm-09-dispense.mp4",
+      "scenes": [
+        {
+          "pageKey": "inbox-main",
+          "heading": "เริ่มจ่ายยาจาก Inbox"
+        },
+        {
+          "pageKey": "dispense-tracking",
+          "heading": "ติดตามรายการจ่ายยา"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "ยืนยันผลในห้องแชท"
+        }
+      ]
+    },
+    {
+      "id": "crm-10-refill-followup",
+      "title": "ตอนที่ 10: ติดตาม Refill และดูแลต่อเนื่อง",
+      "audience": "Pharmacist, Admin",
+      "file": "videos/crm-10-refill-followup.mp4",
+      "scenes": [
+        {
+          "pageKey": "dispense-tracking",
+          "heading": "ใช้ประวัติ Dispense เพื่อวางแผนติดตาม"
+        },
+        {
+          "pageKey": "user-tags",
+          "heading": "ตั้ง tag สำหรับติดตาม"
+        },
+        {
+          "pageKey": "broadcast",
+          "heading": "ต่อยอดเป็นการสื่อสารกลุ่ม"
+        }
+      ]
+    },
+    {
+      "id": "crm-11-users",
+      "title": "ตอนที่ 11: ฐานลูกค้า Users / Customer 360",
+      "audience": "Admin, Owner, Marketing",
+      "file": "videos/crm-11-users.mp4",
+      "scenes": [
+        {
+          "pageKey": "users",
+          "heading": "ดูรายการลูกค้าทั้งหมด"
+        },
+        {
+          "pageKey": "users",
+          "heading": "อ่านข้อมูลลูกค้าจาก tenant จริง"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "เชื่อมกลับไปงานแชท"
+        }
+      ]
+    },
+    {
+      "id": "crm-12-segments",
+      "title": "ตอนที่ 12: Customer Segments",
+      "audience": "Marketing, Admin",
+      "file": "videos/crm-12-segments.mp4",
+      "scenes": [
+        {
+          "pageKey": "customer-segments",
+          "heading": "เข้าใจ Segment"
+        },
+        {
+          "pageKey": "user-tags",
+          "heading": "Tag คือฐานของ Segment"
+        },
+        {
+          "pageKey": "broadcast",
+          "heading": "ใช้ Segment กับ Broadcast"
+        }
+      ]
+    },
+    {
+      "id": "crm-13-auto-rules",
+      "title": "ตอนที่ 13: Auto Tag และ Automation",
+      "audience": "Admin, Marketing",
+      "file": "videos/crm-13-auto-rules.mp4",
+      "scenes": [
+        {
+          "pageKey": "auto-tag-rules",
+          "heading": "ตั้ง Auto Tag Rules"
+        },
+        {
+          "pageKey": "inbox-main",
+          "heading": "ดูผลที่กลับมาใน Inbox"
+        },
+        {
+          "pageKey": "analytics-crm",
+          "heading": "วัดผลหลังใช้งาน"
+        }
+      ]
+    },
+    {
+      "id": "crm-14-broadcast",
+      "title": "ตอนที่ 14: Broadcast และ Marketing Hub",
+      "audience": "Marketing, Admin",
+      "file": "videos/crm-14-broadcast.mp4",
+      "scenes": [
+        {
+          "pageKey": "broadcast",
+          "heading": "เตรียม Broadcast"
+        },
+        {
+          "pageKey": "customer-segments",
+          "heading": "เลือกกลุ่มจาก Segment"
+        },
+        {
+          "pageKey": "drip-campaigns",
+          "heading": "Drip Campaigns"
+        }
+      ]
+    },
+    {
+      "id": "crm-15-analytics",
+      "title": "ตอนที่ 15: CRM Analytics",
+      "audience": "Owner, Manager, Marketing",
+      "file": "videos/crm-15-analytics.mp4",
+      "scenes": [
+        {
+          "pageKey": "analytics-crm",
+          "heading": "อ่านผล CRM ตามช่วงเวลา"
+        },
+        {
+          "pageKey": "inbox-analytics",
+          "heading": "อ่านผลแชท"
+        },
+        {
+          "pageKey": "link-tracking",
+          "heading": "ติดตามลิงก์และ campaign"
+        }
+      ]
+    },
+    {
+      "id": "crm-16-weekly-report",
+      "title": "ตอนที่ 16: สรุปงาน CRM รายสัปดาห์",
+      "audience": "Owner, Manager, Admin",
+      "file": "videos/crm-16-weekly-report.mp4",
+      "scenes": [
+        {
+          "pageKey": "dashboard-crm",
+          "heading": "เริ่ม weekly review ที่ Dashboard CRM"
+        },
+        {
+          "pageKey": "analytics-crm",
+          "heading": "อ่านรายงานผลลัพธ์"
+        },
+        {
+          "pageKey": "broadcast",
+          "heading": "วางแผน action ถัดไป"
+        }
+      ]
+    }
+  ]
+}

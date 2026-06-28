@@ -1,56 +1,60 @@
-/**
- * Tests for SaaS subdomain → API origin resolution.
- *
- * Run with: `node --import tsx --test src/lib/__tests__/config.test.ts`
- * (tsx is not currently installed; this guards the tenant-separation logic so a
- *  future runner — Vitest / node strip-types — catches regressions.)
- */
-
-import { test } from 'node:test'
+import { test, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { isTenantSubdomainHost, resolveApiBaseUrl } from '../config.ts'
+import {
+  buildMiniappBootstrapUrl,
+  resolvePhpApiBaseUrl,
+} from '../config.ts'
 
-test('treats tenant slugs on the base domain as tenant subdomains', () => {
-  assert.equal(isTenantSubdomainHost('tenant-0001.re-ya.com'), true)
-  assert.equal(isTenantSubdomainHost('tenant-9.re-ya.com'), true)
-  assert.equal(isTenantSubdomainHost('cny.re-ya.com'), true)
-  assert.equal(isTenantSubdomainHost('TENANT-7.RE-YA.COM'), true)
-  assert.equal(isTenantSubdomainHost('tenant-1.re-ya.com:443'), true)
+const originalApiBase = process.env.NEXT_PUBLIC_PHP_API_BASE_URL
+
+afterEach(() => {
+  if (originalApiBase === undefined) {
+    delete process.env.NEXT_PUBLIC_PHP_API_BASE_URL
+  } else {
+    process.env.NEXT_PUBLIC_PHP_API_BASE_URL = originalApiBase
+  }
+  delete (globalThis as { window?: unknown }).window
 })
 
-test('rejects root domain, reserved hosts, deep subdomains and foreign hosts', () => {
-  assert.equal(isTenantSubdomainHost('re-ya.com'), false)
-  assert.equal(isTenantSubdomainHost('www.re-ya.com'), false)
-  assert.equal(isTenantSubdomainHost('api.re-ya.com'), false)
-  assert.equal(isTenantSubdomainHost('miniapp.re-ya.com'), false)
-  assert.equal(isTenantSubdomainHost('shop.re-ya.com'), false)
-  assert.equal(isTenantSubdomainHost('a.b.re-ya.com'), false)
-  assert.equal(isTenantSubdomainHost('localhost'), false)
-  assert.equal(isTenantSubdomainHost('localhost:3000'), false)
-  assert.equal(isTenantSubdomainHost('evil.com'), false)
-})
-
-test('resolveApiBaseUrl uses same-origin on a tenant subdomain', () => {
-  const original = (globalThis as { window?: unknown }).window
+function setWindowLocation(origin: string) {
+  const url = new URL(origin)
   ;(globalThis as { window?: unknown }).window = {
-    location: { hostname: 'tenant-0042.re-ya.com', origin: 'https://tenant-0042.re-ya.com' }
+    location: {
+      hostname: url.hostname,
+      origin: url.origin,
+      search: url.search,
+    },
   }
-  try {
-    assert.equal(resolveApiBaseUrl(), 'https://tenant-0042.re-ya.com')
-  } finally {
-    ;(globalThis as { window?: unknown }).window = original
-  }
+}
+
+test('tenant subdomains use their own origin even when PHP API env points at root', () => {
+  process.env.NEXT_PUBLIC_PHP_API_BASE_URL = 'https://re-ya.com'
+  setWindowLocation('https://tenant-0003.re-ya.com/miniapp/')
+
+  assert.equal(resolvePhpApiBaseUrl(), 'https://tenant-0003.re-ya.com')
 })
 
-test('resolveApiBaseUrl falls back to env base off a tenant subdomain', () => {
-  const original = (globalThis as { window?: unknown }).window
-  ;(globalThis as { window?: unknown }).window = {
-    location: { hostname: 'localhost', origin: 'http://localhost:3000' }
-  }
-  try {
-    // ENV default is https://re-ya.com when NEXT_PUBLIC_PHP_API_BASE_URL is unset.
-    assert.notEqual(resolveApiBaseUrl(), 'http://localhost:3000')
-  } finally {
-    ;(globalThis as { window?: unknown }).window = original
-  }
+test('root domain still uses the configured PHP API base', () => {
+  process.env.NEXT_PUBLIC_PHP_API_BASE_URL = 'https://re-ya.com'
+  setWindowLocation('https://re-ya.com/miniapp/')
+
+  assert.equal(resolvePhpApiBaseUrl(), 'https://re-ya.com')
+})
+
+test('miniapp bootstrap request forwards the LIFF tenant signal', () => {
+  const url = buildMiniappBootstrapUrl(
+    'https://re-ya.com',
+    '?la=7&liff_id=2008477880-wmRN2Aln&utm=ignored'
+  )
+
+  assert.equal(
+    url,
+    'https://re-ya.com/api/miniapp-bootstrap.php?la=7&liff_id=2008477880-wmRN2Aln'
+  )
+})
+
+test('miniapp bootstrap accepts long-form line_account_id as tenant signal', () => {
+  const url = buildMiniappBootstrapUrl('https://shop-a.re-ya.com', '?line_account_id=12')
+
+  assert.equal(url, 'https://shop-a.re-ya.com/api/miniapp-bootstrap.php?la=12')
 })

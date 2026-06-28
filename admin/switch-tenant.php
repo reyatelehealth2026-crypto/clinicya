@@ -28,7 +28,6 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php'; // pulls in classes/Database.php
 require_once __DIR__ . '/../classes/TenantContext.php';
 require_once __DIR__ . '/../classes/TenantProvisioning.php';
-require_once __DIR__ . '/../includes/onboarding/onboarding-helpers.php';
 
 // ---------------------------------------------------------------------------
 // Auth gate — Platform Owner only.
@@ -118,9 +117,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($target['status'] === 'terminated') {
             $flash = ['type' => 'error', 'msg' => 'Tenant นี้ถูกระงับถาวรแล้ว — ห้ามเข้า'];
         } else {
-            // Regenerate session ID on tenant-context change (privilege scope
-            // change) to defend against session fixation.
-            session_regenerate_id(true);
             $_SESSION['admin_switched_to_tenant_id'] = (int) $target['id'];
             TenantContext::setCurrentTenantId((int) $target['id']);
 
@@ -150,16 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($slug === '' || !preg_match('/^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/', $slug)) {
                 throw new \InvalidArgumentException('Slug ต้องเป็น lowercase + ตัวเลข + ขีดกลาง 2-32 ตัวอักษร');
             }
-            // Use the SAME reserved list the subdomain resolver enforces, so a
-            // slug we let through here can never resolve to a reserved name and
-            // strand the new tenant on an unreachable subdomain.
-            if (!function_exists('reya_reserved_subdomains')) {
-                require_once __DIR__ . '/../bootstrap/resolve_subdomain.php';
-            }
-            $reservedSlugs = function_exists('reya_reserved_subdomains')
-                ? reya_reserved_subdomains()
-                : ['www','api','admin','platform','app','shop','odoo','stg','dev'];
-            if (in_array($slug, $reservedSlugs, true)) {
+            if (in_array($slug, ['www','api','admin','platform','app','shop','odoo','stg','dev','mail','cdn','assets','blog','www','support','help','docs'], true)) {
                 throw new \InvalidArgumentException('Slug นี้สงวนไว้ — เลือกชื่ออื่น');
             }
             if ($displayName === '') {
@@ -256,12 +243,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'db_name'   => $result['db_name'],
             ]);
 
-            $onboardingUrl = reya_onboarding_first_run_url();
             $flash = [
                 'type' => 'ok',
                 'msg'  => "สร้าง tenant สำเร็จ! 🎉 URL: https://{$slug}.re-ya.com/auth/login.php — "
-                        . "Login: {$adminUser} / (password ที่คุณตั้ง). "
-                        . "หลัง login ครั้งแรก แอดมินจะถูกพาเข้าหน้าตั้งค่าเริ่มต้น (onboarding) ที่ {$onboardingUrl}",
+                        . "Login: {$adminUser} / (password ที่คุณตั้ง)",
             ];
         } catch (\Throwable $e) {
             $flash = ['type' => 'error', 'msg' => 'Provisioning failed: ' . $e->getMessage()];
@@ -307,20 +292,10 @@ if ($activeTenantId) {
     }
 }
 ?>
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Switch tenant — Platform Owner</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-      body { font-family: 'Inter', 'Sarabun', sans-serif; }
-    </style>
-</head>
-<body class="bg-slate-50 min-h-screen">
+<?php
+require_once __DIR__ . '/../includes/platform_shell.php';
+platform_shell_top('tenants', 'ร้านค้า / Switch Tenant', 'สลับเข้าจัดการแต่ละร้าน — ทุกการกระทำถูกบันทึก audit');
+?>
 
 <?php if ($activeTenant): ?>
 <div role="alert"
@@ -350,7 +325,7 @@ if ($activeTenantId) {
 <div class="max-w-5xl mx-auto px-6 py-10">
     <header class="mb-8">
         <div class="flex items-center gap-3 mb-2">
-            <span class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600">
+            <span class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700">
                 <i class="fas fa-user-shield text-xl"></i>
             </span>
             <div>
@@ -376,7 +351,7 @@ if ($activeTenantId) {
     <?php endif; ?>
 
     <!-- Provisioning panel — create new tenant -->
-    <details class="bg-white rounded-2xl shadow-sm border border-indigo-200 mb-6 overflow-hidden group">
+    <details class="pf-card mb-6 overflow-hidden group">
         <summary class="px-6 py-4 cursor-pointer flex items-center justify-between hover:bg-indigo-50 transition">
             <div class="flex items-center gap-3">
                 <span class="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-600 text-white">
@@ -402,7 +377,7 @@ if ($activeTenantId) {
                     </label>
                     <input type="text" name="slug" required pattern="[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?" maxlength="32"
                            placeholder="smilepharm"
-                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                           class="pf-input">
                     <p class="text-xs text-slate-400 mt-1">a-z, 0-9, hyphen เท่านั้น (2-32 ตัว) — เปลี่ยนไม่ได้ภายหลัง</p>
                 </div>
 
@@ -412,14 +387,14 @@ if ($activeTenantId) {
                     </label>
                     <input type="text" name="display_name" required maxlength="120"
                            placeholder="ร้านยา สไมล์ ฟาร์ม สาขาเซ็นทรัล"
-                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                           class="pf-input">
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Owner Name</label>
                     <input type="text" name="owner_name" maxlength="100"
                            placeholder="ภญ. สมศรี"
-                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                           class="pf-input">
                 </div>
 
                 <div>
@@ -428,19 +403,19 @@ if ($activeTenantId) {
                     </label>
                     <input type="email" name="owner_email" required maxlength="120"
                            placeholder="owner@pharmacy.com"
-                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                           class="pf-input">
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Owner Phone</label>
                     <input type="tel" name="owner_phone" maxlength="20"
                            placeholder="0812345678"
-                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                           class="pf-input">
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Plan</label>
-                    <select name="plan_slug" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <select name="plan_slug" class="pf-input">
                         <option value="starter">Starter — 1 สาขา / 1 LINE OA (990฿/เดือน)</option>
                         <option value="pro">Pro — 3 สาขา / 3 LINE OA (2,990฿/เดือน)</option>
                         <option value="enterprise">Enterprise — 10 สาขา / 10 LINE OA (9,990฿/เดือน)</option>
@@ -453,7 +428,7 @@ if ($activeTenantId) {
                     </label>
                     <input type="text" name="admin_username" required pattern="[a-zA-Z0-9._-]{3,50}" maxlength="50"
                            placeholder="admin"
-                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                           class="pf-input">
                 </div>
 
                 <div>
@@ -462,13 +437,13 @@ if ($activeTenantId) {
                     </label>
                     <input type="text" name="admin_password" required minlength="8" maxlength="64"
                            value="Reya@<?= date('Y') ?>"
-                           class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+                           class="pf-input font-mono">
                     <p class="text-xs text-slate-400 mt-1">อย่างน้อย 8 ตัว — แจ้งเจ้าของร้านให้เปลี่ยน password หลัง login ครั้งแรก</p>
                 </div>
             </div>
 
             <div class="flex justify-end pt-3 border-t border-slate-100">
-                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-lg flex items-center gap-2">
+                <button type="submit" class="pf-btn pf-btn-primary">
                     <i class="fas fa-rocket"></i>
                     Provision Tenant
                 </button>
@@ -476,15 +451,21 @@ if ($activeTenantId) {
         </form>
     </details>
 
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="pf-card overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <h2 class="font-semibold text-slate-800">
                 Tenants (<?= count($tenants) ?>)
             </h2>
-            <a href="/admin/platform-login.php?action=logout"
-               class="text-sm text-slate-500 hover:text-red-600">
-                <i class="fas fa-sign-out-alt mr-1"></i>Sign out (platform)
-            </a>
+            <div class="flex items-center gap-4">
+                <a href="/admin/customers.php"
+                   class="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
+                    <i class="fas fa-users mr-1"></i>ลูกค้า / Customers
+                </a>
+                <a href="/admin/platform-login.php?action=logout"
+                   class="text-sm text-slate-500 hover:text-red-600">
+                    <i class="fas fa-sign-out-alt mr-1"></i>Sign out (platform)
+                </a>
+            </div>
         </div>
 
         <?php if (empty($tenants)): ?>
@@ -497,13 +478,13 @@ if ($activeTenantId) {
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 text-slate-600 uppercase text-xs">
                     <tr>
-                        <th class="px-6 py-3 text-left">ID</th>
-                        <th class="px-6 py-3 text-left">Slug</th>
-                        <th class="px-6 py-3 text-left">ชื่อร้าน</th>
-                        <th class="px-6 py-3 text-left">Plan</th>
-                        <th class="px-6 py-3 text-left">Status</th>
-                        <th class="px-6 py-3 text-left">DB</th>
-                        <th class="px-6 py-3 text-right">Action</th>
+                        <th class="pf-th">ID</th>
+                        <th class="pf-th">Slug</th>
+                        <th class="pf-th">ชื่อร้าน</th>
+                        <th class="pf-th">Plan</th>
+                        <th class="pf-th">Status</th>
+                        <th class="pf-th">DB</th>
+                        <th class="pf-th" style="text-align:right">Action</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -547,10 +528,10 @@ if ($activeTenantId) {
                                     <input type="text"
                                            name="reason"
                                            placeholder="reason (optional)"
-                                           class="text-xs border border-slate-200 rounded px-2 py-1 w-40 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                           class="pf-input text-xs w-40" style="padding:.35rem .6rem;">
                                     <button type="submit"
-                                            class="text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded">
-                                        <i class="fas fa-sign-in-alt mr-1"></i>Enter
+                                            class="pf-btn pf-btn-primary" style="padding:.4rem .8rem;font-size:.75rem;">
+                                        <i class="fas fa-sign-in-alt"></i>Enter
                                     </button>
                                 </form>
                             <?php endif; ?>
@@ -578,5 +559,4 @@ function confirmEnter(form) {
 }
 </script>
 
-</body>
-</html>
+<?php platform_shell_bottom(); ?>

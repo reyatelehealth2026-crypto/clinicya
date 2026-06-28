@@ -14,7 +14,7 @@ if (!isset($_SESSION['admin_user']['id'])) {
 }
 
 $adminName = $_SESSION['admin_user']['display_name'] ?? $_SESSION['admin_user']['username'] ?? 'User';
-$pageTitle = 'Kiro Assistant';
+$pageTitle = 'REYA ผู้ช่วยตั้งค่า';
 ?>
 
 <div class="p-4 lg:p-6">
@@ -23,13 +23,13 @@ $pageTitle = 'Kiro Assistant';
         <div class="lg:col-span-2">
             <div class="bg-white rounded-xl shadow-sm overflow-hidden">
                 <!-- Header -->
-                <div class="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-3 flex justify-between items-center">
+                <div class="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 flex justify-between items-center">
                     <div>
                         <h5 class="font-semibold flex items-center gap-2">
-                            <i class="fas fa-robot"></i>RE-YA  Assistant
+                            <i class="fas fa-robot"></i>REYA ผู้ช่วยตั้งค่า
                             <span id="aiStatusBadge" class="text-xs px-2 py-0.5 rounded-full bg-orange-500">Fallback Mode</span>
                         </h5>
-                        <small class="text-purple-200 text-xs">ผู้ช่วย AI สำหรับการตั้งค่าและใช้งานระบบ</small>
+                        <small class="text-emerald-100 text-xs">ผู้ช่วย AI สำหรับการตั้งค่าและใช้งานระบบ</small>
                     </div>
                     <div class="flex gap-2">
                         <button onclick="runHealthCheck()" title="Health Check" class="p-2 hover:bg-white/20 rounded-lg transition">
@@ -45,7 +45,7 @@ $pageTitle = 'Kiro Assistant';
                 <!-- Chat Messages -->
                 <div id="chatMessages" class="h-96 overflow-y-auto p-4 bg-gray-50">
                     <div class="text-center text-gray-400 py-10" id="loadingIndicator">
-                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-3"></div>
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto mb-3"></div>
                         <p>กำลังโหลด...</p>
                     </div>
                 </div>
@@ -60,10 +60,10 @@ $pageTitle = 'Kiro Assistant';
                     <form id="chatForm" class="flex gap-2">
                         <input type="text" 
                                id="chatInput" 
-                               class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+                               class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                                placeholder="พิมพ์ข้อความ... (เช่น วิธีเชื่อมต่อ LINE)"
                                autocomplete="off">
-                        <button type="submit" id="sendBtn" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                        <button type="submit" id="sendBtn" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition">
                             <i class="fas fa-paper-plane"></i>
                         </button>
                     </form>
@@ -76,7 +76,7 @@ $pageTitle = 'Kiro Assistant';
             <!-- Progress Card -->
             <div class="bg-white rounded-xl shadow-sm p-4">
                 <h6 class="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <i class="fas fa-tasks text-purple-600"></i>ความคืบหน้าการตั้งค่า
+                    <i class="fas fa-tasks text-emerald-600"></i>ความคืบหน้าการตั้งค่า
                 </h6>
                 <div class="w-full bg-gray-200 rounded-full h-5 mb-2">
                     <div id="progressBar" class="bg-green-500 h-5 rounded-full transition-all duration-500 flex items-center justify-center text-white text-xs font-medium" style="width: 0%">
@@ -112,7 +112,7 @@ $pageTitle = 'Kiro Assistant';
                         <i class="fas fa-store text-blue-500"></i>วิธีตั้งค่าร้านค้า
                     </button>
                     <button onclick="askQuestion('ระบบนี้ทำอะไรได้บ้าง')" class="w-full text-left px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition flex items-center gap-2">
-                        <i class="fas fa-question-circle text-purple-500"></i>ระบบนี้ทำอะไรได้บ้าง
+                        <i class="fas fa-question-circle text-emerald-500"></i>ระบบนี้ทำอะไรได้บ้าง
                     </button>
                 </div>
                 
@@ -135,7 +135,7 @@ $pageTitle = 'Kiro Assistant';
                         <i class="fas fa-gift text-pink-500"></i>โปรโมชั่น/คูปอง
                     </button>
                     <button onclick="askQuestion('วิธีใช้ Flex Builder')" class="w-full text-left px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition flex items-center gap-2">
-                        <i class="fas fa-palette text-purple-500"></i>Flex Message Builder
+                        <i class="fas fa-palette text-emerald-500"></i>Flex Message Builder
                     </button>
                 </div>
             </div>
@@ -155,7 +155,7 @@ $pageTitle = 'Kiro Assistant';
 }
 .message-user { margin-left: auto; }
 .message-user .message-content {
-    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
     color: white;
     border-radius: 18px 18px 4px 18px;
 }

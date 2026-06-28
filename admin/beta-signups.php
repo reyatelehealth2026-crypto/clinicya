@@ -177,37 +177,10 @@ $stats = $db->query("SELECT
     AVG(lead_score)               AS avg_score
   FROM beta_signups")->fetch(PDO::FETCH_ASSOC);
 ?>
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beta Signups — Platform Owner</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style> body { font-family: 'Sarabun', 'Inter', sans-serif; } </style>
-</head>
-<body class="bg-slate-100 min-h-screen">
-
-<header class="bg-white border-b border-slate-200">
-    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <div>
-            <h1 class="text-xl font-bold text-slate-900">Beta Signup Inbox</h1>
-            <p class="text-xs text-slate-500">ผู้สมัครทดลองใช้ REYA Beta — Platform Owner only</p>
-        </div>
-        <div class="flex items-center gap-3 text-sm">
-            <a href="/admin/switch-tenant.php" class="text-slate-500 hover:text-slate-800">
-                <i class="fas fa-arrow-left mr-1"></i> Switch Tenant
-            </a>
-            <a href="/admin/platform-login.php?action=logout" class="text-slate-500 hover:text-red-600">
-                <i class="fas fa-sign-out-alt"></i>
-            </a>
-        </div>
-    </div>
-</header>
-
-<main class="max-w-7xl mx-auto px-6 py-6">
+<?php
+require_once __DIR__ . '/../includes/platform_shell.php';
+platform_shell_top('beta', 'Beta Signup Inbox', 'ผู้สมัครทดลองใช้ REYA Beta');
+?>
     <?php if ($flash): ?>
         <div class="mb-4 p-3 rounded-xl text-sm <?= $flash['type'] === 'ok' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800' ?>">
             <?= $h($flash['msg']) ?>
@@ -223,31 +196,31 @@ $stats = $db->query("SELECT
             ['Demo Booked', (int)$stats['s_demo'],      'fa-calendar-check','text-violet-600'],
             ['Signed Up',   (int)$stats['s_signed'],    'fa-check-circle',  'text-emerald-600'],
         ] as [$label, $count, $icon, $color]): ?>
-            <div class="bg-white rounded-xl border border-slate-200 p-4">
+            <div class="pf-card pf-card-pad">
                 <div class="flex items-center gap-2 text-xs text-slate-500"><i class="fas <?= $icon ?> <?= $color ?>"></i> <?= $label ?></div>
-                <div class="text-2xl font-bold text-slate-900 mt-1"><?= number_format($count) ?></div>
+                <div class="pf-kpi-fig mt-1" style="font-size:1.6rem"><?= number_format($count) ?></div>
             </div>
         <?php endforeach; ?>
     </div>
 
     <!-- Filters -->
-    <form method="GET" class="bg-white rounded-2xl border border-slate-200 p-4 mb-6 flex items-center gap-3 flex-wrap">
+    <form method="GET" class="pf-card pf-card-pad mb-6 flex items-center gap-3 flex-wrap">
         <input type="text" name="q" value="<?= $h($q) ?>" placeholder="ค้นชื่อ / ร้าน / โทร / LINE / email"
-               class="flex-1 min-w-[200px] border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
-        <select name="status" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+               class="pf-input flex-1 min-w-[200px]" style="width:auto;">
+        <select name="status" class="pf-input" style="width:auto;">
             <option value="">— ทุกสถานะ —</option>
             <?php foreach ($LABELS['status'] as $k => $lab): ?>
                 <option value="<?= $k ?>" <?= $filterStatus === $k ? 'selected' : '' ?>><?= $h($lab) ?></option>
             <?php endforeach; ?>
         </select>
-        <select name="min_score" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <select name="min_score" class="pf-input" style="width:auto;">
             <option value="">— score ≥ ทั้งหมด —</option>
             <option value="70" <?= $filterScore === '70' ? 'selected' : '' ?>>≥ 70 (hot)</option>
             <option value="50" <?= $filterScore === '50' ? 'selected' : '' ?>>≥ 50</option>
             <option value="30" <?= $filterScore === '30' ? 'selected' : '' ?>>≥ 30</option>
         </select>
-        <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold px-4 py-2 rounded-lg">
-            <i class="fas fa-filter mr-1"></i> Filter
+        <button type="submit" class="pf-btn pf-btn-dark">
+            <i class="fas fa-filter"></i> Filter
         </button>
         <a href="/admin/beta-signups.php" class="text-sm text-slate-500 hover:text-slate-800">รีเซ็ต</a>
     </form>
@@ -264,10 +237,10 @@ $stats = $db->query("SELECT
                 $pain  = json_decode((string)($r['pain_points'] ?? '[]'), true) ?: [];
                 $goals = json_decode((string)($r['goals']       ?? '[]'), true) ?: [];
             ?>
-                <details class="bg-white rounded-2xl border border-slate-200 overflow-hidden group">
+                <details class="pf-card overflow-hidden group">
                     <summary class="px-5 py-4 cursor-pointer hover:bg-slate-50 list-none flex items-center justify-between gap-4 flex-wrap">
                         <div class="flex items-center gap-3 flex-1 min-w-0">
-                            <div class="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 font-bold flex-shrink-0">
+                            <div class="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-100 text-emerald-700 font-bold flex-shrink-0 tnum">
                                 <?= (int)$r['lead_score'] ?>
                             </div>
                             <div class="min-w-0 flex-1">
@@ -385,8 +358,8 @@ $stats = $db->query("SELECT
                                               placeholder="วันที่โทร, สิ่งที่คุย, follow-up next…"
                                               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"><?= $h($r['internal_notes']) ?></textarea>
                                 </div>
-                                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2.5 rounded-lg">
-                                    <i class="fas fa-save mr-1"></i> บันทึก
+                                <button type="submit" class="pf-btn pf-btn-primary w-full">
+                                    <i class="fas fa-save"></i> บันทึก
                                 </button>
                                 <div class="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2">
                                     <a href="tel:<?= $h($r['phone']) ?>" class="text-center text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-2 rounded">
@@ -411,6 +384,4 @@ $stats = $db->query("SELECT
     <p class="mt-6 text-xs text-slate-400 text-center">
         แสดง <?= count($rows) ?> รายการ (limit 200) · stats เป็น aggregate ทั้งหมด · sorted by id DESC
     </p>
-</main>
-</body>
-</html>
+<?php platform_shell_bottom(); ?>

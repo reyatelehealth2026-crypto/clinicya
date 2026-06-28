@@ -433,8 +433,124 @@ class InboxService
     }
 
     /**
+     * Get followers who added the OA as a friend but have NEVER exchanged a
+     * message with us — so a pharmacist can reach out FIRST.
+     *
+     * Complements getConversationsDelta(): that lists users WITH messages; this
+     * lists followers (account_followers.is_following = 1) with NO messages at
+     * all. Once we send the first message a message row appears and the contact
+     * moves into the normal conversation list automatically.
+     *
+     * Returns the same envelope shape as getConversationsDelta(), with each row
+     * flagged is_new_follower = 1 and last_message_at = followed_at (used for
+     * cursor pagination + the time shown in the list).
+     *
+     * @return array ['conversations'=>[], 'next_cursor'=>?string, 'has_more'=>bool, 'count'=>int]
+     */
+    public function getUncontactedFollowersDelta(
+        int $accountId,
+        ?string $cursor = null,
+        int $limit = 50,
+        ?string $search = null
+    ): array {
+        $limit = max(1, min(100, $limit));
+
+        $params = [$accountId, $accountId];
+        $sql = "
+            SELECT
+                u.id,
+                COALESCE(u.custom_display_name, u.display_name) as display_name,
+                u.picture_url,
+                u.chat_status,
+                COALESCE(u.platform, 'line') AS platform,
+                u.platform_user_id,
+                af.followed_at as last_message_at,
+                0 as unread_count,
+                NULL as last_message_preview,
+                NULL as last_message_type,
+                1 as is_new_follower,
+                ca.assigned_to,
+                ca.status as assignment_status
+            FROM users u
+            JOIN (
+                SELECT user_id, MAX(followed_at) AS followed_at
+                FROM account_followers
+                WHERE line_account_id = ? AND is_following = 1 AND user_id IS NOT NULL
+                GROUP BY user_id
+            ) af ON af.user_id = u.id
+            LEFT JOIN conversation_assignments ca ON ca.user_id = u.id
+            WHERE u.line_account_id = ?
+            AND NOT EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)
+        ";
+
+        if ($search !== null && trim($search) !== '') {
+            $sql .= " AND COALESCE(u.custom_display_name, u.display_name) LIKE ?";
+            $params[] = '%' . trim($search) . '%';
+        }
+
+        // Cursor-based pagination on followed_at (DESC).
+        if ($cursor !== null && trim($cursor) !== '') {
+            $sql .= " AND af.followed_at < ?";
+            $params[] = $cursor;
+        }
+
+        // $limit is capped to an int in [1,100] above, so inlining is injection-safe
+        // and avoids the PDO-emulated-prepares "LIMIT '6'" string-bind failure.
+        $sql .= " ORDER BY af.followed_at DESC LIMIT " . ($limit + 1);
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $hasMore = count($conversations) > $limit;
+        if ($hasMore) {
+            array_pop($conversations);
+        }
+
+        $nextCursor = null;
+        if ($hasMore && !empty($conversations)) {
+            $lastConv = end($conversations);
+            $nextCursor = $lastConv['last_message_at'];
+        }
+
+        foreach ($conversations as &$conv) {
+            $conv['tags'] = $this->getUserTags($conv['id']);
+            $conv['assignees'] = $this->getAssignedAdminIds($conv['id']);
+        }
+        unset($conv);
+
+        return [
+            'conversations' => $conversations,
+            'next_cursor' => $nextCursor,
+            'has_more' => $hasMore,
+            'count' => count($conversations)
+        ];
+    }
+
+    /**
+     * Count followers who added the OA but never messaged (for the filter badge).
+     */
+    public function countUncontactedFollowers(int $accountId): int
+    {
+        $sql = "
+            SELECT COUNT(*) FROM (
+                SELECT af.user_id
+                FROM account_followers af
+                JOIN users u ON u.id = af.user_id
+                WHERE af.line_account_id = ? AND af.is_following = 1 AND af.user_id IS NOT NULL
+                AND u.line_account_id = ?
+                AND NOT EXISTS (SELECT 1 FROM messages WHERE user_id = af.user_id)
+                GROUP BY af.user_id
+            ) t
+        ";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$accountId, $accountId]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
      * Get user tags
-     * 
+     *
      * @param int $userId User ID
      * @return array Tags
      */

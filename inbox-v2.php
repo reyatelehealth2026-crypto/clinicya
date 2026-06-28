@@ -152,6 +152,26 @@ $inboxService = new InboxService($db, $currentBotId);
 $analyticsService = new AnalyticsService($db, $currentBotId);
 $templateService = new TemplateService($db, $currentBotId);
 
+// Count of followers who added the LINE OA but never messaged us (for the "เพิ่งแอด" chip badge)
+$uncontactedFollowerCount = 0;
+try {
+    $uncontactedFollowerCount = $inboxService->countUncontactedFollowers((int) $currentBotId);
+} catch (Throwable $e) {
+    $uncontactedFollowerCount = 0;
+}
+
+// Loyalty rate for the "ให้แต้ม" (give points via QR) live preview — read from
+// points_settings.points_per_baht (a multiplier; e.g. 0.04 ⇒ 25฿ = 1 แต้ม).
+// JS only previews; the authoritative points value comes from api/points-claim.php.
+$pointsPerBaht = 0.0;
+try {
+    require_once __DIR__ . '/classes/LoyaltyPoints.php';
+    $loyaltySettings = (new LoyaltyPoints($db, $currentBotId))->getSettings();
+    $pointsPerBaht = (float) ($loyaltySettings['points_per_baht'] ?? 0);
+} catch (Throwable $e) {
+    $pointsPerBaht = 0.0;
+}
+
 // Auto-create dispensing_records table if not exists (ported from messages.php 2026-05-08)
 try {
     $stmt = $db->query("SHOW TABLES LIKE 'dispensing_records'");
@@ -219,20 +239,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 if (!$userId || !$message)
                     throw new Exception("Invalid data");
 
-                $stmt = $db->prepare("SELECT line_user_id, line_account_id, reply_token, reply_token_expires FROM users WHERE id = ?");
+                $stmt = $db->prepare("SELECT * FROM users WHERE id = ?");
                 $stmt->execute([$userId]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 if (!$user)
                     throw new Exception("User not found");
 
-                $lineManager = new LineAccountManager($db);
-                $line = $lineManager->getLineAPI($user['line_account_id']);
+                $userPlatform = $user['platform'] ?? 'line';
 
-                if (method_exists($line, 'sendMessage')) {
-                    $result = $line->sendMessage($user['line_user_id'], $message, $user['reply_token'] ?? null, $user['reply_token_expires'] ?? null, $db, $userId);
+                if ($userPlatform === 'facebook') {
+                    // Route the reply through Facebook Messenger (not LINE push)
+                    require_once 'classes/FacebookMessengerAPI.php';
+                    $fbAcc = null;
+                    if (!empty($user['facebook_account_id'])) {
+                        $fbStmt = $db->prepare("SELECT * FROM facebook_accounts WHERE id = ? LIMIT 1");
+                        $fbStmt->execute([$user['facebook_account_id']]);
+                        $fbAcc = $fbStmt->fetch(PDO::FETCH_ASSOC);
+                    }
+                    if (!$fbAcc) {
+                        $fbAcc = $db->query("SELECT * FROM facebook_accounts WHERE is_active = 1 LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                    }
+                    if (!$fbAcc) {
+                        throw new Exception("ไม่พบการเชื่อมต่อ Facebook (ตั้งค่าในแท็บ การเชื่อมต่อแพลตฟอร์ม ก่อน)");
+                    }
+                    $psid = $user['platform_user_id'] ?: $user['line_user_id'];
+                    $fbApi = new FacebookMessengerAPI($fbAcc);
+                    $fbResp = $fbApi->sendTextMessage((string) $psid, $message);
+                    if (empty($fbResp['success'])) {
+                        $fbErr = is_array($fbResp['error'] ?? null) ? ($fbResp['error']['message'] ?? '') : ($fbResp['error'] ?? '');
+                        throw new Exception('ส่ง Facebook ไม่สำเร็จ: ' . ($fbErr !== '' ? $fbErr : 'HTTP ' . ($fbResp['http_code'] ?? '?')));
+                    }
+                    $result = ['code' => 200, 'method' => 'facebook'];
+                } elseif ($userPlatform === 'tiktok') {
+                    throw new Exception("ยังไม่รองรับการตอบ TikTok จากหน้านี้");
                 } else {
-                    $result = $line->pushMessage($user['line_user_id'], [['type' => 'text', 'text' => $message]]);
-                    $result['method'] = 'push';
+                    $lineManager = new LineAccountManager($db);
+                    $line = $lineManager->getLineAPI($user['line_account_id']);
+
+                    if (method_exists($line, 'sendMessage')) {
+                        $result = $line->sendMessage($user['line_user_id'], $message, $user['reply_token'] ?? null, $user['reply_token_expires'] ?? null, $db, $userId);
+                    } else {
+                        $result = $line->pushMessage($user['line_user_id'], [['type' => 'text', 'text' => $message]]);
+                        $result['method'] = 'push';
+                    }
                 }
 
                 if ($result['code'] === 200) {
@@ -282,7 +331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                         'method_label' => $method === 'reply' ? '✓ Reply (ฟรี)' : '💰 Push'
                     ]);
                 } else {
-                    throw new Exception("LINE API Error");
+                    throw new Exception("LINE API Error (HTTP " . ($result['code'] ?? 0) . ", " . ($result['method'] ?? 'push') . "): " . (isset($result['body']) ? json_encode($result['body'], JSON_UNESCAPED_UNICODE) : 'no body'));
                 }
                 break;
 
@@ -419,6 +468,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
             // ============================================
             case 'dispense':
                 require_once __DIR__ . '/classes/FlexTemplates.php';
+                require_once __DIR__ . '/includes/liff-helper.php'; // reya_liff_url_or_oa()
 
                 $userId = intval($_POST['user_id'] ?? 0);
                 if (!$userId) {
@@ -600,21 +650,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                         $lineManager = new LineAccountManager($db);
                         $line = $lineManager->getLineAPI($user['line_account_id']);
 
-                        // Build checkout URL — ชี้ไปหน้า order ใน mini app ใหม่ พร้อม transaction id
-                        $baseUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'];
-                        $checkoutUrl = !empty($transactionId)
-                            ? $baseUrl . '/miniapp/order/?id=' . $transactionId
-                            : $baseUrl . '/miniapp/orders/';
-                        // ถ้ามี LIFF wrapper สำหรับ mini app → ห่อด้วย liff.line.me เพื่อให้ LIFF init auto
+                        // Build checkout URL with LIFF-or-OA fallback.
+                        // Priority: dedicated liff_apps wrapper → line_accounts.liff_id
+                        // (via helper) → OA chat → '' (no checkout button rendered).
+                        // Customers of tenants without a real LIFF must NOT be sent to
+                        // the shared Mini App without LIFF context.
+                        $deepLink = !empty($transactionId) ? '/order?id=' . $transactionId : '/orders';
+                        $checkoutUrl = '';
+                        // 1. Dedicated LIFF wrapper for the Mini App, if configured.
                         try {
                             $stmt = $db->prepare("SELECT liff_id FROM liff_apps WHERE line_account_id = ? AND is_active = 1 AND (name IN ('miniapp','order','checkout') OR endpoint_url LIKE '%/miniapp%') ORDER BY FIELD(name,'order','checkout','miniapp') LIMIT 1");
                             $stmt->execute([$user['line_account_id']]);
                             $liffApp = $stmt->fetch(PDO::FETCH_ASSOC);
-                            if ($liffApp && !empty($liffApp['liff_id'])) {
-                                $deepLink = !empty($transactionId) ? '/order?id=' . $transactionId : '/orders';
-                                $checkoutUrl = 'https://liff.line.me/' . $liffApp['liff_id'] . $deepLink;
+                            if ($liffApp && reya_is_real_liff_id($liffApp['liff_id'] ?? null)) {
+                                $sep = (strpos($deepLink, '?') !== false) ? '&' : '?';
+                                $checkoutUrl = 'https://liff.line.me/' . $liffApp['liff_id'] . $deepLink . $sep . 'la=' . (int) $user['line_account_id'];
                             }
                         } catch (Exception $e) {}
+                        // 2. Fall back to line_accounts.liff_id, else OA chat, else ''.
+                        if ($checkoutUrl === '') {
+                            $checkoutUrl = reya_liff_url_or_oa($db, (int) $user['line_account_id'], $deepLink);
+                        }
 
                         // Hydrate item images from business_items
                         foreach ($itemsArr as &$item) {
@@ -696,7 +752,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                     throw new Exception("Image too large. Max 10MB");
                 }
 
-                $stmt = $db->prepare("SELECT line_user_id, line_account_id FROM users WHERE id = ?");
+                $stmt = $db->prepare("SELECT line_user_id, line_account_id, reply_token, reply_token_expires FROM users WHERE id = ?");
                 $stmt->execute([$userId]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 if (!$user)
@@ -722,13 +778,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 $lineManager = new LineAccountManager($db);
                 $line = $lineManager->getLineAPI($user['line_account_id']);
 
-                $result = $line->pushMessage($user['line_user_id'], [
-                    [
-                        'type' => 'image',
-                        'originalContentUrl' => $imageUrl,
-                        'previewImageUrl' => $imageUrl
-                    ]
-                ]);
+                $imageMessage = [[
+                    'type' => 'image',
+                    'originalContentUrl' => $imageUrl,
+                    'previewImageUrl' => $imageUrl
+                ]];
+                // reply-first (free if a valid reply_token exists; else falls back to push)
+                if (method_exists($line, 'sendMessage')) {
+                    $result = $line->sendMessage($user['line_user_id'], $imageMessage, $user['reply_token'] ?? null, $user['reply_token_expires'] ?? null, $db, $userId);
+                } else {
+                    $result = $line->pushMessage($user['line_user_id'], $imageMessage);
+                }
 
                 if ($result['code'] === 200) {
                     $adminUser = $_SESSION['admin_user'] ?? null;
@@ -769,7 +829,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                     ]);
                 } else {
                     @unlink($filepath);
-                    throw new Exception("Failed to send image via LINE");
+                    throw new Exception("Failed to send image via LINE (HTTP " . ($result['code'] ?? 0) . ", " . ($result['method'] ?? 'push') . "): " . (isset($result['body']) ? json_encode($result['body'], JSON_UNESCAPED_UNICODE) : 'no body'));
                 }
                 break;
 
@@ -830,7 +890,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                     throw new Exception("PDF too large. Max 10MB");
                 }
 
-                $stmt = $db->prepare("SELECT line_user_id, line_account_id FROM users WHERE id = ?");
+                $stmt = $db->prepare("SELECT line_user_id, line_account_id, reply_token, reply_token_expires FROM users WHERE id = ?");
                 $stmt->execute([$userId]);
                 $user = $stmt->fetch(PDO::FETCH_ASSOC);
                 if (!$user)
@@ -858,12 +918,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 $line = $lineManager->getLineAPI($user['line_account_id']);
 
                 $pdfMessage = "📄 ไฟล์ PDF: " . $_FILES['pdf']['name'] . "\n🔗 " . $fileUrl;
-                $result = $line->pushMessage($user['line_user_id'], [
-                    [
-                        'type' => 'text',
-                        'text' => $pdfMessage
-                    ]
-                ]);
+                $pdfMessages = [[
+                    'type' => 'text',
+                    'text' => $pdfMessage
+                ]];
+                // reply-first (free if a valid reply_token exists; else falls back to push)
+                if (method_exists($line, 'sendMessage')) {
+                    $result = $line->sendMessage($user['line_user_id'], $pdfMessages, $user['reply_token'] ?? null, $user['reply_token_expires'] ?? null, $db, $userId);
+                } else {
+                    $result = $line->pushMessage($user['line_user_id'], $pdfMessages);
+                }
 
                 if ($result['code'] === 200) {
                     $adminUser = $_SESSION['admin_user'] ?? null;
@@ -908,7 +972,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                     ]);
                 } else {
                     @unlink($filepath);
-                    throw new Exception("Failed to send PDF via LINE");
+                    throw new Exception("Failed to send PDF via LINE (HTTP " . ($result['code'] ?? 0) . ", " . ($result['method'] ?? 'push') . "): " . (isset($result['body']) ? json_encode($result['body'], JSON_UNESCAPED_UNICODE) : 'no body'));
                 }
                 break;
 
@@ -932,10 +996,45 @@ $conversationLimit = 200; // Initial load limit (can be adjusted)
 $hasMoreConversations = false;
 $totalConversations = 0;
 
+// Multi-platform channel switcher (LINE default; Facebook/TikTok via ?platform=).
+// users.platform exists only after migration_add_platforms — degrade to LINE-only if absent.
+$hasPlatformColumn = false;
+try {
+    $hasPlatformColumn = (bool) $db->query("SHOW COLUMNS FROM users LIKE 'platform'")->fetch();
+} catch (Exception $e) {
+}
+$selectedPlatform = $_GET['platform'] ?? 'line';
+if (!$hasPlatformColumn || !in_array($selectedPlatform, ['line', 'facebook', 'tiktok'], true)) {
+    $selectedPlatform = 'line';
+}
+$isLinePlatform = ($selectedPlatform === 'line');
+
+// Conversation-count badges for the non-LINE channels
+$platformCounts = ['facebook' => 0, 'tiktok' => 0];
+if ($hasPlatformColumn) {
+    foreach (['facebook', 'tiktok'] as $pf) {
+        try {
+            $pcStmt = $db->prepare("SELECT COUNT(*) FROM users u WHERE u.platform = ? AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)");
+            $pcStmt->execute([$pf]);
+            $platformCounts[$pf] = (int) $pcStmt->fetchColumn();
+        } catch (Exception $e) {
+        }
+    }
+}
+
+// Scope: LINE → line_account_id; other platforms → users.platform
+if ($isLinePlatform) {
+    $platformWhere  = "u.line_account_id = ?";
+    $platformParams = [$currentBotId];
+} else {
+    $platformWhere  = "u.platform = ?";
+    $platformParams = [$selectedPlatform];
+}
+
 // First, get total count for UI indicator
-$countSql = "SELECT COUNT(*) FROM users u WHERE u.line_account_id = ? AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)";
+$countSql = "SELECT COUNT(*) FROM users u WHERE {$platformWhere} AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)";
 $countStmt = $db->prepare($countSql);
-$countStmt->execute([$currentBotId]);
+$countStmt->execute($platformParams);
 $totalConversations = (int) $countStmt->fetchColumn();
 $hasMoreConversations = $totalConversations > $conversationLimit;
 
@@ -948,12 +1047,12 @@ $sql = "SELECT u.*,
         (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_time,
         (SELECT COUNT(*) FROM messages WHERE user_id = u.id AND direction = 'incoming' AND is_read = 0) as unread
         FROM users u
-        WHERE u.line_account_id = ?
+        WHERE {$platformWhere}
         AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)
         ORDER BY last_time DESC
         LIMIT ?";
 $stmt = $db->prepare($sql);
-$stmt->execute([$currentBotId, $conversationLimit]);
+$stmt->execute(array_merge($platformParams, [$conversationLimit]));
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get last conversation timestamp for cursor-based pagination
@@ -2810,6 +2909,40 @@ function formatThaiDateTime($datetime)
                     </div>
                 </div>
 
+                <?php if ($hasPlatformColumn): ?>
+                <!-- Channel switcher: LINE / Facebook Messenger / TikTok -->
+                <div class="p-2 border-b bg-white flex gap-1.5" id="platformSwitcher">
+                    <?php
+                    $channelTabs = [
+                        'line'     => ['label' => 'LINE',      'icon' => 'fab fa-line',               'bg' => '#06C755'],
+                        'facebook' => ['label' => 'Messenger', 'icon' => 'fab fa-facebook-messenger', 'bg' => '#0084FF'],
+                        'tiktok'   => ['label' => 'TikTok',    'icon' => 'fab fa-tiktok',             'bg' => '#111827'],
+                    ];
+                    foreach ($channelTabs as $ck => $ci):
+                        $isActive = ($selectedPlatform === $ck);
+                        $cnt = $platformCounts[$ck] ?? 0;
+                    ?>
+                        <a href="inbox-v2.php?platform=<?= $ck ?>"
+                           class="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold transition <?= $isActive ? 'text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200' ?>"
+                           <?= $isActive ? 'style="background:' . $ci['bg'] . '"' : '' ?>>
+                            <i class="<?= $ci['icon'] ?>"></i><span><?= $ci['label'] ?></span>
+                            <?php if ($ck !== 'line' && $cnt > 0): ?>
+                                <span class="inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-full text-[10px] font-bold <?= $isActive ? 'bg-white/30 text-white' : 'bg-blue-500 text-white' ?>"><?= $cnt ?></span>
+                            <?php endif; ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+
+                <!-- 2026-06-02: Always-visible "ให้แต้ม (ขายหน้าร้าน)" — opens QR modal without needing an open chat -->
+                <div class="p-2 border-b">
+                    <button type="button" onclick="openGivePointsModal()"
+                        class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-bold text-white shadow-sm hover:opacity-95 transition"
+                        style="background: linear-gradient(135deg, #10B981 0%, #047857 100%);">
+                        <i class="fas fa-gift"></i> 🎁 ให้แต้ม (ขายหน้าร้าน)
+                    </button>
+                </div>
+
                 <!-- Filter Dropdowns -->
                 <div class="p-2 border-b bg-gray-50 space-y-2">
                     <div class="flex gap-2">
@@ -2857,6 +2990,20 @@ function formatThaiDateTime($datetime)
                             <?php endforeach; ?>
                         </select>
                     </div>
+                </div>
+
+                <!-- New-followers segment chip: customers who added the OA but never messaged (LINE only) -->
+                <div class="px-2 py-2 border-b bg-white"<?= $isLinePlatform ? '' : ' style="display:none"' ?>>
+                    <button type="button" id="newFollowersChip" onclick="toggleNewFollowers()"
+                        class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 transition">
+                        <span>🆕 เพิ่งแอด · ยังไม่ทัก</span>
+                        <span id="newFollowersBadge"
+                            class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-bold <?= $uncontactedFollowerCount > 0 ? '' : 'hidden' ?>"><?= (int) $uncontactedFollowerCount ?></span>
+                    </button>
+                    <button type="button" id="backToNormalChat" onclick="exitNewFollowers()"
+                        class="hidden w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 transition">
+                        ← กลับแชทปกติ
+                    </button>
                 </div>
 
                 <!-- Conversation List -->
@@ -3791,6 +3938,14 @@ function formatThaiDateTime($datetime)
                                 </button>
                             </div>
 
+                            <!-- Give Points via QR (ให้แต้ม) — offline counter-sale loyalty 2026-06-02 -->
+                            <div class="crm-section" style="padding: 12px;">
+                                <button onclick="openGivePointsModal()" class="quick-edit-btn" style="background: linear-gradient(135deg, #10B981 0%, #047857 100%); color: white; border: none;">
+                                    <i class="fas fa-gift"></i>
+                                    🎁 ให้แต้ม
+                                </button>
+                            </div>
+
                             <!-- Quick Edit Button -->
                             <div class="crm-section" style="padding: 12px;">
                                 <button class="quick-edit-btn" onclick="HUDMode.openUserDetail()">
@@ -3931,6 +4086,15 @@ function formatThaiDateTime($datetime)
                                     <div class="hud-widget-body" style="padding: 10px;">
                                         <button onclick="openDispenseModal()" class="w-full bg-purple-500 hover:bg-purple-600 text-white text-xs py-2.5 rounded-lg font-medium">
                                             <i class="fas fa-prescription-bottle-alt mr-1"></i>จ่ายยา
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Give Points via QR — ให้แต้ม (offline counter-sale loyalty 2026-06-02) -->
+                                <div class="hud-widget" id="givePointsWidget" style="background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%); border: 2px solid #34D399;">
+                                    <div class="hud-widget-body" style="padding: 10px;">
+                                        <button onclick="openGivePointsModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs py-2.5 rounded-lg font-medium">
+                                            <i class="fas fa-gift mr-1"></i>🎁 ให้แต้ม
                                         </button>
                                     </div>
                                 </div>
@@ -4151,6 +4315,8 @@ function formatThaiDateTime($datetime)
         <script>
             // Se     t global v     ariables for FAB/    HU      D
             window.currentBotId = <?= $currentBotId ?>;
+            // Loyalty multiplier for the give-points QR preview (points = floor(amount * rate)).
+            window.pointsPerBaht = <?= json_encode($pointsPerBaht) ?>;
             // Customer communication type for analytics (A=Direct, B=Concerned, C=Detailed)
             window.customerCommunicationType = '<?= $customerClassification['type'] ?? 'A' ?>';
             // Current consultation stage
@@ -4551,12 +4717,24 @@ function formatThaiDateTime($datetime)
 
                 let contentHtml = '';
 
-                switch (msg.type) {
+                switch (msg.type || msg.message_type) {
                     case 'image':
                         contentHtml = `<img src="${escapeHtml(msg.content)}" class="max-w-[200px] rounded-lg cursor-pointer" onclick="window.open('${escapeHtml(msg.content)}', '_blank')">`;
                         break;
                     case 'sticker':
                         contentHtml = `<div class="text-4xl">😊</div>`;
+                        break;
+                    case 'flex':
+                        // Render the Flex card immediately (e.g. loyalty/points cards) instead of
+                        // dumping raw JSON — no refresh needed. Wrap in .flex-message-container so
+                        // the CSS strips the chat bubble, matching the server-rendered view.
+                        try {
+                            contentHtml = (typeof renderFlexMessage === 'function')
+                                ? `<div class="flex-message-container">${renderFlexMessage(JSON.parse(msg.content))}</div>`
+                                : `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex</div>`;
+                        } catch (e) {
+                            contentHtml = `<div class="bg-white rounded-lg border p-3 text-xs text-gray-500"><i class="fas fa-cube mr-1"></i>Flex Message</div>`;
+                        }
                         break;
                     default:
                         contentHtml = `<div class="whitespace-pre-wrap break-words">${escapeHtml(msg.content)}</div>`;
@@ -7420,7 +7598,7 @@ function formatThaiDateTime($datetime)
                     const status = document.getElementById('filterStatus')?.value || '';
 
                     // Build URL with search and filters
-                    let url = `/api/inbox-v2.php?action=getConversations&limit=200&search=${encodeURIComponent(query)}`;
+                    let url = `/api/inbox-v2.php?action=getConversations&limit=200&search=${encodeURIComponent(query)}<?= $isLinePlatform ? '' : '&platform=' . $selectedPlatform ?>`;
                     if (chatStatus) url += `&chatStatus=${encodeURIComponent(chatStatus)}`;
                     if (tagId) url += `&tagId=${encodeURIComponent(tagId)}`;
                     if (assigneeId) url += `&assigneeId=${encodeURIComponent(assigneeId)}`;
@@ -9164,8 +9342,8 @@ function formatThaiDateTime($datetime)
 
         const messageInput = document.getElementById('messageInput');
 
-        // Generate LIFF checkout URL - using unified liff/index.php
-        const checkoutUrl = `${window.location.origin}/liff/index.php?page=checkout`;
+        // Generate checkout URL — new Mini App cart (not the retired /liff/ SPA)
+        const checkoutUrl = `${window.location.origin}/miniapp/cart/`;
 
         if (messageInput) {
             messageInput.value = `💳 ลิงก์ชำระเงิน\n\n${checkoutUrl}\n\n✅ กดลิงก์ด้านบนเพื่อดูรายการสินค้าและชำระเงินค่ะ\n📦 หลังชำระเงินจะจัดส่งให้ภายใน 1-3 วันทำการค่ะ`;
@@ -11286,7 +11464,7 @@ function formatThaiDateTime($datetime)
                 console.log(`[Progressive Load] Loading batch ${batchCount}...`);
 
                 try {
-                    const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200`);
+                    const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200<?= $isLinePlatform ? '' : '&platform=' . $selectedPlatform ?>`);
                     const data = await response.json();
 
                     console.log('[Progressive Load] API response:', data.success, 'has_more:', data.data?.has_more, 'count:', data.data?.conversations?.length);
@@ -11373,7 +11551,7 @@ function formatThaiDateTime($datetime)
             this.showLoadingSpinner();
 
             try {
-                const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200`);
+                const response = await fetch(`/api/inbox-v2.php?action=getConversations&cursor=${encodeURIComponent(this.cursor || '')}&limit=200<?= $isLinePlatform ? '' : '&platform=' . $selectedPlatform ?>`);
                 const data = await response.json();
 
                 if (data.success && data.data && data.data.conversations) {
@@ -11614,6 +11792,129 @@ function formatThaiDateTime($datetime)
     document.addEventListener('DOMContentLoaded', function () {
         conversationLoader = new ConversationLoader();
     });
+
+    /* ===== New-followers segment (เพิ่งแอด · ยังไม่ทัก) ===== */
+    let newFollowersMode = false;
+
+    function toggleNewFollowers() {
+        if (newFollowersMode) {
+            exitNewFollowers();
+        } else {
+            enterNewFollowers();
+        }
+    }
+
+    // Restore the normal conversation list. Reloading to a clean inbox is the
+    // simplest reliable way to bring back the ConversationLoader, search and filters.
+    function exitNewFollowers() {
+        window.location.href = 'inbox-v2.php';
+    }
+
+    async function enterNewFollowers() {
+        newFollowersMode = true;
+
+        // Stop the progressive loader from appending normal conversations on top
+        if (conversationLoader) {
+            conversationLoader.autoLoadEnabled = false;
+            conversationLoader.hasMore = false;
+            if (conversationLoader.observer) conversationLoader.observer.disconnect();
+        }
+
+        // Hide the normal load-more sentinel + any active search info
+        const sentinel = document.getElementById('loadMoreSentinel');
+        if (sentinel) sentinel.style.display = 'none';
+        if (typeof hideSearchResultsInfo === 'function') hideSearchResultsInfo();
+        if (typeof hideSearchingIndicator === 'function') hideSearchingIndicator();
+
+        // Toggle chip visual state + show "back" control
+        const chip = document.getElementById('newFollowersChip');
+        if (chip) chip.classList.add('bg-amber-100', 'ring-2', 'ring-amber-300');
+        const backBtn = document.getElementById('backToNormalChat');
+        if (backBtn) backBtn.classList.remove('hidden');
+
+        const userList = document.getElementById('userList');
+        if (!userList) return;
+        userList.innerHTML = `
+            <div id="newFollowersLoading" class="px-3 py-3 text-center text-gray-400 text-xs">
+                <i class="fas fa-spinner fa-spin"></i> กำลังโหลดรายชื่อ...
+            </div>`;
+
+        try {
+            const response = await fetch('/api/inbox-v2.php?action=getConversations&segment=new_followers&limit=200');
+            const data = await response.json();
+            renderNewFollowers((data.success && data.data && data.data.conversations) ? data.data.conversations : []);
+        } catch (error) {
+            console.error('[New Followers] Error loading:', error);
+            userList.innerHTML = `
+                <div class="p-6 text-center text-gray-400">
+                    <i class="fas fa-triangle-exclamation text-2xl mb-2"></i>
+                    <p class="text-sm">โหลดรายชื่อไม่สำเร็จ</p>
+                </div>`;
+        }
+    }
+
+    function renderNewFollowers(conversations) {
+        const userList = document.getElementById('userList');
+        if (!userList) return;
+        userList.innerHTML = '';
+
+        if (!conversations.length) {
+            userList.innerHTML = `
+                <div class="p-6 text-center text-gray-400">
+                    <i class="fas fa-user-check text-3xl mb-2"></i>
+                    <p class="text-sm">ไม่มีลูกค้าที่เพิ่งแอดและยังไม่ทัก</p>
+                </div>`;
+            return;
+        }
+
+        conversations.forEach(conv => {
+            userList.appendChild(createNewFollowerElement(conv));
+        });
+    }
+
+    // Row for an uncontacted follower. Reuses buildUserLink + formatThaiTimeLocal +
+    // the shared avatar fallback so clicking opens the chat thread like any normal row.
+    function createNewFollowerElement(conv) {
+        const userId = conv.id || conv.user_id;
+        const displayName = conv.display_name || 'Unknown';
+        const followTime = formatThaiTimeLocal(conv.last_message_at || '');
+        const pictureUrl = conv.picture_url || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e5e7eb'/%3E%3Cpath d='M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z' fill='%239ca3af'/%3E%3C/svg%3E";
+
+        const element = document.createElement('a');
+        element.href = buildUserLink(userId);
+        element.className = 'user-item block p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50';
+        element.dataset.userId = userId;
+        element.dataset.name = displayName.toLowerCase();
+        element.tabIndex = 0;
+
+        element.addEventListener('click', function (e) {
+            e.preventDefault();
+            window.location.href = buildUserLink(userId);
+        });
+
+        element.innerHTML = `
+        <div class="flex items-center gap-3">
+            <div class="relative flex-shrink-0">
+                <img src="${pictureUrl}"
+                     class="w-10 h-10 rounded-full object-cover border-2 border-white shadow"
+                     loading="lazy"
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23e5e7eb%22/%3E%3Cpath d=%22M20 22c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6zm0 3c-4 0-12 2-12 6v3h24v-3c0-4-8-6-12-6z%22 fill=%22%239ca3af%22/%3E%3C/svg%3E'">
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-baseline">
+                    <h3 class="text-sm font-semibold text-gray-800 truncate">${escapeHtmlLocal(displayName)}</h3>
+                    <span class="last-time text-[10px] text-gray-400">${followTime}</span>
+                </div>
+                <p class="last-msg text-xs text-gray-500 truncate">🆕 เพิ่งแอดเพื่อน · ยังไม่เคยคุย</p>
+                <div class="flex items-center gap-1 mt-1 flex-wrap">
+                    <span class="text-[9px] px-1 py-0.5 bg-amber-50 text-amber-700 rounded">ทักก่อนได้เลย</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+        return element;
+    }
 
     /**
      * Format Thai time (client-side)
@@ -12067,6 +12368,147 @@ function formatThaiDateTime($datetime)
         <div class="p-3 border-t bg-gray-50 flex-shrink-0">
             <button type="button" onclick="dispenseSubmit()" class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-lg font-medium text-sm">
                 <i class="fas fa-check mr-1"></i>ยืนยันจ่ายยา
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     Give Points Modal — ให้แต้มผ่าน QR (offline counter-sale loyalty 2026-06-02)
+     Blank form: amount OR points + payment method → generate one-time claim QR.
+     No customer/user selection — the customer claims by scanning.
+     ============================================================ -->
+<div id="givePointsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-2">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden max-h-[95vh] flex flex-col">
+        <div class="p-3 border-b flex justify-between items-center bg-emerald-50 flex-shrink-0">
+            <h3 class="font-bold text-sm text-emerald-700"><i class="fas fa-gift mr-1"></i>🎁 ให้แต้มสะสม</h3>
+            <div class="flex items-center gap-2">
+                <a href="loyalty-members.php" class="text-[11px] text-emerald-600 hover:text-emerald-800 underline"><i class="fas fa-id-card-clip mr-1"></i>สมาชิกเบอร์</a>
+                <button onclick="closeGivePointsModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4">
+            <!-- Input form (hidden once a QR is generated) -->
+            <div id="givePointsForm">
+                <!-- 2026-06-20: quiet-time merge review — only appears when phone-only
+                     records share a phone with a LINE member. Collapsed by default so it
+                     never slows the counter sale. -->
+                <div id="gpMergeBanner" class="hidden mb-3 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs text-amber-700"><i class="fas fa-link mr-1"></i><b id="gpMergeCount">0</b> เบอร์รอยืนยันรวมแต้มเข้าบัญชี LINE</span>
+                        <button type="button" onclick="gpToggleMergeList()" id="gpMergeToggleBtn" class="text-xs px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-700 font-medium">ดู</button>
+                    </div>
+                    <div id="gpMergeList" class="hidden mt-2 space-y-2"></div>
+                </div>
+
+                <p id="givePointsIntro" class="text-xs text-gray-500 mb-3">กรอก <b>ยอดเงิน</b> หรือ <b>แต้ม</b> อย่างใดอย่างหนึ่ง แล้วให้ลูกค้าสแกน QR เพื่อรับแต้ม</p>
+
+                <!-- 2026-06-20: phone-first counter loyalty (ขายผ่าน POS นอกระบบ).
+                     Type a phone → instant lookup (doubles as points check). Found = credit
+                     existing customer; not found = create a phone-only member on the fly. -->
+                <div id="gpPhoneBlock" class="mb-3 p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-100">
+                    <label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-phone mr-1 text-emerald-600"></i>เบอร์โทรลูกค้า <span class="text-gray-400">(สะสมแต้มด้วยเบอร์)</span></label>
+                    <div class="flex gap-2">
+                        <input type="tel" inputmode="numeric" id="gpPhoneInput" autocomplete="off"
+                            oninput="gpPhoneOnInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();gpPhoneLookup();}"
+                            class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="08x-xxx-xxxx">
+                        <button type="button" id="gpPhoneSearchBtn" onclick="gpPhoneLookup()"
+                            class="px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-sm font-medium whitespace-nowrap">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <!-- Existing customer match(es) -->
+                    <div id="gpPhoneResult" class="hidden mt-2 space-y-1.5"></div>
+                    <!-- New customer name (shown when phone not found) -->
+                    <div id="gpPhoneNewBox" class="hidden mt-2">
+                        <div class="text-xs text-amber-600 mb-1"><i class="fas fa-user-plus mr-1"></i>ลูกค้าใหม่ — ใส่ชื่อไว้ก็ได้ (ข้ามได้)</div>
+                        <input type="text" id="gpPhoneNewName" autocomplete="off"
+                            class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="ชื่อลูกค้า (ไม่บังคับ)">
+                    </div>
+                </div>
+
+                <!-- 2026-06-02: direct-credit banner — shown only when a customer chat is open.
+                     Lets the pharmacist give points straight to this customer (no QR scan). -->
+                <div id="givePointsCustomer" class="hidden mb-3 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center gap-2">
+                    <i class="fas fa-user-circle text-emerald-600 text-lg"></i>
+                    <div class="text-xs leading-tight">
+                        <div class="text-gray-500">ให้แต้มทันทีกับลูกค้า</div>
+                        <div class="font-bold text-emerald-700" id="givePointsCustomerName">-</div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-coins mr-1 text-emerald-600"></i>ยอดเงิน (฿)</label>
+                    <input type="number" min="0" step="0.01" id="givePointsAmount" oninput="givePointsOnAmountInput()" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="เช่น 250">
+                    <div id="givePointsPreview" class="text-xs text-emerald-700 mt-1 hidden"></div>
+                </div>
+
+                <div class="flex items-center gap-2 my-2">
+                    <div class="flex-1 border-t border-gray-200"></div>
+                    <span class="text-xs text-gray-400">หรือ</span>
+                    <div class="flex-1 border-t border-gray-200"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-star mr-1 text-emerald-600"></i>แต้มที่จะให้ (ระบุเอง)</label>
+                    <input type="number" min="0" step="1" id="givePointsPoints" oninput="givePointsOnPointsInput()" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="เช่น 10">
+                </div>
+
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-wallet mr-1"></i>วิธีชำระเงิน (ไม่บังคับ)</label>
+                    <select id="givePointsPayment" class="w-full border rounded-lg px-2 py-2 text-sm">
+                        <option value="">— ไม่ระบุ —</option>
+                        <option value="cash">💵 เงินสด</option>
+                        <option value="transfer">📱 โอนเงิน</option>
+                        <option value="card">💳 บัตร</option>
+                        <option value="qr">📲 QR</option>
+                    </select>
+                </div>
+
+                <div id="givePointsError" class="text-xs text-red-600 mb-2 hidden"></div>
+            </div>
+
+            <!-- QR result (shown after generate). The primary scan surface is the
+                 separate pop-up window; this stays as a fallback if the pop-up was blocked. -->
+            <div id="givePointsResult" class="hidden text-center">
+                <div class="text-sm font-bold text-emerald-700 mb-1">🖥️ เปิดหน้าต่างสแกนแยกให้ลูกค้าแล้ว</div>
+                <div class="text-[11px] text-gray-400 mb-1">(ถ้าหน้าต่างไม่เด้ง กดปุ่ม “เปิดหน้าต่างสแกน/พิมพ์” ด้านล่าง — หรือให้สแกน QR นี้แทนได้)</div>
+                <div class="text-2xl font-extrabold text-emerald-600 my-1"><span id="givePointsResultPoints">0</span> ⭐</div>
+                <div class="inline-block p-3 bg-white border-2 border-emerald-200 rounded-xl my-2">
+                    <img id="givePointsQrImg" src="" alt="QR รับแต้ม" class="w-56 h-56 mx-auto" />
+                </div>
+                <div class="text-xs text-gray-500">เลขที่: <span id="givePointsVoucher" class="font-mono text-gray-700">-</span></div>
+                <div class="text-xs text-orange-500 mt-1"><i class="far fa-clock mr-1"></i>หมดอายุใน <span id="givePointsCountdown">30:00</span> นาที (ใช้ได้ครั้งเดียว)</div>
+                <div class="text-[11px] text-gray-400 mt-2 break-all px-2"><span id="givePointsClaimUrl"></span></div>
+            </div>
+
+            <!-- Direct-credit success (shown after "ให้ทันที") -->
+            <div id="givePointsDirectResult" class="hidden text-center py-4">
+                <div class="text-5xl mb-2">✅</div>
+                <div class="text-sm font-bold text-emerald-700">ให้แต้มสำเร็จ</div>
+                <div class="text-3xl font-extrabold text-emerald-600 my-2">+<span id="gpDirectPoints">0</span> ⭐</div>
+                <div class="text-xs text-gray-500">ยอดแต้มคงเหลือ: <b id="gpDirectBalance">0</b> แต้ม</div>
+                <div class="text-xs text-gray-400 mt-1">เลขที่: <span id="gpDirectVoucher" class="font-mono">-</span></div>
+                <div id="gpDirectNote" class="text-[11px] text-gray-400 mt-2">📨 ส่งใบเสร็จแต้มให้ลูกค้าทาง LINE แล้ว และบันทึกในประวัติแต้มของลูกค้าแล้ว</div>
+            </div>
+        </div>
+
+        <div class="p-3 border-t bg-gray-50 flex-shrink-0 flex gap-2">
+            <button type="button" id="givePointsByPhoneBtn" onclick="givePointsGiveByPhone()" class="hidden flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold text-sm">
+                <i class="fas fa-star mr-1"></i>ให้แต้ม (เบอร์นี้)
+            </button>
+            <button type="button" id="givePointsDirectBtn" onclick="givePointsGiveDirect()" class="hidden flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold text-sm">
+                <i class="fas fa-bolt mr-1"></i>ให้ทันที
+            </button>
+            <button type="button" id="givePointsGenerateBtn" onclick="givePointsGenerate()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-medium text-sm">
+                <i class="fas fa-qrcode mr-1"></i>สร้าง QR ให้แต้ม
+            </button>
+            <button type="button" id="givePointsScanBtn" onclick="gpReopenScanWindow()" class="hidden flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-medium text-sm">
+                <i class="fas fa-external-link-alt mr-1"></i>เปิดหน้าต่างสแกน/พิมพ์
+            </button>
+            <button type="button" id="givePointsNewBtn" onclick="givePointsReset()" class="hidden flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-lg font-medium text-sm">
+                <i class="fas fa-redo mr-1"></i>สร้างใหม่
             </button>
         </div>
     </div>
@@ -12534,6 +12976,645 @@ function formatThaiDateTime($datetime)
     });
     document.getElementById('medicineDetailModal')?.addEventListener('click', (e) => {
         if (e.target.id === 'medicineDetailModal') window.closeMedicineDetail();
+    });
+
+    // ============================================================
+    // Give Points via QR — ให้แต้มผ่าน QR (offline counter-sale loyalty 2026-06-02)
+    // Blank form → POST api/points-claim.php?action=create → show one-time QR.
+    // No customer lookup: the customer claims by scanning the QR.
+    // ============================================================
+    let givePointsCountdownTimer = null;
+
+    // The customer of the currently open chat (null when no chat is open).
+    // Drives the "ให้ทันที" direct-credit option vs the QR-only flow.
+    window.gpCurrentUser = <?= $selectedUser
+        ? json_encode(['id' => (int) $selectedUser['id'], 'name' => (string) ($selectedUser['display_name'] ?? '')], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)
+        : 'null' ?>;
+
+    // Toggle the modal between "direct credit to this customer" and "QR only".
+    function gpApplyMode() {
+        const u = window.gpCurrentUser;
+        const banner = document.getElementById('givePointsCustomer');
+        const directBtn = document.getElementById('givePointsDirectBtn');
+        const genBtn = document.getElementById('givePointsGenerateBtn');
+        const intro = document.getElementById('givePointsIntro');
+        if (u && u.id) {
+            banner?.classList.remove('hidden');
+            const nameEl = document.getElementById('givePointsCustomerName');
+            if (nameEl) nameEl.textContent = u.name || ('ลูกค้า #' + u.id);
+            directBtn?.classList.remove('hidden');
+            if (genBtn) {
+                genBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700', 'text-white');
+                genBtn.classList.add('bg-gray-100', 'hover:bg-gray-200', 'text-gray-700', 'border');
+                genBtn.innerHTML = '<i class="fas fa-qrcode mr-1"></i>สร้าง QR แทน';
+            }
+            if (intro) intro.textContent = 'ให้แต้มกับลูกค้านี้ได้ทันที (เข้าประวัติแต้มเลย) หรือจะสร้าง QR ให้สแกนรับเองก็ได้';
+        } else {
+            banner?.classList.add('hidden');
+            directBtn?.classList.add('hidden');
+            if (genBtn) {
+                genBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700', 'text-white');
+                genBtn.classList.remove('bg-gray-100', 'hover:bg-gray-200', 'text-gray-700', 'border');
+                genBtn.innerHTML = '<i class="fas fa-qrcode mr-1"></i>สร้าง QR ให้แต้ม';
+            }
+            if (intro) intro.textContent = 'กรอกยอดเงินหรือแต้ม แล้วให้ลูกค้าสแกน QR เพื่อรับแต้ม';
+        }
+    }
+
+    // --- Dedicated scan/print window -----------------------------------------
+    // The QR is shown in a separate browser window so the customer can scan it
+    // privately, away from the owner's chat screen. Includes a print button.
+    let gpLastClaim = null;
+
+    function gpBuildScanHtml(d) {
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const shop = esc(d.shop_name || 'ร้านยา');
+        const phone = esc(d.shop_phone || '');
+        const pts = Number(d.points || 0).toLocaleString();
+        const voucher = esc(d.voucher_no || '-');
+        const qr = esc(d.qr_image_url || '');
+        const secs = parseInt(d.expires_in_seconds || 1800, 10);
+        return '<!doctype html><html lang="th"><head><meta charset="utf-8">'
+            + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            + '<title>QR รับแต้ม ' + voucher + '</title><style>'
+            + '*{box-sizing:border-box}body{font-family:"Sarabun","Segoe UI",sans-serif;margin:0;padding:20px;background:#f1f5f9;color:#0f172a;text-align:center}'
+            + '.card{max-width:380px;margin:0 auto;background:#fff;border-radius:18px;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,.12)}'
+            + '.shop{font-size:19px;font-weight:800;color:#047857}.phone{font-size:12px;color:#64748b;margin-top:2px}'
+            + '.sub{font-size:13px;color:#64748b;margin:10px 0 2px}'
+            + '.pts{font-size:34px;font-weight:800;color:#059669;margin:6px 0}'
+            + '.qr{width:280px;height:280px;max-width:78vw;margin:6px auto;border:2px solid #d1fae5;border-radius:14px;padding:8px;display:block}'
+            + '.voucher{font-family:monospace;color:#334155;margin-top:8px;font-size:13px}'
+            + '.expire{color:#ea580c;font-size:13px;margin-top:6px;font-weight:600}'
+            + '.hint{font-size:13px;color:#475569;margin-top:12px;line-height:1.5}'
+            + '.btns{margin-top:18px;display:flex;gap:8px}'
+            + 'button{flex:1;padding:13px;border:0;border-radius:11px;font-size:15px;font-weight:700;cursor:pointer}'
+            + '.print{background:#059669;color:#fff}.close{background:#e5e7eb;color:#334155}'
+            + '@media print{.btns,.hint{display:none}body{background:#fff;padding:0}.card{box-shadow:none;max-width:100%}}'
+            + '</style></head><body><div class="card">'
+            + '<div class="shop">' + shop + '</div>'
+            + (phone ? '<div class="phone">☎ ' + phone + '</div>' : '')
+            + '<div class="sub">สแกนเพื่อรับแต้มสะสม</div>'
+            + '<div class="pts">+' + pts + ' ⭐</div>'
+            + '<img class="qr" src="' + qr + '" alt="QR รับแต้ม">'
+            + '<div class="voucher">เลขที่: ' + voucher + '</div>'
+            + '<div class="expire">⏳ หมดอายุใน <span id="cd">--:--</span> · ใช้ได้ครั้งเดียว</div>'
+            + '<div class="hint">เปิด <b>LINE</b> แล้วสแกน QR นี้<br>เพื่อรับแต้มเข้าบัญชีของคุณ</div>'
+            + '<div class="btns"><button class="print" onclick="window.print()">🖨️ พิมพ์</button>'
+            + '<button class="close" onclick="window.close()">ปิด</button></div>'
+            + '</div><scr' + 'ipt>var r=' + secs + ',el=document.getElementById("cd");'
+            + '(function t(){if(r<=0){el.textContent="หมดอายุแล้ว";el.style.color="#dc2626";return;}'
+            + 'var m=Math.floor(r/60),s=r%60;el.textContent=(m<10?"0":"")+m+":"+(s<10?"0":"")+s;r--;setTimeout(t,1000);})();'
+            + '</scr' + 'ipt></body></html>';
+    }
+
+    function gpWriteScanWindow(win, data) {
+        try {
+            if (!win || win.closed) {
+                win = window.open('', 'reyaScanQR', 'width=460,height=780,menubar=no,toolbar=no,location=no');
+            }
+            if (!win) return false; // popup blocked
+            win.document.open();
+            win.document.write(gpBuildScanHtml(data));
+            win.document.close();
+            win.focus();
+            return true;
+        } catch (e) {
+            console.error('scan window error:', e);
+            return false;
+        }
+    }
+
+    window.gpReopenScanWindow = function () {
+        if (!gpLastClaim) return;
+        if (!gpWriteScanWindow(null, gpLastClaim)) {
+            alert('เบราว์เซอร์บล็อกป๊อปอัป — กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้ แล้วลองใหม่');
+        }
+    };
+
+    window.openGivePointsModal = function () {
+        givePointsReset();
+        document.getElementById('givePointsModal')?.classList.remove('hidden');
+        gpLoadMergeCandidates(); // refresh the quiet-time merge-review banner
+    };
+    window.closeGivePointsModal = function () {
+        document.getElementById('givePointsModal')?.classList.add('hidden');
+        if (givePointsCountdownTimer) { clearInterval(givePointsCountdownTimer); givePointsCountdownTimer = null; }
+    };
+
+    window.givePointsReset = function () {
+        if (givePointsCountdownTimer) { clearInterval(givePointsCountdownTimer); givePointsCountdownTimer = null; }
+        const amt = document.getElementById('givePointsAmount');
+        const pts = document.getElementById('givePointsPoints');
+        const pay = document.getElementById('givePointsPayment');
+        if (amt) { amt.value = ''; amt.disabled = false; }
+        if (pts) { pts.value = ''; pts.disabled = false; }
+        if (pay) pay.value = '';
+        document.getElementById('givePointsPreview')?.classList.add('hidden');
+        document.getElementById('givePointsError')?.classList.add('hidden');
+        document.getElementById('givePointsForm')?.classList.remove('hidden');
+        document.getElementById('givePointsResult')?.classList.add('hidden');
+        document.getElementById('givePointsDirectResult')?.classList.add('hidden');
+        document.getElementById('givePointsGenerateBtn')?.classList.remove('hidden');
+        document.getElementById('givePointsScanBtn')?.classList.add('hidden');
+        document.getElementById('givePointsNewBtn')?.classList.add('hidden');
+        // Reset the phone-first block.
+        const phoneInput = document.getElementById('gpPhoneInput');
+        if (phoneInput) phoneInput.value = '';
+        const newName = document.getElementById('gpPhoneNewName');
+        if (newName) newName.value = '';
+        document.getElementById('gpPhoneResult')?.classList.add('hidden');
+        document.getElementById('gpPhoneNewBox')?.classList.add('hidden');
+        document.getElementById('givePointsByPhoneBtn')?.classList.add('hidden');
+        const directNote = document.getElementById('gpDirectNote');
+        if (directNote) directNote.textContent = '📨 ส่งใบเสร็จแต้มให้ลูกค้าทาง LINE แล้ว และบันทึกในประวัติแต้มของลูกค้าแล้ว';
+        window.gpPhoneState = { phone: '', userId: 0, found: false, checked: false, hasLine: false, name: '' };
+        gpApplyMode();
+    };
+
+    // Amount drives a live points preview and disables the manual-points field.
+    window.givePointsOnAmountInput = function () {
+        const amt = parseFloat(document.getElementById('givePointsAmount')?.value || '0');
+        const pts = document.getElementById('givePointsPoints');
+        const preview = document.getElementById('givePointsPreview');
+        if (amt > 0) {
+            if (pts) { pts.value = ''; pts.disabled = true; }
+            const rate = parseFloat(window.pointsPerBaht || 0);
+            if (preview) {
+                if (rate > 0) {
+                    preview.textContent = '≈ จะได้รับ ' + Math.floor(amt * rate).toLocaleString() + ' แต้ม';
+                } else {
+                    preview.textContent = 'ระบบจะคำนวณแต้มจากยอดเงินอัตโนมัติ';
+                }
+                preview.classList.remove('hidden');
+            }
+        } else {
+            if (pts) pts.disabled = false;
+            preview?.classList.add('hidden');
+        }
+    };
+
+    // Manual points disable the amount field.
+    window.givePointsOnPointsInput = function () {
+        const pts = parseFloat(document.getElementById('givePointsPoints')?.value || '0');
+        const amt = document.getElementById('givePointsAmount');
+        if (pts > 0) {
+            if (amt) { amt.value = ''; amt.disabled = true; }
+            document.getElementById('givePointsPreview')?.classList.add('hidden');
+        } else if (amt) {
+            amt.disabled = false;
+        }
+    };
+
+    window.givePointsGenerate = async function () {
+        const errBox = document.getElementById('givePointsError');
+        const showErr = (msg) => { if (errBox) { errBox.textContent = msg; errBox.classList.remove('hidden'); } };
+        errBox?.classList.add('hidden');
+
+        const amount = parseFloat(document.getElementById('givePointsAmount')?.value || '0');
+        const points = parseInt(document.getElementById('givePointsPoints')?.value || '0', 10);
+        const payment = document.getElementById('givePointsPayment')?.value || '';
+
+        if (!(amount > 0) && !(points > 0)) {
+            showErr('กรุณากรอกยอดเงินหรือแต้มอย่างน้อยหนึ่งช่อง');
+            return;
+        }
+
+        // Open the private scan window NOW (inside the click gesture) so the
+        // browser's popup blocker allows it. Content is written after the fetch.
+        let scanWin = null;
+        try {
+            scanWin = window.open('', 'reyaScanQR', 'width=460,height=780,menubar=no,toolbar=no,location=no');
+            if (scanWin) {
+                scanWin.document.write('<!doctype html><meta charset="utf-8"><title>กำลังสร้าง QR…</title>'
+                    + '<body style="font-family:sans-serif;text-align:center;padding-top:60px;color:#475569">⏳ กำลังสร้าง QR รับแต้ม…</body>');
+            }
+        } catch (e) { scanWin = null; }
+        const closeScanWin = () => { try { if (scanWin && !scanWin.closed) scanWin.close(); } catch (e) {} };
+
+        const btn = document.getElementById('givePointsGenerateBtn');
+        const btnHtml = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังสร้าง...'; }
+
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({
+                    action: 'create',
+                    line_account_id: window.currentBotId,
+                    amount: amount > 0 ? amount : '',
+                    points: points > 0 ? points : '',
+                    payment_method: payment
+                })
+            });
+            const text = await res.text();
+            let data;
+            try { data = JSON.parse(text); }
+            catch (e) { console.error('points-claim parse error:', e, text); showErr('ไม่สามารถอ่านข้อมูลจากเซิร์ฟเวอร์'); closeScanWin(); return; }
+
+            if (!data.success) {
+                showErr(data.message || 'สร้าง QR ไม่สำเร็จ');
+                closeScanWin();
+                return;
+            }
+
+            // Pop the QR up in its own private window (+ print button).
+            gpLastClaim = data;
+            gpWriteScanWindow(scanWin, data);
+
+            // Modal keeps a fallback QR in case the popup was blocked.
+            document.getElementById('givePointsResultPoints').textContent = Number(data.points || 0).toLocaleString();
+            document.getElementById('givePointsQrImg').src = data.qr_image_url || '';
+            document.getElementById('givePointsVoucher').textContent = data.voucher_no || '-';
+            document.getElementById('givePointsClaimUrl').textContent = data.claim_url || '';
+
+            document.getElementById('givePointsForm')?.classList.add('hidden');
+            document.getElementById('givePointsResult')?.classList.remove('hidden');
+            document.getElementById('givePointsGenerateBtn')?.classList.add('hidden');
+            document.getElementById('givePointsScanBtn')?.classList.remove('hidden');
+            document.getElementById('givePointsNewBtn')?.classList.remove('hidden');
+
+            givePointsStartCountdown(parseInt(data.expires_in_seconds || 1800, 10));
+        } catch (err) {
+            console.error('points-claim fetch error:', err);
+            showErr('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+            closeScanWin();
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = btnHtml; }
+        }
+    };
+
+    // Direct credit — give points straight to the open chat's customer (no QR).
+    // Goes through the same ledger as orders, so it lands in the customer's
+    // points history. Server: api/points-claim.php?action=give_direct.
+    window.givePointsGiveDirect = async function () {
+        const errBox = document.getElementById('givePointsError');
+        const showErr = (msg) => { if (errBox) { errBox.textContent = msg; errBox.classList.remove('hidden'); } };
+        errBox?.classList.add('hidden');
+
+        const u = window.gpCurrentUser;
+        if (!u || !u.id) { showErr('ไม่พบลูกค้า — เปิดแชทลูกค้าก่อน หรือใช้วิธีสร้าง QR'); return; }
+
+        const amount = parseFloat(document.getElementById('givePointsAmount')?.value || '0');
+        const points = parseInt(document.getElementById('givePointsPoints')?.value || '0', 10);
+        const payment = document.getElementById('givePointsPayment')?.value || '';
+        if (!(amount > 0) && !(points > 0)) {
+            showErr('กรุณากรอกยอดเงินหรือแต้มอย่างน้อยหนึ่งช่อง');
+            return;
+        }
+
+        const btn = document.getElementById('givePointsDirectBtn');
+        const btnHtml = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังให้แต้ม...'; }
+
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({
+                    action: 'give_direct',
+                    line_account_id: window.currentBotId,
+                    user_id: u.id,
+                    amount: amount > 0 ? amount : '',
+                    points: points > 0 ? points : '',
+                    payment_method: payment
+                })
+            });
+            const text = await res.text();
+            let data;
+            try { data = JSON.parse(text); }
+            catch (e) { console.error('give_direct parse error:', e, text); showErr('ไม่สามารถอ่านข้อมูลจากเซิร์ฟเวอร์'); return; }
+
+            if (!data.success) { showErr(data.message || 'ให้แต้มไม่สำเร็จ'); return; }
+
+            // Show the success panel.
+            document.getElementById('gpDirectPoints').textContent = Number(data.points || 0).toLocaleString();
+            document.getElementById('gpDirectBalance').textContent = Number(data.total_points || 0).toLocaleString();
+            document.getElementById('gpDirectVoucher').textContent = data.voucher_no || '-';
+
+            document.getElementById('givePointsForm')?.classList.add('hidden');
+            document.getElementById('givePointsResult')?.classList.add('hidden');
+            document.getElementById('givePointsDirectResult')?.classList.remove('hidden');
+            document.getElementById('givePointsGenerateBtn')?.classList.add('hidden');
+            document.getElementById('givePointsDirectBtn')?.classList.add('hidden');
+            document.getElementById('givePointsNewBtn')?.classList.remove('hidden');
+        } catch (err) {
+            console.error('give_direct fetch error:', err);
+            showErr('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = btnHtml; }
+        }
+    };
+
+    // ============================================================
+    // Phone-first counter loyalty — 2026-06-20
+    // Type a phone → lookup_phone (instant balance check) → give_by_phone.
+    // Works with NO open chat (external POS sale). Found = credit the existing
+    // customer; not found = create a phone-only member on the fly.
+    // ============================================================
+    window.gpPhoneState = { phone: '', userId: 0, found: false, checked: false, hasLine: false, name: '' };
+
+    function gpDigits(s) { return String(s || '').replace(/\D+/g, ''); }
+
+    function gpPhoneToggleBtn() {
+        const btn = document.getElementById('givePointsByPhoneBtn');
+        if (!btn) return;
+        const ok = gpDigits(document.getElementById('gpPhoneInput')?.value).length >= 8;
+        btn.classList.toggle('hidden', !ok);
+    }
+
+    window.gpPhoneOnInput = function () {
+        // Phone changed → invalidate the previous lookup.
+        window.gpPhoneState = { phone: '', userId: 0, found: false, checked: false, hasLine: false, name: '' };
+        document.getElementById('gpPhoneResult')?.classList.add('hidden');
+        document.getElementById('gpPhoneNewBox')?.classList.add('hidden');
+        gpPhoneToggleBtn();
+    };
+
+    window.gpPhoneLookup = async function () {
+        const phone = gpDigits(document.getElementById('gpPhoneInput')?.value);
+        const resultBox = document.getElementById('gpPhoneResult');
+        const newBox = document.getElementById('gpPhoneNewBox');
+        const errBox = document.getElementById('givePointsError');
+        errBox?.classList.add('hidden');
+        if (phone.length < 8) { if (errBox) { errBox.textContent = 'กรุณากรอกเบอร์ให้ครบ'; errBox.classList.remove('hidden'); } return; }
+
+        const btn = document.getElementById('gpPhoneSearchBtn');
+        const html = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ action: 'lookup_phone', line_account_id: window.currentBotId, phone: phone })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { if (errBox) { errBox.textContent = data.message || 'ค้นหาไม่สำเร็จ'; errBox.classList.remove('hidden'); } return; }
+
+            window.gpPhoneState.phone = data.phone || phone;
+            window.gpPhoneState.checked = true;
+
+            if (data.found && data.customers && data.customers.length) {
+                newBox?.classList.add('hidden');
+                const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                resultBox.innerHTML = data.customers.map((c) => {
+                    const badge = c.has_line
+                        ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">LINE</span>'
+                        : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">เบอร์</span>';
+                    return '<button type="button" onclick="gpSelectPhoneCustomer(' + c.user_id + ')" data-uid="' + c.user_id + '"'
+                        + ' class="gp-cust-row w-full flex items-center justify-between gap-2 p-2 rounded-lg border border-emerald-200 bg-white hover:bg-emerald-50 text-left">'
+                        + '<span class="text-xs"><b class="text-gray-700">' + esc(c.name) + '</b> ' + badge + '</span>'
+                        + '<span class="text-xs text-emerald-700 font-bold whitespace-nowrap">' + Number(c.points || 0).toLocaleString() + ' แต้ม</span>'
+                        + '</button>';
+                }).join('');
+                resultBox.classList.remove('hidden');
+                if (data.customers.length === 1) {
+                    gpSelectPhoneCustomer(data.customers[0].user_id); // auto-select the only match
+                } else {
+                    window.gpPhoneState.userId = 0;
+                    window.gpPhoneState.found = true;
+                }
+            } else {
+                window.gpPhoneState.found = false;
+                window.gpPhoneState.userId = 0;
+                resultBox.classList.add('hidden');
+                resultBox.innerHTML = '';
+                newBox?.classList.remove('hidden');
+            }
+            gpPhoneToggleBtn();
+        } catch (err) {
+            console.error('lookup_phone error:', err);
+            if (errBox) { errBox.textContent = 'เกิดข้อผิดพลาดในการค้นหา'; errBox.classList.remove('hidden'); }
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = html; }
+        }
+    };
+
+    window.gpSelectPhoneCustomer = function (userId) {
+        window.gpPhoneState.userId = parseInt(userId, 10) || 0;
+        window.gpPhoneState.found = true;
+        document.querySelectorAll('#gpPhoneResult .gp-cust-row').forEach((r) => {
+            const on = parseInt(r.getAttribute('data-uid'), 10) === window.gpPhoneState.userId;
+            r.classList.toggle('ring-2', on);
+            r.classList.toggle('ring-emerald-500', on);
+        });
+        gpPhoneToggleBtn();
+    };
+
+    // Credit points to a phone (existing customer or auto-created phone member).
+    // Server: api/points-claim.php?action=give_by_phone.
+    window.givePointsGiveByPhone = async function () {
+        const errBox = document.getElementById('givePointsError');
+        const showErr = (msg) => { if (errBox) { errBox.textContent = msg; errBox.classList.remove('hidden'); } };
+        errBox?.classList.add('hidden');
+
+        const phone = gpDigits(document.getElementById('gpPhoneInput')?.value);
+        if (phone.length < 8) { showErr('กรุณากรอกเบอร์ให้ถูกต้อง'); return; }
+
+        const amount = parseFloat(document.getElementById('givePointsAmount')?.value || '0');
+        const points = parseInt(document.getElementById('givePointsPoints')?.value || '0', 10);
+        const payment = document.getElementById('givePointsPayment')?.value || '';
+        if (!(amount > 0) && !(points > 0)) { showErr('กรุณากรอกยอดเงินหรือแต้มอย่างน้อยหนึ่งช่อง'); return; }
+
+        // Implicit lookup if the pharmacist typed a phone but never pressed search,
+        // so we reuse an existing customer instead of making a duplicate.
+        if (!window.gpPhoneState.checked || window.gpPhoneState.phone !== phone) {
+            await gpPhoneLookup();
+        }
+
+        const name = document.getElementById('gpPhoneNewName')?.value || '';
+        const btn = document.getElementById('givePointsByPhoneBtn');
+        const btnHtml = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>กำลังให้แต้ม...'; }
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({
+                    action: 'give_by_phone',
+                    line_account_id: window.currentBotId,
+                    phone: phone,
+                    user_id: window.gpPhoneState.userId || '',
+                    name: name,
+                    amount: amount > 0 ? amount : '',
+                    points: points > 0 ? points : '',
+                    payment_method: payment
+                })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { showErr(data.message || 'ให้แต้มไม่สำเร็จ'); return; }
+
+            document.getElementById('gpDirectPoints').textContent = Number(data.points || 0).toLocaleString();
+            document.getElementById('gpDirectBalance').textContent = Number(data.total_points || 0).toLocaleString();
+            document.getElementById('gpDirectVoucher').textContent = data.voucher_no || '-';
+
+            // Tailor the sub-note: LINE customer vs phone-only member.
+            const note = document.getElementById('gpDirectNote');
+            if (note) {
+                let msg;
+                if (data.has_line) {
+                    msg = '📨 ส่งใบเสร็จแต้มทาง LINE แล้ว และบันทึกในประวัติแต้มของลูกค้าแล้ว';
+                } else {
+                    msg = '✅ บันทึกแต้มเข้าบัญชีเบอร์ ' + phone + ' แล้ว (ยังไม่มี LINE — เชื่อมภายหลังได้)';
+                }
+                if (data.is_new) msg = '🆕 สร้างลูกค้าใหม่ · ' + msg;
+                if (data.merge_flag && data.merge_flag.offline_points > 0) {
+                    msg += '\n⚠️ เบอร์นี้มีแต้มหน้าร้านค้างอยู่ ' + Number(data.merge_flag.offline_points).toLocaleString() + ' แต้ม — รอยืนยันรวมในเมนูรวมแต้ม';
+                }
+                note.style.whiteSpace = 'pre-line';
+                note.textContent = msg;
+            }
+
+            document.getElementById('givePointsForm')?.classList.add('hidden');
+            document.getElementById('givePointsResult')?.classList.add('hidden');
+            document.getElementById('givePointsDirectResult')?.classList.remove('hidden');
+            document.getElementById('givePointsByPhoneBtn')?.classList.add('hidden');
+            document.getElementById('givePointsDirectBtn')?.classList.add('hidden');
+            document.getElementById('givePointsGenerateBtn')?.classList.add('hidden');
+            document.getElementById('givePointsNewBtn')?.classList.remove('hidden');
+        } catch (err) {
+            console.error('give_by_phone error:', err);
+            showErr('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = btnHtml; }
+        }
+    };
+
+    // ============================================================
+    // Merge review (semi-auto confirm) — 2026-06-20
+    // Lists phone-only records whose phone matches a LINE member, so the
+    // pharmacist can confirm moving the counter points into the LINE profile.
+    // ============================================================
+    window.gpMergeCandidates = [];
+
+    window.gpLoadMergeCandidates = async function () {
+        const banner = document.getElementById('gpMergeBanner');
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ action: 'list_merge_candidates', line_account_id: window.currentBotId })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { banner?.classList.add('hidden'); return; }
+            window.gpMergeCandidates = data.candidates || [];
+            const count = data.count || window.gpMergeCandidates.length;
+            const countEl = document.getElementById('gpMergeCount');
+            if (countEl) countEl.textContent = count;
+            const listEl = document.getElementById('gpMergeList');
+            if (listEl) { listEl.classList.add('hidden'); listEl.innerHTML = ''; }
+            const toggle = document.getElementById('gpMergeToggleBtn');
+            if (toggle) toggle.textContent = 'ดู';
+            banner?.classList.toggle('hidden', count <= 0);
+        } catch (err) {
+            console.error('list_merge_candidates error:', err);
+            banner?.classList.add('hidden');
+        }
+    };
+
+    window.gpToggleMergeList = function () {
+        const listEl = document.getElementById('gpMergeList');
+        const toggle = document.getElementById('gpMergeToggleBtn');
+        if (!listEl) return;
+        const willShow = listEl.classList.contains('hidden');
+        if (toggle) toggle.textContent = willShow ? 'ซ่อน' : 'ดู';
+        if (!willShow) { listEl.classList.add('hidden'); return; }
+        gpRenderMergeList();
+        listEl.classList.remove('hidden');
+    };
+
+    function gpRenderMergeList() {
+        const listEl = document.getElementById('gpMergeList');
+        if (!listEl) return;
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        if (!window.gpMergeCandidates.length) {
+            listEl.innerHTML = '<div class="text-xs text-gray-400 text-center py-1">ไม่มีรายการรอยืนยัน</div>';
+            return;
+        }
+        listEl.innerHTML = window.gpMergeCandidates.map((c) =>
+            '<div class="p-2 rounded-lg bg-white border border-amber-200 text-xs" data-cid="' + c.id + '">'
+            + '<div class="text-gray-600">📞 ' + esc(c.phone) + '</div>'
+            + '<div class="mt-1 flex items-center justify-between gap-2">'
+            + '<span class="text-gray-700">รวม <b class="text-emerald-700">' + Number(c.offline_points || 0).toLocaleString() + ' แต้ม</b> '
+            + 'จาก “' + esc(c.ghost_name) + '” → <b>' + esc(c.line_name) + '</b> (LINE)</span>'
+            + '</div>'
+            + '<div class="mt-2 flex gap-2">'
+            + '<button type="button" onclick="gpConfirmMerge(' + c.id + ',this)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 rounded font-medium"><i class="fas fa-check mr-1"></i>ยืนยันรวม</button>'
+            + '<button type="button" onclick="gpDismissMerge(' + c.id + ',this)" class="px-3 bg-gray-100 hover:bg-gray-200 text-gray-600 py-1.5 rounded">ไม่รวม</button>'
+            + '</div></div>'
+        ).join('');
+    }
+
+    function gpRemoveMergeItem(id) {
+        window.gpMergeCandidates = window.gpMergeCandidates.filter((c) => c.id !== id);
+        const countEl = document.getElementById('gpMergeCount');
+        if (countEl) countEl.textContent = window.gpMergeCandidates.length;
+        if (!window.gpMergeCandidates.length) {
+            document.getElementById('gpMergeBanner')?.classList.add('hidden');
+        } else {
+            gpRenderMergeList();
+        }
+    }
+
+    window.gpConfirmMerge = async function (id, btn) {
+        const html = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ action: 'confirm_merge', line_account_id: window.currentBotId, candidate_id: id })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { alert(data.message || 'รวมแต้มไม่สำเร็จ'); if (btn) { btn.disabled = false; btn.innerHTML = html; } return; }
+            gpRemoveMergeItem(id);
+        } catch (err) {
+            console.error('confirm_merge error:', err);
+            alert('เกิดข้อผิดพลาดในการรวมแต้ม');
+            if (btn) { btn.disabled = false; btn.innerHTML = html; }
+        }
+    };
+
+    window.gpDismissMerge = async function (id, btn) {
+        if (btn) btn.disabled = true;
+        try {
+            const res = await fetch('api/points-claim.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ action: 'dismiss_merge', line_account_id: window.currentBotId, candidate_id: id })
+            });
+            const data = JSON.parse(await res.text());
+            if (!data.success) { alert(data.message || 'ยกเลิกไม่สำเร็จ'); if (btn) btn.disabled = false; return; }
+            gpRemoveMergeItem(id);
+        } catch (err) {
+            console.error('dismiss_merge error:', err);
+            if (btn) btn.disabled = false;
+        }
+    };
+
+    function givePointsStartCountdown(seconds) {
+        if (givePointsCountdownTimer) clearInterval(givePointsCountdownTimer);
+        const el = document.getElementById('givePointsCountdown');
+        let remaining = seconds;
+        const render = () => {
+            if (!el) return;
+            if (remaining <= 0) {
+                el.textContent = '00:00 (หมดอายุ)';
+                clearInterval(givePointsCountdownTimer);
+                givePointsCountdownTimer = null;
+                return;
+            }
+            const m = Math.floor(remaining / 60);
+            const s = remaining % 60;
+            el.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+            remaining--;
+        };
+        render();
+        givePointsCountdownTimer = setInterval(render, 1000);
+    }
+
+    document.getElementById('givePointsModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'givePointsModal') window.closeGivePointsModal();
     });
 })();
 </script>

@@ -296,6 +296,30 @@ const InboxRealtime = (function () {
         const bgClass = isIncoming ? 'bg-white' : 'bg-emerald-500 text-white';
         const roundedClass = isIncoming ? 'rounded-tl-none' : 'rounded-tr-none';
 
+        // Flex (e.g. loyalty/points cards): render the card live instead of dumping
+        // raw JSON. Bypass the coloured chat bubble and reuse the page's global
+        // renderFlexMessage (defined in inbox-v2.php). No refresh needed.
+        if ((msg.type || msg.message_type) === 'flex') {
+            let card;
+            try {
+                card = (typeof window.renderFlexMessage === 'function')
+                    ? window.renderFlexMessage(JSON.parse(msg.content))
+                    : '<div class="bg-white rounded-lg border p-3 text-xs text-gray-500">Flex</div>';
+            } catch (e) {
+                card = '<div class="bg-white rounded-lg border p-3 text-xs text-gray-500">Flex Message</div>';
+            }
+            return `
+            <div class="flex ${alignClass} mb-3 animate-fadeIn" data-msg-id="${msg.id}">
+                <div class="max-w-[80%]">
+                    <div class="flex-message-container">${card}</div>
+                    <div class="text-[10px] text-gray-400 mt-1 text-right">
+                        ${msg.time}
+                        ${!isIncoming && msg.sent_by ? `<span class="ml-1">• ${escapeHtml(msg.sent_by.replace('admin:', ''))}</span>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }
+
         let content = '';
 
         switch (msg.type) {

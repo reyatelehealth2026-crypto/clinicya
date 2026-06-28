@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-06-04T00:10:31.529Z",
+  "base_url": "https://tenant-0001.re-ya.com",
+  "episode": "10",
+  "title": "เคสติดตาม Refill และการดูแลต่อเนื่อง",
+  "audience": "เภสัชกร / แอดมิน",
+  "output": "videos/crm-manual-v2/crm-10-refill-follow-up.mp4",
+  "frames": 127,
+  "scenes": [
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เปิดลูกค้าที่เคยจ่ายยาแล้ว ดูวันที่จ่ายยาและรายการยา"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เพิ่ม tag เช่น ต้องติดตาม หรือ refill เพื่อเตือนทีม"
+    },
+    {
+      "route": "/inbox-v2?user=1",
+      "caption": "เขียน note สำหรับรอบถัดไปให้ทีมอ่านต่อได้"
+    },
+    {
+      "route": "/users",
+      "caption": "ดูฐานลูกค้าเพื่อวางแผน follow-up โดยไม่ส่งข้อความวินิจฉัยอัตโนมัติ"
+    }
+  ],
+  "ai_voice_disclosure": "เสียงบรรยายสร้างด้วย AI",
+  "privacy_note": "Live tenant recording; internal use only."
+}

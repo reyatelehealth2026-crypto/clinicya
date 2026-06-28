@@ -136,7 +136,7 @@ class GeminiAI {
         // ลอง models ตามลำดับพร้อม API version ที่เหมาะสม
         $modelConfigs = [
             ['model' => 'gemini-flash-latest', 'version' => 'v1beta'],
-            ['model' => 'gemini-2.0-flash', 'version' => 'v1beta'],
+            ['model' => 'gemini-2.5-flash', 'version' => 'v1beta'],
             ['model' => 'gemini-1.5-flash', 'version' => 'v1beta'],
             ['model' => 'gemini-1.5-pro', 'version' => 'v1beta'],
             ['model' => 'gemini-pro', 'version' => 'v1beta'],

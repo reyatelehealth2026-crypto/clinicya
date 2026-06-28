@@ -441,6 +441,28 @@ if (!function_exists('buildStorefrontQuery')) {
             })
             .finally(() => { input.value = ''; });
     }
+
+    // 2026-06-02: delete a single product from the storefront list
+    function reyaDeleteProduct(id, name) {
+        if (!id) return;
+        if (!confirm('ลบสินค้า "' + (name || ('#' + id)) + '" ?\n\nการลบนี้ถาวร — ถ้าสินค้าเคยถูกใช้ในออเดอร์/จ่ายยา ระบบจะปิดการขายแทนการลบเพื่อกันข้อมูลเสียหาย')) return;
+        const fd = new FormData();
+        fd.append('action', 'delete');
+        fd.append('id', String(id));
+        fetch('/api/inventory-csv.php?action=delete', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(j => {
+                if (j.ok) {
+                    if (j.soft) {
+                        alert('สินค้านี้มีประวัติการใช้งาน — ปิดการขายแทนการลบ (ข้อมูลยังอยู่)');
+                    }
+                    location.reload();
+                } else {
+                    alert('ลบไม่สำเร็จ: ' + (j.message || j.error || 'unknown'));
+                }
+            })
+            .catch(e => alert('เครือข่าย: ' + e.message));
+    }
     </script>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
@@ -954,7 +976,7 @@ if (!function_exists('buildStorefrontQuery')) {
                         <th class="px-3 py-3 text-center">หน่วย</th>
                         <th class="px-3 py-3 text-center">สถานะระบบ</th>
                         <th class="px-3 py-3 text-center">หน้าร้าน</th>
-                        <th class="px-3 py-3 text-center">รายละเอียด</th>
+                        <th class="px-3 py-3 text-center">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y">
@@ -1118,13 +1140,21 @@ if (!function_exists('buildStorefrontQuery')) {
                                     </button>
                                 </td>
                                 <td class="px-3 py-2 text-center">
-                                    <a href="/inventory/product-detail?id=<?= $id ?>"
-                                       class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 <?= $anyOvr ? 'ring-1 ring-amber-300' : '' ?>"
-                                       title="<?= $anyOvr ? 'แก้ไข/ดูรายละเอียด (มี admin override)' : 'เปิดหน้ารายละเอียดสินค้า' ?>">
-                                        <i class="fas fa-eye"></i>
-                                        <span>ดูรายละเอียด</span>
-                                        <?php if ($anyOvr): ?><i class="fas fa-pen-square text-amber-500 text-[10px]"></i><?php endif; ?>
-                                    </a>
+                                    <div class="inline-flex items-center gap-1">
+                                        <a href="/inventory/product-detail?id=<?= $id ?>"
+                                           class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 <?= $anyOvr ? 'ring-1 ring-amber-300' : '' ?>"
+                                           title="<?= $anyOvr ? 'แก้ไข/ดูรายละเอียด (มี admin override)' : 'เปิดหน้ารายละเอียดสินค้า' ?>">
+                                            <i class="fas fa-eye"></i>
+                                            <span>ดูรายละเอียด</span>
+                                            <?php if ($anyOvr): ?><i class="fas fa-pen-square text-amber-500 text-[10px]"></i><?php endif; ?>
+                                        </a>
+                                        <button type="button"
+                                                onclick="reyaDeleteProduct(<?= $id ?>, <?= htmlspecialchars(json_encode((string)($eff['name'] ?? $r['name'] ?? '')), ENT_QUOTES) ?>)"
+                                                class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-xs bg-red-50 hover:bg-red-100 text-red-600 border border-red-100"
+                                                title="ลบสินค้า">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

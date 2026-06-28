@@ -21,6 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once dirname(__DIR__) . '/config/config.php';
 require_once dirname(__DIR__) . '/config/database.php';
+// Route root-domain (Mini App / LIFF) request to the tenant DB by line_account_id (split-brain fix).
+require_once dirname(__DIR__) . '/bootstrap/route_by_account.php';
 require_once dirname(__DIR__) . '/classes/MiniAppContentService.php';
 
 try {

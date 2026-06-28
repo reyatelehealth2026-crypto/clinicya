@@ -39,6 +39,7 @@ require_once 'classes/LineAccountManager.php';
 require_once 'classes/OpenAI.php';
 require_once 'classes/TelegramAPI.php';
 require_once 'classes/FlexTemplates.php';
+require_once __DIR__ . '/includes/liff-helper.php'; // reya_liff_url_or_oa(): LIFF-or-OA fallback
 
 // V2.5: Load BusinessBot if available, fallback to ShopBot
 if (file_exists(__DIR__ . '/classes/BusinessBot.php')) {
@@ -511,6 +512,8 @@ function handleFollow($userId, $replyToken, $db, $line, $lineAccountId = null, $
         saveAccountFollower($db, $lineAccountId, $userId, $dbUserId, $profile, true);
         saveAccountEvent($db, $lineAccountId, 'follow', $userId, $dbUserId, $event);
         updateAccountDailyStats($db, $lineAccountId, 'new_followers');
+        // แอดเพื่อน = เป็นสมาชิกทันที (ไม่ต้องเข้า LIFF ก่อน)
+        ensureMemberRegistered($db, $dbUserId, $lineAccountId);
     }
 
     // V2.5: CRM - Auto-tag new customer & trigger drip campaigns
@@ -1160,12 +1163,12 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             $accountInfo = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($accountInfo) {
-                if (!empty($accountInfo['liff_id'])) {
-                    $liffShopUrl = 'https://liff.line.me/' . $accountInfo['liff_id'];
-                }
-                // ใช้ liff_consent_id ถ้ามี หรือใช้ liff_id ปกติ
+                // LIFF-or-OA fallback: real liff_id → Mini App; empty/PENDING → OA chat (or '').
+                // Keeps customers of not-yet-connected tenants out of the broken shared Mini App.
+                $liffShopUrl = reya_liff_url_or_oa($db, (int) $lineAccountId);
+                // ใช้ liff_consent_id ถ้ามี หรือใช้ liff_id ปกติ — gate on a REAL liff id only.
                 $consentLiffId = $accountInfo['liff_consent_id'] ?? $accountInfo['liff_id'] ?? '';
-                if ($consentLiffId) {
+                if (reya_is_real_liff_id($consentLiffId)) {
                     $liffConsentUrl = 'https://liff.line.me/' . $consentLiffId . '?page=consent';
                 }
 
@@ -1255,38 +1258,12 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         }
         */
 
-        // ========== LIFF Menu สำหรับข้อความแรก (หลังจาก consent แล้ว) ==========
-        // ส่ง LIFF Menu เมื่อลูกค้าทักมาครั้งแรก
-        if ($isFirstMessage && $sourceType === 'user' && $hasConsent) {
-            try {
-                // ถ้ามี LIFF URL ให้ส่ง LIFF Menu
-                if ($liffShopUrl) {
-                    $displayName = $user['display_name'] ?: 'คุณลูกค้า';
-                    $liffMenuBubble = FlexTemplates::firstMessageMenu($shopName, $liffShopUrl, $displayName);
-                    $liffMenuMessage = FlexTemplates::toMessage($liffMenuBubble, "ยินดีต้อนรับสู่ {$shopName}");
-
-                    // เพิ่ม Quick Reply
-                    $liffMenuMessage = FlexTemplates::withQuickReply($liffMenuMessage, [
-                        ['label' => '🛒 ดูสินค้า', 'text' => 'shop'],
-                        ['label' => '📋 เมนู', 'text' => 'menu'],
-                        ['label' => '💬 ติดต่อเรา', 'text' => 'contact']
-                    ]);
-
-                    $line->replyMessage($replyToken, [$liffMenuMessage]);
-                    saveOutgoingMessage($db, $user['id'], 'liff_menu');
-
-                    devLog($db, 'info', 'webhook', 'Sent LIFF Menu to new user', [
-                        'user_id' => $user['id'],
-                        'display_name' => $displayName,
-                        'liff_url' => $liffShopUrl
-                    ], $userId);
-
-                    return; // ส่ง LIFF Menu แล้ว ไม่ต้อง process ต่อ
-                }
-            } catch (Exception $e) {
-                logWebhookException($db, 'webhook.php', $e);
-                devLog($db, 'error', 'webhook', 'LIFF Menu error: ' . $e->getMessage(), null, $userId);
-            }
+        // ========== LIFF Menu สำหรับข้อความแรก ==========
+        // 2026-06-02: DISABLED — ไม่ส่งข้อความต้อนรับ/เมนูอัตโนมัติใดๆ ตอนทักครั้งแรก
+        // เจ้าของร้านควบคุมการต้อนรับเองผ่าน welcome_settings (follow event) เท่านั้น
+        // (เดิม block นี้ยิง firstMessageMenu "ยินดีต้อนรับสู่..." โดยไม่ผ่าน owner settings)
+        if (false && $isFirstMessage && $sourceType === 'user' && $hasConsent) {
+            // intentionally disabled — no auto welcome on first message
         }
 
         // ตรวจสอบ bot_mode ก่อน - ถ้าเป็น general ไม่ตอบกลับอะไรเลย
@@ -1318,6 +1295,45 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             'message' => mb_substr($messageText, 0, 30),
             'text_lower' => $textLower
         ], $userId);
+
+        // Loyalty via chat — works in ALL bot modes. In shop mode the webhook returns at
+        // "No matching command" (line ~1769) before reaching BusinessBot, so points /
+        // member card / rewards / redeem are all handled here instead. Replies with the
+        // designed Flex so a customer never needs the mini app for loyalty.
+        $pointsKeywords = ['แต้ม', 'แต้มสะสม', 'คะแนน', 'คะแนนสะสม', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'];
+        $memberKeywords = ['สมาชิก', 'บัตรสมาชิก', 'บัตร', 'member', 'membercard', 'member card'];
+        $rewardKeywords = ['ของรางวัล', 'แลกของรางวัล', 'แลกแต้ม', 'ของแลก', 'rewards', 'reward'];
+        $isRedeem = (bool) preg_match('/^redeem\s+(\d+)$/', $textLower, $redeemMatch);
+        $isLoyaltyCmd = in_array($textLower, $pointsKeywords, true)
+            || in_array($textLower, $memberKeywords, true)
+            || in_array($textLower, $rewardKeywords, true)
+            || $isRedeem;
+        if (class_exists('BusinessBot') && $isLoyaltyCmd) {
+            try {
+                $loyaltyBot = new BusinessBot($db, $line, $lineAccountId);
+                $sendResult = null;
+                if ($isRedeem) {
+                    $sendResult = $loyaltyBot->redeemReward($userId, $user['id'], (int) $redeemMatch[1], $replyToken);
+                } elseif (in_array($textLower, $pointsKeywords, true)) {
+                    $sendResult = $loyaltyBot->showPoints($userId, $user['id'], $replyToken);
+                } elseif (in_array($textLower, $memberKeywords, true)) {
+                    $sendResult = $loyaltyBot->showMemberCard($userId, $user['id'], $replyToken);
+                } else {
+                    $sendResult = $loyaltyBot->showRewards($userId, $user['id'], $replyToken);
+                }
+                devLog($db, 'info', 'webhook', 'Loyalty command handled (chat)', [
+                    'user_id' => $userId,
+                    'command' => $textLower,
+                    'bot_mode' => $botMode,
+                    'send_code' => is_array($sendResult) ? ($sendResult['code'] ?? null) : null,
+                    'send_method' => is_array($sendResult) ? ($sendResult['method'] ?? null) : null,
+                    'send_body' => is_array($sendResult) ? mb_substr(is_array($sendResult['body'] ?? null) ? (json_encode($sendResult['body'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '') : (string) ($sendResult['body'] ?? ''), 0, 200) : null
+                ], $userId);
+                return;
+            } catch (Exception $e) {
+                logWebhookException($db, 'webhook.php', $e);
+            }
+        }
 
         // ถ้าเป็นโหมด general - เช็ค Auto Reply ก่อน ถ้าไม่ match ค่อยไม่ตอบ
         if ($botMode === 'general') {
@@ -1710,9 +1726,10 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             }
         }
 
-        // ถ้าเป็นคำสั่งร้านค้า - ส่ง LIFF URL
-        if ($isShopCommand && $liffId) {
-            $liffUrl = "https://liff.line.me/{$liffId}";
+        // ถ้าเป็นคำสั่งร้านค้า - ส่ง LIFF URL (หรือ fallback ไป OA chat ถ้ายังไม่ได้เชื่อม LIFF)
+        // $liffShopUrl ถูกคำนวณผ่าน reya_liff_url_or_oa() ด้านบนแล้ว:
+        //   real liff_id → liff.line.me ; empty/PENDING → line.me/R/ti/p ; ไม่มีอะไรเลย → ''
+        if ($isShopCommand && $liffShopUrl !== '') {
             $shopFlex = [
                 'type' => 'bubble',
                 'body' => [
@@ -1731,7 +1748,7 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                             'type' => 'button',
                             'style' => 'primary',
                             'color' => '#06C755',
-                            'action' => ['type' => 'uri', 'label' => '🛒 เข้าสู่ร้านค้า', 'uri' => $liffUrl]
+                            'action' => ['type' => 'uri', 'label' => '🛒 เข้าสู่ร้านค้า', 'uri' => $liffShopUrl]
                         ]
                     ]
                 ]
@@ -3166,18 +3183,31 @@ function logAnalytics($db, $eventType, $data, $lineAccountId = null)
 function devLog($db, $type, $source, $message, $data = null, $userId = null)
 {
     try {
+        // dev_logs.user_id is an INT column in tenant schemas, but LINE user IDs are
+        // strings ("U…"). Passing a string there throws SQLSTATE[22007]/1366 and crashed
+        // the webhook. Only a numeric id goes in the column; a LINE id is preserved in
+        // `data` so nothing is lost.
+        $userIdInt = is_numeric($userId) ? (int) $userId : null;
+        if ($userId !== null && $userIdInt === null) {
+            if (!is_array($data)) {
+                $data = ($data === null) ? [] : ['detail' => $data];
+            }
+            $data['line_user_id'] = $userId;
+        }
         $stmt = $db->prepare("INSERT INTO dev_logs (log_type, source, message, data, user_id, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
         $stmt->execute([
             $type,
             $source,
             $message,
             $data ? json_encode($data, JSON_UNESCAPED_UNICODE) : null,
-            $userId
+            $userIdInt
         ]);
     } catch (Exception $e) {
-        logWebhookException($db, 'webhook.php', $e);
-        // Table might not exist - log to error_log instead
-        error_log("[{$type}] [{$source}] {$message} " . ($data ? json_encode($data) : ''));
+        // Do NOT call logWebhookException() here: it calls devLog() again, which
+        // re-enters this catch when dev_logs is missing/broken — an infinite
+        // recursion that exhausts memory and fatals the whole webhook request.
+        // Log straight to error_log instead (no re-entry).
+        error_log("[devLog failed: {$e->getMessage()}] [{$type}] [{$source}] {$message} " . ($data ? json_encode($data) : ''));
     }
 }
 
@@ -3536,6 +3566,66 @@ function getOrCreateUser($db, $line, $userId, $lineAccountId = null, $groupId = 
     }
 
     return $user;
+}
+
+/**
+ * Generate next member_id (M + yy + 5-digit running, per LINE account).
+ * Mirrors api/member.php::generateMemberId so both paths stay consistent.
+ */
+function wfGenerateMemberId($db, $lineAccountId)
+{
+    $prefix = 'M';
+    $year = date('y');
+    $stmt = $db->prepare(
+        "SELECT member_id FROM users WHERE member_id LIKE ? AND (line_account_id = ? OR line_account_id IS NULL) ORDER BY member_id DESC LIMIT 1"
+    );
+    $stmt->execute([$prefix . $year . '%', $lineAccountId]);
+    $last = $stmt->fetch(PDO::FETCH_ASSOC);
+    $next = ($last && preg_match('/^M\d{2}(\d{5})$/', (string) $last['member_id'], $m)) ? (intval($m[1]) + 1) : 1;
+    return $prefix . $year . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+}
+
+/**
+ * Promote a user to a registered member on the spot (e.g. right after they add
+ * the OA as a friend) so they don't need to open the LIFF to "become" a member.
+ * Idempotent: does nothing if the user is already registered. Mirrors
+ * api/member.php::autoUpgradeMember (member_id + is_registered + welcome bonus).
+ */
+function ensureMemberRegistered($db, $userDbId, $lineAccountId)
+{
+    if (!$userDbId) {
+        return;
+    }
+    try {
+        $stmt = $db->prepare("SELECT is_registered FROM users WHERE id = ?");
+        $stmt->execute([$userDbId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row || (int) ($row['is_registered'] ?? 0) === 1) {
+            return; // already a member (or missing) — keep idempotent
+        }
+
+        $cols = [];
+        try {
+            $cols = array_flip($db->query("SHOW COLUMNS FROM users")->fetchAll(PDO::FETCH_COLUMN));
+        } catch (Exception $e) {
+        }
+
+        $memberId = wfGenerateMemberId($db, $lineAccountId);
+        $updates = ['member_id = ?', 'is_registered = 1'];
+        $params = [$memberId];
+        if (isset($cols['registered_at'])) {
+            $updates[] = 'registered_at = NOW()';
+        }
+        if (isset($cols['member_tier'])) {
+            $updates[] = "member_tier = 'bronze'";
+        }
+        // No welcome-bonus points here — membership only (points stay at the
+        // counter/claim flows so the various point sources don't drift further).
+        $params[] = $userDbId;
+        $db->prepare("UPDATE users SET " . implode(', ', $updates) . " WHERE id = ?")->execute($params);
+    } catch (Exception $e) {
+        error_log('ensureMemberRegistered: ' . $e->getMessage());
+    }
 }
 
 /**

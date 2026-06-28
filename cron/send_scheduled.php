@@ -251,10 +251,10 @@ function buildProductCarousel($products, $lineAccountId) {
         
         $priceText = '฿' . number_format($displayPrice, 0);
         
-        // Build product URL
-        $productUrl = $baseUrl . '/liff/shop.php?product=' . $product['id'];
+        // Build product URL — new Mini App product page (not the retired /liff/ SPA)
+        $productUrl = $baseUrl . '/miniapp/shop/product/?id=' . $product['id'];
         if ($lineAccountId) {
-            $productUrl .= '&account=' . $lineAccountId;
+            $productUrl .= '&la=' . $lineAccountId;
         }
         
         $bodyContents = [

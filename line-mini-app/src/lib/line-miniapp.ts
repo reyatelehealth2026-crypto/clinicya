@@ -1,7 +1,7 @@
 'use client'
 
 import liff from '@line/liff'
-import { appConfig } from '@/lib/config'
+import { resolveLineAccountId, resolveLiffId } from '@/lib/config'
 import type { LineBootstrapState, MiniAppCapabilities } from '@/types/line'
 
 export async function bootstrapLine(): Promise<LineBootstrapState> {
@@ -15,7 +15,10 @@ export async function bootstrapLine(): Promise<LineBootstrapState> {
     error: null
   }
 
-  if (!appConfig.liffId) {
+  // Resolve the correct LIFF id for THIS host (tenant) before init — using the
+  // baked id on every host makes login bounce to the wrong tenant's endpoint.
+  const liffId = await resolveLiffId()
+  if (!liffId) {
     return {
       ...baseState,
       isReady: true,
@@ -24,7 +27,20 @@ export async function bootstrapLine(): Promise<LineBootstrapState> {
   }
 
   try {
-    await liff.init({ liffId: appConfig.liffId, withLoginOnExternalBrowser: false })
+    await liff.init({ liffId, withLoginOnExternalBrowser: false })
+
+    // Resolve which tenant (line_account) this shared Mini App is serving.
+    // Priority: ?la= / localStorage (handled inside) → resolver API via LIFF id.
+    // Best-effort: never blocks bootstrap on failure.
+    try {
+      const ctxLiffId =
+        (liff as unknown as { id?: string }).id ||
+        liff.getContext?.()?.liffId ||
+        liffId
+      await resolveLineAccountId(ctxLiffId ?? null)
+    } catch {
+      /* keep going with the build-time default */
+    }
 
     if (!liff.isLoggedIn()) {
       return {

@@ -1,0 +1,68 @@
+{
+  "size": {
+    "width": 2500,
+    "height": 1686
+  },
+  "selected": true,
+  "name": "ClinicYa Rich Menu Page 1",
+  "chatBarText": "เมนูหลัก",
+  "areas": [
+    {
+      "bounds": { "x": 0, "y": 0, "width": 833, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "ปรึกษาเภสัช",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/video"
+      }
+    },
+    {
+      "bounds": { "x": 833, "y": 0, "width": 834, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "ซื้อยา",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/shop"
+      }
+    },
+    {
+      "bounds": { "x": 1667, "y": 0, "width": 833, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "ตรวจอาการ",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/ai-chat"
+      }
+    },
+    {
+      "bounds": { "x": 0, "y": 753, "width": 833, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "โปรโมชั่น",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/rewards"
+      }
+    },
+    {
+      "bounds": { "x": 833, "y": 753, "width": 834, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "ติดตามออเดอร์",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/orders"
+      }
+    },
+    {
+      "bounds": { "x": 1667, "y": 753, "width": 833, "height": 753 },
+      "action": {
+        "type": "uri",
+        "label": "สมาชิก",
+        "uri": "https://liff.line.me/2009900162-LNKJpFRi/profile"
+      }
+    },
+    {
+      "bounds": { "x": 1250, "y": 1506, "width": 1250, "height": 180 },
+      "action": {
+        "type": "richmenuswitch",
+        "label": "หน้า 2",
+        "richMenuAliasId": "clinicya-page-2",
+        "data": "richmenu=clinicya-page-2"
+      }
+    }
+  ]
+}
