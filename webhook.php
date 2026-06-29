@@ -5128,6 +5128,96 @@ function notifyPharmacistForHumanRequest($db, $userId, $lineAccountId, $message)
  * ตรวจสอบรูปภาพว่าเป็นใบเสร็จหรือไม่ ถ้าใช่ให้แต้มอัตโนมัติ
  * คืน true ถ้าจัดการแล้ว (ทั้งกรณีสำเร็จและกรณีปฏิเสธ), false ถ้าไม่ใช่ใบเสร็จ
  */
+function ensureReceiptPointClaimsTable($db)
+{
+    $db->exec("CREATE TABLE IF NOT EXISTS receipt_point_claims (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        line_account_id INT,
+        user_id       INT NOT NULL,
+        claim_key     VARCHAR(255) NOT NULL,
+        receipt_number VARCHAR(100),
+        shop_name     VARCHAR(255),
+        total_amount  DECIMAL(10,2),
+        points_awarded INT,
+        created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_claim (line_account_id, claim_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $optionalColumns = [
+        'status' => "ALTER TABLE receipt_point_claims ADD COLUMN status VARCHAR(30) DEFAULT 'approved'",
+        'image_hash' => "ALTER TABLE receipt_point_claims ADD COLUMN image_hash CHAR(64) DEFAULT NULL",
+        'image_path' => "ALTER TABLE receipt_point_claims ADD COLUMN image_path VARCHAR(255) DEFAULT NULL",
+    ];
+
+    foreach ($optionalColumns as $column => $sql) {
+        $check = $db->query("SHOW COLUMNS FROM receipt_point_claims LIKE " . $db->quote($column));
+        if ($check && $check->rowCount() === 0) {
+            $db->exec($sql);
+        }
+    }
+}
+
+function recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken)
+{
+    $imageHash = hash('sha256', $imageData);
+    $claimKey = 'pending:u' . $user['id'] . ':' . $imageHash;
+    $imagePath = null;
+
+    try {
+        ensureReceiptPointClaimsTable($db);
+
+        $mimeType = (new finfo(FILEINFO_MIME_TYPE))->buffer($imageData) ?: 'image/jpeg';
+        $extensions = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/heic' => 'heic',
+            'image/heif' => 'heif',
+        ];
+        $extension = $extensions[$mimeType] ?? 'jpg';
+        $relativeDir = 'uploads/receipt-claims/' . date('Y/m');
+        $absoluteDir = __DIR__ . '/' . $relativeDir;
+        if (!is_dir($absoluteDir)) {
+            @mkdir($absoluteDir, 0755, true);
+        }
+        if (is_dir($absoluteDir) && is_writable($absoluteDir)) {
+            $relativePath = $relativeDir . '/' . $imageHash . '.' . $extension;
+            $absolutePath = __DIR__ . '/' . $relativePath;
+            if (!file_exists($absolutePath)) {
+                @file_put_contents($absolutePath, $imageData, LOCK_EX);
+            }
+            if (file_exists($absolutePath)) {
+                $imagePath = $relativePath;
+            }
+        }
+
+        $dup = $db->prepare("SELECT id FROM receipt_point_claims WHERE line_account_id = ? AND claim_key = ? LIMIT 1");
+        $dup->execute([$lineAccountId, $claimKey]);
+        if (!$dup->fetch()) {
+            $ins = $db->prepare("INSERT INTO receipt_point_claims
+                (line_account_id, user_id, claim_key, receipt_number, shop_name, total_amount, points_awarded, status, image_hash, image_path)
+                VALUES (?, ?, ?, NULL, NULL, 0, 0, 'pending_review', ?, ?)");
+            $ins->execute([$lineAccountId, $user['id'], $claimKey, $imageHash, $imagePath]);
+        } elseif ($imagePath) {
+            $upd = $db->prepare("UPDATE receipt_point_claims SET image_path = COALESCE(image_path, ?) WHERE line_account_id = ? AND claim_key = ?");
+            $upd->execute([$imagePath, $lineAccountId, $claimKey]);
+        }
+
+        $pendingMessage = [
+            'type' => 'text',
+            'text' => "รับใบเสร็จแล้วค่ะ ระบบจะส่งให้ทีมงานตรวจและเพิ่มแต้มให้ภายหลัง",
+        ];
+
+        sendMessageWithFallback($line, $replyToken, $user['id'], [$pendingMessage], $db);
+        saveOutgoingMessage($db, $user['id'], json_encode($pendingMessage, JSON_UNESCAPED_UNICODE), 'system:receipt-pending', 'text');
+
+        return true;
+    } catch (Exception $e) {
+        error_log('recordPendingReceiptPointClaim error: ' . $e->getMessage());
+        return false;
+    }
+}
+
 function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken)
 {
     if (!file_exists(__DIR__ . '/classes/GeminiAI.php') || !file_exists(__DIR__ . '/classes/LoyaltyPoints.php')) {
@@ -5167,7 +5257,11 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
         return false;
     }
 
-    if (!$receipt || empty($receipt['is_receipt'])) {
+    if (!$receipt) {
+        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken);
+    }
+
+    if (empty($receipt['is_receipt'])) {
         return false; // Not a receipt — let normal bot flow handle
     }
 
@@ -5177,7 +5271,22 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
     $receiptDate   = $receipt['date'] ?? null;
 
     if ($totalAmount <= 0) {
-        return false;
+        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken);
+    }
+
+    // Confidence gate — only auto-award when an independent calculation
+    // confirmed the total (≤0.5% error). Anything unverified goes to manual
+    // review so we never award points from a misread amount.
+    $confidence = $receipt['confidence'] ?? 'low';
+    if ($confidence !== 'high') {
+        error_log(sprintf(
+            'Receipt points: low-confidence (%s) for user=%d account=%s amount=%.2f → manual review',
+            $receipt['confidence_reason'] ?? 'unknown',
+            $user['id'],
+            (string) $lineAccountId,
+            $totalAmount
+        ));
+        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken);
     }
 
     // Get shop name for display in Flex (no validation — any receipt earns points)
@@ -5198,18 +5307,7 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
 
     // Ensure the claims table exists, then check for duplicates
     try {
-        $db->exec("CREATE TABLE IF NOT EXISTS receipt_point_claims (
-            id            INT AUTO_INCREMENT PRIMARY KEY,
-            line_account_id INT,
-            user_id       INT NOT NULL,
-            claim_key     VARCHAR(255) NOT NULL,
-            receipt_number VARCHAR(100),
-            shop_name     VARCHAR(255),
-            total_amount  DECIMAL(10,2),
-            points_awarded INT,
-            created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uk_claim (line_account_id, claim_key)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        ensureReceiptPointClaimsTable($db);
 
         $dup = $db->prepare("SELECT id FROM receipt_point_claims WHERE line_account_id = ? AND claim_key = ? LIMIT 1");
         $dup->execute([$lineAccountId, $claimKey]);

@@ -378,10 +378,23 @@ class GeminiAI {
             }
         }
 
-        $totalAmount = $this->extractReceiptTotalAmount($normalized);
+        $evidence = $this->extractReceiptEvidence($normalized);
+        $totalAmount = (float) $evidence['total'];
+
         if (!$looksLikeReceipt && $totalAmount <= 0) {
-            return ['is_receipt' => false, 'shop_name' => null, 'receipt_number' => null, 'total_amount' => 0, 'date' => null];
+            return [
+                'is_receipt' => false, 'shop_name' => null, 'receipt_number' => null,
+                'total_amount' => 0, 'date' => null,
+                'confidence' => 'low', 'confidence_reason' => 'not_a_receipt',
+            ];
         }
+
+        $verdict = $this->assessReceiptConfidence(
+            $totalAmount,
+            $evidence['line_items'],
+            $evidence['paid'],
+            $evidence['change']
+        );
 
         return [
             'is_receipt' => $totalAmount > 0,
@@ -389,13 +402,29 @@ class GeminiAI {
             'receipt_number' => $this->extractReceiptNumber($normalized),
             'total_amount' => $totalAmount,
             'date' => $this->extractReceiptDate($normalized),
+            'confidence' => $verdict['level'],
+            'confidence_reason' => $verdict['reason'],
         ];
     }
 
-    private function extractReceiptTotalAmount($text) {
+    /**
+     * Pull structured evidence out of OCR text so the grand total can be
+     * cross-checked. Classifies every line as total / cash / change / item and
+     * returns the best total guess plus the supporting line-item amounts,
+     * tendered cash and change — exactly what assessReceiptConfidence() needs.
+     */
+    private function extractReceiptEvidence($text) {
         $lines = preg_split('/\n+/', (string) $text) ?: [];
-        $candidates = [];
-        $orderedAmounts = [];
+
+        $itemAmounts     = []; // right-most TOTAL-column value of each item line
+        $totalCandidates = []; // amounts on grand-total lines (keyed, deduped)
+        $allAmounts      = []; // every amount seen (repeated-value detection)
+        $paid            = null;
+        $change          = null;
+
+        $totalKeywords  = ['grand total', 'net total', 'total', 'amount due', 'dues', 'ยอดสุทธิ', 'ยอดรวม', 'รวมทั้งสิ้น', 'รวมเงินสุทธิ', 'รวมเงิน', 'ชำระเงิน', 'สุทธิ', 'รวม'];
+        $cashKeywords   = ['cash', 'เงินสด', 'รับเงิน', 'paid', 'tendered'];
+        $changeKeywords = ['change', 'เงินทอน', 'ทอน'];
 
         foreach ($lines as $line) {
             $line = trim($line);
@@ -403,84 +432,148 @@ class GeminiAI {
                 continue;
             }
 
-            if (!preg_match_all('/(?:฿|THB|บาท)?\s*([0-9]{1,3}(?:[, ]?[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]{2,}(?:\.[0-9]{1,2})?)/iu', $line, $matches)) {
+            $lower    = mb_strtolower($line, 'UTF-8');
+            $isChange = $this->lineHasKeyword($lower, $changeKeywords);
+            $isCash   = $this->lineHasKeyword($lower, $cashKeywords);
+            $isTotal  = $this->lineHasKeyword($lower, $totalKeywords);
+
+            // Unit prices live inside parentheses e.g. (@25.00) — never a line total.
+            $lineNoParen = preg_replace('/\([^)]*\)/u', ' ', $line);
+
+            if (!preg_match_all('/([0-9]{1,3}(?:[, ]?[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/u', $lineNoParen, $m)) {
                 continue;
             }
 
-            $lower = mb_strtolower($line, 'UTF-8');
-            $weight = 1;
-            foreach (['grand total', 'net total', 'total', 'amount due', 'dues', 'ยอดสุทธิ', 'ยอดรวม', 'รวมทั้งสิ้น', 'รวมเงิน', 'ชำระเงิน', 'รวม'] as $keyword) {
-                if (mb_strpos($lower, mb_strtolower($keyword, 'UTF-8')) !== false) {
-                    $weight = 10;
-                    break;
+            $nums = [];
+            foreach ($m[1] as $raw) {
+                $val = (float) str_replace([',', ' '], '', $raw);
+                if ($val > 0) {
+                    $nums[]       = $val;
+                    $allAmounts[] = $val;
                 }
             }
-            foreach (['change', 'cash', 'เงินทอน', 'รับเงิน', 'ทอน'] as $keyword) {
-                if (mb_strpos($lower, mb_strtolower($keyword, 'UTF-8')) !== false) {
-                    $weight = -5;
-                    break;
-                }
+            if (!$nums) {
+                continue;
             }
 
-            foreach ($matches[1] as $raw) {
-                $amount = (float) str_replace([',', ' '], '', $raw);
-                if ($amount >= 10) {
-                    $orderedAmounts[] = $amount;
-                    $candidates[] = ['amount' => $amount, 'weight' => $weight];
-                }
+            $lastNum = (float) end($nums);
+
+            // Order matters: change before cash (a change line may also say เงิน),
+            // and both before total so "เงินสด" isn't mistaken for a รวม line.
+            if ($isChange) {
+                $change = $change === null ? $lastNum : max($change, $lastNum);
+                continue;
             }
-        }
-
-        if (!$candidates) {
-            return 0.0;
-        }
-
-        // Tendered cash minus change is a reliable receipt pattern and must
-        // run before repeated-number detection because OCR can repeat cash too.
-        $countAmounts = count($orderedAmounts);
-        if ($countAmounts >= 2) {
-            for ($i = 0; $i < $countAmounts; $i++) {
-                for ($j = $i + 1; $j < $countAmounts; $j++) {
-                    $net = round($orderedAmounts[$i] - $orderedAmounts[$j], 2);
-                    if ($net <= 0) {
-                        continue;
-                    }
-                    foreach ($orderedAmounts as $amount) {
-                        if (abs($amount - $net) < 0.01) {
-                            return (float) $amount;
-                        }
+            if ($isCash) {
+                $paid = $paid === null ? $lastNum : max($paid, $lastNum);
+                continue;
+            }
+            if ($isTotal) {
+                foreach ($nums as $n) {
+                    if ($n >= 1) {
+                        $totalCandidates[number_format($n, 2, '.', '')] = true;
                     }
                 }
+                continue;
+            }
+
+            // Plain item line — the right-most number is the line total.
+            if ($lastNum >= 1) {
+                $itemAmounts[] = $lastNum;
             }
         }
 
-        // Column OCR often returns labels first and the TOTAL column numbers
-        // later. Net totals commonly appear twice before cash/change values.
-        $amountCounts = [];
-        foreach ($orderedAmounts as $amount) {
-            $key = number_format($amount, 2, '.', '');
-            $amountCounts[$key] = ($amountCounts[$key] ?? 0) + 1;
-        }
-        $repeatedTotals = [];
-        foreach ($amountCounts as $key => $count) {
-            $amount = (float) $key;
-            if ($count >= 2 && $amount > 0) {
-                $repeatedTotals[] = $amount;
+        return [
+            'total'      => $this->resolveGrandTotal($totalCandidates, $allAmounts, $paid, $change),
+            'line_items' => $itemAmounts,
+            'paid'       => $paid,
+            'change'     => $change,
+        ];
+    }
+
+    private function lineHasKeyword($lowerLine, array $keywords) {
+        foreach ($keywords as $kw) {
+            if (mb_strpos($lowerLine, mb_strtolower($kw, 'UTF-8')) !== false) {
+                return true;
             }
         }
-        if ($repeatedTotals) {
-            rsort($repeatedTotals, SORT_NUMERIC);
-            return (float) $repeatedTotals[0];
+        return false;
+    }
+
+    /**
+     * Resolve the most likely grand total from the classified evidence.
+     * Preference: explicit total-line value → tendered cash minus change →
+     * a value repeated across lines → the largest amount seen.
+     */
+    private function resolveGrandTotal(array $totalCandidates, array $allAmounts, $paid, $change) {
+        if ($totalCandidates) {
+            $vals = array_map('floatval', array_keys($totalCandidates));
+            rsort($vals, SORT_NUMERIC);
+            return (float) $vals[0];
         }
 
-        usort($candidates, static function ($a, $b) {
-            if ($a['weight'] === $b['weight']) {
-                return $b['amount'] <=> $a['amount'];
-            }
-            return $b['weight'] <=> $a['weight'];
-        });
+        if ($paid !== null && $change !== null && ($paid - $change) > 0) {
+            return round((float) $paid - (float) $change, 2);
+        }
 
-        return (float) $candidates[0]['amount'];
+        $counts = [];
+        foreach ($allAmounts as $a) {
+            $key = number_format($a, 2, '.', '');
+            $counts[$key] = ($counts[$key] ?? 0) + 1;
+        }
+        $repeated = [];
+        foreach ($counts as $key => $count) {
+            if ($count >= 2) {
+                $repeated[] = (float) $key;
+            }
+        }
+        if ($repeated) {
+            rsort($repeated, SORT_NUMERIC);
+            return (float) $repeated[0];
+        }
+
+        return $allAmounts ? (float) max($allAmounts) : 0.0;
+    }
+
+    /**
+     * Decide whether a parsed total is trustworthy enough to auto-award points.
+     * Returns level 'high' ONLY when an independent computation confirms the
+     * total within 0.5% (rounding / VAT drift). Everything else is 'low' and
+     * MUST be routed to manual review — never auto-awarded.
+     */
+    private function assessReceiptConfidence($total, $lineItems, $paid, $change) {
+        $total = (float) $total;
+        if ($total <= 0) {
+            return ['level' => 'low', 'reason' => 'no_total'];
+        }
+
+        $tolerance = max($total * 0.005, 0.01); // accept ≤0.5% drift
+
+        // 1) Tendered cash minus change must equal the total.
+        if ($paid !== null && $change !== null
+            && abs(((float) $paid - (float) $change) - $total) <= $tolerance) {
+            return ['level' => 'high', 'reason' => 'cash_change_match'];
+        }
+
+        // Exact cash with no change line.
+        if ($paid !== null && $change === null
+            && abs((float) $paid - $total) <= $tolerance) {
+            return ['level' => 'high', 'reason' => 'cash_exact_match'];
+        }
+
+        // 2) Sum of line items (excluding repeats of the total itself) == total.
+        $items = [];
+        foreach ((array) $lineItems as $amount) {
+            $amount = (float) $amount;
+            if ($amount > 0 && abs($amount - $total) > $tolerance) {
+                $items[] = $amount;
+            }
+        }
+        if ($items && abs(array_sum($items) - $total) <= $tolerance) {
+            return ['level' => 'high', 'reason' => 'items_sum_match'];
+        }
+
+        return ['level' => 'low', 'reason' => 'unverified'];
     }
 
     private function extractReceiptShopName($text) {
@@ -588,12 +681,15 @@ class GeminiAI {
 
         $prompt = 'วิเคราะห์รูปนี้ว่าเป็นใบเสร็จรับเงิน/ใบกำกับภาษี/บิลซื้อของหรือไม่ '
             . 'แล้วตอบเป็น JSON ล้วนๆ ไม่มี Markdown และไม่มีข้อความอื่น:\n'
-            . '{"is_receipt":true,"shop_name":"ชื่อร้าน","receipt_number":"เลขที่","total_amount":0.00,"date":"YYYY-MM-DD"}\n'
+            . '{"is_receipt":true,"shop_name":"ชื่อร้าน","receipt_number":"เลขที่","total_amount":0.00,"line_items":[0.00],"paid_amount":null,"change_amount":null,"date":"YYYY-MM-DD"}\n'
             . 'กฎ:\n'
             . '- is_receipt=false ถ้าไม่ใช่ใบเสร็จ\n'
-            . '- total_amount คือยอดสุทธิที่ลูกค้าชำระ เป็นตัวเลขเท่านั้น\n'
+            . '- total_amount คือยอดสุทธิที่ลูกค้าชำระจริง เป็นตัวเลขเท่านั้น\n'
+            . '- line_items คือ "ราคารวมต่อรายการ" (ตัวเลขคอลัมน์ขวาสุดของแต่ละบรรทัดสินค้า) เป็น array ตัวเลข '
+            . 'ห้ามรวมราคาต่อหน่วยในวงเล็บ และห้ามรวมยอดรวม/ยอดสุทธิ\n'
+            . '- paid_amount คือเงินที่รับมา, change_amount คือเงินทอน (ใส่ null ถ้าไม่มี)\n'
             . '- receipt_number และ date ให้เป็น null เมื่ออ่านไม่พบ\n'
-            . '- ห้ามเดาข้อมูลที่อ่านไม่ชัด';
+            . '- ห้ามเดาข้อมูลที่อ่านไม่ชัด ถ้าไม่แน่ใจให้ใส่ null';
 
         $data = [
             'contents' => [[
@@ -607,7 +703,7 @@ class GeminiAI {
             ]],
             'generationConfig' => [
                 'temperature'      => 0.1,
-                'maxOutputTokens'  => 256,
+                'maxOutputTokens'  => 512,
                 'responseMimeType' => 'application/json',
             ],
         ];
@@ -624,13 +720,30 @@ class GeminiAI {
                     continue;
                 }
 
-                error_log('analyzeReceiptImage Gemini success: model=' . $model);
+                $total = isset($parsed['total_amount']) && is_numeric($parsed['total_amount']) ? (float) $parsed['total_amount'] : 0.0;
+
+                $lineItems = [];
+                if (isset($parsed['line_items']) && is_array($parsed['line_items'])) {
+                    foreach ($parsed['line_items'] as $it) {
+                        if (is_numeric($it)) {
+                            $lineItems[] = (float) $it;
+                        }
+                    }
+                }
+                $paid   = isset($parsed['paid_amount']) && is_numeric($parsed['paid_amount']) ? (float) $parsed['paid_amount'] : null;
+                $change = isset($parsed['change_amount']) && is_numeric($parsed['change_amount']) ? (float) $parsed['change_amount'] : null;
+
+                $verdict = $this->assessReceiptConfidence($total, $lineItems, $paid, $change);
+
+                error_log('analyzeReceiptImage Gemini success: model=' . $model . ', confidence=' . $verdict['level'] . ' (' . $verdict['reason'] . ')');
                 return [
-                    'is_receipt'     => !empty($parsed['is_receipt']),
-                    'shop_name'      => isset($parsed['shop_name']) && $parsed['shop_name'] !== '' ? trim((string) $parsed['shop_name']) : null,
-                    'receipt_number' => isset($parsed['receipt_number']) && $parsed['receipt_number'] !== '' ? trim((string) $parsed['receipt_number']) : null,
-                    'total_amount'   => isset($parsed['total_amount']) && is_numeric($parsed['total_amount']) ? (float) $parsed['total_amount'] : 0.0,
-                    'date'           => isset($parsed['date']) && $parsed['date'] !== '' ? trim((string) $parsed['date']) : null,
+                    'is_receipt'        => !empty($parsed['is_receipt']),
+                    'shop_name'         => isset($parsed['shop_name']) && $parsed['shop_name'] !== '' ? trim((string) $parsed['shop_name']) : null,
+                    'receipt_number'    => isset($parsed['receipt_number']) && $parsed['receipt_number'] !== '' ? trim((string) $parsed['receipt_number']) : null,
+                    'total_amount'      => $total,
+                    'date'              => isset($parsed['date']) && $parsed['date'] !== '' ? trim((string) $parsed['date']) : null,
+                    'confidence'        => $verdict['level'],
+                    'confidence_reason' => $verdict['reason'],
                 ];
             } catch (Throwable $e) {
                 error_log('analyzeReceiptImage error model=' . $model . ': ' . $e->getMessage());
