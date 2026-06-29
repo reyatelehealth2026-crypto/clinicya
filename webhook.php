@@ -5157,7 +5157,7 @@ function ensureReceiptPointClaimsTable($db)
     }
 }
 
-function recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken)
+function recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, $readAmount = null)
 {
     $imageHash = hash('sha256', $imageData);
     $claimKey = 'pending:u' . $user['id'] . ':' . $imageHash;
@@ -5210,6 +5210,16 @@ function recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imag
 
         sendMessageWithFallback($line, $replyToken, $user['id'], [$pendingMessage], $db);
         saveOutgoingMessage($db, $user['id'], json_encode($pendingMessage, JSON_UNESCAPED_UNICODE), 'system:receipt-pending', 'text');
+
+        // Admin-only "Manual Review" badge card next to the customer's receipt,
+        // so the pharmacist knows this slip is awaiting manual point award.
+        persistReceiptConversationCard(
+            $db,
+            $user['id'],
+            $lineAccountId,
+            buildReceiptPendingAdminCard($readAmount),
+            'system:receipt-review'
+        );
 
         return true;
     } catch (Exception $e) {
@@ -5286,7 +5296,7 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
             (string) $lineAccountId,
             $totalAmount
         ));
-        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken);
+        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, $totalAmount);
     }
 
     // Get shop name for display in Flex (no validation — any receipt earns points)
@@ -5356,6 +5366,10 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
     // Reply with Flex confirmation
     $flex = buildReceiptPointsFlex($shopName ?: $ownShopName, $totalAmount, $receiptNumber, $points, $newBalance);
     sendMessageWithFallback($line, $replyToken, $user['id'], [$flex], $db);
+
+    // Persist the same card to the admin inbox so the pharmacist can see that
+    // points were awarded and exactly what the customer received.
+    persistReceiptConversationCard($db, $user['id'], $lineAccountId, $flex, 'system:receipt-points');
 
     return true;
 }
@@ -5457,6 +5471,101 @@ function buildReceiptPointsFlex($shopName, $amount, $receiptNumber, $pointsEarne
                         'decoration' => 'underline',
                         'action' => ['type' => 'message', 'label' => 'ดูรางวัล', 'text' => 'ดูรางวัล'],
                     ],
+                ],
+            ],
+        ],
+    ];
+}
+
+/**
+ * Persist a Flex card into the conversation so it shows in the admin inbox.
+ * Mirrors the dispense pattern: scoped to line_account_id, marked read so it
+ * does not inflate unread counts, and pushed to the websocket for live update.
+ * Does NOT send to LINE — callers decide separately whether the customer sees it.
+ */
+function persistReceiptConversationCard($db, $userId, $lineAccountId, $flex, $sentBy)
+{
+    $contentStr = is_array($flex) ? json_encode($flex, JSON_UNESCAPED_UNICODE) : (string) $flex;
+
+    try {
+        $hasSentBy = false;
+        try {
+            $checkCol = $db->query("SHOW COLUMNS FROM messages LIKE 'sent_by'");
+            $hasSentBy = $checkCol && $checkCol->rowCount() > 0;
+        } catch (Exception $e) {
+            // assume absent
+        }
+
+        if ($hasSentBy) {
+            $stmt = $db->prepare("INSERT INTO messages (line_account_id, user_id, direction, message_type, content, sent_by, created_at, is_read) VALUES (?, ?, 'outgoing', 'flex', ?, ?, NOW(), 1)");
+            $stmt->execute([$lineAccountId, $userId, $contentStr, $sentBy]);
+        } else {
+            $stmt = $db->prepare("INSERT INTO messages (line_account_id, user_id, direction, message_type, content, created_at, is_read) VALUES (?, ?, 'outgoing', 'flex', ?, NOW(), 1)");
+            $stmt->execute([$lineAccountId, $userId, $contentStr]);
+        }
+        $messageId = (int) $db->lastInsertId();
+
+        // Live update so the pharmacist sees the card without refreshing.
+        if (class_exists('WebSocketNotifier')) {
+            try {
+                $wsNotifier = new WebSocketNotifier();
+                if ($wsNotifier->isConnected()) {
+                    $wsNotifier->notifyNewMessage([
+                        'id' => $messageId,
+                        'user_id' => $userId,
+                        'content' => $contentStr,
+                        'direction' => 'outgoing',
+                        'type' => 'flex',
+                        'created_at' => date('Y-m-d H:i:s'),
+                        'sent_by' => $sentBy,
+                    ], $lineAccountId, []);
+                }
+            } catch (Exception $e) {
+                // websocket optional
+            }
+        }
+    } catch (Exception $e) {
+        error_log('persistReceiptConversationCard error: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Admin-only "Manual Review" card shown in the inbox right after a customer's
+ * receipt image when the system could not auto-verify the total. Never sent to
+ * the customer — it is the pharmacist's cue to check and award points by hand.
+ */
+function buildReceiptPendingAdminCard($readAmount = null)
+{
+    $detail = $readAmount && (float) $readAmount > 0
+        ? 'ระบบอ่านยอดได้ ~฿' . number_format((float) $readAmount, 2) . ' แต่ยืนยันไม่ผ่าน'
+        : 'ระบบอ่านยอดจากใบเสร็จไม่ชัดเจน';
+
+    return [
+        'type'    => 'flex',
+        'altText' => '⏳ ใบเสร็จรอตรวจสอบ (Manual Review)',
+        'contents' => [
+            'type'   => 'bubble',
+            'size'   => 'kilo',
+            'header' => [
+                'type'            => 'box',
+                'layout'          => 'vertical',
+                'backgroundColor' => '#b45309',
+                'paddingAll'      => '16px',
+                'contents'        => [
+                    ['type' => 'text', 'text' => '⏳ รอตรวจสอบแต้ม', 'color' => '#ffffff', 'size' => 'sm', 'weight' => 'bold', 'align' => 'center'],
+                    ['type' => 'text', 'text' => 'MANUAL REVIEW (เฉพาะแอดมิน)', 'color' => '#ffe9c7', 'size' => 'xxs', 'align' => 'center', 'margin' => 'xs'],
+                ],
+            ],
+            'body' => [
+                'type'       => 'box',
+                'layout'     => 'vertical',
+                'paddingAll' => '16px',
+                'spacing'    => 'sm',
+                'contents'   => [
+                    ['type' => 'text', 'text' => 'ลูกค้าส่งใบเสร็จเพื่อสะสมแต้ม', 'color' => '#333333', 'size' => 'sm', 'weight' => 'bold', 'wrap' => true],
+                    ['type' => 'text', 'text' => $detail, 'color' => '#b45309', 'size' => 'xs', 'wrap' => true, 'margin' => 'sm'],
+                    ['type' => 'separator', 'margin' => 'sm'],
+                    ['type' => 'text', 'text' => 'กรุณาตรวจสอบและเพิ่มแต้มให้ลูกค้าด้วยตนเอง', 'color' => '#555555', 'size' => 'xs', 'wrap' => true, 'margin' => 'sm'],
                 ],
             ],
         ],

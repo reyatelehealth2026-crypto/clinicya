@@ -347,6 +347,11 @@ class GeminiAI {
                 $text .= "\n" . (string) ($result['ParsedText'] ?? '');
             }
 
+            // TEMP DEBUG — log raw OCR text so the parser can be tuned to the
+            // real OCR.Space layout. Remove after receipt parsing is dialled in.
+            error_log('RECEIPT_OCR_RAW[' . $language . '/' . $engine . ']: '
+                . str_replace(["\r", "\n"], ['', '\\n'], mb_substr($text, 0, 2000, 'UTF-8')));
+
             $parsed = $this->parseReceiptOcrText($text);
             if (!empty($parsed['is_receipt']) && (float) $parsed['total_amount'] > 0) {
                 error_log('analyzeReceiptImage OCR.Space fallback success: language=' . $language . ', engine=' . $engine);
@@ -396,6 +401,14 @@ class GeminiAI {
             $evidence['change']
         );
 
+        // TEMP DEBUG — log the extracted evidence so confidence misses can be
+        // diagnosed. Remove together with the RECEIPT_OCR_RAW log above.
+        error_log('RECEIPT_EVIDENCE: total=' . $totalAmount
+            . ' items=[' . implode(',', array_map(static fn ($v) => (string) $v, $evidence['line_items'])) . ']'
+            . ' paid=' . var_export($evidence['paid'], true)
+            . ' change=' . var_export($evidence['change'], true)
+            . ' verdict=' . $verdict['level'] . '/' . $verdict['reason']);
+
         return [
             'is_receipt' => $totalAmount > 0,
             'shop_name' => $this->extractReceiptShopName($normalized),
@@ -415,61 +428,80 @@ class GeminiAI {
      */
     private function extractReceiptEvidence($text) {
         $lines = preg_split('/\n+/', (string) $text) ?: [];
+        // Normalise: trim and drop blanks while keeping order.
+        $lines = array_values(array_filter(array_map('trim', $lines), static fn ($l) => $l !== ''));
 
-        $itemAmounts     = []; // right-most TOTAL-column value of each item line
+        $columnItems     = []; // numbers in the TOTAL column block (thermal POS layout)
+        $inlineItems     = []; // right-most number per plain line (inline layout)
         $totalCandidates = []; // amounts on grand-total lines (keyed, deduped)
-        $allAmounts      = []; // every amount seen (repeated-value detection)
+        $allAmounts      = []; // every amount seen (largest-fallback only)
+        $pureAmounts     = []; // amounts on standalone number lines (repeated-total)
         $paid            = null;
         $change          = null;
+        $collectingItems = false;
 
         $totalKeywords  = ['grand total', 'net total', 'total', 'amount due', 'dues', 'ยอดสุทธิ', 'ยอดรวม', 'รวมทั้งสิ้น', 'รวมเงินสุทธิ', 'รวมเงิน', 'ชำระเงิน', 'สุทธิ', 'รวม'];
         $cashKeywords   = ['cash', 'เงินสด', 'รับเงิน', 'paid', 'tendered'];
         $changeKeywords = ['change', 'เงินทอน', 'ทอน'];
 
         foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '') {
+            $lower = mb_strtolower($line, 'UTF-8');
+
+            // Every number on the raw line (incl. parentheses) feeds repeated-value
+            // detection and cash/change parsing where the amount sits in (...).
+            $numsAll = $this->extractNumbers($line);
+            foreach ($numsAll as $n) {
+                $allAmounts[] = $n;
+            }
+
+            // Standalone amount lines feed repeated-total detection (barcodes /
+            // ids / addresses are never pure-number lines, so they're excluded).
+            if ($numsAll && $this->isPureNumberLine($line)) {
+                $pureAmounts[] = (float) $numsAll[count($numsAll) - 1];
+            }
+
+            // "TOTAL" as a standalone column header starts the item-total block
+            // that thermal POS printers emit (item names first, amounts after).
+            if (preg_match('/^(?:qty\s+)?(?:item\s+)?total$/i', $line)) {
+                $collectingItems = true;
                 continue;
             }
 
-            $lower    = mb_strtolower($line, 'UTF-8');
+            // While collecting, consecutive pure-number lines are the item totals.
+            if ($collectingItems) {
+                if ($this->isPureNumberLine($line)) {
+                    $columnItems[] = (float) $numsAll[count($numsAll) - 1];
+                    continue;
+                }
+                $collectingItems = false; // block ended; fall through to classify
+            }
+
             $isChange = $this->lineHasKeyword($lower, $changeKeywords);
             $isCash   = $this->lineHasKeyword($lower, $cashKeywords);
             $isTotal  = $this->lineHasKeyword($lower, $totalKeywords);
 
-            // Unit prices live inside parentheses e.g. (@25.00) — never a line total.
-            $lineNoParen = preg_replace('/\([^)]*\)/u', ' ', $line);
-
-            if (!preg_match_all('/([0-9]{1,3}(?:[, ]?[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/u', $lineNoParen, $m)) {
-                continue;
-            }
-
-            $nums = [];
-            foreach ($m[1] as $raw) {
-                $val = (float) str_replace([',', ' '], '', $raw);
-                if ($val > 0) {
-                    $nums[]       = $val;
-                    $allAmounts[] = $val;
+            // Cash / change amounts often live inside parentheses — keep them.
+            if ($isCash || $isChange) {
+                if ($numsAll) {
+                    if ($this->lineHasKeyword($lower, $changeKeywords)) {
+                        // e.g. "เงินสด (รับเงิน 1,000.00 เงินทอน 845.00)"
+                        $change = (float) $numsAll[count($numsAll) - 1];
+                        if (count($numsAll) >= 2) {
+                            $paid = (float) $numsAll[count($numsAll) - 2];
+                        }
+                    } else {
+                        // e.g. "เงินสด (รับเงิน 365.00)"
+                        $paid = (float) $numsAll[count($numsAll) - 1];
+                    }
                 }
-            }
-            if (!$nums) {
                 continue;
             }
 
-            $lastNum = (float) end($nums);
+            // Unit prices/quantities live inside parentheses e.g. (@25.00),(QTY:12).
+            $numsNoParen = $this->extractNumbers(preg_replace('/\([^)]*\)/u', ' ', $line));
 
-            // Order matters: change before cash (a change line may also say เงิน),
-            // and both before total so "เงินสด" isn't mistaken for a รวม line.
-            if ($isChange) {
-                $change = $change === null ? $lastNum : max($change, $lastNum);
-                continue;
-            }
-            if ($isCash) {
-                $paid = $paid === null ? $lastNum : max($paid, $lastNum);
-                continue;
-            }
             if ($isTotal) {
-                foreach ($nums as $n) {
+                foreach ($numsNoParen as $n) {
                     if ($n >= 1) {
                         $totalCandidates[number_format($n, 2, '.', '')] = true;
                     }
@@ -477,18 +509,44 @@ class GeminiAI {
                 continue;
             }
 
-            // Plain item line — the right-most number is the line total.
-            if ($lastNum >= 1) {
-                $itemAmounts[] = $lastNum;
+            // Plain inline item line — right-most number is the line total.
+            if ($numsNoParen) {
+                $last = (float) $numsNoParen[count($numsNoParen) - 1];
+                if ($last >= 1) {
+                    $inlineItems[] = $last;
+                }
             }
         }
 
+        // Prefer the clean column block; fall back to inline extraction.
+        $lineItems = $columnItems ?: $inlineItems;
+
         return [
-            'total'      => $this->resolveGrandTotal($totalCandidates, $allAmounts, $paid, $change),
-            'line_items' => $itemAmounts,
+            'total'      => $this->resolveGrandTotal($totalCandidates, $pureAmounts, $lineItems, $paid, $change, $allAmounts),
+            'line_items' => $lineItems,
             'paid'       => $paid,
             'change'     => $change,
         ];
+    }
+
+    /** All numeric tokens in a string, as floats (handles 1,000.00 / 365.00). */
+    private function extractNumbers($text) {
+        if (!preg_match_all('/([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/u', (string) $text, $m)) {
+            return [];
+        }
+        $out = [];
+        foreach ($m[1] as $raw) {
+            $val = (float) str_replace(',', '', $raw);
+            if ($val > 0) {
+                $out[] = $val;
+            }
+        }
+        return $out;
+    }
+
+    /** True when the whole line is just a money amount (optionally ฿/THB). */
+    private function isPureNumberLine($line) {
+        return (bool) preg_match('/^\s*(?:฿|THB|บาท)?\s*[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?\s*(?:฿|THB|บาท)?\s*$/u', (string) $line);
     }
 
     private function lineHasKeyword($lowerLine, array $keywords) {
@@ -502,37 +560,62 @@ class GeminiAI {
 
     /**
      * Resolve the most likely grand total from the classified evidence.
-     * Preference: explicit total-line value → tendered cash minus change →
-     * a value repeated across lines → the largest amount seen.
+     * Preference: explicit total-line value → value repeated across standalone
+     * amount lines (printed grand-total block) → cash → item sum → largest seen.
+     * NOTE: the total is derived independently of the confirmation sources so
+     * assessReceiptConfidence() stays a genuine cross-check, not a tautology.
      */
-    private function resolveGrandTotal(array $totalCandidates, array $allAmounts, $paid, $change) {
+    private function resolveGrandTotal(array $totalCandidates, array $pureAmounts, array $lineItems, $paid, $change, array $allAmounts) {
+        // 1) Explicit total-keyword line carrying a number (inline layout).
         if ($totalCandidates) {
             $vals = array_map('floatval', array_keys($totalCandidates));
             rsort($vals, SORT_NUMERIC);
             return (float) $vals[0];
         }
 
+        // 2) Printed grand total block: thermal POS prints the total 2-3x on its
+        //    own lines. Restricted to pure-number lines so a barcode / zip / id
+        //    (e.g. ORR-00-26-18690) can never be mistaken for the total.
+        $rep = $this->maxRepeated($pureAmounts);
+        if ($rep > 0) {
+            return $rep;
+        }
+
+        // 3) Tendered cash minus change, or exact cash.
         if ($paid !== null && $change !== null && ($paid - $change) > 0) {
             return round((float) $paid - (float) $change, 2);
         }
+        if ($paid !== null) {
+            return (float) $paid;
+        }
 
+        // 4) Sum of detected line items.
+        if ($lineItems) {
+            return (float) array_sum($lineItems);
+        }
+
+        // 5) Largest standalone amount, else largest number seen anywhere.
+        if ($pureAmounts) {
+            return (float) max($pureAmounts);
+        }
+        return $allAmounts ? (float) max($allAmounts) : 0.0;
+    }
+
+    /** Largest amount that appears on at least two standalone amount lines. */
+    private function maxRepeated(array $amounts) {
         $counts = [];
-        foreach ($allAmounts as $a) {
+        foreach ($amounts as $a) {
             $key = number_format($a, 2, '.', '');
             $counts[$key] = ($counts[$key] ?? 0) + 1;
         }
-        $repeated = [];
+        $best = 0.0;
         foreach ($counts as $key => $count) {
-            if ($count >= 2) {
-                $repeated[] = (float) $key;
+            $val = (float) $key;
+            if ($count >= 2 && $val > $best) {
+                $best = $val;
             }
         }
-        if ($repeated) {
-            rsort($repeated, SORT_NUMERIC);
-            return (float) $repeated[0];
-        }
-
-        return $allAmounts ? (float) max($allAmounts) : 0.0;
+        return $best;
     }
 
     /**
