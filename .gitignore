@@ -157,6 +157,9 @@ database/*.sql
 !database/migration_2026-06-04_platform_billing_details.sql
 !database/migration_2026-06-28_tenant_activity_log.sql
 !database/migration_2026-06-28_site_visitor_ips_geo.sql
+!database/migration_2026-06-29_subscription_self_serve_billing.sql
+!database/migration_2026-06-29_receipt_point_claims.sql
+!database/migration_2026-06-30_plans_remodel_platform_settings.sql
 !docs/adr/*.md
 !CONTEXT.md
 !CONTEXT-MAP.md

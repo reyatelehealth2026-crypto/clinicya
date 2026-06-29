@@ -36,13 +36,13 @@ $tabs = [
     'general' => ['label' => 'ข้อมูลร้าน', 'icon' => 'fas fa-store'],
     'shop_tax' => ['label' => 'ข้อมูลร้าน / ใบกำกับภาษี', 'icon' => 'fas fa-file-invoice'],
     'welcome' => ['label' => 'ข้อความต้อนรับ', 'icon' => 'fas fa-hand-sparkles'],
-    'liff' => ['label' => 'LIFF Settings', 'icon' => 'fas fa-mobile-alt'],
-    'vibe-selling' => ['label' => 'Vibe Selling v2', 'icon' => 'fas fa-brain'],
-    'telegram' => ['label' => 'Telegram', 'icon' => 'fab fa-telegram'],
-    'email' => ['label' => 'Email/SMTP', 'icon' => 'fas fa-envelope'],
+    // 'liff' => ['label' => 'LIFF Settings', 'icon' => 'fas fa-mobile-alt'],
+    // 'vibe-selling' => ['label' => 'Vibe Selling v2', 'icon' => 'fas fa-brain'],
+    // 'telegram' => ['label' => 'Telegram', 'icon' => 'fab fa-telegram'],
+    // 'email' => ['label' => 'Email/SMTP', 'icon' => 'fas fa-envelope'],
     'notifications' => ['label' => 'การแจ้งเตือน', 'icon' => 'fas fa-bell'],
     'consent' => ['label' => 'Consent', 'icon' => 'fas fa-shield-alt'],
-    'quick-access' => ['label' => 'Quick Access', 'icon' => 'fas fa-bolt'],
+    // 'quick-access' => ['label' => 'Quick Access', 'icon' => 'fas fa-bolt'],
 ];
 
 $activeTab = getActiveTab($tabs, 'line');
@@ -270,6 +270,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'welcome_message' => $_POST['welcome_message'] ?? '',
             'auto_reply_enabled' => isset($_POST['auto_reply_enabled']) ? 1 : 0,
             'shop_enabled' => isset($_POST['shop_enabled']) ? 1 : 0,
+            'receipt_points_enabled' => isset($_POST['receipt_points_enabled']) ? 1 : 0,
         ]);
         header('Location: settings.php?tab=line&success=created');
         exit;
@@ -289,6 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'welcome_message' => $_POST['welcome_message'] ?? '',
             'auto_reply_enabled' => isset($_POST['auto_reply_enabled']) ? 1 : 0,
             'shop_enabled' => isset($_POST['shop_enabled']) ? 1 : 0,
+            'receipt_points_enabled' => isset($_POST['receipt_points_enabled']) ? 1 : 0,
         ]);
         header('Location: settings.php?tab=line&success=updated');
         exit;

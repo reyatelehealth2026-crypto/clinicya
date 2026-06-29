@@ -174,6 +174,54 @@ class GeminiAI {
     }
 
     /**
+     * วิเคราะห์ใบเสร็จด้วย Gemini Vision
+     * คืนค่า array: {is_receipt, shop_name, receipt_number, total_amount, date} หรือ null ถ้าล้มเหลว
+     */
+    public function analyzeReceiptImage($imageData, $mimeType = 'image/jpeg') {
+        $prompt = 'วิเคราะห์รูปนี้ว่าเป็นใบเสร็จรับเงิน/ใบกำกับภาษี/บิลซื้อของหรือไม่ แล้วตอบเป็น JSON ล้วนๆ ไม่มีข้อความอื่น:
+{"is_receipt":true,"shop_name":"ชื่อร้าน","receipt_number":"เลขที่","total_amount":0.00,"date":"YYYY-MM-DD"}
+กฎ: is_receipt=false ถ้าไม่ใช่ใบเสร็จ, total_amount คือยอดสุทธิ (ตัวเลขล้วน), receipt_number/date ใส่ null ถ้าไม่มี';
+
+        $data = [
+            'contents' => [[
+                'parts' => [
+                    ['text' => $prompt],
+                    ['inline_data' => [
+                        'mime_type' => $mimeType,
+                        'data'      => base64_encode($imageData),
+                    ]],
+                ],
+            ]],
+            'generationConfig' => ['temperature' => 0.1, 'maxOutputTokens' => 256],
+        ];
+
+        $models = [
+            ['model' => 'gemini-2.0-flash',  'version' => 'v1beta'],
+            ['model' => 'gemini-1.5-flash',  'version' => 'v1beta'],
+            ['model' => 'gemini-flash-latest','version' => 'v1beta'],
+        ];
+
+        foreach ($models as $cfg) {
+            try {
+                $result = $this->makeRequest($cfg['model'], $data, $cfg['version']);
+                $text   = trim($result['candidates'][0]['content']['parts'][0]['text'] ?? '');
+                $text   = preg_replace('/^```(?:json)?\s*|\s*```$/m', '', $text);
+                $parsed = json_decode($text, true);
+                if (is_array($parsed)) {
+                    return $parsed;
+                }
+            } catch (Exception $e) {
+                if (strpos($e->getMessage(), '404') !== false) {
+                    continue;
+                }
+                error_log('analyzeReceiptImage error: ' . $e->getMessage());
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
      * สร้างรูปภาพ (Image Generation)
      * หมายเหตุ: ต้องใช้ Model imagen-3.0-generate-001
      */

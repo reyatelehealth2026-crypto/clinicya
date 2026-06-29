@@ -914,6 +914,18 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                     }
                 }
             }
+
+            // Scan receipt image and award points — only when user triggered with keyword
+            if ($messageType === 'image' && !empty($imageData) && strlen($imageData) > 100
+                && $userState && $userState['state'] === 'waiting_receipt') {
+                $receiptHandled = handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken);
+                if ($receiptHandled) {
+                    clearUserState($db, $user['id']);
+                    $stmt = $db->prepare("INSERT INTO messages (user_id, direction, message_type, content, reply_token) VALUES (?, 'incoming', 'image', ?, ?)");
+                    $stmt->execute([$user['id'], $messageContent, $replyToken]);
+                    return;
+                }
+            }
         } elseif ($messageType === 'sticker') {
             $stickerId = $event['message']['stickerId'] ?? '';
             $packageId = $event['message']['packageId'] ?? '';
@@ -1131,6 +1143,25 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                 saveOutgoingMessage($db, $user['id'], json_encode($cancelMessage), 'system', 'text');
                 return;
             }
+        }
+
+        // ========== สะสมแต้มจากใบเสร็จ: keyword trigger ==========
+        $textForPoints = mb_strtolower(trim($messageText));
+        // เฉพาะ keyword ที่ไม่ชนกับ "แต้ม" (showPoints), "points" (systemCommands), "แลกแต้ม" (LiffMessageHandler)
+        $pointKeywords = ['สะสมแต้ม', 'เพิ่มแต้ม', 'ส่งใบเสร็จ', 'ใบเสร็จ'];
+        $isPointKeyword = false;
+        foreach ($pointKeywords as $kw) {
+            if (mb_strpos($textForPoints, $kw) !== false) {
+                $isPointKeyword = true;
+                break;
+            }
+        }
+        if ($isPointKeyword) {
+            setUserState($db, $user['id'], 'waiting_receipt', [], 30);
+            $promptMsg = ['type' => 'text', 'text' => "📸 ส่งรูปใบเสร็จมาได้เลยค่ะ\nระบบจะเพิ่มแต้มให้อัตโนมัติ ✨"];
+            sendMessageWithFallback($line, $replyToken, $user['id'], [$promptMsg], $db);
+            saveOutgoingMessage($db, $user['id'], json_encode($promptMsg), 'system', 'text');
+            return;
         }
 
         // ========== ตรวจสอบ Consent PDPA ==========
@@ -5091,5 +5122,246 @@ function notifyPharmacistForHumanRequest($db, $userId, $lineAccountId, $message)
         logWebhookException($db, 'webhook.php', $e);
         error_log("notifyPharmacistForHumanRequest error: " . $e->getMessage());
     }
+}
+
+/**
+ * ตรวจสอบรูปภาพว่าเป็นใบเสร็จหรือไม่ ถ้าใช่ให้แต้มอัตโนมัติ
+ * คืน true ถ้าจัดการแล้ว (ทั้งกรณีสำเร็จและกรณีปฏิเสธ), false ถ้าไม่ใช่ใบเสร็จ
+ */
+function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken)
+{
+    if (!file_exists(__DIR__ . '/classes/GeminiAI.php') || !file_exists(__DIR__ . '/classes/LoyaltyPoints.php')) {
+        return false;
+    }
+
+    // Check if receipt points feature is enabled for this LINE account
+    try {
+        $flagRow = $db->prepare("SELECT receipt_points_enabled FROM line_accounts WHERE id = ? LIMIT 1");
+        $flagRow->execute([$lineAccountId]);
+        $flag = $flagRow->fetchColumn();
+        if ($flag !== false && (int)$flag === 0) {
+            return false;
+        }
+    } catch (Exception $e) {
+        // Column not yet migrated — allow (settings page will add it on next load)
+    }
+    require_once __DIR__ . '/classes/GeminiAI.php';
+    require_once __DIR__ . '/classes/LoyaltyPoints.php';
+
+    // Initialise Gemini — bail silently if no API key configured
+    try {
+        $gemini = new GeminiAI(null, $db, $lineAccountId);
+    } catch (Exception $e) {
+        return false;
+    }
+
+    // Detect MIME type from binary header
+    $finfo    = new finfo(FILEINFO_MIME_TYPE);
+    $mimeType = $finfo->buffer($imageData) ?: 'image/jpeg';
+
+    // Ask Gemini Vision
+    try {
+        $receipt = $gemini->analyzeReceiptImage($imageData, $mimeType);
+    } catch (Exception $e) {
+        error_log('Receipt OCR failed: ' . $e->getMessage());
+        return false;
+    }
+
+    if (!$receipt || empty($receipt['is_receipt'])) {
+        return false; // Not a receipt — let normal bot flow handle
+    }
+
+    $receiptNumber = $receipt['receipt_number'] ?? null;
+    $totalAmount   = (float) ($receipt['total_amount'] ?? 0);
+    $shopName      = trim($receipt['shop_name'] ?? '');
+    $receiptDate   = $receipt['date'] ?? null;
+
+    if ($totalAmount <= 0) {
+        return false;
+    }
+
+    // Get shop name for display in Flex (no validation — any receipt earns points)
+    try {
+        $row = $db->prepare("SELECT shop_name FROM shop_settings WHERE line_account_id = ? LIMIT 1");
+        $row->execute([$lineAccountId]);
+        $ownShopName = trim($row->fetchColumn() ?: '');
+    } catch (Exception $e) {
+        $ownShopName = '';
+    }
+
+    // Build a dedup key: prefer receipt number, fall back to hash of amount+date
+    // Receipt number → dedup across all users (same slip ≠ claim twice by anyone)
+    // No receipt number → dedup per-user only (different customers can buy same amount same day)
+    $claimKey = $receiptNumber
+        ? $receiptNumber
+        : 'u' . $user['id'] . ':' . md5($totalAmount . '|' . ($receiptDate ?? date('Y-m-d')));
+
+    // Ensure the claims table exists, then check for duplicates
+    try {
+        $db->exec("CREATE TABLE IF NOT EXISTS receipt_point_claims (
+            id            INT AUTO_INCREMENT PRIMARY KEY,
+            line_account_id INT,
+            user_id       INT NOT NULL,
+            claim_key     VARCHAR(255) NOT NULL,
+            receipt_number VARCHAR(100),
+            shop_name     VARCHAR(255),
+            total_amount  DECIMAL(10,2),
+            points_awarded INT,
+            created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_claim (line_account_id, claim_key)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+        $dup = $db->prepare("SELECT id FROM receipt_point_claims WHERE line_account_id = ? AND claim_key = ? LIMIT 1");
+        $dup->execute([$lineAccountId, $claimKey]);
+        if ($dup->fetch()) {
+            sendMessageWithFallback($line, $replyToken, $user['id'], [[
+                'type' => 'text',
+                'text' => "⚠️ ใบเสร็จนี้ถูกใช้สะสมแต้มไปแล้ว",
+            ]], $db);
+            return true;
+        }
+    } catch (Exception $e) {
+        error_log('receipt_point_claims check error: ' . $e->getMessage());
+        return false;
+    }
+
+    // Calculate points
+    $lp     = new LoyaltyPoints($db, $lineAccountId);
+    $points = $lp->calculatePoints($totalAmount);
+
+    if ($points <= 0) {
+        return false; // Points system disabled or amount below minimum
+    }
+
+    // Record the claim (UNIQUE key prevents race-condition double-award)
+    try {
+        $ins = $db->prepare("INSERT INTO receipt_point_claims
+            (line_account_id, user_id, claim_key, receipt_number, shop_name, total_amount, points_awarded)
+            VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $ins->execute([$lineAccountId, $user['id'], $claimKey, $receiptNumber, $shopName, $totalAmount, $points]);
+        $claimId = (int) $db->lastInsertId();
+    } catch (Exception $e) {
+        // Duplicate on race condition
+        sendMessageWithFallback($line, $replyToken, $user['id'], [[
+            'type' => 'text',
+            'text' => "⚠️ ใบเสร็จนี้ถูกใช้สะสมแต้มไปแล้ว",
+        ]], $db);
+        return true;
+    }
+
+    // Award points
+    $desc = "สะสมแต้มจากใบเสร็จ" . ($receiptNumber ? " #{$receiptNumber}" : '') . " ยอด ฿" . number_format($totalAmount, 2);
+    $lp->addPoints($user['id'], $points, 'receipt', $claimId, $desc);
+
+    $newBalance = (int) $lp->getUserPoints($user['id'])['available_points'];
+
+    // Reply with Flex confirmation
+    $flex = buildReceiptPointsFlex($shopName ?: $ownShopName, $totalAmount, $receiptNumber, $points, $newBalance);
+    sendMessageWithFallback($line, $replyToken, $user['id'], [$flex], $db);
+
+    return true;
+}
+
+/**
+ * สร้าง Flex Message ยืนยันการสะสมแต้มจากใบเสร็จ
+ */
+function buildReceiptPointsFlex($shopName, $amount, $receiptNumber, $pointsEarned, $totalPoints)
+{
+    $shopDisplay    = $shopName ?: 'ร้านของเรา';
+    $amountDisplay  = '฿' . number_format($amount, 2);
+    $receiptDisplay = $receiptNumber ? "เลขที่ {$receiptNumber}" : 'ใบเสร็จรับเงิน';
+    $dateDisplay    = date('d/m/') . (date('Y') + 543) . ' ' . date('H:i') . ' น.';
+
+    return [
+        'type'     => 'flex',
+        'altText'  => "✅ สะสมแต้มสำเร็จ +{$pointsEarned} แต้ม",
+        'contents' => [
+            'type'   => 'bubble',
+            'size'   => 'kilo',
+            'header' => [
+                'type'            => 'box',
+                'layout'          => 'vertical',
+                'backgroundColor' => '#1a6b3c',
+                'paddingAll'      => '16px',
+                'contents'        => [
+                    ['type' => 'text', 'text' => $shopDisplay, 'color' => '#ffffff', 'size' => 'sm', 'weight' => 'bold', 'align' => 'center'],
+                    ['type' => 'text', 'text' => '⭐ รับแต้มสะสม', 'color' => '#f8e71c', 'size' => 'xs', 'align' => 'center', 'margin' => 'xs'],
+                ],
+            ],
+            'body' => [
+                'type'       => 'box',
+                'layout'     => 'vertical',
+                'paddingAll' => '16px',
+                'spacing'    => 'sm',
+                'contents'   => [
+                    ['type' => 'text', 'text' => '✅ บันทึกการซื้อสำเร็จ', 'color' => '#1a6b3c', 'weight' => 'bold', 'size' => 'sm', 'align' => 'center'],
+                    ['type' => 'separator', 'margin' => 'sm'],
+                    [
+                        'type' => 'box', 'layout' => 'horizontal', 'margin' => 'sm',
+                        'contents' => [
+                            ['type' => 'text', 'text' => 'ใบเสร็จ',   'color' => '#888888', 'size' => 'xs', 'flex' => 2],
+                            ['type' => 'text', 'text' => $receiptDisplay, 'color' => '#333333', 'size' => 'xs', 'flex' => 3, 'align' => 'end', 'wrap' => true],
+                        ],
+                    ],
+                    [
+                        'type' => 'box', 'layout' => 'horizontal',
+                        'contents' => [
+                            ['type' => 'text', 'text' => 'วันที่',     'color' => '#888888', 'size' => 'xs', 'flex' => 2],
+                            ['type' => 'text', 'text' => $dateDisplay,  'color' => '#333333', 'size' => 'xs', 'flex' => 3, 'align' => 'end'],
+                        ],
+                    ],
+                    [
+                        'type' => 'box', 'layout' => 'horizontal',
+                        'contents' => [
+                            ['type' => 'text', 'text' => 'ยอดชำระ',   'color' => '#888888', 'size' => 'xs', 'flex' => 2],
+                            ['type' => 'text', 'text' => $amountDisplay, 'color' => '#333333', 'size' => 'xs', 'flex' => 3, 'align' => 'end', 'weight' => 'bold'],
+                        ],
+                    ],
+                    ['type' => 'separator', 'margin' => 'sm'],
+                    [
+                        'type' => 'box', 'layout' => 'horizontal', 'margin' => 'sm',
+                        'contents' => [
+                            ['type' => 'text', 'text' => 'แต้มที่ได้รับ', 'color' => '#555555', 'size' => 'sm', 'flex' => 2],
+                            [
+                                'type' => 'text',
+                                'text' => "+{$pointsEarned} ⭐",
+                                'color' => '#1a6b3c', 'size' => 'sm', 'flex' => 3,
+                                'align' => 'end', 'weight' => 'bold',
+                            ],
+                        ],
+                    ],
+                    [
+                        'type' => 'box', 'layout' => 'horizontal',
+                        'contents' => [
+                            ['type' => 'text', 'text' => 'แต้มสะสมรวม', 'color' => '#555555', 'size' => 'sm', 'flex' => 2],
+                            [
+                                'type' => 'text',
+                                'text' => "{$totalPoints} ⭐",
+                                'color' => '#333333', 'size' => 'sm', 'flex' => 3,
+                                'align' => 'end', 'weight' => 'bold',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'footer' => [
+                'type'            => 'box',
+                'layout'          => 'vertical',
+                'backgroundColor' => '#f0f9f4',
+                'paddingAll'      => '12px',
+                'contents'        => [
+                    [
+                        'type'  => 'text',
+                        'text'  => 'สะสมแต้มแลกของรางวัลได้เลย',
+                        'color' => '#1a6b3c',
+                        'size'  => 'xs',
+                        'align' => 'center',
+                        'decoration' => 'underline',
+                        'action' => ['type' => 'message', 'label' => 'ดูรางวัล', 'text' => 'ดูรางวัล'],
+                    ],
+                ],
+            ],
+        ],
+    ];
 }
 

@@ -22,6 +22,9 @@ try {
     if (!in_array('rich_menu_id', $cols)) {
         $db->exec("ALTER TABLE line_accounts ADD COLUMN rich_menu_id VARCHAR(100)");
     }
+    if (!in_array('receipt_points_enabled', $cols)) {
+        $db->exec("ALTER TABLE line_accounts ADD COLUMN receipt_points_enabled TINYINT(1) DEFAULT 1");
+    }
 } catch (Exception $e) {}
 
 $manager = new LineAccountManager($db);
@@ -317,6 +320,13 @@ $accounts = $manager->getAllAccounts();
                                 <p class="text-xs text-gray-500">เปิดระบบร้านค้า</p>
                             </div>
                         </label>
+                        <label class="flex items-center p-4 border rounded-xl cursor-pointer hover:bg-gray-50">
+                            <input type="checkbox" name="receipt_points_enabled" id="line_receipt_points_enabled" checked class="mr-3 w-5 h-5 text-green-500 rounded">
+                            <div>
+                                <span class="font-medium">🧾 สะสมแต้มใบเสร็จ</span>
+                                <p class="text-xs text-gray-500">ลูกค้าส่งรูปใบเสร็จแล้วได้แต้มอัตโนมัติ</p>
+                            </div>
+                        </label>
                     </div>
                     
                     <div class="flex gap-4">
@@ -408,6 +418,7 @@ function openLineModal() {
     document.getElementById('line_is_active').checked = true;
     document.getElementById('line_auto_reply_enabled').checked = true;
     document.getElementById('line_shop_enabled').checked = true;
+    document.getElementById('line_receipt_points_enabled').checked = true;
     showLineTab('basic');
 }
 
@@ -436,6 +447,7 @@ function editLineAccount(account) {
     document.getElementById('line_is_default').checked = account.is_default == 1;
     document.getElementById('line_auto_reply_enabled').checked = account.auto_reply_enabled != 0;
     document.getElementById('line_shop_enabled').checked = account.shop_enabled != 0;
+    document.getElementById('line_receipt_points_enabled').checked = account.receipt_points_enabled != 0;
     
     document.querySelectorAll('input[name="bot_mode"]').forEach(el => {
         el.checked = el.value === (account.bot_mode || 'shop');
