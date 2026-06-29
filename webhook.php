@@ -238,6 +238,37 @@ function sendMessageWithFallback($line, $replyToken, $userId, $messages, $db = n
     ];
 }
 
+/**
+ * Prompt text + quick reply for the "send receipt to earn points" step.
+ * Quick reply opens the camera or photo album so the customer can send the
+ * receipt in one tap. Kept emoji-light per the desired tone.
+ */
+function buildReceiptPromptMessage()
+{
+    return [
+        'type' => 'text',
+        'text' => "ส่งรูปใบเสร็จได้เลยค่ะ ระบบจะเพิ่มแต้มให้อัตโนมัติ",
+        'quickReply' => [
+            'items' => [
+                ['type' => 'action', 'action' => ['type' => 'cameraAction', 'label' => 'ถ่ายรูปใบเสร็จ']],
+                ['type' => 'action', 'action' => ['type' => 'cameraRollAction', 'label' => 'เลือกรูปใบเสร็จ']],
+            ],
+        ],
+    ];
+}
+
+/**
+ * Put the user into the waiting_receipt state and send the camera/album prompt.
+ * Shared by the text-keyword path and the "ส่งสลิปรับแต้ม" member-card postback.
+ */
+function triggerReceiptFlow($db, $line, $replyToken, $userDbId)
+{
+    setUserState($db, $userDbId, 'waiting_receipt', [], 30);
+    $promptMsg = buildReceiptPromptMessage();
+    sendMessageWithFallback($line, $replyToken, $userDbId, [$promptMsg], $db);
+    saveOutgoingMessage($db, $userDbId, json_encode($promptMsg, JSON_UNESCAPED_UNICODE), 'system', 'text');
+}
+
 // Log incoming webhook
 if (!empty($events)) {
     try {
@@ -391,6 +422,15 @@ foreach ($events as $event) {
 
                 // Handle Broadcast Product Click - Auto Tag
                 $postbackData = $event['postback']['data'] ?? '';
+
+                // ปุ่ม "ส่งสลิปรับแต้ม" บนบัตรสมาชิก → เปิดขั้นตอนส่งใบเสร็จ
+                if (strpos($postbackData, '{') === 0) {
+                    $pbJson = json_decode($postbackData, true);
+                    if (is_array($pbJson) && ($pbJson['action'] ?? '') === 'send_receipt' && $dbUserId) {
+                        triggerReceiptFlow($db, $line, $replyToken, $dbUserId);
+                        break;
+                    }
+                }
 
                 // รองรับทั้ง 2 รูปแบบ: broadcast_click_{id}_{id} หรือ JSON {"action":"broadcast_click",...}
                 $isBroadcastClick = false;
@@ -1145,22 +1185,20 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             }
         }
 
-        // ========== สะสมแต้มจากใบเสร็จ: keyword trigger ==========
+        // ========== ส่งใบเสร็จรับแต้ม: keyword trigger ==========
+        // "แต้ม"/"สะสมแต้ม" → บัตรสมาชิก (showPoints) ด้านล่าง ซึ่งมีปุ่ม "ส่งสลิปรับแต้ม";
+        // ที่นี่จับเฉพาะเจตนาส่งสลิปตรงๆ แล้วเปิดขั้นตอนส่งรูปพร้อม quick reply กล้อง/อัลบั้ม
         $textForPoints = mb_strtolower(trim($messageText));
-        // เฉพาะ keyword ที่ไม่ชนกับ "แต้ม" (showPoints), "points" (systemCommands), "แลกแต้ม" (LiffMessageHandler)
-        $pointKeywords = ['สะสมแต้ม', 'เพิ่มแต้ม', 'ส่งใบเสร็จ', 'ใบเสร็จ'];
-        $isPointKeyword = false;
-        foreach ($pointKeywords as $kw) {
+        $receiptKeywords = ['ส่งใบเสร็จ', 'ใบเสร็จ', 'เพิ่มแต้ม', 'สลิปรับแต้ม'];
+        $isReceiptKeyword = false;
+        foreach ($receiptKeywords as $kw) {
             if (mb_strpos($textForPoints, $kw) !== false) {
-                $isPointKeyword = true;
+                $isReceiptKeyword = true;
                 break;
             }
         }
-        if ($isPointKeyword) {
-            setUserState($db, $user['id'], 'waiting_receipt', [], 30);
-            $promptMsg = ['type' => 'text', 'text' => "📸 ส่งรูปใบเสร็จมาได้เลยค่ะ\nระบบจะเพิ่มแต้มให้อัตโนมัติ ✨"];
-            sendMessageWithFallback($line, $replyToken, $user['id'], [$promptMsg], $db);
-            saveOutgoingMessage($db, $user['id'], json_encode($promptMsg), 'system', 'text');
+        if ($isReceiptKeyword) {
+            triggerReceiptFlow($db, $line, $replyToken, $user['id']);
             return;
         }
 
@@ -1331,7 +1369,7 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         // "No matching command" (line ~1769) before reaching BusinessBot, so points /
         // member card / rewards / redeem are all handled here instead. Replies with the
         // designed Flex so a customer never needs the mini app for loyalty.
-        $pointsKeywords = ['แต้ม', 'แต้มสะสม', 'คะแนน', 'คะแนนสะสม', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'];
+        $pointsKeywords = ['แต้ม', 'แต้มสะสม', 'สะสมแต้ม', 'คะแนน', 'คะแนนสะสม', 'สะสมคะแนน', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'];
         $memberKeywords = ['สมาชิก', 'บัตรสมาชิก', 'บัตร', 'member', 'membercard', 'member card'];
         $rewardKeywords = ['ของรางวัล', 'แลกของรางวัล', 'แลกแต้ม', 'ของแลก', 'rewards', 'reward'];
         $isRedeem = (bool) preg_match('/^redeem\s+(\d+)$/', $textLower, $redeemMatch);

@@ -2401,8 +2401,19 @@ class BusinessBot
             }
 
             $pointsCard = $this->buildPremiumMemberCard($user, $userDbId, $userPoints, $tier, $shopName, $shopLogo, [
-                ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'บัตรสมาชิก', 'text' => 'สมาชิก'], 'style' => 'secondary', 'height' => 'sm', 'flex' => 1],
-                ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🎁 แลกของรางวัล', 'text' => 'ของรางวัล'], 'style' => 'primary', 'color' => self::BRAND_MAIN, 'height' => 'sm', 'flex' => 1]
+                [
+                    'type' => 'box', 'layout' => 'vertical', 'spacing' => 'sm', 'flex' => 1,
+                    'contents' => [
+                        ['type' => 'button', 'action' => ['type' => 'postback', 'label' => 'ส่งสลิปรับแต้ม', 'data' => '{"action":"send_receipt"}', 'displayText' => 'ส่งใบเสร็จ'], 'style' => 'primary', 'color' => self::BRAND_MAIN, 'height' => 'sm'],
+                        [
+                            'type' => 'box', 'layout' => 'horizontal', 'spacing' => 'sm',
+                            'contents' => [
+                                ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'บัตรสมาชิก', 'text' => 'สมาชิก'], 'style' => 'secondary', 'height' => 'sm', 'flex' => 1],
+                                ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'แลกของรางวัล', 'text' => 'ของรางวัล'], 'style' => 'secondary', 'height' => 'sm', 'flex' => 1],
+                            ]
+                        ],
+                    ]
+                ]
             ]);
 
             $loyaltyMsg = FlexTemplates::toMessage($pointsCard, 'แต้มสะสม');
@@ -2539,8 +2550,19 @@ class BusinessBot
             }
 
             $memberCard = $this->buildPremiumMemberCard($user, $userDbId, $points, $tier, $shopName, $shopLogo, [
-                ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ดูแต้ม', 'text' => 'แต้ม'], 'style' => 'secondary', 'height' => 'sm', 'flex' => 1],
-                ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🎁 แลกของรางวัล', 'text' => 'ของรางวัล'], 'style' => 'primary', 'color' => self::BRAND_MAIN, 'height' => 'sm', 'flex' => 1]
+                [
+                    'type' => 'box', 'layout' => 'vertical', 'spacing' => 'sm', 'flex' => 1,
+                    'contents' => [
+                        ['type' => 'button', 'action' => ['type' => 'postback', 'label' => 'ส่งสลิปรับแต้ม', 'data' => '{"action":"send_receipt"}', 'displayText' => 'ส่งใบเสร็จ'], 'style' => 'primary', 'color' => self::BRAND_MAIN, 'height' => 'sm'],
+                        [
+                            'type' => 'box', 'layout' => 'horizontal', 'spacing' => 'sm',
+                            'contents' => [
+                                ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ดูแต้ม', 'text' => 'แต้ม'], 'style' => 'secondary', 'height' => 'sm', 'flex' => 1],
+                                ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'แลกของรางวัล', 'text' => 'ของรางวัล'], 'style' => 'secondary', 'height' => 'sm', 'flex' => 1],
+                            ]
+                        ],
+                    ]
+                ]
             ]);
 
             $loyaltyMsg = FlexTemplates::toMessage($memberCard, 'บัตรสมาชิก');
