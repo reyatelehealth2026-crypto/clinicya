@@ -250,8 +250,8 @@ function buildReceiptPromptMessage()
         'text' => "ส่งรูปใบเสร็จได้เลยค่ะ ระบบจะเพิ่มแต้มให้อัตโนมัติ",
         'quickReply' => [
             'items' => [
-                ['type' => 'action', 'action' => ['type' => 'cameraAction', 'label' => 'ถ่ายรูปใบเสร็จ']],
-                ['type' => 'action', 'action' => ['type' => 'cameraRollAction', 'label' => 'เลือกรูปใบเสร็จ']],
+                ['type' => 'action', 'action' => ['type' => 'camera', 'label' => 'ถ่ายรูปใบเสร็จ']],
+                ['type' => 'action', 'action' => ['type' => 'cameraRoll', 'label' => 'เลือกรูปใบเสร็จ']],
             ],
         ],
     ];
@@ -269,8 +269,7 @@ function triggerReceiptFlow($db, $line, $replyToken, $userDbId, $lineUserId = nu
     setUserState($db, $userDbId, 'waiting_receipt', [], 30);
     $promptMsg = buildReceiptPromptMessage();
     $pushTarget = $lineUserId ?: $userDbId;
-    $res = sendMessageWithFallback($line, $replyToken, $pushTarget, [$promptMsg], $db);
-    error_log('triggerReceiptFlow send result: ' . json_encode($res, JSON_UNESCAPED_UNICODE)); // TEMP diag
+    sendMessageWithFallback($line, $replyToken, $pushTarget, [$promptMsg], $db);
     saveOutgoingMessage($db, $userDbId, json_encode($promptMsg, JSON_UNESCAPED_UNICODE), 'system', 'text');
 }
 

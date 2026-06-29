@@ -347,11 +347,6 @@ class GeminiAI {
                 $text .= "\n" . (string) ($result['ParsedText'] ?? '');
             }
 
-            // TEMP DEBUG — log raw OCR text so the parser can be tuned to the
-            // real OCR.Space layout. Remove after receipt parsing is dialled in.
-            error_log('RECEIPT_OCR_RAW[' . $language . '/' . $engine . ']: '
-                . str_replace(["\r", "\n"], ['', '\\n'], mb_substr($text, 0, 2000, 'UTF-8')));
-
             $parsed = $this->parseReceiptOcrText($text);
             if (!empty($parsed['is_receipt']) && (float) $parsed['total_amount'] > 0) {
                 error_log('analyzeReceiptImage OCR.Space fallback success: language=' . $language . ', engine=' . $engine);
@@ -400,14 +395,6 @@ class GeminiAI {
             $evidence['paid'],
             $evidence['change']
         );
-
-        // TEMP DEBUG — log the extracted evidence so confidence misses can be
-        // diagnosed. Remove together with the RECEIPT_OCR_RAW log above.
-        error_log('RECEIPT_EVIDENCE: total=' . $totalAmount
-            . ' items=[' . implode(',', array_map(static fn ($v) => (string) $v, $evidence['line_items'])) . ']'
-            . ' paid=' . var_export($evidence['paid'], true)
-            . ' change=' . var_export($evidence['change'], true)
-            . ' verdict=' . $verdict['level'] . '/' . $verdict['reason']);
 
         return [
             'is_receipt' => $totalAmount > 0,
