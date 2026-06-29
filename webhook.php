@@ -260,12 +260,17 @@ function buildReceiptPromptMessage()
 /**
  * Put the user into the waiting_receipt state and send the camera/album prompt.
  * Shared by the text-keyword path and the "ส่งสลิปรับแต้ม" member-card postback.
+ * $lineUserId is the LINE Uxxxx id used for the push fallback (the DB id only
+ * works for reply); pass it whenever available so the prompt still lands if the
+ * reply token is missing/expired.
  */
-function triggerReceiptFlow($db, $line, $replyToken, $userDbId)
+function triggerReceiptFlow($db, $line, $replyToken, $userDbId, $lineUserId = null)
 {
     setUserState($db, $userDbId, 'waiting_receipt', [], 30);
     $promptMsg = buildReceiptPromptMessage();
-    sendMessageWithFallback($line, $replyToken, $userDbId, [$promptMsg], $db);
+    $pushTarget = $lineUserId ?: $userDbId;
+    $res = sendMessageWithFallback($line, $replyToken, $pushTarget, [$promptMsg], $db);
+    error_log('triggerReceiptFlow send result: ' . json_encode($res, JSON_UNESCAPED_UNICODE)); // TEMP diag
     saveOutgoingMessage($db, $userDbId, json_encode($promptMsg, JSON_UNESCAPED_UNICODE), 'system', 'text');
 }
 
@@ -427,7 +432,7 @@ foreach ($events as $event) {
                 if (strpos($postbackData, '{') === 0) {
                     $pbJson = json_decode($postbackData, true);
                     if (is_array($pbJson) && ($pbJson['action'] ?? '') === 'send_receipt' && $dbUserId) {
-                        triggerReceiptFlow($db, $line, $replyToken, $dbUserId);
+                        triggerReceiptFlow($db, $line, $replyToken, $dbUserId, $userId);
                         break;
                     }
                 }
@@ -1198,7 +1203,7 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             }
         }
         if ($isReceiptKeyword) {
-            triggerReceiptFlow($db, $line, $replyToken, $user['id']);
+            triggerReceiptFlow($db, $line, $replyToken, $user['id'], $userId);
             return;
         }
 
