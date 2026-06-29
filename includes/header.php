@@ -255,7 +255,7 @@ $quickAccessMenus = [
 
     // ==================== Insights & Overview ====================
     'executive' => ['icon' => 'fa-chart-line', 'label' => $dashboardMenuLabel, 'url' => $dashboardDefaultHref, 'page' => 'dashboard', 'color' => 'indigo', 'roles' => ['owner', 'admin']],
-    'crm-dashboard' => ['icon' => 'fa-users-cog', 'label' => 'CRM Dashboard', 'url' => '/dashboard?tab=crm', 'page' => 'dashboard', 'color' => 'blue', 'roles' => ['owner', 'admin']],
+    // 'crm-dashboard' removed — tab of Dashboard (/dashboard?tab=crm); reachable from the dashboard tabs
     'odoo-customers' => ['icon' => 'fa-file-invoice-dollar', 'label' => 'จัดการลูกค้า Odoo', 'url' => '/odoo-dashboard', 'page' => 'odoo-dashboard', 'color' => 'violet', 'roles' => ['owner', 'admin'], 'condition' => $isOdooMode],
     'triage' => ['icon' => 'fa-stethoscope', 'label' => 'สถิติการรักษา', 'url' => '/triage-analytics', 'page' => 'triage-analytics', 'color' => 'emerald', 'roles' => ['pharmacist', 'owner']],
     'drug-interactions' => ['icon' => 'fa-pills', 'label' => 'ยาตีกัน', 'url' => '/pharmacy?tab=interactions', 'page' => 'pharmacy', 'color' => 'red', 'roles' => ['pharmacist', 'owner']],
@@ -273,13 +273,13 @@ $quickAccessMenus = [
 
     // ==================== Patient & Journey - Care Journey ====================
     'broadcast' => ['icon' => 'fa-paper-plane', 'label' => 'บรอดแคสต์', 'url' => '/broadcast', 'page' => 'broadcast', 'color' => 'purple', 'roles' => ['admin', 'marketing']],
-    'broadcast-catalog' => ['icon' => 'fa-layer-group', 'label' => 'แคตตาล็อก', 'url' => '/broadcast?tab=catalog', 'page' => 'broadcast', 'color' => 'violet', 'roles' => ['admin', 'marketing']],
+    // 'broadcast-catalog' removed — tab of บรอดแคสต์ (/broadcast?tab=catalog)
     'drip-campaigns' => ['icon' => 'fa-water', 'label' => 'Drip Campaign', 'url' => '/drip-campaigns', 'page' => 'drip-campaigns', 'color' => 'blue', 'roles' => ['admin', 'marketing']],
     'templates' => ['icon' => 'fa-file-alt', 'label' => 'Templates', 'url' => '/templates', 'page' => 'templates', 'color' => 'slate', 'roles' => ['admin', 'marketing']],
 
     // ==================== Patient & Journey - Digital Front Door ====================
     'rich-menu' => ['icon' => 'fa-th-large', 'label' => 'Rich Menu', 'url' => '/rich-menu', 'page' => 'rich-menu', 'color' => 'teal', 'roles' => ['admin', 'marketing']],
-    'dynamic-rich-menu' => ['icon' => 'fa-random', 'label' => 'Dynamic Rich Menu', 'url' => '/rich-menu?tab=dynamic', 'page' => 'rich-menu', 'color' => 'cyan', 'roles' => ['admin', 'marketing']],
+    // 'dynamic-rich-menu' removed — tab of Rich Menu (/rich-menu?tab=dynamic)
     'liff-settings' => ['icon' => 'fa-mobile-screen', 'label' => 'ตั้งค่า LIFF', 'url' => '/liff-settings', 'page' => 'liff-settings', 'color' => 'lime', 'roles' => ['admin', 'marketing']],
 
     // ==================== Supply & Revenue - Billing & Orders ====================
@@ -287,17 +287,12 @@ $quickAccessMenus = [
     'promotions' => ['icon' => 'fa-star', 'label' => 'โปรโมชั่น', 'url' => '/shop/promotions', 'page' => 'promotions', 'color' => 'amber', 'roles' => ['admin', 'staff']],
 
     // ==================== Supply & Revenue - Inventory ====================
-    'products' => ['icon' => 'fa-box', 'label' => 'สินค้า', 'url' => '/inventory?tab=products', 'page' => 'inventory', 'color' => 'blue', 'roles' => ['admin', 'pharmacist']],
+    'products' => ['icon' => 'fa-box', 'label' => 'สินค้า / คลัง', 'url' => '/inventory', 'page' => 'inventory', 'color' => 'blue', 'roles' => ['admin', 'pharmacist']],
     'categories' => ['icon' => 'fa-folder', 'label' => 'หมวดหมู่', 'url' => '/shop/categories', 'page' => 'categories', 'color' => 'lime', 'roles' => ['admin', 'pharmacist']],
-    'stock-adjustment' => ['icon' => 'fa-sliders-h', 'label' => 'ปรับสต็อก', 'url' => '/inventory?tab=adjustment', 'page' => 'inventory', 'color' => 'indigo', 'roles' => ['admin', 'pharmacist']],
-    'stock-movements' => ['icon' => 'fa-exchange-alt', 'label' => 'ประวัติเคลื่อนไหว', 'url' => '/inventory?tab=movements', 'page' => 'inventory', 'color' => 'sky', 'roles' => ['admin', 'pharmacist']],
     'low-stock' => ['icon' => 'fa-exclamation-triangle', 'label' => 'สินค้าใกล้หมด', 'url' => '/inventory?tab=low-stock', 'page' => 'inventory', 'color' => 'red', 'roles' => ['admin', 'pharmacist']],
     'product-units' => ['icon' => 'fa-balance-scale', 'label' => 'หน่วยสินค้า', 'url' => '/inventory/product-units', 'page' => 'product-units', 'color' => 'emerald', 'roles' => ['admin', 'pharmacist']],
     'sync' => ['icon' => 'fa-sync', 'label' => 'Sync สินค้า', 'url' => '/sync-dashboard', 'page' => 'sync-dashboard', 'color' => 'sky', 'roles' => ['admin', 'owner']],
-    'wms' => ['icon' => 'fa-shipping-fast', 'label' => 'WMS', 'url' => '/inventory?tab=wms', 'page' => 'inventory', 'color' => 'purple', 'roles' => ['admin', 'staff']],
-    'locations' => ['icon' => 'fa-map-marker-alt', 'label' => 'ตำแหน่งจัดเก็บ', 'url' => '/inventory?tab=locations', 'page' => 'inventory', 'color' => 'teal', 'roles' => ['admin', 'pharmacist', 'staff']],
-    'batches' => ['icon' => 'fa-layer-group', 'label' => 'Batch/Lot', 'url' => '/inventory?tab=batches', 'page' => 'inventory', 'color' => 'amber', 'roles' => ['admin', 'pharmacist', 'staff']],
-    'put-away' => ['icon' => 'fa-inbox', 'label' => 'Put Away', 'url' => '/inventory?tab=put-away', 'page' => 'inventory', 'color' => 'violet', 'roles' => ['admin', 'pharmacist', 'staff']],
+    // removed inventory tab-duplicates (all /inventory?tab=*): stock-adjustment, stock-movements, wms, locations, batches, put-away — reachable as tabs inside คลังสินค้า
 
     // ==================== Supply & Revenue - Procurement ====================
     'purchase-orders' => ['icon' => 'fa-file-invoice', 'label' => 'ใบสั่งซื้อ (PO)', 'url' => '/procurement?tab=po', 'page' => 'procurement', 'color' => 'violet', 'roles' => ['admin', 'owner']],
@@ -306,9 +301,7 @@ $quickAccessMenus = [
 
     // ==================== Supply & Revenue - Accounting ====================
     'accounting' => ['icon' => 'fa-calculator', 'label' => 'บัญชี', 'url' => '/accounting', 'page' => 'accounting', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
-    'accounting-ap' => ['icon' => 'fa-file-invoice-dollar', 'label' => 'เจ้าหนี้ (AP)', 'url' => '/accounting?tab=ap', 'page' => 'accounting', 'color' => 'red', 'roles' => ['admin', 'owner']],
-    'accounting-ar' => ['icon' => 'fa-hand-holding-usd', 'label' => 'ลูกหนี้ (AR)', 'url' => '/accounting?tab=ar', 'page' => 'accounting', 'color' => 'green', 'roles' => ['admin', 'owner']],
-    'accounting-expenses' => ['icon' => 'fa-receipt', 'label' => 'ค่าใช้จ่าย', 'url' => '/accounting?tab=expenses', 'page' => 'accounting', 'color' => 'orange', 'roles' => ['admin', 'owner']],
+    // removed accounting tab-duplicates (all /accounting?tab=*): AP, AR, ค่าใช้จ่าย — reachable as tabs inside บัญชี
 
     // ==================== Facility Setup - Facility Profile ====================
     'shop-settings' => ['icon' => 'fa-store', 'label' => 'ข้อมูลสถานพยาบาล', 'url' => '/settings.php?tab=general', 'page' => 'settings', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
@@ -506,6 +499,72 @@ foreach (($quickAccessItems ?? []) as $quickItem) {
 
 $visibleGroupCount = count($visibleMenuGroups);
 $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0);
+
+// ==================== L1 — Flat Primary Nav (single-level rail) ====================
+// Daily-driver hubs only; second level handled by each hub's in-page tabs (L2).
+// Flat nav is now the DEFAULT (2026-06-29). ?nav=classic switches to the old accordion
+// (persists in session); ?nav=flat switches back.
+if (isset($_GET['nav'])) {
+    $_SESSION['pref_flat_nav'] = ($_GET['nav'] === 'flat');
+}
+$flatNav = $_SESSION['pref_flat_nav'] ?? true;
+
+// Each item is a hub; 'match' = path prefixes that mark it active (covers its tabs).
+// Role-gated with the same $userRole used by the accordion groups.
+$primaryNav = [
+    ['key' => 'overview', 'icon' => 'fa-gauge-high', 'label' => 'ภาพรวม',
+        'href' => $dashboardDefaultHref, 'match' => ['/dashboard', '/odoo-dashboard', '/analytics'],
+        'roles' => ['owner', 'admin']],
+    ['key' => 'inbox', 'icon' => 'fa-comments', 'label' => 'กล่องข้อความ',
+        'href' => $inboxUrl, 'match' => ['/inbox', '/messages'],
+        'badge' => $unreadMessages,
+        'roles' => ['owner', 'admin', 'pharmacist', 'staff', 'marketing']],
+    ['key' => 'orders', 'icon' => 'fa-receipt', 'label' => $ordersMenuLabel,
+        'href' => '/shop/orders', 'match' => ['/shop/orders', '/pos'],
+        'badge' => $pendingOrders, 'badgeColor' => 'yellow',
+        'roles' => ['owner', 'admin', 'staff']],
+    ['key' => 'inventory', 'icon' => 'fa-boxes-stacked', 'label' => 'สินค้า & คลัง',
+        'href' => '/inventory', 'match' => ['/inventory', '/procurement', '/accounting'],
+        'roles' => ['owner', 'admin', 'pharmacist', 'staff']],
+    ['key' => 'pharmacy', 'icon' => 'fa-prescription-bottle-medical', 'label' => 'งานเภสัช',
+        'href' => '/pharmacy', 'match' => ['/pharmacy', '/dispense-tracking', '/appointments-admin', '/pharmacist-video-calls'],
+        'roles' => ['owner', 'admin', 'pharmacist']],
+    ['key' => 'patients', 'icon' => 'fa-user-group', 'label' => 'ลูกค้า & สมาชิก',
+        'href' => '/users', 'match' => ['/users', '/user-tags', '/membership', '/loyalty-members'],
+        'roles' => ['owner', 'admin', 'pharmacist', 'staff']],
+    ['key' => 'marketing', 'icon' => 'fa-bullhorn', 'label' => 'การตลาด LINE',
+        'href' => '/broadcast', 'match' => ['/broadcast', '/drip-campaigns', '/rich-menu', '/templates', '/liff-settings'],
+        'roles' => ['owner', 'admin', 'marketing']],
+    ['key' => 'reports', 'icon' => 'fa-chart-line', 'label' => 'รายงาน',
+        'href' => '/analytics', 'match' => ['/activity-logs', '/scheduled', '/triage-analytics'],
+        'roles' => ['owner', 'admin']],
+];
+$primaryNavFooter = [
+    ['key' => 'settings', 'icon' => 'fa-gear', 'label' => 'ตั้งค่า',
+        'href' => '/settings', 'match' => ['/settings', '/admin-users', '/admin/', '/consent-management'],
+        'roles' => ['owner', 'admin', 'tech']],
+];
+
+// Active matcher: longest-prefix wins so a more specific hub claims the page.
+$primaryNavActiveKey = null;
+$primaryNavBestLen = 0;
+foreach (array_merge($primaryNav, $primaryNavFooter) as $navItem) {
+    foreach (($navItem['match'] ?? [$navItem['href']]) as $prefix) {
+        if ($prefix !== '' && strpos($currentPath, $prefix) !== false && strlen($prefix) > $primaryNavBestLen) {
+            $primaryNavBestLen = strlen($prefix);
+            $primaryNavActiveKey = $navItem['key'];
+        }
+    }
+}
+
+/** Filter a primary-nav list by the current role. */
+$filterPrimaryNav = static function (array $items) use ($userRole): array {
+    return array_values(array_filter($items, static function ($item) use ($userRole) {
+        return empty($item['roles']) || in_array($userRole, $item['roles'], true);
+    }));
+};
+$visiblePrimaryNav = $filterPrimaryNav($primaryNav);
+$visiblePrimaryNavFooter = $filterPrimaryNav($primaryNavFooter);
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -640,6 +699,22 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.01em;
+        }
+        /* subscription plan pill */
+        a.sidebar-brand-pill { text-decoration: none; transition: filter .15s, box-shadow .15s; }
+        a.sidebar-brand-pill:hover { filter: brightness(1.03); }
+        .sidebar-brand-pill.is-plan-paid {
+            background: linear-gradient(135deg, #fde68a 0%, #f59e0b 100%);
+            border-color: #d97706;
+            color: #7c3a03;
+            box-shadow: 0 1px 4px rgba(217,119,6,.25);
+        }
+        .sidebar-brand-pill.is-plan-paid i { color: #b45309; }
+        .sidebar-brand-pill.is-plan-trial {
+            background: #fef3c7; border-color: #fcd34d; color: #b45309;
+        }
+        .sidebar-brand-pill.is-plan-free {
+            background: #f1f5f9; border-color: #e2e8f0; color: #64748b;
         }
         
         /* Bot Selector */
@@ -1358,23 +1433,42 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
         }
 
+        /* Toned down: neutral background, coloured icon (let the gold plan button pop) */
         .header-btn.erp-quick-btn {
-            background: linear-gradient(135deg, #1f8f77 0%, #16665a 100%);
-            border-color: rgba(20, 83, 45, 0.16);
-            color: white;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(243,246,250,0.96) 100%);
+            border-color: #d7e0ea;
+            color: #1f8f77;
         }
 
         .header-btn.erp-ai-btn {
-            background: linear-gradient(135deg, var(--color-dark-700) 0%, var(--color-dark-800) 100%);
-            border-color: rgba(15, 23, 42, 0.12);
-            color: white;
+            background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(243,246,250,0.96) 100%);
+            border-color: #d7e0ea;
+            color: #334155;
         }
+
+        /* Cluster separator in the header actions row */
+        .header-divider { width:1px; height:22px; background:#e2e8f0; border-radius:1px; margin:0 3px; flex-shrink:0; }
+        .dark .header-divider { background: rgba(255,255,255,0.12); }
 
         .header-btn.erp-odoo-btn {
             background: linear-gradient(135deg, var(--color-dark-700) 0%, var(--color-dark-900) 100%);
             border-color: rgba(15, 23, 42, 0.2);
             color: white;
             box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+        }
+
+        /* Subscription / plan button — gold, matches the sidebar plan pill */
+        .header-btn.erp-plan-btn {
+            background: linear-gradient(135deg, #fde68a 0%, #f59e0b 100%);
+            border-color: #d97706;
+            color: #7c3a03;
+            box-shadow: 0 8px 18px rgba(217, 119, 6, 0.22);
+        }
+        .header-btn.erp-plan-btn:hover {
+            color: #7c3a03;
+            filter: brightness(1.04);
+            border-color: #b45309;
+            box-shadow: 0 12px 24px rgba(217, 119, 6, 0.30);
         }
         
         .header-btn .badge {
@@ -2241,29 +2335,48 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
             if (!$brandLogo) {
                 $brandLogo = '/uploads/shop/logo_1_1778797967.png'; // REYA default
             }
+
+            // Current subscription plan → gold pill (paid) / amber (trial) / grey (free).
+            // Defensive: never break the header if billing tables/helpers are absent.
+            $brandPlan = null;
+            try {
+                if (!function_exists('subscriptionState')) {
+                    $bh = __DIR__ . '/platform-billing-helpers.php';
+                    if (is_file($bh)) { require_once $bh; }
+                }
+                $btid = class_exists('TenantContext') ? (int) (TenantContext::getCurrentTenantId() ?? 0) : 0;
+                if ($btid > 0 && function_exists('subscriptionState')) {
+                    $bst   = subscriptionState(Database::platform()->getConnection(), $btid);
+                    $bslug = (string) ($bst['plan_slug'] ?? '');
+                    $bname = (string) ($bst['plan_name'] ?: ($bslug !== '' ? ucfirst($bslug) : 'Free'));
+                    $bstate = (string) ($bst['state'] ?? '');
+                    if ($bstate === 'trial') {
+                        $brandPlan = ['name' => $bname, 'cls' => 'is-plan-trial', 'icon' => 'fa-hourglass-half'];
+                    } elseif (in_array($bslug, ['monthly', 'yearly'], true) || $bstate === 'active') {
+                        $brandPlan = ['name' => $bname, 'cls' => 'is-plan-paid', 'icon' => 'fa-crown'];
+                    } else {
+                        $brandPlan = ['name' => $bname, 'cls' => 'is-plan-free', 'icon' => 'fa-leaf'];
+                    }
+                }
+            } catch (\Throwable $e) { /* never break header */ }
             ?>
             <div class="sidebar-brand">
                 <div class="flex items-center">
-                    <div class="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden bg-white border border-emerald-100">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden bg-white border border-emerald-100 p-1">
                         <img src="<?= htmlspecialchars($brandLogo) ?>"
                              alt="REYA"
-                             class="w-full h-full object-cover"
+                             class="max-w-full max-h-full object-contain"
                              onerror="this.outerHTML='<div class=\'w-full h-full flex items-center justify-center text-white text-lg font-bold\' style=\'background: linear-gradient(135deg, var(--primary), var(--primary-dark));\'>R</div>';">
                     </div>
                     <div class="ml-3 flex-1 min-w-0">
-                        <div class="font-bold text-gray-800 text-sm truncate">REYA PHARMACY CRM</div>
-                        <div class="text-xs text-gray-400">REYA · Pharmacy Admin</div>
+                        <div class="font-bold text-gray-800 text-sm truncate">REYA Pharmacy</div>
+                        <div class="text-xs text-gray-400">Pharmacy Admin</div>
                     </div>
                     <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-gray-700">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                <div class="sidebar-brand-meta">
-                    <span class="sidebar-brand-pill"><i class="fas fa-layer-group"></i><?= $visibleGroupCount ?> sections</span>
-                    <?php if ($workspaceAlertCount > 0): ?>
-                        <span class="sidebar-brand-pill"><i class="fas fa-bell"></i><?= $workspaceAlertCount > 99 ? '99+' : $workspaceAlertCount ?> alerts</span>
-                    <?php endif; ?>
-                </div>
+                <?php // brand pills (plan / sections / alerts) removed per request 2026-06-29 ?>
             </div>
 
             <!-- Bot Selector -->
@@ -2311,8 +2424,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
 
             <!-- Navigation -->
             <nav class="flex-1 overflow-y-auto py-2">
-                <!-- Quick Access Section -->
-                <?php if (!empty($quickAccessItems)): ?>
+                <!-- Quick Access Section (classic nav only — hidden in flat nav for a clean rail) -->
+                <?php if (!$flatNav && !empty($quickAccessItems)): ?>
                     <div class="quick-access-section">
                         <div class="quick-access-header">
                             <div>
@@ -2352,8 +2465,87 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                     </div>
                 <?php endif; ?>
 
+                <?php if ($flatNav): ?>
+                    <!-- L1 — Flat Primary Nav (single-level rail). Second level lives in each hub's in-page tabs. -->
+                    <style>
+                        .primary-rail { padding: 6px 8px 2px; }
+                        .primary-rail .menu-section-title { padding: 0 8px 8px; }
+                        .primary-link {
+                            display: flex; align-items: center; gap: 10px;
+                            padding: 10px 12px; margin: 2px 6px;
+                            border-radius: 10px; text-decoration: none;
+                            color: var(--sidebar-text); font-size: 13px; font-weight: 500;
+                            border: 1px solid transparent; transition: all 0.15s ease;
+                        }
+                        .primary-link:hover { background: var(--sidebar-hover); color: #111827; border-color: #d6deea; }
+                        .primary-link.active {
+                            background: var(--sidebar-active-bg);
+                            color: var(--sidebar-active-text); font-weight: 700;
+                            box-shadow: inset 3px 0 0 var(--sidebar-active-border);
+                        }
+                        .primary-link-icon {
+                            width: 30px; height: 30px; flex-shrink: 0;
+                            display: flex; align-items: center; justify-content: center;
+                            border-radius: 9px; font-size: 14px;
+                            background: linear-gradient(180deg, #eef2f7 0%, #dde6f0 100%);
+                            color: #3f5468; border: 1px solid rgba(203, 213, 225, 0.7);
+                        }
+                        .primary-link.active .primary-link-icon {
+                            background: linear-gradient(135deg, #1f8f77 0%, #125f55 100%);
+                            color: #fff; border-color: transparent;
+                        }
+                        .primary-link-label { flex: 1; min-width: 0; }
+                        .primary-rail-footer { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--sidebar-border); }
+                    </style>
+                    <div class="primary-rail">
+                        <div class="menu-section-title">เมนูหลัก</div>
+                        <?php foreach ($visiblePrimaryNav as $navItem):
+                            $navUrl = $baseUrl . ltrim($navItem['href'], '/');
+                            $navActive = ($primaryNavActiveKey === $navItem['key']);
+                            ?>
+                            <a href="<?= $navUrl ?>"
+                                class="primary-link nav-track-link <?= $navActive ? 'active' : '' ?>"
+                                data-nav-title="<?= htmlspecialchars($navItem['label']) ?>"
+                                data-nav-group="เมนูหลัก"
+                                data-nav-icon="<?= htmlspecialchars($navItem['icon']) ?>">
+                                <span class="primary-link-icon"><i class="fas <?= htmlspecialchars($navItem['icon']) ?>"></i></span>
+                                <span class="primary-link-label"><?= htmlspecialchars($navItem['label']) ?></span>
+                                <?php if (!empty($navItem['badge']) && $navItem['badge'] > 0): ?>
+                                    <span class="menu-badge <?= htmlspecialchars($navItem['badgeColor'] ?? '') ?>"><?= $navItem['badge'] > 99 ? '99+' : $navItem['badge'] ?></span>
+                                <?php endif; ?>
+                            </a>
+                        <?php endforeach; ?>
+
+                        <?php if (!empty($visiblePrimaryNavFooter)): ?>
+                            <div class="primary-rail-footer">
+                                <?php foreach ($visiblePrimaryNavFooter as $navItem):
+                                    $navUrl = $baseUrl . ltrim($navItem['href'], '/');
+                                    $navActive = ($primaryNavActiveKey === $navItem['key']);
+                                    ?>
+                                    <a href="<?= $navUrl ?>"
+                                        class="primary-link nav-track-link <?= $navActive ? 'active' : '' ?>"
+                                        data-nav-title="<?= htmlspecialchars($navItem['label']) ?>"
+                                        data-nav-group="เมนูหลัก"
+                                        data-nav-icon="<?= htmlspecialchars($navItem['icon']) ?>">
+                                        <span class="primary-link-icon"><i class="fas <?= htmlspecialchars($navItem['icon']) ?>"></i></span>
+                                        <span class="primary-link-label"><?= htmlspecialchars($navItem['label']) ?></span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="primary-rail-footer">
+                            <a href="?nav=classic" class="primary-link" style="font-size:11px;color:var(--sidebar-text-muted);">
+                                <span class="primary-link-icon" style="background:none;border:none;color:var(--sidebar-text-muted);"><i class="fas fa-rotate-left"></i></span>
+                                <span class="primary-link-label">กลับเมนูแบบเดิม</span>
+                            </a>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
                 <!-- Main Menu Groups -->
                 <?php
+                if (!$flatNav):
                 foreach ($visibleMenuGroups as $group):
                     $groupHasActive = false;
                     $groupBadgeCount = 0;
@@ -2446,7 +2638,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                             <?php endforeach; ?>
                         </div>
                     </div>
-                <?php endforeach; ?>
+                <?php endforeach;
+                endif; // !$flatNav ?>
             </nav>
 
             <!-- Sidebar Footer -->
@@ -2454,6 +2647,10 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                 <div class="sidebar-footer-info">
                     <span>LINE CRM Pro v3.5</span>
                     <div class="flex items-center gap-2">
+                        <?php if (!$flatNav): ?>
+                            <a href="?nav=flat" class="hover:text-green-600" title="ลองเมนูใหม่ (รุ่นทดลอง)"><i
+                                    class="fas fa-bars-staggered"></i></a>
+                        <?php endif; ?>
                         <a href="<?= $baseUrl ?>help.php" class="hover:text-white" title="Help"><i
                                 class="fas fa-question-circle"></i></a>
                     </div>
@@ -2505,47 +2702,7 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                     </a>
                     <?php endif; ?>
 
-                    <!-- Quick Access Dropdown -->
-                    <div class="relative" x-data="{ open: false }">
-                        <button @click="open = !open" class="header-btn erp-quick-btn" title="Quick Access">
-                            <i class="fas fa-bolt"></i>
-                        </button>
-                        <div x-show="open" @click.away="open = false" x-transition
-                            class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
-                            <?php foreach ($quickAccessItems as $item):
-                                $itemUrl = $baseUrl . ltrim($item['url'], '/');
-                                $colorClass = [
-                                    'green' => 'text-green-500',
-                                    'orange' => 'text-orange-500',
-                                    'blue' => 'text-blue-500',
-                                    'purple' => 'text-purple-500',
-                                    'cyan' => 'text-cyan-500',
-                                    'pink' => 'text-pink-500',
-                                    'indigo' => 'text-indigo-500',
-                                    'teal' => 'text-teal-500',
-                                    'amber' => 'text-amber-500',
-                                    'emerald' => 'text-emerald-500',
-                                    'sky' => 'text-sky-500',
-                                    'violet' => 'text-violet-500',
-                                    'rose' => 'text-rose-500',
-                                    'lime' => 'text-lime-500',
-                                    'slate' => 'text-slate-500',
-                                ][$item['color'] ?? 'gray'] ?? 'text-gray-500';
-                                ?>
-                                <a href="<?= $itemUrl ?>"
-                                    class="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition">
-                                    <i class="fas <?= $item['icon'] ?> <?= $colorClass ?>"></i>
-                                    <span class="text-sm"><?= htmlspecialchars($item['label']) ?></span>
-                                </a>
-                            <?php endforeach; ?>
-                            <div class="border-t my-1"></div>
-                            <a href="<?= $baseUrl ?>settings.php?tab=quick-access"
-                                class="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition text-gray-500">
-                                <i class="fas fa-cog"></i>
-                                <span class="text-sm">ตั้งค่า Quick Access</span>
-                            </a>
-                        </div>
-                    </div>
+                    <?php // Quick Access (bolt) dropdown removed per request 2026-06-29 ?>
 
                     <!-- AI Tools Dropdown -->
                     <div class="relative" x-data="{ open: false }">
@@ -2588,6 +2745,8 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                         </div>
                     </div>
 
+                    <span class="header-divider"></span>
+
                     <!-- Quick Actions -->
                     <a href="<?= $baseUrl ?><?= ltrim($inboxUrl, '/') ?>.php" class="header-btn"
                         title="Inbox<?= ($vibeSellingHelper && $vibeSellingHelper->shouldShowV2Badge($currentBotId)) ? ' V2' : '' ?>">
@@ -2607,6 +2766,14 @@ $workspaceAlertCount = (int) ($unreadMessages ?? 0) + (int) ($pendingOrders ?? 0
                             <span class="badge" style="background:#f59e0b"><?= $pendingOrders ?></span>
                         <?php endif; ?>
                     </a>
+
+                    <span class="header-divider"></span>
+
+                    <?php if (in_array(($currentUser['role'] ?? ''), ['super_admin', 'admin'], true)): ?>
+                    <a href="<?= $baseUrl ?>billing.php" class="header-btn erp-plan-btn" title="แผน &amp; ชำระเงิน">
+                        <i class="fas fa-crown"></i>
+                    </a>
+                    <?php endif; ?>
 
                     <div class="header-btn" onclick="toggleTheme()" title="Toggle Theme">
                         <i class="fas fa-moon"></i>

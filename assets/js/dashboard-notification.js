@@ -132,7 +132,9 @@ const DashboardNotification = (function () {
         const inboxLinks = document.querySelectorAll('a[href*="inbox"]');
 
         inboxLinks.forEach(link => {
-            let badge = link.querySelector('.inbox-badge');
+            // Reuse any server-rendered badge in this link (sidebar .menu-badge or header .badge),
+            // so we don't stack a 2nd, mispositioned badge onto icon buttons.
+            let badge = link.querySelector('.inbox-badge, .menu-badge, .badge');
 
             if (count > 0) {
                 if (!badge) {

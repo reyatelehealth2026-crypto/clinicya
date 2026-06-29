@@ -91,7 +91,7 @@ const nextConfig = {
       {
         // Apply strict frame-deny everywhere EXCEPT the REYA prototype assets,
         // which the /reya Next.js page legitimately embeds via iframe.
-        source: '/((?!reya($|/)).*)',
+        source: '/((?!reya(?:$|/)).*)',
         headers: [
           {
             key: 'X-Frame-Options',

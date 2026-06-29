@@ -96,24 +96,11 @@
     }
     </script>
     
-    <?php
-    // Floating Help Button — แสดงทุกหน้า admin (ยกเว้น LIFF และ help เอง)
-    $isLiffPageHelp = strpos($_SERVER['REQUEST_URI'] ?? '', '/liff') !== false;
-    $isHelpPage = strpos($_SERVER['REQUEST_URI'] ?? '', '/help') !== false;
-    if (!$isLiffPageHelp && !$isHelpPage):
-    ?>
-    <a href="/help" id="floating-help-btn"
-       class="fixed bottom-6 right-24 z-40 w-12 h-12 bg-white border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-emerald-600 hover:bg-emerald-50 hover:scale-110 transition-transform"
-       title="ศูนย์ช่วยเหลือ" aria-label="ศูนย์ช่วยเหลือ">
-        <i class="fas fa-question text-lg"></i>
-    </a>
-    <?php endif; ?>
-
-    <?php
+    <?php 
     // ซ่อน AI Chat Widget ในหน้า LIFF หรือหน้าที่กำหนด
     $hideAiChat = isset($hideAiChatWidget) && $hideAiChatWidget === true;
     $isLiffPage = strpos($_SERVER['REQUEST_URI'] ?? '', '/liff') !== false;
-    if (!$hideAiChat && !$isLiffPage):
+    if (!$hideAiChat && !$isLiffPage): 
     ?>
     <!-- AI Admin Assistant Chat Widget -->
     <div id="ai-chat-widget" class="fixed bottom-6 right-6 z-50">
@@ -342,10 +329,23 @@
     </style>
     <?php endif; ?>
 
-    <?php
-    // Interactive admin tour (8-step walkthrough). Safe to include on every admin page.
-    $tourLauncher = __DIR__ . '/onboarding/tour-launcher.php';
-    if (file_exists($tourLauncher)) { include $tourLauncher; }
-    ?>
+<!-- ผู้จัดการร้าน Re-ya — mascot AI assistant (replaces legacy fa-robot widget) -->
+<link rel="stylesheet" href="/assets/css/mor-ruj-mascot.css?v=7">
+<script src="/assets/js/mor-ruj-mascot.js?v=10"></script>
+<script>
+if (window.MorRuj) MorRuj.init({
+  autoTourFirstVisit: false,
+  steps: [
+    { selector:'a.primary-link[href*="dashboard"]', text:'หน้าภาพรวม — ยอดขาย ลูกค้า ออเดอร์วันนี้ ครบในที่เดียวครับ' },
+    { selector:'a.primary-link[href*="inbox"]',     text:'กล่องข้อความลูกค้า + จ่ายยาผ่านแชทได้เลยจากตรงนี้ครับ' },
+    { selector:'a.primary-link[href*="orders"]',    text:'ออเดอร์ที่รอจัดการอยู่ตรงนี้ครับ' },
+    { selector:'a.primary-link[href*="inventory"]', text:'คลังสินค้า + ยาใกล้หมดอายุ เช็คที่นี่ครับ' },
+    { selector:'a.primary-link[href*="pharmacy"]',  text:'งานเภสัช — ห้องยา ตารางเวร นัดหมาย ครับ' },
+    { selector:'a.primary-link[href*="broadcast"]', text:'การตลาด LINE — ดึงลูกค้าประจำกลับร้านครับ' },
+    { selector:'a.primary-link[href*="analytics"]', text:'รายงานเชิงลึก ดูแนวโน้มธุรกิจครับ 📈' }
+  ]
+});
+</script>
+
 </body>
 </html>

@@ -27,6 +27,11 @@ require_once __DIR__ . '/config/database.php';
 
 $h = static fn ($v) => htmlspecialchars((string)($v ?? ''), ENT_QUOTES, 'UTF-8');
 
+// Marketing analytics — public client-side IDs (safe to expose). Configure via
+// env or config constant; leave blank to disable the tag entirely.
+$metaPixelId = (string)(getenv('META_PIXEL_ID') ?: (defined('META_PIXEL_ID') ? META_PIXEL_ID : ''));
+$ga4Id       = (string)(getenv('GA4_MEASUREMENT_ID') ?: (defined('GA4_MEASUREMENT_ID') ? GA4_MEASUREMENT_ID : ''));
+
 $success    = false;
 $errors     = [];
 $old        = []; // sticky form values on error
@@ -223,6 +228,36 @@ $checked = function (string $field, $option) use ($old): string {
     <meta property="og:title" content="REYA Beta — ฟรีค่าตั้งระบบ 2,000 บาท">
     <meta property="og:description" content="ระบบจัดการร้านขายยา/คลินิก ผ่าน LINE OA แบบมืออาชีพ">
     <meta property="og:type" content="website">
+
+    <?php /* --- Marketing analytics (render only when configured) --- */ ?>
+    <?php if ($ga4Id !== ''): ?>
+    <!-- Google Analytics 4 -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=<?= $h($ga4Id) ?>"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '<?= $h($ga4Id) ?>');
+    </script>
+    <?php endif; ?>
+    <?php if ($metaPixelId !== ''): ?>
+    <!-- Meta Pixel -->
+    <script>
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window,document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '<?= $h($metaPixelId) ?>');
+        fbq('track', 'PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+        src="https://www.facebook.com/tr?id=<?= $h($metaPixelId) ?>&ev=PageView&noscript=1" alt=""/></noscript>
+    <?php endif; ?>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -324,6 +359,14 @@ $checked = function (string $field, $option) use ($old): string {
             </div>
         </div>
     </div>
+
+    <?php /* --- Conversion events (fire once on successful submit) --- */ ?>
+    <?php if ($metaPixelId !== ''): ?>
+    <script>fbq('track', 'Lead', {value: 2000, currency: 'THB', lead_score: <?= (int)($score ?? 0) ?>});</script>
+    <?php endif; ?>
+    <?php if ($ga4Id !== ''): ?>
+    <script>gtag('event', 'sign_up', {method: 'beta_form', value: 2000, currency: 'THB', lead_score: <?= (int)($score ?? 0) ?>});</script>
+    <?php endif; ?>
 
 <?php else: ?>
     <!-- =============== Hero =============== -->

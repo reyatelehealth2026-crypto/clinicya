@@ -14,6 +14,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../classes/TenantOnboardingService.php';
 
 if (empty($_SESSION['platform_user_id'])) {
     http_response_code(403);
@@ -120,21 +121,71 @@ $STATUS_COLOR = [
 // ---------------------------------------------------------------------------
 $flash = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = (string)($_POST['action'] ?? 'update');
     $id     = (int)($_POST['id'] ?? 0);
-    $status = (string)($_POST['status'] ?? '');
-    $notes  = trim((string)($_POST['internal_notes'] ?? ''));
-    if ($id > 0 && isset($LABELS['status'][$status])) {
+
+    if ($action === 'provision' && $id > 0) {
+        // ---- One-click: provision a live tenant from this lead + email credentials ----
         try {
-            $stmt = $db->prepare(
+            $lead = $db->prepare('SELECT * FROM beta_signups WHERE id = ? LIMIT 1');
+            $lead->execute([$id]);
+            $lead = $lead->fetch(PDO::FETCH_ASSOC);
+            if (!$lead) {
+                throw new \RuntimeException("ไม่พบ lead #{$id}");
+            }
+
+            $res = TenantOnboardingService::provisionFromOwner([
+                'slug'           => $_POST['slug'] ?? ($lead['preferred_subdomain'] ?? ''),
+                'display_name'   => $lead['business_name'],
+                'owner_name'     => $lead['full_name'],
+                'owner_email'    => trim((string)($_POST['owner_email'] ?? ($lead['email'] ?? ''))),
+                'owner_phone'    => $lead['phone'],
+                'plan_slug'      => $_POST['plan_slug'] ?? 'starter',
+                'admin_username' => $_POST['admin_username'] ?? 'admin',
+                'admin_password' => $_POST['admin_password'] ?? '',
+                'created_by'     => $platformUserId,
+            ]);
+
+            // Mark the lead as signed_up and append a provisioning note.
+            $note = sprintf('✅ Provisioned tenant #%d (%s.re-ya.com) @ %s',
+                $res['tenant_id'], $res['slug'], date('Y-m-d H:i'));
+            $db->prepare(
                 'UPDATE beta_signups
-                    SET status = ?, internal_notes = ?, contacted_at = COALESCE(contacted_at, IF(? = "new", NULL, NOW())),
-                        contacted_by = COALESCE(contacted_by, IF(? = "new", NULL, ?))
+                    SET status = "signed_up",
+                        internal_notes = TRIM(CONCAT(COALESCE(internal_notes, ""), "\n", ?)),
+                        contacted_at = COALESCE(contacted_at, NOW()),
+                        contacted_by = COALESCE(contacted_by, ?)
                   WHERE id = ?'
-            );
-            $stmt->execute([$status, $notes ?: null, $status, $status, $platformUserId, $id]);
-            $flash = ['type' => 'ok', 'msg' => "อัปเดต lead #{$id} เรียบร้อย"];
+            )->execute([$note, $platformUserId, $id]);
+
+            $emailMsg = $res['email_sent']
+                ? 'ส่งอีเมล credential แล้ว'
+                : '⚠️ ส่งอีเมลไม่สำเร็จ — แจ้ง login เองทาง LINE/โทร';
+            $flash = ['type' => 'ok', 'msg' => sprintf(
+                'สร้างร้านสำเร็จ 🎉 tenant #%d · %s · Login: %s / %s · %s',
+                $res['tenant_id'], $res['login_url'], $res['admin_username'], $res['admin_password'], $emailMsg
+            )];
         } catch (\Throwable $e) {
-            $flash = ['type' => 'error', 'msg' => 'Update failed: ' . $e->getMessage()];
+            $flash = ['type' => 'error', 'msg' => 'Provision ไม่สำเร็จ: ' . $e->getMessage()];
+            error_log('[beta-signups provision] ' . $e->getMessage());
+        }
+    } else {
+        // ---- Existing flow: update lead status / notes ----
+        $status = (string)($_POST['status'] ?? '');
+        $notes  = trim((string)($_POST['internal_notes'] ?? ''));
+        if ($id > 0 && isset($LABELS['status'][$status])) {
+            try {
+                $stmt = $db->prepare(
+                    'UPDATE beta_signups
+                        SET status = ?, internal_notes = ?, contacted_at = COALESCE(contacted_at, IF(? = "new", NULL, NOW())),
+                            contacted_by = COALESCE(contacted_by, IF(? = "new", NULL, ?))
+                      WHERE id = ?'
+                );
+                $stmt->execute([$status, $notes ?: null, $status, $status, $platformUserId, $id]);
+                $flash = ['type' => 'ok', 'msg' => "อัปเดต lead #{$id} เรียบร้อย"];
+            } catch (\Throwable $e) {
+                $flash = ['type' => 'error', 'msg' => 'Update failed: ' . $e->getMessage()];
+            }
         }
     }
 }
@@ -374,6 +425,77 @@ platform_shell_top('beta', 'Beta Signup Inbox', 'ผู้สมัครทด�
                                     <p class="text-xs text-slate-400 text-center">ติดต่อแล้ว <?= $h(date('d M Y H:i', strtotime((string)$r['contacted_at']))) ?></p>
                                 <?php endif; ?>
                             </form>
+
+                            <?php
+                            $planDefault = [
+                                'single_pharm' => 'starter', 'multi_pharm' => 'pro', 'clinic' => 'starter',
+                                'beta_trial'   => 'starter', 'need_advice'  => 'starter',
+                            ][$r['preferred_package']] ?? 'starter';
+                            $alreadyProvisioned = strpos((string)($r['internal_notes'] ?? ''), 'Provisioned tenant #') !== false;
+                            ?>
+                            <details class="mt-3 bg-indigo-50/50 border border-indigo-200 rounded-xl overflow-hidden">
+                                <summary class="px-4 py-3 cursor-pointer text-sm font-semibold text-indigo-800 hover:bg-indigo-100/60 list-none flex items-center gap-2">
+                                    <i class="fas fa-rocket"></i> ออกระบบให้ลูกค้า (Provision)
+                                    <?php if ($alreadyProvisioned): ?>
+                                        <span class="ml-auto text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">provisioned แล้ว</span>
+                                    <?php endif; ?>
+                                </summary>
+                                <form method="POST" class="px-4 py-4 border-t border-indigo-100 space-y-3"
+                                      onsubmit="return confirm('ยืนยันสร้างร้านจริงให้ลูกค้ารายนี้?\n\nระบบจะสร้าง database + apply schema + ส่งอีเมล credential ให้ลูกค้า (~30 วินาที). การกระทำนี้ย้อนกลับไม่ได้');">
+                                    <input type="hidden" name="action" value="provision">
+                                    <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+                                    <?php if ($alreadyProvisioned): ?>
+                                        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                            <i class="fas fa-triangle-exclamation mr-1"></i>
+                                            lead นี้เคย provision แล้ว — สร้างซ้ำจะสร้าง tenant ใหม่อีกชุด (slug ต้องไม่ซ้ำ)
+                                        </p>
+                                    <?php endif; ?>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <label class="block col-span-2">
+                                            <span class="text-xs font-medium text-slate-600">Slug (URL) <span class="text-red-500">*</span></span>
+                                            <div class="mt-1 flex items-stretch rounded-lg overflow-hidden border border-slate-300 bg-white text-sm">
+                                                <input type="text" name="slug" required maxlength="32"
+                                                       pattern="[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?"
+                                                       value="<?= $h($r['preferred_subdomain'] ?? '') ?>"
+                                                       placeholder="smilepharm"
+                                                       class="flex-1 px-2 py-1.5 focus:outline-none font-mono">
+                                                <span class="px-2 flex items-center bg-slate-50 text-slate-500 border-l border-slate-200 text-xs">.re-ya.com</span>
+                                            </div>
+                                        </label>
+                                        <label class="block col-span-2">
+                                            <span class="text-xs font-medium text-slate-600">Owner Email <span class="text-red-500">*</span></span>
+                                            <input type="email" name="owner_email" required maxlength="120"
+                                                   value="<?= $h($r['email'] ?? '') ?>"
+                                                   placeholder="owner@pharmacy.com"
+                                                   class="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                        </label>
+                                        <label class="block">
+                                            <span class="text-xs font-medium text-slate-600">Plan</span>
+                                            <select name="plan_slug" class="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                                <?php foreach (['starter' => 'Starter', 'pro' => 'Pro', 'enterprise' => 'Enterprise'] as $pk => $pl): ?>
+                                                    <option value="<?= $pk ?>" <?= $planDefault === $pk ? 'selected' : '' ?>><?= $pl ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </label>
+                                        <label class="block">
+                                            <span class="text-xs font-medium text-slate-600">Admin user</span>
+                                            <input type="text" name="admin_username" maxlength="50" value="admin"
+                                                   pattern="[a-zA-Z0-9._-]{3,50}"
+                                                   class="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                        </label>
+                                        <label class="block col-span-2">
+                                            <span class="text-xs font-medium text-slate-600">Temp password <span class="text-slate-400 font-normal">(เว้นว่าง = สุ่มให้)</span></span>
+                                            <input type="text" name="admin_password" maxlength="64"
+                                                   value="<?= $h(TenantOnboardingService::generatePassword()) ?>"
+                                                   class="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                        </label>
+                                    </div>
+                                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2.5 rounded-lg">
+                                        <i class="fas fa-rocket mr-1"></i> Provision → ส่งอีเมล credential
+                                    </button>
+                                    <p class="text-[11px] text-slate-400 text-center">สร้าง DB จริง + ส่งอีเมลให้ลูกค้า · slug เปลี่ยนภายหลังไม่ได้</p>
+                                </form>
+                            </details>
                         </div>
                     </div>
                 </details>
