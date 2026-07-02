@@ -177,6 +177,7 @@ DB_CONNECTION.md
 !docs/plans/2026-04-13-line-mini-app-gap-closure.md
 !docs/admin-tutorials/*.md
 !docs/training/*.md
+!docs/ai/**/*.md
 !docs/user-manual.md
 !.claude/agents/*.md
 !.agents/skills/**/*.md
