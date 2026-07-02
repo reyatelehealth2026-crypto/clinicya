@@ -58,6 +58,7 @@ class TenantFileStorage
         'exports',
         'rx_uploads',
         'profile_pics',
+        'shop_photos',
     ];
 
     /** Filename validation regex — basenames only, no path separators. */

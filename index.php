@@ -148,6 +148,28 @@ $testimonialService = new TestimonialService($db, $lineAccountId);
 $trustBadgeService = new TrustBadgeService($db, $lineAccountId);
 $bannerService = new LandingBannerService($db, $lineAccountId);
 $featuredProductService = new FeaturedProductService($db, $lineAccountId);
+
+// ── Landing V2 (2026-07-03) ──────────────────────────────────────────
+// ร้านที่กด "เผยแพร่" โฉมใหม่แล้ว render เทมเพลต v2 แทนหน้าเดิมทั้งหมด
+// ?v2=draft = ดูตัวอย่างร่าง (เฉพาะแอดมินที่ login) — ร้านที่ยังไม่เผยแพร่ไม่กระทบ
+require_once 'classes/LandingV2Config.php';
+$lv2Service = new LandingV2Config($db, $lineAccountId);
+$lv2IsDraftPreview = false;
+if (($_GET['v2'] ?? '') === 'draft') {
+    if (session_status() === PHP_SESSION_NONE) { @session_start(); }
+    if (!empty($_SESSION['admin_user'])) {
+        $lv2Config = $lv2Service->getDraft();
+        $lv2IsDraftPreview = true;
+        include __DIR__ . '/includes/landing-v2/template.php';
+        exit;
+    }
+}
+$lv2PublishedConfig = $lv2Service->getPublished();
+if ($lv2PublishedConfig !== null) {
+    $lv2Config = $lv2PublishedConfig;
+    include __DIR__ . '/includes/landing-v2/template.php';
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">

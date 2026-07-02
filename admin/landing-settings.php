@@ -24,6 +24,8 @@ require_once ADMIN_BASE_PATH . 'classes/LandingSEOService.php';
 require_once ADMIN_BASE_PATH . 'classes/LandingBannerService.php';
 require_once ADMIN_BASE_PATH . 'classes/FeaturedProductService.php';
 require_once ADMIN_BASE_PATH . 'classes/HealthArticleService.php';
+require_once ADMIN_BASE_PATH . 'classes/LandingV2Config.php';
+require_once ADMIN_BASE_PATH . 'classes/TenantFileStorage.php';
 
 $db = Database::getInstance()->getConnection();
 $currentBotId = $_SESSION['current_bot_id'] ?? null;
@@ -37,9 +39,11 @@ $seoService = new LandingSEOService($db, $currentBotId);
 $bannerService = new LandingBannerService($db, $currentBotId);
 $featuredProductService = new FeaturedProductService($db, $currentBotId);
 $articleService = new HealthArticleService($db, $currentBotId);
+$landingV2 = new LandingV2Config($db, $currentBotId);
 
 // Tab configuration
 $tabs = [
+    'website_v2' => ['label' => 'เว็บโฉมใหม่', 'icon' => 'fas fa-wand-magic-sparkles'],
     'banners' => ['label' => 'แบนเนอร์', 'icon' => 'fas fa-images', 'badge' => $bannerService->getCount()],
     'featured' => ['label' => 'สินค้าแนะนำ', 'icon' => 'fas fa-star', 'badge' => $featuredProductService->getCount()],
     'articles' => ['label' => 'บทความ', 'icon' => 'fas fa-newspaper', 'badge' => $articleService->getCount()],
@@ -258,7 +262,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $activeTab = 'trust';
         }
-        
+
+        // Landing V2 actions (2026-07-03) — เว็บร้านโฉมใหม่
+        elseif ($action === 'save_v2_draft') {
+            $draft = $landingV2->getDraft();
+            $draft['theme']    = $_POST['v2_theme'] ?? $draft['theme'];
+            $draft['hero']     = $_POST['v2_hero'] ?? $draft['hero'];
+            $draft['headline'] = $_POST['v2_headline'] ?? '';
+            $draft['tagline']  = $_POST['v2_tagline'] ?? '';
+            foreach (array_keys(LandingV2Config::defaults()['show']) as $sec) {
+                $draft['show'][$sec] = isset($_POST['v2_show'][$sec]);
+            }
+            $landingV2->saveDraft($draft);
+            $success = 'บันทึกร่างแล้ว กด "ดูตัวอย่างร่าง" เพื่อเช็คก่อนเผยแพร่';
+            $activeTab = 'website_v2';
+        }
+        elseif ($action === 'upload_v2_photo') {
+            $activeTab = 'website_v2';
+            $slot = $_POST['slot'] ?? '';
+            if (!isset(LandingV2Config::PHOTO_SLOTS[$slot])) {
+                throw new Exception('ตำแหน่งรูปไม่ถูกต้อง');
+            }
+            if (empty($_FILES['photo']['tmp_name']) || ($_FILES['photo']['error'] ?? 1) !== UPLOAD_ERR_OK) {
+                throw new Exception('กรุณาเลือกไฟล์รูปก่อนอัปโหลด');
+            }
+            if (($_FILES['photo']['size'] ?? 0) > 5 * 1024 * 1024) {
+                throw new Exception('ไฟล์ใหญ่เกิน 5MB');
+            }
+            $imgInfo = @getimagesize($_FILES['photo']['tmp_name']);
+            if ($imgInfo === false || !in_array($imgInfo[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
+                throw new Exception('รองรับเฉพาะไฟล์รูป JPG, PNG, WEBP');
+            }
+            // ตั้งนามสกุลไฟล์จากชนิดรูปที่ตรวจแล้วจริง ไม่เชื่อชื่อไฟล์จากผู้ใช้
+            // (กันไฟล์ polyglot เช่นรูป JPEG ที่ตั้งชื่อ .phar/.php7)
+            $v2Upload = $_FILES['photo'];
+            $v2Upload['name'] = 'photo' . image_type_to_extension($imgInfo[2]);
+            $v2TenantId = class_exists('TenantContext') ? TenantContext::getCurrentTenantId() : null;
+            if (!$v2TenantId) {
+                throw new Exception('ไม่พบ tenant ปัจจุบัน (super admin ต้องเลือกร้านก่อน)');
+            }
+            $newFilename = TenantFileStorage::saveUpload((int) $v2TenantId, 'shop_photos', $v2Upload);
+            $draft = $landingV2->getDraft();
+            $oldFilename = $draft['photos'][$slot] ?? '';
+            $draft['photos'][$slot] = $newFilename;
+            $landingV2->saveDraft($draft);
+            // ห้ามลบไฟล์ที่หน้า published ยังอ้างถึงอยู่ ไม่งั้นหน้าจริงรูปแตกจนกว่าจะ republish
+            $publishedPhotos = array_values(($landingV2->getPublished()['photos'] ?? []));
+            if ($oldFilename !== '' && $oldFilename !== $newFilename && !in_array($oldFilename, $publishedPhotos, true)) {
+                TenantFileStorage::delete((int) $v2TenantId, 'shop_photos', $oldFilename);
+            }
+            $success = 'อัปโหลดรูป "' . LandingV2Config::PHOTO_SLOTS[$slot] . '" แล้ว';
+        }
+        elseif ($action === 'remove_v2_photo') {
+            $activeTab = 'website_v2';
+            $slot = $_POST['slot'] ?? '';
+            if (!isset(LandingV2Config::PHOTO_SLOTS[$slot])) {
+                throw new Exception('ตำแหน่งรูปไม่ถูกต้อง');
+            }
+            $draft = $landingV2->getDraft();
+            $oldFilename = $draft['photos'][$slot] ?? '';
+            $draft['photos'][$slot] = '';
+            $landingV2->saveDraft($draft);
+            $v2TenantId = class_exists('TenantContext') ? TenantContext::getCurrentTenantId() : null;
+            // ห้ามลบไฟล์ที่หน้า published ยังอ้างถึงอยู่ (เหมือน upload_v2_photo)
+            $publishedPhotos = array_values(($landingV2->getPublished()['photos'] ?? []));
+            if ($v2TenantId && $oldFilename !== '' && !in_array($oldFilename, $publishedPhotos, true)) {
+                TenantFileStorage::delete((int) $v2TenantId, 'shop_photos', $oldFilename);
+            }
+            $success = 'ลบรูปแล้ว';
+        }
+        elseif ($action === 'publish_v2') {
+            $landingV2->publish();
+            $success = 'เผยแพร่เว็บโฉมใหม่แล้ว ลูกค้าเห็นหน้าใหม่ทันที';
+            $activeTab = 'website_v2';
+        }
+        elseif ($action === 'unpublish_v2') {
+            $landingV2->unpublish();
+            $success = 'ปิดใช้เว็บโฉมใหม่แล้ว ลูกค้ากลับไปเห็นหน้าเดิม';
+            $activeTab = 'website_v2';
+        }
+
     } catch (Exception $e) {
         $error = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
     }
@@ -362,6 +445,9 @@ echo getStickySaveBarStyles();
         <div class="tab-panel">
             <?php
             switch ($activeTab) {
+                case 'website_v2':
+                    include ADMIN_BASE_PATH . 'includes/landing/admin-website-v2.php';
+                    break;
                 case 'banners':
                     include ADMIN_BASE_PATH . 'includes/landing/admin-banners.php';
                     break;
