@@ -44,8 +44,18 @@ export interface TriageProduct {
 // Existing structured event payloads (already shipped — keep schema stable)
 // ---------------------------------------------------------------------------
 
+/**
+ * PDPA (issue #15): the backend attaches these to any triage payload when the
+ * resolved (real) user has not granted an active `health_data` consent. The
+ * client should prompt for consent; it is advisory and does not stop the chat.
+ */
+export interface ConsentHint {
+  consent_required?: boolean
+  consent_type?: string
+}
+
 /** Y/N or multi-choice triage question rendered as buttons */
-export interface QuestionPayload {
+export interface QuestionPayload extends ConsentHint {
   type: 'question'
   session_id?: number | null
   question_id?: number
@@ -55,7 +65,7 @@ export interface QuestionPayload {
 }
 
 /** Product recommendations rendered as cards after triage */
-export interface ProductsPayload {
+export interface ProductsPayload extends ConsentHint {
   type: 'products'
   session_id?: number | null
   products: TriageProduct[]
@@ -63,14 +73,14 @@ export interface ProductsPayload {
 }
 
 /** Escalation banner — AI hands off to a pharmacist */
-export interface EscalatePayload {
+export interface EscalatePayload extends ConsentHint {
   type: 'escalate'
   session_id?: number | null
   message: string
 }
 
 /** Internal marker emitted by old TriageRouter — usually a no-op for UI */
-export interface ContinuePayload {
+export interface ContinuePayload extends ConsentHint {
   type: 'continue'
   session_id?: number | null
   message?: string
