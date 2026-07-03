@@ -71,6 +71,12 @@ $action = $_POST['action'] ?? $_GET['action'] ?? $jsonBody['action'] ?? '';
 $lineAccountId = $_SESSION['current_bot_id'] ?? $_SESSION['line_account_id'] ?? $_GET['line_account_id'] ?? $_POST['line_account_id'] ?? 1;
 $adminId = $_SESSION['admin_id'] ?? $_GET['admin_id'] ?? $_POST['admin_id'] ?? null;
 
+// Release the session file lock now that all session values are read.
+// Without this, PHP serializes every request from the same browser session —
+// the 5s poll blocks chat-open/getMessages and requests queue up for seconds.
+// No handler below writes to $_SESSION.
+session_write_close();
+
 /**
  * Load service class with error handling
  * @param string $className Service class name
@@ -3076,16 +3082,18 @@ try {
                     sendError('User not found', 404);
                 }
 
-                // Get messages
+                // Get the LATEST messages (offset counts back from the newest),
+                // then reverse to chat order. Previously ORDER BY created_at ASC
+                // returned the OLDEST chunk, so long conversations opened at the top.
                 $msgStmt = $db->prepare("
                     SELECT id, direction, message_type, content, created_at, is_read, sent_by
-                    FROM messages 
+                    FROM messages
                     WHERE user_id = ? AND line_account_id = ?
-                    ORDER BY created_at ASC
+                    ORDER BY id DESC
                     LIMIT ? OFFSET ?
                 ");
                 $msgStmt->execute([$userId, $lineAccountId, $limit, $offset]);
-                $messages = $msgStmt->fetchAll(PDO::FETCH_ASSOC);
+                $messages = array_reverse($msgStmt->fetchAll(PDO::FETCH_ASSOC));
 
                 // Get total message count
                 $countStmt = $db->prepare("SELECT COUNT(*) FROM messages WHERE user_id = ? AND line_account_id = ?");

@@ -161,6 +161,7 @@ database/*.sql
 !database/migration_2026-06-29_receipt_point_claims.sql
 !database/migration_2026-06-30_plans_remodel_platform_settings.sql
 !database/migration_2026-07-03_landing_settings_unique_key.sql
+!database/migration_2026-07-03_inbox_performance_indexes.sql
 !docs/adr/*.md
 !CONTEXT.md
 !CONTEXT-MAP.md

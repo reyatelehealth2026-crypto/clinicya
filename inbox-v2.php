@@ -1038,14 +1038,12 @@ $countStmt->execute($platformParams);
 $totalConversations = (int) $countStmt->fetchColumn();
 $hasMoreConversations = $totalConversations > $conversationLimit;
 
-// Get Users List - use subqueries for accurate latest message (v2.1 - fixed 2026-01-15)
-// Now with LIMIT for progressive loading
+// Get Users List (v3 - 2026-07-03 perf rewrite)
+// Slim main query: only the index-backed MAX(created_at) subquery stays inline;
+// preview/type/unread + assignees/tags are batch-fetched for just the LIMIT rows
+// (previously 4 correlated subqueries per user + 2 queries per rendered row).
 $sql = "SELECT u.*,
-        u.chat_status,
-        (SELECT content FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_msg,
-        (SELECT message_type FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_type,
-        (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_time,
-        (SELECT COUNT(*) FROM messages WHERE user_id = u.id AND direction = 'incoming' AND is_read = 0) as unread
+        (SELECT MAX(m.created_at) FROM messages m WHERE m.user_id = u.id) as last_time
         FROM users u
         WHERE {$platformWhere}
         AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)
@@ -1054,6 +1052,47 @@ $sql = "SELECT u.*,
 $stmt = $db->prepare($sql);
 $stmt->execute(array_merge($platformParams, [$conversationLimit]));
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Batch-enrich the rendered rows: last message preview/type + unread counts
+$listUserIds = array_map('intval', array_column($users, 'id'));
+$listLastMsgMap = $inboxService->getLastMessageMetaBatch($listUserIds);
+$listUnreadMap = $inboxService->getUnreadCountsBatch($listUserIds);
+foreach ($users as &$listUser) {
+    $listUid = (int) $listUser['id'];
+    $listUser['last_msg'] = $listLastMsgMap[$listUid]['preview'] ?? null;
+    $listUser['last_type'] = $listLastMsgMap[$listUid]['type'] ?? null;
+    $listUser['unread'] = $listUnreadMap[$listUid] ?? 0;
+}
+unset($listUser);
+
+// Prefetch assignees + tag ids for the rendered rows in 2 queries
+// (the template loop previously ran 2 queries per conversation row)
+$listAssigneesMap = [];
+$listTagIdsMap = [];
+if (!empty($listUserIds)) {
+    $listPh = implode(',', array_fill(0, count($listUserIds), '?'));
+    try {
+        $assignStmt = $db->prepare("
+            SELECT cma.user_id, cma.admin_id, au.username, au.display_name
+            FROM conversation_multi_assignees cma
+            LEFT JOIN admin_users au ON cma.admin_id = au.id
+            WHERE cma.user_id IN ({$listPh}) AND cma.status = 'active'
+            ORDER BY cma.assigned_at DESC");
+        $assignStmt->execute($listUserIds);
+        foreach ($assignStmt->fetchAll(PDO::FETCH_ASSOC) as $assignRow) {
+            $listAssigneesMap[(int) $assignRow['user_id']][] = $assignRow;
+        }
+    } catch (PDOException $e) {
+    }
+    try {
+        $tagStmt = $db->prepare("SELECT user_id, tag_id FROM user_tag_assignments WHERE user_id IN ({$listPh})");
+        $tagStmt->execute($listUserIds);
+        foreach ($tagStmt->fetchAll(PDO::FETCH_ASSOC) as $tagRow) {
+            $listTagIdsMap[(int) $tagRow['user_id']][] = $tagRow['tag_id'];
+        }
+    } catch (PDOException $e) {
+    }
+}
 
 // Get last conversation timestamp for cursor-based pagination
 $lastConversationCursor = null;
@@ -1080,8 +1119,11 @@ if (isset($_GET['user']) || isset($_GET['user_id'])) {
         // Use custom_display_name if set, otherwise use display_name from LINE
         $selectedUser['effective_display_name'] = $selectedUser['custom_display_name'] ?: $selectedUser['display_name'];
 
-        $db->prepare("UPDATE messages SET is_read = 1 WHERE user_id = ? AND direction = 'incoming'")->execute([$uid]);
-        $stmt = $db->prepare("SELECT * FROM messages WHERE user_id = ? ORDER BY created_at ASC");
+        $db->prepare("UPDATE messages SET is_read = 1 WHERE user_id = ? AND direction = 'incoming' AND is_read = 0")->execute([$uid]);
+        // Latest 300 messages only (2026-07-03: was the ENTIRE history — customers
+        // with thousands of messages made first paint take 15s+). Clicking the
+        // conversation in the list loads via AJAX with cursor-paged older history.
+        $stmt = $db->prepare("SELECT * FROM (SELECT * FROM messages WHERE user_id = ? ORDER BY id DESC LIMIT 300) recent ORDER BY id ASC");
         $stmt->execute([$uid]);
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -3015,29 +3057,10 @@ function formatThaiDateTime($datetime)
                             </div>
                     <?php else: ?>
                             <?php foreach ($users as $index => $user):
-                                // Get multi-assignees
-                                $assignees = [];
-                                try {
-                                    $assignStmt = $db->prepare("
-                            SELECT cma.admin_id, au.username, au.display_name
-                            FROM conversation_multi_assignees cma
-                            LEFT JOIN admin_users au ON cma.admin_id = au.id
-                            WHERE cma.user_id = ? AND cma.status = 'active'
-                            ORDER BY cma.assigned_at DESC
-                        ");
-                                    $assignStmt->execute([$user['id']]);
-                                    $assignees = $assignStmt->fetchAll(PDO::FETCH_ASSOC);
-                                } catch (PDOException $e) {
-                                }
-
-                                // Get user tags for filtering
-                                $userTagIds = [];
-                                try {
-                                    $tagStmt = $db->prepare("SELECT tag_id FROM user_tag_assignments WHERE user_id = ?");
-                                    $tagStmt->execute([$user['id']]);
-                                    $userTagIds = $tagStmt->fetchAll(PDO::FETCH_COLUMN);
-                                } catch (PDOException $e) {
-                                }
+                                // Assignees + tag ids come from the prefetched maps
+                                // (2026-07-03: was 2 queries per rendered row)
+                                $assignees = $listAssigneesMap[(int) $user['id']] ?? [];
+                                $userTagIds = $listTagIdsMap[(int) $user['id']] ?? [];
 
                                 $hasSlaWarning = in_array($user['id'], $slaViolationUserIds);
 

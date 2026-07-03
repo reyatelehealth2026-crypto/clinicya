@@ -293,6 +293,10 @@ class InboxService
             $params = [$accountId];
         }
 
+        // Perf 2026-07-03: only the last_message_at subquery stays in the main
+        // query (needed for ORDER BY / cursor). unread_count, preview and type
+        // are batch-fetched afterwards for just the LIMIT rows — previously
+        // they ran as correlated subqueries against EVERY user of the account.
         $sql = "
             SELECT
                 u.id,
@@ -301,19 +305,8 @@ class InboxService
                 u.chat_status,
                 COALESCE(u.platform, 'line') AS platform,
                 u.platform_user_id,
-                (SELECT created_at FROM messages m_last
-                 WHERE m_last.user_id = u.id
-                 ORDER BY m_last.created_at DESC LIMIT 1) as last_message_at,
-                (SELECT COUNT(*) FROM messages m
-                 WHERE m.user_id = u.id
-                 AND m.direction = 'incoming'
-                 AND m.is_read = 0) as unread_count,
-                (SELECT SUBSTRING(content, 1, 100) FROM messages m2
-                 WHERE m2.user_id = u.id
-                 ORDER BY m2.created_at DESC LIMIT 1) as last_message_preview,
-                (SELECT message_type FROM messages m3
-                 WHERE m3.user_id = u.id
-                 ORDER BY m3.created_at DESC LIMIT 1) as last_message_type,
+                (SELECT MAX(m_last.created_at) FROM messages m_last
+                 WHERE m_last.user_id = u.id) as last_message_at,
                 ca.assigned_to,
                 ca.status as assignment_status
             FROM users u
@@ -385,18 +378,18 @@ class InboxService
 
         // Delta updates: only conversations updated since timestamp
         if ($since > 0) {
-            $sql .= " AND (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) > FROM_UNIXTIME(?)";
+            $sql .= " AND (SELECT MAX(created_at) FROM messages WHERE user_id = u.id) > FROM_UNIXTIME(?)";
             $params[] = $since;
         }
 
         // Cursor-based pagination: use last_message_at (from messages table) as cursor
         if ($cursor !== null && trim($cursor) !== '') {
-            $sql .= " AND (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) < ?";
+            $sql .= " AND (SELECT MAX(created_at) FROM messages WHERE user_id = u.id) < ?";
             $params[] = $cursor;
         }
 
         // Order by most recent message first and limit
-        $sql .= " ORDER BY (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) DESC LIMIT ?";
+        $sql .= " ORDER BY last_message_at DESC LIMIT ?";
         $params[] = $limit + 1; // Fetch one extra to check if there are more
 
         $stmt = $this->db->prepare($sql);
@@ -416,13 +409,23 @@ class InboxService
             $nextCursor = $lastConv['last_message_at'];
         }
 
-        // Get tags for each conversation
-        foreach ($conversations as &$conv) {
-            $conv['tags'] = $this->getUserTags($conv['id']);
+        // Batch-enrich the page of rows: last message preview/type, unread
+        // counts, tags and assignees — 4 queries total instead of per row.
+        $userIds = array_column($conversations, 'id');
+        $lastMsgMap = $this->getLastMessageMetaBatch($userIds);
+        $unreadMap = $this->getUnreadCountsBatch($userIds);
+        $tagsMap = $this->getUserTagsBatch($userIds);
+        $assigneesMap = $this->getAssignedAdminIdsBatch($userIds);
 
-            // Get all assignees (multi-assignee support)
-            $conv['assignees'] = $this->getAssignedAdminIds($conv['id']);
+        foreach ($conversations as &$conv) {
+            $uid = (int) $conv['id'];
+            $conv['unread_count'] = $unreadMap[$uid] ?? 0;
+            $conv['last_message_preview'] = $lastMsgMap[$uid]['preview'] ?? null;
+            $conv['last_message_type'] = $lastMsgMap[$uid]['type'] ?? null;
+            $conv['tags'] = $tagsMap[$uid] ?? [];
+            $conv['assignees'] = $assigneesMap[$uid] ?? [];
         }
+        unset($conv);
 
         return [
             'conversations' => $conversations,
@@ -430,6 +433,132 @@ class InboxService
             'has_more' => $hasMore,
             'count' => count($conversations)
         ];
+    }
+
+    /**
+     * Batch: latest message preview + type per user (single query).
+     *
+     * @param int[] $userIds
+     * @return array [user_id => ['preview' => string|null, 'type' => string|null]]
+     */
+    public function getLastMessageMetaBatch(array $userIds): array
+    {
+        $userIds = array_values(array_unique(array_map('intval', $userIds)));
+        if (empty($userIds)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+        $sql = "
+            SELECT m.user_id, SUBSTRING(m.content, 1, 100) as preview, m.message_type as type
+            FROM messages m
+            JOIN (
+                SELECT user_id, MAX(id) as max_id
+                FROM messages
+                WHERE user_id IN ({$placeholders})
+                GROUP BY user_id
+            ) t ON t.max_id = m.id
+        ";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($userIds);
+
+        $map = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $map[(int) $row['user_id']] = ['preview' => $row['preview'], 'type' => $row['type']];
+        }
+        return $map;
+    }
+
+    /**
+     * Batch: unread incoming message count per user (single query).
+     *
+     * @param int[] $userIds
+     * @return array [user_id => int]
+     */
+    public function getUnreadCountsBatch(array $userIds): array
+    {
+        $userIds = array_values(array_unique(array_map('intval', $userIds)));
+        if (empty($userIds)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+        $sql = "
+            SELECT user_id, COUNT(*) as unread
+            FROM messages
+            WHERE user_id IN ({$placeholders})
+            AND direction = 'incoming'
+            AND is_read = 0
+            GROUP BY user_id
+        ";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($userIds);
+
+        $map = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $map[(int) $row['user_id']] = (int) $row['unread'];
+        }
+        return $map;
+    }
+
+    /**
+     * Batch: tags per user (single query). Same row shape as getUserTags().
+     *
+     * @param int[] $userIds
+     * @return array [user_id => [['id' =>, 'name' =>, 'color' =>], ...]]
+     */
+    private function getUserTagsBatch(array $userIds): array
+    {
+        $userIds = array_values(array_unique(array_map('intval', $userIds)));
+        if (empty($userIds)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+        $sql = "
+            SELECT uta.user_id, ut.id, ut.name, ut.color
+            FROM user_tags ut
+            JOIN user_tag_assignments uta ON ut.id = uta.tag_id
+            WHERE uta.user_id IN ({$placeholders})
+            ORDER BY ut.name
+        ";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($userIds);
+
+        $map = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $uid = (int) $row['user_id'];
+            unset($row['user_id']);
+            $map[$uid][] = $row;
+        }
+        return $map;
+    }
+
+    /**
+     * Batch: active assignee admin IDs per user (single query).
+     * Same values as getAssignedAdminIds().
+     *
+     * @param int[] $userIds
+     * @return array [user_id => [admin_id, ...]]
+     */
+    private function getAssignedAdminIdsBatch(array $userIds): array
+    {
+        $userIds = array_values(array_unique(array_map('intval', $userIds)));
+        if (empty($userIds)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+        $sql = "
+            SELECT user_id, admin_id
+            FROM conversation_multi_assignees
+            WHERE user_id IN ({$placeholders})
+            AND status = 'active'
+        ";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($userIds);
+
+        $map = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $map[(int) $row['user_id']][] = $row['admin_id'];
+        }
+        return $map;
     }
 
     /**
@@ -513,9 +642,14 @@ class InboxService
             $nextCursor = $lastConv['last_message_at'];
         }
 
+        $userIds = array_column($conversations, 'id');
+        $tagsMap = $this->getUserTagsBatch($userIds);
+        $assigneesMap = $this->getAssignedAdminIdsBatch($userIds);
+
         foreach ($conversations as &$conv) {
-            $conv['tags'] = $this->getUserTags($conv['id']);
-            $conv['assignees'] = $this->getAssignedAdminIds($conv['id']);
+            $uid = (int) $conv['id'];
+            $conv['tags'] = $tagsMap[$uid] ?? [];
+            $conv['assignees'] = $assigneesMap[$uid] ?? [];
         }
         unset($conv);
 
