@@ -8151,6 +8151,11 @@ function formatThaiDateTime($datetime)
                     if (result.success && result.data) {
                         currentChatUserId = userId;
 
+                        // Retarget points/dispense/send-form to the new customer
+                        if (typeof window.setActiveChatCustomer === 'function') {
+                            window.setActiveChatCustomer(userId, (result.data.user && result.data.user.display_name) || '');
+                        }
+
                         // Render chat content
                         renderChatHeader(result.data.user, result.data.tags);
                         renderMessages(result.data.messages);
@@ -10935,6 +10940,11 @@ function formatThaiDateTime($datetime)
             // Update chat header with user data
             updateChatHeader(userData);
 
+            // Retarget points/dispense/send-form to the new customer
+            if (typeof window.setActiveChatCustomer === 'function') {
+                window.setActiveChatCustomer(userId, (userData && userData.display_name) || '');
+            }
+
             // Load HUD data
             if (typeof initializeHUD === 'function') {
                 const lastMessage = getLastCustomerMessage();
@@ -12649,9 +12659,15 @@ function formatThaiDateTime($datetime)
 <script>
 // ===== Dispense System (ported from messages.php 2026-05-08) =====
 (function() {
-    const dispenseUserId = <?= (int) $selectedUser['id'] ?>;
+    let dispenseUserId = <?= (int) ($selectedUser['id'] ?? 0) ?>;
     let dispenseItems = [];
     let dispenseSearchTimeout = null;
+
+    // Called by setActiveChatCustomer on AJAX chat switch so dispensing
+    // targets the currently open customer, not the one from page load.
+    window.setDispenseUser = function (id) {
+        dispenseUserId = parseInt(id, 10) || 0;
+    };
 
     function escHtml(s) {
         return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -13037,6 +13053,21 @@ function formatThaiDateTime($datetime)
     window.gpCurrentUser = <?= $selectedUser
         ? json_encode(['id' => (int) $selectedUser['id'], 'name' => (string) ($selectedUser['display_name'] ?? '')], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)
         : 'null' ?>;
+
+    // Keep every customer-targeting widget in sync when the chat is switched
+    // via AJAX (no page reload). Without this, give-points (gpCurrentUser),
+    // dispense (dispenseUserId) and the send-message hidden field all kept
+    // pointing at the customer from the ORIGINAL page load — points/medicine/
+    // messages could go to the wrong customer.
+    window.setActiveChatCustomer = function (id, name) {
+        id = parseInt(id, 10) || 0;
+        window.gpCurrentUser = id ? { id: id, name: name || '' } : null;
+        if (typeof window.setDispenseUser === 'function') {
+            window.setDispenseUser(id);
+        }
+        const uidInput = document.querySelector('#sendForm input[name="user_id"]');
+        if (uidInput) uidInput.value = id || '';
+    };
 
     // Toggle the modal between "direct credit to this customer" and "QR only".
     function gpApplyMode() {
