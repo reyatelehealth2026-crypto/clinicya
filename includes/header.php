@@ -2325,6 +2325,8 @@ $visiblePrimaryNavFooter = $filterPrimaryNav($primaryNavFooter);
             <!-- Brand -->
             <?php
             // 2026-05-26: per-tenant logo (fallback ไป REYA default ถ้าไม่มี)
+            // 2026-07-03: ถ้าร้านยังไม่ตั้งโลโก้ใน shop_settings ใช้รูปโปรไฟล์
+            // LINE OA ของร้าน (line_accounts.picture_url) ก่อน REYA default
             $brandLogo = null;
             try {
                 $bid = (int)($_SESSION['current_bot_id'] ?? 0);
@@ -2332,6 +2334,11 @@ $visiblePrimaryNavFooter = $filterPrimaryNav($primaryNavFooter);
                     $s = $db->prepare('SELECT shop_logo FROM shop_settings WHERE line_account_id = ? LIMIT 1');
                     $s->execute([$bid]);
                     $brandLogo = (string)($s->fetchColumn() ?: '');
+                    if (!$brandLogo) {
+                        $s = $db->prepare('SELECT picture_url FROM line_accounts WHERE id = ? LIMIT 1');
+                        $s->execute([$bid]);
+                        $brandLogo = (string)($s->fetchColumn() ?: '');
+                    }
                 }
             } catch (\Throwable $e) { /* table might be missing on some tenants */ }
             if (!$brandLogo) {
