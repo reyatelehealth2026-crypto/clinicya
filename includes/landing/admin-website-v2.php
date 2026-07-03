@@ -21,6 +21,7 @@ $v2ThemeSwatches = [
     'ocean'    => ['accent' => '#0A6C8C', 'bg' => '#D8EEF6'],
 ];
 $v2SectionLabels = [
+    'banners'     => 'แบนเนอร์สไลด์',
     'services'    => 'บริการของร้าน',
     'products'    => 'สินค้าแนะนำ',
     'faq'         => 'คำถามที่พบบ่อย',

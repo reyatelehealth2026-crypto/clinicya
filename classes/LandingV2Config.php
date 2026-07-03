@@ -60,6 +60,7 @@ class LandingV2Config
             'tagline'  => '',
             'photos'   => ['main' => '', 'consult' => '', 'shelf' => ''],
             'show'     => [
+                'banners'     => true,
                 'services'    => true,
                 'products'    => true,
                 'faq'         => true,

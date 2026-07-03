@@ -233,6 +233,42 @@ body.lv2 {
 .lv2 .hero-prod-card b { font-size: 14px; line-height: 1.35; }
 .lv2 .hero-prod-card .price { color: var(--accent); font-weight: 800; font-size: 15px; }
 
+/* ════════ banner slider ════════ */
+.lv2 .banner-wrap { padding: 24px 0 0; }
+.lv2 .banner-slider {
+  position: relative; border-radius: var(--radius-lg); overflow: hidden;
+  box-shadow: var(--shadow); border: 1px solid var(--border); background: var(--surface);
+}
+.lv2 .banner-track { display: flex; transition: transform .5s ease; }
+@media (prefers-reduced-motion: reduce) { .lv2 .banner-track { transition: none; } }
+.lv2 .banner-slide { min-width: 100%; flex: none; }
+.lv2 .banner-slide a { display: block; }
+.lv2 .banner-slide img { width: 100%; aspect-ratio: 21 / 8; object-fit: cover; display: block; background: var(--accent-soft); }
+@media (max-width: 640px) { .lv2 .banner-slide img { aspect-ratio: 16 / 10; } }
+.lv2 .banner-caption {
+  position: absolute; left: 16px; bottom: 14px;
+  background: rgba(0,0,0,.5); color: #fff;
+  padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+}
+.lv2 .banner-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(255,255,255,.85); color: var(--ink); font-size: 15px;
+  display: grid; place-items: center; box-shadow: var(--shadow);
+}
+.lv2 .banner-nav:hover { background: #fff; }
+.lv2 .banner-nav.prev { left: 12px; }
+.lv2 .banner-nav.next { right: 12px; }
+.lv2 .banner-dots {
+  position: absolute; left: 0; right: 0; bottom: 10px;
+  display: flex; justify-content: center; gap: 6px;
+}
+.lv2 .banner-dot {
+  width: 8px; height: 8px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(255,255,255,.55); padding: 0;
+}
+.lv2 .banner-dot.active { background: #fff; width: 20px; border-radius: 4px; }
+
 /* ════════ trust block ════════ */
 .lv2 .trust-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 20px; }
 @media (max-width: 860px) { .lv2 .trust-grid { grid-template-columns: 1fr; } }

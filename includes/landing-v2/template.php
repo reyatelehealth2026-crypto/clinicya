@@ -8,7 +8,7 @@
  * ตัวแปรที่ index.php เตรียมไว้แล้ว:
  *   $db, $lineAccountId, $lineAccount, $shopSettings, $shopName, $shopLogo,
  *   $shopDescription, $contactPhone, $shopAddress, $shopEmail, $lineId,
- *   $liffUrl, $seoService, $faqService, $featuredProductService
+ *   $liffUrl, $seoService, $faqService, $featuredProductService, $bannerService
  * ตัวแปรเพิ่มจาก entry point:
  *   $lv2Config (array), $lv2IsDraftPreview (bool)
  */
@@ -125,6 +125,11 @@ $lv2QrUrl = $lv2BasicId !== ''
 $lv2Tel = preg_replace('/[^0-9+]/', '', (string) $contactPhone);
 
 // ── เนื้อหา section (ซ่อนเมื่อว่างตามนโยบาย) ─────────────────────────
+$lv2Banners = [];
+if (!isset($lv2Show['banners']) || $lv2Show['banners']) {
+    // $bannerService ถูกสร้างไว้แล้วใน index.php ก่อน include ไฟล์นี้
+    try { $lv2Banners = $bannerService->getActiveBanners(8); } catch (Exception $e) {}
+}
 $lv2Products = [];
 if (!isset($lv2Show['products']) || $lv2Show['products']) {
     try { $lv2Products = $featuredProductService->getFeaturedProducts(4); } catch (Exception $e) {}
@@ -273,6 +278,42 @@ $lv2HasTrust = !empty($lv2Photos) || !empty($lv2Hours) || $lv2MapSrc !== '' || $
         <?php endif; ?>
     </div>
 </section>
+
+<?php if (!empty($lv2Banners)): ?>
+<div class="wrap banner-wrap">
+    <div class="banner-slider" id="lv2Banner" data-autoplay="5000">
+        <div class="banner-track">
+            <?php foreach ($lv2Banners as $i => $banner): ?>
+            <div class="banner-slide">
+                <?php if (!empty($banner['link_url'])): ?>
+                <a href="<?= lv2_h($banner['link_url']) ?>"
+                   <?= ($banner['link_type'] ?? '') === 'external' ? 'target="_blank" rel="noopener"' : '' ?>>
+                <?php endif; ?>
+                    <img src="<?= lv2_h($banner['image_url']) ?>"
+                         alt="<?= lv2_h($banner['title'] ?: ('โปรโมชัน ' . $shopName)) ?>"
+                         loading="<?= $i === 0 ? 'eager' : 'lazy' ?>">
+                <?php if (!empty($banner['link_url'])): ?>
+                </a>
+                <?php endif; ?>
+                <?php if (!empty($banner['title'])): ?>
+                <span class="banner-caption"><?= lv2_h($banner['title']) ?></span>
+                <?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php if (count($lv2Banners) > 1): ?>
+        <button type="button" class="banner-nav prev" aria-label="แบนเนอร์ก่อนหน้า">‹</button>
+        <button type="button" class="banner-nav next" aria-label="แบนเนอร์ถัดไป">›</button>
+        <div class="banner-dots" role="tablist" aria-label="เลือกแบนเนอร์">
+            <?php foreach ($lv2Banners as $i => $banner): ?>
+            <button type="button" class="banner-dot<?= $i === 0 ? ' active' : '' ?>"
+                    aria-label="แบนเนอร์ที่ <?= $i + 1 ?>"></button>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php if ($lv2HasTrust): ?>
 <section class="section" id="trust">
@@ -510,6 +551,38 @@ $lv2HasTrust = !empty($lv2Photos) || !empty($lv2Hours) || $lv2MapSrc !== '' || $
     <a class="btn btn-call" href="tel:<?= lv2_h($lv2Tel) ?>">โทร</a>
     <?php endif; ?>
 </div>
+<?php endif; ?>
+
+<?php if (count($lv2Banners) > 1): ?>
+<script>
+(function () {
+    var root = document.getElementById('lv2Banner');
+    if (!root) { return; }
+    var track = root.querySelector('.banner-track');
+    var slides = root.querySelectorAll('.banner-slide');
+    var dots = root.querySelectorAll('.banner-dot');
+    var current = 0;
+    var timer = null;
+
+    function show(i) {
+        current = (i + slides.length) % slides.length;
+        track.style.transform = 'translateX(-' + (current * 100) + '%)';
+        dots.forEach(function (d, di) { d.classList.toggle('active', di === current); });
+    }
+    function restart() {
+        clearInterval(timer);
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
+        timer = setInterval(function () { show(current + 1); }, parseInt(root.dataset.autoplay, 10) || 5000);
+    }
+
+    root.querySelector('.banner-nav.prev').addEventListener('click', function () { show(current - 1); restart(); });
+    root.querySelector('.banner-nav.next').addEventListener('click', function () { show(current + 1); restart(); });
+    dots.forEach(function (d, i) { d.addEventListener('click', function () { show(i); restart(); }); });
+
+    show(0);
+    restart();
+})();
+</script>
 <?php endif; ?>
 
 </body>

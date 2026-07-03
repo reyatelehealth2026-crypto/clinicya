@@ -17,6 +17,7 @@ require_once 'includes/auth_check.php';
 require_once 'classes/LandingV2Config.php';
 require_once 'classes/TenantFileStorage.php';
 require_once 'classes/FeaturedProductService.php';
+require_once 'classes/LandingBannerService.php';
 require_once 'includes/liff-helper.php';
 
 $db = Database::getInstance()->getConnection();
@@ -24,6 +25,7 @@ $currentBotId = $_SESSION['current_bot_id'] ?? null;
 
 $landingV2 = new LandingV2Config($db, $currentBotId);
 $featuredService = new FeaturedProductService($db, $currentBotId);
+$hubBannerService = new LandingBannerService($db, $currentBotId);
 
 $success = null;
 $error = null;
@@ -286,6 +288,8 @@ foreach ($v2DraftForChecklist['photos'] as $p) {
 }
 $featuredCount = 0;
 try { $featuredCount = $featuredService->getCount(); } catch (Exception $e) {}
+$hubBannerCount = 0;
+try { $hubBannerCount = $hubBannerService->getCount(); } catch (Exception $e) {}
 $hasLine = !empty($hubLineAccount['basic_id'])
     || (!empty($hubLineAccount['liff_id']) && reya_is_real_liff_id($hubLineAccount['liff_id']));
 
@@ -533,7 +537,12 @@ require_once 'includes/header.php';
             </span>
             เนื้อหาบนหน้าเว็บ
         </h3>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <a href="/admin/landing-settings?tab=banners" class="p-4 border border-gray-200 rounded-xl hover:border-emerald-400 text-center">
+                <i class="fas fa-images text-fuchsia-500 text-xl mb-2"></i>
+                <span class="block text-sm font-medium">แบนเนอร์สไลด์</span>
+                <span class="block text-xs text-gray-400"><?= (int) $hubBannerCount ?> รูป</span>
+            </a>
             <a href="/admin/landing-settings?tab=featured" class="p-4 border border-gray-200 rounded-xl hover:border-emerald-400 text-center">
                 <i class="fas fa-star text-amber-500 text-xl mb-2"></i>
                 <span class="block text-sm font-medium">สินค้าแนะนำ</span>
