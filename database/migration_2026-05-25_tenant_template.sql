@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS `account_followers` (
   `total_messages` int(11) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  KEY `idx_af_line_following` (`line_account_id`, `is_following`, `user_id`),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -377,6 +378,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   `tier_updated_at` timestamp NULL DEFAULT NULL,
   `chat_status` varchar(50) DEFAULT NULL,
   `order_days` varchar(255) DEFAULT NULL,
+  KEY `idx_users_line_account` (`line_account_id`),
+  KEY `idx_users_line_user` (`line_user_id`),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -628,6 +631,7 @@ CREATE TABLE IF NOT EXISTS `conversation_assignments` (
   `assigned_at` datetime DEFAULT current_timestamp(),
   `status` enum('active','resolved','transferred') DEFAULT 'active',
   `resolved_at` datetime DEFAULT NULL,
+  KEY `idx_ca_user` (`user_id`),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -642,6 +646,7 @@ CREATE TABLE IF NOT EXISTS `conversation_multi_assignees` (
   `status` enum('active','resolved') DEFAULT 'active',
   `resolved_at` datetime DEFAULT NULL,
   KEY `idx_conversation_multi_assignees_la` (`line_account_id`),
+  KEY `idx_cma_user_status` (`user_id`, `status`),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Supports multiple admins assigned to one conversation';
 
@@ -729,6 +734,10 @@ CREATE TABLE IF NOT EXISTS `messages` (
   `metadata` longtext DEFAULT NULL,
   `reply_to_id` int(11) DEFAULT NULL,
   `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  KEY `idx_msg_user` (`user_id`),
+  KEY `idx_msg_user_created` (`user_id`, `created_at`),
+  KEY `idx_msg_user_dir_read` (`user_id`, `direction`, `is_read`),
+  KEY `idx_msg_line_created` (`line_account_id`, `created_at`),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -875,6 +884,7 @@ CREATE TABLE IF NOT EXISTS `user_tag_assignments` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `expires_at` timestamp NULL DEFAULT NULL COMMENT 'Tag หมดอายุเมื่อไหร่',
   KEY `idx_user_tag_assignments_la` (`line_account_id`),
+  KEY `idx_uta_user` (`user_id`, `tag_id`),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -4495,7 +4505,8 @@ CREATE TABLE IF NOT EXISTS `landing_settings` (
   `setting_value` text DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_landing_setting` (`line_account_id`,`setting_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `landing_testimonials` (

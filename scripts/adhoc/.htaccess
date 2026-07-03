@@ -1,0 +1,17 @@
+# =====================================================
+# Ad-hoc / one-off scripts — NEVER web-accessible.
+# These are CLI-only debugging & data-fix scripts. Blocking
+# all HTTP access is defense-in-depth: many query customer /
+# BDO financial data with no auth guard of their own.
+# =====================================================
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2 (mod_access_compat fallback)
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

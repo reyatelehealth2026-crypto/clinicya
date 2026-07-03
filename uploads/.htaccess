@@ -1,11 +1,30 @@
 # Deny access to all files except images
-<FilesMatch "\.(?i:php|php3|php4|php5|phtml|pl|py|jsp|asp|htm|html|shtml|sh|cgi)$">
-    Order Deny,Allow
-    Deny from all
+# 2026-07-03: ปิดช่อง phar/pht/php7/php8/phps + เพิ่ม syntax Apache 2.4 (Require)
+# ควบคู่กับของเดิม (Order/Deny ใช้ได้เมื่อมี mod_access_compat)
+<FilesMatch "\.(?i:php|php3|php4|php5|php7|php8|phtml|phar|pht|phps|pl|py|jsp|asp|htm|html|shtml|sh|cgi)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order Deny,Allow
+        Deny from all
+    </IfModule>
 </FilesMatch>
+
+# ปิดการ execute PHP ในโฟลเดอร์นี้ทั้งก้อน (กันไฟล์หลุด denylist)
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+RemoveHandler .php .phtml .phar
+RemoveType .php .phtml .phar
 
 # Allow only image files
 <FilesMatch "\.(?i:jpg|jpeg|png|gif|webp)$">
-    Order Allow,Deny
-    Allow from all
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order Allow,Deny
+        Allow from all
+    </IfModule>
 </FilesMatch>

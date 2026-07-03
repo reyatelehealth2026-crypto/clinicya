@@ -258,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $activeTab = 'trust';
         }
-        
+
     } catch (Exception $e) {
         $error = 'เกิดข้อผิดพลาด: ' . $e->getMessage();
     }

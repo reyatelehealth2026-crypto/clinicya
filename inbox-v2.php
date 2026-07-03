@@ -1038,14 +1038,12 @@ $countStmt->execute($platformParams);
 $totalConversations = (int) $countStmt->fetchColumn();
 $hasMoreConversations = $totalConversations > $conversationLimit;
 
-// Get Users List - use subqueries for accurate latest message (v2.1 - fixed 2026-01-15)
-// Now with LIMIT for progressive loading
+// Get Users List (v3 - 2026-07-03 perf rewrite)
+// Slim main query: only the index-backed MAX(created_at) subquery stays inline;
+// preview/type/unread + assignees/tags are batch-fetched for just the LIMIT rows
+// (previously 4 correlated subqueries per user + 2 queries per rendered row).
 $sql = "SELECT u.*,
-        u.chat_status,
-        (SELECT content FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_msg,
-        (SELECT message_type FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_type,
-        (SELECT created_at FROM messages WHERE user_id = u.id ORDER BY created_at DESC LIMIT 1) as last_time,
-        (SELECT COUNT(*) FROM messages WHERE user_id = u.id AND direction = 'incoming' AND is_read = 0) as unread
+        (SELECT MAX(m.created_at) FROM messages m WHERE m.user_id = u.id) as last_time
         FROM users u
         WHERE {$platformWhere}
         AND EXISTS (SELECT 1 FROM messages WHERE user_id = u.id)
@@ -1054,6 +1052,47 @@ $sql = "SELECT u.*,
 $stmt = $db->prepare($sql);
 $stmt->execute(array_merge($platformParams, [$conversationLimit]));
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Batch-enrich the rendered rows: last message preview/type + unread counts
+$listUserIds = array_map('intval', array_column($users, 'id'));
+$listLastMsgMap = $inboxService->getLastMessageMetaBatch($listUserIds);
+$listUnreadMap = $inboxService->getUnreadCountsBatch($listUserIds);
+foreach ($users as &$listUser) {
+    $listUid = (int) $listUser['id'];
+    $listUser['last_msg'] = $listLastMsgMap[$listUid]['preview'] ?? null;
+    $listUser['last_type'] = $listLastMsgMap[$listUid]['type'] ?? null;
+    $listUser['unread'] = $listUnreadMap[$listUid] ?? 0;
+}
+unset($listUser);
+
+// Prefetch assignees + tag ids for the rendered rows in 2 queries
+// (the template loop previously ran 2 queries per conversation row)
+$listAssigneesMap = [];
+$listTagIdsMap = [];
+if (!empty($listUserIds)) {
+    $listPh = implode(',', array_fill(0, count($listUserIds), '?'));
+    try {
+        $assignStmt = $db->prepare("
+            SELECT cma.user_id, cma.admin_id, au.username, au.display_name
+            FROM conversation_multi_assignees cma
+            LEFT JOIN admin_users au ON cma.admin_id = au.id
+            WHERE cma.user_id IN ({$listPh}) AND cma.status = 'active'
+            ORDER BY cma.assigned_at DESC");
+        $assignStmt->execute($listUserIds);
+        foreach ($assignStmt->fetchAll(PDO::FETCH_ASSOC) as $assignRow) {
+            $listAssigneesMap[(int) $assignRow['user_id']][] = $assignRow;
+        }
+    } catch (PDOException $e) {
+    }
+    try {
+        $tagStmt = $db->prepare("SELECT user_id, tag_id FROM user_tag_assignments WHERE user_id IN ({$listPh})");
+        $tagStmt->execute($listUserIds);
+        foreach ($tagStmt->fetchAll(PDO::FETCH_ASSOC) as $tagRow) {
+            $listTagIdsMap[(int) $tagRow['user_id']][] = $tagRow['tag_id'];
+        }
+    } catch (PDOException $e) {
+    }
+}
 
 // Get last conversation timestamp for cursor-based pagination
 $lastConversationCursor = null;
@@ -1080,8 +1119,11 @@ if (isset($_GET['user']) || isset($_GET['user_id'])) {
         // Use custom_display_name if set, otherwise use display_name from LINE
         $selectedUser['effective_display_name'] = $selectedUser['custom_display_name'] ?: $selectedUser['display_name'];
 
-        $db->prepare("UPDATE messages SET is_read = 1 WHERE user_id = ? AND direction = 'incoming'")->execute([$uid]);
-        $stmt = $db->prepare("SELECT * FROM messages WHERE user_id = ? ORDER BY created_at ASC");
+        $db->prepare("UPDATE messages SET is_read = 1 WHERE user_id = ? AND direction = 'incoming' AND is_read = 0")->execute([$uid]);
+        // Latest 300 messages only (2026-07-03: was the ENTIRE history — customers
+        // with thousands of messages made first paint take 15s+). Clicking the
+        // conversation in the list loads via AJAX with cursor-paged older history.
+        $stmt = $db->prepare("SELECT * FROM (SELECT * FROM messages WHERE user_id = ? ORDER BY id DESC LIMIT 300) recent ORDER BY id ASC");
         $stmt->execute([$uid]);
         $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -3015,29 +3057,10 @@ function formatThaiDateTime($datetime)
                             </div>
                     <?php else: ?>
                             <?php foreach ($users as $index => $user):
-                                // Get multi-assignees
-                                $assignees = [];
-                                try {
-                                    $assignStmt = $db->prepare("
-                            SELECT cma.admin_id, au.username, au.display_name
-                            FROM conversation_multi_assignees cma
-                            LEFT JOIN admin_users au ON cma.admin_id = au.id
-                            WHERE cma.user_id = ? AND cma.status = 'active'
-                            ORDER BY cma.assigned_at DESC
-                        ");
-                                    $assignStmt->execute([$user['id']]);
-                                    $assignees = $assignStmt->fetchAll(PDO::FETCH_ASSOC);
-                                } catch (PDOException $e) {
-                                }
-
-                                // Get user tags for filtering
-                                $userTagIds = [];
-                                try {
-                                    $tagStmt = $db->prepare("SELECT tag_id FROM user_tag_assignments WHERE user_id = ?");
-                                    $tagStmt->execute([$user['id']]);
-                                    $userTagIds = $tagStmt->fetchAll(PDO::FETCH_COLUMN);
-                                } catch (PDOException $e) {
-                                }
+                                // Assignees + tag ids come from the prefetched maps
+                                // (2026-07-03: was 2 queries per rendered row)
+                                $assignees = $listAssigneesMap[(int) $user['id']] ?? [];
+                                $userTagIds = $listTagIdsMap[(int) $user['id']] ?? [];
 
                                 $hasSlaWarning = in_array($user['id'], $slaViolationUserIds);
 
@@ -8112,6 +8135,15 @@ function formatThaiDateTime($datetime)
             async function switchChat(userId) {
                 if (isSwitchingChat || userId == currentChatUserId) return;
 
+                // Page was opened with no chat selected → the chat area
+                // (#chatBox, header, send form) was never server-rendered and
+                // AJAX has nowhere to render. Navigate for real this once;
+                // subsequent switches are AJAX as usual.
+                if (!document.getElementById('chatBox')) {
+                    window.location.href = buildUserLink(userId);
+                    return;
+                }
+
                 isSwitchingChat = true;
                 console.log('[AJAX Chat] Switching to user:', userId);
 
@@ -8128,8 +8160,13 @@ function formatThaiDateTime($datetime)
                     if (result.success && result.data) {
                         currentChatUserId = userId;
 
+                        // Retarget points/dispense/send-form to the new customer
+                        if (typeof window.setActiveChatCustomer === 'function') {
+                            window.setActiveChatCustomer(userId, (result.data.user && result.data.user.display_name) || '');
+                        }
+
                         // Render chat content
-                        renderChatHeader(result.data.user);
+                        renderChatHeader(result.data.user, result.data.tags);
                         renderMessages(result.data.messages);
 
                         // Update HUD if available
@@ -8194,15 +8231,33 @@ function formatThaiDateTime($datetime)
             /**
              * Render chat header with user info
              */
-            function renderChatHeader(user) {
-                const headerName = document.querySelector('.chat-header .truncate, .chat-header h2');
+            function renderChatHeader(user, tags) {
+                // The header markup has no .chat-header class — target the real
+                // elements (same selectors as updateChatHeader), otherwise the
+                // name/avatar silently kept showing the previous customer.
+                const headerName = document.querySelector('#chatArea h3');
                 if (headerName) {
                     headerName.textContent = user.display_name || 'Unknown';
                 }
 
-                const headerAvatar = document.querySelector('.chat-header img');
+                const headerAvatar = document.querySelector('#chatArea img');
                 if (headerAvatar && user.picture_url) {
                     headerAvatar.src = user.picture_url;
+                }
+
+                // Refresh the tag badges under the name (DOM-built = XSS-safe)
+                const tagsEl = document.getElementById('userTags');
+                if (tagsEl && Array.isArray(tags)) {
+                    tagsEl.innerHTML = '';
+                    tags.forEach(tag => {
+                        const span = document.createElement('span');
+                        span.className = 'tag-badge';
+                        const color = tag.color || '#3B82F6';
+                        span.style.backgroundColor = color + '20';
+                        span.style.color = color;
+                        span.textContent = tag.name || '';
+                        tagsEl.appendChild(span);
+                    });
                 }
             }
 
@@ -10830,10 +10885,12 @@ function formatThaiDateTime($datetime)
                 updateActiveConversation(userId);
 
                 // Load conversation via AJAX (Requirement 1.1)
-                if (chatPanelManager) {
+                // No server-rendered chat area (page opened without a selected
+                // chat) → nothing to render into; navigate for real this once.
+                if (chatPanelManager && document.getElementById('chatBox')) {
                     loadConversationAJAX(userId, userData);
                 } else {
-                    console.warn('[CLICK] ChatPanelManager not ready, falling back to page reload');
+                    console.warn('[CLICK] ChatPanelManager/chatBox not ready, falling back to page reload');
                     // Fallback: reload page with user parameter
                     window.location.href = newUrl;
                 }
@@ -10893,6 +10950,11 @@ function formatThaiDateTime($datetime)
 
             // Update chat header with user data
             updateChatHeader(userData);
+
+            // Retarget points/dispense/send-form to the new customer
+            if (typeof window.setActiveChatCustomer === 'function') {
+                window.setActiveChatCustomer(userId, (userData && userData.display_name) || '');
+            }
 
             // Load HUD data
             if (typeof initializeHUD === 'function') {
@@ -11346,6 +11408,12 @@ function formatThaiDateTime($datetime)
      * @param {Object} messageData - New message data
      */
     function updateConversationPreview(conversationItem, messageData) {
+        // No message data = caller only wants the conversation moved to top
+        // (e.g. switchChat calls bumpConversationToTop(userId) with one arg).
+        // Skip preview/time/badge updates — otherwise this crashed on
+        // messageData.content and switchChat's catch forced a full page reload.
+        if (!messageData) return;
+
         // Update last message
         const lastMsgEl = conversationItem.querySelector('.last-msg');
         if (lastMsgEl && messageData.content) {
@@ -12602,9 +12670,15 @@ function formatThaiDateTime($datetime)
 <script>
 // ===== Dispense System (ported from messages.php 2026-05-08) =====
 (function() {
-    const dispenseUserId = <?= (int) $selectedUser['id'] ?>;
+    let dispenseUserId = <?= (int) ($selectedUser['id'] ?? 0) ?>;
     let dispenseItems = [];
     let dispenseSearchTimeout = null;
+
+    // Called by setActiveChatCustomer on AJAX chat switch so dispensing
+    // targets the currently open customer, not the one from page load.
+    window.setDispenseUser = function (id) {
+        dispenseUserId = parseInt(id, 10) || 0;
+    };
 
     function escHtml(s) {
         return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -12990,6 +13064,21 @@ function formatThaiDateTime($datetime)
     window.gpCurrentUser = <?= $selectedUser
         ? json_encode(['id' => (int) $selectedUser['id'], 'name' => (string) ($selectedUser['display_name'] ?? '')], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)
         : 'null' ?>;
+
+    // Keep every customer-targeting widget in sync when the chat is switched
+    // via AJAX (no page reload). Without this, give-points (gpCurrentUser),
+    // dispense (dispenseUserId) and the send-message hidden field all kept
+    // pointing at the customer from the ORIGINAL page load — points/medicine/
+    // messages could go to the wrong customer.
+    window.setActiveChatCustomer = function (id, name) {
+        id = parseInt(id, 10) || 0;
+        window.gpCurrentUser = id ? { id: id, name: name || '' } : null;
+        if (typeof window.setDispenseUser === 'function') {
+            window.setDispenseUser(id);
+        }
+        const uidInput = document.querySelector('#sendForm input[name="user_id"]');
+        if (uidInput) uidInput.value = id || '';
+    };
 
     // Toggle the modal between "direct credit to this customer" and "QR only".
     function gpApplyMode() {
