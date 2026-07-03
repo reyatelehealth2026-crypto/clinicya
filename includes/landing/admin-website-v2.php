@@ -95,7 +95,7 @@ $v2SectionLabels = [
                 <?php foreach (LandingV2Config::THEMES as $slug => $label):
                     $swatch = $v2ThemeSwatches[$slug] ?? ['accent' => '#888', 'bg' => '#eee'];
                 ?>
-                <label class="cursor-pointer border rounded-xl p-3 flex items-center gap-3 hover:border-emerald-400 transition
+                <label class="relative cursor-pointer border rounded-xl p-3 flex items-center gap-3 hover:border-emerald-400 transition
                               <?= $v2Draft['theme'] === $slug ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-gray-200' ?>">
                     <input type="radio" name="v2_theme" value="<?= htmlspecialchars($slug) ?>"
                            <?= $v2Draft['theme'] === $slug ? 'checked' : '' ?> class="sr-only">
@@ -115,13 +115,13 @@ $v2SectionLabels = [
                 ส่วนเปิดหน้า (Hero)
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <label class="cursor-pointer border rounded-xl p-4 hover:border-emerald-400 transition
+                <label class="relative cursor-pointer border rounded-xl p-4 hover:border-emerald-400 transition
                               <?= $v2Draft['hero'] === 'shop' ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-gray-200' ?>">
                     <input type="radio" name="v2_hero" value="shop" <?= $v2Draft['hero'] === 'shop' ? 'checked' : '' ?> class="sr-only">
                     <div class="font-bold text-sm mb-1">เน้นหน้าร้าน</div>
                     <div class="text-xs text-gray-500">โชว์รูปหน้าร้านจริง สร้างความเชื่อใจ เหมาะกับร้านที่เน้นบริการปรึกษา</div>
                 </label>
-                <label class="cursor-pointer border rounded-xl p-4 hover:border-emerald-400 transition
+                <label class="relative cursor-pointer border rounded-xl p-4 hover:border-emerald-400 transition
                               <?= $v2Draft['hero'] === 'product' ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-gray-200' ?>">
                     <input type="radio" name="v2_hero" value="product" <?= $v2Draft['hero'] === 'product' ? 'checked' : '' ?> class="sr-only">
                     <div class="font-bold text-sm mb-1">เน้นสินค้า</div>
