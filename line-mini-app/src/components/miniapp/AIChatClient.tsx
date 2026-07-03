@@ -11,11 +11,13 @@ import { EscalationBanner } from '@/components/miniapp/EscalationBanner'
 import { StateHeader } from '@/components/miniapp/StateHeader'
 import { AllergyBanner } from '@/components/miniapp/AllergyBanner'
 import { EmergencyModal } from '@/components/miniapp/EmergencyModal'
+import { ConsentModal } from '@/components/miniapp/ConsentModal'
 import { DrugInteractionWarning } from '@/components/miniapp/DrugInteractionWarning'
 import { MIMSInfoCard } from '@/components/miniapp/MIMSInfoCard'
 import { PharmacistConsultCTA } from '@/components/miniapp/PharmacistConsultCTA'
 import { streamAIChat } from '@/lib/ai-chat-api'
 import { fetchAIChatHistory, clearAIChatHistory } from '@/lib/ai-chat-history-api'
+import { saveHealthDataConsent } from '@/lib/consent-api'
 import { apiUrl, appConfig } from '@/lib/config'
 import { scanEmergency, type EmergencyPayload, type EmergencySeverity } from '@/lib/emergency-scan'
 import { toTriageState, type TriageState } from '@/lib/state-labels'
@@ -153,6 +155,11 @@ export function AIChatClient() {
   const [drugInteractions, setDrugInteractions] = useState<DrugInteractionItem[] | null>(null)
   const [mimsInfo, setMimsInfo] = useState<MIMSPayload | null>(null)
   const [suggestPharmacist, setSuggestPharmacist] = useState<SuggestPharmacistPayload | null>(null)
+  // PDPA health-data consent (issue #15): shown when the backend flags
+  // `consent_required`; `consentHandled` stops re-prompting for the session.
+  const [consentRequired, setConsentRequired] = useState(false)
+  const [consentHandled, setConsentHandled] = useState(false)
+  const [consentSubmitting, setConsentSubmitting] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -295,6 +302,13 @@ export function AIChatClient() {
   ]
 
   const handleStructured = (payload: TriageStructuredPayload) => {
+    // PDPA (issue #15): the backend attaches `consent_required` to any payload
+    // when a real user lacks active health_data consent. Prompt once per session.
+    const consentFlag = (payload as unknown as { consent_required?: boolean }).consent_required
+    if (consentFlag === true && !consentHandled) {
+      setConsentRequired(true)
+    }
+
     // Existing types (preserve original behaviour)
     if (payload.type === 'question' && Array.isArray(payload.options)) {
       setCurrentOptions(payload.options)
@@ -752,6 +766,26 @@ export function AIChatClient() {
             onConsultPharmacist={() => {
               setEmergency(null)
               goToVideoConsult(true)
+            }}
+          />
+        ) : null}
+
+        {/* PDPA health-data consent prompt (issue #15) */}
+        {consentRequired ? (
+          <ConsentModal
+            submitting={consentSubmitting}
+            onAccept={async () => {
+              setConsentSubmitting(true)
+              await saveHealthDataConsent(lineCtx.profile?.userId, true, lineCtx.accessToken)
+              setConsentSubmitting(false)
+              setConsentHandled(true)
+              setConsentRequired(false)
+            }}
+            onDecline={() => {
+              // Record the decline (non-blocking) and stop nudging this session.
+              void saveHealthDataConsent(lineCtx.profile?.userId, false, lineCtx.accessToken)
+              setConsentHandled(true)
+              setConsentRequired(false)
             }}
           />
         ) : null}
