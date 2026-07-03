@@ -27,8 +27,11 @@ class GeminiAI {
     private $model;
     private $systemPrompt;
     private $apiKeySource = 'unknown';
+    private $lineAccountId;
 
     public function __construct($apiKey = null, $db = null, $botId = null) {
+        $this->lineAccountId = $botId !== null ? (int) $botId : null;
+
         // รับ API Key จาก parameter หรือ database หรือ config
         if ($apiKey) {
             $this->apiKey = $apiKey;
@@ -230,6 +233,7 @@ class GeminiAI {
                 if (!is_array($result)) {
                     throw new Exception('Google API returned invalid JSON response');
                 }
+                $this->recordUsage($model);
                 return $result;
             }
 
@@ -255,6 +259,25 @@ class GeminiAI {
         }
 
         throw new Exception('Google API request failed without a response');
+    }
+
+    /**
+     * Per-tenant usage metering (Phase 3, #19). Never throws — a metering
+     * failure must not break the Gemini call it is counting.
+     */
+    private function recordUsage($model) {
+        try {
+            if (!class_exists('AiUsageMeter') && file_exists(__DIR__ . '/AiUsageMeter.php')) {
+                require_once __DIR__ . '/AiUsageMeter.php';
+            }
+            if (!class_exists('AiUsageMeter') || !class_exists('Database')) {
+                return;
+            }
+            $db = Database::getInstance()->getConnection();
+            AiUsageMeter::increment($db, $this->lineAccountId, 'gemini', (string) $model);
+        } catch (Throwable $e) {
+            error_log('GeminiAI recordUsage error: ' . $e->getMessage());
+        }
     }
 
     /**
