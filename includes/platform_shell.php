@@ -27,6 +27,7 @@ function platform_nav_items(): array
         ['key' => 'customers', 'label' => 'ลูกค้า / ร้าน',    'icon' => 'fa-users',          'href' => '/admin/customers.php',          'section' => 'จัดการร้าน'],
         ['key' => 'approvals', 'label' => 'รออนุมัติ',        'icon' => 'fa-hourglass-half', 'href' => '/admin/tenant-approvals.php',   'section' => 'จัดการร้าน', 'badge' => 'approvals'],
         ['key' => 'beta',      'label' => 'Beta Signups',     'icon' => 'fa-inbox',          'href' => '/admin/beta-signups.php',       'section' => 'การตลาด',   'badge' => 'beta'],
+        ['key' => 'outlook',   'label' => 'Pharmacy Outlook', 'icon' => 'fa-chart-pie',      'href' => '/admin/pharmacy-outlook.php',   'section' => 'ภาพรวม'],
     ];
 }
 
