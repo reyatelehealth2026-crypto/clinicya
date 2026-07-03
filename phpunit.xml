@@ -35,6 +35,9 @@
         <testsuite name="AiStudio Tests">
             <directory>tests/AiStudio</directory>
         </testsuite>
+        <testsuite name="Tenancy Tests">
+            <directory>tests/Tenancy</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>
