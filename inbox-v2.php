@@ -11369,6 +11369,12 @@ function formatThaiDateTime($datetime)
      * @param {Object} messageData - New message data
      */
     function updateConversationPreview(conversationItem, messageData) {
+        // No message data = caller only wants the conversation moved to top
+        // (e.g. switchChat calls bumpConversationToTop(userId) with one arg).
+        // Skip preview/time/badge updates — otherwise this crashed on
+        // messageData.content and switchChat's catch forced a full page reload.
+        if (!messageData) return;
+
         // Update last message
         const lastMsgEl = conversationItem.querySelector('.last-msg');
         if (lastMsgEl && messageData.content) {
