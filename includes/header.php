@@ -2325,24 +2325,38 @@ $visiblePrimaryNavFooter = $filterPrimaryNav($primaryNavFooter);
             <!-- Brand -->
             <?php
             // 2026-05-26: per-tenant logo (fallback ไป REYA default ถ้าไม่มี)
-            // 2026-07-03: ถ้าร้านยังไม่ตั้งโลโก้ใน shop_settings ใช้รูปโปรไฟล์
-            // LINE OA ของร้าน (line_accounts.picture_url) ก่อน REYA default
+            // 2026-07-03: โลโก้+ชื่อร้านต่อ tenant — ถ้าร้านยังไม่ตั้งใน
+            // shop_settings ใช้รูปโปรไฟล์/ชื่อ LINE OA ของร้านก่อน REYA default
             $brandLogo = null;
+            $brandName = null;
             try {
                 $bid = (int)($_SESSION['current_bot_id'] ?? 0);
                 if ($bid > 0) {
-                    $s = $db->prepare('SELECT shop_logo FROM shop_settings WHERE line_account_id = ? LIMIT 1');
+                    $s = $db->prepare('SELECT shop_logo, shop_name FROM shop_settings WHERE line_account_id = ? LIMIT 1');
                     $s->execute([$bid]);
-                    $brandLogo = (string)($s->fetchColumn() ?: '');
-                    if (!$brandLogo) {
-                        $s = $db->prepare('SELECT picture_url FROM line_accounts WHERE id = ? LIMIT 1');
+                    if ($brandRow = $s->fetch(PDO::FETCH_ASSOC)) {
+                        $brandLogo = (string)($brandRow['shop_logo'] ?? '');
+                        $brandName = (string)($brandRow['shop_name'] ?? '');
+                    }
+                    if (!$brandLogo || !$brandName) {
+                        $s = $db->prepare('SELECT picture_url, name FROM line_accounts WHERE id = ? LIMIT 1');
                         $s->execute([$bid]);
-                        $brandLogo = (string)($s->fetchColumn() ?: '');
+                        if ($brandLa = $s->fetch(PDO::FETCH_ASSOC)) {
+                            if (!$brandLogo) {
+                                $brandLogo = (string)($brandLa['picture_url'] ?? '');
+                            }
+                            if (!$brandName) {
+                                $brandName = (string)($brandLa['name'] ?? '');
+                            }
+                        }
                     }
                 }
             } catch (\Throwable $e) { /* table might be missing on some tenants */ }
             if (!$brandLogo) {
                 $brandLogo = '/uploads/shop/logo_1_1778797967.png'; // REYA default
+            }
+            if (!$brandName) {
+                $brandName = 'REYA Pharmacy';
             }
 
             // Current subscription plan → gold pill (paid) / amber (trial) / grey (free).
@@ -2378,7 +2392,7 @@ $visiblePrimaryNavFooter = $filterPrimaryNav($primaryNavFooter);
                              onerror="this.outerHTML='<div class=\'w-full h-full flex items-center justify-center text-white text-lg font-bold\' style=\'background: linear-gradient(135deg, var(--primary), var(--primary-dark));\'>R</div>';">
                     </div>
                     <div class="ml-3 flex-1 min-w-0">
-                        <div class="font-bold text-gray-800 text-sm truncate">REYA Pharmacy</div>
+                        <div class="font-bold text-gray-800 text-sm truncate"><?= htmlspecialchars($brandName) ?></div>
                         <div class="text-xs text-gray-400">Pharmacy Admin</div>
                     </div>
                     <button onclick="toggleSidebar()" class="md:hidden text-gray-400 hover:text-gray-700">
