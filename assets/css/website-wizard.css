@@ -1,0 +1,105 @@
+/**
+ * Website Wizard — โหมดไกด์ตั้งค่าเว็บร้านทีละขั้นบน website.php
+ * ไม่มีฟอร์ม/ข้อมูลของตัวเอง แค่ไฮไลต์ card เดิมทีละใบ + แถบ stepper ลอยด้านล่าง
+ */
+
+body.wz-active {
+    padding-bottom: 96px; /* กันแถบ stepper บังเนื้อหาท้ายหน้า */
+}
+
+/* card ที่ไม่ใช่ขั้นปัจจุบัน: หรี่ลงและกดไม่ได้ กันหลงไปแก้ผิดที่ */
+.wz-dim {
+    opacity: .35;
+    pointer-events: none;
+    filter: grayscale(.4);
+    transition: opacity .2s ease;
+}
+
+/* card ขั้นปัจจุบัน */
+.wz-focus {
+    position: relative;
+    outline: 3px solid #10b981;
+    outline-offset: 4px;
+    border-radius: 14px;
+}
+
+/* แถบ stepper ลอยล่างจอ */
+.wz-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 95;
+    width: min(720px, calc(100vw - 24px));
+    background: #111827;
+    color: #f9fafb;
+    border-radius: 16px;
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, .5);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.wz-bar-info { flex: 1; min-width: 200px; }
+.wz-bar-step {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #34d399;
+    letter-spacing: .3px;
+}
+.wz-bar-title {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+.wz-bar-hint {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+.wz-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+.wz-btn {
+    border: none;
+    cursor: pointer;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13.5px;
+    padding: 9px 16px;
+    font-family: inherit;
+    transition: background .15s;
+}
+.wz-btn-next {
+    background: #10b981;
+    color: #fff;
+}
+.wz-btn-next:hover { background: #059669; }
+.wz-btn-prev {
+    background: #374151;
+    color: #e5e7eb;
+}
+.wz-btn-prev:hover { background: #4b5563; }
+.wz-btn-prev:disabled { opacity: .4; cursor: default; }
+.wz-btn-exit {
+    background: transparent;
+    color: #9ca3af;
+    padding: 9px 10px;
+}
+.wz-btn-exit:hover { color: #f9fafb; }
+
+/* จุดบอกความคืบหน้า */
+.wz-dots { display: flex; gap: 5px; margin-top: 6px; }
+.wz-dots i {
+    width: 22px; height: 4px; border-radius: 2px;
+    background: #374151; display: block;
+}
+.wz-dots i.on { background: #34d399; }
+
+@media (prefers-reduced-motion: reduce) {
+    .wz-dim { transition: none; }
+}

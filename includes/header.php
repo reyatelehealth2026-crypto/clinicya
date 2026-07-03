@@ -305,6 +305,7 @@ $quickAccessMenus = [
 
     // ==================== Facility Setup - Facility Profile ====================
     'shop-settings' => ['icon' => 'fa-store', 'label' => 'ข้อมูลสถานพยาบาล', 'url' => '/settings.php?tab=general', 'page' => 'settings', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
+    'website' => ['icon' => 'fa-globe', 'label' => 'เว็บไซต์ร้าน', 'url' => '/website', 'page' => 'website', 'color' => 'emerald', 'roles' => ['admin', 'owner']],
     'miniapp-settings' => ['icon' => 'fa-mobile-alt', 'label' => 'ตั้งค่าร้านออนไลน์', 'url' => '/admin/miniapp-settings.php', 'page' => 'miniapp-settings', 'color' => 'violet', 'roles' => ['admin', 'owner']],
     'landing-settings' => ['icon' => 'fa-home', 'label' => 'Landing Page', 'url' => '/admin/landing-settings', 'page' => 'landing-settings', 'color' => 'sky', 'roles' => ['admin', 'owner']],
 
@@ -430,6 +431,7 @@ $menuGroups = [
         'menus' => [
             ['title' => 'ตั้งค่าระบบ', 'icon' => '🔧', 'href' => '/settings'],
             // ข้อมูลร้านอยู่ในแท็บของหน้าตั้งค่าระบบแล้ว
+            ['title' => 'เว็บไซต์ร้าน', 'icon' => '🌐', 'href' => '/website'],
             ['title' => 'ตั้งค่าร้านออนไลน์', 'icon' => '📱', 'href' => '/admin/miniapp-settings.php'],
             ['title' => 'Landing Page', 'icon' => '🏠', 'href' => '/admin/landing-settings'],
             ['title' => 'Rich Menu', 'icon' => '🎨', 'href' => '/rich-menu'],

@@ -3,7 +3,7 @@
  * Admin tab: เว็บร้านโฉมใหม่ (Landing V2)
  * เลือกธีม/hero, พาดหัว, รูปหน้าร้าน, เปิด/ปิด section แล้ว preview ร่างก่อนเผยแพร่
  *
- * ตัวแปรจาก landing-settings.php: $db, $currentBotId, $landingV2
+ * ตัวแปรจาก website.php: $db, $currentBotId, $landingV2
  */
 
 $v2Draft = $landingV2->getDraft();
