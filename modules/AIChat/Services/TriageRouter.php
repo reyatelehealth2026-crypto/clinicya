@@ -308,6 +308,14 @@ class TriageRouter
             return ['type' => 'continue'];
         }
 
+        // Tenant toggle "ต้องให้เภสัชกรอนุมัติ" (require_pharmacist_approval, issue #31):
+        // when ON, the AI must NOT present the recommendation to the customer as
+        // final — hold it for a pharmacist to review/approve first (reusing the
+        // existing escalate/PharmacistNotifier path) instead of auto-checkout.
+        if ($this->requiresPharmacistApproval()) {
+            return $this->buildPendingApprovalResult($sessionId, $symptoms, $products);
+        }
+
         $summary = 'ตามอาการที่คุณระบุ แนะนำสินค้าต่อไปนี้ค่ะ';
         $this->sessions->complete($sessionId, 'otc_recommended', $summary);
 
@@ -326,6 +334,53 @@ class TriageRouter
             'session_id' => $sessionId,
             'products'   => $products,
             'message'    => $summary,
+        ];
+    }
+
+    /**
+     * Hold the recommendation for pharmacist review instead of presenting it to
+     * the customer as final. Marks the session 'refer_doctor' (same outcome
+     * vocabulary TriageSessionManager::complete() already accepts) so the
+     * pharmacist dashboard picks it up, and notifies pharmacists the same way
+     * a red-flag escalation does — just without the "red flag" framing.
+     *
+     * @param list<string>               $symptoms
+     * @param list<array<string, mixed>> $products
+     * @return array<string, mixed>
+     */
+    private function buildPendingApprovalResult(int $sessionId, array $symptoms, array $products): array
+    {
+        $message = 'ระบบได้รับข้อมูลอาการของคุณแล้ว กรุณารอเภสัชกรตรวจสอบและอนุมัติรายการยาก่อนสั่งซื้อค่ะ';
+        $this->sessions->complete($sessionId, 'refer_doctor', $message);
+
+        $this->audit('pending_pharmacist_approval', 'ai', $sessionId, [
+            'symptoms'     => array_values($symptoms),
+            'product_ids'  => array_values(array_filter(array_map(
+                static fn ($p) => is_array($p) ? ($p['id'] ?? $p['product_id'] ?? null) : null,
+                $products
+            ))),
+            'product_count' => count($products),
+        ]);
+
+        if ($this->notifier !== null) {
+            try {
+                $this->notifier->notifyAllPharmacists([
+                    'session_id' => $sessionId,
+                    'message'    => 'มีคำแนะนำยารอการอนุมัติจากเภสัชกร',
+                    'symptoms'   => $symptoms,
+                ], false);
+            } catch (\Throwable $e) {
+                // ignore — notification is best-effort
+            }
+        }
+
+        $this->fireAndForgetSummary($sessionId);
+
+        return [
+            'type'       => 'pending_approval',
+            'session_id' => $sessionId,
+            'products'   => $products,
+            'message'    => $message,
         ];
     }
 
@@ -383,6 +438,29 @@ class TriageRouter
             return $val === false ? true : !empty($val);
         } catch (\Throwable $e) {
             return true;
+        }
+    }
+
+    /**
+     * Tenant toggle "ต้องให้เภสัชกรอนุมัติ" — ai_pharmacy_settings.require_pharmacist_approval.
+     * Default OFF (false) when unset, matching the pre-existing behaviour
+     * (auto-present recommendations) so tenants that never touched this
+     * setting see no change.
+     */
+    private function requiresPharmacistApproval(): bool
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                "SELECT require_pharmacist_approval FROM ai_pharmacy_settings
+                 WHERE (line_account_id <=> :acc)
+                 ORDER BY (line_account_id IS NOT NULL) DESC
+                 LIMIT 1"
+            );
+            $stmt->execute([':acc' => $this->lineAccountId]);
+            $val = $stmt->fetchColumn();
+            return $val === false ? false : !empty($val);
+        } catch (\Throwable $e) {
+            return false;
         }
     }
 
