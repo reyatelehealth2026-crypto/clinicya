@@ -79,6 +79,7 @@ class ProductRecommender
         // ใช้ COALESCE เผื่อคอลัมน์ pharmacy ยังไม่ถูก migrate
         $sql = "SELECT
                     p.id, p.name, p.description, p.price, p.sale_price, p.image_url,
+                    p.stock,
                     psm.symptom_code, psm.weight, psm.is_first_line, psm.notes
                 FROM product_symptom_map psm
                 INNER JOIN business_items p ON p.id = psm.product_id
@@ -110,6 +111,7 @@ class ProductRecommender
                     'price'               => (float) ($r['price'] ?? 0),
                     'sale_price'          => $r['sale_price'] !== null ? (float) $r['sale_price'] : null,
                     'image_url'           => (string) ($r['image_url'] ?? ''),
+                    'stock'               => isset($r['stock']) ? (int) $r['stock'] : null,
                     'drug_type'           => '',
                     'requires_pharmacist' => false,
                     'active_ingredient'   => '',

@@ -541,11 +541,28 @@ class FlexTemplates
             $priceContents[] = ['type' => 'text', 'text' => '฿' . number_format($originalPrice), 'size' => 'sm', 'color' => '#AAAAAA', 'decoration' => 'line-through', 'margin' => 'sm'];
         }
 
+        // Stock line is only shown when stock is actually known. Sources like
+        // ProductRecommender don't always carry a stock column — a missing key
+        // must NOT render as "❌ สินค้าหมด" (that wrongly blocks conversion).
+        $hasStock = array_key_exists('stock', $product) && $product['stock'] !== null;
+        $inStock = !$hasStock || (int) $product['stock'] > 0;
+
         $buttons = [];
-        if ($showAddToCart) {
+        if ($showAddToCart && $inStock) {
             $buttons[] = ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🛒 เพิ่มลงตะกร้า', 'text' => "add {$product['id']}"], 'style' => 'primary', 'color' => '#06C755'];
         }
         $buttons[] = ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📋 รายละเอียด', 'text' => "product {$product['id']}"], 'style' => 'secondary', 'margin' => 'sm'];
+
+        $bodyContents = [
+            ['type' => 'text', 'text' => $product['name'], 'weight' => 'bold', 'size' => 'lg', 'wrap' => true],
+            ['type' => 'box', 'layout' => 'horizontal', 'contents' => $priceContents, 'margin' => 'md'],
+        ];
+        // Only render a stock line when stock is actually known.
+        if ($hasStock) {
+            $bodyContents[] = $inStock
+                ? ['type' => 'text', 'text' => "📦 เหลือ {$product['stock']} ชิ้น", 'size' => 'xs', 'color' => '#888888', 'margin' => 'md']
+                : ['type' => 'text', 'text' => '❌ สินค้าหมด', 'size' => 'xs', 'color' => '#EF4444', 'margin' => 'md'];
+        }
 
         return [
             'type' => 'bubble',
@@ -555,13 +572,7 @@ class FlexTemplates
             ] : null,
             'body' => [
                 'type' => 'box', 'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'text', 'text' => $product['name'], 'weight' => 'bold', 'size' => 'lg', 'wrap' => true],
-                    ['type' => 'box', 'layout' => 'horizontal', 'contents' => $priceContents, 'margin' => 'md'],
-                    $product['stock'] > 0 
-                        ? ['type' => 'text', 'text' => "📦 เหลือ {$product['stock']} ชิ้น", 'size' => 'xs', 'color' => '#888888', 'margin' => 'md']
-                        : ['type' => 'text', 'text' => '❌ สินค้าหมด', 'size' => 'xs', 'color' => '#EF4444', 'margin' => 'md']
-                ],
+                'contents' => $bodyContents,
                 'paddingAll' => 'lg'
             ],
             'footer' => ['type' => 'box', 'layout' => 'vertical', 'contents' => $buttons, 'paddingAll' => 'lg']
