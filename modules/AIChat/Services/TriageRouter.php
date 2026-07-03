@@ -25,6 +25,10 @@ class TriageRouter
     private ProductRecommender $recommender;
     private ?RedFlagDetector $redFlag;
     private ?PharmacistNotifier $notifier;
+    private ?ConsultationAudit $audit;
+
+    /** user_id ของ turn ปัจจุบัน — ตั้งใน handleTurn ให้ build* helper บันทึก audit ได้ */
+    private ?int $currentUserId = null;
 
     /**
      * @param list<string> $geminiKeys
@@ -42,6 +46,24 @@ class TriageRouter
 
         $this->redFlag  = class_exists(RedFlagDetector::class) ? new RedFlagDetector() : null;
         $this->notifier = class_exists(PharmacistNotifier::class) ? new PharmacistNotifier($lineAccountId) : null;
+        $this->audit    = class_exists(ConsultationAudit::class) ? new ConsultationAudit($pdo, $lineAccountId) : null;
+    }
+
+    /**
+     * บันทึก audit trail แบบไม่ throw (การ log ห้ามทำให้การสนทนาพัง).
+     *
+     * @param array<string,mixed> $payload
+     */
+    private function audit(string $eventType, string $actorType, ?int $sessionId, array $payload = [], ?int $actorId = null): void
+    {
+        if ($this->audit === null) {
+            return;
+        }
+        try {
+            $this->audit->log($eventType, $actorType, $sessionId, $this->currentUserId, $payload, $actorId);
+        } catch (\Throwable $e) {
+            // ConsultationAudit::log กลืน error อยู่แล้ว — กันไว้อีกชั้น
+        }
     }
 
     /**
@@ -78,6 +100,8 @@ class TriageRouter
         if (!$this->isTriageEnabled()) {
             return ['type' => 'continue'];
         }
+
+        $this->currentUserId = $userId;
 
         // 1. Red flag screen — ดูข้อความผู้ใช้ก่อน triage
         if ($this->redFlag !== null) {
@@ -220,6 +244,10 @@ class TriageRouter
                 error_log('setLastQuestion failed: ' . $e->getMessage());
             }
         }
+        $this->audit('triage_question', 'ai', $sessionId, [
+            'question_id' => $qid,
+            'question_th' => (string) $question['question_th'],
+        ]);
         return [
             'type'        => 'question',
             'session_id'  => $sessionId,
@@ -234,6 +262,10 @@ class TriageRouter
      */
     private function buildEscalateResult(?int $sessionId, string $message): array
     {
+        $this->audit('escalation', 'system', $sessionId, [
+            'message'  => $message,
+            'red_flag' => true,
+        ]);
         if ($sessionId !== null) {
             $this->sessions->escalate($sessionId, $message);
         }
@@ -278,6 +310,15 @@ class TriageRouter
 
         $summary = 'ตามอาการที่คุณระบุ แนะนำสินค้าต่อไปนี้ค่ะ';
         $this->sessions->complete($sessionId, 'otc_recommended', $summary);
+
+        $this->audit('ai_recommendation', 'ai', $sessionId, [
+            'symptoms'     => array_values($symptoms),
+            'product_ids'  => array_values(array_filter(array_map(
+                static fn ($p) => is_array($p) ? ($p['id'] ?? $p['product_id'] ?? null) : null,
+                $products
+            ))),
+            'product_count' => count($products),
+        ]);
         $this->fireAndForgetSummary($sessionId);
 
         return [

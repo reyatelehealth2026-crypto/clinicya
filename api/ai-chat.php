@@ -216,6 +216,9 @@ if ($isConsultMode) {
             ? (int) $input['line_account_id'] : null;
         $userId = isset($input['user_id']) && is_numeric($input['user_id'])
             ? (int) $input['user_id'] : 0;
+        // ผู้ใช้จริง (มี row ใน users) เท่านั้นที่มี consent PDPA ให้ตรวจได้ —
+        // id แบบ crc32/IP fallback ด้านล่างเป็น synthetic ไม่ผูกกับ user_consents
+        $isRealUser = $userId > 0;
         // 🆕 ถ้าไม่มี user_id → lookup users.id จริงจาก line_user_id ก่อน fallback crc32
         // (สำคัญ: ทำให้ triage_sessions.user_id link กลับมา users ได้ → pharmacy dashboard
         //  + dispense page แสดง display_name + AI chat history ถูกจับคู่)
@@ -226,6 +229,7 @@ if ($isConsultMode) {
                 $userRow = $lookupStmt->fetch(\PDO::FETCH_ASSOC);
                 if ($userRow && !empty($userRow['id'])) {
                     $userId = (int) $userRow['id'];
+                    $isRealUser = true;
                 }
             } catch (\Throwable $e) {
                 error_log('ai-chat user lookup error: ' . $e->getMessage());
@@ -246,9 +250,36 @@ if ($isConsultMode) {
             }
         }
 
+        // PDPA (issue #15): ก่อนซัก triage (เก็บประวัติอาการ = ข้อมูลอ่อนไหว)
+        // บันทึกสถานะ consent 'health_data' ลง audit trail และเตรียม hint ให้ UI.
+        // ตรวจเฉพาะผู้ใช้จริง — synthetic id ไม่มี consent record ให้ตรวจ.
+        $healthConsentMissing = false;
+        if ($isRealUser && $userId > 0 && class_exists(\Modules\AIChat\Services\ConsentGuard::class)) {
+            try {
+                $hasHealthConsent = (new \Modules\AIChat\Services\ConsentGuard($db))->hasHealthDataConsent($userId);
+                $healthConsentMissing = !$hasHealthConsent;
+                if (class_exists(\Modules\AIChat\Services\ConsultationAudit::class)) {
+                    (new \Modules\AIChat\Services\ConsultationAudit($db, $lineAccountId))->log(
+                        $hasHealthConsent ? 'consent_granted' : 'consent_missing',
+                        'customer',
+                        null,
+                        $userId,
+                        ['consent_type' => 'health_data', 'source' => 'ai-chat']
+                    );
+                }
+            } catch (\Throwable $e) {
+                error_log('ai-chat consent check error: ' . $e->getMessage());
+            }
+        }
+
         if ($userId > 0 && class_exists(\Modules\AIChat\Services\TriageRouter::class)) {
             $router = new \Modules\AIChat\Services\TriageRouter($db, $geminiKeys, $lineAccountId);
             $tr = $router->handleTurn($userMessage, $userId);
+            // แนบ hint ให้ UI เตือนขอ consent (advisory — ไม่ตัดการสนทนา)
+            if (is_array($tr) && $healthConsentMissing) {
+                $tr['consent_required'] = true;
+                $tr['consent_type'] = 'health_data';
+            }
             if (is_array($tr) && isset($tr['type']) && $tr['type'] !== 'continue') {
                 // emit สรุปข้อความเป็น token (สำหรับ client ที่ไม่ render structured)
                 if (!empty($tr['question_th'])) {
