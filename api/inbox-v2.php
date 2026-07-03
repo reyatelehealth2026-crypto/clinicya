@@ -3141,7 +3141,8 @@ try {
                     'data' => [
                         'user' => [
                             'id' => (int) $user['id'],
-                            'display_name' => $user['display_name'],
+                            // Prefer the admin-set custom name, same as the server-rendered header
+                            'display_name' => (!empty($user['custom_display_name']) ? $user['custom_display_name'] : $user['display_name']),
                             'picture_url' => $user['picture_url'] ?? null,
                             'phone' => $user['phone'] ?? null,
                             'chat_status' => $user['chat_status'] ?? null,

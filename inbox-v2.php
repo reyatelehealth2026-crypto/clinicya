@@ -8152,7 +8152,7 @@ function formatThaiDateTime($datetime)
                         currentChatUserId = userId;
 
                         // Render chat content
-                        renderChatHeader(result.data.user);
+                        renderChatHeader(result.data.user, result.data.tags);
                         renderMessages(result.data.messages);
 
                         // Update HUD if available
@@ -8217,15 +8217,33 @@ function formatThaiDateTime($datetime)
             /**
              * Render chat header with user info
              */
-            function renderChatHeader(user) {
-                const headerName = document.querySelector('.chat-header .truncate, .chat-header h2');
+            function renderChatHeader(user, tags) {
+                // The header markup has no .chat-header class — target the real
+                // elements (same selectors as updateChatHeader), otherwise the
+                // name/avatar silently kept showing the previous customer.
+                const headerName = document.querySelector('#chatArea h3');
                 if (headerName) {
                     headerName.textContent = user.display_name || 'Unknown';
                 }
 
-                const headerAvatar = document.querySelector('.chat-header img');
+                const headerAvatar = document.querySelector('#chatArea img');
                 if (headerAvatar && user.picture_url) {
                     headerAvatar.src = user.picture_url;
+                }
+
+                // Refresh the tag badges under the name (DOM-built = XSS-safe)
+                const tagsEl = document.getElementById('userTags');
+                if (tagsEl && Array.isArray(tags)) {
+                    tagsEl.innerHTML = '';
+                    tags.forEach(tag => {
+                        const span = document.createElement('span');
+                        span.className = 'tag-badge';
+                        const color = tag.color || '#3B82F6';
+                        span.style.backgroundColor = color + '20';
+                        span.style.color = color;
+                        span.textContent = tag.name || '';
+                        tagsEl.appendChild(span);
+                    });
                 }
             }
 
