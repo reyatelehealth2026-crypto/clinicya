@@ -111,6 +111,7 @@ class ProductRecommender
                     'price'               => (float) ($r['price'] ?? 0),
                     'sale_price'          => $r['sale_price'] !== null ? (float) $r['sale_price'] : null,
                     'image_url'           => (string) ($r['image_url'] ?? ''),
+                    'stock'               => isset($r['stock']) ? (int) $r['stock'] : null,
                     'drug_type'           => '',
                     'requires_pharmacist' => false,
                     'active_ingredient'   => '',
