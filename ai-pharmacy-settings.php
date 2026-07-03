@@ -194,6 +194,10 @@ echo getToastStyles();
                             <i class="fas fa-robot text-blue-500"></i>
                             <span class="text-sm">ตั้งค่า AI Chat</span>
                         </a>
+                        <a href="ai-settings.php" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
+                            <i class="fas fa-microchip text-teal-500"></i>
+                            <span class="text-sm">เลือกโมเดล AI / API Key</span>
+                        </a>
                         <a href="pharmacist-dashboard.php" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
                             <i class="fas fa-tachometer-alt text-green-500"></i>
                             <span class="text-sm">Pharmacist Dashboard</span>

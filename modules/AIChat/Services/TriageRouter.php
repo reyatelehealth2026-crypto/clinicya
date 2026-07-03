@@ -367,8 +367,13 @@ class TriageRouter
     private function canRecommendProducts(): bool
     {
         try {
+            // Column is `auto_recommend` — matches the toggle saved by
+            // ai-pharmacy-settings.php ("แนะนำยาอัตโนมัติ"). Previously this
+            // queried a non-existent `recommend_products` column, which threw
+            // on every call and silently fell back to `true` — the tenant
+            // toggle had no effect.
             $stmt = $this->pdo->prepare(
-                "SELECT recommend_products FROM ai_pharmacy_settings
+                "SELECT auto_recommend FROM ai_pharmacy_settings
                  WHERE (line_account_id <=> :acc)
                  ORDER BY (line_account_id IS NOT NULL) DESC
                  LIMIT 1"
