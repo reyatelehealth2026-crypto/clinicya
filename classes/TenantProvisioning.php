@@ -259,6 +259,12 @@ class TenantProvisioning
                 );
             }
 
+            // The tenant template intentionally omits platform-level tables, but
+            // every tenant DB still needs admin_users for owner/staff login —
+            // its absence made provisionFromOwner fatal with 1146 after the DB
+            // was already created (orphaned half-provisioned tenants 0113/0115).
+            self::ensureAdminUsersTable($dbName);
+
             self::logComplete($logId, 'succeeded');
             self::recordMigrationApplied($tenantId, basename($schemaFile), $schemaFile, $ms);
         } catch (\Throwable $e) {
@@ -267,6 +273,48 @@ class TenantProvisioning
         } finally {
             @unlink($defaultsFile);
         }
+    }
+
+    /**
+     * Create the tenant-side admin_users table when the template didn't
+     * (canonical DDL from install_complete_latest.sql). Idempotent.
+     */
+    public static function ensureAdminUsersTable(string $dbName): void
+    {
+        self::assertDbNameAllowed($dbName);
+        $pdo = new \PDO(
+            'mysql:host=' . DB_HOST . ';dbname=' . $dbName . ';charset=utf8mb4',
+            DB_USER,
+            DB_PASS,
+            [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+        );
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS `admin_users` (
+              `id` int(11) NOT NULL AUTO_INCREMENT,
+              `username` varchar(100) NOT NULL,
+              `email` varchar(255) NOT NULL,
+              `phone` varchar(20) DEFAULT NULL,
+              `password` varchar(255) NOT NULL,
+              `display_name` varchar(255) DEFAULT NULL,
+              `avatar_url` varchar(500) DEFAULT NULL,
+              `role` varchar(20) DEFAULT 'admin',
+              `line_account_id` int(11) DEFAULT NULL,
+              `is_active` tinyint(1) DEFAULT 1,
+              `last_login` timestamp NULL DEFAULT NULL,
+              `login_count` int(11) DEFAULT 0,
+              `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+              `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+              `line_user_id` varchar(50) DEFAULT NULL,
+              `notification_enabled` tinyint(1) DEFAULT 1,
+              PRIMARY KEY (`id`),
+              UNIQUE KEY `username` (`username`),
+              UNIQUE KEY `email` (`email`),
+              KEY `idx_admin_users_role` (`role`),
+              KEY `idx_admin_users_line_account` (`line_account_id`),
+              KEY `idx_line_user` (`line_user_id`),
+              KEY `idx_role_active` (`role`,`is_active`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
     }
 
     /**

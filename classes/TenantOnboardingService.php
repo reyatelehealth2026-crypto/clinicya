@@ -243,7 +243,7 @@ class TenantOnboardingService
      * (SMTP if email_settings is configured, otherwise PHP mail()).
      * Returns true on success; never throws (failure is reported, not fatal).
      */
-    private static function sendWelcomeEmail(
+    public static function sendWelcomeEmail(
         \PDO $db,
         string $to,
         string $ownerName,
