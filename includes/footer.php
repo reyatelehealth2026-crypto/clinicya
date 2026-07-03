@@ -329,6 +329,7 @@
     </style>
     <?php endif; ?>
 
+<?php if (file_exists(__DIR__ . '/../assets/css/mor-ruj-mascot.css') && file_exists(__DIR__ . '/../assets/js/mor-ruj-mascot.js')): ?>
 <!-- ผู้จัดการร้าน Re-ya — mascot AI assistant (replaces legacy fa-robot widget) -->
 <link rel="stylesheet" href="/assets/css/mor-ruj-mascot.css?v=7">
 <script src="/assets/js/mor-ruj-mascot.js?v=10"></script>
@@ -346,6 +347,7 @@ if (window.MorRuj) MorRuj.init({
   ]
 });
 </script>
+<?php endif; ?>
 
 </body>
 </html>
