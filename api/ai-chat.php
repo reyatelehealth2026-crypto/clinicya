@@ -877,10 +877,42 @@ if (!$success && $openaiKey !== '') {
     }
 }
 
-// 3) ถ้ายังพังอีก → ส่ง error สุดท้ายที่เก็บไว้
+// 3) ถ้ายังพังอีก → degrade อย่างปลอดภัย (Phase 1 · WS-A)
 $silentMode = false;
 if (!$success) {
-    $emitErrorOrCapture($capturedError !== '' ? $capturedError : 'AI ไม่ตอบสนอง — ตรวจสอบคีย์ Gemini/OpenAI');
+    // เก็บสาเหตุจริง (อาจ sensitive เช่นสถานะคีย์) ไว้ที่ log ฝั่ง server เท่านั้น
+    error_log('[ai-chat] all AI providers failed: ' . ($capturedError !== '' ? $capturedError : 'unknown'));
+
+    if ($isConsultMode) {
+        // ฝั่งลูกค้า: ห้ามโชว์ error ดิบ และห้ามพยายามแนะนำยาเองโดยไม่มี LLM.
+        // แสดงข้อความส่งต่ออย่างสุภาพ + escalate หาเภสัชกรจริงให้มารับช่วงต่อ.
+        $emitToken('ขออภัยค่ะ ระบบผู้ช่วย AI ขัดข้องชั่วคราว 🙏 ทางเภสัชกรได้รับแจ้งแล้ว และจะติดต่อกลับมาดูแลคุณโดยเร็วที่สุดค่ะ');
+        try {
+            require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+            if (class_exists(\Modules\AIChat\Services\PharmacistNotifier::class)) {
+                (new \Modules\AIChat\Services\PharmacistNotifier($ctxLineAccountId))->notifyAllPharmacists([
+                    'session_id'     => $ctxSessionId,
+                    'message'        => 'ระบบ AI ขัดข้องชั่วคราว — ลูกค้ากำลังรอเภสัชกรช่วยตอบ',
+                    'ai_unavailable' => true,
+                ], true);
+            }
+            // บันทึก audit ของการ escalate นี้ (no-op จนกว่า ConsultationAudit จะ merge)
+            if (class_exists(\Modules\AIChat\Services\ConsultationAudit::class)) {
+                (new \Modules\AIChat\Services\ConsultationAudit($db, $ctxLineAccountId))->log(
+                    'ai_unavailable_escalation',
+                    'system',
+                    $ctxSessionId !== null ? (int) $ctxSessionId : null,
+                    $ctxInternalUserId > 0 ? $ctxInternalUserId : null,
+                    ['reason' => 'all_ai_providers_failed']
+                );
+            }
+        } catch (\Throwable $escErr) {
+            error_log('[ai-chat] AI-down pharmacist escalation failed: ' . $escErr->getMessage());
+        }
+    } else {
+        // ฝั่ง admin/dev: คงรายละเอียดทางเทคนิคไว้เพื่อ debug
+        $emitErrorOrCapture($capturedError !== '' ? $capturedError : 'AI ไม่ตอบสนอง — ตรวจสอบคีย์ Gemini/OpenAI');
+    }
 }
 
 // --- PHASE 1 POST-STREAM: persistence + drug-interaction warnings ----------
