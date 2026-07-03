@@ -36,8 +36,13 @@ declare(strict_types=1);
  *     is never trusted for the on-disk name.
  *   - The bucket name must be in BUCKETS (constant whitelist below). Free-form
  *     bucket strings would re-introduce the path-injection class of bug.
- *   - All directories created with 0750 (owner: web user, group: web group, no
- *     world access). Files written 0640.
+ *   - Directories/files for most buckets are 0750/0640 (owner + web-process
+ *     group only). PUBLIC_BUCKETS (content meant to be fetched directly by any
+ *     web visitor — shop logos, storefront photos) use 0711/0644 instead: on
+ *     hosts where the PHP process (suexec, account user) and the plain
+ *     static-file Apache worker run as different users/groups, 0750/0640 is
+ *     unreadable to the latter and every direct URL 404s even though the file
+ *     exists. See PUBLIC_BUCKETS docblock below before adding a bucket to it.
  *
  * NOT responsible for:
  *   - URL signing / expiring tokens (a future signed-URL service will wrap this).
@@ -64,11 +69,41 @@ class TenantFileStorage
     /** Filename validation regex — basenames only, no path separators. */
     private const FILENAME_RE = '/\A[A-Za-z0-9._-]+\z/';
 
-    /** Directory permission for tenant + bucket dirs. */
+    /**
+     * Buckets whose files are meant to be fetched directly by any web visitor
+     * (storefront logos, shop photos). On hosts where PHP runs via suexec as
+     * the account user but plain static GETs are served by a separate,
+     * lower-privileged Apache worker (e.g. group "nobody" — the case on the
+     * re-ya.net/re-ya.com cPanel box), files written at the default 0640/0750
+     * are unreadable by that worker and 404 even though they exist on disk.
+     * Everything else (payment slips, prescription uploads, exports) stays
+     * locked to owner+group only — those are never meant to be world-fetchable.
+     */
+    private const PUBLIC_BUCKETS = [
+        'logos',
+        'shop_photos',
+    ];
+
+    /** Directory permission for tenant + bucket dirs (non-public buckets). */
     private const DIR_PERM = 0750;
 
-    /** File permission for stored uploads. */
+    /** File permission for stored uploads (non-public buckets). */
     private const FILE_PERM = 0640;
+
+    /**
+     * Directory permission for PUBLIC_BUCKETS: traverse-only for "other" (no
+     * listing), so exact filenames still work without exposing directory
+     * contents to casual enumeration.
+     */
+    private const DIR_PERM_PUBLIC = 0711;
+
+    /** File permission for PUBLIC_BUCKETS: world-readable, as intended for direct serving. */
+    private const FILE_PERM_PUBLIC = 0644;
+
+    /** Tenant root permission: always traverse-only for "other", so a public
+     *  bucket underneath stays reachable even though the root itself is never
+     *  listable and sibling private buckets keep their own stricter perms. */
+    private const TENANT_ROOT_PERM = 0711;
 
     /** Max filename length we will accept (DB column is VARCHAR(500)). */
     private const MAX_FILENAME_LEN = 200;
@@ -143,7 +178,8 @@ class TenantFileStorage
         if (!move_uploaded_file($fileFromFiles['tmp_name'], $dest)) {
             throw new RuntimeException('saveUpload: move_uploaded_file failed');
         }
-        @chmod($dest, self::FILE_PERM);
+        $filePerm = in_array($bucket, self::PUBLIC_BUCKETS, true) ? self::FILE_PERM_PUBLIC : self::FILE_PERM;
+        @chmod($dest, $filePerm);
 
         return $filename;
     }
@@ -168,15 +204,21 @@ class TenantFileStorage
         self::assertTenantId($tenantId);
         self::assertBucket($bucket);
 
+        $isPublic = in_array($bucket, self::PUBLIC_BUCKETS, true);
+        $dirPerm = $isPublic ? self::DIR_PERM_PUBLIC : self::DIR_PERM;
+
         $dir = self::path($tenantId, $bucket);
-        if (is_dir($dir)) {
-            return;
+        if (!is_dir($dir)) {
+            if (!@mkdir($dir, $dirPerm, true) && !is_dir($dir)) {
+                throw new RuntimeException('ensureDir: cannot create ' . $dir);
+            }
         }
-        if (!@mkdir($dir, self::DIR_PERM, true) && !is_dir($dir)) {
-            throw new RuntimeException('ensureDir: cannot create ' . $dir);
-        }
-        @chmod($dir, self::DIR_PERM);
-        @chmod(dirname($dir), self::DIR_PERM); // also tighten the tenant root we just created
+        @chmod($dir, $dirPerm);
+        // Tenant root is shared by every bucket for this tenant (public and
+        // private alike) — always traverse-only so a public bucket underneath
+        // stays reachable, never tightened to the private DIR_PERM which would
+        // block Apache's static-file worker from reaching it at all.
+        @chmod(dirname($dir), self::TENANT_ROOT_PERM);
     }
 
     /**

@@ -240,3 +240,22 @@ $v2SectionLabels = [
     </div>
 
 </div>
+
+<script>
+// Radio selection only updates on the server after a full form submit (the
+// green border comes from PHP checking the saved draft) — without this, a
+// click looks like it did nothing until "บันทึกร่าง" reloads the page.
+// This just mirrors that same visual state instantly on click.
+document.querySelectorAll('input[name="v2_theme"], input[name="v2_hero"]').forEach(function (input) {
+    input.addEventListener('change', function () {
+        document.querySelectorAll('input[name="' + input.name + '"]').forEach(function (sibling) {
+            var label = sibling.closest('label');
+            if (!label) { return; }
+            label.classList.remove('border-emerald-500', 'ring-2', 'ring-emerald-200');
+            label.classList.remove('border-gray-200');
+            label.classList.add(sibling.checked ? 'border-emerald-500' : 'border-gray-200');
+            if (sibling.checked) { label.classList.add('ring-2', 'ring-emerald-200'); }
+        });
+    });
+});
+</script>
