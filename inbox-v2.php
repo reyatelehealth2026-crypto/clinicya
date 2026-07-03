@@ -8135,6 +8135,15 @@ function formatThaiDateTime($datetime)
             async function switchChat(userId) {
                 if (isSwitchingChat || userId == currentChatUserId) return;
 
+                // Page was opened with no chat selected → the chat area
+                // (#chatBox, header, send form) was never server-rendered and
+                // AJAX has nowhere to render. Navigate for real this once;
+                // subsequent switches are AJAX as usual.
+                if (!document.getElementById('chatBox')) {
+                    window.location.href = buildUserLink(userId);
+                    return;
+                }
+
                 isSwitchingChat = true;
                 console.log('[AJAX Chat] Switching to user:', userId);
 
@@ -10876,10 +10885,12 @@ function formatThaiDateTime($datetime)
                 updateActiveConversation(userId);
 
                 // Load conversation via AJAX (Requirement 1.1)
-                if (chatPanelManager) {
+                // No server-rendered chat area (page opened without a selected
+                // chat) → nothing to render into; navigate for real this once.
+                if (chatPanelManager && document.getElementById('chatBox')) {
                     loadConversationAJAX(userId, userData);
                 } else {
-                    console.warn('[CLICK] ChatPanelManager not ready, falling back to page reload');
+                    console.warn('[CLICK] ChatPanelManager/chatBox not ready, falling back to page reload');
                     // Fallback: reload page with user parameter
                     window.location.href = newUrl;
                 }
