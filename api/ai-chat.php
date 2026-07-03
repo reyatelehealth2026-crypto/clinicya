@@ -439,18 +439,9 @@ if ($isConsultMode) {
                     // Emit the state transition first so any UI listening on
                     // 'state' switches the header chip before the emergency
                     // modal opens (avoids the stale 'greeting' flash).
-                    $emitStructured([
-                        'type'     => 'state',
-                        'state'    => 'escalate',
-                        'label_th' => 'ส่งต่อเภสัชกร',
-                    ]);
+                    $emitStructured(aiChatBuildStateEvent('escalate', 'ส่งต่อเภสัชกร'));
 
-                    $emitStructured([
-                        'type'           => 'emergency',
-                        'severity'       => 'critical',
-                        'symptoms'       => array_values(array_filter($symptoms)),
-                        'recommendation' => trim(implode("\n", array_filter($actions))),
-                    ]);
+                    $emitStructured(aiChatBuildEmergencyEvent($symptoms, $actions, 'critical'));
 
                     // Persist what we have (user turn) so the conversation
                     // history still reflects the escalation event.
@@ -971,10 +962,7 @@ if ($isConsultMode && $success && $assistantBuffer !== '') {
             if (!empty($mentions)) {
                 $warnings = aiChatCheckDrugInteractionsSimple($mentions, $ctxUserProfile);
                 if (!empty($warnings)) {
-                    $emitStructured([
-                        'type'     => 'drug_interactions',
-                        'warnings' => $warnings,
-                    ]);
+                    $emitStructured(aiChatBuildDrugInteractionsEvent($warnings));
                 }
             }
         }
