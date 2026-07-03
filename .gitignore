@@ -224,3 +224,8 @@ g_out.txt
 # Session/cost reports — throwaway, may contain tokens (Vercel PAT found in one)
 session-report-*.html
 cost-by-*.csv
+
+# Browser profiles captured during screen recordings — never commit (bloat +
+# Windows MAX_PATH breaks worktrees). See chore/remove-chrome-profile-junk.
+**/.chrome-profile*/
+**/.chrome-profile*
