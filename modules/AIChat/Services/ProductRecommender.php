@@ -79,6 +79,7 @@ class ProductRecommender
         // ใช้ COALESCE เผื่อคอลัมน์ pharmacy ยังไม่ถูก migrate
         $sql = "SELECT
                     p.id, p.name, p.description, p.price, p.sale_price, p.image_url,
+                    p.stock,
                     psm.symptom_code, psm.weight, psm.is_first_line, psm.notes
                 FROM product_symptom_map psm
                 INNER JOIN business_items p ON p.id = psm.product_id
