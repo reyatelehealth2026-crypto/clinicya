@@ -2327,29 +2327,16 @@ $visiblePrimaryNavFooter = $filterPrimaryNav($primaryNavFooter);
             // 2026-05-26: per-tenant logo (fallback ไป REYA default ถ้าไม่มี)
             // 2026-07-03: โลโก้+ชื่อร้านต่อ tenant — ถ้าร้านยังไม่ตั้งใน
             // shop_settings ใช้รูปโปรไฟล์/ชื่อ LINE OA ของร้านก่อน REYA default
+            // 2026-07-04: fallback chain รวมศูนย์ไว้ใน classes/BrandingResolver.php
             $brandLogo = null;
             $brandName = null;
             try {
                 $bid = (int)($_SESSION['current_bot_id'] ?? 0);
-                if ($bid > 0) {
-                    $s = $db->prepare('SELECT shop_logo, shop_name FROM shop_settings WHERE line_account_id = ? LIMIT 1');
-                    $s->execute([$bid]);
-                    if ($brandRow = $s->fetch(PDO::FETCH_ASSOC)) {
-                        $brandLogo = (string)($brandRow['shop_logo'] ?? '');
-                        $brandName = (string)($brandRow['shop_name'] ?? '');
-                    }
-                    if (!$brandLogo || !$brandName) {
-                        $s = $db->prepare('SELECT picture_url, name FROM line_accounts WHERE id = ? LIMIT 1');
-                        $s->execute([$bid]);
-                        if ($brandLa = $s->fetch(PDO::FETCH_ASSOC)) {
-                            if (!$brandLogo) {
-                                $brandLogo = (string)($brandLa['picture_url'] ?? '');
-                            }
-                            if (!$brandName) {
-                                $brandName = (string)($brandLa['name'] ?? '');
-                            }
-                        }
-                    }
+                if ($bid > 0 && is_file(__DIR__ . '/../classes/BrandingResolver.php')) {
+                    require_once __DIR__ . '/../classes/BrandingResolver.php';
+                    $brand     = (new BrandingResolver($db))->resolveForLineAccount($bid);
+                    $brandLogo = $brand['logo_url'];
+                    $brandName = $brand['shop_name'];
                 }
             } catch (\Throwable $e) { /* table might be missing on some tenants */ }
             if (!$brandLogo) {
