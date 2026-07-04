@@ -228,4 +228,26 @@ class PharmacyOutlook
             throw new \InvalidArgumentException("Invalid date (expected Y-m-d): {$date}");
         }
     }
+
+    /**
+     * Shapes a buildReport()/applyMinCohortSuppression() output into the
+     * clean, stable envelope used by machine-readable exports (e.g.
+     * api/pharmacy-outlook-export.php). Pure function — no I/O.
+     *
+     * Deliberately exposes only the suppressed bucket COUNT, never the
+     * bucket names themselves — the names of near-identifiable (small
+     * cohort) categories are exactly the thing MIN_COHORT suppression
+     * exists to hide, so they must not leak into any export either.
+     */
+    public static function toExportArray(array $report): array
+    {
+        return [
+            'tenant_count'            => (int) ($report['tenant_count'] ?? 0),
+            'order_count'             => (int) ($report['order_count'] ?? 0),
+            'revenue_total'           => round((float) ($report['revenue_total'] ?? 0), 2),
+            'drug_category_counts'    => (array) ($report['drug_category_counts'] ?? []),
+            'drug_category_tenants'   => (array) ($report['drug_category_tenants'] ?? []),
+            'suppressed_bucket_count' => count((array) ($report['suppressed_buckets'] ?? [])),
+        ];
+    }
 }
