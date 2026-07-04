@@ -41,6 +41,10 @@ if (!is_array($input)) {
 $userMessage = trim((string) ($input['message'] ?? ''));
 $history = is_array($input['history'] ?? null) ? $input['history'] : [];
 $mode = strtolower(trim((string) ($input['mode'] ?? '')));
+// ใช้ scope คีย์ AI ให้ตรง tenant/LINE OA ของ request นี้ (Phase 3 · #19 — เดิมดึงคีย์
+// ของทุก tenant มาปนกัน ทำให้ billing/quota อาจไปตกที่ tenant อื่น)
+$requestLineAccountId = isset($input['line_account_id']) && is_numeric($input['line_account_id'])
+    ? (int) $input['line_account_id'] : null;
 
 /**
  * เลือก persona — DEFAULT คือ consult (เภสัชกรผู้ช่วย) เพื่อให้ฝั่งลูกค้าได้ persona ที่ถูก
@@ -125,7 +129,29 @@ $loadKeysFromQuery = function (string $sql, string $col) use ($db, &$diagnostics
     return $out;
 };
 
-// 1) ai_settings — ลอง query แบบง่ายสุดก่อน
+// 1a) ai_settings ของ tenant (line_account_id) นี้โดยเฉพาะก่อนเสมอ (Phase 3 · #19)
+if ($requestLineAccountId !== null) {
+    $tenantScopedStmt = null;
+    try {
+        $tenantScopedStmt = $db->prepare(
+            "SELECT gemini_api_key FROM ai_settings
+             WHERE line_account_id = ? AND gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> ''"
+        );
+        $tenantScopedStmt->execute([$requestLineAccountId]);
+        $tenantRows = $tenantScopedStmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $diagnostics[] = 'ai_settings (tenant=' . $requestLineAccountId . ') → ' . count($tenantRows) . ' rows';
+        foreach ($tenantRows as $r) {
+            $v = isset($r['gemini_api_key']) ? trim((string) $r['gemini_api_key']) : '';
+            if ($v !== '' && !in_array($v, $geminiKeys, true)) {
+                $geminiKeys[] = $v;
+            }
+        }
+    } catch (\Throwable $e) {
+        $diagnostics[] = 'ai_settings tenant-scoped SQL fail: ' . substr($e->getMessage(), 0, 80);
+    }
+}
+
+// 1b) ai_settings — ทุกแถว (fallback เมื่อไม่มีคีย์เฉพาะ tenant, หรือไม่ทราบ tenant)
 foreach ($loadKeysFromQuery(
     "SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> ''",
     'gemini_api_key'
@@ -706,7 +732,7 @@ $emitErrorOrCapture = static function (string $msg) use (&$silentMode, &$capture
 /**
  * ลอง Gemini ด้วยคีย์ที่ระบุ คืน true ถ้ามี token ส่งออกอย่างน้อย 1 ตัว
  */
-$tryGemini = function (string $key) use ($payload, $emitToken, &$capturedError, &$emittedAnyToken, &$assistantBuffer): bool {
+$tryGemini = function (string $key) use ($db, $requestLineAccountId, $payload, $emitToken, &$capturedError, &$emittedAnyToken, &$assistantBuffer): bool {
     // Reset the persistence buffer at the start of each attempt so a
     // partially-streamed response from a failed key does not get appended
     // to (and pollute) the response that the fallback key eventually
@@ -795,6 +821,13 @@ $tryGemini = function (string $key) use ($payload, $emitToken, &$capturedError, 
 
     $tokensAfter = $emittedAnyToken ? 1 : 0;
     if ($tokensAfter > $tokenCountBefore) {
+        // Phase 3 · #19 — per-tenant usage metering (never fatal).
+        if (!class_exists('AiUsageMeter') && file_exists(__DIR__ . '/../classes/AiUsageMeter.php')) {
+            require_once __DIR__ . '/../classes/AiUsageMeter.php';
+        }
+        if (class_exists('AiUsageMeter')) {
+            AiUsageMeter::increment($db, $requestLineAccountId, 'gemini', 'gemini-flash-latest');
+        }
         return true;
     }
 

@@ -163,6 +163,7 @@ database/*.sql
 !database/migration_2026-07-03_landing_settings_unique_key.sql
 !database/migration_2026-07-03_inbox_performance_indexes.sql
 !database/migration_2026-07-04_consultation_audit_pdpa.sql
+!database/migration_2026-07-04_ai_usage_counters.sql
 !database/migration_2026-07-04_ai_pharmacy_settings_columns.sql
 !docs/adr/*.md
 !CONTEXT.md
