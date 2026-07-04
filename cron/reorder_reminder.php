@@ -9,6 +9,13 @@
  * today — and who have not already been reminded recently — get a LINE Flex
  * "ถึงเวลาเติมยา" (time to refill) push message.
  *
+ * Task 2.5 (Phase 2): the reminder is personalized where possible — the
+ * customer's previously-bought products (still active/sellable) are mapped
+ * via `ReorderFlexBuilder` into a product carousel with order CTAs, so the
+ * customer can reorder the exact item(s) in one tap. Falls back to the
+ * original generic "ถึงเวลาเติมยา" Flex when no orderable products can be
+ * found (e.g. all previously-bought items were removed/deactivated).
+ *
  * Run: php cron/reorder_reminder.php
  * Schedule: Daily, e.g. 0 9 * * * (09:00 Asia/Bangkok)
  *
@@ -31,8 +38,12 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/TenantContext.php';
 require_once __DIR__ . '/../classes/ReorderCycle.php';
+require_once __DIR__ . '/../classes/ReorderFlexBuilder.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
 require_once __DIR__ . '/../classes/FlexTemplates.php';
+
+/** How many of a customer's previously-bought products to offer in the reorder carousel. */
+const REORDER_REMINDER_MAX_PRODUCTS = 5;
 
 /** How many days ahead of / behind the predicted due-date still counts as "due now". */
 const REORDER_REMINDER_WINDOW_DAYS = 3;
@@ -168,7 +179,9 @@ function reya_process_tenant_reorder_reminders(PDO $db, int $tenantId, string $t
             continue;
         }
 
-        $flex = reya_build_reorder_reminder_flex($info['display_name'], $prediction);
+        $products = reya_fetch_reorder_products($db, $userId, REORDER_REMINDER_MAX_PRODUCTS);
+        $flex = ReorderFlexBuilder::build($info['display_name'], $prediction, $products)
+            ?? reya_build_reorder_reminder_flex($info['display_name'], $prediction);
 
         try {
             $line = new LineAPI($info['channel_access_token']);
@@ -187,6 +200,38 @@ function reya_process_tenant_reorder_reminders(PDO $db, int $tenantId, string $t
     }
 
     return ['checked' => $checked, 'notified' => $notified, 'errors' => $errors];
+}
+
+/**
+ * Fetch a customer's previously-bought products, most-frequently-bought
+ * first, joined against the live `business_items` row so the carousel shows
+ * current price/stock/image rather than a stale snapshot from
+ * `transaction_items`. Only active, sellable items are offered — a
+ * discontinued/disabled product can't be reordered.
+ *
+ * @return array<int, array{id:int, name:string, price:float, sale_price:float|null, image_url:string|null, stock:int|null}>
+ */
+function reya_fetch_reorder_products(PDO $db, int $userId, int $limit): array
+{
+    $stmt = $db->prepare(
+        "SELECT bi.id, bi.name, bi.price, bi.sale_price, bi.image_url, bi.stock,
+                COUNT(*) AS times_bought
+           FROM transaction_items ti
+           JOIN transactions t ON t.id = ti.transaction_id
+           JOIN business_items bi ON bi.id = ti.product_id
+          WHERE t.user_id = ?
+            AND t.status NOT IN ('cancelled', 'refunded')
+            AND bi.is_active = 1
+            AND bi.enable = 1
+          GROUP BY bi.id, bi.name, bi.price, bi.sale_price, bi.image_url, bi.stock
+          ORDER BY times_bought DESC, MAX(t.created_at) DESC
+          LIMIT ?"
+    );
+    $stmt->bindValue(1, $userId, PDO::PARAM_INT);
+    $stmt->bindValue(2, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
 /**
