@@ -166,6 +166,7 @@ database/*.sql
 !database/migration_2026-07-04_ai_usage_counters.sql
 !database/migration_2026-07-04_ai_pharmacy_settings_columns.sql
 !database/migration_2026-07-04_tenant_onboard_progress.sql
+!database/migration_2026-07-04_pdpa_data_rights.sql
 !docs/adr/*.md
 !CONTEXT.md
 !CONTEXT-MAP.md

@@ -15,6 +15,7 @@ import {
   MapPin,
   Package,
   Pill,
+  ShieldCheck,
   Store,
   UserPlus,
   Video
@@ -264,6 +265,10 @@ export function ProfileClient() {
           <MenuSection title="ช้อปปิ้ง">
             <MenuRow href="/shop" icon={Store} title="ร้านค้า" />
             <MenuRow href="/orders" icon={Package} title="ออเดอร์ของฉัน" />
+          </MenuSection>
+
+          <MenuSection title="ความเป็นส่วนตัวและข้อมูล">
+            <MenuRow href="/privacy" icon={ShieldCheck} title="สิทธิของฉัน (PDPA)" />
           </MenuSection>
 
           {/* Logout */}
