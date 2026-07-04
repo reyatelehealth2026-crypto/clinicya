@@ -41,6 +41,9 @@
         <testsuite name="AiUsage Tests">
             <directory>tests/AiUsage</directory>
         </testsuite>
+        <testsuite name="Branding Tests">
+            <directory>tests/Branding</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>
