@@ -490,7 +490,7 @@ function buildReminder10MinFlex($apt) {
             'paddingAll' => '15px',
             'contents' => [
                 ['type' => 'button', 'style' => 'primary', 'color' => '#FF9500', 'height' => 'md', 'action' => [
-                    'type' => 'uri', 'label' => '�  เตรียมพร้อม Video Call', 'uri' => $videoCallUrl
+                    'type' => 'uri', 'label' => '📹  เตรียมพร้อม Video Call', 'uri' => $videoCallUrl
                 ]]
             ]
         ]
@@ -631,7 +631,7 @@ function buildReminderNowFlex($apt) {
             'paddingAll' => '15px',
             'spacing' => 'sm',
             'contents' => [
-                ['type' => 'button', 'style' => 'primary', 'color' => '#06C755', 'height' => 'lg', 'action' => [
+                ['type' => 'button', 'style' => 'primary', 'color' => '#06C755', 'height' => 'md', 'action' => [
                     'type' => 'uri', 'label' => '📹 เริ่ม Video Call เลย!', 'uri' => $videoCallUrl
                 ]],
                 ['type' => 'text', 'text' => 'กดปุ่มด้านบนเพื่อเริ่มการสนทนา', 'size' => 'xs', 'color' => '#999999', 'align' => 'center', 'margin' => 'md']
