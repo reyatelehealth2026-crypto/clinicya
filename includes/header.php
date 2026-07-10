@@ -270,6 +270,7 @@ $quickAccessMenus = [
     'rewards' => ['icon' => 'fa-gift', 'label' => 'รางวัลแลกแต้ม', 'url' => '/membership?tab=rewards', 'page' => 'membership', 'color' => 'fuchsia'],
     'points-settings' => ['icon' => 'fa-coins', 'label' => 'ตั้งค่าแต้ม', 'url' => '/membership?tab=settings', 'page' => 'membership', 'color' => 'yellow'],
     'loyalty-members' => ['icon' => 'fa-phone', 'label' => 'สมาชิกเบอร์ (จ่ายแต้ม)', 'url' => '/loyalty-members', 'page' => 'loyalty-members', 'color' => 'emerald'],
+    'receipt-points-review' => ['icon' => 'fa-receipt', 'label' => 'ตรวจสลิปรับแต้ม', 'url' => '/receipt-points-review', 'page' => 'receipt-points-review', 'color' => 'amber', 'roles' => ['owner', 'admin', 'pharmacist']],
 
     // ==================== Patient & Journey - Care Journey ====================
     'broadcast' => ['icon' => 'fa-paper-plane', 'label' => 'บรอดแคสต์', 'url' => '/broadcast', 'page' => 'broadcast', 'color' => 'purple', 'roles' => ['admin', 'marketing']],
