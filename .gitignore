@@ -162,6 +162,7 @@ database/*.sql
 !database/migration_2026-06-30_plans_remodel_platform_settings.sql
 !database/migration_2026-07-03_landing_settings_unique_key.sql
 !database/migration_2026-07-03_inbox_performance_indexes.sql
+!database/migration_2026-07-10_receipt_points_review.sql
 !docs/adr/*.md
 !CONTEXT.md
 !CONTEXT-MAP.md
@@ -175,6 +176,8 @@ DB_CONNECTION.md
 !docs/plans/2026-04-13-line-mini-app-100pct-subagent-orchestration.md
 !docs/plans/2026-04-13-line-mini-app-human-vs-ai.md
 !docs/plans/UAT-line-mini-app-b4.md
+!docs/superpowers/plans/2026-07-10-receipt-points-review.md
+!docs/superpowers/plans/2026-07-10-receipt-points-review-agent-context.md
 !docs/plans/2026-04-13-line-mini-app-gap-closure.md
 !docs/admin-tutorials/*.md
 !docs/training/*.md
