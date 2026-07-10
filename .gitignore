@@ -180,6 +180,7 @@ DB_CONNECTION.md
 !docs/training/*.md
 !docs/ai/**/*.md
 !docs/user-manual.md
+!docs/adr/0007-receipt-points-review.md
 !.claude/agents/*.md
 !.agents/skills/**/*.md
 *.bak*
