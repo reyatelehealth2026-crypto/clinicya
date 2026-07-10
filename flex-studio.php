@@ -93,7 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                     'corner_style'      => (in_array($_POST['corner_style'] ?? '', ['none', 'sm', 'md', 'lg'], true) ? $_POST['corner_style'] : null),
                 ];
                 if ($fields['sender_name'] !== null) {
-                    $fields['sender_name'] = mb_substr($fields['sender_name'], 0, 255);
+                    // LINE caps sender.name at 20 characters.
+                    $fields['sender_name'] = mb_substr($fields['sender_name'], 0, 20);
                 }
                 if ($fields['shop_display_name'] !== null) {
                     $fields['shop_display_name'] = mb_substr($fields['shop_display_name'], 0, 255);
@@ -124,6 +125,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
 
             case 'set_override_active': {
                 $slot = preg_replace('/[^a-z0-9_]/', '', (string) ($_POST['slot'] ?? ''));
+                if (!flex_slot_allows_override($slot)) {
+                    echo json_encode(['success' => false, 'error' => 'slot not overridable']);
+                    break;
+                }
                 $id = (int) ($_POST['id'] ?? 0);
                 $active = (int) ($_POST['active'] ?? 0) === 1 ? 1 : 0;
                 $db->beginTransaction();
@@ -152,6 +157,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 $id = (int) ($_POST['id'] ?? 0);
                 if ($slot === '' || $id <= 0) {
                     echo json_encode(['success' => false, 'error' => 'bad params']);
+                    break;
+                }
+                if (!flex_slot_allows_override($slot)) {
+                    echo json_encode(['success' => false, 'error' => 'slot not overridable']);
                     break;
                 }
                 // Verify the template belongs to this shop before binding.
@@ -225,6 +234,7 @@ foreach ($slots as $s) {
                             data-slot="<?= htmlspecialchars($s['key']) ?>"
                             data-label="<?= htmlspecialchars($s['label']) ?>"
                             data-producer="<?= htmlspecialchars($s['producer']) ?>"
+                            data-ovr="<?= flex_slot_allows_override($s['key']) ? '1' : '0' ?>"
                             onclick="fsSelect(this)">
                             <span class="text-lg w-6 text-center"><?= $s['icon'] ?></span>
                             <span class="flex-1 min-w-0">
@@ -268,13 +278,21 @@ foreach ($slots as $s) {
                     <div class="bg-white rounded-lg border p-3">
                         <h3 class="text-sm font-bold text-gray-700 mb-1">ปรับเฉพาะใบนี้ (Override)</h3>
                         <p class="text-[11px] text-gray-400 mb-2">ถ้าไม่ตั้ง จะใช้ดีไซน์มาตรฐาน + ธีมร้านของคุณ</p>
-                        <div id="fs-overrides" class="space-y-1 text-sm text-gray-500">—</div>
-                        <div class="border-t mt-3 pt-3">
-                            <div class="text-[11px] text-gray-500 mb-1">ผูกเทมเพลตจาก Flex Builder เข้ากับ slot นี้:</div>
-                            <div class="flex gap-2">
-                                <select id="fs-bind-select" class="flex-1 border rounded-lg px-2 py-1.5 text-sm"><option value="">— เลือกเทมเพลต —</option></select>
-                                <button onclick="fsBindTemplate()" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">ผูก</button>
+                        <!-- Shown for override-safe (static) slots -->
+                        <div id="fs-override-wrap">
+                            <div id="fs-overrides" class="space-y-1 text-sm text-gray-500">—</div>
+                            <div class="border-t mt-3 pt-3">
+                                <div class="text-[11px] text-gray-500 mb-1">ผูกเทมเพลตจาก Flex Builder เข้ากับ slot นี้:</div>
+                                <div class="flex gap-2">
+                                    <select id="fs-bind-select" class="flex-1 border rounded-lg px-2 py-1.5 text-sm"><option value="">— เลือกเทมเพลต —</option></select>
+                                    <button onclick="fsBindTemplate()" class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">ผูก</button>
+                                </div>
                             </div>
+                        </div>
+                        <!-- Shown for dynamic slots (content from live data) -->
+                        <div id="fs-override-locked" class="hidden text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 leading-relaxed">
+                            🔒 สลอตนี้ปรับได้เฉพาะ<b>ธีม</b> (สี/โลโก้/ผู้ส่ง) เพราะเนื้อหามาจากข้อมูลจริง เช่น ชื่อยา/ขนาด/ยอดเงิน
+                            การล็อกดีไซน์ตายตัวจะทำให้ลูกค้าได้ข้อมูลผิด
                         </div>
                     </div>
                     <div class="mt-3 text-[11px] text-gray-400 leading-relaxed">
@@ -290,7 +308,7 @@ foreach ($slots as $s) {
     <div id="pane-theme" class="hidden grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
         <div class="bg-white rounded-xl border p-5 space-y-4">
             <h2 class="font-bold text-gray-800">ธีมแบรนด์ร้าน</h2>
-            <p class="text-xs text-gray-500 -mt-2">แก้ที่นี่ครั้งเดียว มีผลกับ Flex ทุกใบที่ระบบส่งให้ลูกค้า</p>
+            <p class="text-xs text-gray-500 -mt-2">ธีมสี/โลโก้/ผู้ส่ง มีผลกับ Flex ที่ระบบส่งผ่านแชตบอทและระบบจ่ายยา (เช่น เมนู แต้ม ฉลากยา)</p>
 
             <div class="grid grid-cols-2 gap-4">
                 <label class="block text-sm">สีหลักแบรนด์
@@ -306,8 +324,8 @@ foreach ($slots as $s) {
             </label>
 
             <div class="grid grid-cols-2 gap-4">
-                <label class="block text-sm">ชื่อผู้ส่ง (บน LINE)
-                    <input type="text" id="t_sender_name" placeholder="เช่น ร้านยาของคุณ" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
+                <label class="block text-sm">ชื่อผู้ส่ง (บน LINE, สูงสุด 20 ตัว)
+                    <input type="text" id="t_sender_name" maxlength="20" placeholder="เช่น ร้านยาของคุณ" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
                 </label>
                 <label class="block text-sm">ไอคอนผู้ส่ง (URL)
                     <input type="url" id="t_sender_icon_url" placeholder="https://..." class="mt-1 w-full border rounded-lg px-3 py-2 text-sm">
@@ -375,12 +393,14 @@ function fsSelect(el) {
     document.getElementById('fs-title').textContent = el.dataset.label;
     document.getElementById('fs-producer').textContent = 'ส่งจาก: ' + el.dataset.producer;
     document.getElementById('fs-refresh').classList.remove('hidden');
+    const allowsOverride = el.dataset.ovr === '1';
     const edit = document.getElementById('fs-edit');
-    edit.classList.remove('hidden');
+    edit.classList.toggle('hidden', !allowsOverride);
     edit.href = 'flex-builder.php?slot=' + encodeURIComponent(fsCurrentSlot);
+    document.getElementById('fs-override-wrap').classList.toggle('hidden', !allowsOverride);
+    document.getElementById('fs-override-locked').classList.toggle('hidden', allowsOverride);
     fsLoadPreview();
-    fsLoadOverrides();
-    fsLoadBindOptions();
+    if (allowsOverride) { fsLoadOverrides(); fsLoadBindOptions(); }
 }
 
 function fsLoadPreview() {

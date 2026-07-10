@@ -20,6 +20,10 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth_check.php';
 require_once __DIR__ . '/../classes/FlexTemplates.php';
 require_once __DIR__ . '/../includes/flex-slots.php';
+// getShopOrderDataSource() lives here; header.php loads it for pages but APIs must require it directly.
+if (is_file(__DIR__ . '/../includes/shop-data-source.php')) {
+    require_once __DIR__ . '/../includes/shop-data-source.php';
+}
 
 $db = Database::getInstance()->getConnection();
 $lineAccountId = $_SESSION['current_bot_id'] ?? ($_SESSION['line_account_id'] ?? null);

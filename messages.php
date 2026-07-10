@@ -440,23 +440,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                 unset($item);
                 
                 try {
+                    // Flex Studio: theme to this shop's brand (dynamic slot → theme only, no override).
+                    $dispenseAccountId = $user['line_account_id'] ?? ($currentBotId ?? null);
+                    FlexTemplates::useAccount($dispenseAccountId);
+                    $needCheckout = ($paymentMethod === 'later' || $paymentMethod === 'transfer');
                     // Create Flex Message carousel with medicine labels
                     if (count($itemsArr) > 1) {
                         // Multiple items - use carousel
-                        $flexContents = FlexTemplates::medicineLabelsCarousel(
-                            $itemsArr, 
-                            $shopInfo, 
-                            $user['display_name'],
-                            ($paymentMethod === 'later' || $paymentMethod === 'transfer') ? $checkoutUrl : null
-                        );
+                        $flexContents = FlexTemplates::render('medicine_label_carousel', [], $dispenseAccountId, function () use ($itemsArr, $shopInfo, $user, $needCheckout, $checkoutUrl) {
+                            return FlexTemplates::medicineLabelsCarousel($itemsArr, $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
+                        }, false);
                     } else {
                         // Single item - use single bubble
-                        $flexContents = FlexTemplates::medicineLabel(
-                            $itemsArr[0], 
-                            $shopInfo, 
-                            $user['display_name'],
-                            ($paymentMethod === 'later' || $paymentMethod === 'transfer') ? $checkoutUrl : null
-                        );
+                        $flexContents = FlexTemplates::render('medicine_label', [], $dispenseAccountId, function () use ($itemsArr, $shopInfo, $user, $needCheckout, $checkoutUrl) {
+                            return FlexTemplates::medicineLabel($itemsArr[0], $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
+                        }, false);
                     }
                     
                     $flexMessage = FlexTemplates::toMessage($flexContents, '💊 รายการจ่ายยา #' . $orderNumber);

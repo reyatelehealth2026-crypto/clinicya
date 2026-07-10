@@ -156,14 +156,23 @@ Add `!database/migration_2026-07-09_flex_studio.sql` to `.gitignore` whitelist (
 
 ## Known limitations (v1, shipped)
 
-- **Overrides are static in v1.** `render()` call sites currently pass `$vars = []`, so a
-  saved override with `{{placeholder}}` tokens ships/previews the literal token. Static
-  designs (welcome, promo, menu, receipts-as-fixed-layout) work fully; variable-driven slots
-  (e.g. per-item medicine label) should use the default template until a per-slot `$vars` map
-  is wired. Substitution machinery (`FlexTemplates::substituteVars`) is in place for that next step.
-- **Auto-theming uses ambient context.** `toMessage()` themes to the last `useAccount()` shop.
-  Within a single web request this is always one tenant; long-lived multi-tenant loops must
-  call `useAccount()` (or `render()`) per tenant before building Flex.
+- **Overrides are restricted to static slots.** Only `welcome`, `main_menu`, `quick_menu`,
+  `liff_menu`, `promo_card`, `notification` accept a full-design override
+  (`flex_slot_allows_override()`); dynamic slots (order/dispense/points/reminders) carry
+  per-event data a frozen override would corrupt, so they are theme-only. Enforced in three
+  places: the bind/activate AJAX guards, `flex-builder.php` save (won't bind a dynamic slot),
+  and `render(..., $allowOverride=false)` at the dispense producers. `{{var}}` substitution
+  machinery (`substituteVars`) is in place for a future per-slot `$vars` contract.
+- **Theming reaches the wired producers.** Brand theme (colors/sender) applies to sends that
+  set shop context: `BusinessBot` (menus/points/cart/member/reward/notifications, via its
+  constructor), the dispense flow (`inbox-v2.php` + `messages.php`), and the checkout receipt
+  (`api/checkout.php`). Other producers (some crons, LIFF bridge) still send unthemed until
+  they call `useAccount()`; the Theme tab copy states this scope rather than "every Flex".
+- **Token cache is tenant-keyed.** `getTokens()` keys its per-request cache by
+  `TenantContext` tenant id + `line_account_id` (ids collide across per-tenant DBs). Long-lived
+  multi-tenant loops (cron/workers) should call `FlexTemplates::resetTokenCache()` per iteration.
+- **Broadcast picker excludes slot-bound overrides** so override JSON with `{{var}}` can't be
+  broadcast verbatim.
 
 ## Open questions
 

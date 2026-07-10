@@ -81,13 +81,36 @@ class FlexTemplates
     }
 
     /**
+     * Clear cached tokens. Long-running / multi-tenant loop processes
+     * (cron, workers) should call this per tenant iteration so a rebrand or a
+     * tenant switch is picked up instead of serving a stale cached theme.
+     */
+    public static function resetTokenCache()
+    {
+        self::$tokenCache = [];
+    }
+
+    /**
      * Merge brand tokens for a shop: hardcoded defaults ← shop_settings ← flex_brand_settings.
      * Always tenant-scoped by line_account_id. Never throws; missing tables fall back to defaults.
      */
     public static function getTokens($lineAccountId = null)
     {
         $id = $lineAccountId !== null ? (int) $lineAccountId : self::$currentAccountId;
-        $cacheKey = $id === null ? '_none' : (string) $id;
+        // Key by tenant too: line_account_id values collide across per-tenant DBs
+        // (ADR-001), so an id-only key would leak one tenant's brand into another.
+        $tenantPart = '';
+        if (class_exists('TenantContext')) {
+            try {
+                $tid = TenantContext::getCurrentTenantId();
+                if ($tid) {
+                    $tenantPart = 't' . $tid . ':';
+                }
+            } catch (Exception $e) {
+                // no tenant context → global key
+            }
+        }
+        $cacheKey = $tenantPart . ($id === null ? '_none' : (string) $id);
         if (isset(self::$tokenCache[$cacheKey])) {
             return self::$tokenCache[$cacheKey];
         }
@@ -171,10 +194,12 @@ class FlexTemplates
                 $node[$k] = self::walkTheme($v, $primary, $primaryDark);
             } elseif (is_string($v) && ($k === 'color' || $k === 'backgroundColor' || $k === 'borderColor')) {
                 $up = strtoupper($v);
-                if ($up === self::BRAND_PRIMARY) {
-                    $node[$k] = $primary;
-                } elseif ($up === self::BRAND_PRIMARY_DARK) {
-                    $node[$k] = $primaryDark;
+                // Match the brand color exactly OR with an 8-digit alpha suffix
+                // (templates build tints like '#06C75520'); preserve the suffix.
+                if (strpos($up, self::BRAND_PRIMARY) === 0) {
+                    $node[$k] = $primary . substr($v, strlen(self::BRAND_PRIMARY));
+                } elseif (strpos($up, self::BRAND_PRIMARY_DARK) === 0) {
+                    $node[$k] = $primaryDark . substr($v, strlen(self::BRAND_PRIMARY_DARK));
                 }
             }
         }
@@ -239,10 +264,12 @@ class FlexTemplates
      * Both paths are themed to the shop's brand. Returns Flex contents (bubble/carousel);
      * wrap with toMessage() to send.
      */
-    public static function render($slotKey, array $vars, $lineAccountId, callable $fallback)
+    public static function render($slotKey, array $vars, $lineAccountId, callable $fallback, $allowOverride = true)
     {
         self::useAccount($lineAccountId);
-        $override = self::getActiveOverride($slotKey, $lineAccountId);
+        // Dynamic slots (per-event clinical/order data) must NOT be replaced by a
+        // static override — pass $allowOverride=false there so the real builder wins.
+        $override = $allowOverride ? self::getActiveOverride($slotKey, $lineAccountId) : null;
         $flex = $override !== null ? self::substituteVars($override, $vars) : $fallback($vars);
         return self::applyTheme($flex, $lineAccountId);
     }
@@ -325,11 +352,16 @@ class FlexTemplates
         } else {
             $tokens = self::getTokens();
             $tokenSender = [];
-            if (!empty($tokens['sender_name'])) {
-                $tokenSender['name'] = $tokens['sender_name'];
+            // LINE caps sender.name at 20 chars and requires an https iconUrl;
+            // enforce here so an over-long name or relative/http logo can never
+            // make LINE reject the whole message.
+            $nm = trim((string) ($tokens['sender_name'] ?? ''));
+            if ($nm !== '') {
+                $tokenSender['name'] = mb_substr($nm, 0, 20);
             }
-            if (!empty($tokens['sender_icon_url'])) {
-                $tokenSender['iconUrl'] = $tokens['sender_icon_url'];
+            $icon = (string) ($tokens['sender_icon_url'] ?? '');
+            if ($icon !== '' && preg_match('#^https://#i', $icon)) {
+                $tokenSender['iconUrl'] = $icon;
             }
             if ($tokenSender) {
                 $message['sender'] = $tokenSender;
@@ -736,7 +768,7 @@ class FlexTemplates
     public static function productCard($product, $showAddToCart = true)
     {
         $price = $product['sale_price'] ?? $product['price'];
-        $originalPrice = $product['sale_price'] ? $product['price'] : null;
+        $originalPrice = ($product['sale_price'] ?? null) ? $product['price'] : null;
         
         $priceContents = [
             ['type' => 'text', 'text' => '฿' . number_format($price), 'size' => 'xl', 'weight' => 'bold', 'color' => '#06C755']

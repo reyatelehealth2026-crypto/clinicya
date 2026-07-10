@@ -41,6 +41,10 @@ class BusinessBot
         $this->db = $db;
         $this->line = $line;
         $this->lineAccountId = $lineAccountId;
+        // Flex Studio: theme every bot Flex send to this shop's brand (no-op on default colors).
+        if ($lineAccountId && class_exists('FlexTemplates')) {
+            FlexTemplates::useAccount($lineAccountId);
+        }
         $this->loadBotMode();
         $this->loadSettings();
     }

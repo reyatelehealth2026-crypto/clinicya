@@ -70,4 +70,18 @@ if (!function_exists('flex_studio_slots')) {
         }
         return $keys;
     }
+
+    /**
+     * Slots whose content is static enough that a full-design override is safe.
+     * Dynamic slots (order/dispense/points/reminders) carry per-event data that a
+     * frozen override would replace with stale/placeholder content — patient-safety
+     * and order-integrity risk — so overrides are limited to this allowlist. All
+     * slots still receive brand theming; only override binding is restricted.
+     */
+    function flex_slot_allows_override(string $key): bool
+    {
+        return in_array($key, [
+            'welcome', 'main_menu', 'quick_menu', 'liff_menu', 'promo_card', 'notification',
+        ], true);
+    }
 }

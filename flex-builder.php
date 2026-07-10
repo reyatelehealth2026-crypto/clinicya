@@ -6,14 +6,16 @@
 require_once 'config/config.php';
 require_once 'config/database.php';
 require_once 'includes/auth_check.php'; // enforce login + start session before AJAX
+require_once 'includes/flex-slots.php'; // slot override allowlist
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'Flex Message Builder';
 // Resolve tenant before header.php so AJAX saves are correctly scoped (header runs later).
 $currentBotId = $_SESSION['current_bot_id'] ?? ($_SESSION['line_account_id'] ?? null);
 
-// Handle AJAX actions
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+// Handle AJAX actions — gated on X-Requested-With per the same-page-AJAX convention
+// (CLAUDE.md) so a cross-site form POST can't create/delete/bind templates (CSRF).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
     header('Content-Type: application/json');
 
     if ($_POST['action'] === 'save_template') {
@@ -23,6 +25,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         // Optional slot binding (Flex Studio): sanitize to [a-z0-9_].
         $slotKey = preg_replace('/[^a-z0-9_]/', '', (string) ($_POST['slot_key'] ?? ($_GET['slot'] ?? '')));
         $slotKey = $slotKey !== '' ? $slotKey : null;
+        // Only bind to override-safe (static) slots; dynamic/unknown slots stay unbound.
+        if ($slotKey !== null && function_exists('flex_slot_allows_override') && !flex_slot_allows_override($slotKey)) {
+            $slotKey = null;
+        }
         try {
             if ($slotKey !== null) {
                 $stmt = $db->prepare("INSERT INTO flex_templates (name, category, flex_json, line_account_id, slot_key, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
@@ -68,6 +74,10 @@ require_once 'includes/header.php';
 
 <script src="assets/js/flex-preview.js"></script>
 <script src="assets/js/flex-product-builder.js"></script>
+<script>
+// Flex Studio: slot this builder session is editing (from ?slot=), bound on save.
+const FLEX_SLOT = <?= json_encode(preg_replace('/[^a-z0-9_]/', '', (string) ($_GET['slot'] ?? ''))) ?>;
+</script>
 
 <!-- Toast Container -->
 <div id="toast-container" class="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none"></div>
@@ -1416,7 +1426,7 @@ function loadSavedTemplates() {
     list.innerHTML = '<div class="text-center py-6 text-gray-400 col-span-full text-sm">กำลังโหลด...</div>';
     fetch('flex-builder.php', {
         method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
         body:'action=get_templates'
     }).then(r=>r.json()).then(data=>{
         if(!data.success||!data.templates.length) {
@@ -1452,7 +1462,7 @@ function deleteSavedTemplate(id, btn) {
     if(!confirm('ลบเทมเพลตนี้?')) return;
     fetch('flex-builder.php', {
         method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
         body:'action=delete_template&id='+id
     }).then(r=>r.json()).then(data=>{
         if(data.success) { toast('ลบแล้ว'); loadSavedTemplates(); }
@@ -1476,10 +1486,10 @@ function doSaveTemplate() {
     if(!name) { toast('กรุณาตั้งชื่อ','error'); return; }
     fetch('flex-builder.php', {
         method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:`action=save_template&name=${encodeURIComponent(name)}&category=${encodeURIComponent(category)}&flex_json=${encodeURIComponent(JSON.stringify(flexData))}`
+        headers:{'Content-Type':'application/x-www-form-urlencoded','X-Requested-With':'XMLHttpRequest'},
+        body:`action=save_template&name=${encodeURIComponent(name)}&category=${encodeURIComponent(category)}&slot_key=${encodeURIComponent(FLEX_SLOT||'')}&flex_json=${encodeURIComponent(JSON.stringify(flexData))}`
     }).then(r=>r.json()).then(data=>{
-        if(data.success) { toast('บันทึกเรียบร้อย!'); closeModal('modal-save'); }
+        if(data.success) { toast(FLEX_SLOT ? 'บันทึก + ผูกกับ slot แล้ว!' : 'บันทึกเรียบร้อย!'); closeModal('modal-save'); }
         else toast('เกิดข้อผิดพลาด','error');
     }).catch(()=>toast('เกิดข้อผิดพลาด','error'));
 }

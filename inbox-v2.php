@@ -691,14 +691,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                         // Flex Studio: theme + optional per-shop override for the dispense label.
                         $dispenseAccountId = $user['line_account_id'] ?? $currentBotId;
                         FlexTemplates::useAccount($dispenseAccountId);
+                        // Dynamic clinical data → theme only, never a static override (allowOverride=false).
                         if (count($itemsArr) > 1) {
                             $flexContents = FlexTemplates::render('medicine_label_carousel', [], $dispenseAccountId, function () use ($itemsArr, $shopInfo, $user, $needCheckout, $checkoutUrl) {
                                 return FlexTemplates::medicineLabelsCarousel($itemsArr, $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
-                            });
+                            }, false);
                         } else {
                             $flexContents = FlexTemplates::render('medicine_label', [], $dispenseAccountId, function () use ($itemsArr, $shopInfo, $user, $needCheckout, $checkoutUrl) {
                                 return FlexTemplates::medicineLabel($itemsArr[0], $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
-                            });
+                            }, false);
                         }
                         $flexMessage = FlexTemplates::toMessage($flexContents, '💊 รายการจ่ายยา #' . $orderNumber);
 
