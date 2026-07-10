@@ -5170,6 +5170,44 @@ function notifyPharmacistForHumanRequest($db, $userId, $lineAccountId, $message)
  * ตรวจสอบรูปภาพว่าเป็นใบเสร็จหรือไม่ ถ้าใช่ให้แต้มอัตโนมัติ
  * คืน true ถ้าจัดการแล้ว (ทั้งกรณีสำเร็จและกรณีปฏิเสธ), false ถ้าไม่ใช่ใบเสร็จ
  */
+/**
+ * Save a receipt photo to disk, sha256-named, for both the auto-approve and
+ * pending-review paths (previously only the pending path saved anything).
+ * Never throws — returns nulls on any I/O failure so callers can proceed
+ * without an image rather than losing the whole claim.
+ *
+ * @return array{hash: ?string, path: ?string}
+ */
+function saveReceiptClaimImage($imageData)
+{
+    $imageHash = hash('sha256', $imageData);
+    $extensions = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/heic' => 'heic',
+        'image/heif' => 'heif',
+    ];
+    $mimeType = (new finfo(FILEINFO_MIME_TYPE))->buffer($imageData) ?: 'image/jpeg';
+    $extension = $extensions[$mimeType] ?? 'jpg';
+    $relativeDir = 'uploads/receipt-claims/' . date('Y/m');
+    $absoluteDir = __DIR__ . '/' . $relativeDir;
+    if (!is_dir($absoluteDir)) {
+        @mkdir($absoluteDir, 0755, true);
+    }
+    if (!is_dir($absoluteDir) || !is_writable($absoluteDir)) {
+        return ['hash' => null, 'path' => null];
+    }
+    $relativePath = $relativeDir . '/' . $imageHash . '.' . $extension;
+    $absolutePath = __DIR__ . '/' . $relativePath;
+    if (!file_exists($absolutePath)) {
+        @file_put_contents($absolutePath, $imageData, LOCK_EX);
+    }
+    return file_exists($absolutePath)
+        ? ['hash' => $imageHash, 'path' => $relativePath]
+        : ['hash' => $imageHash, 'path' => null];
+}
+
 function ensureReceiptPointClaimsTable($db)
 {
     $db->exec("CREATE TABLE IF NOT EXISTS receipt_point_claims (
@@ -5199,47 +5237,24 @@ function ensureReceiptPointClaimsTable($db)
     }
 }
 
-function recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, $readAmount = null)
+function recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, $readAmount = null, $confidence = null, $failReason = null)
 {
     $imageHash = hash('sha256', $imageData);
     $claimKey = 'pending:u' . $user['id'] . ':' . $imageHash;
-    $imagePath = null;
 
     try {
         ensureReceiptPointClaimsTable($db);
 
-        $mimeType = (new finfo(FILEINFO_MIME_TYPE))->buffer($imageData) ?: 'image/jpeg';
-        $extensions = [
-            'image/jpeg' => 'jpg',
-            'image/png' => 'png',
-            'image/webp' => 'webp',
-            'image/heic' => 'heic',
-            'image/heif' => 'heif',
-        ];
-        $extension = $extensions[$mimeType] ?? 'jpg';
-        $relativeDir = 'uploads/receipt-claims/' . date('Y/m');
-        $absoluteDir = __DIR__ . '/' . $relativeDir;
-        if (!is_dir($absoluteDir)) {
-            @mkdir($absoluteDir, 0755, true);
-        }
-        if (is_dir($absoluteDir) && is_writable($absoluteDir)) {
-            $relativePath = $relativeDir . '/' . $imageHash . '.' . $extension;
-            $absolutePath = __DIR__ . '/' . $relativePath;
-            if (!file_exists($absolutePath)) {
-                @file_put_contents($absolutePath, $imageData, LOCK_EX);
-            }
-            if (file_exists($absolutePath)) {
-                $imagePath = $relativePath;
-            }
-        }
+        $saved = saveReceiptClaimImage($imageData);
+        $imagePath = $saved['path'];
 
         $dup = $db->prepare("SELECT id FROM receipt_point_claims WHERE line_account_id = ? AND claim_key = ? LIMIT 1");
         $dup->execute([$lineAccountId, $claimKey]);
         if (!$dup->fetch()) {
             $ins = $db->prepare("INSERT INTO receipt_point_claims
-                (line_account_id, user_id, claim_key, receipt_number, shop_name, total_amount, points_awarded, status, image_hash, image_path)
-                VALUES (?, ?, ?, NULL, NULL, 0, 0, 'pending_review', ?, ?)");
-            $ins->execute([$lineAccountId, $user['id'], $claimKey, $imageHash, $imagePath]);
+                (line_account_id, user_id, claim_key, receipt_number, shop_name, total_amount, points_awarded, status, image_hash, image_path, ocr_amount, confidence, fail_reason)
+                VALUES (?, ?, ?, NULL, NULL, 0, 0, 'pending_review', ?, ?, ?, ?, ?)");
+            $ins->execute([$lineAccountId, $user['id'], $claimKey, $imageHash, $imagePath, $readAmount, $confidence, $failReason]);
         } elseif ($imagePath) {
             $upd = $db->prepare("UPDATE receipt_point_claims SET image_path = COALESCE(image_path, ?) WHERE line_account_id = ? AND claim_key = ?");
             $upd->execute([$imagePath, $lineAccountId, $claimKey]);
@@ -5310,7 +5325,7 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
     }
 
     if (!$receipt) {
-        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken);
+        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, null, 'none', 'no_ocr_result');
     }
 
     if (empty($receipt['is_receipt'])) {
@@ -5323,7 +5338,7 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
     $receiptDate   = $receipt['date'] ?? null;
 
     if ($totalAmount <= 0) {
-        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken);
+        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, null, ($receipt['confidence'] ?? 'unverified'), 'zero_amount');
     }
 
     // Confidence gate — only auto-award when an independent calculation
@@ -5338,7 +5353,7 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
             (string) $lineAccountId,
             $totalAmount
         ));
-        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, $totalAmount);
+        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, $totalAmount, $confidence, 'low_confidence');
     }
 
     // Get shop name for display in Flex (no validation — any receipt earns points)
@@ -5384,11 +5399,12 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
     }
 
     // Record the claim (UNIQUE key prevents race-condition double-award)
+    $saved = saveReceiptClaimImage($imageData);
     try {
         $ins = $db->prepare("INSERT INTO receipt_point_claims
-            (line_account_id, user_id, claim_key, receipt_number, shop_name, total_amount, points_awarded)
-            VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $ins->execute([$lineAccountId, $user['id'], $claimKey, $receiptNumber, $shopName, $totalAmount, $points]);
+            (line_account_id, user_id, claim_key, receipt_number, shop_name, total_amount, points_awarded, status, image_hash, image_path, confidence)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, 'high')");
+        $ins->execute([$lineAccountId, $user['id'], $claimKey, $receiptNumber, $shopName, $totalAmount, $points, $saved['hash'], $saved['path']]);
         $claimId = (int) $db->lastInsertId();
     } catch (Exception $e) {
         // Duplicate on race condition
