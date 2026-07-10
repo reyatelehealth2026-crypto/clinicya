@@ -154,6 +154,17 @@ Add `!database/migration_2026-07-09_flex_studio.sql` to `.gitignore` whitelist (
 - **No new UI in `products.php`** (it's a redirect); this is a standalone admin page.
 - Same-page POST AJAX gated on `X-Requested-With`, following `inbox-v2.php` convention.
 
+## Known limitations (v1, shipped)
+
+- **Overrides are static in v1.** `render()` call sites currently pass `$vars = []`, so a
+  saved override with `{{placeholder}}` tokens ships/previews the literal token. Static
+  designs (welcome, promo, menu, receipts-as-fixed-layout) work fully; variable-driven slots
+  (e.g. per-item medicine label) should use the default template until a per-slot `$vars` map
+  is wired. Substitution machinery (`FlexTemplates::substituteVars`) is in place for that next step.
+- **Auto-theming uses ambient context.** `toMessage()` themes to the last `useAccount()` shop.
+  Within a single web request this is always one tenant; long-lived multi-tenant loops must
+  call `useAccount()` (or `render()`) per tenant before building Flex.
+
 ## Open questions
 
 - Should Brand Tokens reuse existing `shop_settings` columns where they overlap (tax name,

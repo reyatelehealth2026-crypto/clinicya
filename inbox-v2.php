@@ -688,10 +688,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
                         unset($item);
 
                         $needCheckout = ($paymentMethod === 'later' || $paymentMethod === 'transfer');
+                        // Flex Studio: theme + optional per-shop override for the dispense label.
+                        $dispenseAccountId = $user['line_account_id'] ?? $currentBotId;
+                        FlexTemplates::useAccount($dispenseAccountId);
                         if (count($itemsArr) > 1) {
-                            $flexContents = FlexTemplates::medicineLabelsCarousel($itemsArr, $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
+                            $flexContents = FlexTemplates::render('medicine_label_carousel', [], $dispenseAccountId, function () use ($itemsArr, $shopInfo, $user, $needCheckout, $checkoutUrl) {
+                                return FlexTemplates::medicineLabelsCarousel($itemsArr, $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
+                            });
                         } else {
-                            $flexContents = FlexTemplates::medicineLabel($itemsArr[0], $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
+                            $flexContents = FlexTemplates::render('medicine_label', [], $dispenseAccountId, function () use ($itemsArr, $shopInfo, $user, $needCheckout, $checkoutUrl) {
+                                return FlexTemplates::medicineLabel($itemsArr[0], $shopInfo, $user['display_name'], $needCheckout ? $checkoutUrl : null);
+                            });
                         }
                         $flexMessage = FlexTemplates::toMessage($flexContents, '💊 รายการจ่ายยา #' . $orderNumber);
 

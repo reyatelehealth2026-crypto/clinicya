@@ -5,9 +5,12 @@
  */
 require_once 'config/config.php';
 require_once 'config/database.php';
+require_once 'includes/auth_check.php'; // enforce login + start session before AJAX
 
 $db = Database::getInstance()->getConnection();
 $pageTitle = 'Flex Message Builder';
+// Resolve tenant before header.php so AJAX saves are correctly scoped (header runs later).
+$currentBotId = $_SESSION['current_bot_id'] ?? ($_SESSION['line_account_id'] ?? null);
 
 // Handle AJAX actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -17,9 +20,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $name = trim($_POST['name'] ?? 'Untitled');
         $flexJson = $_POST['flex_json'] ?? '{}';
         $category = $_POST['category'] ?? 'custom';
+        // Optional slot binding (Flex Studio): sanitize to [a-z0-9_].
+        $slotKey = preg_replace('/[^a-z0-9_]/', '', (string) ($_POST['slot_key'] ?? ($_GET['slot'] ?? '')));
+        $slotKey = $slotKey !== '' ? $slotKey : null;
         try {
-            $stmt = $db->prepare("INSERT INTO flex_templates (name, category, flex_json, line_account_id, created_at) VALUES (?, ?, ?, ?, NOW())");
-            $stmt->execute([$name, $category, $flexJson, $currentBotId ?? null]);
+            if ($slotKey !== null) {
+                $stmt = $db->prepare("INSERT INTO flex_templates (name, category, flex_json, line_account_id, slot_key, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+                $stmt->execute([$name, $category, $flexJson, $currentBotId ?? null, $slotKey]);
+            } else {
+                $stmt = $db->prepare("INSERT INTO flex_templates (name, category, flex_json, line_account_id, created_at) VALUES (?, ?, ?, ?, NOW())");
+                $stmt->execute([$name, $category, $flexJson, $currentBotId ?? null]);
+            }
             echo json_encode(['success' => true, 'id' => $db->lastInsertId()]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -41,8 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'delete_template') {
         $id = (int)($_POST['id'] ?? 0);
         try {
-            $stmt = $db->prepare("DELETE FROM flex_templates WHERE id = ?");
-            $stmt->execute([$id]);
+            // Tenant-scoped: only delete templates owned by this shop (or legacy global).
+            $stmt = $db->prepare("DELETE FROM flex_templates WHERE id = ? AND (line_account_id = ? OR line_account_id IS NULL)");
+            $stmt->execute([$id, $currentBotId ?? null]);
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
