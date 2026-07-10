@@ -8,14 +8,17 @@ require_once 'config/config.php';
 require_once 'config/database.php';
 
 $db = Database::getInstance()->getConnection();
-require_once 'includes/header.php';
+
+// Auth + $currentUser + TenantContext — emits NO HTML, so the AJAX branch
+// below can return clean JSON. (header.php is included later for page render.)
+require_once 'includes/auth_check.php';
 require_once 'classes/ReceiptPointsAdmin.php';
-require_once 'classes/LoyaltyPoints.php';
 
-$lineAccountId = (int) ($currentBotId ?? 0);
-$pageTitle = 'ตรวจสลิปรับแต้ม';
+$lineAccountId = (int) ($_SESSION['current_bot_id'] ?? $_SESSION['line_account_id'] ?? 0);
 
-// ---- Same-page AJAX handler ----
+// ---- Same-page AJAX handler — MUST run before header.php emits any HTML,
+// or the response becomes "<html>…</html>{json}" and fetch's .json() throws
+// a false "เชื่อมต่อไม่ได้" even though the award already ran. ----
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
     header('Content-Type: application/json');
     $action = $_POST['action'] ?? '';
@@ -44,6 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_X_REQUESTED_WI
         exit;
     }
 }
+
+// ---- Page render (header.php emits HTML + sets $currentBotId) ----
+require_once 'includes/header.php';
+require_once 'classes/LoyaltyPoints.php';
+$lineAccountId = (int) ($currentBotId ?? $lineAccountId);
+$pageTitle = 'ตรวจสลิปรับแต้ม';
 
 // ---- List query ----
 $statusFilter = $_GET['status'] ?? 'pending_review';
