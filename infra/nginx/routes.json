@@ -1,0 +1,26 @@
+[
+  {
+    "path": "/",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Default catch-all (plan §1.5: php_backend is the strangler default). Required — the generator refuses to render without a '/' entry."
+  },
+  {
+    "path": "/miniapp",
+    "upstream": "next_miniapp",
+    "tenants": "all",
+    "note": "line-mini-app is already the production LIFF experience today (see CLAUDE.md) — this route documents current reality, not a future flip."
+  },
+  {
+    "path": "/ws",
+    "upstream": "ws",
+    "tenants": "all",
+    "note": "Realtime inbox updates (websocket-server.js today; superseded by apps/worker's unified websocket in Phase 4)."
+  },
+  {
+    "path": "/admin-preview",
+    "upstream": "next_admin",
+    "tenants": ["demo-tenant"],
+    "note": "Working example of a per-tenant canary route (plan §7.3 ramp: demo tenant first). apps/admin doesn't exist until Phase 1 — this entry is a placeholder demonstrating the round-trip add/remove mechanics mig-verify checks, not a live flip."
+  }
+]

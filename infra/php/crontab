@@ -1,0 +1,75 @@
+# infra/php/crontab
+#
+# Phase 0 cron sidecar (plan §2 item 5) — runs `php cron/<job>.php` for all
+# 33 jobs under cron/ on the same schedule they run on today via cPanel's
+# crontab, using the same container image/code/vendor as the `php` service
+# (see infra/compose/docker-compose.strangler.yml, service `cron`).
+#
+# *** SCHEDULES BELOW ARE INFERRED, NOT VERIFIED — REHEARSAL BLOCKER ***
+# This container has no access to the production cPanel crontab, so every
+# time below is inferred from the job's filename/behavior (see
+# docs/ai/background-jobs.md, which itself says "Real scheduler entries
+# were not inspected"). Before the real Phase 0 cutover, replace this
+# entire file with the literal output of `crontab -l` on the cPanel host
+# for the account that owns these jobs — see
+# docs/runbooks/phase0-cutover-rollback.md item 5.
+#
+# /etc/cron.d format: schedule, run-as user, command. REYA_SKIP_SUBDOMAIN_RESOLUTION
+# must be defined before config/database.php loads in every cron script
+# (see CLAUDE.md "CLI / cron") — that's already true of every file below;
+# nothing here changes that contract.
+#
+# Env vars available to cron jobs (cron does not inherit the container's
+# shell env by default — SHELL/PATH below plus explicit `env` sourcing in
+# the compose `cron` service keep DB_HOST/REDIS_*/etc. visible to PHP).
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# --- Broadcast jobs (docs/ai/background-jobs.md "Broadcast Jobs") ---
+* * * * *      www-data    php /var/www/html/cron/send_scheduled.php >> /var/log/clinicya-cron/send_scheduled.log 2>&1
+*/5 * * * *    www-data    php /var/www/html/cron/process_broadcast_queue.php >> /var/log/clinicya-cron/process_broadcast_queue.log 2>&1
+*/15 * * * *   www-data    php /var/www/html/cron/broadcast_delivery_reconcile.php >> /var/log/clinicya-cron/broadcast_delivery_reconcile.log 2>&1
+*/15 * * * *   www-data    php /var/www/html/cron/process_drip_campaigns.php >> /var/log/clinicya-cron/process_drip_campaigns.log 2>&1
+
+# --- Reminder jobs ---
+*/30 * * * *   www-data    php /var/www/html/cron/appointment_reminder.php >> /var/log/clinicya-cron/appointment_reminder.log 2>&1
+0 * * * *      www-data    php /var/www/html/cron/medication_reminder.php >> /var/log/clinicya-cron/medication_reminder.log 2>&1
+0 9 * * *      www-data    php /var/www/html/cron/medication_refill_reminder.php >> /var/log/clinicya-cron/medication_refill_reminder.log 2>&1
+0 9 * * *      www-data    php /var/www/html/cron/reward_expiry_reminder.php >> /var/log/clinicya-cron/reward_expiry_reminder.log 2>&1
+0 9 * * *      www-data    php /var/www/html/cron/adherence_reminder.php >> /var/log/clinicya-cron/adherence_reminder.log 2>&1
+0 8 * * *      www-data    php /var/www/html/cron/reorder_reminder.php >> /var/log/clinicya-cron/reorder_reminder.log 2>&1
+*/30 * * * *   www-data    php /var/www/html/cron/wishlist_notification.php >> /var/log/clinicya-cron/wishlist_notification.log 2>&1
+*/30 * * * *   www-data    php /var/www/html/cron/restock_notification.php >> /var/log/clinicya-cron/restock_notification.log 2>&1
+
+# --- Webhook / monitoring jobs ---
+*/5 * * * *    www-data    php /var/www/html/cron/webhook_retry_processor.php >> /var/log/clinicya-cron/webhook_retry_processor.log 2>&1
+*/15 * * * *   www-data    php /var/www/html/cron/webhook_statistics_calculator.php >> /var/log/clinicya-cron/webhook_statistics_calculator.log 2>&1
+0 4 * * *      www-data    php /var/www/html/cron/cleanup-dlq.php >> /var/log/clinicya-cron/cleanup-dlq.log 2>&1
+0 2 * * *      www-data    php /var/www/html/cron/error_handling_maintenance.php >> /var/log/clinicya-cron/error_handling_maintenance.log 2>&1
+*/5 * * * *    www-data    php /var/www/html/cron/security_monitoring.php >> /var/log/clinicya-cron/security_monitoring.log 2>&1
+
+# --- Reporting / cache jobs ---
+0 7 * * *      www-data    php /var/www/html/cron/scheduled_reports.php >> /var/log/clinicya-cron/scheduled_reports.log 2>&1
+0 20 * * *     www-data    php /var/www/html/cron/send-daily-summary.php >> /var/log/clinicya-cron/send-daily-summary.log 2>&1
+*/5 * * * *    www-data    php /var/www/html/cron/dashboard_realtime_updates.php >> /var/log/clinicya-cron/dashboard_realtime_updates.log 2>&1
+*/10 * * * *   www-data    php /var/www/html/cron/dashboard_cache_warming.php >> /var/log/clinicya-cron/dashboard_cache_warming.log 2>&1
+*/15 * * * *   www-data    php /var/www/html/cron/ai_session_summarizer.php >> /var/log/clinicya-cron/ai_session_summarizer.log 2>&1
+0 5 * * *      www-data    php /var/www/html/cron/rebuild-customer-projections.php >> /var/log/clinicya-cron/rebuild-customer-projections.log 2>&1
+*/15 * * * *   www-data    php /var/www/html/cron/inbox-response-time-collector.php >> /var/log/clinicya-cron/inbox-response-time-collector.log 2>&1
+
+# --- Commerce / sync jobs ---
+*/10 * * * *   www-data    php /var/www/html/cron/release-expired-cart-reservations.php >> /var/log/clinicya-cron/release-expired-cart-reservations.log 2>&1
+*/30 * * * *   www-data    php /var/www/html/cron/refresh_product_cache.php >> /var/log/clinicya-cron/refresh_product_cache.log 2>&1
+0 * * * *      www-data    php /var/www/html/cron/sync-retail-products.php >> /var/log/clinicya-cron/sync-retail-products.log 2>&1
+15 * * * *     www-data    php /var/www/html/cron/sync_cny_products.php >> /var/log/clinicya-cron/sync_cny_products.log 2>&1
+0 1 * * *      www-data    php /var/www/html/cron/import_cny_csv.php >> /var/log/clinicya-cron/import_cny_csv.log 2>&1
+* * * * *      www-data    php /var/www/html/cron/sync_worker.php >> /var/log/clinicya-cron/sync_worker.log 2>&1
+*/10 * * * *   www-data    php /var/www/html/cron/sync_odoo_dashboard_cache.php >> /var/log/clinicya-cron/sync_odoo_dashboard_cache.log 2>&1
+0 18 * * *     www-data    php /var/www/html/cron/odoo_daily_summary_auto.php >> /var/log/clinicya-cron/odoo_daily_summary_auto.log 2>&1
+
+# --- Users / misc ---
+0 3 * * *      www-data    php /var/www/html/cron/check_inactive_users.php >> /var/log/clinicya-cron/check_inactive_users.log 2>&1
+
+# 33 jobs total (matches cron/*.php count as of 2026-07-12). If cron/*.php
+# gains or loses a file, this count — and this file — must be updated in
+# the same PR (CI check: see docs/runbooks/phase0-cutover-rollback.md item 5).

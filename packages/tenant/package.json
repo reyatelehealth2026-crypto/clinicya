@@ -1,0 +1,36 @@
+{
+  "name": "@reya/tenant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tenant resolution + LINE-account routing — TypeScript port of bootstrap/resolve_subdomain.php and bootstrap/route_by_account.php.",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@reya/config": "workspace:*",
+    "@reya/db": "workspace:*",
+    "kysely": "^0.29.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}
