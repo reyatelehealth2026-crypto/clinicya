@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { MasterDB } from '@reya/db';
 import {
   CachedSessionStore,
   SessionCache,
@@ -27,7 +28,7 @@ function tenantSession(overrides: Partial<TenantSession> = {}): TenantSession {
 
 describe('createMySqlSessionStore (node_sessions CRUD)', () => {
   it('create() INSERTs the full row including the JSON payload', async () => {
-    const { db, pool } = makeTestDb('master', () => ({ insertId: 1, affectedRows: 1 }));
+    const { db, pool } = makeTestDb<MasterDB>('master', () => ({ insertId: 1, affectedRows: 1 }));
     const store = createMySqlSessionStore(db);
     const session = tenantSession();
 
@@ -40,43 +41,72 @@ describe('createMySqlSessionStore (node_sessions CRUD)', () => {
     );
   });
 
+  it('create() converts the ISO 8601 createdAt/lastSeenAt/expiresAt into MariaDB DATETIME literals (Bangkok +07:00, not raw ISO) — regression test for the strict-mode "Incorrect datetime value" write failure', async () => {
+    const { db, pool } = makeTestDb<MasterDB>('master', () => ({ insertId: 1, affectedRows: 1 }));
+    const store = createMySqlSessionStore(db);
+    const session = tenantSession({
+      createdAt: '2026-07-12T00:00:00.000Z',
+      lastSeenAt: '2026-07-12T00:00:00.000Z',
+      expiresAt: '2026-07-13T00:00:00.000Z',
+    });
+
+    await store.create(session);
+
+    const [, params] = (pool.connection.query as unknown as { mock: { calls: unknown[][] } }).mock.calls[0];
+    // Last 3 bound params, per the fixed column order in the INSERT text:
+    // ..., payload, created_at, last_seen_at, expires_at.
+    const [createdAt, lastSeenAt, expiresAt] = (params as unknown[]).slice(-3);
+    expect(createdAt).toBe('2026-07-12 07:00:00');
+    expect(lastSeenAt).toBe('2026-07-12 07:00:00');
+    expect(expiresAt).toBe('2026-07-13 07:00:00');
+    // None of the three raw ISO instants (with 'T'/'Z') reach the mysql2 driver.
+    for (const value of [createdAt, lastSeenAt, expiresAt]) {
+      expect(value).not.toMatch(/[TZ]/);
+    }
+  });
+
   it('get() returns null when no row matches', async () => {
-    const { db } = makeTestDb('master', () => []);
+    const { db } = makeTestDb<MasterDB>('master', () => []);
     const store = createMySqlSessionStore(db);
     expect(await store.get('missing-sid', 'tenant')).toBeNull();
   });
 
   it('get() deserializes the JSON payload column back into a Session', async () => {
     const session = tenantSession();
-    const { db } = makeTestDb('master', () => [{ payload: JSON.stringify(session) }]);
+    const { db } = makeTestDb<MasterDB>('master', () => [{ payload: JSON.stringify(session) }]);
     const store = createMySqlSessionStore(db);
     expect(await store.get(session.sid, 'tenant')).toEqual(session);
   });
 
   it('get() also handles a driver that hands back an already-parsed payload object (not a string)', async () => {
     const session = tenantSession();
-    const { db } = makeTestDb('master', () => [{ payload: session }]);
+    const { db } = makeTestDb<MasterDB>('master', () => [{ payload: session }]);
     const store = createMySqlSessionStore(db);
     expect(await store.get(session.sid, 'tenant')).toEqual(session);
   });
 
   it('touch() UPDATEs last_seen_at scoped to sid+realm', async () => {
-    const { db, pool } = makeTestDb('master', () => ({ affectedRows: 1 }));
+    const { db, pool } = makeTestDb<MasterDB>('master', () => ({ affectedRows: 1 }));
     const store = createMySqlSessionStore(db);
     const now = new Date('2026-07-12T01:00:00.000Z');
 
     await store.touch('sid-abc', 'tenant', now);
 
+    // now = 2026-07-12T01:00:00.000Z -> stored as the MariaDB DATETIME
+    // literal for the Bangkok (+07:00) wall-clock equivalent (08:00), since
+    // every connection runs `SET time_zone = '+07:00'` (packages/db) and a
+    // raw ISO string ('...T...Z') is rejected outright by strict-mode
+    // MariaDB. See toMySqlDateTime()'s doc comment in sessionStore.ts.
     expect(pool.connection.query).toHaveBeenCalledWith(
       expect.stringMatching(/UPDATE node_sessions SET last_seen_at/),
-      [now.toISOString(), 'sid-abc', 'tenant'],
+      ['2026-07-12 08:00:00', 'sid-abc', 'tenant'],
       expect.any(Function)
     );
   });
 
   it('rotate() deletes the old sid then inserts the new session row', async () => {
     const calls: string[] = [];
-    const { db, pool } = makeTestDb('master', (sqlText) => {
+    const { db, pool } = makeTestDb<MasterDB>('master', (sqlText) => {
       calls.push(sqlText);
       return { affectedRows: 1 };
     });
@@ -96,7 +126,7 @@ describe('createMySqlSessionStore (node_sessions CRUD)', () => {
   });
 
   it('delete() is a plain DELETE scoped to sid+realm', async () => {
-    const { db, pool } = makeTestDb('master', () => ({ affectedRows: 1 }));
+    const { db, pool } = makeTestDb<MasterDB>('master', () => ({ affectedRows: 1 }));
     const store = createMySqlSessionStore(db);
 
     await store.delete('sid-abc', 'tenant');
@@ -109,7 +139,7 @@ describe('createMySqlSessionStore (node_sessions CRUD)', () => {
   });
 
   it('deleteAllForIdentity() scopes by realm + admin_user_id for the tenant realm', async () => {
-    const { db, pool } = makeTestDb('master', () => ({ affectedRows: 2 }));
+    const { db, pool } = makeTestDb<MasterDB>('master', () => ({ affectedRows: 2 }));
     const store = createMySqlSessionStore(db);
 
     await store.deleteAllForIdentity('tenant', { adminUserId: 7 });
@@ -122,7 +152,7 @@ describe('createMySqlSessionStore (node_sessions CRUD)', () => {
   });
 
   it('deleteAllForIdentity() scopes by realm + platform_user_id for the platform realm', async () => {
-    const { db, pool } = makeTestDb('master', () => ({ affectedRows: 1 }));
+    const { db, pool } = makeTestDb<MasterDB>('master', () => ({ affectedRows: 1 }));
     const store = createMySqlSessionStore(db);
 
     await store.deleteAllForIdentity('platform', { platformUserId: 3 });
@@ -137,7 +167,7 @@ describe('createMySqlSessionStore (node_sessions CRUD)', () => {
   it('findByIdentity() returns every session row for one identity, deserialized', async () => {
     const s1 = tenantSession({ sid: 'sid-1' });
     const s2 = tenantSession({ sid: 'sid-2' });
-    const { db } = makeTestDb('master', () => [{ payload: JSON.stringify(s1) }, { payload: JSON.stringify(s2) }]);
+    const { db } = makeTestDb<MasterDB>('master', () => [{ payload: JSON.stringify(s1) }, { payload: JSON.stringify(s2) }]);
     const store = createMySqlSessionStore(db);
 
     const rows = await store.findByIdentity('tenant', { adminUserId: 1 });
@@ -145,7 +175,7 @@ describe('createMySqlSessionStore (node_sessions CRUD)', () => {
   });
 
   it('findByIdentity() returns [] when the identity field for the given realm is missing', async () => {
-    const { db } = makeTestDb('master', () => {
+    const { db } = makeTestDb<MasterDB>('master', () => {
       throw new Error('should not query');
     });
     const store = createMySqlSessionStore(db);

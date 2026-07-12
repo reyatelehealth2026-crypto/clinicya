@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { MasterDB } from '@reya/db';
 import { writeSuperAdminAudit } from '../src/impersonation';
 import { makeTestDb } from './helpers/makeTestDb';
 
 describe('writeSuperAdminAudit', () => {
   it('INSERTs the exact super_admin_audit column list with metadata JSON-encoded', async () => {
-    const { db, pool } = makeTestDb('master', () => ({ insertId: 1, affectedRows: 1 }));
+    const { db, pool } = makeTestDb<MasterDB>('master', () => ({ insertId: 1, affectedRows: 1 }));
 
     await writeSuperAdminAudit(db, {
       platformUserId: 9,
@@ -32,7 +33,7 @@ describe('writeSuperAdminAudit', () => {
   });
 
   it('stores NULL metadata (not "{}") when metadata is omitted — mirrors PHP\'s `$metadata ? json_encode(...) : null`', async () => {
-    const { db, pool } = makeTestDb('master', () => ({ insertId: 2, affectedRows: 1 }));
+    const { db, pool } = makeTestDb<MasterDB>('master', () => ({ insertId: 2, affectedRows: 1 }));
 
     await writeSuperAdminAudit(db, {
       platformUserId: 9,
@@ -48,7 +49,7 @@ describe('writeSuperAdminAudit', () => {
   });
 
   it('accepts a null tenantId (platform-wide action)', async () => {
-    const { db, pool } = makeTestDb('master', () => ({ insertId: 3, affectedRows: 1 }));
+    const { db, pool } = makeTestDb<MasterDB>('master', () => ({ insertId: 3, affectedRows: 1 }));
 
     await writeSuperAdminAudit(db, { platformUserId: 9, tenantId: null, action: 'platform_login' });
 
@@ -60,7 +61,7 @@ describe('writeSuperAdminAudit', () => {
   });
 
   it('propagates a DB failure (never silently swallowed like the PHP error_log fallback)', async () => {
-    const { db } = makeTestDb('master', () => {
+    const { db } = makeTestDb<MasterDB>('master', () => {
       throw new Error('connection lost');
     });
 

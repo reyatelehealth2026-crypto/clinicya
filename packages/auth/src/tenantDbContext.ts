@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Kysely } from 'kysely';
+import type { TenantDB } from '@reya/db';
 
 /**
  * tenantDbContext.ts — ambient "which tenant DB is this request for" context
@@ -28,7 +29,7 @@ import type { Kysely } from 'kysely';
 
 export interface TenantDbContext {
   tenantId: number;
-  db: Kysely<any>;
+  db: Kysely<TenantDB>;
 }
 
 const storage = new AsyncLocalStorage<TenantDbContext>();

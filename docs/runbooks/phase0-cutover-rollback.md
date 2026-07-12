@@ -387,3 +387,231 @@ service `cron` (same image as `php`, command overridden to `cron -f`).
 
 None of the above required DNS, VPS, or a live production/tenant database —
 every check ran against throwaway local containers and was torn down after.
+
+---
+
+## E2E bridge harness (Phase 1)
+
+Phase 1 batch 3 (mig-infra). Source: `infra/e2e/`. Proves — on the REAL
+stack, not mocks — the exact mechanics Phase 1's login-bridge acceptance
+depends on: `@reya/auth`'s `login()` creates a session AND bridges it into a
+real PHP `$_SESSION` via `internal/session-bridge.php`, such that a browser
+presenting the resulting `PHPSESSID` cookie loads a real
+`auth_check`-gated PHP admin page without bouncing to `/auth/login.php`,
+and that `logout()` reverses this.
+
+### What this proves, and what it does NOT prove
+
+This exercises the bridge **mechanism** end-to-end on **one** representative
+page (`system-status.php` — see `infra/e2e/probe-page.md` for why) and
+**one** representative tenant DB (a scratch DB seeded from the committed
+`database/migration_2026-05-25_tenant_template.sql`). It does **not**
+attempt the full plan Phase-1-acceptance line ("5 heavy PHP pages, Google
+OAuth/SSO, platform-login+switch-tenant audit rows") — that is a broader,
+separate verification pass. Read this harness's PASS/FAIL output as
+**"bridge mechanics: PASS/FAIL"**, never as "Phase 1: PASS/FAIL".
+
+### How to run it locally
+
+```bash
+node infra/e2e/run.mjs
+```
+
+This is the single documented command. It is fully self-contained:
+
+1. Checks `packages/auth/dist/index.js` exists; if not, runs
+   `pnpm --filter @reya/auth run build` itself first (which transitively
+   builds `@reya/config`/`@reya/db` via TypeScript project references).
+2. Parses `config/config.php` (the local, gitignored copy — see this repo's
+   CLAUDE.md) at runtime for `DB_NAME`/`DB_USER`/`DB_PASS`. These values are
+   **never** written into any tracked file — see the secrets-discipline
+   note below.
+3. Generates fresh, random, throwaway secrets (MariaDB root password,
+   `SESSION_BRIDGE_HMAC_SECRET`, the seeded admin's password) — held only in
+   the Node process's memory/env for the duration of the run.
+4. `docker compose -f infra/e2e/docker-compose.yml up -d --build` — brings
+   up `mariadb:10.11` (host port **3306 directly** — see the "port gotcha"
+   note below), `redis:7-alpine`, and a `php` service built from the
+   **existing, unmodified** `infra/php/Dockerfile`, all on a dedicated
+   bridge network with a **fixed subnet** (`172.30.99.0/24`).
+5. Seeds, strictly in order (see `infra/e2e/seed/` + `run.mjs`'s
+   `MASTER_MIGRATIONS` list): the master DB (`zrismpsz_reya_platform`) from
+   the six committed master migrations, the app/tenant DB (named whatever
+   `config/config.php` says — in practice `zrismpsz_clinicya`) from the
+   ~280-table tenant template, one `plans` row, one `tenants` row. Then
+   fires **one throwaway unauthenticated GET** at the probe page (this is
+   what makes `classes/AdminAuth.php`'s constructor auto-create
+   `admin_users`/`admin_bot_access`/`admin_activity_log` — see
+   `infra/e2e/seed/20-admin-user.sql.tmpl`'s header comment for the full
+   "sequencing trap" explanation), generates a **real PHP bcrypt hash**
+   by invoking `password_hash()` inside the harness's own `php` container,
+   and seeds one `admin_users` row with it.
+6. Calls the **built dist** of `@reya/auth`'s `login()` (wrapped in
+   `runWithTenantDb`, per that package's README), asserts `ok===true` and
+   `bridgeSynced===true` (printing the bridge's actual HTTP status/body on
+   failure, not just a bare boolean).
+7. Fetches the probe page through the harness's `php` service with
+   `Cookie: PHPSESSID=<sid>` — asserts 200, no `Location` to
+   `auth/login.php`. Separately fetches the same page with a garbage
+   `PHPSESSID` — asserts a 3xx redirect **to** `auth/login.php` (the
+   "does it actually gate on auth at all" control).
+8. Calls `logout()`, then re-fetches the probe page with the **same**
+   `PHPSESSID` — asserts it now redirects like the logged-out control.
+9. Prints one JSON line to stdout — see "Reading the output" below — and
+   **always** tears the stack down (`docker compose down -v
+   --remove-orphans`) in a `finally` block, even on a thrown error.
+
+Re-running the same command immediately again is safe and produces the same
+result — every volume/network/container is destroyed at the end of the
+previous run, so there is no leftover state to interfere with a fresh run.
+
+### Reading the output
+
+The last stdout line is a single JSON object:
+
+```json
+{"result":"PASS"|"FAIL","steps":{"<step_name>":{"ok":true|false,...},...},"failedAt":"<step_name>"|null}
+```
+
+`steps` is populated in execution order — a `FAIL` result's `failedAt`
+names the first step that didn't succeed; every step recorded before it
+succeeded. Exit code is 0 for PASS, 1 for FAIL — the whole harness is
+scriptable/CI-friendly by design (this is what mig-verify runs verbatim).
+
+### The `internal/.htaccess` CIDR caveat
+
+`internal/.htaccess` previously denied ALL requests unconditionally (its own
+header comment explicitly named mig-infra as the owner of replacing that
+with a scoped Allow/Require-ip rule once a Docker network CIDR was known).
+This batch replaces the blanket deny with:
+
+```
+Require ip 172.30.99.0/24
+```
+
+— scoped to **exactly** this harness's own dedicated compose network
+(`infra/e2e/docker-compose.yml`'s `e2e-net`, fixed subnet). This was
+verified empirically (not assumed): a request from the Docker **host**
+(where `infra/e2e/run.mjs`'s Node process itself runs — it is not
+containerized) to a container's published port on a custom bridge network
+is SNAT'd to that network's **gateway** IP (`172.30.99.1` for this subnet),
+which is why the whole `/24` is allow-listed rather than a single address.
+
+**This is a narrow, harness-specific carve-out — it is NOT the production
+Phase 0 cutover's CIDR decision.** The real production network `internal/`
+needs to be scoped to (whatever Docker network Phase 0 actually runs the
+`php` + Next.js kernel containers on) is a **separate** decision, tracked in
+`docs/plans/2026-07-12-nextjs-full-migration-plan.md` Phase 0/13 — do not
+assume `172.30.99.0/24` means anything there, and do not widen this rule to
+cover it. When that production CIDR is decided, add a second scoped rule
+alongside this one (or replace it if this harness is retired) rather than
+loosening it.
+
+### The DB_HOST/port gotcha
+
+`config/config.php` hardcodes `DB_HOST` to the literal string `'localhost'`,
+which PDO's mysql driver (used by every PHP page) treats as "connect via
+unix socket", not TCP — `infra/e2e/docker-compose.yml` replicates the exact
+shared-socket-volume trick `infra/compose/docker-compose.strangler.yml`
+already uses for this (`e2e_mariadb_socket` mounted at `/run/mysqld` in both
+the `mariadb` and `php` services; `infra/php/php.ini`, unmodified, already
+points `pdo_mysql.default_socket` there).
+
+Separately: `packages/db`'s `masterPool.ts`/`tenantPoolRegistry.ts` build
+their `mysql2` `PoolOptions` from `env.DB_HOST` **alone** — there is no
+`DB_PORT` anywhere in `packages/config`'s env schema, and `mysql2`'s `host`
+option does not parse a `"host:port"` string. Since `infra/e2e/run.mjs`'s
+Node process runs on the host (not inside the compose network), the only
+way for it to reach MariaDB on `mysql2`'s hardcoded default port is a
+**direct host-port mapping**, `"3306:3306"` — not a remapped high port. If a
+genuine port conflict is ever hit here, that is a real `packages/db` gap
+(no way to configure a non-default MySQL port for the Node side) — flag it
+back rather than working around it in this harness.
+
+### Confirmed findings from running this harness against the real stack
+
+Building and running this harness surfaced two real, blocking defects
+**outside** this batch's allowed paths (`packages/**`, and any PHP file
+other than the `internal/.htaccess` CIDR carve-out, are out of scope for
+mig-infra to fix — see this batch's brief). Both were diagnosed with
+temporary, fully-reverted local edits (verified via `git diff` /
+`git status` showing a clean tree afterward) and are reported here, not
+patched:
+
+1. **`packages/auth/src/sessionStore.ts` — `toRow()` and `touch()` write a
+   JS `Date#toISOString()` string (`"...T...Z"`) directly into a raw `sql`
+   tag for `node_sessions`' `created_at`/`last_seen_at`/`expires_at`
+   `TIMESTAMP` columns.** MariaDB rejects that literal syntax outright
+   (`Incorrect datetime value: '2026-07-12T15:03:08.546Z' ...`) — this
+   fails on **every** `login()` call against a real MySQL/MariaDB pool (not
+   just this harness). None of `packages/auth`'s own tests catch it because
+   they mock `mysql2` entirely (see that package's README: "No test in this
+   package opens a real DB"). Fix direction: strip the `T`/trailing
+   `.sssZ` (`iso.replace('T',' ').replace(/\.\d+Z$/, '')`) before handing
+   these to the `sql` tag, or pass real `Date` objects instead of
+   pre-stringified ISO values (mysql2 auto-formats actual `Date` objects
+   correctly).
+2. **`internal/session-bridge.php`'s `'login-sync'` action calls
+   `session_regenerate_id(true)`, which changes which PHP session id
+   actually holds the bridged `$_SESSION` data — but nothing communicates
+   that new id back to Node or the browser.** `session_regenerate_id`'s
+   `Set-Cookie` is sent on the POST response `@reya/auth`'s `bridgeClient.ts`
+   consumes (server-to-server), never on a response a browser ever sees;
+   the browser's `PHPSESSID` cookie is set independently by `apps/admin`'s
+   login route to Node's own `sid` (`SessionCookieDescriptor.value`), which
+   is never told about the regeneration. Verified directly: after a
+   `login-sync` bridge call, the ORIGINAL `sid`'s PHP session file/key is
+   empty, and the admin_user payload is filed under a freshly-regenerated,
+   different id that no client ever holds — so a browser presenting the
+   `PHPSESSID` Next.js actually sets it always bounces back to
+   `auth/login.php`. With `session_regenerate_id(true)` temporarily disabled
+   for verification (immediately reverted), every remaining step of this
+   harness passed cleanly (authed 200, unauthed-control 302, `logout()`
+   reverses it) — confirming the rest of the bridge/probe mechanism is
+   otherwise correct. This blocks the bridge mechanism itself in its
+   current form and needs to be fixed by whoever owns
+   `internal/session-bridge.php` (routed via mig-orchestrator) — most
+   likely by not rotating the PHP-side session id at all during a
+   Node-driven bridge sync (Node already rotates its own `sid` for
+   privilege elevation; the PHP side doesn't need a second, uncommunicated
+   rotation on top of that) before this harness can report a real `PASS`.
+
+A third, lower-severity observation: this harness's own manual debugging
+(`docker compose exec php php -r 'var_dump(class_exists("Predis\\Client"));'`)
+found `predis/predis` is declared in `composer.json`'s `require` but is
+**not actually present in `vendor/`** in this checkout (no entry in
+`composer.lock` either) — so `infra/php/session-redis-handler.php` silently
+falls back to file-based PHP sessions (its documented fail-open behavior;
+confirmed via `session.save_handler => files` and populated `sess_*` files
+under `/tmp` inside the container, with **zero** keys in Redis DB 1). This
+did not block this harness (both the bridge-write request and the
+probe-page-read request land on the *same* single `php` container, so
+file-based sessions are still shared correctly for THIS harness's purposes)
+— but it silently defeats the stateless-PHP-session design Phase 0/§2.1
+calls for, which matters once there is more than one PHP replica. Worth a
+`composer install` + `composer.lock` audit outside this batch's scope.
+
+The FAIL path itself was verified as real (mig-verify acceptance criterion):
+with `SESSION_BRIDGE_HMAC_SECRET` deliberately mismatched between the `php`
+service and the Node runner (both `internal/session-bridge.php`'s HMAC
+signature check and this repo's `internal/.htaccess` fix from this batch
+were otherwise unchanged), the harness printed `{"result":"FAIL",...,
+"failedAt":"bridge_synced"}` — correctly isolating the injected fault to
+exactly the right step — and `docker ps`/`docker volume ls`/`docker network
+ls` showed zero leftover harness resources afterward. Both temporary changes
+used for this verification (the HMAC mismatch, and a diagnostic-only rebuild
+of `packages/auth/dist/sessionStore.js`, which is gitignored) were fully
+reverted; `git status`/`git diff` show no trace of them.
+
+### Secrets discipline
+
+`config/config.php`'s `DB_NAME`/`DB_USER`/`DB_PASS` values are parsed at
+runtime by `infra/e2e/run.mjs` and never written into `infra/e2e/`'s tracked
+files (`docker-compose.yml`, the `infra/e2e/seed/*.sql*` files) — only the
+non-secret schema/table identifiers they represent (e.g. the literal string
+`zrismpsz_reya_platform`, which is `TenantContext::PLATFORM_DB_NAME` /
+`packages/config`'s `PLATFORM_DB_NAME`, hardcoded identically in both
+runtimes already) appear literally in those files. Every other credential
+(`MARIADB_ROOT_PASSWORD`, `SESSION_BRIDGE_HMAC_SECRET`, the seeded test
+admin's password) is generated fresh per run via `crypto.randomBytes(...)`
+and lives only in the Node process's environment for the run's duration.

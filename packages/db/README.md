@@ -15,37 +15,50 @@ for byte.
 
 ## What is NOT in this batch
 
-- `packages/db/migrations/{master,tenant}/*.sql` are placeholder directories
-  (`.gitkeep` only). Populating them — introspecting the template 280-table
-  schema + master into committed migration files, and writing the one-time
-  drift-audit reconciliation migrations — is the "Schema governance"
-  cross-cutting workstream (plan §4.1), tracked separately from this
-  foundation batch.
-- `kysely-codegen` has never been run against a real DB from this container
-  (no live tenant/master DB is reachable here). `src/codegen.ts` +
-  `scripts/codegen.sh` are ready to run the moment one is — see below.
+- `packages/db/migrations/tenant/` is still a placeholder directory
+  (`.gitkeep` only) — no committed tenant migration files exist yet.
+  `packages/db/migrations/master/migration_2026-07-12_node_sessions.sql` is
+  committed but, per its own header comment, is applied by hand (as part of
+  the "Regenerating the types" recipe below) rather than by any runner —
+  `migrateAll()` only ever walks `migrations/tenant/`. Populating
+  `migrations/tenant/` with the introspected-from-template committed
+  migration files, wiring an equivalent runner for `migrations/master/`, and
+  writing the one-time drift-audit reconciliation migrations are the
+  remaining "Schema governance" cross-cutting workstream items (plan §4.1),
+  tracked separately from this foundation batch.
+- `kysely-codegen` **has** now been run for real against schema-complete
+  scratch DBs and its output is committed (`src/generated/master-db.d.ts`,
+  `src/generated/tenant-db.d.ts`) — see "Regenerating the types" below for
+  the exact recipe. What's still open: those two files are a snapshot from
+  one point in time; they are not regenerated automatically by CI or by
+  `migrate-all`, so a schema change lands in the generated types only when
+  someone re-runs the recipe below and commits the diff.
 
 ## Pool registry
 
 ```ts
-import { getMasterDb, getTenantDb, tenantPoolRegistry } from '@reya/db';
+import { getMasterDb, getTenantDb, tenantPoolRegistry, type MasterDB, type TenantDB } from '@reya/db';
 import { sql } from 'kysely';
 
-const master = getMasterDb();                          // Kysely<any> over zrismpsz_reya_platform
-const tenantDb = await getTenantDb(42);                 // Kysely<any> over master.tenants[id=42].db_name
+const master = getMasterDb();                          // Kysely<MasterDB> over zrismpsz_reya_platform
+const tenantDb = await getTenantDb(42);                 // Kysely<TenantDB> over master.tenants[id=42].db_name
 
 const rows = await sql`select 1`.execute(master);        // raw-SQL escape hatch (plan §1.2 rationale)
 tenantPoolRegistry.size();                              // current live tenant pool count
 ```
 
-`getMasterDb()`/`getTenantDb()` return `Kysely<any>` (plan §1.2: registry is
-`Map<dbName, Kysely<TenantDB>>`), backed by a plain (callback-style) `mysql2`
-`Pool` wrapped in Kysely's `MysqlDialect` — not Prisma, and not a raw
-`mysql2/promise` pool. `any` because no `kysely-codegen` output exists yet in
-this batch (no live DB to introspect from this container); once
-`scripts/codegen.sh` has been run for real, swap `Kysely<any>` for the
-generated `Database` interface — every call site threads the type parameter
-through, so it's a one-line change here, not a call-site migration.
+`getMasterDb()`/`getTenantDb()` return `Kysely<MasterDB>` / `Kysely<TenantDB>`
+(plan §1.2: registry is `Map<dbName, Kysely<TenantDB>>`), backed by a plain
+(callback-style) `mysql2` `Pool` wrapped in Kysely's `MysqlDialect` — not
+Prisma, and not a raw `mysql2/promise` pool. `MasterDB`/`TenantDB` are
+`kysely-codegen`'s generated `DB` interface from `src/generated/{master,tenant}-db.d.ts`,
+re-exported from `@reya/db`'s index under those aliases (kysely-codegen has
+no `--interface-name` flag — the interface in both generated files is always
+literally named `DB`, so every consumer imports it aliased: `import type { DB
+as MasterDB } from './generated/master-db'` inside `@reya/db` itself, then
+`import type { MasterDB } from '@reya/db'` everywhere else). See
+"Regenerating the types" below for how these files are produced — **never
+hand-edit `src/generated/*.d.ts`**, they are fully regenerable output.
 
 Internally, each registry entry keeps the **raw mysql2 pool** alongside the
 Kysely wrapper and evicts by calling `pool.end()` on the raw pool directly,
@@ -120,13 +133,160 @@ DB_HOST=<host> DB_USER=<user> DB_PASS=<pass> \
 `--dry-run` (or omitting `--db` for the tenant target, which throws before
 ever reaching `child_process`) prints the exact `kysely-codegen ...`
 invocation that would run, with the password redacted, and exits without
-touching `child_process.spawn` at all — this is what's exercised in this
-container instead of the plan's "codegen 280 ตาราง ผ่าน" acceptance line,
-which needs a live DB:
+touching `child_process.spawn` at all — this is the no-live-DB path, always
+kept green regardless of whether a scratch DB is available:
 
 ```bash
 pnpm --filter @reya/db run codegen -- master --dry-run
 pnpm --filter @reya/db run codegen -- tenant --db=reya_tenant_0001 --dry-run
+```
+
+### Regenerating the types
+
+`src/generated/master-db.d.ts` and `src/generated/tenant-db.d.ts` are
+committed, generated output — **never hand-edit them**, treat them as fully
+regenerable from this recipe. Both were produced against a throwaway local
+MariaDB container, never against a shared/persistent DB, and the container
+was torn down afterward — nothing about the scratch environment itself is
+committed, only the two `.d.ts` files and this procedure.
+
+**1. Bring up a scratch MariaDB (plain `docker run`, not a compose file):**
+
+```bash
+SCRATCH_PW=$(openssl rand -hex 16)   # throwaway, never written to a tracked file
+docker run -d --name codegen-mariadb-scratch \
+  -e MARIADB_ROOT_PASSWORD="$SCRATCH_PW" \
+  -p 33061:3306 \
+  mariadb:10.11
+# wait for it to accept connections:
+until docker exec codegen-mariadb-scratch mariadb -uroot -p"$SCRATCH_PW" -e "SELECT 1" >/dev/null 2>&1; do
+  sleep 2
+done
+```
+
+Use a `codegen-`-prefixed container name and a high host port — this is
+unrelated to (and must never collide with) the mig-infra e2e MariaDB/Redis
+stack, which uses its own container names/ports.
+
+**2. Create the master DB — name matters:** `src/codegen.ts`'s
+`resolveDbName()` hardcodes `zrismpsz_reya_platform` for `target=master`
+regardless of any `--db` flag (which is ignored for that target), so the
+scratch DB must be created with exactly that name:
+
+```bash
+docker exec codegen-mariadb-scratch mariadb -uroot -p"$SCRATCH_PW" -e "
+  CREATE DATABASE IF NOT EXISTS zrismpsz_reya_platform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  CREATE DATABASE IF NOT EXISTS reya_tenant_scratch CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+"
+```
+
+**3. Apply the master DB migrations, IN ORDER** (the first four live in
+`database/`, the last one is `packages/db/migrations/master/` and is
+flagged in `packages/auth/README.md` as "not yet wired into any runner" — it
+is applied by hand here, exactly as that flag says):
+
+```bash
+for f in \
+  database/migration_2026-05-25_platform_master.sql \
+  database/migration_2026-05-27_master_products.sql \
+  database/migration_2026-05-27_tenant_line_account_routes.sql \
+  database/migration_2026-06-04_platform_billing.sql \
+  database/migration_2026-06-04_platform_billing_details.sql \
+  packages/db/migrations/master/migration_2026-07-12_node_sessions.sql \
+; do
+  docker exec -i codegen-mariadb-scratch mariadb -uroot -p"$SCRATCH_PW" zrismpsz_reya_platform < "$f"
+done
+```
+
+Despite the tenant-sounding filename, `migration_2026-05-27_tenant_line_account_routes.sql`
+is a **platform**-DB table (`tenant_line_account_routes` lives in
+`zrismpsz_reya_platform`, routing LINE OAs to tenants) — confirmed by its own
+header comment, not by the filename. The first, fourth, fifth, and sixth
+files each carry their own `USE \`zrismpsz_reya_platform\`;`; the second and
+third don't, which is why the default DB is passed explicitly on the
+`mariadb` command line above for all of them.
+
+**4. Apply the tenant template** to the second scratch DB — this is the
+representative ~280-table tenant schema `src/codegen.ts`'s own doc comment
+already names as the intended source for this step:
+
+```bash
+docker exec -i codegen-mariadb-scratch mariadb -uroot -p"$SCRATCH_PW" reya_tenant_scratch \
+  < database/migration_2026-05-25_tenant_template.sql
+```
+
+**5. Run codegen for both targets.** `CodegenEnvLike` has no `DB_PORT`
+field, but `buildDatabaseUrl()` builds a real `mysql://host/db` URL string —
+so a non-3306 scratch port folds into `DB_HOST` itself
+(`DB_HOST=127.0.0.1:33061`). This URL-based trick is specific to this
+codegen path; it does not apply to raw `mysql2` `Pool` configs elsewhere in
+this monorepo (those take a separate `port` field).
+
+```bash
+DB_HOST=127.0.0.1:33061 DB_USER=root DB_PASS="$SCRATCH_PW" \
+  pnpm --filter @reya/db run codegen -- master
+# ✓ Introspected 13 tables and generated ./src/generated/master-db.d.ts
+
+DB_HOST=127.0.0.1:33061 DB_USER=root DB_PASS="$SCRATCH_PW" \
+  pnpm --filter @reya/db run codegen -- tenant --db=reya_tenant_scratch
+# ✓ Introspected 279 tables and generated ./src/generated/tenant-db.d.ts
+```
+
+This writes `src/generated/master-db.d.ts` and `src/generated/tenant-db.d.ts`
+(kysely-codegen's default `${outDir}/${target}-db.d.ts` naming — `--out-dir`
+overrides `outDir`, the `master`/`tenant` half of the filename always tracks
+`target`). kysely-codegen has no `--interface-name` flag, so the generated
+interface in **both** files is always literally named `DB`. Import it
+aliased, never rename it inside the generated file itself:
+
+```ts
+import type { DB as MasterDB } from './generated/master-db'; // masterPool.ts
+import type { DB as TenantDB } from './generated/tenant-db';  // tenantPoolRegistry.ts
+```
+
+`@reya/db`'s `index.ts` re-exports both under those same aliases
+(`export type { DB as MasterDB } from './generated/master-db'` /
+`... TenantDB ... tenant-db`), so downstream packages (`@reya/auth`, etc.)
+import `MasterDB`/`TenantDB` straight from `@reya/db` without reaching into
+`./generated/*` themselves.
+
+**6. `.gitignore` trap — generated files are silently untracked by default.**
+The root `.gitignore` has a blanket `generated/` rule ("Build/scratch
+artifacts — not source") that matches `packages/db/src/generated/` too.
+`packages/db/src/generated/*.d.ts` IS source here (committed, regenerable
+via this exact recipe) — the repo's own `.gitignore` carries a negation
+whitelist for it, the same pattern CLAUDE.md documents for
+`database/migration_*.sql`:
+
+```gitignore
+generated/
+!packages/db/src/generated/
+!packages/db/src/generated/*.d.ts
+```
+
+After regenerating, always confirm the files are actually stageable before
+assuming the diff will land:
+
+```bash
+git status packages/db/src/generated/
+git add -n packages/db/src/generated/master-db.d.ts packages/db/src/generated/tenant-db.d.ts
+```
+
+Codegen can succeed perfectly and still produce an empty `git diff` if this
+whitelist entry is ever removed or the files move outside it.
+
+**7. Tear down the scratch container** — nothing about it is committed:
+
+```bash
+docker rm -f codegen-mariadb-scratch
+```
+
+**Sanity checks worth re-running after a regenerate:**
+
+```bash
+grep -c '^export interface' packages/db/src/generated/tenant-db.d.ts   # ~280 (279 tables + the DB interface)
+grep -n 'realm' packages/db/src/generated/master-db.d.ts | head        # NodeSessions.realm should be present
+pnpm -r run build && pnpm -r run test && pnpm -r run lint              # whole workspace, not just @reya/db
 ```
 
 ## Build / test

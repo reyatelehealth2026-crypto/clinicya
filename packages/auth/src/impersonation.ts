@@ -1,4 +1,5 @@
 import { sql, type Kysely } from 'kysely';
+import type { MasterDB } from '@reya/db';
 
 /**
  * impersonation.ts — port of the `$writeAudit` closure in
@@ -25,7 +26,7 @@ export interface WriteSuperAdminAuditInput {
   metadata?: Record<string, unknown> | null;
 }
 
-export async function writeSuperAdminAudit(db: Kysely<any>, input: WriteSuperAdminAuditInput): Promise<void> {
+export async function writeSuperAdminAudit(db: Kysely<MasterDB>, input: WriteSuperAdminAuditInput): Promise<void> {
   // Mirrors PHP's `$metadata ? json_encode($metadata, JSON_UNESCAPED_UNICODE) : null`
   // — an empty/absent metadata object is stored as SQL NULL, not `{}`.
   const metadataJson =

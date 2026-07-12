@@ -188,24 +188,21 @@ session_start();
 
 switch ($action) {
     case 'login-sync':
-        // Privilege elevation — mirrors classes/AdminAuth.php::login() /
-        // admin/platform-login.php's session_regenerate_id(true) on the PHP side too.
-        session_regenerate_id(true);
+        // NO session_regenerate_id() here: the sid this request targeted via
+        // session_id($sid) IS the freshly-rotated id Node's login() just
+        // issued (fixation defense lives on the Node side — @reya/auth
+        // rotates on every privilege elevation). Regenerating here would
+        // move $_SESSION to a new PHP-generated id the browser never learns
+        // about, orphaning the PHPSESSID cookie (= Node sid) — caught live
+        // by infra/e2e/run.mjs (authed probe 302'd instead of 200).
         reya_bridge_apply_keys($phpSessionKeys);
         break;
 
     case 'set_tenant':
-        // Only rotate when ENTERING impersonation (privilege elevation) —
-        // mirrors admin/switch-tenant.php's 'enter' action. 'exit' (i.e.
-        // admin_switched_to_tenant_id explicitly present and null) doesn't
-        // need its own PHP-side rotation — the Node side already issued a
-        // new sid before calling here in both cases.
-        if (
-            array_key_exists('admin_switched_to_tenant_id', $phpSessionKeys)
-            && $phpSessionKeys['admin_switched_to_tenant_id'] !== null
-        ) {
-            session_regenerate_id(true);
-        }
+        // NO PHP-side rotation for enter OR exit: @reya/auth's switchTenant()
+        // already rotated the Node sid before calling here, and this request
+        // was addressed to that new sid via session_id($sid). Regenerating
+        // again would orphan it (same bug class as login-sync above).
         reya_bridge_apply_keys($phpSessionKeys);
         break;
 

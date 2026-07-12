@@ -1,4 +1,5 @@
 import { sql, type Kysely } from 'kysely';
+import type { MasterDB } from '@reya/db';
 import type { Realm, Session } from './types';
 
 /**
@@ -50,6 +51,41 @@ interface NodeSessionRow {
   expires_at: unknown;
 }
 
+/**
+ * Converts a UTC instant (ISO 8601 string — Session.createdAt/lastSeenAt/
+ * expiresAt's type — or a `Date`) into the literal MariaDB expects for a
+ * TIMESTAMP column, expressed in the exact same Asia/Bangkok (+07:00)
+ * session offset every connection in this repo runs under (`SET time_zone =
+ * '+07:00'` — see packages/db/src/masterPool.ts / tenantPoolRegistry.ts).
+ *
+ * Two failure modes this avoids:
+ *  1. Handing the raw ISO string (e.g. '2026-07-12T15:26:12.428Z') straight
+ *     to the `sql` tag — MariaDB (STRICT_TRANS_TABLES) rejects the 'T'/'Z'/
+ *     milliseconds as an "Incorrect datetime value" and every write throws.
+ *  2. A naive 'T'->' ' / trailing-'Z' strip — that produces a
+ *     syntactically-valid DATETIME literal, but since the connection's
+ *     session `time_zone` is '+07:00', MariaDB interprets that literal as
+ *     Bangkok-local wall-clock time and subtracts 7h to store it as UTC,
+ *     silently persisting an instant 7 hours earlier than intended.
+ *
+ * Fix: shift the UTC instant forward by the Bangkok offset ourselves (via
+ * the UTC getters, so this is correct regardless of the Node process's own
+ * TZ env) before formatting. The literal we send is the Bangkok wall-clock
+ * time for that instant; MariaDB's session `time_zone` conversion then maps
+ * it back to the correct UTC instant on write (and forward again on read).
+ */
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+function toMySqlDateTime(value: string | Date): string {
+  const utcInstant = typeof value === 'string' ? new Date(value) : value;
+  const bangkok = new Date(utcInstant.getTime() + BANGKOK_OFFSET_MS);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return (
+    `${bangkok.getUTCFullYear()}-${pad(bangkok.getUTCMonth() + 1)}-${pad(bangkok.getUTCDate())} ` +
+    `${pad(bangkok.getUTCHours())}:${pad(bangkok.getUTCMinutes())}:${pad(bangkok.getUTCSeconds())}`
+  );
+}
+
 function toRow(session: Session): {
   sid: string;
   realm: Realm;
@@ -67,9 +103,9 @@ function toRow(session: Session): {
   const base = {
     sid: session.sid,
     payload: JSON.stringify(session),
-    created_at: session.createdAt,
-    last_seen_at: session.lastSeenAt,
-    expires_at: session.expiresAt,
+    created_at: toMySqlDateTime(session.createdAt),
+    last_seen_at: toMySqlDateTime(session.lastSeenAt),
+    expires_at: toMySqlDateTime(session.expiresAt),
   };
 
   if (session.realm === 'tenant') {
@@ -107,7 +143,7 @@ export function deserializeSessionRow(row: NodeSessionRow): Session {
   return parsed as Session;
 }
 
-export function createMySqlSessionStore(db: Kysely<any>): SessionStore {
+export function createMySqlSessionStore(db: Kysely<MasterDB>): SessionStore {
   return {
     async create(session: Session): Promise<void> {
       const r = toRow(session);
@@ -131,7 +167,7 @@ export function createMySqlSessionStore(db: Kysely<any>): SessionStore {
 
     async touch(sid: string, realm: Realm, now: Date): Promise<void> {
       await sql`
-        UPDATE node_sessions SET last_seen_at = ${now.toISOString()} WHERE sid = ${sid} AND realm = ${realm}
+        UPDATE node_sessions SET last_seen_at = ${toMySqlDateTime(now)} WHERE sid = ${sid} AND realm = ${realm}
       `.execute(db);
     },
 

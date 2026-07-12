@@ -19,6 +19,7 @@
     "@reya/config": "workspace:*",
     "@reya/db": "workspace:*",
     "@reya/tenant": "workspace:*",
+    "kysely": "^0.29.3",
     "next": "^16.2.4",
     "react": "^18",
     "react-dom": "^18"

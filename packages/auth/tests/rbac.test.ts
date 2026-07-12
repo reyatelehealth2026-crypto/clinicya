@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { TenantDB } from '@reya/db';
 import { canAccessBot, requireRole } from '../src/rbac';
 import type { PlatformSession, TenantSession } from '../src/types';
 import { makeTestDb } from './helpers/makeTestDb';
@@ -76,7 +77,7 @@ describe('requireRole', () => {
 describe('canAccessBot (admin_bot_access ACL — mirrors AdminAuth::canAccessBot())', () => {
   it('super_admin short-circuits true without ever querying admin_bot_access', async () => {
     let queried = false;
-    const { db } = makeTestDb('tenant_db', () => {
+    const { db } = makeTestDb<TenantDB>('tenant_db', () => {
       queried = true;
       return [];
     });
@@ -87,13 +88,13 @@ describe('canAccessBot (admin_bot_access ACL — mirrors AdminAuth::canAccessBot
   });
 
   it('denies when no admin_bot_access row exists for (admin_id, line_account_id)', async () => {
-    const { db } = makeTestDb('tenant_db', () => []);
+    const { db } = makeTestDb<TenantDB>('tenant_db', () => []);
     const allowed = await canAccessBot(db, 1, 'admin', 99, 'can_view');
     expect(allowed).toBe(false);
   });
 
   it('denies when the row exists but can_view=0', async () => {
-    const { db } = makeTestDb('tenant_db', () => [
+    const { db } = makeTestDb<TenantDB>('tenant_db', () => [
       { can_view: 0, can_edit: 1, can_broadcast: 1, can_manage_users: 1, can_manage_shop: 1, can_view_analytics: 1 },
     ]);
     const allowed = await canAccessBot(db, 1, 'admin', 99, 'can_view');
@@ -101,7 +102,7 @@ describe('canAccessBot (admin_bot_access ACL — mirrors AdminAuth::canAccessBot
   });
 
   it('allows when the row exists and can_view=1', async () => {
-    const { db, pool } = makeTestDb('tenant_db', () => [
+    const { db, pool } = makeTestDb<TenantDB>('tenant_db', () => [
       { can_view: 1, can_edit: 0, can_broadcast: 0, can_manage_users: 0, can_manage_shop: 0, can_view_analytics: 0 },
     ]);
     const allowed = await canAccessBot(db, 1, 'admin', 99, 'can_view');
@@ -114,7 +115,7 @@ describe('canAccessBot (admin_bot_access ACL — mirrors AdminAuth::canAccessBot
   });
 
   it('checks an arbitrary permission column (can_manage_shop) when the row grants it', async () => {
-    const { db } = makeTestDb('tenant_db', () => [
+    const { db } = makeTestDb<TenantDB>('tenant_db', () => [
       { can_view: 1, can_edit: 0, can_broadcast: 0, can_manage_users: 0, can_manage_shop: 1, can_view_analytics: 0 },
     ]);
     const allowed = await canAccessBot(db, 1, 'staff', 99, 'can_manage_shop');
@@ -122,7 +123,7 @@ describe('canAccessBot (admin_bot_access ACL — mirrors AdminAuth::canAccessBot
   });
 
   it('defaults the permission parameter to can_view', async () => {
-    const { db } = makeTestDb('tenant_db', () => [
+    const { db } = makeTestDb<TenantDB>('tenant_db', () => [
       { can_view: 1, can_edit: 0, can_broadcast: 0, can_manage_users: 0, can_manage_shop: 0, can_view_analytics: 0 },
     ]);
     const allowed = await canAccessBot(db, 1, 'staff', 99);

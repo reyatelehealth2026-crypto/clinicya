@@ -1,0 +1,42 @@
+-- infra/e2e/seed/15-plan-and-tenant.sql.tmpl
+--
+-- infra/e2e/parity.mjs's OWN plan+tenant row (Phase 2 batch 1). Structurally
+-- identical to 10-plan-and-tenant.sql.tmpl (Phase 1 batch 3, owned by
+-- run.mjs) — deliberately NOT reusing that file, because its `tenants.slug`
+-- ('e2e-bridge-harness') is a hardcoded literal inside it, not a
+-- __PLACEHOLDER__. Two independent harnesses coincidentally sharing one
+-- hardcoded tenant slug string would be a confusing cross-reference for
+-- anyone reading either script in isolation, so parity.mjs gets its own
+-- distinctly-named tenant/plan row instead. Applied AFTER the tenant
+-- template (same ordering as 10-*, one step later in the sequence — hence
+-- "15", between the numbered 10/20 files run.mjs already owns).
+--
+-- __APP_DB_NAME__ substituted by parity.mjs at runtime — see
+-- 05-app-db.sql.tmpl's header comment for why it can't be hardcoded here.
+
+USE `zrismpsz_reya_platform`;
+
+INSERT IGNORE INTO `plans` (`slug`, `display_name`, `description`, `price_monthly_thb`, `is_active`, `is_visible_public`)
+VALUES (
+  'e2e-parity-harness',
+  'E2E Parity Harness (internal test plan / แผนทดสอบภายใน)',
+  'infra/e2e/parity.mjs scratch plan — not a real subscription tier, never shown publicly.',
+  0.00,
+  1,
+  0
+);
+
+-- DELETE-then-INSERT, not INSERT IGNORE — see 10-plan-and-tenant.sql.tmpl's
+-- header comment for the empirically-verified reason (a stale db_name from
+-- an earlier interrupted run must never silently survive a re-seed).
+DELETE FROM `tenants` WHERE `slug` = 'e2e-parity-harness';
+
+INSERT INTO `tenants` (`slug`, `display_name`, `db_name`, `db_host`, `plan_id`, `status`)
+VALUES (
+  'e2e-parity-harness',
+  'E2E Parity Harness Tenant (ทดสอบภายใน)',
+  '__APP_DB_NAME__',
+  'localhost',
+  (SELECT id FROM `plans` WHERE `slug` = 'e2e-parity-harness' LIMIT 1),
+  'active'
+);

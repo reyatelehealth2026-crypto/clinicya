@@ -64,11 +64,30 @@ async function buildLoginResponse(result: AuthResult<LoginValue>, realm: Realm, 
   const destination = new URL(result.value.session.realm === 'platform' ? '/platform' : '/dashboard', requestUrl.origin);
   if (!result.value.bridgeSynced) {
     // Non-blocking: the (tenant)/(platform) layout can render this as a soft notice, never a hard failure.
+    // IMPORTANT: bridgeSynced:false means the internal/session-bridge.php POST failed, so PHP's
+    // $_SESSION for this sid is still empty even though — per the PHPSESSID cookie set below,
+    // unconditionally — the browser now holds a PHPSESSID cookie *naming* that (empty) session. A
+    // subsequent legacy PHP page load will still bounce to auth/login.php until a later successful
+    // bridge sync (e.g. switchBot()/switchTenant()) populates that session server-side. There is no
+    // retry mechanism in this batch; this is a documented, accepted gap, not something fixed here.
     destination.searchParams.set('bridgeWarning', '1');
   }
 
   const cookieStore = await cookies();
   cookieStore.set(result.value.cookie.name, result.value.cookie.value, result.value.cookie);
+  // Also set PHPSESSID = the same sid, UNCONDITIONALLY of bridgeSynced (see comment above), so a
+  // browser that just logged in via Next can immediately load a legacy PHP page under the bridged
+  // $_SESSION — internal/session-bridge.php reuses the Node opaque sid as the PHP session id via
+  // session_id($sid) (see its own doc comment, and packages/auth/src/types.ts's
+  // BridgeSyncPayload.sid doc comment). Attributes are read off the SAME returned descriptor (not
+  // re-hardcoded) so they can never drift from the Node cookie's env-dependent `secure` flag.
+  cookieStore.set('PHPSESSID', result.value.cookie.value, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: result.value.cookie.secure,
+    path: '/',
+    maxAge: result.value.cookie.maxAge,
+  });
 
   return NextResponse.redirect(destination, { status: 303 });
 }
