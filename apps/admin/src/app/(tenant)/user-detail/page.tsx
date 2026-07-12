@@ -69,7 +69,11 @@ export default async function UserDetailPage({ searchParams }: UserDetailPagePro
         ]}
       />
 
-      {updated || pointsUpdated ? <div role="status">บันทึกสำเร็จ!</div> : null}
+      {updated || pointsUpdated ? (
+        <div role="status" className="ud-save-toast badge badge-success">
+          บันทึกสำเร็จ!
+        </div>
+      ) : null}
 
       <div className="ud-grid">
         {/* Left column */}
@@ -118,15 +122,17 @@ export default async function UserDetailPage({ searchParams }: UserDetailPagePro
             </div>
             <div className="ud-card-body">
               <form action={addPointsAction.bind(null, userId)}>
-                <label>
+                <label className="ud-field">
                   จำนวนแต้ม (ติดลบ = หักแต้ม)
-                  <input type="number" name="points" placeholder="เช่น 100 หรือ -50" />
+                  <input type="number" name="points" placeholder="เช่น 100 หรือ -50" className="ud-input" />
                 </label>
-                <label>
+                <label className="ud-field">
                   หมายเหตุ
-                  <input type="text" name="description" placeholder="เหตุผล..." />
+                  <input type="text" name="description" placeholder="เหตุผล..." className="ud-input" />
                 </label>
-                <button type="submit">อัพเดทแต้ม</button>
+                <button type="submit" className="ud-btn-primary">
+                  อัพเดทแต้ม
+                </button>
               </form>
             </div>
           </div>
@@ -139,12 +145,12 @@ export default async function UserDetailPage({ searchParams }: UserDetailPagePro
               </div>
               <div className="ud-card-body">
                 {pointsHistory.map((h) => (
-                  <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div key={h.id} className="ud-stat-row">
                     <div>
                       <div>{(h.description ?? '').slice(0, 25)}</div>
-                      <div>{formatDateTimeDMY(h.createdAt)}</div>
+                      <div className="ud-info-label">{formatDateTimeDMY(h.createdAt)}</div>
                     </div>
-                    <span>
+                    <span className={`badge ${h.type === 'earn' ? 'badge-success' : 'badge-danger'}`}>
                       {h.type === 'earn' ? '+' : '-'}
                       {formatNumber(Math.abs(h.points))}
                     </span>
@@ -205,56 +211,58 @@ export default async function UserDetailPage({ searchParams }: UserDetailPagePro
             </div>
             <div className="ud-card-body">
               <form action={updateUserInfoAction.bind(null, userId)}>
-                <label>
+                <label className="ud-field">
                   ชื่อที่แสดง (Display Name)
-                  <input type="text" name="display_name" defaultValue={user.displayName ?? ''} />
+                  <input type="text" name="display_name" defaultValue={user.displayName ?? ''} className="ud-input" />
                 </label>
-                <label>
+                <label className="ud-field">
                   ชื่อจริง
-                  <input type="text" name="real_name" defaultValue={user.realName ?? ''} />
+                  <input type="text" name="real_name" defaultValue={user.realName ?? ''} className="ud-input" />
                 </label>
-                <label>
+                <label className="ud-field">
                   เลขสมาชิก (Member ID)
-                  <input type="text" name="member_id" defaultValue={user.memberId ?? ''} />
+                  <input type="text" name="member_id" defaultValue={user.memberId ?? ''} className="ud-input" />
                 </label>
-                <label>
+                <label className="ud-field">
                   เบอร์โทร
-                  <input type="tel" name="phone" defaultValue={user.phone ?? ''} />
+                  <input type="tel" name="phone" defaultValue={user.phone ?? ''} className="ud-input" />
                 </label>
-                <label>
+                <label className="ud-field">
                   อีเมล
-                  <input type="email" name="email" defaultValue={user.email ?? ''} />
+                  <input type="email" name="email" defaultValue={user.email ?? ''} className="ud-input" />
                 </label>
-                <label>
+                <label className="ud-field">
                   วันเกิด
-                  <input type="date" name="birthday" defaultValue={formatDateISO(user.birthday)} />
+                  <input type="date" name="birthday" defaultValue={formatDateISO(user.birthday)} className="ud-input" />
                 </label>
-                <label>
+                <label className="ud-field">
                   เพศ
-                  <select name="gender" defaultValue={user.gender ?? ''}>
+                  <select name="gender" defaultValue={user.gender ?? ''} className="ud-select">
                     <option value="">-- เลือก --</option>
                     <option value="male">ชาย</option>
                     <option value="female">หญิง</option>
                     <option value="other">อื่นๆ</option>
                   </select>
                 </label>
-                <label>
+                <label className="ud-field">
                   ที่อยู่
-                  <textarea name="address" defaultValue={user.address ?? ''} />
+                  <textarea name="address" defaultValue={user.address ?? ''} className="ud-textarea" />
                 </label>
-                <label>
+                <label className="ud-field">
                   จังหวัด
-                  <input type="text" name="province" defaultValue={user.province ?? ''} />
+                  <input type="text" name="province" defaultValue={user.province ?? ''} className="ud-input" />
                 </label>
-                <label>
+                <label className="ud-field">
                   รหัสไปรษณีย์
-                  <input type="text" name="postal_code" defaultValue={user.postalCode ?? ''} />
+                  <input type="text" name="postal_code" defaultValue={user.postalCode ?? ''} className="ud-input" />
                 </label>
-                <label>
+                <label className="ud-field">
                   หมายเหตุ
-                  <textarea name="note" defaultValue={user.note ?? ''} />
+                  <textarea name="note" defaultValue={user.note ?? ''} className="ud-textarea" />
                 </label>
-                <button type="submit">บันทึกข้อมูล</button>
+                <button type="submit" className="ud-btn-primary">
+                  บันทึกข้อมูล
+                </button>
               </form>
             </div>
           </div>
@@ -269,23 +277,23 @@ export default async function UserDetailPage({ searchParams }: UserDetailPagePro
               {health.hasHealthInfo ? (
                 <>
                   <div style={{ display: 'flex', gap: 16 }}>
-                    <div>
+                    <div className="ud-health-metric">
                       <p>{health.displayWeight ? health.displayWeight.toFixed(1) : '-'}</p>
                       <p>น้ำหนัก (กก.)</p>
                     </div>
-                    <div>
+                    <div className="ud-health-metric">
                       <p>{health.displayHeight ? health.displayHeight.toFixed(1) : '-'}</p>
                       <p>ส่วนสูง (ซม.)</p>
                     </div>
-                    <div>
+                    <div className="ud-health-metric">
                       <p>{health.bmi !== null ? health.bmi.toFixed(1) : '-'}</p>
                       <p>BMI</p>
                     </div>
-                    <div>
+                    <div className="ud-health-metric">
                       <p>{health.genderIcon}</p>
                       <p>{health.genderText}</p>
                     </div>
-                    <div>
+                    <div className="ud-health-metric">
                       <p>{health.displayBloodType || '-'}</p>
                       <p>กรุ๊ปเลือด</p>
                     </div>
@@ -295,7 +303,9 @@ export default async function UserDetailPage({ searchParams }: UserDetailPagePro
                     <div>
                       <p>โรคประจำตัว</p>
                       {health.conditions.map((c) => (
-                        <span key={c}>{c}</span>
+                        <span key={c} className="ud-condition-chip">
+                          {c}
+                        </span>
                       ))}
                     </div>
                   ) : null}
@@ -324,16 +334,16 @@ export default async function UserDetailPage({ searchParams }: UserDetailPagePro
                 <EmptyState heading="ยังไม่มีประวัติการสั่งซื้อ" />
               ) : (
                 transactions.map((order) => (
-                  <a key={order.id} href={`/shop/order-detail?id=${order.id}`} style={{ display: 'block' }}>
+                  <a key={order.id} href={`/shop/order-detail?id=${order.id}`} className="ud-order-row">
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <div>
                         <p>#{order.orderNumber || order.id}</p>
-                        <p>{formatDateTimeDMY(order.createdAt)}</p>
+                        <p className="ud-info-label">{formatDateTimeDMY(order.createdAt)}</p>
                         {order.shippingName ? <p>{order.shippingName}</p> : null}
                       </div>
                       <div>
                         <p>฿{formatMoney(order.grandTotal)}</p>
-                        <span>{order.status ?? 'pending'}</span>
+                        <span className="ud-order-status">{order.status ?? 'pending'}</span>
                       </div>
                     </div>
                     {order.items.length > 0 ? (
@@ -372,20 +382,20 @@ export default async function UserDetailPage({ searchParams }: UserDetailPagePro
               <h3 className="ud-card-title">ข้อมูล LINE</h3>
             </div>
             <div className="ud-card-body">
-              <div>
-                <div>LINE User ID</div>
+              <div className="ud-info-row">
+                <div className="ud-info-label">LINE User ID</div>
                 <div>{user.lineUserId || '-'}</div>
               </div>
-              <div>
-                <div>Display Name</div>
+              <div className="ud-info-row">
+                <div className="ud-info-label">Display Name</div>
                 <div>{user.displayName || '-'}</div>
               </div>
-              <div>
-                <div>Status Message</div>
+              <div className="ud-info-row">
+                <div className="ud-info-label">Status Message</div>
                 <div>{user.statusMessage || '-'}</div>
               </div>
-              <div>
-                <div>เข้าร่วมเมื่อ</div>
+              <div className="ud-info-row">
+                <div className="ud-info-label">เข้าร่วมเมื่อ</div>
                 <div>{formatDateTimeDMY(user.createdAt)}</div>
               </div>
             </div>

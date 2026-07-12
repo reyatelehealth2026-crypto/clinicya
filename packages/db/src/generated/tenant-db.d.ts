@@ -12,211 +12,211 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   : ColumnType<T, T | undefined, T>;
 
 export interface AccountDailyStats {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  incomingMessages: Generated<number | null>;
-  lineAccountId: number;
-  newFollowers: Generated<number | null>;
-  outgoingMessages: Generated<number | null>;
-  statDate: Date;
-  totalMessages: Generated<number | null>;
+  incoming_messages: Generated<number | null>;
+  line_account_id: number;
+  new_followers: Generated<number | null>;
+  outgoing_messages: Generated<number | null>;
+  stat_date: Date;
+  total_messages: Generated<number | null>;
   unfollowers: Generated<number | null>;
-  uniqueUsers: Generated<number | null>;
-  updatedAt: Generated<Date>;
+  unique_users: Generated<number | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface AccountEvents {
-  createdAt: Generated<Date>;
-  eventData: Generated<string | null>;
-  eventType: string;
+  created_at: Generated<Date>;
+  event_data: Generated<string | null>;
+  event_type: string;
   id: Generated<number>;
-  lineAccountId: number;
-  lineUserId: string;
-  replyToken: Generated<string | null>;
-  sourceId: Generated<string | null>;
-  sourceType: Generated<string | null>;
+  line_account_id: number;
+  line_user_id: string;
+  reply_token: Generated<string | null>;
+  source_id: Generated<string | null>;
+  source_type: Generated<string | null>;
   timestamp: Generated<number | null>;
-  userId: Generated<number | null>;
-  webhookEventId: Generated<string | null>;
+  user_id: Generated<number | null>;
+  webhook_event_id: Generated<string | null>;
 }
 
 export interface AccountFollowers {
-  createdAt: Generated<Date>;
-  displayName: Generated<string | null>;
-  followCount: Generated<number | null>;
-  followedAt: Generated<Date>;
+  created_at: Generated<Date>;
+  display_name: Generated<string | null>;
+  follow_count: Generated<number | null>;
+  followed_at: Generated<Date>;
   id: Generated<number>;
-  isFollowing: Generated<number | null>;
-  lastInteractionAt: Generated<Date | null>;
-  lineAccountId: number;
-  lineUserId: string;
-  pictureUrl: Generated<string | null>;
-  statusMessage: Generated<string | null>;
-  totalMessages: Generated<number | null>;
-  unfollowedAt: Generated<Date | null>;
-  updatedAt: Generated<Date>;
-  userId: Generated<number | null>;
+  is_following: Generated<number | null>;
+  last_interaction_at: Generated<Date | null>;
+  line_account_id: number;
+  line_user_id: string;
+  picture_url: Generated<string | null>;
+  status_message: Generated<string | null>;
+  total_messages: Generated<number | null>;
+  unfollowed_at: Generated<Date | null>;
+  updated_at: Generated<Date>;
+  user_id: Generated<number | null>;
 }
 
 export interface AccountPayables {
-  apNumber: string;
+  ap_number: string;
   balance: Decimal;
-  closedAt: Generated<Date | null>;
-  createdAt: Generated<Date>;
-  dueDate: Date;
-  grId: Generated<number | null>;
+  closed_at: Generated<Date | null>;
+  created_at: Generated<Date>;
+  due_date: Date;
+  gr_id: Generated<number | null>;
   id: Generated<number>;
-  invoiceDate: Generated<Date | null>;
-  invoiceNumber: Generated<string | null>;
-  lineAccountId: Generated<number | null>;
+  invoice_date: Generated<Date | null>;
+  invoice_number: Generated<string | null>;
+  line_account_id: Generated<number | null>;
   metadata: Generated<string | null>;
   notes: Generated<string | null>;
-  paidAmount: Generated<Decimal | null>;
-  poId: Generated<number | null>;
+  paid_amount: Generated<Decimal | null>;
+  po_id: Generated<number | null>;
   status: Generated<"cancelled" | "open" | "paid" | "partial" | null>;
-  supplierId: number;
-  totalAmount: Decimal;
-  updatedAt: Generated<Date>;
+  supplier_id: number;
+  total_amount: Decimal;
+  updated_at: Generated<Date>;
 }
 
 export interface AccountReceivables {
-  arNumber: string;
+  ar_number: string;
   balance: Decimal;
-  closedAt: Generated<Date | null>;
-  createdAt: Generated<Date>;
-  dueDate: Date;
+  closed_at: Generated<Date | null>;
+  created_at: Generated<Date>;
+  due_date: Date;
   id: Generated<number>;
-  invoiceDate: Generated<Date | null>;
-  invoiceNumber: Generated<string | null>;
-  lineAccountId: Generated<number | null>;
+  invoice_date: Generated<Date | null>;
+  invoice_number: Generated<string | null>;
+  line_account_id: Generated<number | null>;
   metadata: Generated<string | null>;
   notes: Generated<string | null>;
-  receivedAmount: Generated<Decimal | null>;
+  received_amount: Generated<Decimal | null>;
   status: Generated<"cancelled" | "open" | "paid" | "partial" | null>;
-  totalAmount: Decimal;
-  transactionId: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  total_amount: Decimal;
+  transaction_id: Generated<number | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface ActivityLogs {
   action: string;
-  adminId: Generated<number | null>;
-  adminName: Generated<string | null>;
-  createdAt: Generated<Date>;
+  admin_id: Generated<number | null>;
+  admin_name: Generated<string | null>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
-  entityId: Generated<number | null>;
-  entityType: Generated<string | null>;
-  extraData: Generated<string | null>;
+  entity_id: Generated<number | null>;
+  entity_type: Generated<string | null>;
+  extra_data: Generated<string | null>;
   id: Generated<number>;
-  ipAddress: Generated<string | null>;
-  lineAccountId: Generated<number | null>;
-  logType: string;
-  newValue: Generated<string | null>;
-  oldValue: Generated<string | null>;
-  requestUrl: Generated<string | null>;
-  sessionId: Generated<string | null>;
-  userAgent: Generated<string | null>;
-  userId: Generated<number | null>;
-  userName: Generated<string | null>;
+  ip_address: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  log_type: string;
+  new_value: Generated<string | null>;
+  old_value: Generated<string | null>;
+  request_url: Generated<string | null>;
+  session_id: Generated<string | null>;
+  user_agent: Generated<string | null>;
+  user_id: Generated<number | null>;
+  user_name: Generated<string | null>;
 }
 
 export interface AdminQuickAccess {
-  adminUserId: number;
-  createdAt: Generated<Date>;
+  admin_user_id: number;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  menuKey: string;
-  sortOrder: Generated<number | null>;
+  line_account_id: Generated<number>;
+  menu_key: string;
+  sort_order: Generated<number | null>;
 }
 
 export interface AiChatLogs {
-  aiResponse: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  ai_response: Generated<string | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  modelUsed: Generated<string | null>;
-  responseTimeMs: Generated<number | null>;
-  userId: Generated<number | null>;
-  userMessage: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  model_used: Generated<string | null>;
+  response_time_ms: Generated<number | null>;
+  user_id: Generated<number | null>;
+  user_message: Generated<string | null>;
 }
 
 export interface AiChatSettings {
-  businessInfo: Generated<string | null>;
-  createdAt: Generated<Date>;
-  fallbackMessage: Generated<string | null>;
-  geminiApiKey: Generated<string | null>;
+  business_info: Generated<string | null>;
+  created_at: Generated<Date>;
+  fallback_message: Generated<string | null>;
+  gemini_api_key: Generated<string | null>;
   id: Generated<number>;
-  isEnabled: Generated<number | null>;
+  is_enabled: Generated<number | null>;
   language: Generated<string | null>;
-  lineAccountId: Generated<number | null>;
-  maxTokens: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  max_tokens: Generated<number | null>;
   model: Generated<string | null>;
-  productKnowledge: Generated<string | null>;
-  quickReplyButtons: Generated<string | null>;
-  responseStyle: Generated<string | null>;
-  senderIcon: Generated<string | null>;
-  senderName: Generated<string | null>;
-  systemPrompt: Generated<string | null>;
+  product_knowledge: Generated<string | null>;
+  quick_reply_buttons: Generated<string | null>;
+  response_style: Generated<string | null>;
+  sender_icon: Generated<string | null>;
+  sender_name: Generated<string | null>;
+  system_prompt: Generated<string | null>;
   temperature: Generated<Decimal | null>;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface AiConversationHistory {
   content: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   role: "assistant" | "user";
-  sessionId: Generated<string | null>;
-  userId: number;
+  session_id: Generated<string | null>;
+  user_id: number;
 }
 
 export interface AiConversations {
   content: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   role: "assistant" | "system" | "user";
-  tokensUsed: Generated<number | null>;
-  userId: number;
+  tokens_used: Generated<number | null>;
+  user_id: number;
 }
 
 export interface AiKnowledgeBase {
-  conditionCodes: Generated<string | null>;
+  condition_codes: Generated<string | null>;
   content: string;
-  createdAt: Generated<Date>;
-  headingPath: Generated<string | null>;
+  created_at: Generated<Date>;
+  heading_path: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number>;
+  is_active: Generated<number>;
   keywords: Generated<string | null>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   priority: Generated<number>;
   source: string;
   title: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface AiPharmacySettings {
-  autoRecommend: Generated<number | null>;
-  createdAt: Generated<Date>;
-  emergencyContact: Generated<string | null>;
+  auto_recommend: Generated<number | null>;
+  created_at: Generated<Date>;
+  emergency_contact: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  notificationEmail: Generated<string | null>;
-  notificationLineToken: Generated<string | null>;
-  pharmacyLicense: Generated<string | null>;
-  pharmacyName: Generated<string | null>;
-  redFlagEnabled: Generated<number | null>;
-  requirePharmacistApproval: Generated<number | null>;
-  triageEnabled: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  videoCallEnabled: Generated<number | null>;
-  workingHoursEnd: Generated<string | null>;
-  workingHoursStart: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  notification_email: Generated<string | null>;
+  notification_line_token: Generated<string | null>;
+  pharmacy_license: Generated<string | null>;
+  pharmacy_name: Generated<string | null>;
+  red_flag_enabled: Generated<number | null>;
+  require_pharmacist_approval: Generated<number | null>;
+  triage_enabled: Generated<number | null>;
+  updated_at: Generated<Date>;
+  video_call_enabled: Generated<number | null>;
+  working_hours_end: Generated<string | null>;
+  working_hours_start: Generated<string | null>;
 }
 
 export interface AiRateLimits {
@@ -229,145 +229,145 @@ export interface AiRateLimits {
    * line_user_id or ip
    */
   identifier: string;
-  identifierType: "ip" | "user";
+  identifier_type: "ip" | "user";
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  requestCount: Generated<number>;
-  windowStart: Generated<Date>;
+  line_account_id: Generated<number>;
+  request_count: Generated<number>;
+  window_start: Generated<Date>;
 }
 
 export interface AiSettings {
-  aiMode: Generated<"pharmacist" | "sales" | "support" | null>;
-  aiProvider: Generated<string>;
-  autoLoadProducts: Generated<number | null>;
-  businessInfo: Generated<string | null>;
-  createdAt: Generated<Date>;
-  geminiApiKey: Generated<string | null>;
+  ai_mode: Generated<"pharmacist" | "sales" | "support" | null>;
+  ai_provider: Generated<string>;
+  auto_load_products: Generated<number | null>;
+  business_info: Generated<string | null>;
+  created_at: Generated<Date>;
+  gemini_api_key: Generated<string | null>;
   id: Generated<number>;
-  isEnabled: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  maxTokens: Generated<number | null>;
+  is_enabled: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  max_tokens: Generated<number | null>;
   model: Generated<string | null>;
-  openaiApiKey: Generated<string | null>;
-  productKnowledge: Generated<string | null>;
-  productLoadLimit: Generated<number | null>;
-  salesPrompt: Generated<string | null>;
-  senderIcon: Generated<string | null>;
-  senderName: Generated<string | null>;
-  systemPrompt: Generated<string | null>;
+  openai_api_key: Generated<string | null>;
+  product_knowledge: Generated<string | null>;
+  product_load_limit: Generated<number | null>;
+  sales_prompt: Generated<string | null>;
+  sender_icon: Generated<string | null>;
+  sender_name: Generated<string | null>;
+  system_prompt: Generated<string | null>;
   temperature: Generated<Decimal | null>;
 }
 
 export interface AiTriageAssessments {
-  aiAssessment: Generated<string | null>;
+  ai_assessment: Generated<string | null>;
   allergies: Generated<string | null>;
-  associatedSymptoms: Generated<string | null>;
-  createdAt: Generated<Date>;
-  currentMedications: Generated<string | null>;
+  associated_symptoms: Generated<string | null>;
+  created_at: Generated<Date>;
+  current_medications: Generated<string | null>;
   duration: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  medicalConditions: Generated<string | null>;
-  pharmacistNotified: Generated<number | null>;
-  pharmacistResponse: Generated<string | null>;
-  recommendedAction: Generated<"consult_pharmacist" | "emergency" | "see_doctor" | "self_care" | null>;
+  line_account_id: Generated<number | null>;
+  medical_conditions: Generated<string | null>;
+  pharmacist_notified: Generated<number | null>;
+  pharmacist_response: Generated<string | null>;
+  recommended_action: Generated<"consult_pharmacist" | "emergency" | "see_doctor" | "self_care" | null>;
   severity: Generated<number | null>;
-  severityLevel: Generated<"critical" | "high" | "low" | "medium" | null>;
+  severity_level: Generated<"critical" | "high" | "low" | "medium" | null>;
   status: Generated<"completed" | "pending" | "reviewed" | null>;
   symptoms: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface AiUserMode {
-  aiMode: string;
-  createdAt: Generated<Date>;
-  expiresAt: Date;
+  ai_mode: string;
+  created_at: Generated<Date>;
+  expires_at: Date;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  userId: number;
+  line_account_id: Generated<number>;
+  user_id: number;
 }
 
 export interface AiUserPause {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  pauseUntil: Date;
+  line_account_id: Generated<number>;
+  pause_until: Date;
   reason: Generated<string | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface Analytics {
-  createdAt: Generated<Date>;
-  eventData: Generated<string | null>;
-  eventType: string;
+  created_at: Generated<Date>;
+  event_data: Generated<string | null>;
+  event_type: string;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
 }
 
 export interface Appointments {
-  appointmentDate: Date;
-  appointmentTime: string;
-  appointmentType: Generated<"consultation" | "delivery" | "pickup" | "video_call" | null>;
-  cancelledReason: Generated<string | null>;
-  createdAt: Generated<Date>;
-  durationMinutes: Generated<number | null>;
+  appointment_date: Date;
+  appointment_time: string;
+  appointment_type: Generated<"consultation" | "delivery" | "pickup" | "video_call" | null>;
+  cancelled_reason: Generated<string | null>;
+  created_at: Generated<Date>;
+  duration_minutes: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   notes: Generated<string | null>;
-  pharmacistId: Generated<number | null>;
-  reminder10minSent: Generated<number | null>;
-  reminderNowSent: Generated<number | null>;
-  reminderSent: Generated<number | null>;
+  pharmacist_id: Generated<number | null>;
+  reminder_10min_sent: Generated<number | null>;
+  reminder_now_sent: Generated<number | null>;
+  reminder_sent: Generated<number | null>;
   status: Generated<"cancelled" | "completed" | "confirmed" | "no_show" | "pending" | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface AutoReplies {
   /**
    * Alt text for Flex Message
    */
-  altText: Generated<string | null>;
-  createdAt: Generated<Date>;
+  alt_text: Generated<string | null>;
+  created_at: Generated<Date>;
   /**
    * Rule description
    */
   description: Generated<string | null>;
-  enableShare: Generated<number | null>;
+  enable_share: Generated<number | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   keyword: string;
   /**
    * Last time this rule was triggered
    */
-  lastUsedAt: Generated<Date | null>;
-  lineAccountId: Generated<number | null>;
-  matchType: Generated<"contains" | "exact" | "regex" | "starts_with" | null>;
+  last_used_at: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
+  match_type: Generated<"contains" | "exact" | "regex" | "starts_with" | null>;
   priority: Generated<number | null>;
   /**
    * Quick reply buttons JSON
    */
-  quickReply: Generated<string | null>;
-  replyContent: string;
-  replyType: Generated<string | null>;
+  quick_reply: Generated<string | null>;
+  reply_content: string;
+  reply_type: Generated<string | null>;
   /**
    * Custom sender icon URL
    */
-  senderIcon: Generated<string | null>;
+  sender_icon: Generated<string | null>;
   /**
    * Custom sender name
    */
-  senderName: Generated<string | null>;
-  shareButtonLabel: Generated<string | null>;
+  sender_name: Generated<string | null>;
+  share_button_label: Generated<string | null>;
   /**
    * Tags for categorization
    */
@@ -375,25 +375,25 @@ export interface AutoReplies {
   /**
    * Number of times used
    */
-  useCount: Generated<number | null>;
+  use_count: Generated<number | null>;
 }
 
 export interface AutoReplyRules {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * เปิดใช้งาน
    */
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   /**
    * คำสำคัญที่ต้องการตรวจจับ
    */
   keyword: string;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * ประเภทการจับคู่
    */
-  matchType: Generated<"contains" | "ends_with" | "exact" | "regex" | "starts_with" | null>;
+  match_type: Generated<"contains" | "ends_with" | "exact" | "regex" | "starts_with" | null>;
   /**
    * ลำดับความสำคัญ (เลขมากทำก่อน)
    */
@@ -401,187 +401,187 @@ export interface AutoReplyRules {
   /**
    * เนื้อหาการตอบกลับ (text หรือ JSON สำหรับ flex)
    */
-  responseContent: string;
+  response_content: string;
   /**
    * ประเภทการตอบกลับ
    */
-  responseType: Generated<"audio" | "flex" | "image" | "text" | "video" | null>;
-  updatedAt: Generated<Date>;
+  response_type: Generated<"audio" | "flex" | "image" | "text" | "video" | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface AutoTagLogs {
   action: "assign" | "remove";
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  ruleId: Generated<number | null>;
-  tagId: number;
-  triggerData: Generated<string | null>;
-  triggerType: Generated<string | null>;
-  userId: number;
+  line_account_id: Generated<number>;
+  rule_id: Generated<number | null>;
+  tag_id: number;
+  trigger_data: Generated<string | null>;
+  trigger_type: Generated<string | null>;
+  user_id: number;
 }
 
 export interface AutoTagRules {
   conditions: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   priority: Generated<number | null>;
-  ruleName: string;
-  tagId: number;
-  triggerType: string;
-  updatedAt: Generated<Date>;
+  rule_name: string;
+  tag_id: number;
+  trigger_type: string;
+  updated_at: Generated<Date>;
 }
 
 export interface BirthdayCampaigns {
-  couponCode: Generated<string | null>;
-  createdAt: Generated<Date>;
+  coupon_code: Generated<string | null>;
+  created_at: Generated<Date>;
   /**
    * ส่งก่อนวันเกิดกี่วัน
    */
-  daysBefore: Generated<number | null>;
-  discountType: Generated<"fixed" | "percent" | null>;
-  discountValue: Generated<Decimal | null>;
+  days_before: Generated<number | null>;
+  discount_type: Generated<"fixed" | "percent" | null>;
+  discount_value: Generated<Decimal | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  messageContent: string;
-  messageType: Generated<"flex" | "text" | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  message_content: string;
+  message_type: Generated<"flex" | "text" | null>;
   name: string;
-  sendTime: Generated<string | null>;
-  sentCount: Generated<number | null>;
+  send_time: Generated<string | null>;
+  sent_count: Generated<number | null>;
 }
 
 export interface BroadcastCampaigns {
-  autoTagEnabled: Generated<number | null>;
-  clickCount: Generated<number | null>;
+  auto_tag_enabled: Generated<number | null>;
+  click_count: Generated<number | null>;
   content: Generated<string | null>;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  messageType: Generated<"flex" | "image" | "product_carousel" | "text" | null>;
+  line_account_id: Generated<number | null>;
+  message_type: Generated<"flex" | "image" | "product_carousel" | "text" | null>;
   name: string;
-  scheduledAt: Generated<Date | null>;
-  sentAt: Generated<Date | null>;
-  sentCount: Generated<number | null>;
+  scheduled_at: Generated<Date | null>;
+  sent_at: Generated<Date | null>;
+  sent_count: Generated<number | null>;
   status: Generated<"draft" | "failed" | "scheduled" | "sending" | "sent" | null>;
-  tagPrefix: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  tag_prefix: Generated<string | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface BroadcastClicks {
-  broadcastId: number;
-  clickedAt: Generated<Date>;
+  broadcast_id: number;
+  clicked_at: Generated<Date>;
   id: Generated<number>;
-  itemId: number;
+  item_id: number;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  tagAssigned: Generated<number | null>;
-  userId: number;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  tag_assigned: Generated<number | null>;
+  user_id: number;
 }
 
 export interface BroadcastItems {
-  broadcastId: number;
-  clickCount: Generated<number | null>;
-  createdAt: Generated<Date>;
+  broadcast_id: number;
+  click_count: Generated<number | null>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  itemImage: Generated<string | null>;
-  itemName: string;
-  itemPrice: Generated<Decimal | null>;
+  item_image: Generated<string | null>;
+  item_name: string;
+  item_price: Generated<Decimal | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  postbackData: string;
-  productId: Generated<number | null>;
-  sortOrder: Generated<number | null>;
-  tagId: Generated<number | null>;
+  line_account_id: Generated<number>;
+  postback_data: string;
+  product_id: Generated<number | null>;
+  sort_order: Generated<number | null>;
+  tag_id: Generated<number | null>;
 }
 
 export interface BroadcastMessages {
   content: string;
-  createdAt: Generated<Date>;
-  createdBy: Generated<number | null>;
-  failCount: Generated<number | null>;
-  flexJson: Generated<string | null>;
+  created_at: Generated<Date>;
+  created_by: Generated<number | null>;
+  fail_count: Generated<number | null>;
+  flex_json: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  messageType: Generated<string | null>;
-  scheduledAt: Generated<Date | null>;
-  sentAt: Generated<Date | null>;
-  sentCount: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  message_type: Generated<string | null>;
+  scheduled_at: Generated<Date | null>;
+  sent_at: Generated<Date | null>;
+  sent_count: Generated<number | null>;
   status: Generated<"draft" | "failed" | "scheduled" | "sending" | "sent" | null>;
-  successCount: Generated<number | null>;
-  targetSegment: Generated<string | null>;
-  targetTags: Generated<string | null>;
-  targetType: Generated<"all" | "segment" | "tag" | null>;
+  success_count: Generated<number | null>;
+  target_segment: Generated<string | null>;
+  target_tags: Generated<string | null>;
+  target_type: Generated<"all" | "segment" | "tag" | null>;
   title: string;
 }
 
 export interface BroadcastMessagesV2 {
   content: string;
-  createdAt: Generated<Date | null>;
-  createdBy: number;
-  deliveredCount: Generated<number | null>;
+  created_at: Generated<Date | null>;
+  created_by: number;
+  delivered_count: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: number;
-  mediaUrl: Generated<string | null>;
-  readCount: Generated<number | null>;
-  scheduledAt: Generated<Date | null>;
-  sentAt: Generated<Date | null>;
+  line_account_id: number;
+  media_url: Generated<string | null>;
+  read_count: Generated<number | null>;
+  scheduled_at: Generated<Date | null>;
+  sent_at: Generated<Date | null>;
   status: Generated<"cancelled" | "draft" | "failed" | "scheduled" | "sending" | "sent">;
-  targetSegmentId: Generated<number | null>;
-  totalRecipients: Generated<number | null>;
+  target_segment_id: Generated<number | null>;
+  total_recipients: Generated<number | null>;
 }
 
 export interface BroadcastQueue {
-  broadcastId: number;
-  createdAt: Generated<Date>;
-  errorMessage: Generated<string | null>;
+  broadcast_id: number;
+  created_at: Generated<Date>;
+  error_message: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  sentAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  sent_at: Generated<Date | null>;
   status: Generated<"failed" | "pending" | "sent" | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface Broadcasts {
   content: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  messageType: Generated<string | null>;
-  scheduledAt: Generated<Date | null>;
-  sentAt: Generated<Date | null>;
-  sentCount: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  message_type: Generated<string | null>;
+  scheduled_at: Generated<Date | null>;
+  sent_at: Generated<Date | null>;
+  sent_count: Generated<number | null>;
   status: Generated<"draft" | "failed" | "scheduled" | "sending" | "sent" | null>;
-  targetGroupId: Generated<string | null>;
+  target_group_id: Generated<string | null>;
   /**
    * database, all, limit, narrowcast, group, segment, tag, select, single
    */
-  targetType: Generated<string | null>;
+  target_type: Generated<string | null>;
   title: string;
 }
 
 export interface BusinessCategories {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   id: Generated<number>;
-  imageUrl: Generated<string | null>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  image_url: Generated<string | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
-  sortOrder: Generated<number | null>;
+  sort_order: Generated<number | null>;
 }
 
 export interface BusinessDocumentItems {
@@ -589,101 +589,101 @@ export interface BusinessDocumentItems {
    * à¸£à¸²à¸¢à¸¥à¸°à¹€à¸­à¸µà¸¢à¸”à¹€à¸žà¸´à¹ˆà¸¡à¹€à¸•à¸´à¸¡
    */
   description: Generated<string | null>;
-  discountAmount: Generated<Decimal>;
-  discountPercent: Generated<Decimal>;
+  discount_amount: Generated<Decimal>;
+  discount_percent: Generated<Decimal>;
   /**
    * FK business_documents.id
    */
-  documentId: number;
+  document_id: number;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * à¸¥à¸³à¸”à¸±à¸šà¸šà¸£à¸£à¸—à¸±à¸” (1..N)
    */
-  lineNo: Generated<number>;
+  line_no: Generated<number>;
   /**
    * (qty * unit_price) - discount_amount
    */
-  lineTotal: Generated<Decimal>;
+  line_total: Generated<Decimal>;
   /**
    * FK business_items.id (nullable for free-text services)
    */
-  productId: Generated<number | null>;
+  product_id: Generated<number | null>;
   /**
    * à¸Šà¸·à¹ˆà¸­à¸ªà¸´à¸™à¸„à¹‰à¸²/à¸šà¸£à¸´à¸à¸²à¸£
    */
-  productName: string;
-  productSku: Generated<string | null>;
+  product_name: string;
+  product_sku: Generated<string | null>;
   quantity: Generated<Decimal>;
   /**
    * à¸«à¸™à¹ˆà¸§à¸¢ à¹€à¸Šà¹ˆà¸™ à¸à¸¥à¹ˆà¸­à¸‡, à¸‚à¸§à¸”, à¹€à¸¡à¹‡à¸”
    */
   unit: Generated<string | null>;
-  unitPrice: Generated<Decimal>;
+  unit_price: Generated<Decimal>;
 }
 
 export interface BusinessDocuments {
-  approvedAt: Generated<Date | null>;
-  approvedBy: Generated<number | null>;
-  cancelledAt: Generated<Date | null>;
-  cancelledBy: Generated<number | null>;
-  cancelReason: Generated<string | null>;
-  createdAt: Generated<Date>;
+  approved_at: Generated<Date | null>;
+  approved_by: Generated<number | null>;
+  cancel_reason: Generated<string | null>;
+  cancelled_at: Generated<Date | null>;
+  cancelled_by: Generated<number | null>;
+  created_at: Generated<Date>;
   /**
    * admin_users.id
    */
-  createdBy: Generated<number | null>;
-  customerAddress: Generated<string | null>;
+  created_by: Generated<number | null>;
+  customer_address: Generated<string | null>;
   /**
    * à¸£à¸«à¸±à¸ªà¸ªà¸²à¸‚à¸²à¸¥à¸¹à¸à¸„à¹‰à¸² â€” 00000 = à¸ªà¸³à¸™à¸±à¸à¸‡à¸²à¸™à¹ƒà¸«à¸à¹ˆ
    */
-  customerBranchCode: Generated<string | null>;
-  customerEmail: Generated<string | null>;
+  customer_branch_code: Generated<string | null>;
+  customer_email: Generated<string | null>;
   /**
    * à¸Šà¸·à¹ˆà¸­à¸¥à¸¹à¸à¸„à¹‰à¸²
    */
-  customerName: Generated<string | null>;
-  customerPhone: Generated<string | null>;
+  customer_name: Generated<string | null>;
+  customer_phone: Generated<string | null>;
   /**
    * à¹€à¸¥à¸‚à¸›à¸£à¸°à¸ˆà¸³à¸•à¸±à¸§à¸œà¸¹à¹‰à¹€à¸ªà¸µà¸¢à¸ à¸²à¸©à¸µ 13 à¸«à¸¥à¸±à¸
    */
-  customerTaxId: Generated<string | null>;
+  customer_tax_id: Generated<string | null>;
   /**
    * FK users.id when LINE customer
    */
-  customerUserId: Generated<number | null>;
+  customer_user_id: Generated<number | null>;
   /**
    * à¸ªà¹ˆà¸§à¸™à¸¥à¸”à¸£à¸§à¸¡
    */
-  discountAmount: Generated<Decimal>;
+  discount_amount: Generated<Decimal>;
   /**
    * human-facing number, e.g. QT-2605-0001
    */
-  docNumber: string;
+  doc_number: string;
   /**
    * QT=quotation, BL=billing-note, INV=invoice, RE=receipt, TAX=tax-invoice, DN=debit-note, CN=credit-note, PO=purchase-order, GR=goods-receipt, DNP=debit-note-purchase, CNP=credit-note-purchase
    */
-  docType: "BL" | "CN" | "CNP" | "DN" | "DNP" | "GR" | "INV" | "PO" | "QT" | "RE" | "TAX";
+  doc_type: "BL" | "CN" | "CNP" | "DN" | "DNP" | "GR" | "INV" | "PO" | "QT" | "RE" | "TAX";
   /**
    * à¸§à¸±à¸™à¸—à¸µà¹ˆà¸„à¸£à¸šà¸à¸³à¸«à¸™à¸” (BL/INV)
    */
-  dueDate: Generated<Date | null>;
+  due_date: Generated<Date | null>;
   id: Generated<number>;
   /**
    * à¸«à¸¡à¸²à¸¢à¹€à¸«à¸•à¸¸à¸ à¸²à¸¢à¹ƒà¸™ (à¹„à¸¡à¹ˆà¸žà¸´à¸¡à¸žà¹Œ)
    */
-  internalNote: Generated<string | null>;
+  internal_note: Generated<string | null>;
   /**
    * à¸§à¸±à¸™à¸—à¸µà¹ˆà¸­à¸­à¸à¹€à¸­à¸à¸ªà¸²à¸£
    */
-  issueDate: Date;
+  issue_date: Date;
   /**
    * tenant scope â€” FK line_accounts.id
    */
-  lineAccountId: number;
+  line_account_id: number;
   /**
    * à¸«à¸¡à¸²à¸¢à¹€à¸«à¸•à¸¸ (à¸žà¸´à¸¡à¸žà¹Œà¸šà¸™à¹€à¸­à¸à¸ªà¸²à¸£)
    */
@@ -691,23 +691,23 @@ export interface BusinessDocuments {
   /**
    * cash / transfer / credit_card / qr / cheque
    */
-  paymentMethod: Generated<string | null>;
+  payment_method: Generated<string | null>;
   /**
    * à¹€à¸¥à¸‚à¸­à¹‰à¸²à¸‡à¸­à¸´à¸‡à¸à¸²à¸£à¸Šà¸³à¸£à¸°
    */
-  paymentRef: Generated<string | null>;
+  payment_ref: Generated<string | null>;
   /**
    * cached generated PDF/HTML path (optional)
    */
-  pdfPath: Generated<string | null>;
+  pdf_path: Generated<string | null>;
   /**
    * FK business_documents.id (e.g. INV references BL)
    */
-  refDocId: Generated<number | null>;
+  ref_doc_id: Generated<number | null>;
   /**
    * FK transactions.id when bound to an order
    */
-  refTransactionId: Generated<number | null>;
+  ref_transaction_id: Generated<number | null>;
   /**
    * à¸£à¸­à¸­à¸™à¸¸à¸¡à¸±à¸•à¸´ / à¸­à¸™à¸¸à¸¡à¸±à¸•à¸´ / à¸¢à¸à¹€à¸¥à¸´à¸
    */
@@ -719,80 +719,80 @@ export interface BusinessDocuments {
   /**
    * à¸¢à¸­à¸”à¸ªà¸¸à¸—à¸˜à¸´à¸£à¸§à¸¡ VAT
    */
-  totalAmount: Generated<Decimal>;
-  updatedAt: Generated<Date>;
+  total_amount: Generated<Decimal>;
+  updated_at: Generated<Date>;
   /**
    * à¹ƒà¸Šà¹‰à¹„à¸”à¹‰à¸–à¸¶à¸‡à¸§à¸±à¸™à¸—à¸µà¹ˆ (QT)
    */
-  validUntil: Generated<Date | null>;
+  valid_until: Generated<Date | null>;
   /**
    * à¸¢à¸­à¸” VAT
    */
-  vatAmount: Generated<Decimal>;
+  vat_amount: Generated<Decimal>;
   /**
    * à¸­à¸±à¸•à¸£à¸² VAT %
    */
-  vatRate: Generated<Decimal>;
+  vat_rate: Generated<Decimal>;
 }
 
 export interface BusinessItems {
   /**
    * ข้อมูลเฉพาะประเภท: game_code, download_url, etc.
    */
-  actionData: Generated<string | null>;
+  action_data: Generated<string | null>;
   /**
    * ตัวยาสำคัญ
    */
-  activeIngredient: Generated<string | null>;
-  aiRecommendable: Generated<number>;
+  active_ingredient: Generated<string | null>;
+  ai_recommendable: Generated<number>;
   barcode: Generated<string | null>;
   /**
    * หน่วยนับ เช่น ขวด, กล่อง, แผง
    */
-  baseUnit: Generated<string | null>;
-  categoryId: Generated<number | null>;
+  base_unit: Generated<string | null>;
+  category_id: Generated<number | null>;
   /**
    * หมวดหมู่จาก CNY
    */
-  cnyCategory: Generated<string | null>;
+  cny_category: Generated<string | null>;
   /**
    * ID จาก CNY API
    */
-  cnyId: Generated<number | null>;
+  cny_id: Generated<number | null>;
   contraindications: Generated<string | null>;
-  costPrice: Generated<Decimal | null>;
-  createdAt: Generated<Date>;
+  cost_price: Generated<Decimal | null>;
+  created_at: Generated<Date>;
   /**
    * Default storage location
    */
-  defaultLocationId: Generated<number | null>;
+  default_location_id: Generated<number | null>;
   /**
    * à¸§à¸´à¸˜à¸µà¹ƒà¸Šà¹‰à¹€à¸£à¸´à¹ˆà¸¡à¸•à¹‰à¸™à¸ªà¸³à¸«à¸£à¸±à¸šà¸‰à¸¥à¸²à¸
    */
-  defaultUsageText: Generated<string | null>;
+  default_usage_text: Generated<string | null>;
   /**
    * à¸„à¸³à¹€à¸•à¸·à¸­à¸™à¹€à¸£à¸´à¹ˆà¸¡à¸•à¹‰à¸™à¸ªà¸³à¸«à¸£à¸±à¸šà¸‰à¸¥à¸²à¸
    */
-  defaultWarningText: Generated<string | null>;
-  deliveryMethod: Generated<"download" | "email" | "line" | "onsite" | "shipping" | null>;
+  default_warning_text: Generated<string | null>;
+  delivery_method: Generated<"download" | "email" | "line" | "onsite" | "shipping" | null>;
   description: Generated<string | null>;
   /**
    * à¸„à¹ˆà¸²à¸«à¸¢à¸´à¸šà¸¢à¸² per unit / dispensing fee
    */
-  dispensingFee: Generated<Decimal | null>;
+  dispensing_fee: Generated<Decimal | null>;
   /**
    * ขนาดยา
    */
   dosage: Generated<string | null>;
-  dosageForm: Generated<string | null>;
+  dosage_form: Generated<string | null>;
   /**
    * ประเภทยา: otc, dangerous, controlled
    */
-  drugCategory: Generated<string | null>;
+  drug_category: Generated<string | null>;
   /**
    * FK drug_groups.id
    */
-  drugGroupId: Generated<number | null>;
+  drug_group_id: Generated<number | null>;
   /**
    * เปิด/ปิดขาย
    */
@@ -800,14 +800,14 @@ export interface BusinessItems {
   /**
    * ข้อมูลเพิ่มเติมจาก API (JSON)
    */
-  extraData: Generated<string | null>;
-  featuredOrder: Generated<number | null>;
-  flashSaleEnd: Generated<Date | null>;
-  genericName: Generated<string | null>;
+  extra_data: Generated<string | null>;
+  featured_order: Generated<number | null>;
+  flash_sale_end: Generated<Date | null>;
+  generic_name: Generated<string | null>;
   /**
    * FK generic_names.id
    */
-  genericNameId: Generated<number | null>;
+  generic_name_id: Generated<number | null>;
   /**
    * Hashtag สำหรับค้นหา
    */
@@ -816,584 +816,584 @@ export interface BusinessItems {
   /**
    * JSON array of image URLs for the mini-app product detail gallery
    */
-  imageGallery: Generated<string | null>;
-  imageUrl: Generated<string | null>;
-  isActive: Generated<number | null>;
-  isBestseller: Generated<number | null>;
-  isChoice: Generated<number | null>;
-  isFeatured: Generated<number | null>;
-  isFlashSale: Generated<number | null>;
-  isPromotion: Generated<number | null>;
-  itemType: Generated<"booking" | "content" | "digital" | "physical" | "service" | null>;
+  image_gallery: Generated<string | null>;
+  image_url: Generated<string | null>;
+  is_active: Generated<number | null>;
+  is_bestseller: Generated<number | null>;
+  is_choice: Generated<number | null>;
+  is_featured: Generated<number | null>;
+  is_flash_sale: Generated<number | null>;
+  is_promotion: Generated<number | null>;
+  item_type: Generated<"booking" | "content" | "digital" | "physical" | "service" | null>;
   /**
    * TH / EN
    */
-  labelLanguage: Generated<string | null>;
+  label_language: Generated<string | null>;
   /**
    * FK drug_label_templates.id
    */
-  labelTemplateId: Generated<number | null>;
+  label_template_id: Generated<number | null>;
   /**
    * เวลา sync ล่าสุด
    */
-  lastSyncedAt: Generated<Date | null>;
-  lineAccountId: Generated<number | null>;
+  last_synced_at: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
   manufacturer: Generated<string | null>;
   /**
    * จำนวนสูงสุดต่อออเดอร์
    */
-  maxQuantity: Generated<number | null>;
-  minStock: Generated<number | null>;
+  max_quantity: Generated<number | null>;
+  min_stock: Generated<number | null>;
   /**
    * ABC classification
    */
-  movementClass: Generated<"A" | "B" | "C" | null>;
+  movement_class: Generated<"A" | "B" | "C" | null>;
   name: string;
-  nameEn: Generated<string | null>;
+  name_en: Generated<string | null>;
   /**
    * URL รูปภาพจาก CNY
    */
-  photoPath: Generated<string | null>;
+  photo_path: Generated<string | null>;
   price: Decimal;
   /**
    * ราคาตามกลุ่มลูกค้า JSON array
    */
-  productPrice: Generated<string | null>;
-  promotionEnd: Generated<Date | null>;
-  promotionStart: Generated<Date | null>;
-  propertiesOther: Generated<string | null>;
+  product_price: Generated<string | null>;
+  promotion_end: Generated<Date | null>;
+  promotion_start: Generated<Date | null>;
+  properties_other: Generated<string | null>;
   /**
    * จำนวนที่กำลังเข้า
    */
-  qtyIncoming: Generated<number | null>;
-  reorderPoint: Generated<number | null>;
+  qty_incoming: Generated<number | null>;
+  reorder_point: Generated<number | null>;
   /**
    * Requires batch/lot tracking
    */
-  requiresBatchTracking: Generated<number | null>;
+  requires_batch_tracking: Generated<number | null>;
   /**
    * Requires expiry date tracking
    */
-  requiresExpiryTracking: Generated<number | null>;
-  requiresPrescription: Generated<number | null>;
-  salePrice: Generated<Decimal | null>;
-  sideEffects: Generated<string | null>;
+  requires_expiry_tracking: Generated<number | null>;
+  requires_prescription: Generated<number | null>;
+  sale_price: Generated<Decimal | null>;
+  side_effects: Generated<string | null>;
   sku: Generated<string | null>;
-  sortOrder: Generated<number | null>;
+  sort_order: Generated<number | null>;
   stock: Generated<number | null>;
   /**
    * สภาพการจัดเก็บ/ตำแหน่งจัดเก็บ
    */
-  storageCondition: Generated<string | null>;
-  storageConditions: Generated<string | null>;
+  storage_condition: Generated<string | null>;
+  storage_conditions: Generated<string | null>;
   /**
    * FK storage_locations.id
    */
-  storageLocationId: Generated<number | null>;
-  storageZoneType: Generated<string | null>;
+  storage_location_id: Generated<number | null>;
+  storage_zone_type: Generated<string | null>;
   strength: Generated<string | null>;
-  supplierId: Generated<number | null>;
+  supplier_id: Generated<number | null>;
   unit: Generated<string | null>;
   /**
    * FK product_units.id (sell unit)
    */
-  unitId: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  usageInstructions: Generated<string | null>;
+  unit_id: Generated<number | null>;
+  updated_at: Generated<Date>;
+  usage_instructions: Generated<string | null>;
   /**
    * à¸§à¸´à¸˜à¸µà¸à¸²à¸£à¹ƒà¸Šà¹‰ (oral, topical, injection ...)
    */
-  usageMethod: Generated<string | null>;
+  usage_method: Generated<string | null>;
   /**
    * อายุการใช้งาน (สำหรับ digital/service)
    */
-  validityDays: Generated<number | null>;
+  validity_days: Generated<number | null>;
   warnings: Generated<string | null>;
 }
 
 export interface BusinessSettings {
-  bankAccounts: Generated<string | null>;
-  businessType: Generated<"digital" | "hybrid" | "retail" | "service" | null>;
-  contactPhone: Generated<string | null>;
-  createdAt: Generated<Date>;
-  digitalSettings: Generated<string | null>;
-  freeShippingMin: Generated<Decimal | null>;
+  bank_accounts: Generated<string | null>;
+  business_type: Generated<"digital" | "hybrid" | "retail" | "service" | null>;
+  contact_phone: Generated<string | null>;
+  created_at: Generated<Date>;
+  digital_settings: Generated<string | null>;
+  free_shipping_min: Generated<Decimal | null>;
   id: Generated<number>;
-  isOpen: Generated<number | null>;
+  is_open: Generated<number | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  promptpayNumber: Generated<string | null>;
-  serviceSettings: Generated<string | null>;
-  shippingFee: Generated<Decimal | null>;
-  shopLogo: Generated<string | null>;
-  shopName: Generated<string | null>;
-  welcomeMessage: Generated<string | null>;
+  line_account_id: Generated<number>;
+  promptpay_number: Generated<string | null>;
+  service_settings: Generated<string | null>;
+  shipping_fee: Generated<Decimal | null>;
+  shop_logo: Generated<string | null>;
+  shop_name: Generated<string | null>;
+  welcome_message: Generated<string | null>;
 }
 
 export interface Cart {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  productId: number;
+  line_account_id: Generated<number>;
+  product_id: number;
   quantity: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface CartItems {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: string;
-  productId: number;
+  line_account_id: Generated<number>;
+  line_user_id: string;
+  product_id: number;
   /**
    * business_items|odoo_products_cache
    */
-  productSource: Generated<string>;
+  product_source: Generated<string>;
   quantity: Generated<number | null>;
-  unitId: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  unit_id: Generated<number | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface CategoryPointsBonus {
-  categoryId: number;
-  createdAt: Generated<Date>;
+  category_id: number;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * Points multiplier for this category
    */
   multiplier: Generated<Decimal | null>;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface ChatStatusHistory {
-  changedAt: Generated<Date | null>;
-  changedBy: Generated<number | null>;
+  changed_at: Generated<Date | null>;
+  changed_by: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: number;
-  newStatus: Generated<string | null>;
+  line_account_id: number;
+  new_status: Generated<string | null>;
   note: Generated<string | null>;
-  oldStatus: Generated<string | null>;
-  userId: number;
+  old_status: Generated<string | null>;
+  user_id: number;
 }
 
 export interface ConsentLogs {
   action: "accept" | "update" | "withdraw";
-  consentType: string;
-  consentVersion: string;
-  createdAt: Generated<Date | null>;
+  consent_type: string;
+  consent_version: string;
+  created_at: Generated<Date | null>;
   details: Generated<string | null>;
   id: Generated<number>;
-  ipAddress: Generated<string | null>;
+  ip_address: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  userAgent: Generated<string | null>;
-  userId: number;
+  line_account_id: Generated<number>;
+  user_agent: Generated<string | null>;
+  user_id: number;
 }
 
 export interface ConsultationAnalytics {
-  aiSuggestionsAccepted: Generated<number | null>;
-  aiSuggestionsShown: Generated<number | null>;
-  communicationType: Generated<"A" | "B" | "C" | null>;
-  createdAt: Generated<Date | null>;
+  ai_suggestions_accepted: Generated<number | null>;
+  ai_suggestions_shown: Generated<number | null>;
+  communication_type: Generated<"A" | "B" | "C" | null>;
+  created_at: Generated<Date | null>;
   /**
    * Drugs recommended in consultation
    */
-  drugsRecommended: Generated<string | null>;
+  drugs_recommended: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  messageCount: Generated<number | null>;
-  pharmacistId: Generated<number | null>;
-  purchaseAmount: Generated<Decimal | null>;
+  line_account_id: Generated<number>;
+  message_count: Generated<number | null>;
+  pharmacist_id: Generated<number | null>;
+  purchase_amount: Generated<Decimal | null>;
   /**
    * Average response time in seconds
    */
-  responseTimeAvg: Generated<number | null>;
-  resultedInPurchase: Generated<number | null>;
-  stageAtClose: Generated<string | null>;
+  response_time_avg: Generated<number | null>;
+  resulted_in_purchase: Generated<number | null>;
+  stage_at_close: Generated<string | null>;
   /**
    * Patterns that led to purchase
    */
-  successfulPatterns: Generated<string | null>;
+  successful_patterns: Generated<string | null>;
   /**
    * Categories of symptoms discussed
    */
-  symptomCategories: Generated<string | null>;
-  userId: number;
+  symptom_categories: Generated<string | null>;
+  user_id: number;
 }
 
 export interface ConsultationLogs {
-  appointmentId: number;
+  appointment_id: number;
   content: Generated<string | null>;
-  createdAt: Generated<Date>;
-  createdBy: Generated<string | null>;
+  created_at: Generated<Date>;
+  created_by: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  logType: Generated<"end" | "note" | "prescription" | "start" | null>;
+  line_account_id: Generated<number>;
+  log_type: Generated<"end" | "note" | "prescription" | "start" | null>;
 }
 
 export interface ConsultationStages {
   confidence: Generated<Decimal | null>;
-  hasUrgentSymptoms: Generated<number | null>;
+  has_urgent_symptoms: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * Detected signals
    */
   signals: Generated<string | null>;
   stage: "drug_recommendation" | "follow_up" | "purchase" | "symptom_assessment";
-  updatedAt: Generated<Date | null>;
-  userId: number;
+  updated_at: Generated<Date | null>;
+  user_id: number;
 }
 
 export interface ConversationAssignees {
-  assignedAt: Generated<Date | null>;
-  assignedBy: Generated<number | null>;
-  assigneeId: number;
-  conversationId: number;
+  assigned_at: Generated<Date | null>;
+  assigned_by: Generated<number | null>;
+  assignee_id: number;
+  conversation_id: number;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
 }
 
 export interface ConversationAssignments {
-  assignedAt: Generated<Date | null>;
+  assigned_at: Generated<Date | null>;
   /**
    * Who assigned
    */
-  assignedBy: Generated<number | null>;
+  assigned_by: Generated<number | null>;
   /**
    * Admin user ID
    */
-  assignedTo: number;
+  assigned_to: number;
   id: Generated<number>;
-  lineAccountId: Generated<number>;
-  resolvedAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  resolved_at: Generated<Date | null>;
   status: Generated<"active" | "resolved" | "transferred" | null>;
   /**
    * Customer user ID
    */
-  userId: number;
+  user_id: number;
 }
 
 export interface ConversationMultiAssignees {
   /**
    * Admin user ID assigned
    */
-  adminId: number;
-  assignedAt: Generated<Date | null>;
+  admin_id: number;
+  assigned_at: Generated<Date | null>;
   /**
    * Who assigned this admin
    */
-  assignedBy: Generated<number | null>;
+  assigned_by: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  resolvedAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  resolved_at: Generated<Date | null>;
   status: Generated<"active" | "resolved" | null>;
   /**
    * Customer user ID
    */
-  userId: number;
+  user_id: number;
 }
 
 export interface ConversationStates {
-  createdAt: Generated<Date>;
-  currentState: string;
+  created_at: Generated<Date>;
+  current_state: string;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  stateData: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  line_account_id: Generated<number>;
+  state_data: Generated<string | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface Coupons {
   code: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
-  discountType: Generated<"fixed" | "percent" | null>;
-  discountValue: Decimal;
-  endDate: Generated<Date | null>;
+  discount_type: Generated<"fixed" | "percent" | null>;
+  discount_value: Decimal;
+  end_date: Generated<Date | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  maxDiscount: Generated<Decimal | null>;
-  minPurchase: Generated<Decimal | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  max_discount: Generated<Decimal | null>;
+  min_purchase: Generated<Decimal | null>;
   name: Generated<string | null>;
-  startDate: Generated<Date | null>;
-  usageCount: Generated<number | null>;
-  usageLimit: Generated<number | null>;
-  userLimit: Generated<number | null>;
+  start_date: Generated<Date | null>;
+  usage_count: Generated<number | null>;
+  usage_limit: Generated<number | null>;
+  user_limit: Generated<number | null>;
 }
 
 export interface CouponUsage {
-  couponId: number;
-  discountAmount: Generated<Decimal | null>;
+  coupon_id: number;
+  discount_amount: Generated<Decimal | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  orderId: Generated<number | null>;
-  usedAt: Generated<Date>;
-  userId: number;
+  line_account_id: Generated<number>;
+  order_id: Generated<number | null>;
+  used_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface CustomerHealthProfiles {
   /**
    * List of chronic conditions
    */
-  chronicConditions: Generated<string | null>;
-  communicationTips: Generated<string | null>;
+  chronic_conditions: Generated<string | null>;
+  communication_tips: Generated<string | null>;
   /**
    * A=Direct, B=Concerned, C=Detailed
    */
-  communicationType: Generated<"A" | "B" | "C" | null>;
+  communication_type: Generated<"A" | "B" | "C" | null>;
   confidence: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  lastAnalyzedAt: Generated<Date | null>;
+  last_analyzed_at: Generated<Date | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  messageCountAnalyzed: Generated<number | null>;
-  updatedAt: Generated<Date | null>;
-  userId: number;
+  line_account_id: Generated<number>;
+  message_count_analyzed: Generated<number | null>;
+  updated_at: Generated<Date | null>;
+  user_id: number;
 }
 
 export interface CustomerNotes {
-  adminId: number;
+  admin_id: number;
   content: string;
-  createdAt: Generated<Date | null>;
-  createdBy: Generated<number | null>;
+  created_at: Generated<Date | null>;
+  created_by: Generated<number | null>;
   id: Generated<number>;
-  isPinned: Generated<number | null>;
+  is_pinned: Generated<number | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   note: string;
-  updatedAt: Generated<Date | null>;
-  userId: number;
+  updated_at: Generated<Date | null>;
+  user_id: number;
 }
 
 export interface CustomerSegments {
   conditions: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lastCalculatedAt: Generated<Date | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  last_calculated_at: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
   name: string;
-  segmentType: Generated<"dynamic" | "static" | null>;
-  updatedAt: Generated<Date>;
-  userCount: Generated<number | null>;
+  segment_type: Generated<"dynamic" | "static" | null>;
+  updated_at: Generated<Date>;
+  user_count: Generated<number | null>;
 }
 
 export interface DataAccessLogs {
   action: string;
-  adminUserId: Generated<number | null>;
-  createdAt: Generated<Date | null>;
+  admin_user_id: Generated<number | null>;
+  created_at: Generated<Date | null>;
   details: Generated<string | null>;
   id: Generated<number>;
-  ipAddress: Generated<string | null>;
+  ip_address: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  resourceId: Generated<number | null>;
-  resourceType: string;
-  userAgent: Generated<string | null>;
-  userId: Generated<number | null>;
+  line_account_id: Generated<number>;
+  resource_id: Generated<number | null>;
+  resource_type: string;
+  user_agent: Generated<string | null>;
+  user_id: Generated<number | null>;
 }
 
 export interface DispensingRecords {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   items: Generated<string | null>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   notes: Generated<string | null>;
-  orderNumber: string;
-  paymentMethod: Generated<string | null>;
-  paymentStatus: Generated<string | null>;
-  pharmacistId: Generated<number | null>;
-  totalAmount: Generated<Decimal | null>;
-  userId: number;
+  order_number: string;
+  payment_method: Generated<string | null>;
+  payment_status: Generated<string | null>;
+  pharmacist_id: Generated<number | null>;
+  total_amount: Generated<Decimal | null>;
+  user_id: number;
 }
 
 export interface DocumentSequences {
-  docType: string;
+  doc_type: string;
   id: Generated<number>;
-  lastSeq: Generated<number>;
-  lineAccountId: number;
-  updatedAt: Generated<Date>;
+  last_seq: Generated<number>;
+  line_account_id: number;
+  updated_at: Generated<Date>;
   /**
    * YYMM in Buddhist year tail e.g. 2605 = à¸ž.à¸„. 2569
    */
-  yearMonth: string;
+  year_month: string;
 }
 
 export interface DripCampaignLogs {
-  campaignId: number;
-  errorMessage: Generated<string | null>;
+  campaign_id: number;
+  error_message: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  sentAt: Generated<Date>;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  sent_at: Generated<Date>;
   status: "failed" | "sent" | "skipped";
-  stepId: number;
-  userId: number;
+  step_id: number;
+  user_id: number;
 }
 
 export interface DripCampaignProgress {
-  campaignId: number;
-  completedAt: Generated<Date | null>;
-  currentStep: Generated<number | null>;
-  enrolledAt: Generated<Date>;
+  campaign_id: number;
+  completed_at: Generated<Date | null>;
+  current_step: Generated<number | null>;
+  enrolled_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  nextSendAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  next_send_at: Generated<Date | null>;
   status: Generated<"active" | "cancelled" | "completed" | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface DripCampaignQueue {
-  campaignId: number;
-  createdAt: Generated<Date>;
+  campaign_id: number;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  scheduledAt: Generated<Date>;
-  sentAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  scheduled_at: Generated<Date>;
+  sent_at: Generated<Date | null>;
   status: Generated<"cancelled" | "failed" | "pending" | "sent" | null>;
-  stepId: number;
-  userId: number;
+  step_id: number;
+  user_id: number;
 }
 
 export interface DripCampaigns {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
-  totalCompleted: Generated<number | null>;
-  totalEnrolled: Generated<number | null>;
-  triggerTagId: Generated<number | null>;
-  triggerType: Generated<"follow" | "manual" | "purchase" | "tag_added" | null>;
-  updatedAt: Generated<Date>;
+  total_completed: Generated<number | null>;
+  total_enrolled: Generated<number | null>;
+  trigger_tag_id: Generated<number | null>;
+  trigger_type: Generated<"follow" | "manual" | "purchase" | "tag_added" | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface DripCampaignSteps {
-  campaignId: number;
-  createdAt: Generated<Date>;
-  delayMinutes: Generated<number | null>;
+  campaign_id: number;
+  created_at: Generated<Date>;
+  delay_minutes: Generated<number | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  messageContent: string;
-  messageType: Generated<"flex" | "image" | "text" | null>;
-  stepOrder: number;
+  line_account_id: Generated<number>;
+  message_content: string;
+  message_type: Generated<"flex" | "image" | "text" | null>;
+  step_order: number;
 }
 
 export interface DripQueue {
-  campaignId: number;
-  createdAt: Generated<Date | null>;
-  currentStep: Generated<number | null>;
+  campaign_id: number;
+  created_at: Generated<Date | null>;
+  current_step: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  scheduledAt: Generated<Date | null>;
-  sentAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  scheduled_at: Generated<Date | null>;
+  sent_at: Generated<Date | null>;
   status: Generated<string | null>;
-  userId: string;
+  user_id: string;
 }
 
 export interface DripSteps {
-  campaignId: number;
-  createdAt: Generated<Date | null>;
-  delayMinutes: Generated<number | null>;
+  campaign_id: number;
+  created_at: Generated<Date | null>;
+  delay_minutes: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  messageContent: Generated<string | null>;
-  messageType: Generated<string | null>;
-  stepOrder: Generated<number | null>;
-  templateId: Generated<number | null>;
-  updatedAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  message_content: Generated<string | null>;
+  message_type: Generated<string | null>;
+  step_order: Generated<number | null>;
+  template_id: Generated<number | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface DrugDisposalRecords {
-  batchNumber: Generated<string | null>;
-  createdAt: Generated<Date | null>;
-  disposalDate: Date;
+  batch_number: Generated<string | null>;
+  created_at: Generated<Date | null>;
+  disposal_date: Date;
   /**
    * วิธีการทำลาย
    */
-  disposalMethod: Generated<string | null>;
+  disposal_method: Generated<string | null>;
   /**
    * ผู้ทำลาย
    */
-  disposedBy: number;
+  disposed_by: number;
   id: Generated<number>;
-  lineAccountId: number;
+  line_account_id: number;
   notes: Generated<string | null>;
   /**
    * รูปถ่ายหลักฐาน
    */
-  photoEvidence: Generated<string | null>;
-  productId: number;
+  photo_evidence: Generated<string | null>;
+  product_id: number;
   quantity: number;
   reason: "damaged" | "expired" | "other" | "recalled";
   /**
    * พยาน
    */
-  witnessBy: Generated<number | null>;
+  witness_by: Generated<number | null>;
 }
 
 export interface DrugGroups {
@@ -1401,55 +1401,55 @@ export interface DrugGroups {
    * à¸£à¸«à¸±à¸ªà¸à¸¥à¸¸à¹ˆà¸¡ / group code
    */
   code: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   description: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: number;
+  is_active: Generated<number | null>;
+  line_account_id: number;
   /**
    * à¸Šà¸·à¹ˆà¸­à¸ à¸²à¸©à¸²à¸­à¸±à¸‡à¸à¸¤à¸©
    */
-  nameEn: Generated<string | null>;
+  name_en: Generated<string | null>;
   /**
    * à¸Šà¸·à¹ˆà¸­à¸ à¸²à¸©à¸²à¹„à¸—à¸¢
    */
-  nameTh: string;
-  updatedAt: Generated<Date | null>;
+  name_th: string;
+  updated_at: Generated<Date | null>;
 }
 
 export interface DrugInteractionAcknowledgments {
-  acknowledgedAt: Generated<Date>;
-  drug1Id: number;
-  drug1Name: Generated<string | null>;
-  drug2Id: number;
-  drug2Name: Generated<string | null>;
+  acknowledged_at: Generated<Date>;
+  drug1_id: number;
+  drug1_name: Generated<string | null>;
+  drug2_id: number;
+  drug2_name: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  orderId: Generated<number | null>;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  order_id: Generated<number | null>;
   severity: Generated<"mild" | "moderate" | "severe" | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface DrugInteractions {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
-  drug1Generic: Generated<string | null>;
-  drug1Name: string;
-  drug2Generic: Generated<string | null>;
-  drug2Name: string;
+  drug1_generic: Generated<string | null>;
+  drug1_name: string;
+  drug2_generic: Generated<string | null>;
+  drug2_name: string;
   id: Generated<number>;
   /**
    * à¸‚à¹‰à¸­à¸„à¸§à¸²à¸¡à¸œà¸¥à¸—à¸µà¹ˆà¹€à¸à¸´à¸” (alias / extended description)
    */
-  interactionText: Generated<string | null>;
+  interaction_text: Generated<string | null>;
   /**
    * FK line_accounts.id (NULL = global)
    */
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * à¸à¸¥à¹„à¸ / mechanism of interaction
    */
@@ -1462,20 +1462,20 @@ export interface DrugLabelTemplates {
   /**
    * FK generic_names.id (auto-apply)
    */
-  appliesToGenericId: Generated<number | null>;
+  applies_to_generic_id: Generated<number | null>;
   /**
    * usage_method match for bulk apply
    */
-  appliesToUsagePattern: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  applies_to_usage_pattern: Generated<string | null>;
+  created_at: Generated<Date | null>;
   /**
    * FK drug_groups.id (default for whole group)
    */
-  defaultForDrugGroupId: Generated<number | null>;
+  default_for_drug_group_id: Generated<number | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   language: Generated<string | null>;
-  lineAccountId: number;
+  line_account_id: number;
   /**
    * à¸Šà¸·à¹ˆà¸­à¹€à¸—à¸¡à¹€à¸žà¸¥à¸•
    */
@@ -1483,111 +1483,111 @@ export interface DrugLabelTemplates {
   /**
    * placeholders: {shop_name}, {patient_name}, {drug_name}, {dose}, {usage}, {date}, {pharmacist}
    */
-  templateText: string;
-  updatedAt: Generated<Date | null>;
+  template_text: string;
+  updated_at: Generated<Date | null>;
 }
 
 export interface DrugPricingRules {
   /**
    * Brand name if applicable
    */
-  brandName: Generated<string | null>;
+  brand_name: Generated<string | null>;
   /**
    * Product category ID if applicable
    */
-  categoryId: Generated<number | null>;
+  category_id: Generated<number | null>;
   /**
    * Additional conditions for rule application
    */
   conditions: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * Maximum margin percentage
    */
-  maxMargin: Generated<Decimal | null>;
+  max_margin: Generated<Decimal | null>;
   /**
    * Minimum margin percentage
    */
-  minMargin: Generated<Decimal | null>;
-  priceRounding: Generated<"nearest_10" | "nearest_5" | "none" | "up_10" | "up_5" | null>;
+  min_margin: Generated<Decimal | null>;
+  price_rounding: Generated<"nearest_10" | "nearest_5" | "none" | "up_10" | "up_5" | null>;
   /**
    * Higher priority rules applied first
    */
   priority: Generated<number | null>;
-  ruleName: string;
-  ruleType: Generated<"brand" | "category" | "generic" | "margin" | "promotion">;
+  rule_name: string;
+  rule_type: Generated<"brand" | "category" | "generic" | "margin" | "promotion">;
   /**
    * Target margin percentage
    */
-  targetMargin: Generated<Decimal | null>;
-  updatedAt: Generated<Date | null>;
+  target_margin: Generated<Decimal | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface DrugRecognitionCache {
-  createdAt: Generated<Date | null>;
-  drugName: Generated<string | null>;
-  expiresAt: Generated<Date | null>;
-  genericName: Generated<string | null>;
+  created_at: Generated<Date | null>;
+  drug_name: Generated<string | null>;
+  expires_at: Generated<Date | null>;
+  generic_name: Generated<string | null>;
   id: Generated<number>;
-  imageHash: string;
-  imageUrl: Generated<string | null>;
+  image_hash: string;
+  image_url: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  matchedProductId: Generated<number | null>;
-  recognitionResult: Generated<string | null>;
+  line_account_id: Generated<number>;
+  matched_product_id: Generated<number | null>;
+  recognition_result: Generated<string | null>;
 }
 
 export interface DrugTypeRules {
-  createdAt: Generated<Date | null>;
-  drugType: string;
+  created_at: Generated<Date | null>;
+  drug_type: string;
   id: Generated<number>;
-  isActive: Generated<number>;
+  is_active: Generated<number>;
   /**
    * NULL = ใช้ทุกบัญชี, มีค่า = เฉพาะบัญชีนั้น
    */
-  lineAccountId: Generated<number | null>;
-  matchType: "category" | "name_contains" | "sku_prefix";
-  matchValue: string;
+  line_account_id: Generated<number | null>;
+  match_type: "category" | "name_contains" | "sku_prefix";
+  match_value: string;
   /**
    * ตัวเลขน้อย = match ก่อน
    */
   priority: Generated<number>;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface EmailSettings {
-  createdAt: Generated<Date>;
-  fromEmail: Generated<string | null>;
-  fromName: Generated<string | null>;
+  created_at: Generated<Date>;
+  from_email: Generated<string | null>;
+  from_name: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  smtpHost: Generated<string | null>;
-  smtpPass: Generated<string | null>;
-  smtpPort: Generated<number | null>;
-  smtpSecure: Generated<"none" | "ssl" | "tls" | null>;
-  smtpUser: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  line_account_id: Generated<number>;
+  smtp_host: Generated<string | null>;
+  smtp_pass: Generated<string | null>;
+  smtp_port: Generated<number | null>;
+  smtp_secure: Generated<"none" | "ssl" | "tls" | null>;
+  smtp_user: Generated<string | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface EmergencyAlerts {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * Additional emergency information
    */
-  emergencyInfo: Generated<string | null>;
+  emergency_info: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * Original message that triggered the alert
    */
@@ -1599,409 +1599,409 @@ export interface EmergencyAlerts {
   /**
    * Detected red flags array
    */
-  redFlags: Generated<string | null>;
-  reviewedAt: Generated<Date | null>;
+  red_flags: Generated<string | null>;
+  reviewed_at: Generated<Date | null>;
   /**
    * Admin user who reviewed
    */
-  reviewedBy: Generated<number | null>;
+  reviewed_by: Generated<number | null>;
   severity: Generated<"critical" | "high" | "warning" | null>;
   status: Generated<"dismissed" | "handled" | "pending" | "reviewed" | null>;
-  updatedAt: Generated<Date>;
-  userId: Generated<number | null>;
+  updated_at: Generated<Date>;
+  user_id: Generated<number | null>;
 }
 
 export interface ExpenseCategories {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
-  expenseType: Generated<"administrative" | "financial" | "operating" | "other" | null>;
+  expense_type: Generated<"administrative" | "financial" | "operating" | "other" | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  isDefault: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  is_default: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
-  nameEn: Generated<string | null>;
+  name_en: Generated<string | null>;
 }
 
 export interface Expenses {
   amount: Decimal;
-  attachmentPath: Generated<string | null>;
-  categoryId: number;
-  createdAt: Generated<Date>;
-  createdBy: Generated<number | null>;
+  attachment_path: Generated<string | null>;
+  category_id: number;
+  created_at: Generated<Date>;
+  created_by: Generated<number | null>;
   description: Generated<string | null>;
-  dueDate: Generated<Date | null>;
-  expenseDate: Date;
-  expenseNumber: string;
+  due_date: Generated<Date | null>;
+  expense_date: Date;
+  expense_number: string;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   metadata: Generated<string | null>;
   notes: Generated<string | null>;
-  paymentStatus: Generated<"paid" | "unpaid" | null>;
-  paymentVoucherId: Generated<number | null>;
-  referenceNumber: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  vendorName: Generated<string | null>;
+  payment_status: Generated<"paid" | "unpaid" | null>;
+  payment_voucher_id: Generated<number | null>;
+  reference_number: Generated<string | null>;
+  updated_at: Generated<Date>;
+  vendor_name: Generated<string | null>;
 }
 
 export interface FacebookAccounts {
-  appId: string;
-  appSecret: string;
-  createdAt: Generated<Date>;
+  app_id: string;
+  app_secret: string;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isActive: Generated<number>;
+  is_active: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   name: string;
-  pageAccessToken: string;
-  pageId: string;
-  pictureUrl: Generated<string | null>;
+  page_access_token: string;
+  page_id: string;
+  picture_url: Generated<string | null>;
   settings: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  verifyToken: string;
-  webhookUrl: Generated<string | null>;
+  updated_at: Generated<Date>;
+  verify_token: string;
+  webhook_url: Generated<string | null>;
 }
 
 export interface FlexTemplates {
   category: Generated<string | null>;
-  createdAt: Generated<Date>;
-  createdBy: Generated<number | null>;
+  created_at: Generated<Date>;
+  created_by: Generated<number | null>;
   description: Generated<string | null>;
-  flexJson: string;
+  flex_json: string;
   id: Generated<number>;
-  isPublic: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_public: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
-  thumbnailUrl: Generated<string | null>;
-  useCount: Generated<number | null>;
+  thumbnail_url: Generated<string | null>;
+  use_count: Generated<number | null>;
 }
 
 export interface GenericNames {
   /**
    * WHO ATC classification
    */
-  atcCode: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  atc_code: Generated<string | null>;
+  created_at: Generated<Date | null>;
   /**
    * à¸£à¸¹à¸›à¹à¸šà¸šà¸¢à¸²à¹€à¸£à¸´à¹ˆà¸¡à¸•à¹‰à¸™
    */
-  defaultDosageForm: Generated<string | null>;
+  default_dosage_form: Generated<string | null>;
   /**
    * à¸«à¸™à¹ˆà¸§à¸¢à¹€à¸£à¸´à¹ˆà¸¡à¸•à¹‰à¸™
    */
-  defaultUnit: Generated<string | null>;
+  default_unit: Generated<string | null>;
   /**
    * à¸„à¸³à¹€à¸•à¸·à¸­à¸™à¹€à¸£à¸´à¹ˆà¸¡à¸•à¹‰à¸™
    */
-  defaultWarnings: Generated<string | null>;
+  default_warnings: Generated<string | null>;
   description: Generated<string | null>;
   /**
    * à¸Šà¸·à¹ˆà¸­à¸—à¸²à¸‡à¸à¸²à¸£ / generic name
    */
-  genericName: string;
+  generic_name: string;
   id: Generated<number>;
-  lineAccountId: number;
-  updatedAt: Generated<Date | null>;
+  line_account_id: number;
+  updated_at: Generated<Date | null>;
 }
 
 export interface GhostDraftLearning {
   /**
    * AI generated draft
    */
-  aiDraft: string;
+  ai_draft: string;
   /**
    * Drugs mentioned in conversation
    */
-  contextDrugs: Generated<string | null>;
+  context_drugs: Generated<string | null>;
   /**
    * Customer health profile snapshot
    */
-  contextHealthProfile: Generated<string | null>;
+  context_health_profile: Generated<string | null>;
   /**
    * Consultation stage at time of draft
    */
-  contextStage: Generated<string | null>;
+  context_stage: Generated<string | null>;
   /**
    * Detected symptoms in conversation
    */
-  contextSymptoms: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  context_symptoms: Generated<string | null>;
+  created_at: Generated<Date | null>;
   /**
    * Original customer message
    */
-  customerMessage: string;
+  customer_message: string;
   /**
    * Levenshtein distance between draft and final
    */
-  editDistance: Generated<number | null>;
+  edit_distance: Generated<number | null>;
   /**
    * Edit distance / original length ratio
    */
-  editRatio: Generated<Decimal | null>;
+  edit_ratio: Generated<Decimal | null>;
   /**
    * Pharmacist feedback notes
    */
-  feedbackNotes: Generated<string | null>;
+  feedback_notes: Generated<string | null>;
   /**
    * Pharmacist rating 1-5
    */
-  feedbackRating: Generated<number | null>;
+  feedback_rating: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * Final message sent by pharmacist
    */
-  pharmacistFinal: string;
+  pharmacist_final: string;
   /**
    * Pharmacist who edited
    */
-  pharmacistId: Generated<number | null>;
+  pharmacist_id: Generated<number | null>;
   /**
    * Customer user ID
    */
-  userId: number;
+  user_id: number;
   /**
    * 1 if draft was used with minimal edits
    */
-  wasAccepted: Generated<number | null>;
+  was_accepted: Generated<number | null>;
 }
 
 export interface GhostDrafts {
   confidence: Generated<Decimal | null>;
   content: string;
   context: Generated<string | null>;
-  conversationId: number;
-  createdAt: Generated<Date | null>;
+  conversation_id: number;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   tone: Generated<string | null>;
-  wasAccepted: Generated<number | null>;
-  wasEdited: Generated<number | null>;
+  was_accepted: Generated<number | null>;
+  was_edited: Generated<number | null>;
 }
 
 export interface GoodsReceiveItems {
   /**
    * Batch number from supplier
    */
-  batchNumber: Generated<string | null>;
+  batch_number: Generated<string | null>;
   /**
    * Product expiry date
    */
-  expiryDate: Generated<Date | null>;
-  grId: number;
+  expiry_date: Generated<Date | null>;
+  gr_id: number;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * Lot number from supplier
    */
-  lotNumber: Generated<string | null>;
+  lot_number: Generated<string | null>;
   /**
    * Product manufacture date
    */
-  manufactureDate: Generated<Date | null>;
+  manufacture_date: Generated<Date | null>;
   notes: Generated<string | null>;
-  poItemId: number;
+  po_item_id: number;
   /**
    * FK to business_items.id
    */
-  productId: number;
+  product_id: number;
   quantity: number;
-  unitCost: Generated<Decimal>;
-  unitFactor: Generated<Decimal | null>;
-  unitId: Generated<number | null>;
-  unitName: Generated<string | null>;
+  unit_cost: Generated<Decimal>;
+  unit_factor: Generated<Decimal | null>;
+  unit_id: Generated<number | null>;
+  unit_name: Generated<string | null>;
 }
 
 export interface GoodsReceives {
-  confirmedAt: Generated<Date | null>;
-  createdAt: Generated<Date>;
-  grNumber: string;
+  confirmed_at: Generated<Date | null>;
+  created_at: Generated<Date>;
+  gr_number: string;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   notes: Generated<string | null>;
-  poId: number;
-  receiveDate: Date;
-  receivedBy: Generated<number | null>;
+  po_id: number;
+  receive_date: Date;
+  received_by: Generated<number | null>;
   status: Generated<"cancelled" | "confirmed" | "draft" | null>;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface Groups {
   color: Generated<string | null>;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
 }
 
 export interface HealthArticleCategories {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   description: Generated<string | null>;
   icon: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
   slug: string;
-  sortOrder: Generated<number | null>;
-  updatedAt: Generated<Date | null>;
+  sort_order: Generated<number | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface HealthArticles {
-  authorImage: Generated<string | null>;
-  authorName: Generated<string | null>;
-  authorTitle: Generated<string | null>;
-  categoryId: Generated<number | null>;
+  author_image: Generated<string | null>;
+  author_name: Generated<string | null>;
+  author_title: Generated<string | null>;
+  category_id: Generated<number | null>;
   content: string;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   excerpt: Generated<string | null>;
-  featuredImage: Generated<string | null>;
+  featured_image: Generated<string | null>;
   id: Generated<number>;
-  isFeatured: Generated<number | null>;
-  isPublished: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  metaDescription: Generated<string | null>;
-  metaKeywords: Generated<string | null>;
-  metaTitle: Generated<string | null>;
-  publishedAt: Generated<Date | null>;
+  is_featured: Generated<number | null>;
+  is_published: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  meta_description: Generated<string | null>;
+  meta_keywords: Generated<string | null>;
+  meta_title: Generated<string | null>;
+  published_at: Generated<Date | null>;
   slug: string;
   tags: Generated<string | null>;
   title: string;
-  updatedAt: Generated<Date | null>;
-  viewCount: Generated<number | null>;
+  updated_at: Generated<Date | null>;
+  view_count: Generated<number | null>;
 }
 
 export interface ImageAnalysisResults {
-  analysisType: "drug" | "prescription" | "symptom";
+  analysis_type: "drug" | "prescription" | "symptom";
   confidence: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  messageId: number;
+  line_account_id: Generated<number>;
+  message_id: number;
   results: string;
 }
 
 export interface InventoryBatches {
-  batchNumber: string;
-  costPrice: Generated<Decimal | null>;
-  createdAt: Generated<Date>;
-  disposalBy: Generated<number | null>;
-  disposalDate: Generated<Date | null>;
-  disposalReason: Generated<string | null>;
-  expiryDate: Generated<Date | null>;
+  batch_number: string;
+  cost_price: Generated<Decimal | null>;
+  created_at: Generated<Date>;
+  disposal_by: Generated<number | null>;
+  disposal_date: Generated<Date | null>;
+  disposal_reason: Generated<string | null>;
+  expiry_date: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  locationId: Generated<number | null>;
-  lotNumber: Generated<string | null>;
-  manufactureDate: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
+  location_id: Generated<number | null>;
+  lot_number: Generated<string | null>;
+  manufacture_date: Generated<Date | null>;
   notes: Generated<string | null>;
-  productId: number;
+  product_id: number;
   quantity: Generated<number>;
-  quantityAvailable: Generated<number>;
-  receivedAt: Date;
-  receivedBy: Generated<number | null>;
+  quantity_available: Generated<number>;
+  received_at: Date;
+  received_by: Generated<number | null>;
   status: Generated<"active" | "disposed" | "expired" | "quarantine" | null>;
-  supplierId: Generated<number | null>;
-  updatedAt: Generated<Date>;
+  supplier_id: Generated<number | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface ItemCategories {
   /**
    * CNY Category Code
    */
-  cnyCode: Generated<string | null>;
-  createdAt: Generated<Date>;
+  cny_code: Generated<string | null>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   /**
    * à¸¥à¸³à¸”à¸±à¸šà¸à¸²à¸£à¹à¸ªà¸”à¸‡
    */
-  displayOrder: Generated<number | null>;
+  display_order: Generated<number | null>;
   id: Generated<number>;
-  imageUrl: Generated<string | null>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  manufacturerCode: Generated<string | null>;
+  image_url: Generated<string | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  manufacturer_code: Generated<string | null>;
   name: string;
-  nameEn: Generated<string | null>;
-  parentId: Generated<number | null>;
-  sortOrder: Generated<number | null>;
+  name_en: Generated<string | null>;
+  parent_id: Generated<number | null>;
+  sort_order: Generated<number | null>;
 }
 
 export interface ItemImages {
   id: Generated<number>;
-  imageUrl: string;
-  itemId: number;
+  image_url: string;
+  item_id: number;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  sortOrder: Generated<number | null>;
+  line_account_id: Generated<number>;
+  sort_order: Generated<number | null>;
 }
 
 export interface LandingBanners {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  imageUrl: string;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  linkType: Generated<"external" | "internal" | "none" | null>;
-  linkUrl: Generated<string | null>;
-  sortOrder: Generated<number | null>;
+  image_url: string;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  link_type: Generated<"external" | "internal" | "none" | null>;
+  link_url: Generated<string | null>;
+  sort_order: Generated<number | null>;
   title: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface LandingFaqs {
   answer: string;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   question: string;
-  sortOrder: Generated<number | null>;
-  updatedAt: Generated<Date | null>;
+  sort_order: Generated<number | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface LandingFeaturedProducts {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  productId: number;
-  productSource: Generated<string | null>;
-  sortOrder: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  product_id: number;
+  product_source: Generated<string | null>;
+  sort_order: Generated<number | null>;
 }
 
 export interface LandingSettings {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  settingKey: string;
-  settingValue: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
+  setting_key: string;
+  setting_value: Generated<string | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface LandingTestimonials {
-  approvedAt: Generated<Date | null>;
-  createdAt: Generated<Date | null>;
-  customerAvatar: Generated<string | null>;
-  customerName: string;
+  approved_at: Generated<Date | null>;
+  created_at: Generated<Date | null>;
+  customer_avatar: Generated<string | null>;
+  customer_name: string;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   rating: Generated<number | null>;
-  reviewText: string;
+  review_text: string;
   /**
    * google, facebook, manual
    */
@@ -2010,65 +2010,65 @@ export interface LandingTestimonials {
 }
 
 export interface LiffApps {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
-  endpointUrl: Generated<string | null>;
+  endpoint_url: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  liffId: string;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  liff_id: string;
+  line_account_id: Generated<number | null>;
   name: string;
-  viewType: Generated<"compact" | "full" | "tall" | null>;
+  view_type: Generated<"compact" | "full" | "tall" | null>;
 }
 
 export interface LiffMessageLogs {
-  actionType: string;
-  createdAt: Generated<Date>;
-  errorMessage: Generated<string | null>;
+  action_type: string;
+  created_at: Generated<Date>;
+  error_message: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: string;
-  messageData: Generated<string | null>;
-  sentVia: Generated<"api" | "liff" | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: string;
+  message_data: Generated<string | null>;
+  sent_via: Generated<"api" | "liff" | null>;
   status: Generated<"failed" | "pending" | "sent" | null>;
 }
 
 export interface LiffShopSettings {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  settingKey: string;
-  settingValue: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  line_account_id: Generated<number | null>;
+  setting_key: string;
+  setting_value: Generated<string | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface LineAccounts {
-  autoReplyEnabled: Generated<number | null>;
+  auto_reply_enabled: Generated<number | null>;
   /**
    * LINE Basic ID (@xxx)
    */
-  basicId: Generated<string | null>;
-  botMode: Generated<"auto_reply_only" | "general" | "shop" | null>;
+  basic_id: Generated<string | null>;
+  bot_mode: Generated<"auto_reply_only" | "general" | "shop" | null>;
   /**
    * Channel Access Token
    */
-  channelAccessToken: string;
+  channel_access_token: string;
   /**
    * Channel ID
    */
-  channelId: Generated<string | null>;
+  channel_id: Generated<string | null>;
   /**
    * Channel Secret
    */
-  channelSecret: string;
-  createdAt: Generated<Date>;
+  channel_secret: string;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   /**
    * บัญชีหลัก
    */
-  isDefault: Generated<number | null>;
-  liffId: Generated<string | null>;
+  is_default: Generated<number | null>;
+  liff_id: Generated<string | null>;
   /**
    * ชื่อบัญชี LINE OA
    */
@@ -2076,190 +2076,190 @@ export interface LineAccounts {
   /**
    * รูปโปรไฟล์
    */
-  pictureUrl: Generated<string | null>;
-  richMenuId: Generated<string | null>;
+  picture_url: Generated<string | null>;
+  rich_menu_id: Generated<string | null>;
   /**
    * ตั้งค่าเพิ่มเติม
    */
   settings: Generated<string | null>;
-  shopEnabled: Generated<number | null>;
-  unifiedLiffId: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  shop_enabled: Generated<number | null>;
+  unified_liff_id: Generated<string | null>;
+  updated_at: Generated<Date>;
   /**
    * Webhook URL
    */
-  webhookUrl: Generated<string | null>;
-  welcomeMessage: Generated<string | null>;
+  webhook_url: Generated<string | null>;
+  welcome_message: Generated<string | null>;
 }
 
 export interface LineGroupMembers {
-  createdAt: Generated<Date>;
-  displayName: Generated<string | null>;
-  groupId: number;
+  created_at: Generated<Date>;
+  display_name: Generated<string | null>;
+  group_id: number;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  joinedAt: Generated<Date>;
-  lastMessageAt: Generated<Date | null>;
-  leftAt: Generated<Date | null>;
+  is_active: Generated<number | null>;
+  joined_at: Generated<Date>;
+  last_message_at: Generated<Date | null>;
+  left_at: Generated<Date | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: string;
-  pictureUrl: Generated<string | null>;
-  totalMessages: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  userId: Generated<number | null>;
+  line_account_id: Generated<number>;
+  line_user_id: string;
+  picture_url: Generated<string | null>;
+  total_messages: Generated<number | null>;
+  updated_at: Generated<Date>;
+  user_id: Generated<number | null>;
 }
 
 export interface LineGroupMessages {
   content: Generated<string | null>;
-  createdAt: Generated<Date>;
-  groupId: number;
+  created_at: Generated<Date>;
+  group_id: number;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  messageId: Generated<string | null>;
-  messageType: Generated<string | null>;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  message_id: Generated<string | null>;
+  message_type: Generated<string | null>;
 }
 
 export interface LineGroups {
-  createdAt: Generated<Date>;
-  groupId: string;
-  groupName: Generated<string | null>;
-  groupType: Generated<"group" | "room" | null>;
+  created_at: Generated<Date>;
+  group_id: string;
+  group_name: Generated<string | null>;
+  group_type: Generated<"group" | "room" | null>;
   id: Generated<number>;
-  invitedBy: Generated<string | null>;
-  invitedByName: Generated<string | null>;
-  isActive: Generated<number | null>;
-  joinedAt: Generated<Date>;
-  lastActivityAt: Generated<Date | null>;
-  leftAt: Generated<Date | null>;
-  lineAccountId: number;
-  memberCount: Generated<number | null>;
-  pictureUrl: Generated<string | null>;
+  invited_by: Generated<string | null>;
+  invited_by_name: Generated<string | null>;
+  is_active: Generated<number | null>;
+  joined_at: Generated<Date>;
+  last_activity_at: Generated<Date | null>;
+  left_at: Generated<Date | null>;
+  line_account_id: number;
+  member_count: Generated<number | null>;
+  picture_url: Generated<string | null>;
   settings: Generated<string | null>;
-  totalMessages: Generated<number | null>;
-  updatedAt: Generated<Date>;
+  total_messages: Generated<number | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface LinkClicks {
-  clickedAt: Generated<Date>;
+  clicked_at: Generated<Date>;
   id: Generated<number>;
-  ipAddress: Generated<string | null>;
+  ip_address: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  linkId: number;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  link_id: number;
   referer: Generated<string | null>;
-  userAgent: Generated<string | null>;
-  userId: Generated<number | null>;
+  user_agent: Generated<string | null>;
+  user_id: Generated<number | null>;
 }
 
 export interface LocationMovements {
-  batchId: Generated<number | null>;
-  createdAt: Generated<Date>;
-  fromLocationId: Generated<number | null>;
+  batch_id: Generated<number | null>;
+  created_at: Generated<Date>;
+  from_location_id: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  movementType: "adjustment" | "disposal" | "pick" | "put_away" | "transfer";
+  line_account_id: Generated<number | null>;
+  movement_type: "adjustment" | "disposal" | "pick" | "put_away" | "transfer";
   notes: Generated<string | null>;
-  productId: number;
+  product_id: number;
   quantity: number;
-  referenceId: Generated<number | null>;
-  referenceType: Generated<string | null>;
-  staffId: Generated<number | null>;
-  toLocationId: Generated<number | null>;
+  reference_id: Generated<number | null>;
+  reference_type: Generated<string | null>;
+  staff_id: Generated<number | null>;
+  to_location_id: Generated<number | null>;
 }
 
 export interface LoyaltyPoints {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lifetimePoints: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  lifetime_points: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   points: Generated<number | null>;
   tier: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface LoyaltyPointsHistory {
-  accountId: Generated<number | null>;
-  createdAt: Generated<Date>;
+  account_id: Generated<number | null>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   points: number;
-  referenceId: Generated<number | null>;
+  reference_id: Generated<number | null>;
   type: Generated<"adjust" | "earn" | "expire" | "redeem" | null>;
-  userId: string;
+  user_id: string;
 }
 
 export interface MedicalHistory {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   diagnosis: Generated<string | null>;
-  followUpDate: Generated<Date | null>;
+  follow_up_date: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  medicationsPrescribed: Generated<string | null>;
-  pharmacistNotes: Generated<string | null>;
+  line_account_id: Generated<number>;
+  medications_prescribed: Generated<string | null>;
+  pharmacist_notes: Generated<string | null>;
   symptoms: Generated<string | null>;
-  triageSessionId: Generated<number | null>;
-  userId: number;
+  triage_session_id: Generated<number | null>;
+  user_id: number;
 }
 
 export interface MedicationRefillTracking {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * à¸ˆà¸³à¸™à¸§à¸™à¸—à¸µà¹ˆà¸—à¸²à¸™à¸•à¹ˆà¸­à¸§à¸±à¸™ (à¸£à¸§à¸¡à¸—à¸¸à¸à¸¡à¸·à¹‰à¸­)
    */
-  dailyDosage: Generated<number | null>;
-  estimatedEndDate: Generated<Date | null>;
+  daily_dosage: Generated<number | null>;
+  estimated_end_date: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: Generated<string | null>;
-  orderId: Generated<number | null>;
-  productId: number;
-  productName: Generated<string | null>;
-  purchaseDate: Generated<Date | null>;
-  quantityPurchased: Generated<number | null>;
-  reminderSentAt: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: Generated<string | null>;
+  order_id: Generated<number | null>;
+  product_id: number;
+  product_name: Generated<string | null>;
+  purchase_date: Generated<Date | null>;
+  quantity_purchased: Generated<number | null>;
+  reminder_sent_at: Generated<Date | null>;
   /**
    * dispense | order | manual
    */
   source: Generated<string | null>;
-  sourceRefId: Generated<number | null>;
-  userId: number;
+  source_ref_id: Generated<number | null>;
+  user_id: number;
 }
 
 export interface MedicationReminders {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   dosage: Generated<string | null>;
-  endDate: Generated<Date | null>;
+  end_date: Generated<Date | null>;
   frequency: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: Generated<string | null>;
-  medicationName: string;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: Generated<string | null>;
+  medication_name: string;
   notes: Generated<string | null>;
-  orderId: Generated<number | null>;
-  productId: Generated<number | null>;
-  reminderTimes: Generated<string | null>;
-  startDate: Generated<Date | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  order_id: Generated<number | null>;
+  product_id: Generated<number | null>;
+  reminder_times: Generated<string | null>;
+  start_date: Generated<Date | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface MedicationTakenHistory {
@@ -2267,188 +2267,188 @@ export interface MedicationTakenHistory {
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   notes: Generated<string | null>;
-  reminderId: number;
-  scheduledTime: Generated<string | null>;
+  reminder_id: number;
+  scheduled_time: Generated<string | null>;
   status: Generated<"missed" | "skipped" | "taken" | null>;
-  takenAt: Generated<Date>;
-  userId: number;
+  taken_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface MemberNotificationPreferences {
-  appointmentReminders: Generated<number>;
-  createdAt: Generated<Date | null>;
+  appointment_reminders: Generated<number>;
+  created_at: Generated<Date | null>;
   enabled: Generated<number>;
-  healthTips: Generated<number>;
+  health_tips: Generated<number>;
   id: Generated<number>;
-  lineAccountId: number;
-  lineUserId: string;
-  medReminders: Generated<number>;
-  orderUpdates: Generated<number>;
-  priceAlerts: Generated<number>;
+  line_account_id: number;
+  line_user_id: string;
+  med_reminders: Generated<number>;
+  order_updates: Generated<number>;
+  price_alerts: Generated<number>;
   promotions: Generated<number>;
-  restockAlerts: Generated<number>;
-  updatedAt: Generated<Date | null>;
+  restock_alerts: Generated<number>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface MemberTiers {
   benefits: Generated<string | null>;
   color: Generated<string | null>;
-  createdAt: Generated<Date | null>;
-  discountPercent: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
+  discount_percent: Generated<Decimal | null>;
   icon: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  minPoints: Generated<number>;
-  sortOrder: Generated<number | null>;
-  tierCode: string;
-  tierName: string;
-  updatedAt: Generated<Date | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  min_points: Generated<number>;
+  sort_order: Generated<number | null>;
+  tier_code: string;
+  tier_name: string;
+  updated_at: Generated<Date | null>;
 }
 
 export interface MessageAnalytics {
-  adminId: Generated<number | null>;
-  createdAt: Generated<Date | null>;
+  admin_id: Generated<number | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  messageId: number;
+  line_account_id: Generated<number>;
+  message_id: number;
   /**
    * Time to respond in seconds
    */
-  responseTimeSeconds: Generated<number | null>;
-  userId: number;
+  response_time_seconds: Generated<number | null>;
+  user_id: number;
 }
 
 export interface Messages {
-  accountId: Generated<number | null>;
+  account_id: Generated<number | null>;
   content: Generated<string | null>;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   direction: "incoming" | "outgoing";
   id: Generated<number>;
-  isRead: Generated<number | null>;
-  isReadOnLine: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  markAsReadToken: Generated<string | null>;
-  mediaUrl: Generated<string | null>;
-  messageType: Generated<string | null>;
+  is_read: Generated<number | null>;
+  is_read_on_line: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  mark_as_read_token: Generated<string | null>;
+  media_url: Generated<string | null>;
+  message_type: Generated<string | null>;
   metadata: Generated<string | null>;
   platform: Generated<string>;
-  replyToId: Generated<number | null>;
-  replyToken: Generated<string | null>;
-  sentBy: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
-  userId: Generated<number | null>;
+  reply_to_id: Generated<number | null>;
+  reply_token: Generated<string | null>;
+  sent_by: Generated<string | null>;
+  updated_at: Generated<Date | null>;
+  user_id: Generated<number | null>;
 }
 
 export interface MimsConversationState {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  stateData: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  line_account_id: Generated<number>;
+  state_data: Generated<string | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface MiniappBanners {
-  bgColor: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  bg_color: Generated<string | null>;
+  created_at: Generated<Date | null>;
   description: Generated<string | null>;
-  displayOrder: Generated<number | null>;
-  endDate: Generated<Date | null>;
+  display_order: Generated<number | null>;
+  end_date: Generated<Date | null>;
   id: Generated<number>;
-  imageMobileUrl: Generated<string | null>;
-  imageUrl: string;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  linkLabel: Generated<string | null>;
-  linkType: Generated<"deep_link" | "liff" | "line_chat" | "miniapp" | "none" | "url" | null>;
-  linkValue: Generated<string | null>;
+  image_mobile_url: Generated<string | null>;
+  image_url: string;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  link_label: Generated<string | null>;
+  link_type: Generated<"deep_link" | "liff" | "line_chat" | "miniapp" | "none" | "url" | null>;
+  link_value: Generated<string | null>;
   position: Generated<"home_bottom" | "home_middle" | "home_top" | null>;
-  startDate: Generated<Date | null>;
+  start_date: Generated<Date | null>;
   subtitle: Generated<string | null>;
   surface: Generated<"home" | "shop" | null>;
   title: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface MiniappHomeProducts {
   badges: Generated<string | null>;
-  createdAt: Generated<Date | null>;
-  customLabel: Generated<string | null>;
-  deliveryOptions: Generated<string | null>;
-  discountPercent: Generated<Decimal | null>;
-  displayOrder: Generated<number | null>;
-  endDate: Generated<Date | null>;
+  created_at: Generated<Date | null>;
+  custom_label: Generated<string | null>;
+  delivery_options: Generated<string | null>;
+  discount_percent: Generated<Decimal | null>;
+  display_order: Generated<number | null>;
+  end_date: Generated<Date | null>;
   id: Generated<number>;
-  imageGallery: Generated<string | null>;
-  imageUrl: string;
-  isActive: Generated<number | null>;
-  limitQty: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  linkType: Generated<"deep_link" | "liff" | "line_chat" | "miniapp" | "none" | "url" | null>;
-  linkValue: Generated<string | null>;
-  originalPrice: Generated<Decimal | null>;
-  priceUnit: Generated<string | null>;
-  promotionLabel: Generated<string | null>;
-  promotionTags: Generated<string | null>;
-  salePrice: Generated<Decimal | null>;
-  sectionId: number;
-  shortDescription: Generated<string | null>;
-  showStockBadge: Generated<number | null>;
-  startDate: Generated<Date | null>;
-  stockQty: Generated<number | null>;
+  image_gallery: Generated<string | null>;
+  image_url: string;
+  is_active: Generated<number | null>;
+  limit_qty: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  link_type: Generated<"deep_link" | "liff" | "line_chat" | "miniapp" | "none" | "url" | null>;
+  link_value: Generated<string | null>;
+  original_price: Generated<Decimal | null>;
+  price_unit: Generated<string | null>;
+  promotion_label: Generated<string | null>;
+  promotion_tags: Generated<string | null>;
+  sale_price: Generated<Decimal | null>;
+  section_id: number;
+  short_description: Generated<string | null>;
+  show_stock_badge: Generated<number | null>;
+  start_date: Generated<Date | null>;
+  stock_qty: Generated<number | null>;
   title: string;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface MiniappHomeSections {
-  bgColor: Generated<string | null>;
-  countdownEndsAt: Generated<Date | null>;
-  createdAt: Generated<Date | null>;
-  displayOrder: Generated<number | null>;
-  endDate: Generated<Date | null>;
-  iconUrl: Generated<string | null>;
+  bg_color: Generated<string | null>;
+  countdown_ends_at: Generated<Date | null>;
+  created_at: Generated<Date | null>;
+  display_order: Generated<number | null>;
+  end_date: Generated<Date | null>;
+  icon_url: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  sectionKey: string;
-  sectionStyle: Generated<"banner_list" | "flash_sale" | "grid" | "horizontal_scroll" | null>;
-  startDate: Generated<Date | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  section_key: string;
+  section_style: Generated<"banner_list" | "flash_sale" | "grid" | "horizontal_scroll" | null>;
+  start_date: Generated<Date | null>;
   subtitle: Generated<string | null>;
   surface: Generated<"home" | "shop" | null>;
-  textColor: Generated<string | null>;
+  text_color: Generated<string | null>;
   title: string;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface NotificationSettings {
-  createdAt: Generated<Date>;
-  emailAddresses: Generated<string | null>;
-  emailEnabled: Generated<number | null>;
-  emailNotifyDailyReport: Generated<number | null>;
-  emailNotifyLowStock: Generated<number | null>;
-  emailNotifyUrgent: Generated<number | null>;
+  created_at: Generated<Date>;
+  email_addresses: Generated<string | null>;
+  email_enabled: Generated<number | null>;
+  email_notify_daily_report: Generated<number | null>;
+  email_notify_low_stock: Generated<number | null>;
+  email_notify_urgent: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number>;
-  lineNotifyAppointment: Generated<number | null>;
-  lineNotifyEnabled: Generated<number | null>;
-  lineNotifyLowStock: Generated<number | null>;
-  lineNotifyNewOrder: Generated<number | null>;
-  lineNotifyPayment: Generated<number | null>;
-  lineNotifyUrgent: Generated<number | null>;
-  notifyAdminUsers: Generated<string | null>;
-  odooLiffNotifyEnabled: Generated<number | null>;
-  odooLiffNotifyEvents: Generated<string | null>;
-  telegramEnabled: Generated<number | null>;
-  updatedAt: Generated<Date>;
+  line_account_id: Generated<number>;
+  line_notify_appointment: Generated<number | null>;
+  line_notify_enabled: Generated<number | null>;
+  line_notify_low_stock: Generated<number | null>;
+  line_notify_new_order: Generated<number | null>;
+  line_notify_payment: Generated<number | null>;
+  line_notify_urgent: Generated<number | null>;
+  notify_admin_users: Generated<string | null>;
+  odoo_liff_notify_enabled: Generated<number | null>;
+  odoo_liff_notify_events: Generated<string | null>;
+  telegram_enabled: Generated<number | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface OdooActivityLog {
@@ -2459,7 +2459,7 @@ export interface OdooActivityLog {
   /**
    * When action occurred
    */
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * Additional action details
    */
@@ -2467,39 +2467,39 @@ export interface OdooActivityLog {
   /**
    * Entity identifier
    */
-  entityId: Generated<string | null>;
+  entity_id: Generated<string | null>;
   /**
    * Type of entity (order, customer, webhook)
    */
-  entityType: Generated<string | null>;
+  entity_type: Generated<string | null>;
   id: Generated<number>;
   /**
    * User IP address
    */
-  ipAddress: Generated<string | null>;
+  ip_address: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * User browser/client
    */
-  userAgent: Generated<string | null>;
+  user_agent: Generated<string | null>;
   /**
    * User who performed the action
    */
-  userId: Generated<number | null>;
+  user_id: Generated<number | null>;
 }
 
 export interface OdooApiLogs {
   /**
    * When API call was made
    */
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * Request duration in milliseconds
    */
-  durationMs: Generated<number | null>;
+  duration_ms: Generated<number | null>;
   /**
    * API endpoint called
    */
@@ -2507,12 +2507,12 @@ export interface OdooApiLogs {
   /**
    * Error message if failed
    */
-  errorMessage: Generated<string | null>;
+  error_message: Generated<string | null>;
   id: Generated<number>;
   /**
    * Reference to line_accounts table
    */
-  lineAccountId: number;
+  line_account_id: number;
   /**
    * HTTP method
    */
@@ -2520,339 +2520,339 @@ export interface OdooApiLogs {
   /**
    * Request parameters
    */
-  requestParams: Generated<string | null>;
+  request_params: Generated<string | null>;
   /**
    * Response data
    */
-  responseData: Generated<string | null>;
+  response_data: Generated<string | null>;
   /**
    * HTTP status code
    */
-  statusCode: Generated<number | null>;
+  status_code: Generated<number | null>;
 }
 
 export interface OdooBdoContext {
   amount: Generated<Decimal | null>;
-  bdoId: number;
-  bdoName: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  bdo_id: number;
+  bdo_name: Generated<string | null>;
+  created_at: Generated<Date | null>;
   /**
    * company or private
    */
-  deliveryType: Generated<string | null>;
+  delivery_type: Generated<string | null>;
   /**
    * Full financial breakdown JSON from bdo.confirmed
    */
-  financialSummaryJson: Generated<string | null>;
+  financial_summary_json: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: string;
+  line_account_id: Generated<number>;
+  line_user_id: string;
   /**
    * PromptPay QR raw payload
    */
-  qrPayload: Generated<string | null>;
+  qr_payload: Generated<string | null>;
   /**
    * selected_credit_notes array from financial_summary
    */
-  selectedCreditNotesJson: Generated<string | null>;
+  selected_credit_notes_json: Generated<string | null>;
   /**
    * selected_invoices array from financial_summary
    */
-  selectedInvoicesJson: Generated<string | null>;
+  selected_invoices_json: Generated<string | null>;
   state: Generated<string | null>;
-  statementPdfPath: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  statement_pdf_path: Generated<string | null>;
+  updated_at: Generated<Date | null>;
   /**
    * delivery_id of bdo.confirmed webhook
    */
-  webhookDeliveryId: Generated<string | null>;
+  webhook_delivery_id: Generated<string | null>;
 }
 
 export interface OdooBdoOrders {
   /**
    * BDO total amount
    */
-  amountTotal: Generated<Decimal | null>;
+  amount_total: Generated<Decimal | null>;
   /**
    * Odoo BDO ID
    */
-  bdoId: number;
+  bdo_id: number;
   /**
    * BDO number e.g. BDO2603-00439
    */
-  bdoName: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  bdo_name: Generated<string | null>;
+  created_at: Generated<Date | null>;
   /**
    * Customer display name
    */
-  customerName: Generated<string | null>;
+  customer_name: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * LINE user ID
    */
-  lineUserId: Generated<string | null>;
+  line_user_id: Generated<string | null>;
   /**
    * Odoo Sale Order ID
    */
-  orderId: number;
+  order_id: number;
   /**
    * SO number e.g. SO2603-06523
    */
-  orderName: Generated<string | null>;
+  order_name: Generated<string | null>;
   /**
    * Odoo partner ID
    */
-  partnerId: Generated<number | null>;
+  partner_id: Generated<number | null>;
   /**
    * promptpay / bank_transfer
    */
-  paymentMethod: Generated<string | null>;
+  payment_method: Generated<string | null>;
   /**
    * ref for slip matching (= bdo_name)
    */
-  paymentReference: Generated<string | null>;
+  payment_reference: Generated<string | null>;
   /**
    * Payment workflow status
    */
-  paymentStatus: Generated<"matched" | "paid" | "pending" | "slip_uploaded" | null>;
+  payment_status: Generated<"matched" | "paid" | "pending" | "slip_uploaded" | null>;
   /**
    * FK to odoo_slip_uploads.id
    */
-  slipUploadId: Generated<number | null>;
-  updatedAt: Generated<Date | null>;
+  slip_upload_id: Generated<number | null>;
+  updated_at: Generated<Date | null>;
   /**
    * delivery_id of source webhook
    */
-  webhookDeliveryId: Generated<string | null>;
+  webhook_delivery_id: Generated<string | null>;
 }
 
 export interface OdooBdos {
-  amountNetToPay: Generated<Decimal | null>;
-  amountTotal: Generated<Decimal | null>;
-  bdoDate: Generated<Date | null>;
-  bdoId: number;
-  bdoName: string;
-  createdAt: Generated<Date | null>;
+  amount_net_to_pay: Generated<Decimal | null>;
+  amount_total: Generated<Decimal | null>;
+  bdo_date: Generated<Date | null>;
+  bdo_id: number;
+  bdo_name: string;
+  created_at: Generated<Date | null>;
   currency: Generated<string | null>;
-  customerRef: Generated<string | null>;
-  dueDate: Generated<Date | null>;
-  expectedDelivery: Generated<Date | null>;
+  customer_ref: Generated<string | null>;
+  due_date: Generated<Date | null>;
+  expected_delivery: Generated<Date | null>;
   id: Generated<number>;
-  latestEvent: Generated<string | null>;
+  latest_event: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  orderId: Generated<number | null>;
-  orderName: Generated<string | null>;
-  partnerId: Generated<number | null>;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  order_id: Generated<number | null>;
+  order_name: Generated<string | null>;
+  partner_id: Generated<number | null>;
   /**
    * promptpay / bank_transfer
    */
-  paymentMethod: Generated<string | null>;
+  payment_method: Generated<string | null>;
   /**
    * ref for slip matching (= bdo_name)
    */
-  paymentReference: Generated<string | null>;
-  paymentState: Generated<string | null>;
+  payment_reference: Generated<string | null>;
+  payment_state: Generated<string | null>;
   /**
    * Payment workflow status
    */
-  paymentStatus: Generated<"matched" | "paid" | "pending" | "slip_uploaded" | null>;
+  payment_status: Generated<"matched" | "paid" | "pending" | "slip_uploaded" | null>;
   /**
    * PromptPay QR raw payload
    */
-  qrData: Generated<string | null>;
-  salespersonId: Generated<number | null>;
-  salespersonName: Generated<string | null>;
+  qr_data: Generated<string | null>;
+  salesperson_id: Generated<number | null>;
+  salesperson_name: Generated<string | null>;
   state: Generated<string | null>;
-  syncedAt: Generated<Date | null>;
-  updatedAt: Generated<Date | null>;
-  webhookId: Generated<number | null>;
+  synced_at: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
+  webhook_id: Generated<number | null>;
 }
 
 export interface OdooCircuitBreakerState {
-  consecutiveFailures: Generated<number>;
-  halfOpenAttempts: Generated<number>;
-  lastError: Generated<string | null>;
-  lastFailureAt: Generated<number | null>;
-  lastSuccessAt: Generated<number | null>;
+  consecutive_failures: Generated<number>;
+  half_open_attempts: Generated<number>;
+  last_error: Generated<string | null>;
+  last_failure_at: Generated<number | null>;
+  last_success_at: Generated<number | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * unix timestamp ที่ circuit เปิด
    */
-  openedAt: Generated<number | null>;
-  serviceName: string;
+  opened_at: Generated<number | null>;
+  service_name: string;
   status: Generated<"closed" | "half_open" | "open">;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface OdooCustomerProductStats {
-  amount30d: Generated<Decimal>;
-  amount90d: Generated<Decimal>;
+  amount_30d: Generated<Decimal>;
+  amount_90d: Generated<Decimal>;
   id: Generated<number>;
-  lastPurchasedAt: Generated<Date | null>;
+  last_purchased_at: Generated<Date | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: string;
-  odooPartnerId: Generated<number | null>;
-  productCode: Generated<string | null>;
-  productId: Generated<number | null>;
-  productName: string;
-  qty30d: Generated<Decimal>;
-  qty90d: Generated<Decimal>;
-  updatedAt: Generated<Date>;
+  line_account_id: Generated<number>;
+  line_user_id: string;
+  odoo_partner_id: Generated<number | null>;
+  product_code: Generated<string | null>;
+  product_id: Generated<number | null>;
+  product_name: string;
+  qty_30d: Generated<Decimal>;
+  qty_90d: Generated<Decimal>;
+  updated_at: Generated<Date>;
 }
 
 export interface OdooCustomerProjection {
-  creditLimit: Generated<Decimal | null>;
-  creditRemaining: Generated<Decimal | null>;
-  creditUsed: Generated<Decimal | null>;
-  customerName: Generated<string | null>;
-  customerRef: Generated<string | null>;
+  credit_limit: Generated<Decimal | null>;
+  credit_remaining: Generated<Decimal | null>;
+  credit_used: Generated<Decimal | null>;
+  customer_name: Generated<string | null>;
+  customer_ref: Generated<string | null>;
   id: Generated<number>;
-  latestOrderAt: Generated<Date | null>;
-  latestOrderId: Generated<number | null>;
-  latestOrderName: Generated<string | null>;
+  latest_order_at: Generated<Date | null>;
+  latest_order_id: Generated<number | null>;
+  latest_order_name: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: string;
-  odooPartnerId: Generated<number | null>;
-  ordersCount30d: Generated<number>;
-  ordersCount90d: Generated<number>;
-  overdueAmount: Generated<Decimal | null>;
-  spend30d: Generated<Decimal>;
-  spend90d: Generated<Decimal>;
-  totalDue: Generated<Decimal | null>;
-  updatedAt: Generated<Date>;
+  line_account_id: Generated<number>;
+  line_user_id: string;
+  odoo_partner_id: Generated<number | null>;
+  orders_count_30d: Generated<number>;
+  orders_count_90d: Generated<number>;
+  overdue_amount: Generated<Decimal | null>;
+  spend_30d: Generated<Decimal>;
+  spend_90d: Generated<Decimal>;
+  total_due: Generated<Decimal | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface OdooCustomersCache {
   city: Generated<string | null>;
   country: Generated<string | null>;
-  createdAt: Generated<Date | null>;
-  creditLimit: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
+  credit_limit: Generated<Decimal | null>;
   /**
    * Odoo customer ID
    */
-  customerId: Generated<string | null>;
-  customerName: string;
+  customer_id: Generated<string | null>;
+  customer_name: string;
   /**
    * Customer code/reference
    */
-  customerRef: Generated<string | null>;
+  customer_ref: Generated<string | null>;
   email: Generated<string | null>;
-  firstOrderAt: Generated<Date | null>;
+  first_order_at: Generated<Date | null>;
   id: Generated<number>;
-  lastInvoiceAt: Generated<Date | null>;
-  lastPaymentAt: Generated<Date | null>;
-  latestOrderAt: Generated<Date | null>;
-  lineAccountId: Generated<number | null>;
-  lineDisplayName: Generated<string | null>;
-  lineUserId: Generated<string | null>;
-  ordersCount30d: Generated<number | null>;
-  ordersCountTotal: Generated<number | null>;
-  overdueAmount: Generated<Decimal | null>;
+  last_invoice_at: Generated<Date | null>;
+  last_payment_at: Generated<Date | null>;
+  latest_order_at: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
+  line_display_name: Generated<string | null>;
+  line_user_id: Generated<string | null>;
+  orders_count_30d: Generated<number | null>;
+  orders_count_total: Generated<number | null>;
+  overdue_amount: Generated<Decimal | null>;
   /**
    * Odoo partner ID
    */
-  partnerId: Generated<string | null>;
+  partner_id: Generated<string | null>;
   phone: Generated<string | null>;
-  salespersonId: Generated<string | null>;
-  salespersonName: Generated<string | null>;
-  spend30d: Generated<Decimal | null>;
-  spendTotal: Generated<Decimal | null>;
+  salesperson_id: Generated<string | null>;
+  salesperson_name: Generated<string | null>;
+  spend_30d: Generated<Decimal | null>;
+  spend_total: Generated<Decimal | null>;
   state: Generated<string | null>;
   street: Generated<string | null>;
-  syncedAt: Generated<Date | null>;
-  totalDue: Generated<Decimal | null>;
-  trustLevel: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  synced_at: Generated<Date | null>;
+  total_due: Generated<Decimal | null>;
+  trust_level: Generated<string | null>;
+  updated_at: Generated<Date | null>;
   zip: Generated<string | null>;
 }
 
 export interface OdooDailySummary {
-  bankTransferAmount: Generated<Decimal | null>;
-  cashAmount: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
-  creditCardAmount: Generated<Decimal | null>;
+  bank_transfer_amount: Generated<Decimal | null>;
+  cash_amount: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
+  credit_card_amount: Generated<Decimal | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  promptpayAmount: Generated<Decimal | null>;
-  summaryDate: Date;
-  totalInvoiceAmount: Generated<Decimal | null>;
-  totalInvoices: Generated<number | null>;
-  totalOrderAmount: Generated<Decimal | null>;
-  totalOrders: Generated<number | null>;
-  totalOutstanding: Generated<Decimal | null>;
-  totalPaymentAmount: Generated<Decimal | null>;
-  totalPayments: Generated<number | null>;
-  updatedAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  promptpay_amount: Generated<Decimal | null>;
+  summary_date: Date;
+  total_invoice_amount: Generated<Decimal | null>;
+  total_invoices: Generated<number | null>;
+  total_order_amount: Generated<Decimal | null>;
+  total_orders: Generated<number | null>;
+  total_outstanding: Generated<Decimal | null>;
+  total_payment_amount: Generated<Decimal | null>;
+  total_payments: Generated<number | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface OdooDailySummaryAutoLog {
-  createdAt: Generated<Date | null>;
-  errorMessage: Generated<string | null>;
+  created_at: Generated<Date | null>;
+  error_message: Generated<string | null>;
   /**
    * Date this auto-send was executed
    */
-  executionDate: Date;
+  execution_date: Date;
   /**
    * Execution time in milliseconds
    */
-  executionDurationMs: Generated<number | null>;
+  execution_duration_ms: Generated<number | null>;
   /**
    * Actual execution timestamp
    */
-  executionTime: Date;
+  execution_time: Date;
   /**
    * Failed to send
    */
-  failedCount: Generated<number | null>;
+  failed_count: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * Configured scheduled time
    */
-  scheduledTime: string;
+  scheduled_time: string;
   /**
    * Successfully sent
    */
-  sentCount: Generated<number | null>;
+  sent_count: Generated<number | null>;
   /**
    * Skipped (already sent today)
    */
-  skippedCount: Generated<number | null>;
+  skipped_count: Generated<number | null>;
   status: Generated<"failed" | "partial" | "success" | null>;
   /**
    * Total users eligible
    */
-  totalRecipients: Generated<number | null>;
+  total_recipients: Generated<number | null>;
 }
 
 export interface OdooDailySummarySettings {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * Whether this setting is active
    */
@@ -2861,123 +2861,123 @@ export interface OdooDailySummarySettings {
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * Setting identifier
    */
-  settingKey: string;
+  setting_key: string;
   /**
    * Setting value (JSON or plain text)
    */
-  settingValue: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  setting_value: Generated<string | null>;
+  updated_at: Generated<Date | null>;
   /**
    * Admin user who last updated
    */
-  updatedBy: Generated<string | null>;
+  updated_by: Generated<string | null>;
 }
 
 export interface OdooDashboardCacheMeta {
   /**
    * e.g., overview_kpi, customer_list
    */
-  cacheKey: string;
+  cache_key: string;
   /**
    * kpi/list/chart/summary
    */
-  cacheType: string;
-  createdAt: Generated<Date | null>;
+  cache_type: string;
+  created_at: Generated<Date | null>;
   /**
    * SHA-256 for change detection
    */
-  dataChecksum: Generated<string | null>;
+  data_checksum: Generated<string | null>;
   id: Generated<number>;
   /**
    * 1 = needs refresh
    */
-  isDirty: Generated<number | null>;
-  lastSyncedAt: Generated<Date | null>;
+  is_dirty: Generated<number | null>;
+  last_synced_at: Generated<Date | null>;
   /**
    * Last webhook that triggered update
    */
-  lastWebhookAt: Generated<Date | null>;
+  last_webhook_at: Generated<Date | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  recordCount: Generated<number | null>;
-  syncDurationMs: Generated<number | null>;
-  updatedAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  record_count: Generated<number | null>;
+  sync_duration_ms: Generated<number | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface OdooInvoices {
-  amountResidual: Generated<Decimal | null>;
-  amountTax: Generated<Decimal | null>;
-  amountTotal: Generated<Decimal | null>;
-  amountUntaxed: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
+  amount_residual: Generated<Decimal | null>;
+  amount_tax: Generated<Decimal | null>;
+  amount_total: Generated<Decimal | null>;
+  amount_untaxed: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
   currency: Generated<string | null>;
-  customerRef: Generated<string | null>;
-  dueDate: Generated<Date | null>;
+  customer_ref: Generated<string | null>;
+  due_date: Generated<Date | null>;
   id: Generated<number>;
-  invoiceDate: Generated<Date | null>;
-  invoiceId: number;
-  invoiceNumber: string;
-  invoiceState: Generated<string | null>;
-  isOverdue: Generated<number | null>;
-  isPaid: Generated<number | null>;
-  latestEvent: Generated<string | null>;
+  invoice_date: Generated<Date | null>;
+  invoice_id: number;
+  invoice_number: string;
+  invoice_state: Generated<string | null>;
+  is_overdue: Generated<number | null>;
+  is_paid: Generated<number | null>;
+  latest_event: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  orderId: Generated<number | null>;
-  orderName: Generated<string | null>;
-  partnerId: Generated<number | null>;
-  paymentDate: Generated<Date | null>;
-  paymentMethod: Generated<string | null>;
-  paymentState: Generated<string | null>;
-  paymentTerm: Generated<string | null>;
-  pdfUrl: Generated<string | null>;
-  salespersonId: Generated<number | null>;
-  salespersonName: Generated<string | null>;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  order_id: Generated<number | null>;
+  order_name: Generated<string | null>;
+  partner_id: Generated<number | null>;
+  payment_date: Generated<Date | null>;
+  payment_method: Generated<string | null>;
+  payment_state: Generated<string | null>;
+  payment_term: Generated<string | null>;
+  pdf_url: Generated<string | null>;
+  salesperson_id: Generated<number | null>;
+  salesperson_name: Generated<string | null>;
   state: Generated<string | null>;
-  syncedAt: Generated<Date | null>;
-  updatedAt: Generated<Date | null>;
-  webhookId: Generated<number | null>;
+  synced_at: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
+  webhook_id: Generated<number | null>;
 }
 
 export interface OdooInvoicesCache {
-  amountPaid: Generated<Decimal | null>;
-  amountResidual: Generated<Decimal | null>;
-  amountTotal: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
-  customerId: Generated<string | null>;
-  customerName: Generated<string | null>;
-  daysOverdue: Generated<number | null>;
-  dueDate: Generated<Date | null>;
+  amount_paid: Generated<Decimal | null>;
+  amount_residual: Generated<Decimal | null>;
+  amount_total: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
+  customer_id: Generated<string | null>;
+  customer_name: Generated<string | null>;
+  days_overdue: Generated<number | null>;
+  due_date: Generated<Date | null>;
   id: Generated<number>;
-  invoiceDate: Generated<Date | null>;
+  invoice_date: Generated<Date | null>;
   /**
    * Odoo invoice ID
    */
-  invoiceId: Generated<string | null>;
-  invoiceNumber: string;
-  isOverdue: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: Generated<string | null>;
-  notifiedAt: Generated<Date | null>;
-  orderId: Generated<string | null>;
-  orderKey: Generated<string | null>;
-  partnerId: Generated<string | null>;
-  paymentState: Generated<string | null>;
+  invoice_id: Generated<string | null>;
+  invoice_number: string;
+  is_overdue: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: Generated<string | null>;
+  notified_at: Generated<Date | null>;
+  order_id: Generated<string | null>;
+  order_key: Generated<string | null>;
+  partner_id: Generated<string | null>;
+  payment_state: Generated<string | null>;
   /**
    * draft/open/posted/paid/overdue
    */
   state: Generated<string | null>;
-  syncedAt: Generated<Date | null>;
-  updatedAt: Generated<Date | null>;
+  synced_at: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface OdooLineUsers {
@@ -2985,56 +2985,56 @@ export interface OdooLineUsers {
   /**
    * Reference to line_accounts table
    */
-  lineAccountId: number;
+  line_account_id: number;
   /**
    * Enable/disable LINE notifications
    */
-  lineNotificationEnabled: Generated<number | null>;
+  line_notification_enabled: Generated<number | null>;
   /**
    * LINE user ID (U...)
    */
-  lineUserId: string;
+  line_user_id: string;
   /**
    * When account was linked
    */
-  linkedAt: Generated<Date | null>;
+  linked_at: Generated<Date | null>;
   /**
    * Method used to link account
    */
-  linkedVia: "customer_code" | "email" | "phone";
+  linked_via: "customer_code" | "email" | "phone";
   /**
    * Customer code from Odoo
    */
-  odooCustomerCode: Generated<string | null>;
-  odooEmail: Generated<string | null>;
+  odoo_customer_code: Generated<string | null>;
+  odoo_email: Generated<string | null>;
   /**
    * Odoo partner ID
    */
-  odooPartnerId: number;
+  odoo_partner_id: number;
   /**
    * Partner name from Odoo
    */
-  odooPartnerName: Generated<string | null>;
-  odooPhone: Generated<string | null>;
+  odoo_partner_name: Generated<string | null>;
+  odoo_phone: Generated<string | null>;
   /**
    * Last update timestamp
    */
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface OdooManualOverrides {
-  adminName: string;
-  createdAt: Generated<Date | null>;
-  entityRef: string;
-  entityType: "invoice" | "order";
+  admin_name: string;
+  created_at: Generated<Date | null>;
+  entity_ref: string;
+  entity_type: "invoice" | "order";
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  newStatus: string;
-  oldStatus: Generated<string | null>;
-  partnerId: Generated<number | null>;
+  line_account_id: Generated<number>;
+  new_status: string;
+  old_status: Generated<string | null>;
+  partner_id: Generated<number | null>;
   reason: string;
 }
 
@@ -3042,126 +3042,126 @@ export interface OdooNotificationBatchGroups {
   /**
    * Unique batch group ID
    */
-  batchGroupId: string;
-  createdAt: Generated<Date | null>;
+  batch_group_id: string;
+  created_at: Generated<Date | null>;
   /**
    * Number of events collected
    */
-  eventCount: Generated<number | null>;
+  event_count: Generated<number | null>;
   /**
    * Full event data for all events
    */
-  eventData: Generated<string | null>;
+  event_data: Generated<string | null>;
   /**
    * Array of event types in this batch
    */
-  eventTypes: string;
+  event_types: string;
   /**
    * First event timestamp
    */
-  firstEventAt: Date;
+  first_event_at: Date;
   id: Generated<number>;
   /**
    * Last event timestamp
    */
-  lastEventAt: Date;
+  last_event_at: Date;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * LINE user ID
    */
-  lineUserId: string;
+  line_user_id: string;
   /**
    * Milestone event that triggered send
    */
-  milestoneEvent: Generated<string | null>;
+  milestone_event: Generated<string | null>;
   /**
    * Has milestone been reached
    */
-  milestoneReached: Generated<number | null>;
+  milestone_reached: Generated<number | null>;
   /**
    * Odoo order ID
    */
-  orderId: number;
+  order_id: number;
   /**
    * Order reference
    */
-  orderRef: Generated<string | null>;
+  order_ref: Generated<string | null>;
   /**
    * When roadmap was sent
    */
-  sentAt: Generated<Date | null>;
+  sent_at: Generated<Date | null>;
   /**
    * Batch status
    */
   status: Generated<"collecting" | "expired" | "ready" | "sent" | null>;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
   /**
    * When batch window expires
    */
-  windowExpiresAt: Date;
+  window_expires_at: Date;
 }
 
 export interface OdooNotificationLog {
   /**
    * Webhook delivery ID
    */
-  deliveryId: string;
+  delivery_id: string;
   /**
    * Error message if failed
    */
-  errorMessage: Generated<string | null>;
+  error_message: Generated<string | null>;
   /**
    * Event type
    */
-  eventType: string;
+  event_type: string;
   id: Generated<number>;
   /**
    * Processing latency in milliseconds
    */
-  latencyMs: Generated<number | null>;
+  latency_ms: Generated<number | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * LINE API response
    */
-  lineApiResponse: Generated<string | null>;
+  line_api_response: Generated<string | null>;
   /**
    * LINE API HTTP status code
    */
-  lineApiStatus: Generated<number | null>;
+  line_api_status: Generated<number | null>;
   /**
    * LINE user ID
    */
-  lineUserId: string;
+  line_user_id: string;
   /**
    * Message preview/summary
    */
-  messagePreview: Generated<string | null>;
+  message_preview: Generated<string | null>;
   /**
    * Notification format
    */
-  notificationMethod: "flex" | "roadmap" | "text";
+  notification_method: "flex" | "roadmap" | "text";
   /**
    * Reference to notification_queue.id
    */
-  queueId: Generated<number | null>;
+  queue_id: Generated<number | null>;
   /**
    * Recipient type
    */
-  recipientType: "customer" | "salesperson";
+  recipient_type: "customer" | "salesperson";
   /**
    * When notification was sent/attempted
    */
-  sentAt: Generated<Date | null>;
+  sent_at: Generated<Date | null>;
   /**
    * Reason if skipped
    */
-  skipReason: Generated<string | null>;
+  skip_reason: Generated<string | null>;
   /**
    * Send status
    */
@@ -3172,16 +3172,16 @@ export interface OdooNotificationPreferences {
   /**
    * Enable batching for this event
    */
-  batchEnabled: Generated<number | null>;
+  batch_enabled: Generated<number | null>;
   /**
    * Events that trigger batch send (JSON array)
    */
-  batchMilestoneEvents: Generated<string | null>;
+  batch_milestone_events: Generated<string | null>;
   /**
    * Batch collection window in seconds
    */
-  batchWindowSeconds: Generated<number | null>;
-  createdAt: Generated<Date | null>;
+  batch_window_seconds: Generated<number | null>;
+  created_at: Generated<Date | null>;
   /**
    * Enable/disable notification for this event
    */
@@ -3189,20 +3189,20 @@ export interface OdooNotificationPreferences {
   /**
    * Event type (e.g., order.validated)
    */
-  eventType: string;
+  event_type: string;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * LINE user ID
    */
-  lineUserId: string;
+  line_user_id: string;
   /**
    * Notification format
    */
-  notificationMethod: Generated<"flex" | "none" | "text" | null>;
+  notification_method: Generated<"flex" | "none" | "text" | null>;
   /**
    * Notification priority
    */
@@ -3210,89 +3210,89 @@ export interface OdooNotificationPreferences {
   /**
    * Action during quiet hours
    */
-  quietHoursAction: Generated<"queue" | "silent" | "skip" | null>;
+  quiet_hours_action: Generated<"queue" | "silent" | "skip" | null>;
   /**
    * Enable quiet hours
    */
-  quietHoursEnabled: Generated<number | null>;
+  quiet_hours_enabled: Generated<number | null>;
   /**
    * Quiet hours end time
    */
-  quietHoursEnd: Generated<string | null>;
+  quiet_hours_end: Generated<string | null>;
   /**
    * Quiet hours start time
    */
-  quietHoursStart: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  quiet_hours_start: Generated<string | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface OdooNotificationQueue {
   /**
    * Alternative text for notification
    */
-  altText: Generated<string | null>;
+  alt_text: Generated<string | null>;
   /**
    * Batch group ID for roadmap
    */
-  batchGroupId: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  batch_group_id: Generated<string | null>;
+  created_at: Generated<Date | null>;
   /**
    * Webhook delivery ID
    */
-  deliveryId: string;
+  delivery_id: string;
   /**
    * Error message if failed
    */
-  errorMessage: Generated<string | null>;
+  error_message: Generated<string | null>;
   /**
    * Event type
    */
-  eventType: string;
+  event_type: string;
   /**
    * Expiration time
    */
-  expiresAt: Generated<Date | null>;
+  expires_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * Is part of batch
    */
-  isBatched: Generated<number | null>;
+  is_batched: Generated<number | null>;
   /**
    * LINE account ID
    */
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * LINE API response
    */
-  lineApiResponse: Generated<string | null>;
+  line_api_response: Generated<string | null>;
   /**
    * LINE API HTTP status code
    */
-  lineApiStatus: Generated<number | null>;
+  line_api_status: Generated<number | null>;
   /**
    * LINE user ID
    */
-  lineUserId: string;
+  line_user_id: string;
   /**
    * Maximum retry attempts
    */
-  maxRetries: Generated<number | null>;
+  max_retries: Generated<number | null>;
   /**
    * Message content (JSON)
    */
-  messagePayload: string;
+  message_payload: string;
   /**
    * Message format
    */
-  messageType: "flex" | "roadmap" | "text";
+  message_type: "flex" | "roadmap" | "text";
   /**
    * Odoo order ID
    */
-  orderId: Generated<number | null>;
+  order_id: Generated<number | null>;
   /**
    * Order reference
    */
-  orderRef: Generated<string | null>;
+  order_ref: Generated<string | null>;
   /**
    * Priority (1=highest, 10=lowest)
    */
@@ -3300,32 +3300,32 @@ export interface OdooNotificationQueue {
   /**
    * Recipient type
    */
-  recipientType: "customer" | "salesperson";
+  recipient_type: "customer" | "salesperson";
   /**
    * Number of retry attempts
    */
-  retryCount: Generated<number | null>;
+  retry_count: Generated<number | null>;
   /**
    * When to send
    */
-  scheduledAt: Generated<Date | null>;
+  scheduled_at: Generated<Date | null>;
   /**
    * When notification was sent
    */
-  sentAt: Generated<Date | null>;
+  sent_at: Generated<Date | null>;
   /**
    * Queue status
    */
   status: Generated<"cancelled" | "expired" | "failed" | "pending" | "processing" | "sent" | null>;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface OdooNotificationTemplates {
   /**
    * Alternative text template
    */
-  altTextTemplate: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  alt_text_template: Generated<string | null>;
+  created_at: Generated<Date | null>;
   /**
    * Template description
    */
@@ -3333,12 +3333,12 @@ export interface OdooNotificationTemplates {
   /**
    * Event type
    */
-  eventType: string;
+  event_type: string;
   id: Generated<number>;
   /**
    * Is template active
    */
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   /**
    * Language code
    */
@@ -3346,24 +3346,24 @@ export interface OdooNotificationTemplates {
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * Recipient type
    */
-  recipientType: "both" | "customer" | "salesperson";
+  recipient_type: "both" | "customer" | "salesperson";
   /**
    * Template code (e.g., roadmap_timeline)
    */
-  templateCode: string;
+  template_code: string;
   /**
    * Template structure (JSON)
    */
-  templateContent: string;
+  template_content: string;
   /**
    * Template format
    */
-  templateType: "flex" | "roadmap" | "text";
-  updatedAt: Generated<Date | null>;
+  template_type: "flex" | "roadmap" | "text";
+  updated_at: Generated<Date | null>;
   /**
    * Template version
    */
@@ -3371,28 +3371,28 @@ export interface OdooNotificationTemplates {
 }
 
 export interface OdooOrderEvents {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * order/delivery/invoice/payment
    */
-  eventCategory: string;
+  event_category: string;
   /**
    * sale.order.confirmed, etc.
    */
-  eventType: string;
+  event_type: string;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  newState: Generated<string | null>;
-  oldState: Generated<string | null>;
-  orderKey: string;
+  line_account_id: Generated<number>;
+  new_state: Generated<string | null>;
+  old_state: Generated<string | null>;
+  order_key: string;
   /**
    * Key payload fields only
    */
-  payloadSummary: Generated<string | null>;
-  processedAt: Generated<Date | null>;
+  payload_summary: Generated<string | null>;
+  processed_at: Generated<Date | null>;
   /**
    * Webhook processing status
    */
@@ -3400,173 +3400,173 @@ export interface OdooOrderEvents {
   /**
    * Reference to odoo_webhooks_log
    */
-  webhookLogId: Generated<number | null>;
+  webhook_log_id: Generated<number | null>;
 }
 
 export interface OdooOrderLines {
   barcode: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   discount: Generated<Decimal | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  odooLineId: Generated<number | null>;
-  odooOrderId: number;
-  priceSubtotal: Generated<Decimal | null>;
-  priceUnit: Generated<Decimal | null>;
-  productCode: Generated<string | null>;
-  productId: Generated<number | null>;
-  productName: Generated<string | null>;
+  line_account_id: Generated<number>;
+  odoo_line_id: Generated<number | null>;
+  odoo_order_id: number;
+  price_subtotal: Generated<Decimal | null>;
+  price_unit: Generated<Decimal | null>;
+  product_code: Generated<string | null>;
+  product_id: Generated<number | null>;
+  product_name: Generated<string | null>;
   quantity: Generated<Decimal | null>;
-  uomName: Generated<string | null>;
+  uom_name: Generated<string | null>;
 }
 
 export interface OdooOrderNotes {
-  adminName: string;
-  createdAt: Generated<Date | null>;
-  entityRef: string;
-  entityType: "invoice" | "order";
+  admin_name: string;
+  created_at: Generated<Date | null>;
+  entity_ref: string;
+  entity_type: "invoice" | "order";
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   note: string;
-  partnerId: Generated<number | null>;
+  partner_id: Generated<number | null>;
 }
 
 export interface OdooOrderProjection {
-  amountTotal: Generated<Decimal | null>;
+  amount_total: Generated<Decimal | null>;
   currency: Generated<string | null>;
-  customerName: Generated<string | null>;
-  customerRef: Generated<string | null>;
-  firstSeenAt: Generated<Date>;
+  customer_name: Generated<string | null>;
+  customer_ref: Generated<string | null>;
+  first_seen_at: Generated<Date>;
   id: Generated<number>;
-  lastWebhookAt: Generated<Date | null>;
-  latestEventType: Generated<string | null>;
-  latestState: Generated<string | null>;
-  latestStateDisplay: Generated<string | null>;
+  last_webhook_at: Generated<Date | null>;
+  latest_event_type: Generated<string | null>;
+  latest_state: Generated<string | null>;
+  latest_state_display: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  odooPartnerId: Generated<number | null>;
-  orderId: number;
-  orderName: Generated<string | null>;
-  sourceDeliveryId: Generated<string | null>;
-  sourceStatus: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  odoo_partner_id: Generated<number | null>;
+  order_id: number;
+  order_name: Generated<string | null>;
+  source_delivery_id: Generated<string | null>;
+  source_status: Generated<string | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface OdooOrders {
-  amountTax: Generated<Decimal | null>;
-  amountTotal: Generated<Decimal | null>;
-  amountUntaxed: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
+  amount_tax: Generated<Decimal | null>;
+  amount_total: Generated<Decimal | null>;
+  amount_untaxed: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
   currency: Generated<string | null>;
-  customerRef: Generated<string | null>;
-  dateOrder: Generated<Date | null>;
-  deliveryStatus: Generated<string | null>;
-  expectedDelivery: Generated<Date | null>;
+  customer_ref: Generated<string | null>;
+  date_order: Generated<Date | null>;
+  delivery_status: Generated<string | null>;
+  expected_delivery: Generated<Date | null>;
   id: Generated<number>;
-  isDelivered: Generated<number | null>;
-  isPaid: Generated<number | null>;
-  itemsCount: Generated<number | null>;
-  latestEvent: Generated<string | null>;
+  is_delivered: Generated<number | null>;
+  is_paid: Generated<number | null>;
+  items_count: Generated<number | null>;
+  latest_event: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
   /**
    * Odoo sale.order ID
    */
-  orderId: number;
+  order_id: number;
   /**
    * SO number
    */
-  orderName: string;
+  order_name: string;
   /**
    * Odoo partner ID
    */
-  partnerId: Generated<number | null>;
-  paymentDate: Generated<Date | null>;
-  paymentStatus: Generated<string | null>;
-  salespersonId: Generated<number | null>;
-  salespersonName: Generated<string | null>;
+  partner_id: Generated<number | null>;
+  payment_date: Generated<Date | null>;
+  payment_status: Generated<string | null>;
+  salesperson_id: Generated<number | null>;
+  salesperson_name: Generated<string | null>;
   state: Generated<string | null>;
-  stateDisplay: Generated<string | null>;
-  syncedAt: Generated<Date | null>;
-  updatedAt: Generated<Date | null>;
-  webhookId: Generated<number | null>;
+  state_display: Generated<string | null>;
+  synced_at: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
+  webhook_id: Generated<number | null>;
 }
 
 export interface OdooOrdersSummary {
-  amountTax: Generated<Decimal | null>;
-  amountTotal: Generated<Decimal | null>;
-  amountUntaxed: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
+  amount_tax: Generated<Decimal | null>;
+  amount_total: Generated<Decimal | null>;
+  amount_untaxed: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
   /**
    * Order creation time in Odoo
    */
-  createdAtOdoo: Generated<Date | null>;
+  created_at_odoo: Generated<Date | null>;
   currency: Generated<string | null>;
   /**
    * Customer ID from Odoo
    */
-  customerId: Generated<string | null>;
-  customerName: Generated<string | null>;
+  customer_id: Generated<string | null>;
+  customer_name: Generated<string | null>;
   /**
    * Customer reference code
    */
-  customerRef: Generated<string | null>;
+  customer_ref: Generated<string | null>;
   /**
    * Order date
    */
-  dateOrder: Generated<Date | null>;
+  date_order: Generated<Date | null>;
   /**
    * company/private
    */
-  deliveryType: Generated<string | null>;
-  expectedDeliveryDate: Generated<Date | null>;
+  delivery_type: Generated<string | null>;
+  expected_delivery_date: Generated<Date | null>;
   /**
    * First webhook event time
    */
-  firstEventAt: Generated<Date | null>;
+  first_event_at: Generated<Date | null>;
   id: Generated<number>;
-  invoiceStatus: Generated<string | null>;
+  invoice_status: Generated<string | null>;
   /**
    * Latest webhook event time
    */
-  lastEventAt: Generated<Date | null>;
-  lineAccountId: Generated<number | null>;
+  last_event_at: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
   /**
    * LINE user for notifications
    */
-  lineUserId: Generated<string | null>;
+  line_user_id: Generated<string | null>;
   note: Generated<string | null>;
   /**
    * Odoo order ID
    */
-  odooOrderId: Generated<string | null>;
+  odoo_order_id: Generated<string | null>;
   /**
    * Internal order_id from webhook
    */
-  orderId: Generated<number | null>;
+  order_id: Generated<number | null>;
   /**
    * Order name/number from Odoo
    */
-  orderKey: string;
+  order_key: string;
   /**
    * Odoo partner ID
    */
-  partnerId: Generated<string | null>;
-  paymentStatus: Generated<string | null>;
-  salespersonId: Generated<string | null>;
-  salespersonName: Generated<string | null>;
+  partner_id: Generated<string | null>;
+  payment_status: Generated<string | null>;
+  salesperson_id: Generated<string | null>;
+  salesperson_name: Generated<string | null>;
   /**
    * Order state from Odoo
    */
@@ -3574,55 +3574,55 @@ export interface OdooOrdersSummary {
   /**
    * Human readable state
    */
-  stateDisplay: Generated<string | null>;
-  syncedAt: Generated<Date | null>;
+  state_display: Generated<string | null>;
   /**
    * pending/synced/error
    */
-  syncStatus: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  sync_status: Generated<string | null>;
+  synced_at: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface OdooOrderStates {
-  assigneeId: Generated<number | null>;
-  assigneeName: Generated<string | null>;
-  assigneeType: Generated<string | null>;
-  changedAt: Generated<Date | null>;
-  createdAt: Generated<Date | null>;
+  assignee_id: Generated<number | null>;
+  assignee_name: Generated<string | null>;
+  assignee_type: Generated<string | null>;
+  changed_at: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   notes: Generated<string | null>;
-  odooOrderId: number;
+  odoo_order_id: number;
   state: string;
-  stateDisplay: Generated<string | null>;
-  stateType: Generated<string | null>;
+  state_display: Generated<string | null>;
+  state_type: Generated<string | null>;
 }
 
 export interface OdooOrderStatusOverrides {
   /**
    * When override was made
    */
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * New status value
    */
-  newStatus: string;
+  new_status: string;
   /**
    * Previous status value
    */
-  oldStatus: Generated<string | null>;
+  old_status: Generated<string | null>;
   /**
    * Odoo order reference/name
    */
-  orderId: string;
+  order_id: string;
   /**
    * Reason for status override
    */
@@ -3630,82 +3630,82 @@ export interface OdooOrderStatusOverrides {
   /**
    * User who made the override
    */
-  userId: number;
+  user_id: number;
 }
 
 export interface OdooPayments {
   amount: Generated<Decimal | null>;
-  bankAccount: Generated<string | null>;
-  bankName: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  bank_account: Generated<string | null>;
+  bank_name: Generated<string | null>;
+  created_at: Generated<Date | null>;
   currency: Generated<string | null>;
   id: Generated<number>;
-  invoiceNumber: Generated<string | null>;
+  invoice_number: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
   method: Generated<string | null>;
-  methodDisplay: Generated<string | null>;
-  odooInvoiceId: Generated<number | null>;
-  odooOrderId: Generated<number | null>;
-  odooPaymentId: number;
-  orderName: Generated<string | null>;
-  partnerId: Generated<number | null>;
-  partnerName: Generated<string | null>;
-  paymentDate: Generated<Date | null>;
-  paymentName: Generated<string | null>;
-  postedAt: Generated<Date | null>;
+  method_display: Generated<string | null>;
+  odoo_invoice_id: Generated<number | null>;
+  odoo_order_id: Generated<number | null>;
+  odoo_payment_id: number;
+  order_name: Generated<string | null>;
+  partner_id: Generated<number | null>;
+  partner_name: Generated<string | null>;
+  payment_date: Generated<Date | null>;
+  payment_name: Generated<string | null>;
+  posted_at: Generated<Date | null>;
   reference: Generated<string | null>;
-  slipImageUrl: Generated<string | null>;
+  slip_image_url: Generated<string | null>;
   state: Generated<string | null>;
-  stateDisplay: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  state_display: Generated<string | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface OdooProductsSyncState {
-  lastIncrementalSyncAt: Generated<Date | null>;
-  lineAccountId: number;
-  nextOffset: Generated<number>;
-  updatedAt: Generated<Date | null>;
+  last_incremental_sync_at: Generated<Date | null>;
+  line_account_id: number;
+  next_offset: Generated<number>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface OdooSlipsCache {
   amount: Generated<Decimal | null>;
-  bankRef: Generated<string | null>;
+  bank_ref: Generated<string | null>;
   /**
    * BDO/outstanding ID
    */
-  bdoId: Generated<string | null>;
+  bdo_id: Generated<string | null>;
   /**
    * exact/partial/manual/unmatched
    */
   confidence: Generated<string | null>;
-  createdAt: Generated<Date | null>;
-  customerId: Generated<string | null>;
-  customerName: Generated<string | null>;
+  created_at: Generated<Date | null>;
+  customer_id: Generated<string | null>;
+  customer_name: Generated<string | null>;
   id: Generated<number>;
-  imageUrl: Generated<string | null>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: Generated<string | null>;
-  matchedAmount: Generated<Decimal | null>;
-  matchedAt: Generated<Date | null>;
-  matchedBy: Generated<string | null>;
-  orderKey: Generated<string | null>;
-  paymentDate: Generated<Date | null>;
-  paymentMethod: Generated<string | null>;
+  image_url: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: Generated<string | null>;
+  matched_amount: Generated<Decimal | null>;
+  matched_at: Generated<Date | null>;
+  matched_by: Generated<string | null>;
+  order_key: Generated<string | null>;
+  payment_date: Generated<Date | null>;
+  payment_method: Generated<string | null>;
   /**
    * Internal slip ID
    */
-  slipId: string;
+  slip_id: string;
   /**
    * pending/matched/rejected
    */
   status: Generated<string | null>;
-  syncedAt: Generated<Date | null>;
-  updatedAt: Generated<Date | null>;
-  uploadedAt: Generated<Date | null>;
+  synced_at: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
+  uploaded_at: Generated<Date | null>;
 }
 
 export interface OdooSlipUploads {
@@ -3716,96 +3716,96 @@ export interface OdooSlipUploads {
   /**
    * Net to pay amount from BDO
    */
-  bdoAmount: Generated<Decimal | null>;
+  bdo_amount: Generated<Decimal | null>;
   /**
    * Bank Deposit Order ID (if matched)
    */
-  bdoId: Generated<number | null>;
+  bdo_id: Generated<number | null>;
   /**
    * BDO number e.g. BDO2511-01778
    */
-  bdoName: Generated<string | null>;
+  bdo_name: Generated<string | null>;
   /**
    * company or private
    */
-  deliveryType: Generated<string | null>;
+  delivery_type: Generated<string | null>;
   id: Generated<number>;
   /**
    * Local file path to saved slip image
    */
-  imagePath: Generated<string | null>;
+  image_path: Generated<string | null>;
   /**
    * Original image URL from LINE/inbox
    */
-  imageUrl: Generated<string | null>;
+  image_url: Generated<string | null>;
   /**
    * Invoice ID (if matched)
    */
-  invoiceId: Generated<number | null>;
+  invoice_id: Generated<number | null>;
   /**
    * Reference to line_accounts table
    */
-  lineAccountId: number;
+  line_account_id: number;
   /**
    * LINE user ID who uploaded slip
    */
-  lineUserId: string;
+  line_user_id: string;
   /**
    * exact, partial, multi, bdo_prepayment, manual, unmatched
    */
-  matchConfidence: Generated<string | null>;
-  /**
-   * When slip was matched
-   */
-  matchedAt: Generated<Date | null>;
+  match_confidence: Generated<string | null>;
   /**
    * Reason for match/fail
    */
-  matchReason: Generated<string | null>;
+  match_reason: Generated<string | null>;
+  /**
+   * When slip was matched
+   */
+  matched_at: Generated<Date | null>;
   /**
    * Reference to messages table
    */
-  messageId: Generated<number | null>;
+  message_id: Generated<number | null>;
   /**
    * Odoo partner ID
    */
-  odooPartnerId: Generated<number | null>;
+  odoo_partner_id: Generated<number | null>;
   /**
    * Slip ID from Odoo
    */
-  odooSlipId: Generated<number | null>;
+  odoo_slip_id: Generated<number | null>;
   /**
    * Order ID (if matched)
    */
-  orderId: Generated<number | null>;
+  order_id: Generated<number | null>;
   /**
    * Odoo Slip Inbox record ID
    */
-  slipInboxId: Generated<number | null>;
+  slip_inbox_id: Generated<number | null>;
   /**
    * Slip number e.g. SLIP-2603-00111
    */
-  slipInboxName: Generated<string | null>;
+  slip_inbox_name: Generated<string | null>;
   /**
    * null=not checked, 1=verified, 0=failed
    */
-  slipVerified: Generated<number | null>;
+  slip_verified: Generated<number | null>;
   /**
    * When verification was performed
    */
-  slipVerifiedAt: Generated<Date | null>;
+  slip_verified_at: Generated<Date | null>;
   /**
    * Amount verified by SlipMate
    */
-  slipVerifyAmount: Generated<Decimal | null>;
+  slip_verify_amount: Generated<Decimal | null>;
   /**
    * Full SlipData payload from SlipMate
    */
-  slipVerifyData: Generated<string | null>;
+  slip_verify_data: Generated<string | null>;
   /**
    * Transaction reference from SlipMate
    */
-  slipVerifyRef: Generated<string | null>;
+  slip_verify_ref: Generated<string | null>;
   /**
    * Matching status
    */
@@ -3813,33 +3813,33 @@ export interface OdooSlipUploads {
   /**
    * Transfer date from slip
    */
-  transferDate: Generated<Date | null>;
+  transfer_date: Generated<Date | null>;
   /**
    * When slip was uploaded
    */
-  uploadedAt: Generated<Date | null>;
+  uploaded_at: Generated<Date | null>;
   /**
    * Admin who uploaded the slip
    */
-  uploadedBy: Generated<string | null>;
+  uploaded_by: Generated<string | null>;
 }
 
 export interface OdooSyncLog {
-  completedAt: Generated<Date | null>;
-  createdAt: Generated<Date | null>;
-  errorMessage: Generated<string | null>;
-  executionDurationMs: Generated<number | null>;
+  completed_at: Generated<Date | null>;
+  created_at: Generated<Date | null>;
+  error_message: Generated<string | null>;
+  execution_duration_ms: Generated<number | null>;
   id: Generated<number>;
   /**
    * orders/customers/invoices/slips/full
    */
-  jobType: string;
-  lineAccountId: Generated<number | null>;
-  recordsFailed: Generated<number | null>;
-  recordsInserted: Generated<number | null>;
-  recordsProcessed: Generated<number | null>;
-  recordsUpdated: Generated<number | null>;
-  startedAt: Generated<Date | null>;
+  job_type: string;
+  line_account_id: Generated<number | null>;
+  records_failed: Generated<number | null>;
+  records_inserted: Generated<number | null>;
+  records_processed: Generated<number | null>;
+  records_updated: Generated<number | null>;
+  started_at: Generated<Date | null>;
   /**
    * running/success/failed
    */
@@ -3847,131 +3847,131 @@ export interface OdooSyncLog {
   /**
    * cron/webhook/manual
    */
-  triggeredBy: Generated<string | null>;
+  triggered_by: Generated<string | null>;
 }
 
 export interface OdooWebhookDlq {
-  createdAt: Generated<Date>;
-  deliveryId: string;
-  errorCode: Generated<string | null>;
-  errorMessage: Generated<string | null>;
-  eventType: string;
-  failedAt: Generated<Date>;
+  created_at: Generated<Date>;
+  delivery_id: string;
+  error_code: Generated<string | null>;
+  error_message: Generated<string | null>;
+  event_type: string;
+  failed_at: Generated<Date>;
   id: Generated<number>;
-  lastRetryAt: Generated<Date | null>;
+  last_retry_at: Generated<Date | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   payload: string;
-  resolutionNote: Generated<string | null>;
-  resolvedAt: Generated<Date | null>;
-  retryCount: Generated<number>;
+  resolution_note: Generated<string | null>;
+  resolved_at: Generated<Date | null>;
+  retry_count: Generated<number>;
   status: Generated<string>;
-  webhookLogId: Generated<number | null>;
+  webhook_log_id: Generated<number | null>;
 }
 
 export interface OdooWebhookLogs {
-  errorMessage: Generated<string | null>;
-  eventId: Generated<string | null>;
-  eventType: string;
+  error_message: Generated<string | null>;
+  event_id: Generated<string | null>;
+  event_type: string;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  odooBdoId: Generated<number | null>;
-  odooInvoiceId: Generated<number | null>;
-  odooOrderId: Generated<number | null>;
-  odooPaymentId: Generated<number | null>;
-  partnerId: Generated<number | null>;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  odoo_bdo_id: Generated<number | null>;
+  odoo_invoice_id: Generated<number | null>;
+  odoo_order_id: Generated<number | null>;
+  odoo_payment_id: Generated<number | null>;
+  partner_id: Generated<number | null>;
   payload: Generated<string | null>;
   processed: Generated<number | null>;
-  processedAt: Generated<Date | null>;
-  receivedAt: Generated<Date | null>;
+  processed_at: Generated<Date | null>;
+  received_at: Generated<Date | null>;
 }
 
 export interface OdooWebhooksLog {
   /**
    * Total receive attempts for this delivery_id
    */
-  attemptCount: Generated<number>;
+  attempt_count: Generated<number>;
   /**
    * Extracted customer/partner ID from payload for fast filtering
    */
-  customerId: Generated<number | null>;
+  customer_id: Generated<number | null>;
   /**
    * X-Odoo-Delivery-Id header for idempotency
    */
-  deliveryId: string;
+  delivery_id: string;
   /**
    * Error details if failed
    */
-  errorMessage: Generated<string | null>;
+  error_message: Generated<string | null>;
   /**
    * Webhook event type (e.g., order.validated)
    */
-  eventType: string;
+  event_type: string;
   /**
    * Extracted order reference/name from payload for fast filtering
    */
-  extractedOrderId: Generated<string | null>;
+  extracted_order_id: Generated<string | null>;
   /**
    * Captured webhook headers snapshot
    */
-  headerJson: Generated<string | null>;
+  header_json: Generated<string | null>;
   id: Generated<number>;
   /**
    * Stable internal error code
    */
-  lastErrorCode: Generated<string | null>;
+  last_error_code: Generated<string | null>;
   /**
    * Reference to line_accounts table (nullable for shared mode)
    */
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * LINE user ID that received notification
    */
-  lineUserId: Generated<string | null>;
+  line_user_id: Generated<string | null>;
   /**
    * List of notification targets that were sent
    */
-  notifiedTargets: Generated<string | null>;
+  notified_targets: Generated<string | null>;
   /**
    * Odoo order ID (if applicable)
    */
-  orderId: Generated<number | null>;
+  order_id: Generated<number | null>;
   /**
    * Full webhook payload
    */
   payload: string;
-  payloadCustomerId: Generated<string | null>;
+  payload_customer_id: Generated<string | null>;
   /**
    * SHA256 hash of payload for forensic checks
    */
-  payloadHash: Generated<string | null>;
-  payloadOrderName: Generated<string | null>;
-  /**
-   * When webhook was processed
-   */
-  processedAt: Generated<Date | null>;
-  /**
-   * When processing started
-   */
-  processingStartedAt: Generated<Date | null>;
+  payload_hash: Generated<string | null>;
+  payload_order_name: Generated<string | null>;
   /**
    * End-to-end processing latency (ms)
    */
-  processLatencyMs: Generated<number | null>;
+  process_latency_ms: Generated<number | null>;
+  /**
+   * When webhook was processed
+   */
+  processed_at: Generated<Date | null>;
+  /**
+   * When processing started
+   */
+  processing_started_at: Generated<Date | null>;
   /**
    * When webhook was initially received
    */
-  receivedAt: Generated<Date | null>;
+  received_at: Generated<Date | null>;
   /**
    * Retry attempts for this delivery
    */
-  retryCount: Generated<number>;
+  retry_count: Generated<number>;
   /**
    * X-Odoo-Signature header
    */
@@ -3979,7 +3979,7 @@ export interface OdooWebhooksLog {
   /**
    * Source IP received at webhook endpoint
    */
-  sourceIp: Generated<string | null>;
+  source_ip: Generated<string | null>;
   /**
    * Webhook lifecycle status
    */
@@ -3987,28 +3987,28 @@ export interface OdooWebhooksLog {
   /**
    * Whether this webhook has been synced to dedicated tables
    */
-  syncedToTables: Generated<number | null>;
-  vAmountTotal: Generated<Decimal | null>;
-  vCustomerId: Generated<string | null>;
-  vCustomerName: Generated<string | null>;
-  vCustomerRef: Generated<string | null>;
-  vOrderName: Generated<string | null>;
+  synced_to_tables: Generated<number | null>;
+  v_amount_total: Generated<Decimal | null>;
+  v_customer_id: Generated<string | null>;
+  v_customer_name: Generated<string | null>;
+  v_customer_ref: Generated<string | null>;
+  v_order_name: Generated<string | null>;
   /**
    * X-Odoo-Timestamp header value
    */
-  webhookTimestamp: Generated<number | null>;
+  webhook_timestamp: Generated<number | null>;
 }
 
 export interface OnboardingSessions {
-  adminUserId: number;
-  businessType: Generated<string | null>;
-  conversationHistory: Generated<string | null>;
-  createdAt: Generated<Date>;
-  currentTopic: Generated<string | null>;
+  admin_user_id: number;
+  business_type: Generated<string | null>;
+  conversation_history: Generated<string | null>;
+  created_at: Generated<Date>;
+  current_topic: Generated<string | null>;
   id: Generated<number>;
-  lastActivity: Generated<Date>;
-  lineAccountId: number;
-  setupProgress: Generated<string | null>;
+  last_activity: Generated<Date>;
+  line_account_id: number;
+  setup_progress: Generated<string | null>;
 }
 
 export interface OrderItems {
@@ -4016,269 +4016,269 @@ export interface OrderItems {
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  orderId: number;
-  productId: Generated<number | null>;
-  productName: string;
-  productPrice: Decimal;
+  line_account_id: Generated<number>;
+  order_id: number;
+  product_id: Generated<number | null>;
+  product_name: string;
+  product_price: Decimal;
   quantity: number;
   subtotal: Decimal;
 }
 
 export interface Orders {
-  createdAt: Generated<Date>;
-  discountAmount: Generated<Decimal | null>;
-  grandTotal: Decimal;
+  created_at: Generated<Date>;
+  discount_amount: Generated<Decimal | null>;
+  grand_total: Decimal;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   note: Generated<string | null>;
-  orderNumber: string;
-  paymentMethod: Generated<string | null>;
-  paymentStatus: Generated<"failed" | "paid" | "pending" | "refunded" | null>;
-  shippingAddress: Generated<string | null>;
-  shippingFee: Generated<Decimal | null>;
-  shippingName: Generated<string | null>;
-  shippingPhone: Generated<string | null>;
-  shippingTracking: Generated<string | null>;
+  order_number: string;
+  payment_method: Generated<string | null>;
+  payment_status: Generated<"failed" | "paid" | "pending" | "refunded" | null>;
+  shipping_address: Generated<string | null>;
+  shipping_fee: Generated<Decimal | null>;
+  shipping_name: Generated<string | null>;
+  shipping_phone: Generated<string | null>;
+  shipping_tracking: Generated<string | null>;
   status: Generated<"cancelled" | "confirmed" | "delivered" | "paid" | "pending" | "shipping" | null>;
-  totalAmount: Decimal;
-  updatedAt: Generated<Date>;
-  userId: number;
+  total_amount: Decimal;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface PaymentProofs {
-  adminNote: Generated<string | null>;
+  admin_note: Generated<string | null>;
   amount: Generated<Decimal | null>;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  imageUrl: string;
+  image_url: string;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   status: Generated<"approved" | "pending" | "rejected" | null>;
-  transactionId: number;
+  transaction_id: number;
 }
 
 export interface PaymentSlips {
-  adminNote: Generated<string | null>;
+  admin_note: Generated<string | null>;
   amount: Generated<Decimal | null>;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  imageUrl: string;
+  image_url: string;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineUserId: Generated<string | null>;
-  orderId: number;
+  line_account_id: Generated<number>;
+  line_user_id: Generated<string | null>;
+  order_id: number;
   status: Generated<"approved" | "pending" | "rejected" | null>;
-  transactionId: Generated<number | null>;
-  userId: Generated<number | null>;
+  transaction_id: Generated<number | null>;
+  user_id: Generated<number | null>;
 }
 
 export interface PaymentVouchers {
   amount: Decimal;
-  attachmentPath: Generated<string | null>;
-  bankAccount: Generated<string | null>;
-  chequeDate: Generated<Date | null>;
-  chequeNumber: Generated<string | null>;
-  createdAt: Generated<Date>;
-  createdBy: Generated<number | null>;
+  attachment_path: Generated<string | null>;
+  bank_account: Generated<string | null>;
+  cheque_date: Generated<Date | null>;
+  cheque_number: Generated<string | null>;
+  created_at: Generated<Date>;
+  created_by: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   metadata: Generated<string | null>;
   notes: Generated<string | null>;
-  paymentDate: Date;
-  paymentMethod: "cash" | "cheque" | "credit_card" | "transfer";
+  payment_date: Date;
+  payment_method: "cash" | "cheque" | "credit_card" | "transfer";
   /**
    * AP ID or Expense ID
    */
-  referenceId: number;
-  referenceNumber: Generated<string | null>;
-  voucherNumber: string;
-  voucherType: "ap" | "expense";
+  reference_id: number;
+  reference_number: Generated<string | null>;
+  voucher_number: string;
+  voucher_type: "ap" | "expense";
 }
 
 export interface PerformanceMetrics {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * Duration in milliseconds
    */
-  durationMs: number;
+  duration_ms: number;
   id: Generated<number>;
   /**
    * LINE account for multi-tenant tracking
    */
-  lineAccountId: Generated<number | null>;
-  metricType: "api_call" | "cache_hit" | "cache_miss" | "conversation_switch" | "message_render" | "page_load" | "scroll_performance";
+  line_account_id: Generated<number | null>;
+  metric_type: "api_call" | "cache_hit" | "cache_miss" | "conversation_switch" | "message_render" | "page_load" | "scroll_performance";
   /**
    * Additional context about the operation
    */
-  operationDetails: Generated<string | null>;
-  userAgent: Generated<string | null>;
+  operation_details: Generated<string | null>;
+  user_agent: Generated<string | null>;
 }
 
 export interface PharmacistConsultations {
-  assessmentId: Generated<number | null>;
-  consultationType: Generated<"chat" | "phone" | "video" | null>;
-  createdAt: Generated<Date>;
-  endedAt: Generated<Date | null>;
-  followUpRequired: Generated<number | null>;
+  assessment_id: Generated<number | null>;
+  consultation_type: Generated<"chat" | "phone" | "video" | null>;
+  created_at: Generated<Date>;
+  ended_at: Generated<Date | null>;
+  follow_up_required: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   notes: Generated<string | null>;
-  pharmacistId: Generated<number | null>;
-  prescribedProducts: Generated<string | null>;
+  pharmacist_id: Generated<number | null>;
+  prescribed_products: Generated<string | null>;
   recommendations: Generated<string | null>;
-  startedAt: Generated<Date | null>;
+  started_at: Generated<Date | null>;
   status: Generated<"cancelled" | "completed" | "in_progress" | "waiting" | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface PharmacistHolidays {
-  createdAt: Generated<Date>;
-  holidayDate: Date;
+  created_at: Generated<Date>;
+  holiday_date: Date;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  pharmacistId: number;
+  line_account_id: Generated<number>;
+  pharmacist_id: number;
   reason: Generated<string | null>;
 }
 
 export interface PharmacistNotifications {
-  createdAt: Generated<Date>;
-  handledAt: Generated<Date | null>;
-  handledBy: Generated<number | null>;
+  created_at: Generated<Date>;
+  handled_at: Generated<Date | null>;
+  handled_by: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   message: Generated<string | null>;
-  notificationData: Generated<string | null>;
+  notification_data: Generated<string | null>;
   priority: Generated<"normal" | "urgent" | null>;
   /**
    * ID of related record
    */
-  referenceId: Generated<number | null>;
+  reference_id: Generated<number | null>;
   /**
    * Type of related record
    */
-  referenceType: Generated<string | null>;
+  reference_type: Generated<string | null>;
   status: Generated<"dismissed" | "handled" | "pending" | "read" | null>;
   title: Generated<string | null>;
-  triageSessionId: Generated<number | null>;
+  triage_session_id: Generated<number | null>;
   type: Generated<string | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface Pharmacists {
   bio: Generated<string | null>;
-  consultationDuration: Generated<number | null>;
-  consultationFee: Generated<Decimal | null>;
-  consultingAreas: Generated<string | null>;
+  consultation_duration: Generated<number | null>;
+  consultation_fee: Generated<Decimal | null>;
+  consulting_areas: Generated<string | null>;
   /**
    * หน่วยกิตการศึกษาต่อเนื่อง (CPE)
    */
-  cpeCredits: Generated<number | null>;
-  createdAt: Generated<Date>;
+  cpe_credits: Generated<number | null>;
+  created_at: Generated<Date>;
   hospital: Generated<string | null>;
   id: Generated<number>;
-  imageUrl: Generated<string | null>;
-  isActive: Generated<number | null>;
-  isAvailable: Generated<number | null>;
+  image_url: Generated<string | null>;
+  is_active: Generated<number | null>;
+  is_available: Generated<number | null>;
   /**
    * วันหมดอายุใบอนุญาต (ต่ออายุทุก 5 ปี)
    */
-  licenseExpiry: Generated<Date | null>;
-  licenseNo: Generated<string | null>;
+  license_expiry: Generated<Date | null>;
+  license_no: Generated<string | null>;
   /**
    * เลขที่ใบอนุญาตประกอบวิชาชีพเภสัชกรรม
    */
-  licenseNumber: Generated<string | null>;
-  lineAccountId: Generated<number | null>;
+  license_number: Generated<string | null>;
+  line_account_id: Generated<number | null>;
   name: string;
   /**
    * เลขทะเบียนสภาเภสัชกรรม
    */
-  pharmacyCouncilId: Generated<string | null>;
+  pharmacy_council_id: Generated<string | null>;
   rating: Generated<Decimal | null>;
-  reviewCount: Generated<number | null>;
+  review_count: Generated<number | null>;
   specialty: Generated<string | null>;
-  subSpecialty: Generated<string | null>;
+  sub_specialty: Generated<string | null>;
   title: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  workExperience: Generated<string | null>;
+  updated_at: Generated<Date>;
+  work_experience: Generated<string | null>;
 }
 
 export interface PharmacistSchedules {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * 0=Sunday, 6=Saturday
    */
-  dayOfWeek: number;
-  endTime: string;
+  day_of_week: number;
+  end_time: string;
   id: Generated<number>;
-  isAvailable: Generated<number | null>;
+  is_available: Generated<number | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  pharmacistId: number;
-  startTime: string;
+  line_account_id: Generated<number>;
+  pharmacist_id: number;
+  start_time: string;
 }
 
 export interface PharmacyContextKeywords {
   id: Generated<number>;
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   keyword: string;
-  keywordType: "action" | "condition" | "drug" | "symptom";
+  keyword_type: "action" | "condition" | "drug" | "symptom";
   priority: Generated<number | null>;
   /**
    * Related drug IDs, condition info, etc.
    */
-  relatedData: Generated<string | null>;
-  widgetType: "allergy" | "drug_info" | "interaction" | "pregnancy" | "pricing" | "symptom";
+  related_data: Generated<string | null>;
+  widget_type: "allergy" | "drug_info" | "interaction" | "pregnancy" | "pricing" | "symptom";
 }
 
 export interface PharmacyGhostLearning {
-  aiDraft: string;
+  ai_draft: string;
   /**
    * Stage, health profile, symptoms, etc.
    */
   context: Generated<string | null>;
-  createdAt: Generated<Date | null>;
-  customerMessage: string;
+  created_at: Generated<Date | null>;
+  customer_message: string;
   /**
    * Levenshtein distance
    */
-  editDistance: Generated<number | null>;
+  edit_distance: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * Drugs mentioned in conversation
    */
-  mentionedDrugs: Generated<string | null>;
-  pharmacistFinal: string;
-  userId: number;
-  wasAccepted: Generated<number | null>;
+  mentioned_drugs: Generated<string | null>;
+  pharmacist_final: string;
+  user_id: number;
+  was_accepted: Generated<number | null>;
 }
 
 export interface PointRewards {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
-  endDate: Generated<Date | null>;
+  end_date: Generated<Date | null>;
   id: Generated<number>;
-  imageUrl: Generated<string | null>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  image_url: Generated<string | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
-  pointsRequired: Generated<number>;
-  redeemedCount: Generated<number | null>;
-  startDate: Generated<Date | null>;
+  points_required: Generated<number>;
+  redeemed_count: Generated<number | null>;
+  start_date: Generated<Date | null>;
   /**
    * NULL = ไม่จำกัด
    */
@@ -4294,13 +4294,13 @@ export interface PointsCampaigns {
   /**
    * Array of category IDs, null = all categories
    */
-  applicableCategories: Generated<string | null>;
-  createdAt: Generated<Date>;
+  applicable_categories: Generated<string | null>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
-  endDate: Date;
+  end_date: Date;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * Points multiplier (e.g., 2.0 for double points)
    */
@@ -4309,107 +4309,107 @@ export interface PointsCampaigns {
    * Campaign name
    */
   name: string;
-  startDate: Date;
-  updatedAt: Generated<Date>;
+  start_date: Date;
+  updated_at: Generated<Date>;
 }
 
 export interface PointsHistory {
-  balanceAfter: Generated<number | null>;
-  createdAt: Generated<Date>;
-  createdBy: Generated<string | null>;
+  balance_after: Generated<number | null>;
+  created_at: Generated<Date>;
+  created_by: Generated<string | null>;
   description: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * บวก=ได้รับ, ลบ=ใช้
    */
   points: number;
-  referenceId: Generated<number | null>;
+  reference_id: Generated<number | null>;
   /**
    * order, reward, manual
    */
-  referenceType: Generated<string | null>;
+  reference_type: Generated<string | null>;
   type: "adjust" | "bonus" | "earn" | "expire" | "redeem";
-  userId: number;
+  user_id: number;
 }
 
 export interface PointsRules {
   conditions: Generated<string | null>;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
-  endDate: Generated<Date | null>;
+  end_date: Generated<Date | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
   priority: Generated<number | null>;
-  ruleType: "base" | "campaign" | "category" | "tier";
-  startDate: Generated<Date | null>;
-  updatedAt: Generated<Date>;
+  rule_type: "base" | "campaign" | "category" | "tier";
+  start_date: Generated<Date | null>;
+  updated_at: Generated<Date>;
   value: Generated<Decimal>;
 }
 
 export interface PointsSettings {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * ยอดสั่งซื้อขั้นต่ำเพื่อรับแต้ม
    */
-  minOrderForPoints: Generated<Decimal | null>;
+  min_order_for_points: Generated<Decimal | null>;
   /**
    * แต้มหมดอายุกี่วัน (0 = ไม่หมดอายุ)
    */
-  pointsExpiryDays: Generated<number | null>;
+  points_expiry_days: Generated<number | null>;
   /**
    * แต้มต่อบาท (รองรับถึง 0.000001)
    */
-  pointsPerBaht: Generated<Decimal | null>;
-  updatedAt: Generated<Date>;
+  points_per_baht: Generated<Decimal | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface PointsTiers {
-  badgeColor: Generated<string | null>;
+  badge_color: Generated<string | null>;
   /**
    * สิทธิประโยชน์ (JSON)
    */
   benefits: Generated<string | null>;
   color: Generated<string | null>;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   icon: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * แต้มขั้นต่ำ
    */
-  minPoints: number;
+  min_points: number;
   multiplier: Generated<Decimal | null>;
   name: string;
   /**
    * ตัวคูณแต้ม
    */
-  pointsMultiplier: Generated<Decimal | null>;
-  sortOrder: Generated<number | null>;
+  points_multiplier: Generated<Decimal | null>;
+  sort_order: Generated<number | null>;
 }
 
 export interface PointsTransactions {
   /**
    * แต้มคงเหลือหลังทำรายการ
    */
-  balanceAfter: number;
-  createdAt: Generated<Date>;
+  balance_after: number;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   /**
    * วันหมดอายุของแต้ม
    */
-  expiresAt: Generated<Date | null>;
+  expires_at: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * จำนวนแต้ม (บวก=ได้, ลบ=ใช้)
    */
@@ -4417,342 +4417,342 @@ export interface PointsTransactions {
   /**
    * ID อ้างอิง
    */
-  referenceId: Generated<number | null>;
+  reference_id: Generated<number | null>;
   /**
    * order, reward, manual, etc.
    */
-  referenceType: Generated<string | null>;
+  reference_type: Generated<string | null>;
   type: "adjust" | "earn" | "expire" | "redeem" | "refund";
-  userId: number;
+  user_id: number;
 }
 
 export interface PosCashMovements {
   amount: Decimal;
-  createdAt: Generated<Date | null>;
-  createdBy: number;
+  created_at: Generated<Date | null>;
+  created_by: number;
   id: Generated<number>;
-  lineAccountId: number;
-  movementType: "in" | "out";
+  line_account_id: number;
+  movement_type: "in" | "out";
   reason: string;
-  shiftId: number;
+  shift_id: number;
 }
 
 export interface PosDailySummary {
-  cardSales: Generated<Decimal | null>;
-  cashSales: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
-  creditSales: Generated<Decimal | null>;
+  card_sales: Generated<Decimal | null>;
+  cash_sales: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
+  credit_sales: Generated<Decimal | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  netSales: Generated<Decimal | null>;
-  pointsSales: Generated<Decimal | null>;
-  returnCount: Generated<number | null>;
-  summaryDate: Date;
-  totalItemsSold: Generated<number | null>;
-  totalReturns: Generated<Decimal | null>;
-  totalSales: Generated<Decimal | null>;
-  totalTransactions: Generated<number | null>;
-  totalVat: Generated<Decimal | null>;
-  transferSales: Generated<Decimal | null>;
-  updatedAt: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
+  net_sales: Generated<Decimal | null>;
+  points_sales: Generated<Decimal | null>;
+  return_count: Generated<number | null>;
+  summary_date: Date;
+  total_items_sold: Generated<number | null>;
+  total_returns: Generated<Decimal | null>;
+  total_sales: Generated<Decimal | null>;
+  total_transactions: Generated<number | null>;
+  total_vat: Generated<Decimal | null>;
+  transfer_sales: Generated<Decimal | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface PosPayments {
   amount: Decimal;
-  cashReceived: Generated<Decimal | null>;
-  changeAmount: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
+  cash_received: Generated<Decimal | null>;
+  change_amount: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  paymentMethod: "card" | "cash" | "credit" | "points" | "transfer";
-  pointsUsed: Generated<number | null>;
-  referenceNumber: Generated<string | null>;
-  transactionId: number;
+  line_account_id: Generated<number>;
+  payment_method: "card" | "cash" | "credit" | "points" | "transfer";
+  points_used: Generated<number | null>;
+  reference_number: Generated<string | null>;
+  transaction_id: number;
 }
 
 export interface PosReturnItems {
-  batchId: Generated<number | null>;
+  batch_id: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineTotal: Decimal;
-  originalItemId: number;
-  productId: number;
+  line_account_id: Generated<number>;
+  line_total: Decimal;
+  original_item_id: number;
+  product_id: number;
   quantity: number;
-  returnId: number;
-  unitPrice: Decimal;
+  return_id: number;
+  unit_price: Decimal;
 }
 
 export interface PosReturns {
-  authorizedBy: Generated<number | null>;
-  completedAt: Generated<Date | null>;
-  createdAt: Generated<Date | null>;
+  authorized_by: Generated<number | null>;
+  completed_at: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  originalTransactionId: number;
-  pointsDeducted: Generated<number | null>;
-  processedBy: number;
+  line_account_id: Generated<number | null>;
+  original_transaction_id: number;
+  points_deducted: Generated<number | null>;
+  processed_by: number;
   reason: string;
-  refundAmount: Decimal;
-  refundMethod: "cash" | "credit" | "original";
-  returnNumber: string;
-  shiftId: number;
+  refund_amount: Decimal;
+  refund_method: "cash" | "credit" | "original";
+  return_number: string;
+  shift_id: number;
   status: Generated<"cancelled" | "completed" | "pending" | null>;
-  totalAmount: Decimal;
+  total_amount: Decimal;
 }
 
 export interface PosShifts {
-  cashAdjustments: Generated<Decimal | null>;
-  cashierId: number;
-  closedAt: Generated<Date | null>;
-  closingCash: Generated<Decimal | null>;
-  expectedCash: Generated<Decimal | null>;
+  cash_adjustments: Generated<Decimal | null>;
+  cashier_id: number;
+  closed_at: Generated<Date | null>;
+  closing_cash: Generated<Decimal | null>;
+  expected_cash: Generated<Decimal | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  openedAt: Generated<Date | null>;
-  openingCash: Decimal;
-  shiftNumber: string;
+  line_account_id: Generated<number | null>;
+  opened_at: Generated<Date | null>;
+  opening_cash: Decimal;
+  shift_number: string;
   status: Generated<"closed" | "open" | null>;
-  totalRefunds: Generated<Decimal | null>;
-  totalSales: Generated<Decimal | null>;
-  totalTransactions: Generated<number | null>;
+  total_refunds: Generated<Decimal | null>;
+  total_sales: Generated<Decimal | null>;
+  total_transactions: Generated<number | null>;
   variance: Generated<Decimal | null>;
 }
 
 export interface PosTransactionItems {
-  batchId: Generated<number | null>;
-  costPrice: Generated<Decimal | null>;
-  createdAt: Generated<Date | null>;
-  discountAmount: Generated<Decimal | null>;
-  discountType: Generated<"fixed" | "percent" | null>;
-  discountValue: Generated<Decimal | null>;
+  batch_id: Generated<number | null>;
+  cost_price: Generated<Decimal | null>;
+  created_at: Generated<Date | null>;
+  discount_amount: Generated<Decimal | null>;
+  discount_type: Generated<"fixed" | "percent" | null>;
+  discount_value: Generated<Decimal | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineTotal: Decimal;
-  originalPrice: Generated<Decimal | null>;
-  priceOverrideAt: Generated<Date | null>;
-  priceOverrideBy: Generated<number | null>;
-  priceOverrideReason: Generated<string | null>;
-  productId: number;
-  productName: Generated<string | null>;
-  productSku: Generated<string | null>;
+  line_account_id: Generated<number>;
+  line_total: Decimal;
+  original_price: Generated<Decimal | null>;
+  price_override_at: Generated<Date | null>;
+  price_override_by: Generated<number | null>;
+  price_override_reason: Generated<string | null>;
+  product_id: number;
+  product_name: Generated<string | null>;
+  product_sku: Generated<string | null>;
   quantity: number;
-  returnedQuantity: Generated<number | null>;
-  transactionId: number;
-  unitPrice: Decimal;
+  returned_quantity: Generated<number | null>;
+  transaction_id: number;
+  unit_price: Decimal;
 }
 
 export interface PosTransactions {
-  cashierId: number;
-  completedAt: Generated<Date | null>;
-  createdAt: Generated<Date | null>;
-  customerId: Generated<number | null>;
-  customerType: Generated<"member" | "walk_in" | null>;
-  discountAmount: Generated<Decimal | null>;
-  discountType: Generated<"fixed" | "percent" | null>;
-  discountValue: Generated<Decimal | null>;
-  holdAt: Generated<Date | null>;
-  holdNote: Generated<string | null>;
+  cashier_id: number;
+  completed_at: Generated<Date | null>;
+  created_at: Generated<Date | null>;
+  customer_id: Generated<number | null>;
+  customer_type: Generated<"member" | "walk_in" | null>;
+  discount_amount: Generated<Decimal | null>;
+  discount_type: Generated<"fixed" | "percent" | null>;
+  discount_value: Generated<Decimal | null>;
+  hold_at: Generated<Date | null>;
+  hold_note: Generated<string | null>;
   id: Generated<number>;
-  lastReprintAt: Generated<Date | null>;
-  lastReprintBy: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  pointsEarned: Generated<number | null>;
-  pointsRedeemed: Generated<number | null>;
-  pointsValue: Generated<Decimal | null>;
-  reprintCount: Generated<number | null>;
-  shiftId: number;
+  last_reprint_at: Generated<Date | null>;
+  last_reprint_by: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  points_earned: Generated<number | null>;
+  points_redeemed: Generated<number | null>;
+  points_value: Generated<Decimal | null>;
+  reprint_count: Generated<number | null>;
+  shift_id: number;
   status: Generated<"completed" | "draft" | "hold" | "pending" | "refunded" | "voided" | null>;
   subtotal: Generated<Decimal | null>;
-  totalAmount: Generated<Decimal | null>;
-  transactionNumber: string;
-  vatAmount: Generated<Decimal | null>;
-  voidedAt: Generated<Date | null>;
-  voidedBy: Generated<number | null>;
-  voidReason: Generated<string | null>;
+  total_amount: Generated<Decimal | null>;
+  transaction_number: string;
+  vat_amount: Generated<Decimal | null>;
+  void_reason: Generated<string | null>;
+  voided_at: Generated<Date | null>;
+  voided_by: Generated<number | null>;
 }
 
 export interface PrescriptionApprovals {
-  approvedItems: string;
-  createdAt: Generated<Date | null>;
-  expiresAt: Date;
+  approved_items: string;
+  created_at: Generated<Date | null>;
+  expires_at: Date;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   notes: Generated<string | null>;
-  pharmacistId: Generated<number | null>;
+  pharmacist_id: Generated<number | null>;
   status: Generated<"approved" | "expired" | "pending" | "rejected" | "used" | null>;
-  usedAt: Generated<Date | null>;
-  userId: number;
-  videoCallId: Generated<number | null>;
+  used_at: Generated<Date | null>;
+  user_id: number;
+  video_call_id: Generated<number | null>;
 }
 
 export interface PrescriptionItems {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * วิธีใช้ยา
    */
   directions: string;
-  dispensedQuantity: Generated<number | null>;
-  drugName: string;
+  dispensed_quantity: Generated<number | null>;
+  drug_name: string;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  prescriptionId: number;
-  productId: number;
+  line_account_id: Generated<number>;
+  prescription_id: number;
+  product_id: number;
   quantity: number;
   strength: Generated<string | null>;
 }
 
 export interface PrescriptionOcrResults {
-  createdAt: Generated<Date | null>;
-  doctorName: Generated<string | null>;
+  created_at: Generated<Date | null>;
+  doctor_name: Generated<string | null>;
   /**
    * List of drugs from prescription
    */
-  extractedDrugs: Generated<string | null>;
-  hospitalName: Generated<string | null>;
+  extracted_drugs: Generated<string | null>;
+  hospital_name: Generated<string | null>;
   id: Generated<number>;
-  imageHash: string;
-  imageUrl: Generated<string | null>;
+  image_hash: string;
+  image_url: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  ocrConfidence: Generated<Decimal | null>;
-  prescriptionDate: Generated<Date | null>;
-  userId: number;
+  line_account_id: Generated<number>;
+  ocr_confidence: Generated<Decimal | null>;
+  prescription_date: Generated<Date | null>;
+  user_id: number;
 }
 
 export interface PrescriptionRecords {
-  createdAt: Generated<Date | null>;
-  doctorLicense: string;
-  doctorName: string;
+  created_at: Generated<Date | null>;
+  doctor_license: string;
+  doctor_name: string;
   /**
    * ลายเซ็นแพทย์ (base64)
    */
-  doctorSignature: Generated<string | null>;
+  doctor_signature: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: number;
+  line_account_id: number;
   notes: Generated<string | null>;
-  patientIdCard: Generated<string | null>;
-  patientName: string;
-  prescriptionDate: Date;
+  patient_id_card: Generated<string | null>;
+  patient_name: string;
+  prescription_date: Date;
   /**
    * รูปใบสั่งแพทย์ (base64 or URL)
    */
-  prescriptionImage: Generated<string | null>;
-  prescriptionNumber: string;
+  prescription_image: Generated<string | null>;
+  prescription_number: string;
   status: Generated<"cancelled" | "dispensed" | "pending" | "verified" | null>;
-  verifiedAt: Generated<Date | null>;
+  verified_at: Generated<Date | null>;
   /**
    * เภสัชกรผู้ตรวจสอบ
    */
-  verifiedBy: Generated<number | null>;
+  verified_by: Generated<number | null>;
 }
 
 export interface ProductCategories {
-  cnyCode: Generated<string | null>;
-  createdAt: Generated<Date>;
+  cny_code: Generated<string | null>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   id: Generated<number>;
-  imageUrl: Generated<string | null>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  manufacturerCode: Generated<string | null>;
+  image_url: Generated<string | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  manufacturer_code: Generated<string | null>;
   name: Generated<string | null>;
-  sortOrder: Generated<number | null>;
+  sort_order: Generated<number | null>;
 }
 
 export interface ProductImages {
   id: Generated<number>;
-  imageUrl: string;
+  image_url: string;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  productId: number;
-  sortOrder: Generated<number | null>;
+  line_account_id: Generated<number>;
+  product_id: number;
+  sort_order: Generated<number | null>;
 }
 
 export interface Products {
-  actionData: Generated<string | null>;
+  action_data: Generated<string | null>;
   /**
    * ตัวยาสำคัญ
    */
-  activeIngredient: Generated<string | null>;
+  active_ingredient: Generated<string | null>;
   /**
    * บาร์โค้ด
    */
   barcode: Generated<string | null>;
-  categoryId: Generated<number | null>;
-  createdAt: Generated<Date>;
-  deliveryMethod: Generated<"download" | "email" | "line" | "onsite" | "shipping" | null>;
+  category_id: Generated<number | null>;
+  created_at: Generated<Date>;
+  delivery_method: Generated<"download" | "email" | "line" | "onsite" | "shipping" | null>;
   description: Generated<string | null>;
   /**
    * รูปแบบยา (tablet, capsule, syrup, etc.)
    */
-  dosageForm: Generated<string | null>;
+  dosage_form: Generated<string | null>;
   /**
    * บัญชียา (Schedule 1, 2, 3)
    */
-  drugSchedule: Generated<string | null>;
+  drug_schedule: Generated<string | null>;
   /**
    * ประเภทยา: controlled=ยาควบคุมพิเศษ, dangerous=ยาอันตราย, household=ยาสามัญประจำบ้าน, traditional=ยาแผนโบราณ
    */
-  drugType: Generated<"controlled" | "dangerous" | "household" | "traditional" | null>;
+  drug_type: Generated<"controlled" | "dangerous" | "household" | "traditional" | null>;
   /**
    * ข้อมูลเพิ่มเติมจาก API
    */
-  extraData: Generated<string | null>;
+  extra_data: Generated<string | null>;
   /**
    * เลขทะเบียน อย.
    */
-  fdaRegistration: Generated<string | null>;
+  fda_registration: Generated<string | null>;
   /**
    * ชื่อสามัญยา
    */
-  genericName: Generated<string | null>;
+  generic_name: Generated<string | null>;
   id: Generated<number>;
-  imageUrl: Generated<string | null>;
-  isActive: Generated<number | null>;
-  isBestseller: Generated<number | null>;
-  isFeatured: Generated<number | null>;
-  itemType: Generated<"booking" | "content" | "digital" | "physical" | "service" | null>;
-  lineAccountId: Generated<number | null>;
+  image_url: Generated<string | null>;
+  is_active: Generated<number | null>;
+  is_bestseller: Generated<number | null>;
+  is_featured: Generated<number | null>;
+  item_type: Generated<"booking" | "content" | "digital" | "physical" | "service" | null>;
+  line_account_id: Generated<number | null>;
   /**
    * ผู้ผลิต/บริษัท
    */
   manufacturer: Generated<string | null>;
-  maxQuantity: Generated<number | null>;
+  max_quantity: Generated<number | null>;
   name: Generated<string | null>;
   /**
    * ID เดิมจาก business_items (สำหรับ migration)
    */
-  oldBusinessItemId: Generated<number | null>;
-  previousPrice: Generated<Decimal | null>;
+  old_business_item_id: Generated<number | null>;
+  previous_price: Generated<Decimal | null>;
   price: Decimal;
-  priceChangedAt: Generated<Date | null>;
+  price_changed_at: Generated<Date | null>;
   /**
    * ต้องมีเภสัชกรจ่ายหรือไม่
    */
-  requiresPharmacist: Generated<number | null>;
+  requires_pharmacist: Generated<number | null>;
   /**
    * ต้องมีใบสั่งแพทย์หรือไม่
    */
-  requiresPrescription: Generated<number | null>;
-  salePrice: Generated<Decimal | null>;
+  requires_prescription: Generated<number | null>;
+  sale_price: Generated<Decimal | null>;
   sku: Generated<string | null>;
-  sortOrder: Generated<number | null>;
+  sort_order: Generated<number | null>;
   stock: Generated<number | null>;
   /**
    * ความแรงของยา (e.g., 500mg)
@@ -4762,27 +4762,27 @@ export interface Products {
    * หน่วยนับ
    */
   unit: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
   /**
    * วิธีใช้/ขนาดรับประทาน
    */
-  usageInstructions: Generated<string | null>;
+  usage_instructions: Generated<string | null>;
   /**
    * อายุการใช้งาน (วัน) สำหรับ digital/service
    */
-  validityDays: Generated<number | null>;
+  validity_days: Generated<number | null>;
 }
 
 export interface ProductSymptomMap {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isFirstLine: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  is_first_line: Generated<number>;
+  line_account_id: Generated<number | null>;
   notes: Generated<string | null>;
-  productId: number;
-  symptomCode: string;
-  symptomLabelTh: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  product_id: number;
+  symptom_code: string;
+  symptom_label_th: Generated<string | null>;
+  updated_at: Generated<Date>;
   weight: Generated<number>;
 }
 
@@ -4794,50 +4794,50 @@ export interface ProductUnits {
   /**
    * ราคาทุนต่อหน่วยนี้
    */
-  costPrice: Generated<Decimal | null>;
-  createdAt: Generated<Date>;
+  cost_price: Generated<Decimal | null>;
+  created_at: Generated<Date>;
   /**
    * ตัวคูณเทียบกับหน่วยหลัก เช่น โหล=12
    */
   factor: Generated<Decimal>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   /**
    * เป็นหน่วยหลักหรือไม่
    */
-  isBaseUnit: Generated<number | null>;
+  is_base_unit: Generated<number | null>;
   /**
    * ใช้สำหรับสั่งซื้อ
    */
-  isPurchaseUnit: Generated<number | null>;
+  is_purchase_unit: Generated<number | null>;
   /**
    * ใช้สำหรับขาย
    */
-  isSaleUnit: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  productId: number;
+  is_sale_unit: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  product_id: number;
   /**
    * ราคาขายต่อหน่วยนี้
    */
-  salePrice: Generated<Decimal | null>;
+  sale_price: Generated<Decimal | null>;
   /**
    * รหัสหน่วย เช่น BTL, DOZ, BOX
    */
-  unitCode: Generated<string | null>;
+  unit_code: Generated<string | null>;
   /**
    * ชื่อหน่วย เช่น ขวด, โหล, กล่อง
    */
-  unitName: string;
-  updatedAt: Generated<Date>;
+  unit_name: string;
+  updated_at: Generated<Date>;
 }
 
 export interface PromotionSettings {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  settingKey: string;
-  settingValue: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  line_account_id: Generated<number | null>;
+  setting_key: string;
+  setting_value: Generated<string | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface PurchaseOrderItems {
@@ -4845,101 +4845,101 @@ export interface PurchaseOrderItems {
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   notes: Generated<string | null>;
-  poId: number;
+  po_id: number;
   /**
    * FK to business_items.id
    */
-  productId: number;
+  product_id: number;
   quantity: number;
-  receivedQuantity: Generated<number | null>;
+  received_quantity: Generated<number | null>;
   subtotal: Decimal;
-  unitCost: Decimal;
-  unitFactor: Generated<Decimal | null>;
-  unitId: Generated<number | null>;
-  unitName: Generated<string | null>;
+  unit_cost: Decimal;
+  unit_factor: Generated<Decimal | null>;
+  unit_id: Generated<number | null>;
+  unit_name: Generated<string | null>;
 }
 
 export interface PurchaseOrders {
-  cancelledAt: Generated<Date | null>;
-  cancelReason: Generated<string | null>;
-  createdAt: Generated<Date>;
-  createdBy: Generated<number | null>;
-  expectedDate: Generated<Date | null>;
+  cancel_reason: Generated<string | null>;
+  cancelled_at: Generated<Date | null>;
+  created_at: Generated<Date>;
+  created_by: Generated<number | null>;
+  expected_date: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   notes: Generated<string | null>;
-  orderDate: Date;
-  poNumber: string;
+  order_date: Date;
+  po_number: string;
   status: Generated<"cancelled" | "completed" | "draft" | "partial" | "submitted" | null>;
-  submittedAt: Generated<Date | null>;
+  submitted_at: Generated<Date | null>;
   subtotal: Generated<Decimal | null>;
-  supplierId: number;
-  taxAmount: Generated<Decimal | null>;
-  totalAmount: Generated<Decimal | null>;
-  updatedAt: Generated<Date>;
+  supplier_id: number;
+  tax_amount: Generated<Decimal | null>;
+  total_amount: Generated<Decimal | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface QuickReplyTemplates {
   category: Generated<string | null>;
   content: string;
-  createdAt: Generated<Date | null>;
-  createdBy: Generated<number | null>;
+  created_at: Generated<Date | null>;
+  created_by: Generated<number | null>;
   id: Generated<number>;
-  lastUsedAt: Generated<Date | null>;
-  lineAccountId: number;
+  last_used_at: Generated<Date | null>;
+  line_account_id: number;
   name: string;
   /**
    * JSON array of LINE Quick Reply items
    */
-  quickReply: Generated<string | null>;
+  quick_reply: Generated<string | null>;
   shortcuts: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
-  usageCount: Generated<number | null>;
+  updated_at: Generated<Date | null>;
+  usage_count: Generated<number | null>;
   variables: Generated<string | null>;
 }
 
 export interface ReceiptVouchers {
   amount: Decimal;
-  arId: number;
-  attachmentPath: Generated<string | null>;
-  bankAccount: Generated<string | null>;
-  createdAt: Generated<Date>;
-  createdBy: Generated<number | null>;
+  ar_id: number;
+  attachment_path: Generated<string | null>;
+  bank_account: Generated<string | null>;
+  created_at: Generated<Date>;
+  created_by: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   metadata: Generated<string | null>;
   notes: Generated<string | null>;
-  paymentMethod: "cash" | "cheque" | "credit_card" | "transfer";
-  receiptDate: Date;
-  referenceNumber: Generated<string | null>;
+  payment_method: "cash" | "cheque" | "credit_card" | "transfer";
+  receipt_date: Date;
+  reference_number: Generated<string | null>;
   /**
    * Link to payment_slips table
    */
-  slipId: Generated<number | null>;
-  voucherNumber: string;
+  slip_id: Generated<number | null>;
+  voucher_number: string;
 }
 
 export interface RedFlagSymptoms {
   /**
    * การดำเนินการที่ต้องทำ
    */
-  actionRequired: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  action_required: Generated<string | null>;
+  created_at: Generated<Date | null>;
   description: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   severity: Generated<"critical" | "urgent" | "warning" | null>;
-  symptomCode: string;
+  symptom_code: string;
   /**
    * ชื่ออาการภาษาอังกฤษ
    */
-  symptomNameEn: Generated<string | null>;
+  symptom_name_en: Generated<string | null>;
   /**
    * ชื่ออาการภาษาไทย
    */
-  symptomNameTh: string;
+  symptom_name_th: string;
 }
 
 export interface RestockNotifications {
@@ -4947,55 +4947,55 @@ export interface RestockNotifications {
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   message: Generated<string | null>;
-  newStock: Generated<number | null>;
-  notificationType: Generated<string | null>;
-  oldStock: Generated<number | null>;
-  productId: number;
-  sentAt: Generated<Date>;
-  userId: number;
-  wishlistId: Generated<number | null>;
+  new_stock: Generated<number | null>;
+  notification_type: Generated<string | null>;
+  old_stock: Generated<number | null>;
+  product_id: number;
+  sent_at: Generated<Date>;
+  user_id: number;
+  wishlist_id: Generated<number | null>;
 }
 
 export interface RewardRedemptions {
-  approvedAt: Generated<Date | null>;
-  approvedBy: Generated<number | null>;
-  createdAt: Generated<Date>;
-  deliveredAt: Generated<Date | null>;
-  expiresAt: Generated<Date | null>;
-  expiryReminderSent: Generated<number | null>;
+  approved_at: Generated<Date | null>;
+  approved_by: Generated<number | null>;
+  created_at: Generated<Date>;
+  delivered_at: Generated<Date | null>;
+  expires_at: Generated<Date | null>;
+  expiry_reminder_sent: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   notes: Generated<string | null>;
-  pointsUsed: number;
-  redemptionCode: Generated<string | null>;
-  rewardId: number;
+  points_used: number;
+  redemption_code: Generated<string | null>;
+  reward_id: number;
   status: Generated<"approved" | "cancelled" | "delivered" | "expired" | "pending" | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface Rewards {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
-  endDate: Generated<Date | null>;
+  end_date: Generated<Date | null>;
   id: Generated<number>;
-  imageUrl: Generated<string | null>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  image_url: Generated<string | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * 0 = unlimited
    */
-  maxPerUser: Generated<number | null>;
+  max_per_user: Generated<number | null>;
   name: string;
-  pointsRequired: number;
-  rewardType: Generated<"discount" | "product" | "shipping" | "voucher" | null>;
+  points_required: number;
+  reward_type: Generated<"discount" | "product" | "shipping" | "voucher" | null>;
   /**
    * à¸¡à¸¹à¸¥à¸„à¹ˆà¸²/à¸£à¸«à¸±à¸ªà¸„à¸¹à¸›à¸­à¸‡/product_id
    */
-  rewardValue: Generated<string | null>;
-  sortOrder: Generated<number | null>;
-  startDate: Generated<Date | null>;
+  reward_value: Generated<string | null>;
+  sort_order: Generated<number | null>;
+  start_date: Generated<Date | null>;
   /**
    * -1 = unlimited
    */
@@ -5007,17 +5007,17 @@ export interface RichMenuAliases {
   /**
    * LINE Rich Menu Alias ID
    */
-  aliasId: string;
+  alias_id: string;
   /**
    * ชื่อ Alias (เช่น member, guest)
    */
-  aliasName: string;
-  createdAt: Generated<Date>;
+  alias_name: string;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: number;
-  lineRichMenuId: string;
-  richMenuId: number;
+  line_account_id: number;
+  line_rich_menu_id: string;
+  rich_menu_id: number;
 }
 
 export interface RichMenuRules {
@@ -5025,14 +5025,14 @@ export interface RichMenuRules {
    * เงื่อนไขในรูปแบบ JSON
    */
   conditions: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * คำอธิบาย
    */
   description: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: number;
+  is_active: Generated<number | null>;
+  line_account_id: number;
   /**
    * ชื่อกฎ
    */
@@ -5044,121 +5044,121 @@ export interface RichMenuRules {
   /**
    * Rich Menu ที่จะใช้
    */
-  richMenuId: number;
-  updatedAt: Generated<Date>;
+  rich_menu_id: number;
+  updated_at: Generated<Date>;
 }
 
 export interface RichMenus {
   areas: Generated<string | null>;
-  chatBarText: Generated<string | null>;
-  createdAt: Generated<Date>;
+  chat_bar_text: Generated<string | null>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  imagePath: Generated<string | null>;
-  isActive: Generated<number | null>;
-  isDefault: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  lineRichMenuId: Generated<string | null>;
-  menuType: Generated<"custom" | "default" | "guest" | "member" | "vip" | null>;
+  image_path: Generated<string | null>;
+  is_active: Generated<number | null>;
+  is_default: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  line_rich_menu_id: Generated<string | null>;
+  menu_type: Generated<"custom" | "default" | "guest" | "member" | "vip" | null>;
   name: string;
-  sizeHeight: Generated<number | null>;
-  sizeWidth: Generated<number | null>;
+  size_height: Generated<number | null>;
+  size_width: Generated<number | null>;
   /**
    * กลุ่มเป้าหมาย
    */
-  targetAudience: Generated<string | null>;
+  target_audience: Generated<string | null>;
 }
 
 export interface RichMenuSwitchLog {
-  createdAt: Generated<Date>;
-  fromRichMenuId: Generated<number | null>;
+  created_at: Generated<Date>;
+  from_rich_menu_id: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: number;
-  lineUserId: string;
-  toRichMenuId: number;
-  triggerDetail: Generated<string | null>;
-  triggerType: Generated<"api" | "event" | "manual" | "rule" | null>;
-  userId: number;
+  line_account_id: number;
+  line_user_id: string;
+  to_rich_menu_id: number;
+  trigger_detail: Generated<string | null>;
+  trigger_type: Generated<"api" | "event" | "manual" | "rule" | null>;
+  user_id: number;
 }
 
 export interface RichMenuSwitchPages {
-  aliasId: Generated<string | null>;
-  createdAt: Generated<Date>;
+  alias_id: Generated<string | null>;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  lineRichMenuId: Generated<string | null>;
-  pageName: string;
-  pageNumber: Generated<number>;
-  richMenuId: number;
-  switchSetId: number;
+  line_account_id: Generated<number>;
+  line_rich_menu_id: Generated<string | null>;
+  page_name: string;
+  page_number: Generated<number>;
+  rich_menu_id: number;
+  switch_set_id: number;
 }
 
 export interface RichMenuSwitchSets {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: number;
+  is_active: Generated<number | null>;
+  line_account_id: number;
   name: string;
 }
 
 export interface ScheduledMessages {
   content: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  messageType: Generated<string | null>;
-  repeatType: Generated<"daily" | "monthly" | "none" | "weekly" | null>;
-  scheduledAt: Generated<Date>;
+  line_account_id: Generated<number | null>;
+  message_type: Generated<string | null>;
+  repeat_type: Generated<"daily" | "monthly" | "none" | "weekly" | null>;
+  scheduled_at: Generated<Date>;
   status: Generated<"cancelled" | "pending" | "sent" | null>;
-  targetId: Generated<number | null>;
-  targetType: Generated<"all" | "group" | "user" | null>;
+  target_id: Generated<number | null>;
+  target_type: Generated<"all" | "group" | "user" | null>;
   title: string;
 }
 
 export interface ScheduledReportLogs {
-  errorMessage: Generated<string | null>;
+  error_message: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  recipientsCount: Generated<number>;
-  reportData: Generated<string | null>;
-  reportId: number;
-  sentAt: Date;
+  line_account_id: Generated<number>;
+  recipients_count: Generated<number>;
+  report_data: Generated<string | null>;
+  report_id: number;
+  sent_at: Date;
   status: "failed" | "partial" | "success";
 }
 
 export interface ScheduledReportRecipients {
-  adminUserId: number;
-  createdAt: Generated<Date>;
+  admin_user_id: number;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * LINE User ID for push message
    */
-  lineUserId: Generated<string | null>;
-  notifyMethod: Generated<"both" | "email" | "line">;
-  reportId: number;
+  line_user_id: Generated<string | null>;
+  notify_method: Generated<"both" | "email" | "line">;
+  report_id: number;
 }
 
 export interface ScheduledReports {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lastRun: Generated<Date | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  last_run: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
   name: string;
-  nextRun: Generated<Date | null>;
+  next_run: Generated<Date | null>;
   parameters: Generated<string | null>;
   recipients: Generated<string | null>;
-  reportType: string;
+  report_type: string;
   /**
    * daily, weekly, monthly
    */
@@ -5166,14 +5166,14 @@ export interface ScheduledReports {
 }
 
 export interface SegmentMembers {
-  addedAt: Generated<Date>;
+  added_at: Generated<Date>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   score: Generated<Decimal | null>;
-  segmentId: number;
-  userId: number;
+  segment_id: number;
+  user_id: number;
 }
 
 export interface Settings {
@@ -5183,126 +5183,126 @@ export interface Settings {
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   type: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
   value: Generated<string | null>;
 }
 
 export interface SetupProgress {
-  completedAt: Generated<Date | null>;
-  createdAt: Generated<Date>;
+  completed_at: Generated<Date | null>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  itemKey: string;
-  lineAccountId: number;
+  item_key: string;
+  line_account_id: number;
   notes: Generated<string | null>;
   status: Generated<"completed" | "in_progress" | "pending" | "skipped" | null>;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface SharedFlexMessages {
-  createdAt: Generated<Date>;
-  createdBy: Generated<number | null>;
-  expiresAt: Generated<Date | null>;
-  flexContent: string;
+  created_at: Generated<Date>;
+  created_by: Generated<number | null>;
+  expires_at: Generated<Date | null>;
+  flex_content: string;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  shareCode: string;
-  shareCount: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  share_code: string;
+  share_count: Generated<number | null>;
   title: Generated<string | null>;
-  viewCount: Generated<number | null>;
+  view_count: Generated<number | null>;
 }
 
 export interface ShopProducts {
   /**
    * admin override per-field เช่น {"list_price":100,"name":"ชื่อใหม่"} — sync ไม่แตะ (effective value = COALESCE(override, sync))
    */
-  adminOverrides: Generated<string | null>;
+  admin_overrides: Generated<string | null>;
   barcode: Generated<string | null>;
-  baseUnit: Generated<string | null>;
+  base_unit: Generated<string | null>;
   category: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   description: Generated<string | null>;
   /**
    * ชนิดยา: OTC / Rx / Controlled / Supplement / Cosmetic / Other (derive จาก drug_type_rules)
    */
-  drugType: Generated<string | null>;
+  drug_type: Generated<string | null>;
   /**
    * ลำดับ pin บนหน้าแรก (NULL=ไม่ pin, ค่าน้อย=อยู่บน)
    */
-  featuredOrder: Generated<number | null>;
-  genericName: Generated<string | null>;
+  featured_order: Generated<number | null>;
+  generic_name: Generated<string | null>;
   id: Generated<number>;
-  imageGallery: Generated<string | null>;
-  imageUrl: Generated<string | null>;
-  isActive: Generated<number | null>;
-  isLocal: Generated<number | null>;
-  lastSyncedAt: Generated<Date | null>;
-  lineAccountId: number;
-  listPrice: Generated<Decimal | null>;
+  image_gallery: Generated<string | null>;
+  image_url: Generated<string | null>;
+  is_active: Generated<number | null>;
+  is_local: Generated<number | null>;
+  last_synced_at: Generated<Date | null>;
+  line_account_id: number;
+  list_price: Generated<Decimal | null>;
   manufacturer: Generated<string | null>;
   name: Generated<string | null>;
-  nameEn: Generated<string | null>;
-  onlinePrice: Generated<Decimal | null>;
-  productCode: string;
-  productId: Generated<string | null>;
-  saleableQty: Generated<Decimal | null>;
-  salePrice: Generated<Decimal | null>;
+  name_en: Generated<string | null>;
+  online_price: Generated<Decimal | null>;
+  product_code: string;
+  product_id: Generated<string | null>;
+  sale_price: Generated<Decimal | null>;
+  saleable_qty: Generated<Decimal | null>;
   sku: Generated<string | null>;
   /**
    * 1=แสดงบนหน้าร้านจริง, 0=sync แล้วแต่ซ่อน (default 0 — admin ต้องเปิดเอง)
    */
-  storefrontEnabled: Generated<number>;
+  storefront_enabled: Generated<number>;
   unit: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
-  usageInstructions: Generated<string | null>;
+  updated_at: Generated<Date | null>;
+  usage_instructions: Generated<string | null>;
 }
 
 export interface ShopSettings {
   address: Generated<string | null>;
-  autoConfirmPayment: Generated<number | null>;
-  bankAccounts: Generated<string | null>;
-  codEnabled: Generated<number | null>;
-  codFee: Generated<Decimal | null>;
-  contactPhone: Generated<string | null>;
-  createdAt: Generated<Date>;
-  facebookUrl: Generated<string | null>;
-  freeShippingMin: Generated<Decimal | null>;
+  auto_confirm_payment: Generated<number | null>;
+  bank_accounts: Generated<string | null>;
+  cod_enabled: Generated<number | null>;
+  cod_fee: Generated<Decimal | null>;
+  contact_phone: Generated<string | null>;
+  created_at: Generated<Date>;
+  facebook_url: Generated<string | null>;
+  free_shipping_min: Generated<Decimal | null>;
   /**
    * modern | healthcare â€” controls mini-app home visual theme
    */
-  homeTheme: Generated<string>;
+  home_theme: Generated<string>;
   id: Generated<number>;
-  instagramUrl: Generated<string | null>;
-  isOpen: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  lineId: Generated<string | null>;
-  orderDataSource: Generated<string | null>;
+  instagram_url: Generated<string | null>;
+  is_open: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  line_id: Generated<string | null>;
+  order_data_source: Generated<string | null>;
   /**
    * เลขที่ใบอนุญาตเภสัชกร
    */
-  pharmacistLicense: Generated<string | null>;
+  pharmacist_license: Generated<string | null>;
   /**
    * ชื่อเภสัชกรผู้มีหน้าที่ปฏิบัติการ
    */
-  pharmacistName: Generated<string | null>;
+  pharmacist_name: Generated<string | null>;
   /**
    * เลขที่ใบอนุญาตร้านยา
    */
-  pharmacyLicense: Generated<string | null>;
-  privacyPolicyVersion: Generated<string | null>;
-  promptpayName: Generated<string | null>;
-  promptpayNumber: Generated<string | null>;
-  shippingFee: Generated<Decimal | null>;
-  shopAddress: Generated<string | null>;
+  pharmacy_license: Generated<string | null>;
+  privacy_policy_version: Generated<string | null>;
+  promptpay_name: Generated<string | null>;
+  promptpay_number: Generated<string | null>;
+  shipping_fee: Generated<Decimal | null>;
+  shop_address: Generated<string | null>;
   /**
    * อีเมลร้าน
    */
-  shopEmail: Generated<string | null>;
-  shopLogo: Generated<string | null>;
-  shopName: Generated<string | null>;
-  termsVersion: Generated<string | null>;
-  welcomeMessage: Generated<string | null>;
+  shop_email: Generated<string | null>;
+  shop_logo: Generated<string | null>;
+  shop_name: Generated<string | null>;
+  terms_version: Generated<string | null>;
+  welcome_message: Generated<string | null>;
 }
 
 export interface ShopTaxInfo {
@@ -5310,117 +5310,117 @@ export interface ShopTaxInfo {
   /**
    * à¸œà¸¹à¹‰à¸¡à¸µà¸­à¸³à¸™à¸²à¸ˆà¸¥à¸‡à¸™à¸²à¸¡
    */
-  authorizedSigner: Generated<string | null>;
+  authorized_signer: Generated<string | null>;
   /**
    * 00000 = à¸ªà¸³à¸™à¸±à¸à¸‡à¸²à¸™à¹ƒà¸«à¸à¹ˆ
    */
-  branchCode: Generated<string>;
+  branch_code: Generated<string>;
   /**
    * à¸Šà¸·à¹ˆà¸­à¸à¸´à¸ˆà¸à¸²à¸£
    */
-  businessName: Generated<string | null>;
-  businessNameEn: Generated<string | null>;
-  createdAt: Generated<Date>;
-  defaultVatRate: Generated<Decimal>;
+  business_name: Generated<string | null>;
+  business_name_en: Generated<string | null>;
+  created_at: Generated<Date>;
+  default_vat_rate: Generated<Decimal>;
   email: Generated<string | null>;
   id: Generated<number>;
-  isVatRegistered: Generated<number>;
-  lineAccountId: number;
-  logoUrl: Generated<string | null>;
+  is_vat_registered: Generated<number>;
+  line_account_id: number;
+  logo_url: Generated<string | null>;
   phone: Generated<string | null>;
   /**
    * à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡
    */
-  signerPosition: Generated<string | null>;
+  signer_position: Generated<string | null>;
   /**
    * à¹€à¸¥à¸‚à¸›à¸£à¸°à¸ˆà¸³à¸•à¸±à¸§à¸œà¸¹à¹‰à¹€à¸ªà¸µà¸¢à¸ à¸²à¸©à¸µ 13 à¸«à¸¥à¸±à¸
    */
-  taxId: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  tax_id: Generated<string | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface SlaTracking {
-  conversationId: number;
-  deadlineAt: Date;
+  conversation_id: number;
+  deadline_at: Date;
   id: Generated<number>;
-  isBreached: Generated<number | null>;
+  is_breached: Generated<number | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  respondedAt: Generated<Date | null>;
-  slaThresholdMinutes: number;
-  startedAt: Date;
+  line_account_id: Generated<number>;
+  responded_at: Generated<Date | null>;
+  sla_threshold_minutes: number;
+  started_at: Date;
 }
 
 export interface SlipVerifications {
-  adminNote: Generated<string | null>;
+  admin_note: Generated<string | null>;
   checks: Generated<string | null>;
-  createdAt: Generated<Date>;
-  expectedAmount: Generated<Decimal | null>;
-  expectedDate: Generated<Date | null>;
-  fileSize: Generated<number | null>;
+  created_at: Generated<Date>;
+  expected_amount: Generated<Decimal | null>;
+  expected_date: Generated<Date | null>;
+  file_size: Generated<number | null>;
   flags: Generated<string | null>;
   height: Generated<number | null>;
   id: Generated<number>;
-  imageHash: Generated<string | null>;
-  imageUrl: string;
+  image_hash: Generated<string | null>;
+  image_url: string;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  messageId: number;
-  ocrConfidence: Generated<number | null>;
-  ocrProvider: Generated<string | null>;
-  ocrRawText: Generated<string | null>;
+  line_account_id: Generated<number>;
+  message_id: number;
+  ocr_confidence: Generated<number | null>;
+  ocr_provider: Generated<string | null>;
+  ocr_raw_text: Generated<string | null>;
   parsed: Generated<string | null>;
   score: Generated<number | null>;
   sha256: Generated<string | null>;
   status: Generated<"error" | "pending" | "review" | "suspicious" | "valid">;
   summary: Generated<string | null>;
-  updatedAt: Date;
-  userId: Generated<number | null>;
-  verifiedAt: Generated<Date | null>;
-  verifiedBy: Generated<string | null>;
+  updated_at: Date;
+  user_id: Generated<number | null>;
+  verified_at: Generated<Date | null>;
+  verified_by: Generated<string | null>;
   width: Generated<number | null>;
 }
 
 export interface StockAdjustments {
-  adjustmentNumber: string;
-  adjustmentType: "decrease" | "increase";
-  confirmedAt: Generated<Date | null>;
-  createdAt: Generated<Date>;
-  createdBy: Generated<number | null>;
+  adjustment_number: string;
+  adjustment_type: "decrease" | "increase";
+  confirmed_at: Generated<Date | null>;
+  created_at: Generated<Date>;
+  created_by: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * FK to business_items.id
    */
-  productId: number;
+  product_id: number;
   quantity: number;
   reason: "correction" | "damaged" | "expired" | "found" | "lost" | "other" | "physical_count";
-  reasonDetail: Generated<string | null>;
+  reason_detail: Generated<string | null>;
   status: Generated<"cancelled" | "confirmed" | "draft" | null>;
-  stockAfter: number;
-  stockBefore: number;
+  stock_after: number;
+  stock_before: number;
 }
 
 export interface StockCountItems {
-  countedAt: Generated<Date | null>;
-  countedQty: Generated<number | null>;
+  counted_at: Generated<Date | null>;
+  counted_qty: Generated<number | null>;
   /**
    * counted - expected
    */
   delta: Generated<number | null>;
-  expectedQty: Generated<number>;
+  expected_qty: Generated<number>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   note: Generated<string | null>;
-  productId: number;
-  sessionId: number;
+  product_id: number;
+  session_id: number;
 }
 
 export interface StockCountSessions {
@@ -5429,57 +5429,57 @@ export interface StockCountSessions {
    */
   code: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: number;
+  line_account_id: number;
   /**
    * à¸Šà¸·à¹ˆà¸­à¸£à¸­à¸šà¸™à¸±à¸š (à¹€à¸Šà¹ˆà¸™ à¸ªà¸´à¹‰à¸™à¹€à¸”à¸·à¸­à¸™ 05/2569)
    */
   name: Generated<string | null>;
   note: Generated<string | null>;
   scope: Generated<"all" | "category" | "custom" | "location" | null>;
-  scopeRefId: Generated<number | null>;
-  startedAt: Generated<Date | null>;
-  startedBy: Generated<number | null>;
+  scope_ref_id: Generated<number | null>;
+  started_at: Generated<Date | null>;
+  started_by: Generated<number | null>;
   status: Generated<"adjusted" | "cancelled" | "counting" | "draft" | "submitted" | null>;
-  submittedAt: Generated<Date | null>;
-  submittedBy: Generated<number | null>;
+  submitted_at: Generated<Date | null>;
+  submitted_by: Generated<number | null>;
 }
 
 export interface StockMovements {
-  createdAt: Generated<Date>;
-  createdBy: Generated<number | null>;
+  created_at: Generated<Date>;
+  created_by: Generated<number | null>;
   /**
    * Expiry date for this movement
    */
-  expiryDate: Generated<Date | null>;
+  expiry_date: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * Lot number
    */
-  lotNo: Generated<string | null>;
-  movementType: string;
+  lot_no: Generated<string | null>;
+  movement_type: string;
   notes: Generated<string | null>;
   /**
    * FK to business_items.id
    */
-  productId: number;
+  product_id: number;
   /**
    * บวก=เข้า, ลบ=ออก
    */
   quantity: number;
-  referenceId: Generated<number | null>;
-  referenceNumber: Generated<string | null>;
+  reference_id: Generated<number | null>;
+  reference_number: Generated<string | null>;
   /**
    * goods_receive, order, adjustment
    */
-  referenceType: Generated<string | null>;
-  stockAfter: number;
-  stockBefore: number;
-  unitCost: Generated<Decimal | null>;
-  unitFactor: Generated<Decimal | null>;
-  unitId: Generated<number | null>;
-  unitName: Generated<string | null>;
-  valueChange: Generated<Decimal | null>;
+  reference_type: Generated<string | null>;
+  stock_after: number;
+  stock_before: number;
+  unit_cost: Generated<Decimal | null>;
+  unit_factor: Generated<Decimal | null>;
+  unit_id: Generated<number | null>;
+  unit_name: Generated<string | null>;
+  value_change: Generated<Decimal | null>;
 }
 
 export interface StorageLocations {
@@ -5487,14 +5487,14 @@ export interface StorageLocations {
    * à¸£à¸«à¸±à¸ªà¸žà¸·à¹‰à¸™à¸—à¸µà¹ˆ (A1, B2 ...)
    */
   code: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * à¹€à¸Šà¹ˆà¸™ <60%
    */
-  humidityRange: Generated<string | null>;
+  humidity_range: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: number;
+  is_active: Generated<number | null>;
+  line_account_id: number;
   /**
    * à¸Šà¸·à¹ˆà¸­à¸žà¸·à¹‰à¸™à¸—à¸µà¹ˆà¹€à¸à¹‡à¸š
    */
@@ -5503,194 +5503,194 @@ export interface StorageLocations {
   /**
    * à¹€à¸Šà¹ˆà¸™ 2-8Â°C
    */
-  temperatureRange: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  temperature_range: Generated<string | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface Suppliers {
   address: Generated<string | null>;
   code: Generated<string | null>;
-  contactPerson: Generated<string | null>;
-  createdAt: Generated<Date>;
+  contact_person: Generated<string | null>;
+  created_at: Generated<Date>;
   email: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
   /**
    * วันครบกำหนดชำระ
    */
-  paymentTerms: Generated<number | null>;
+  payment_terms: Generated<number | null>;
   phone: Generated<string | null>;
-  taxId: Generated<string | null>;
-  totalPurchaseAmount: Generated<Decimal | null>;
-  updatedAt: Generated<Date>;
+  tax_id: Generated<string | null>;
+  total_purchase_amount: Generated<Decimal | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface SymptomAnalysisCache {
   /**
    * Condition, severity, recommendations
    */
-  analysisResult: Generated<string | null>;
-  createdAt: Generated<Date | null>;
-  expiresAt: Generated<Date | null>;
+  analysis_result: Generated<string | null>;
+  created_at: Generated<Date | null>;
+  expires_at: Generated<Date | null>;
   id: Generated<number>;
-  imageHash: string;
-  imageUrl: Generated<string | null>;
-  isUrgent: Generated<number | null>;
+  image_hash: string;
+  image_url: Generated<string | null>;
+  is_urgent: Generated<number | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
 }
 
 export interface SymptomAssessmentFollowups {
-  assessmentId: number;
-  createdAt: Generated<Date>;
-  followupDate: Date;
+  assessment_id: number;
+  created_at: Generated<Date>;
+  followup_date: Date;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   notes: Generated<string | null>;
   status: Generated<"consulted_doctor" | "improved" | "pending" | "same" | "worse" | null>;
 }
 
 export interface SymptomAssessments {
-  aiAssessment: Generated<string | null>;
-  aiRecommendations: Generated<string | null>;
+  ai_assessment: Generated<string | null>;
+  ai_recommendations: Generated<string | null>;
   allergies: Generated<string | null>;
-  createdAt: Generated<Date>;
-  currentMedications: Generated<string | null>;
+  created_at: Generated<Date>;
+  current_medications: Generated<string | null>;
   duration: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  medicalHistory: Generated<string | null>;
-  pharmacistId: Generated<number | null>;
-  pharmacistNotes: Generated<string | null>;
-  redFlags: Generated<string | null>;
-  sessionId: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  medical_history: Generated<string | null>;
+  pharmacist_id: Generated<number | null>;
+  pharmacist_notes: Generated<string | null>;
+  red_flags: Generated<string | null>;
+  session_id: Generated<string | null>;
   /**
    * 1-10
    */
   severity: Generated<number | null>;
   status: Generated<"completed" | "in_progress" | "referred" | null>;
   symptoms: Generated<string | null>;
-  triageLevel: Generated<"green" | "orange" | "red" | "yellow" | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  triage_level: Generated<"green" | "orange" | "red" | "yellow" | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface SyncBatches {
-  batchName: string;
-  completedAt: Generated<Date | null>;
-  completedJobs: Generated<number | null>;
-  createdAt: Generated<Date | null>;
-  failedJobs: Generated<number | null>;
+  batch_name: string;
+  completed_at: Generated<Date | null>;
+  completed_jobs: Generated<number | null>;
+  created_at: Generated<Date | null>;
+  failed_jobs: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  skippedJobs: Generated<number | null>;
-  startedAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  skipped_jobs: Generated<number | null>;
+  started_at: Generated<Date | null>;
   status: Generated<"completed" | "failed" | "pending" | "running" | null>;
-  totalJobs: Generated<number | null>;
+  total_jobs: Generated<number | null>;
 }
 
 export interface SyncConfig {
-  configKey: string;
-  configValue: Generated<string | null>;
+  config_key: string;
+  config_value: Generated<string | null>;
   description: Generated<string | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  updatedAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface SyncLogs {
   action: string;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   details: Generated<string | null>;
-  durationMs: Generated<number | null>;
+  duration_ms: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  queueId: Generated<number | null>;
+  line_account_id: Generated<number>;
+  queue_id: Generated<number | null>;
   sku: Generated<string | null>;
 }
 
 export interface SyncQueue {
-  apiData: Generated<string | null>;
+  api_data: Generated<string | null>;
   attempts: Generated<number | null>;
-  createdAt: Generated<Date | null>;
-  errorMessage: Generated<string | null>;
+  created_at: Generated<Date | null>;
+  error_message: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  maxAttempts: Generated<number | null>;
+  line_account_id: Generated<number>;
+  max_attempts: Generated<number | null>;
   priority: Generated<number | null>;
-  processingCompletedAt: Generated<Date | null>;
-  processingStartedAt: Generated<Date | null>;
+  processing_completed_at: Generated<Date | null>;
+  processing_started_at: Generated<Date | null>;
   result: Generated<string | null>;
   sku: string;
   status: Generated<"completed" | "failed" | "pending" | "processing" | "skipped" | null>;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface Tags {
   color: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   name: string;
 }
 
 export interface TelegramSettings {
-  botToken: Generated<string | null>;
-  chatId: Generated<string | null>;
-  createdAt: Generated<Date>;
+  bot_token: Generated<string | null>;
+  chat_id: Generated<string | null>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isEnabled: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  notifyNewFollower: Generated<number | null>;
-  notifyNewMessage: Generated<number | null>;
-  notifyNewOrder: Generated<number | null>;
-  notifyPayment: Generated<number | null>;
-  notifyUnfollow: Generated<number | null>;
+  is_enabled: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  notify_new_follower: Generated<number | null>;
+  notify_new_message: Generated<number | null>;
+  notify_new_order: Generated<number | null>;
+  notify_payment: Generated<number | null>;
+  notify_unfollow: Generated<number | null>;
 }
 
 export interface TemperatureLogs {
   /**
    * แจ้งเตือนเมื่ออุณหภูมิผิดปกติ
    */
-  alertTriggered: Generated<number | null>;
-  createdAt: Generated<Date | null>;
+  alert_triggered: Generated<number | null>;
+  created_at: Generated<Date | null>;
   /**
    * ความชื้น (%)
    */
   humidity: Generated<Decimal | null>;
   id: Generated<number>;
-  lineAccountId: number;
+  line_account_id: number;
   /**
    * ตำแหน่งที่เก็บ (ตู้เย็น, ห้องเย็น, etc.)
    */
-  locationId: Generated<number | null>;
+  location_id: Generated<number | null>;
   notes: Generated<string | null>;
-  recordedAt: Date;
+  recorded_at: Date;
   /**
    * ผู้บันทึก
    */
-  recordedBy: number;
+  recorded_by: number;
   /**
    * อุณหภูมิ (°C)
    */
@@ -5700,10 +5700,10 @@ export interface TemperatureLogs {
 export interface Templates {
   category: Generated<string | null>;
   content: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  messageType: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  message_type: Generated<string | null>;
   name: string;
 }
 
@@ -5711,18 +5711,18 @@ export interface TierSettings {
   /**
    * CSS color for tier badge
    */
-  badgeColor: Generated<string | null>;
+  badge_color: Generated<string | null>;
   /**
    * JSON or text description of tier benefits
    */
   benefits: Generated<string | null>;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * Minimum points to reach this tier
    */
-  minPoints: Generated<number>;
+  min_points: Generated<number>;
   /**
    * Points earning multiplier for this tier
    */
@@ -5731,44 +5731,44 @@ export interface TierSettings {
    * Tier name (Silver, Gold, Platinum)
    */
   name: string;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface TiktokShopAccounts {
-  accessToken: string;
-  appKey: string;
-  appSecret: string;
-  createdAt: Generated<Date>;
+  access_token: string;
+  app_key: string;
+  app_secret: string;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isActive: Generated<number>;
+  is_active: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   name: string;
-  pictureUrl: Generated<string | null>;
-  refreshToken: Generated<string | null>;
+  picture_url: Generated<string | null>;
+  refresh_token: Generated<string | null>;
   settings: Generated<string | null>;
-  shopCipher: Generated<string | null>;
-  shopId: string;
-  tokenExpiresAt: Generated<Date | null>;
-  updatedAt: Generated<Date>;
-  webhookUrl: Generated<string | null>;
+  shop_cipher: Generated<string | null>;
+  shop_id: string;
+  token_expires_at: Generated<Date | null>;
+  updated_at: Generated<Date>;
+  webhook_url: Generated<string | null>;
 }
 
 export interface TrackedLinks {
-  autoTagId: Generated<number | null>;
-  campaignId: Generated<number | null>;
-  clickCount: Generated<number | null>;
-  createdAt: Generated<Date>;
-  expiresAt: Generated<Date | null>;
+  auto_tag_id: Generated<number | null>;
+  campaign_id: Generated<number | null>;
+  click_count: Generated<number | null>;
+  created_at: Generated<Date>;
+  expires_at: Generated<Date | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  originalUrl: string;
-  shortCode: string;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  original_url: string;
+  short_code: string;
   title: Generated<string | null>;
-  uniqueClicks: Generated<number | null>;
+  unique_clicks: Generated<number | null>;
 }
 
 export interface TransactionItems {
@@ -5776,146 +5776,146 @@ export interface TransactionItems {
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  productId: Generated<number | null>;
-  productName: string;
-  productPrice: Decimal;
-  productSku: Generated<string | null>;
+  line_account_id: Generated<number>;
+  product_id: Generated<number | null>;
+  product_name: string;
+  product_price: Decimal;
+  product_sku: Generated<string | null>;
   quantity: number;
   subtotal: Decimal;
-  transactionId: number;
+  transaction_id: number;
 }
 
 export interface Transactions {
-  adminNote: Generated<string | null>;
+  admin_note: Generated<string | null>;
   carrier: Generated<string | null>;
-  createdAt: Generated<Date>;
-  deliveryInfo: Generated<string | null>;
-  discountAmount: Generated<Decimal | null>;
-  grandTotal: Decimal;
+  created_at: Generated<Date>;
+  delivery_info: Generated<string | null>;
+  discount_amount: Generated<Decimal | null>;
+  grand_total: Decimal;
   id: Generated<number>;
-  labelPrintedAt: Generated<Date | null>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: Generated<string | null>;
+  label_printed_at: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: Generated<string | null>;
   note: Generated<string | null>;
-  orderNumber: string;
-  packageDimensions: Generated<string | null>;
-  packageWeight: Generated<Decimal | null>;
-  packCompletedAt: Generated<Date | null>;
-  packerId: Generated<number | null>;
-  packStartedAt: Generated<Date | null>;
-  paymentMethod: Generated<string | null>;
-  paymentStatus: Generated<"failed" | "paid" | "pending" | "refunded" | null>;
-  pickCompletedAt: Generated<Date | null>;
-  pickerId: Generated<number | null>;
-  pickStartedAt: Generated<Date | null>;
-  pointsDiscount: Generated<Decimal | null>;
-  pointsUsed: Generated<number | null>;
-  shippedAt: Generated<Date | null>;
-  shippingAddress: Generated<string | null>;
-  shippingFee: Generated<Decimal | null>;
-  shippingName: Generated<string | null>;
-  shippingPhone: Generated<string | null>;
-  shippingProvider: Generated<string | null>;
-  shippingTracking: Generated<string | null>;
+  order_number: string;
+  pack_completed_at: Generated<Date | null>;
+  pack_started_at: Generated<Date | null>;
+  package_dimensions: Generated<string | null>;
+  package_weight: Generated<Decimal | null>;
+  packer_id: Generated<number | null>;
+  payment_method: Generated<string | null>;
+  payment_status: Generated<"failed" | "paid" | "pending" | "refunded" | null>;
+  pick_completed_at: Generated<Date | null>;
+  pick_started_at: Generated<Date | null>;
+  picker_id: Generated<number | null>;
+  points_discount: Generated<Decimal | null>;
+  points_used: Generated<number | null>;
+  shipped_at: Generated<Date | null>;
+  shipping_address: Generated<string | null>;
+  shipping_fee: Generated<Decimal | null>;
+  shipping_name: Generated<string | null>;
+  shipping_phone: Generated<string | null>;
+  shipping_provider: Generated<string | null>;
+  shipping_tracking: Generated<string | null>;
   status: Generated<string | null>;
-  totalAmount: Decimal;
-  transactionType: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
-  wmsException: Generated<string | null>;
-  wmsExceptionResolvedAt: Generated<Date | null>;
-  wmsExceptionResolvedBy: Generated<number | null>;
-  wmsStatus: Generated<"on_hold" | "packed" | "packing" | "pending_pick" | "picked" | "picking" | "ready_to_ship" | "shipped" | null>;
+  total_amount: Decimal;
+  transaction_type: Generated<string | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
+  wms_exception: Generated<string | null>;
+  wms_exception_resolved_at: Generated<Date | null>;
+  wms_exception_resolved_by: Generated<number | null>;
+  wms_status: Generated<"on_hold" | "packed" | "packing" | "pending_pick" | "picked" | "picking" | "ready_to_ship" | "shipped" | null>;
 }
 
 export interface TriageAnalytics {
-  avgCompletionTimeMinutes: Generated<Decimal | null>;
-  completedSessions: Generated<number | null>;
-  createdAt: Generated<Date>;
+  avg_completion_time_minutes: Generated<Decimal | null>;
+  completed_sessions: Generated<number | null>;
+  created_at: Generated<Date>;
   date: Date;
-  escalatedSessions: Generated<number | null>;
+  escalated_sessions: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  topSymptoms: Generated<string | null>;
-  totalSessions: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  urgentSessions: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  top_symptoms: Generated<string | null>;
+  total_sessions: Generated<number | null>;
+  updated_at: Generated<Date>;
+  urgent_sessions: Generated<number | null>;
 }
 
 export interface TriageQuestionResponses {
-  answeredAt: Generated<Date>;
-  answerText: Generated<string | null>;
-  answerValue: string;
+  answer_text: Generated<string | null>;
+  answer_value: string;
+  answered_at: Generated<Date>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  questionId: number;
-  triageSessionId: number;
+  line_account_id: Generated<number>;
+  question_id: number;
+  triage_session_id: number;
 }
 
 export interface TriageQuestions {
-  answerType: Generated<"multi_choice" | "scale_1_10" | "yes_no">;
-  conditionCode: string;
-  createdAt: Generated<Date>;
+  answer_type: Generated<"multi_choice" | "scale_1_10" | "yes_no">;
+  condition_code: string;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isActive: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  nextIfNo: Generated<number | null>;
-  nextIfYes: Generated<number | null>;
-  optionsJson: Generated<string | null>;
-  parentQuestionId: Generated<number | null>;
-  questionEn: Generated<string | null>;
-  questionTh: string;
-  recommendSymptomCodes: Generated<string | null>;
-  redFlagIfYes: Generated<number>;
-  sortOrder: Generated<number>;
-  updatedAt: Generated<Date>;
+  is_active: Generated<number>;
+  line_account_id: Generated<number | null>;
+  next_if_no: Generated<number | null>;
+  next_if_yes: Generated<number | null>;
+  options_json: Generated<string | null>;
+  parent_question_id: Generated<number | null>;
+  question_en: Generated<string | null>;
+  question_th: string;
+  recommend_symptom_codes: Generated<string | null>;
+  red_flag_if_yes: Generated<number>;
+  sort_order: Generated<number>;
+  updated_at: Generated<Date>;
 }
 
 export interface TriageSessions {
-  aiRecommendation: Generated<string | null>;
-  assessmentId: Generated<number | null>;
-  chiefComplaint: Generated<string | null>;
-  completedAt: Generated<Date | null>;
-  createdAt: Generated<Date>;
-  currentState: Generated<string | null>;
-  followUpDate: Generated<Date | null>;
+  ai_recommendation: Generated<string | null>;
+  assessment_id: Generated<number | null>;
+  chief_complaint: Generated<string | null>;
+  completed_at: Generated<Date | null>;
+  created_at: Generated<Date>;
+  current_state: Generated<string | null>;
+  follow_up_date: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   outcome: Generated<"emergency" | "otc_recommended" | "refer_doctor" | "self_care" | null>;
-  pharmacistAction: Generated<string | null>;
-  pharmacistId: Generated<number | null>;
-  pharmacistNote: Generated<string | null>;
-  redFlagsDetected: Generated<string | null>;
+  pharmacist_action: Generated<string | null>;
+  pharmacist_id: Generated<number | null>;
+  pharmacist_note: Generated<string | null>;
+  red_flags_detected: Generated<string | null>;
   /**
    * URL à¸£à¸¹à¸›à¹à¸™à¸š (à¸£à¸¹à¸›à¸¢à¸²à¹€à¸ªà¸µà¸¢, à¹ƒà¸šà¸ªà¸±à¹ˆà¸‡à¸¢à¸²à¸—à¸µà¹ˆà¸ªà¸‡à¸ªà¸±à¸¢)
    */
-  rejectAttachmentUrl: Generated<string | null>;
-  /**
-   * à¹€à¸§à¸¥à¸²à¸—à¸µà¹ˆà¸›à¸à¸´à¹€à¸ªà¸˜
-   */
-  rejectedAt: Generated<Date | null>;
-  /**
-   * admin_users.id à¸‚à¸­à¸‡à¹€à¸ à¸ªà¸±à¸Šà¸à¸£à¸—à¸µà¹ˆà¸›à¸à¸´à¹€à¸ªà¸˜
-   */
-  rejectedBy: Generated<number | null>;
+  reject_attachment_url: Generated<string | null>;
   /**
    * à¸£à¸«à¸±à¸ªà¹€à¸«à¸•à¸¸à¸œà¸¥à¸›à¸à¸´à¹€à¸ªà¸˜ (unsuitable_med, expired, customer_cancel, invalid_rx, other)
    */
-  rejectReasonCode: Generated<string | null>;
+  reject_reason_code: Generated<string | null>;
   /**
    * à¸£à¸²à¸¢à¸¥à¸°à¹€à¸­à¸µà¸¢à¸”à¹€à¸«à¸•à¸¸à¸œà¸¥à¸›à¸à¸´à¹€à¸ªà¸˜ (free-text à¸ˆà¸²à¸à¹€à¸ à¸ªà¸±à¸Šà¸à¸£)
    */
-  rejectReasonDetail: Generated<string | null>;
+  reject_reason_detail: Generated<string | null>;
+  /**
+   * à¹€à¸§à¸¥à¸²à¸—à¸µà¹ˆà¸›à¸à¸´à¹€à¸ªà¸˜
+   */
+  rejected_at: Generated<Date | null>;
+  /**
+   * admin_users.id à¸‚à¸­à¸‡à¹€à¸ à¸ªà¸±à¸Šà¸à¸£à¸—à¸µà¹ˆà¸›à¸à¸´à¹€à¸ªà¸˜
+   */
+  rejected_by: Generated<number | null>;
   status: Generated<"active" | "cancelled" | "completed" | "escalated" | "expired" | "pending_approval" | null>;
-  triageData: Generated<string | null>;
-  triageLevel: "green" | "orange" | "red" | "yellow";
-  updatedAt: Generated<Date>;
-  userId: number;
-  vitalSigns: Generated<string | null>;
+  triage_data: Generated<string | null>;
+  triage_level: "green" | "orange" | "red" | "yellow";
+  updated_at: Generated<Date>;
+  user_id: number;
+  vital_signs: Generated<string | null>;
 }
 
 export interface UserAddresses {
@@ -5923,7 +5923,7 @@ export interface UserAddresses {
    * à¸šà¹‰à¸²à¸™à¹€à¸¥à¸‚à¸—à¸µà¹ˆ + à¸–à¸™à¸™
    */
   address: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * à¸­à¸³à¹€à¸ à¸­/à¹€à¸‚à¸•
    */
@@ -5933,8 +5933,8 @@ export interface UserAddresses {
    * primary | secondary_1 | secondary_2 | secondary_3
    */
   label: string;
-  lineAccountId: Generated<number | null>;
-  lineUserId: string;
+  line_account_id: Generated<number | null>;
+  line_user_id: string;
   name: Generated<string | null>;
   phone: Generated<string | null>;
   postcode: Generated<string | null>;
@@ -5943,230 +5943,230 @@ export interface UserAddresses {
    * à¸•à¸³à¸šà¸¥/à¹à¸‚à¸§à¸‡
    */
   subdistrict: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface UserBehaviors {
-  behaviorCategory: Generated<string | null>;
-  behaviorData: Generated<string | null>;
-  behaviorType: string;
-  createdAt: Generated<Date>;
+  behavior_category: Generated<string | null>;
+  behavior_data: Generated<string | null>;
+  behavior_type: string;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  sessionId: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  session_id: Generated<string | null>;
   source: Generated<string | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface UserConsents {
-  acceptedAt: Generated<Date | null>;
-  consentType: "health_data" | "marketing" | "privacy_policy" | "terms_of_service";
-  consentVersion: Generated<string>;
-  createdAt: Generated<Date | null>;
+  accepted_at: Generated<Date | null>;
+  consent_type: "health_data" | "marketing" | "privacy_policy" | "terms_of_service";
+  consent_version: Generated<string>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  ipAddress: Generated<string | null>;
-  isAccepted: Generated<number>;
+  ip_address: Generated<string | null>;
+  is_accepted: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  updatedAt: Generated<Date | null>;
-  userAgent: Generated<string | null>;
-  userId: number;
-  withdrawnAt: Generated<Date | null>;
+  line_account_id: Generated<number>;
+  updated_at: Generated<Date | null>;
+  user_agent: Generated<string | null>;
+  user_id: number;
+  withdrawn_at: Generated<Date | null>;
 }
 
 export interface UserCurrentMedications {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   dosage: Generated<string | null>;
   frequency: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: string;
-  medicationName: string;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: string;
+  medication_name: string;
   notes: Generated<string | null>;
-  productId: Generated<number | null>;
-  startDate: Generated<Date | null>;
-  updatedAt: Generated<Date>;
+  product_id: Generated<number | null>;
+  start_date: Generated<Date | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface UserCustomFields {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * key สำหรับใช้ในโค้ด
    */
-  fieldKey: string;
+  field_key: string;
   /**
    * ชื่อฟิลด์
    */
-  fieldName: string;
+  field_name: string;
   /**
    * ตัวเลือก (สำหรับ select)
    */
-  fieldOptions: Generated<string | null>;
-  fieldType: Generated<"checkbox" | "date" | "number" | "select" | "text" | "textarea" | null>;
+  field_options: Generated<string | null>;
+  field_type: Generated<"checkbox" | "date" | "number" | "select" | "text" | "textarea" | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  isRequired: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  sortOrder: Generated<number | null>;
+  is_active: Generated<number | null>;
+  is_required: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  sort_order: Generated<number | null>;
 }
 
 export interface UserCustomFieldValues {
-  createdAt: Generated<Date>;
-  fieldId: number;
-  fieldValue: Generated<string | null>;
+  created_at: Generated<Date>;
+  field_id: number;
+  field_value: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  line_account_id: Generated<number>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface UserDrugAllergies {
-  createdAt: Generated<Date>;
-  drugId: Generated<number | null>;
-  drugName: string;
+  created_at: Generated<Date>;
+  drug_id: Generated<number | null>;
+  drug_name: string;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: string;
-  reactionNotes: Generated<string | null>;
-  reactionType: Generated<"breathing" | "other" | "rash" | "swelling" | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: string;
+  reaction_notes: Generated<string | null>;
+  reaction_type: Generated<"breathing" | "other" | "rash" | "swelling" | null>;
   severity: Generated<"mild" | "moderate" | "severe" | null>;
 }
 
 export interface UserGroups {
-  groupId: number;
+  group_id: number;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  userId: number;
+  line_account_id: Generated<number>;
+  user_id: number;
 }
 
 export interface UserHealthProfiles {
   age: Generated<number | null>;
-  bloodType: Generated<"A" | "AB" | "B" | "O" | "unknown" | null>;
-  createdAt: Generated<Date>;
+  blood_type: Generated<"A" | "AB" | "B" | "O" | "unknown" | null>;
+  created_at: Generated<Date>;
   gender: Generated<"female" | "male" | "other" | null>;
   height: Generated<Decimal | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: string;
-  medicalConditions: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: string;
+  medical_conditions: Generated<string | null>;
   name: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
   weight: Generated<Decimal | null>;
 }
 
 export interface UserNotes {
-  createdAt: Generated<Date | null>;
-  createdBy: Generated<number | null>;
+  created_at: Generated<Date | null>;
+  created_by: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   note: Generated<string | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface UserNotificationPreferences {
-  appointmentReminders: Generated<number | null>;
-  createdAt: Generated<Date>;
-  drugReminders: Generated<number | null>;
-  healthTips: Generated<number | null>;
+  appointment_reminders: Generated<number | null>;
+  created_at: Generated<Date>;
+  drug_reminders: Generated<number | null>;
+  health_tips: Generated<number | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: Generated<string | null>;
-  orderUpdates: Generated<number | null>;
-  priceAlerts: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: Generated<string | null>;
+  order_updates: Generated<number | null>;
+  price_alerts: Generated<number | null>;
   promotions: Generated<number | null>;
-  restockAlerts: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  restock_alerts: Generated<number | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface UserNotificationSettings {
-  appointmentReminders: Generated<number | null>;
-  createdAt: Generated<Date>;
-  drugReminders: Generated<number | null>;
-  healthTips: Generated<number | null>;
+  appointment_reminders: Generated<number | null>;
+  created_at: Generated<Date>;
+  drug_reminders: Generated<number | null>;
+  health_tips: Generated<number | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  orderUpdates: Generated<number | null>;
+  line_account_id: Generated<number>;
+  order_updates: Generated<number | null>;
   promotions: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface UserPoints {
-  availablePoints: Generated<number | null>;
-  createdAt: Generated<Date>;
+  available_points: Generated<number | null>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   tier: Generated<string | null>;
-  totalPoints: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  usedPoints: Generated<number | null>;
-  userId: number;
+  total_points: Generated<number | null>;
+  updated_at: Generated<Date>;
+  used_points: Generated<number | null>;
+  user_id: number;
 }
 
 export interface UserProfilesExtended {
   address: Generated<string | null>;
-  averageOrderValue: Generated<Decimal | null>;
+  average_order_value: Generated<Decimal | null>;
   birthday: Generated<Date | null>;
-  customerType: Generated<"inactive" | "new" | "returning" | "vip" | null>;
-  customFields: Generated<string | null>;
+  custom_fields: Generated<string | null>;
+  customer_type: Generated<"inactive" | "new" | "returning" | "vip" | null>;
   email: Generated<string | null>;
   /**
    * 0-100
    */
-  engagementScore: Generated<number | null>;
-  firstPurchaseAt: Generated<Date | null>;
+  engagement_score: Generated<number | null>;
+  first_purchase_at: Generated<Date | null>;
   gender: Generated<"female" | "male" | "other" | "unknown" | null>;
   interests: Generated<string | null>;
-  lastPurchaseAt: Generated<Date | null>;
-  lifetimeValue: Generated<Decimal | null>;
+  last_purchase_at: Generated<Date | null>;
+  lifetime_value: Generated<Decimal | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   phone: Generated<string | null>;
-  postalCode: Generated<string | null>;
-  preferredCategories: Generated<string | null>;
+  postal_code: Generated<string | null>;
+  preferred_categories: Generated<string | null>;
   province: Generated<string | null>;
-  totalOrders: Generated<number | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  total_orders: Generated<number | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface UserRichMenus {
-  assignedAt: Generated<Date>;
+  assigned_at: Generated<Date>;
   /**
    * เหตุผลที่กำหนด
    */
-  assignedReason: Generated<string | null>;
+  assigned_reason: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: number;
-  lineRichMenuId: string;
-  lineUserId: string;
-  richMenuId: number;
+  line_account_id: number;
+  line_rich_menu_id: string;
+  line_user_id: string;
+  rich_menu_id: number;
   /**
    * กฎที่ใช้กำหนด (NULL = manual)
    */
-  ruleId: Generated<number | null>;
-  userId: number;
+  rule_id: Generated<number | null>;
+  user_id: number;
 }
 
 export interface Users {
-  accountId: Generated<number | null>;
+  account_id: Generated<number | null>;
   /**
    * ที่อยู่
    */
@@ -6174,32 +6174,32 @@ export interface Users {
   /**
    * แต้มที่ใช้ได้
    */
-  availablePoints: Generated<number | null>;
+  available_points: Generated<number | null>;
   /**
    * วันเกิด
    */
   birthday: Generated<Date | null>;
-  bloodType: Generated<string | null>;
-  chatStatus: Generated<string | null>;
-  consentDate: Generated<Date | null>;
-  consentHealthData: Generated<number | null>;
-  consentPrivacy: Generated<number | null>;
-  consentTerms: Generated<number | null>;
-  createdAt: Generated<Date>;
+  blood_type: Generated<string | null>;
+  chat_status: Generated<string | null>;
+  consent_date: Generated<Date | null>;
+  consent_health_data: Generated<number | null>;
+  consent_privacy: Generated<number | null>;
+  consent_terms: Generated<number | null>;
+  created_at: Generated<Date>;
   /**
    * ยาที่ใช้อยู่
    */
-  currentMedications: Generated<string | null>;
+  current_medications: Generated<string | null>;
   /**
    * Custom name set by admin (overrides LINE display_name)
    */
-  customDisplayName: Generated<string | null>;
+  custom_display_name: Generated<string | null>;
   /**
    * คะแนนลูกค้า 0-100
    */
-  customerScore: Generated<number | null>;
-  dateOfBirth: Generated<Date | null>;
-  displayName: Generated<string | null>;
+  customer_score: Generated<number | null>;
+  date_of_birth: Generated<Date | null>;
+  display_name: Generated<string | null>;
   /**
    * เขต/อำเภอ
    */
@@ -6207,17 +6207,17 @@ export interface Users {
   /**
    * แพ้ยา
    */
-  drugAllergies: Generated<string | null>;
+  drug_allergies: Generated<string | null>;
   /**
    * อีเมล
    */
   email: Generated<string | null>;
-  emergencyContact: Generated<string | null>;
-  facebookAccountId: Generated<number | null>;
+  emergency_contact: Generated<string | null>;
+  facebook_account_id: Generated<number | null>;
   /**
    * ชื่อ
    */
-  firstName: Generated<string | null>;
+  first_name: Generated<string | null>;
   /**
    * เพศ
    */
@@ -6227,46 +6227,46 @@ export interface Users {
    */
   height: Generated<Decimal | null>;
   id: Generated<number>;
-  isBlocked: Generated<number | null>;
-  isRegistered: Generated<number | null>;
-  lastInteraction: Generated<Date | null>;
-  lastMessageAt: Generated<Date | null>;
+  is_blocked: Generated<number | null>;
+  is_registered: Generated<number | null>;
+  last_interaction: Generated<Date | null>;
+  last_message_at: Generated<Date | null>;
   /**
    * นามสกุล
    */
-  lastName: Generated<string | null>;
-  lastOrderAt: Generated<Date | null>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: string;
-  loyaltyPoints: Generated<number | null>;
+  last_name: Generated<string | null>;
+  last_order_at: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: string;
+  loyalty_points: Generated<number | null>;
   /**
    * โรคประจำตัว
    */
-  medicalConditions: Generated<string | null>;
+  medical_conditions: Generated<string | null>;
   /**
    * รหัสสมาชิก
    */
-  memberId: Generated<string | null>;
-  membershipLevel: Generated<"bronze" | "gold" | "platinum" | "silver" | null>;
+  member_id: Generated<string | null>;
+  membership_level: Generated<"bronze" | "gold" | "platinum" | "silver" | null>;
   /**
    * หมายเหตุ
    */
   note: Generated<string | null>;
   notes: Generated<string | null>;
-  orderCount: Generated<number | null>;
-  orderDays: Generated<string | null>;
+  order_count: Generated<number | null>;
+  order_days: Generated<string | null>;
   /**
    * เบอร์โทร
    */
   phone: Generated<string | null>;
-  pictureUrl: Generated<string | null>;
+  picture_url: Generated<string | null>;
   platform: Generated<string>;
-  platformUserId: Generated<string | null>;
+  platform_user_id: Generated<string | null>;
   points: Generated<number | null>;
   /**
    * รหัสไปรษณีย์
    */
-  postalCode: Generated<string | null>;
+  postal_code: Generated<string | null>;
   /**
    * จังหวัด
    */
@@ -6274,41 +6274,41 @@ export interface Users {
   /**
    * ชื่อจริง
    */
-  realName: Generated<string | null>;
+  real_name: Generated<string | null>;
   /**
    * วันที่สมัคร
    */
-  registeredAt: Generated<Date | null>;
-  replyToken: Generated<string | null>;
-  replyTokenExpires: Generated<Date | null>;
+  registered_at: Generated<Date | null>;
+  reply_token: Generated<string | null>;
+  reply_token_expires: Generated<Date | null>;
   source: Generated<string | null>;
-  statusMessage: Generated<string | null>;
+  status_message: Generated<string | null>;
   tags: Generated<string | null>;
   tier: Generated<string | null>;
   /**
    * ระดับสมาชิก
    */
-  tierId: Generated<number | null>;
-  tierUpdatedAt: Generated<Date | null>;
-  tiktokAccountId: Generated<number | null>;
+  tier_id: Generated<number | null>;
+  tier_updated_at: Generated<Date | null>;
+  tiktok_account_id: Generated<number | null>;
   /**
    * จำนวนออเดอร์ทั้งหมด
    */
-  totalOrders: Generated<number | null>;
+  total_orders: Generated<number | null>;
   /**
    * แต้มสะสมทั้งหมด
    */
-  totalPoints: Generated<number | null>;
+  total_points: Generated<number | null>;
   /**
    * ยอดซื้อรวม
    */
-  totalSpent: Generated<Decimal | null>;
-  unreadCount: Generated<number | null>;
-  updatedAt: Generated<Date>;
+  total_spent: Generated<Decimal | null>;
+  unread_count: Generated<number | null>;
+  updated_at: Generated<Date>;
   /**
    * แต้มที่ใช้ไปแล้ว
    */
-  usedPoints: Generated<number | null>;
+  used_points: Generated<number | null>;
   /**
    * น้ำหนัก (กก.)
    */
@@ -6316,239 +6316,239 @@ export interface Users {
 }
 
 export interface UserStates {
-  expiresAt: Generated<Date | null>;
+  expires_at: Generated<Date | null>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   state: string;
-  stateData: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  userId: number;
+  state_data: Generated<string | null>;
+  updated_at: Generated<Date>;
+  user_id: number;
 }
 
 export interface UserTagAssignments {
   /**
    * manual, auto, system, campaign
    */
-  assignedBy: Generated<string | null>;
-  assignedReason: Generated<string | null>;
-  createdAt: Generated<Date>;
+  assigned_by: Generated<string | null>;
+  assigned_reason: Generated<string | null>;
+  created_at: Generated<Date>;
   /**
    * Tag หมดอายุเมื่อไหร่
    */
-  expiresAt: Generated<Date | null>;
+  expires_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   /**
    * คะแนนความสนใจ
    */
   score: Generated<number | null>;
-  tagId: number;
-  userId: number;
+  tag_id: number;
+  user_id: number;
 }
 
 export interface UserTags {
   /**
    * เงื่อนไขการติด Tag อัตโนมัติ
    */
-  autoAssignRules: Generated<string | null>;
+  auto_assign_rules: Generated<string | null>;
   /**
    * เงื่อนไขการถอด Tag อัตโนมัติ
    */
-  autoRemoveRules: Generated<string | null>;
+  auto_remove_rules: Generated<string | null>;
   color: Generated<string | null>;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   description: Generated<string | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   name: string;
   priority: Generated<number | null>;
-  sourceId: Generated<number | null>;
-  sourceType: Generated<"auto" | "broadcast" | "manual" | "system" | null>;
-  tagType: Generated<"auto" | "broadcast" | "manual" | "system" | null>;
+  source_id: Generated<number | null>;
+  source_type: Generated<"auto" | "broadcast" | "manual" | "system" | null>;
+  tag_type: Generated<"auto" | "broadcast" | "manual" | "system" | null>;
 }
 
 export interface UserWishlist {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: Generated<string | null>;
   /**
    * แจ้งเตือนล่าสุดเมื่อ
    */
-  notifiedAt: Generated<Date | null>;
+  notified_at: Generated<Date | null>;
   /**
    * แจ้งเตือนเมื่อมีสินค้า
    */
-  notifyOnRestock: Generated<number | null>;
+  notify_on_restock: Generated<number | null>;
   /**
    * แจ้งเตือนเมื่อลดราคา
    */
-  notifyOnSale: Generated<number | null>;
+  notify_on_sale: Generated<number | null>;
   /**
    * ราคาตอนที่เพิ่ม
    */
-  priceWhenAdded: Generated<Decimal | null>;
-  productId: number;
-  userId: number;
+  price_when_added: Generated<Decimal | null>;
+  product_id: number;
+  user_id: number;
 }
 
 export interface VibeSellingSettings {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  settingKey: string;
-  settingValue: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  line_account_id: Generated<number | null>;
+  setting_key: string;
+  setting_value: Generated<string | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface VideoCalls {
-  appointmentId: Generated<number | null>;
-  createdAt: Generated<Date>;
-  displayName: Generated<string | null>;
+  appointment_id: Generated<number | null>;
+  created_at: Generated<Date>;
+  display_name: Generated<string | null>;
   /**
    * Duration in seconds
    */
   duration: Generated<number | null>;
-  durationSeconds: Generated<number | null>;
-  endedAt: Generated<Date | null>;
+  duration_seconds: Generated<number | null>;
+  ended_at: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: Generated<number | null>;
-  lineUserId: Generated<string | null>;
+  line_account_id: Generated<number | null>;
+  line_user_id: Generated<string | null>;
   notes: Generated<string | null>;
-  pharmacistId: Generated<number | null>;
-  pictureUrl: Generated<string | null>;
-  roomId: Generated<string | null>;
-  startedAt: Generated<Date | null>;
+  pharmacist_id: Generated<number | null>;
+  picture_url: Generated<string | null>;
+  room_id: Generated<string | null>;
+  started_at: Generated<Date | null>;
   status: Generated<"active" | "completed" | "ended" | "error" | "pending" | "reconnecting" | "rejected" | "ringing" | "timeout" | null>;
-  userId: number;
+  user_id: number;
 }
 
 export interface VideoCallSettings {
-  autoAnswer: Generated<number | null>;
-  createdAt: Generated<Date>;
+  auto_answer: Generated<number | null>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isEnabled: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
+  is_enabled: Generated<number | null>;
+  line_account_id: Generated<number | null>;
   /**
    * Max call duration in seconds
    */
-  maxDuration: Generated<number | null>;
-  offlineMessage: Generated<string | null>;
-  updatedAt: Generated<Date>;
-  workingHoursEnd: Generated<string | null>;
-  workingHoursStart: Generated<string | null>;
+  max_duration: Generated<number | null>;
+  offline_message: Generated<string | null>;
+  updated_at: Generated<Date>;
+  working_hours_end: Generated<string | null>;
+  working_hours_start: Generated<string | null>;
 }
 
 export interface VideoCallSignals {
-  callId: number;
-  createdAt: Generated<Date>;
-  fromWho: Generated<string | null>;
+  call_id: number;
+  created_at: Generated<Date>;
+  from_who: Generated<string | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   processed: Generated<number | null>;
-  senderType: Generated<"admin" | "customer" | null>;
-  signalData: string;
+  sender_type: Generated<"admin" | "customer" | null>;
+  signal_data: string;
   /**
    * offer, answer, ice-candidate
    */
-  signalType: string;
+  signal_type: string;
 }
 
 export interface WarehouseLocations {
   bin: number;
   capacity: Generated<number | null>;
-  createdAt: Generated<Date | null>;
-  currentQty: Generated<number | null>;
+  created_at: Generated<Date | null>;
+  current_qty: Generated<number | null>;
   description: Generated<string | null>;
-  ergonomicLevel: Generated<"golden" | "lower" | "upper" | null>;
+  ergonomic_level: Generated<"golden" | "lower" | "upper" | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
-  lineAccountId: Generated<number | null>;
-  locationCode: string;
+  is_active: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  location_code: string;
   shelf: number;
-  updatedAt: Generated<Date | null>;
+  updated_at: Generated<Date | null>;
   zone: string;
-  zoneType: Generated<string | null>;
+  zone_type: Generated<string | null>;
 }
 
 export interface WmsActivityLogs {
   action: "exception_resolved" | "item_damaged" | "item_picked" | "item_short" | "label_printed" | "on_hold" | "pack_completed" | "pack_started" | "pick_completed" | "pick_started" | "shipped";
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * Reference to transaction_items.id
    */
-  itemId: Generated<number | null>;
-  lineAccountId: number;
+  item_id: Generated<number | null>;
+  line_account_id: number;
   /**
    * Additional data like quantity, reason, etc.
    */
   metadata: Generated<string | null>;
   notes: Generated<string | null>;
-  orderId: number;
+  order_id: number;
   /**
    * Reference to admin_users.id
    */
-  staffId: Generated<number | null>;
+  staff_id: Generated<number | null>;
 }
 
 export interface WmsBatchPickOrders {
-  batchId: number;
-  createdAt: Generated<Date | null>;
+  batch_id: number;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
-  orderId: number;
-  pickedAt: Generated<Date | null>;
-  pickStatus: Generated<"pending" | "picked" | null>;
+  line_account_id: Generated<number>;
+  order_id: number;
+  pick_status: Generated<"pending" | "picked" | null>;
+  picked_at: Generated<Date | null>;
 }
 
 export interface WmsBatchPicks {
-  batchNumber: string;
-  completedAt: Generated<Date | null>;
-  createdAt: Generated<Date | null>;
+  batch_number: string;
+  completed_at: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
-  lineAccountId: number;
+  line_account_id: number;
   /**
    * Reference to admin_users.id
    */
-  pickerId: Generated<number | null>;
-  startedAt: Generated<Date | null>;
+  picker_id: Generated<number | null>;
+  started_at: Generated<Date | null>;
   status: Generated<"cancelled" | "completed" | "in_progress" | "pending" | null>;
-  totalItems: Generated<number | null>;
-  totalOrders: Generated<number | null>;
+  total_items: Generated<number | null>;
+  total_orders: Generated<number | null>;
 }
 
 export interface WmsPickItems {
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * tenant scope - FK line_accounts.id (added during DB-per-tenant migration)
    */
-  lineAccountId: Generated<number>;
+  line_account_id: Generated<number>;
   notes: Generated<string | null>;
-  orderId: number;
-  pickedAt: Generated<Date | null>;
-  pickedBy: Generated<number | null>;
-  productId: number;
-  quantityPicked: Generated<number | null>;
-  quantityRequired: number;
+  order_id: number;
+  picked_at: Generated<Date | null>;
+  picked_by: Generated<number | null>;
+  product_id: number;
+  quantity_picked: Generated<number | null>;
+  quantity_required: number;
   status: Generated<"damaged" | "pending" | "picked" | "short" | null>;
   /**
    * Reference to transaction_items.id
    */
-  transactionItemId: number;
-  updatedAt: Generated<Date | null>;
+  transaction_item_id: number;
+  updated_at: Generated<Date | null>;
 }
 
 export interface ZoneTypes {
@@ -6560,7 +6560,7 @@ export interface ZoneTypes {
    * Tailwind color name
    */
   color: Generated<string | null>;
-  createdAt: Generated<Date | null>;
+  created_at: Generated<Date | null>;
   /**
    * Description of zone type
    */
@@ -6570,302 +6570,302 @@ export interface ZoneTypes {
    */
   icon: Generated<string | null>;
   id: Generated<number>;
-  isActive: Generated<number | null>;
+  is_active: Generated<number | null>;
   /**
    * Is system default type
    */
-  isDefault: Generated<number | null>;
+  is_default: Generated<number | null>;
   /**
    * Display label
    */
   label: string;
-  lineAccountId: Generated<number | null>;
-  sortOrder: Generated<number | null>;
+  line_account_id: Generated<number | null>;
+  sort_order: Generated<number | null>;
   /**
    * Special storage requirements
    */
-  storageRequirements: Generated<string | null>;
-  updatedAt: Generated<Date | null>;
+  storage_requirements: Generated<string | null>;
+  updated_at: Generated<Date | null>;
 }
 
 export interface DB {
-  accountDailyStats: AccountDailyStats;
-  accountEvents: AccountEvents;
-  accountFollowers: AccountFollowers;
-  accountPayables: AccountPayables;
-  accountReceivables: AccountReceivables;
-  activityLogs: ActivityLogs;
-  adminQuickAccess: AdminQuickAccess;
-  aiChatLogs: AiChatLogs;
-  aiChatSettings: AiChatSettings;
-  aiConversationHistory: AiConversationHistory;
-  aiConversations: AiConversations;
-  aiKnowledgeBase: AiKnowledgeBase;
-  aiPharmacySettings: AiPharmacySettings;
-  aiRateLimits: AiRateLimits;
-  aiSettings: AiSettings;
-  aiTriageAssessments: AiTriageAssessments;
-  aiUserMode: AiUserMode;
-  aiUserPause: AiUserPause;
+  account_daily_stats: AccountDailyStats;
+  account_events: AccountEvents;
+  account_followers: AccountFollowers;
+  account_payables: AccountPayables;
+  account_receivables: AccountReceivables;
+  activity_logs: ActivityLogs;
+  admin_quick_access: AdminQuickAccess;
+  ai_chat_logs: AiChatLogs;
+  ai_chat_settings: AiChatSettings;
+  ai_conversation_history: AiConversationHistory;
+  ai_conversations: AiConversations;
+  ai_knowledge_base: AiKnowledgeBase;
+  ai_pharmacy_settings: AiPharmacySettings;
+  ai_rate_limits: AiRateLimits;
+  ai_settings: AiSettings;
+  ai_triage_assessments: AiTriageAssessments;
+  ai_user_mode: AiUserMode;
+  ai_user_pause: AiUserPause;
   analytics: Analytics;
   appointments: Appointments;
-  autoReplies: AutoReplies;
-  autoReplyRules: AutoReplyRules;
-  autoTagLogs: AutoTagLogs;
-  autoTagRules: AutoTagRules;
-  birthdayCampaigns: BirthdayCampaigns;
-  broadcastCampaigns: BroadcastCampaigns;
-  broadcastClicks: BroadcastClicks;
-  broadcastItems: BroadcastItems;
-  broadcastMessages: BroadcastMessages;
-  broadcastMessagesV2: BroadcastMessagesV2;
-  broadcastQueue: BroadcastQueue;
+  auto_replies: AutoReplies;
+  auto_reply_rules: AutoReplyRules;
+  auto_tag_logs: AutoTagLogs;
+  auto_tag_rules: AutoTagRules;
+  birthday_campaigns: BirthdayCampaigns;
+  broadcast_campaigns: BroadcastCampaigns;
+  broadcast_clicks: BroadcastClicks;
+  broadcast_items: BroadcastItems;
+  broadcast_messages: BroadcastMessages;
+  broadcast_messages_v2: BroadcastMessagesV2;
+  broadcast_queue: BroadcastQueue;
   broadcasts: Broadcasts;
-  businessCategories: BusinessCategories;
-  businessDocumentItems: BusinessDocumentItems;
-  businessDocuments: BusinessDocuments;
-  businessItems: BusinessItems;
-  businessSettings: BusinessSettings;
+  business_categories: BusinessCategories;
+  business_document_items: BusinessDocumentItems;
+  business_documents: BusinessDocuments;
+  business_items: BusinessItems;
+  business_settings: BusinessSettings;
   cart: Cart;
-  cartItems: CartItems;
-  categoryPointsBonus: CategoryPointsBonus;
-  chatStatusHistory: ChatStatusHistory;
-  consentLogs: ConsentLogs;
-  consultationAnalytics: ConsultationAnalytics;
-  consultationLogs: ConsultationLogs;
-  consultationStages: ConsultationStages;
-  conversationAssignees: ConversationAssignees;
-  conversationAssignments: ConversationAssignments;
-  conversationMultiAssignees: ConversationMultiAssignees;
-  conversationStates: ConversationStates;
+  cart_items: CartItems;
+  category_points_bonus: CategoryPointsBonus;
+  chat_status_history: ChatStatusHistory;
+  consent_logs: ConsentLogs;
+  consultation_analytics: ConsultationAnalytics;
+  consultation_logs: ConsultationLogs;
+  consultation_stages: ConsultationStages;
+  conversation_assignees: ConversationAssignees;
+  conversation_assignments: ConversationAssignments;
+  conversation_multi_assignees: ConversationMultiAssignees;
+  conversation_states: ConversationStates;
+  coupon_usage: CouponUsage;
   coupons: Coupons;
-  couponUsage: CouponUsage;
-  customerHealthProfiles: CustomerHealthProfiles;
-  customerNotes: CustomerNotes;
-  customerSegments: CustomerSegments;
-  dataAccessLogs: DataAccessLogs;
-  dispensingRecords: DispensingRecords;
-  documentSequences: DocumentSequences;
-  dripCampaignLogs: DripCampaignLogs;
-  dripCampaignProgress: DripCampaignProgress;
-  dripCampaignQueue: DripCampaignQueue;
-  dripCampaigns: DripCampaigns;
-  dripCampaignSteps: DripCampaignSteps;
-  dripQueue: DripQueue;
-  dripSteps: DripSteps;
-  drugDisposalRecords: DrugDisposalRecords;
-  drugGroups: DrugGroups;
-  drugInteractionAcknowledgments: DrugInteractionAcknowledgments;
-  drugInteractions: DrugInteractions;
-  drugLabelTemplates: DrugLabelTemplates;
-  drugPricingRules: DrugPricingRules;
-  drugRecognitionCache: DrugRecognitionCache;
-  drugTypeRules: DrugTypeRules;
-  emailSettings: EmailSettings;
-  emergencyAlerts: EmergencyAlerts;
-  expenseCategories: ExpenseCategories;
+  customer_health_profiles: CustomerHealthProfiles;
+  customer_notes: CustomerNotes;
+  customer_segments: CustomerSegments;
+  data_access_logs: DataAccessLogs;
+  dispensing_records: DispensingRecords;
+  document_sequences: DocumentSequences;
+  drip_campaign_logs: DripCampaignLogs;
+  drip_campaign_progress: DripCampaignProgress;
+  drip_campaign_queue: DripCampaignQueue;
+  drip_campaign_steps: DripCampaignSteps;
+  drip_campaigns: DripCampaigns;
+  drip_queue: DripQueue;
+  drip_steps: DripSteps;
+  drug_disposal_records: DrugDisposalRecords;
+  drug_groups: DrugGroups;
+  drug_interaction_acknowledgments: DrugInteractionAcknowledgments;
+  drug_interactions: DrugInteractions;
+  drug_label_templates: DrugLabelTemplates;
+  drug_pricing_rules: DrugPricingRules;
+  drug_recognition_cache: DrugRecognitionCache;
+  drug_type_rules: DrugTypeRules;
+  email_settings: EmailSettings;
+  emergency_alerts: EmergencyAlerts;
+  expense_categories: ExpenseCategories;
   expenses: Expenses;
-  facebookAccounts: FacebookAccounts;
-  flexTemplates: FlexTemplates;
-  genericNames: GenericNames;
-  ghostDraftLearning: GhostDraftLearning;
-  ghostDrafts: GhostDrafts;
-  goodsReceiveItems: GoodsReceiveItems;
-  goodsReceives: GoodsReceives;
+  facebook_accounts: FacebookAccounts;
+  flex_templates: FlexTemplates;
+  generic_names: GenericNames;
+  ghost_draft_learning: GhostDraftLearning;
+  ghost_drafts: GhostDrafts;
+  goods_receive_items: GoodsReceiveItems;
+  goods_receives: GoodsReceives;
   groups: Groups;
-  healthArticleCategories: HealthArticleCategories;
-  healthArticles: HealthArticles;
-  imageAnalysisResults: ImageAnalysisResults;
-  inventoryBatches: InventoryBatches;
-  itemCategories: ItemCategories;
-  itemImages: ItemImages;
-  landingBanners: LandingBanners;
-  landingFaqs: LandingFaqs;
-  landingFeaturedProducts: LandingFeaturedProducts;
-  landingSettings: LandingSettings;
-  landingTestimonials: LandingTestimonials;
-  liffApps: LiffApps;
-  liffMessageLogs: LiffMessageLogs;
-  liffShopSettings: LiffShopSettings;
-  lineAccounts: LineAccounts;
-  lineGroupMembers: LineGroupMembers;
-  lineGroupMessages: LineGroupMessages;
-  lineGroups: LineGroups;
-  linkClicks: LinkClicks;
-  locationMovements: LocationMovements;
-  loyaltyPoints: LoyaltyPoints;
-  loyaltyPointsHistory: LoyaltyPointsHistory;
-  medicalHistory: MedicalHistory;
-  medicationRefillTracking: MedicationRefillTracking;
-  medicationReminders: MedicationReminders;
-  medicationTakenHistory: MedicationTakenHistory;
-  memberNotificationPreferences: MemberNotificationPreferences;
-  memberTiers: MemberTiers;
-  messageAnalytics: MessageAnalytics;
+  health_article_categories: HealthArticleCategories;
+  health_articles: HealthArticles;
+  image_analysis_results: ImageAnalysisResults;
+  inventory_batches: InventoryBatches;
+  item_categories: ItemCategories;
+  item_images: ItemImages;
+  landing_banners: LandingBanners;
+  landing_faqs: LandingFaqs;
+  landing_featured_products: LandingFeaturedProducts;
+  landing_settings: LandingSettings;
+  landing_testimonials: LandingTestimonials;
+  liff_apps: LiffApps;
+  liff_message_logs: LiffMessageLogs;
+  liff_shop_settings: LiffShopSettings;
+  line_accounts: LineAccounts;
+  line_group_members: LineGroupMembers;
+  line_group_messages: LineGroupMessages;
+  line_groups: LineGroups;
+  link_clicks: LinkClicks;
+  location_movements: LocationMovements;
+  loyalty_points: LoyaltyPoints;
+  loyalty_points_history: LoyaltyPointsHistory;
+  medical_history: MedicalHistory;
+  medication_refill_tracking: MedicationRefillTracking;
+  medication_reminders: MedicationReminders;
+  medication_taken_history: MedicationTakenHistory;
+  member_notification_preferences: MemberNotificationPreferences;
+  member_tiers: MemberTiers;
+  message_analytics: MessageAnalytics;
   messages: Messages;
-  mimsConversationState: MimsConversationState;
-  miniappBanners: MiniappBanners;
-  miniappHomeProducts: MiniappHomeProducts;
-  miniappHomeSections: MiniappHomeSections;
-  notificationSettings: NotificationSettings;
-  odooActivityLog: OdooActivityLog;
-  odooApiLogs: OdooApiLogs;
-  odooBdoContext: OdooBdoContext;
-  odooBdoOrders: OdooBdoOrders;
-  odooBdos: OdooBdos;
-  odooCircuitBreakerState: OdooCircuitBreakerState;
-  odooCustomerProductStats: OdooCustomerProductStats;
-  odooCustomerProjection: OdooCustomerProjection;
-  odooCustomersCache: OdooCustomersCache;
-  odooDailySummary: OdooDailySummary;
-  odooDailySummaryAutoLog: OdooDailySummaryAutoLog;
-  odooDailySummarySettings: OdooDailySummarySettings;
-  odooDashboardCacheMeta: OdooDashboardCacheMeta;
-  odooInvoices: OdooInvoices;
-  odooInvoicesCache: OdooInvoicesCache;
-  odooLineUsers: OdooLineUsers;
-  odooManualOverrides: OdooManualOverrides;
-  odooNotificationBatchGroups: OdooNotificationBatchGroups;
-  odooNotificationLog: OdooNotificationLog;
-  odooNotificationPreferences: OdooNotificationPreferences;
-  odooNotificationQueue: OdooNotificationQueue;
-  odooNotificationTemplates: OdooNotificationTemplates;
-  odooOrderEvents: OdooOrderEvents;
-  odooOrderLines: OdooOrderLines;
-  odooOrderNotes: OdooOrderNotes;
-  odooOrderProjection: OdooOrderProjection;
-  odooOrders: OdooOrders;
-  odooOrdersSummary: OdooOrdersSummary;
-  odooOrderStates: OdooOrderStates;
-  odooOrderStatusOverrides: OdooOrderStatusOverrides;
-  odooPayments: OdooPayments;
-  odooProductsSyncState: OdooProductsSyncState;
-  odooSlipsCache: OdooSlipsCache;
-  odooSlipUploads: OdooSlipUploads;
-  odooSyncLog: OdooSyncLog;
-  odooWebhookDlq: OdooWebhookDlq;
-  odooWebhookLogs: OdooWebhookLogs;
-  odooWebhooksLog: OdooWebhooksLog;
-  onboardingSessions: OnboardingSessions;
-  orderItems: OrderItems;
+  mims_conversation_state: MimsConversationState;
+  miniapp_banners: MiniappBanners;
+  miniapp_home_products: MiniappHomeProducts;
+  miniapp_home_sections: MiniappHomeSections;
+  notification_settings: NotificationSettings;
+  odoo_activity_log: OdooActivityLog;
+  odoo_api_logs: OdooApiLogs;
+  odoo_bdo_context: OdooBdoContext;
+  odoo_bdo_orders: OdooBdoOrders;
+  odoo_bdos: OdooBdos;
+  odoo_circuit_breaker_state: OdooCircuitBreakerState;
+  odoo_customer_product_stats: OdooCustomerProductStats;
+  odoo_customer_projection: OdooCustomerProjection;
+  odoo_customers_cache: OdooCustomersCache;
+  odoo_daily_summary: OdooDailySummary;
+  odoo_daily_summary_auto_log: OdooDailySummaryAutoLog;
+  odoo_daily_summary_settings: OdooDailySummarySettings;
+  odoo_dashboard_cache_meta: OdooDashboardCacheMeta;
+  odoo_invoices: OdooInvoices;
+  odoo_invoices_cache: OdooInvoicesCache;
+  odoo_line_users: OdooLineUsers;
+  odoo_manual_overrides: OdooManualOverrides;
+  odoo_notification_batch_groups: OdooNotificationBatchGroups;
+  odoo_notification_log: OdooNotificationLog;
+  odoo_notification_preferences: OdooNotificationPreferences;
+  odoo_notification_queue: OdooNotificationQueue;
+  odoo_notification_templates: OdooNotificationTemplates;
+  odoo_order_events: OdooOrderEvents;
+  odoo_order_lines: OdooOrderLines;
+  odoo_order_notes: OdooOrderNotes;
+  odoo_order_projection: OdooOrderProjection;
+  odoo_order_states: OdooOrderStates;
+  odoo_order_status_overrides: OdooOrderStatusOverrides;
+  odoo_orders: OdooOrders;
+  odoo_orders_summary: OdooOrdersSummary;
+  odoo_payments: OdooPayments;
+  odoo_products_sync_state: OdooProductsSyncState;
+  odoo_slip_uploads: OdooSlipUploads;
+  odoo_slips_cache: OdooSlipsCache;
+  odoo_sync_log: OdooSyncLog;
+  odoo_webhook_dlq: OdooWebhookDlq;
+  odoo_webhook_logs: OdooWebhookLogs;
+  odoo_webhooks_log: OdooWebhooksLog;
+  onboarding_sessions: OnboardingSessions;
+  order_items: OrderItems;
   orders: Orders;
-  paymentProofs: PaymentProofs;
-  paymentSlips: PaymentSlips;
-  paymentVouchers: PaymentVouchers;
-  performanceMetrics: PerformanceMetrics;
-  pharmacistConsultations: PharmacistConsultations;
-  pharmacistHolidays: PharmacistHolidays;
-  pharmacistNotifications: PharmacistNotifications;
+  payment_proofs: PaymentProofs;
+  payment_slips: PaymentSlips;
+  payment_vouchers: PaymentVouchers;
+  performance_metrics: PerformanceMetrics;
+  pharmacist_consultations: PharmacistConsultations;
+  pharmacist_holidays: PharmacistHolidays;
+  pharmacist_notifications: PharmacistNotifications;
+  pharmacist_schedules: PharmacistSchedules;
   pharmacists: Pharmacists;
-  pharmacistSchedules: PharmacistSchedules;
-  pharmacyContextKeywords: PharmacyContextKeywords;
-  pharmacyGhostLearning: PharmacyGhostLearning;
-  pointRewards: PointRewards;
-  pointsCampaigns: PointsCampaigns;
-  pointsHistory: PointsHistory;
-  pointsRules: PointsRules;
-  pointsSettings: PointsSettings;
-  pointsTiers: PointsTiers;
-  pointsTransactions: PointsTransactions;
-  posCashMovements: PosCashMovements;
-  posDailySummary: PosDailySummary;
-  posPayments: PosPayments;
-  posReturnItems: PosReturnItems;
-  posReturns: PosReturns;
-  posShifts: PosShifts;
-  posTransactionItems: PosTransactionItems;
-  posTransactions: PosTransactions;
-  prescriptionApprovals: PrescriptionApprovals;
-  prescriptionItems: PrescriptionItems;
-  prescriptionOcrResults: PrescriptionOcrResults;
-  prescriptionRecords: PrescriptionRecords;
-  productCategories: ProductCategories;
-  productImages: ProductImages;
+  pharmacy_context_keywords: PharmacyContextKeywords;
+  pharmacy_ghost_learning: PharmacyGhostLearning;
+  point_rewards: PointRewards;
+  points_campaigns: PointsCampaigns;
+  points_history: PointsHistory;
+  points_rules: PointsRules;
+  points_settings: PointsSettings;
+  points_tiers: PointsTiers;
+  points_transactions: PointsTransactions;
+  pos_cash_movements: PosCashMovements;
+  pos_daily_summary: PosDailySummary;
+  pos_payments: PosPayments;
+  pos_return_items: PosReturnItems;
+  pos_returns: PosReturns;
+  pos_shifts: PosShifts;
+  pos_transaction_items: PosTransactionItems;
+  pos_transactions: PosTransactions;
+  prescription_approvals: PrescriptionApprovals;
+  prescription_items: PrescriptionItems;
+  prescription_ocr_results: PrescriptionOcrResults;
+  prescription_records: PrescriptionRecords;
+  product_categories: ProductCategories;
+  product_images: ProductImages;
+  product_symptom_map: ProductSymptomMap;
+  product_units: ProductUnits;
   products: Products;
-  productSymptomMap: ProductSymptomMap;
-  productUnits: ProductUnits;
-  promotionSettings: PromotionSettings;
-  purchaseOrderItems: PurchaseOrderItems;
-  purchaseOrders: PurchaseOrders;
-  quickReplyTemplates: QuickReplyTemplates;
-  receiptVouchers: ReceiptVouchers;
-  redFlagSymptoms: RedFlagSymptoms;
-  restockNotifications: RestockNotifications;
-  rewardRedemptions: RewardRedemptions;
+  promotion_settings: PromotionSettings;
+  purchase_order_items: PurchaseOrderItems;
+  purchase_orders: PurchaseOrders;
+  quick_reply_templates: QuickReplyTemplates;
+  receipt_vouchers: ReceiptVouchers;
+  red_flag_symptoms: RedFlagSymptoms;
+  restock_notifications: RestockNotifications;
+  reward_redemptions: RewardRedemptions;
   rewards: Rewards;
-  richMenuAliases: RichMenuAliases;
-  richMenuRules: RichMenuRules;
-  richMenus: RichMenus;
-  richMenuSwitchLog: RichMenuSwitchLog;
-  richMenuSwitchPages: RichMenuSwitchPages;
-  richMenuSwitchSets: RichMenuSwitchSets;
-  scheduledMessages: ScheduledMessages;
-  scheduledReportLogs: ScheduledReportLogs;
-  scheduledReportRecipients: ScheduledReportRecipients;
-  scheduledReports: ScheduledReports;
-  segmentMembers: SegmentMembers;
+  rich_menu_aliases: RichMenuAliases;
+  rich_menu_rules: RichMenuRules;
+  rich_menu_switch_log: RichMenuSwitchLog;
+  rich_menu_switch_pages: RichMenuSwitchPages;
+  rich_menu_switch_sets: RichMenuSwitchSets;
+  rich_menus: RichMenus;
+  scheduled_messages: ScheduledMessages;
+  scheduled_report_logs: ScheduledReportLogs;
+  scheduled_report_recipients: ScheduledReportRecipients;
+  scheduled_reports: ScheduledReports;
+  segment_members: SegmentMembers;
   settings: Settings;
-  setupProgress: SetupProgress;
-  sharedFlexMessages: SharedFlexMessages;
-  shopProducts: ShopProducts;
-  shopSettings: ShopSettings;
-  shopTaxInfo: ShopTaxInfo;
-  slaTracking: SlaTracking;
-  slipVerifications: SlipVerifications;
-  stockAdjustments: StockAdjustments;
-  stockCountItems: StockCountItems;
-  stockCountSessions: StockCountSessions;
-  stockMovements: StockMovements;
-  storageLocations: StorageLocations;
+  setup_progress: SetupProgress;
+  shared_flex_messages: SharedFlexMessages;
+  shop_products: ShopProducts;
+  shop_settings: ShopSettings;
+  shop_tax_info: ShopTaxInfo;
+  sla_tracking: SlaTracking;
+  slip_verifications: SlipVerifications;
+  stock_adjustments: StockAdjustments;
+  stock_count_items: StockCountItems;
+  stock_count_sessions: StockCountSessions;
+  stock_movements: StockMovements;
+  storage_locations: StorageLocations;
   suppliers: Suppliers;
-  symptomAnalysisCache: SymptomAnalysisCache;
-  symptomAssessmentFollowups: SymptomAssessmentFollowups;
-  symptomAssessments: SymptomAssessments;
-  syncBatches: SyncBatches;
-  syncConfig: SyncConfig;
-  syncLogs: SyncLogs;
-  syncQueue: SyncQueue;
+  symptom_analysis_cache: SymptomAnalysisCache;
+  symptom_assessment_followups: SymptomAssessmentFollowups;
+  symptom_assessments: SymptomAssessments;
+  sync_batches: SyncBatches;
+  sync_config: SyncConfig;
+  sync_logs: SyncLogs;
+  sync_queue: SyncQueue;
   tags: Tags;
-  telegramSettings: TelegramSettings;
-  temperatureLogs: TemperatureLogs;
+  telegram_settings: TelegramSettings;
+  temperature_logs: TemperatureLogs;
   templates: Templates;
-  tierSettings: TierSettings;
-  tiktokShopAccounts: TiktokShopAccounts;
-  trackedLinks: TrackedLinks;
-  transactionItems: TransactionItems;
+  tier_settings: TierSettings;
+  tiktok_shop_accounts: TiktokShopAccounts;
+  tracked_links: TrackedLinks;
+  transaction_items: TransactionItems;
   transactions: Transactions;
-  triageAnalytics: TriageAnalytics;
-  triageQuestionResponses: TriageQuestionResponses;
-  triageQuestions: TriageQuestions;
-  triageSessions: TriageSessions;
-  userAddresses: UserAddresses;
-  userBehaviors: UserBehaviors;
-  userConsents: UserConsents;
-  userCurrentMedications: UserCurrentMedications;
-  userCustomFields: UserCustomFields;
-  userCustomFieldValues: UserCustomFieldValues;
-  userDrugAllergies: UserDrugAllergies;
-  userGroups: UserGroups;
-  userHealthProfiles: UserHealthProfiles;
-  userNotes: UserNotes;
-  userNotificationPreferences: UserNotificationPreferences;
-  userNotificationSettings: UserNotificationSettings;
-  userPoints: UserPoints;
-  userProfilesExtended: UserProfilesExtended;
-  userRichMenus: UserRichMenus;
+  triage_analytics: TriageAnalytics;
+  triage_question_responses: TriageQuestionResponses;
+  triage_questions: TriageQuestions;
+  triage_sessions: TriageSessions;
+  user_addresses: UserAddresses;
+  user_behaviors: UserBehaviors;
+  user_consents: UserConsents;
+  user_current_medications: UserCurrentMedications;
+  user_custom_field_values: UserCustomFieldValues;
+  user_custom_fields: UserCustomFields;
+  user_drug_allergies: UserDrugAllergies;
+  user_groups: UserGroups;
+  user_health_profiles: UserHealthProfiles;
+  user_notes: UserNotes;
+  user_notification_preferences: UserNotificationPreferences;
+  user_notification_settings: UserNotificationSettings;
+  user_points: UserPoints;
+  user_profiles_extended: UserProfilesExtended;
+  user_rich_menus: UserRichMenus;
+  user_states: UserStates;
+  user_tag_assignments: UserTagAssignments;
+  user_tags: UserTags;
+  user_wishlist: UserWishlist;
   users: Users;
-  userStates: UserStates;
-  userTagAssignments: UserTagAssignments;
-  userTags: UserTags;
-  userWishlist: UserWishlist;
-  vibeSellingSettings: VibeSellingSettings;
-  videoCalls: VideoCalls;
-  videoCallSettings: VideoCallSettings;
-  videoCallSignals: VideoCallSignals;
-  warehouseLocations: WarehouseLocations;
-  wmsActivityLogs: WmsActivityLogs;
-  wmsBatchPickOrders: WmsBatchPickOrders;
-  wmsBatchPicks: WmsBatchPicks;
-  wmsPickItems: WmsPickItems;
-  zoneTypes: ZoneTypes;
+  vibe_selling_settings: VibeSellingSettings;
+  video_call_settings: VideoCallSettings;
+  video_call_signals: VideoCallSignals;
+  video_calls: VideoCalls;
+  warehouse_locations: WarehouseLocations;
+  wms_activity_logs: WmsActivityLogs;
+  wms_batch_pick_orders: WmsBatchPickOrders;
+  wms_batch_picks: WmsBatchPicks;
+  wms_pick_items: WmsPickItems;
+  zone_types: ZoneTypes;
 }

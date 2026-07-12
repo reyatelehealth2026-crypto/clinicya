@@ -41,6 +41,7 @@ export function HourlyActivityChart({ hourlyActivity }: HourlyActivityChartProps
           return (
             <rect
               key={hour}
+              className="hourly-bar"
               x={hour * barWidth + BAR_GAP / 2}
               y={CHART_HEIGHT - barHeight}
               width={Math.max(0, barWidth - BAR_GAP)}

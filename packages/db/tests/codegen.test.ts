@@ -53,8 +53,14 @@ describe('planCodegen', () => {
       'mysql',
       '--out-file',
       'src/generated/master-db.d.ts',
-      '--camel-case',
     ]);
+  });
+
+  it('never includes --camel-case — generated types stay snake_case to match the raw-sql house style', () => {
+    const masterPlan = planCodegen({ target: 'master' }, ENV);
+    const tenantPlan = planCodegen({ target: 'tenant', dbName: 'reya_tenant_0001' }, ENV);
+    expect(masterPlan.args).not.toContain('--camel-case');
+    expect(tenantPlan.args).not.toContain('--camel-case');
   });
 
   it('honours a custom --out-dir', () => {

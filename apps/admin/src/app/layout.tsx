@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import './globals.css';
 
 /**
  * Root layout — required by the App Router. Deliberately minimal: the real

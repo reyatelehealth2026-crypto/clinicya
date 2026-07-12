@@ -12,11 +12,11 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   : ColumnType<T, T | undefined, T>;
 
 export interface Entitlements {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * feature flag name (avoid SQL reserved word `key`)
    */
-  entitlementKey: string;
+  entitlement_key: string;
   id: Generated<number>;
   /**
    * หมายเหตุของ Platform Owner — ทำไมถึงเปิด/ปิด
@@ -25,24 +25,24 @@ export interface Entitlements {
   /**
    * FK tenants.id
    */
-  tenantId: number;
-  updatedAt: Generated<Date>;
+  tenant_id: number;
+  updated_at: Generated<Date>;
   /**
    * 0/1 toggle e.g. allow_telepharmacy=1
    */
-  valueBool: Generated<number | null>;
+  value_bool: Generated<number | null>;
   /**
    * numeric quota e.g. max_branches=3
    */
-  valueInt: Generated<number | null>;
+  value_int: Generated<number | null>;
   /**
    * string value e.g. allowed region code
    */
-  valueText: Generated<string | null>;
+  value_text: Generated<string | null>;
 }
 
 export interface MasterProducts {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * สรรพคุณ / คุณสมบัติ
    */
@@ -50,16 +50,16 @@ export interface MasterProducts {
   /**
    * ตัวยาสำคัญ (Generic)
    */
-  genericName: Generated<string | null>;
+  generic_name: Generated<string | null>;
   id: Generated<number>;
   /**
    * รูปภาพ (URL)
    */
-  imageUrl: Generated<string | null>;
+  image_url: Generated<string | null>;
   /**
    * visible ใน picker
    */
-  isActive: Generated<number>;
+  is_active: Generated<number>;
   /**
    * ผู้ผลิต
    */
@@ -71,11 +71,11 @@ export interface MasterProducts {
   /**
    * ชื่อสินค้า (อังกฤษ)
    */
-  nameEn: Generated<string | null>;
+  name_en: Generated<string | null>;
   /**
    * ขนาดบรรจุ
    */
-  packSize: Generated<string | null>;
+  pack_size: Generated<string | null>;
   /**
    * รหัสสินค้า — unique within source
    */
@@ -88,11 +88,11 @@ export interface MasterProducts {
    * หน่วย
    */
   unit: Generated<string | null>;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
   /**
    * วิธีใช้
    */
-  usageInstructions: Generated<string | null>;
+  usage_instructions: Generated<string | null>;
   /**
    * ตัวแปร — เช่น กล่องส้ม, รุ่น A
    */
@@ -103,24 +103,24 @@ export interface NodeSessions {
   /**
    * soft ref -> tenant_db.admin_users.id (per-tenant DB, no cross-DB FK possible) — set when realm=tenant
    */
-  adminUserId: Generated<number | null>;
-  createdAt: Generated<Date>;
+  admin_user_id: Generated<number | null>;
+  created_at: Generated<Date>;
   /**
    * mirrors $_SESSION[current_bot_id] — realm=tenant only, soft ref -> tenant_db.line_accounts.id
    */
-  currentBotId: Generated<number | null>;
+  current_bot_id: Generated<number | null>;
   /**
    * absolute expiry — no DEFAULT, always set explicitly at creation/rotation from NODE_SESSION_TTL_SECONDS
    */
-  expiresAt: Date;
+  expires_at: Date;
   /**
    * mirrors $_SESSION[admin_switched_to_tenant_id] — realm=platform only, soft ref -> master.tenants.id
    */
-  impersonatedTenantId: Generated<number | null>;
+  impersonated_tenant_id: Generated<number | null>;
   /**
    * bumped by getSession() on every successful read (mirrors a PHP session file mtime touch)
    */
-  lastSeenAt: Generated<Date>;
+  last_seen_at: Generated<Date>;
   /**
    * full serialized Session object (TenantSession | PlatformSession, @reya/auth) — source of truth for getSession(), the columns above are query-optimised mirrors for WHERE/index use, not a second source of truth
    */
@@ -128,11 +128,11 @@ export interface NodeSessions {
   /**
    * mirrors $_SESSION[platform_user_role] (super_admin|support|readonly) — realm=platform only
    */
-  platformRole: Generated<string | null>;
+  platform_role: Generated<string | null>;
   /**
    * FK-by-convention master.platform_users.id — set when realm=platform
    */
-  platformUserId: Generated<number | null>;
+  platform_user_id: Generated<number | null>;
   /**
    * tenant=admin_users session (reya_sid), platform=platform_users session (reya_platform_sid)
    */
@@ -144,11 +144,11 @@ export interface NodeSessions {
   /**
    * mirrors $_SESSION[active_tenant_id] — realm=tenant only, soft ref -> master.tenants.id
    */
-  tenantId: Generated<number | null>;
+  tenant_id: Generated<number | null>;
 }
 
 export interface Plans {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * รายละเอียดแพ็กเกจ
    */
@@ -156,29 +156,29 @@ export interface Plans {
   /**
    * ชื่อแสดงผล เช่น "เริ่มต้น", "มืออาชีพ"
    */
-  displayName: string;
+  display_name: string;
   id: Generated<number>;
   /**
    * 0 = retired plan (ห้ามรับสมัครใหม่)
    */
-  isActive: Generated<number>;
+  is_active: Generated<number>;
   /**
    * 0 = ซ่อนจากหน้า public pricing
    */
-  isVisiblePublic: Generated<number>;
+  is_visible_public: Generated<number>;
   /**
    * ราคาต่อเดือน (บาท)
    */
-  priceMonthlyThb: Generated<Decimal>;
+  price_monthly_thb: Generated<Decimal>;
   /**
    * machine name — starter / pro / enterprise / custom
    */
   slug: string;
-  updatedAt: Generated<Date>;
+  updated_at: Generated<Date>;
 }
 
 export interface PlatformUsers {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * login + contact email
    */
@@ -187,8 +187,8 @@ export interface PlatformUsers {
   /**
    * 0 = disabled (cannot login)
    */
-  isActive: Generated<number>;
-  lastLoginAt: Generated<Date | null>;
+  is_active: Generated<number>;
+  last_login_at: Generated<Date | null>;
   /**
    * ชื่อแสดงผลในระบบ
    */
@@ -196,7 +196,7 @@ export interface PlatformUsers {
   /**
    * bcrypt — never plaintext
    */
-  passwordHash: string;
+  password_hash: string;
   /**
    * super_admin=full cross-tenant access; support=ticket handling; readonly=audit/reporting only
    */
@@ -204,7 +204,7 @@ export interface PlatformUsers {
   /**
    * TOTP shared secret (NULL = 2FA off)
    */
-  twoFactorSecret: Generated<string | null>;
+  two_factor_secret: Generated<string | null>;
 }
 
 export interface SuperAdminAudit {
@@ -212,7 +212,7 @@ export interface SuperAdminAudit {
    * verb-noun e.g. switch_tenant, modify_entitlement
    */
   action: string;
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * BIGINT — audit volume grows quickly
    */
@@ -220,7 +220,7 @@ export interface SuperAdminAudit {
   /**
    * IPv4 or IPv6 of admin
    */
-  ipAddress: Generated<string | null>;
+  ip_address: Generated<string | null>;
   /**
    * free-form extra context (request body excerpt, before/after diff, etc.)
    */
@@ -228,96 +228,96 @@ export interface SuperAdminAudit {
   /**
    * FK platform_users.id — who did it
    */
-  platformUserId: number;
+  platform_user_id: number;
   /**
    * GET/POST/PUT/DELETE
    */
-  requestMethod: Generated<string | null>;
-  requestUri: Generated<string | null>;
+  request_method: Generated<string | null>;
+  request_uri: Generated<string | null>;
   /**
    * entity PK as string (varies by table)
    */
-  targetId: Generated<string | null>;
+  target_id: Generated<string | null>;
   /**
    * entity class e.g. user, order, dispense
    */
-  targetType: Generated<string | null>;
+  target_type: Generated<string | null>;
   /**
    * FK tenants.id (NULL = platform-wide action)
    */
-  tenantId: Generated<number | null>;
-  userAgent: Generated<string | null>;
+  tenant_id: Generated<number | null>;
+  user_agent: Generated<string | null>;
 }
 
 export interface TenantLineAccountRoutes {
   /**
    * LINE Messaging API channel_id — globally unique per OA
    */
-  channelId: Generated<string | null>;
-  createdAt: Generated<Date>;
+  channel_id: Generated<string | null>;
+  created_at: Generated<Date>;
   id: Generated<number>;
-  isActive: Generated<number>;
+  is_active: Generated<number>;
   /**
    * Optional: last time a request hit this route
    */
-  lastSeenAt: Generated<Date | null>;
+  last_seen_at: Generated<Date | null>;
   /**
    * PK of line_accounts row INSIDE the tenant DB
    */
-  lineAccountId: number;
+  line_account_id: number;
   /**
    * Friendly name for ops debugging
    */
-  oaName: Generated<string | null>;
+  oa_name: Generated<string | null>;
   /**
    * Denormalised: tenants.db_name — saves a JOIN per request
    */
-  tenantDbName: string;
+  tenant_db_name: string;
   /**
    * FK → tenants.id
    */
-  tenantId: number;
-  updatedAt: Generated<Date>;
+  tenant_id: number;
+  updated_at: Generated<Date>;
 }
 
 export interface TenantMigrations {
-  appliedAt: Generated<Date>;
+  applied_at: Generated<Date>;
   /**
    * FK platform_users.id (NULL = cron/system)
    */
-  appliedBy: Generated<number | null>;
+  applied_by: Generated<number | null>;
   /**
    * sha256 hex of file content — detect drift after deploy
    */
   checksum: Generated<string | null>;
-  errorMessage: Generated<string | null>;
+  error_message: Generated<string | null>;
   /**
    * wall-clock duration of applying the file (ms)
    */
-  executionMs: Generated<number | null>;
+  execution_ms: Generated<number | null>;
   id: Generated<number>;
   /**
    * e.g. migration_2026-05-24_documents.sql
    */
-  migrationFile: string;
+  migration_file: string;
   status: Generated<"applied" | "failed" | "skipped">;
   /**
    * FK tenants.id
    */
-  tenantId: number;
+  tenant_id: number;
 }
 
 export interface TenantPayments {
   /**
    * ยอดที่จ่าย (บาท)
    */
-  amountThb: Decimal;
-  createdAt: Generated<Date>;
+  amount_thb: Decimal;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * Invoice number associated with this payment
    */
-  invoiceNo: Generated<string | null>;
+  invoice_no: Generated<string | null>;
   /**
    * วิธีชำระ
    */
@@ -326,23 +326,23 @@ export interface TenantPayments {
   /**
    * วันที่จ่าย
    */
-  paidDate: Date;
+  paid_date: Date;
   /**
    * รอบที่จ่ายครอบคลุม (สิ้นสุด)
    */
-  periodEnd: Generated<Date | null>;
+  period_end: Generated<Date | null>;
   /**
    * รอบที่จ่ายครอบคลุม (เริ่ม)
    */
-  periodStart: Generated<Date | null>;
+  period_start: Generated<Date | null>;
   /**
    * Receipt number issued for this payment
    */
-  receiptNo: Generated<string | null>;
+  receipt_no: Generated<string | null>;
   /**
    * FK platform_users.id (คนที่บันทึก)
    */
-  recordedBy: Generated<number | null>;
+  recorded_by: Generated<number | null>;
   /**
    * เลขอ้างอิง/หมายเหตุสลิป
    */
@@ -350,27 +350,27 @@ export interface TenantPayments {
   /**
    * URL/path to payment proof or slip
    */
-  slipUrl: Generated<string | null>;
+  slip_url: Generated<string | null>;
   /**
    * FK tenants.id
    */
-  tenantId: number;
+  tenant_id: number;
   /**
    * When platform owner verified this payment
    */
-  verifiedAt: Generated<Date | null>;
+  verified_at: Generated<Date | null>;
   /**
    * platform_users.id who verified the payment
    */
-  verifiedBy: Generated<number | null>;
+  verified_by: Generated<number | null>;
 }
 
 export interface TenantProvisioningLog {
-  completedAt: Generated<Date | null>;
+  completed_at: Generated<Date | null>;
   /**
    * populated when status=failed/rolled_back
    */
-  errorMessage: Generated<string | null>;
+  error_message: Generated<string | null>;
   /**
    * lifecycle event being recorded
    */
@@ -379,45 +379,45 @@ export interface TenantProvisioningLog {
   /**
    * filename when event=schema_apply or migrate_apply
    */
-  migrationFile: Generated<string | null>;
-  startedAt: Generated<Date>;
+  migration_file: Generated<string | null>;
+  started_at: Generated<Date>;
   status: Generated<"failed" | "rolled_back" | "started" | "succeeded">;
   /**
    * FK tenants.id
    */
-  tenantId: number;
+  tenant_id: number;
   /**
    * FK platform_users.id (NULL = cron/system)
    */
-  triggeredBy: Generated<number | null>;
+  triggered_by: Generated<number | null>;
 }
 
 export interface Tenants {
-  createdAt: Generated<Date>;
+  created_at: Generated<Date>;
   /**
    * FK platform_users.id (NULL = bootstrap/seed)
    */
-  createdBy: Generated<number | null>;
+  created_by: Generated<number | null>;
   /**
    * for future multi-host scaling; default = same instance as platform
    */
-  dbHost: Generated<string>;
+  db_host: Generated<string>;
   /**
    * actual MariaDB DB e.g. reya_tenant_0001
    */
-  dbName: string;
+  db_name: string;
   /**
    * soft ref → tenant_db.branches.id (NULL until branch seeded)
    */
-  defaultBranchId: Generated<number | null>;
+  default_branch_id: Generated<number | null>;
   /**
    * soft ref → tenant_db.line_accounts.id
    */
-  defaultChannelId: Generated<number | null>;
+  default_channel_id: Generated<number | null>;
   /**
    * ชื่อร้านที่แสดงในระบบ (Thai OK)
    */
-  displayName: string;
+  display_name: string;
   /**
    * used as tenant_id everywhere in code
    */
@@ -425,23 +425,23 @@ export interface Tenants {
   /**
    * ชื่อนิติบุคคล (สำหรับเอกสารภาษี)
    */
-  legalName: Generated<string | null>;
+  legal_name: Generated<string | null>;
   /**
    * อีเมลติดต่อหลัก
    */
-  ownerEmail: Generated<string | null>;
+  owner_email: Generated<string | null>;
   /**
    * ชื่อเจ้าของร้าน (contact person)
    */
-  ownerName: Generated<string | null>;
+  owner_name: Generated<string | null>;
   /**
    * เบอร์ติดต่อ
    */
-  ownerPhone: Generated<string | null>;
+  owner_phone: Generated<string | null>;
   /**
    * FK plans.id — current subscription tier
    */
-  planId: number;
+  plan_id: number;
   /**
    * URL-safe identifier (lowercase, hyphens) e.g. "reya-demo"
    */
@@ -450,70 +450,70 @@ export interface Tenants {
    * pending_setup=DB being provisioned; suspended=billing/policy hold; terminated=archived
    */
   status: Generated<"active" | "pending_setup" | "suspended" | "terminated">;
-  suspendedAt: Generated<Date | null>;
+  suspended_at: Generated<Date | null>;
   /**
    * เลขประจำตัวผู้เสียภาษี 13 หลัก (optional)
    */
-  taxId: Generated<string | null>;
-  terminatedAt: Generated<Date | null>;
-  updatedAt: Generated<Date>;
+  tax_id: Generated<string | null>;
+  terminated_at: Generated<Date | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface TenantSubscriptions {
   /**
    * ยอดที่ตกลงต่อรอบ (default = ราคา plan, แก้ได้เผื่อส่วนลด/ดีลพิเศษ)
    */
-  amountThb: Generated<Decimal>;
+  amount_thb: Generated<Decimal>;
   /**
    * Whether platform ops may auto-suspend this tenant after overdue policy
    */
-  autoSuspendEnabled: Generated<number>;
+  auto_suspend_enabled: Generated<number>;
   /**
    * Billing address for invoice/receipt
    */
-  billingAddress: Generated<string | null>;
+  billing_address: Generated<string | null>;
   /**
    * Billing contact email
    */
-  billingContactEmail: Generated<string | null>;
+  billing_contact_email: Generated<string | null>;
   /**
    * Billing contact person
    */
-  billingContactName: Generated<string | null>;
+  billing_contact_name: Generated<string | null>;
   /**
    * Billing contact phone
    */
-  billingContactPhone: Generated<string | null>;
+  billing_contact_phone: Generated<string | null>;
   /**
    * รอบบิล
    */
-  billingCycle: Generated<"monthly" | "quarterly" | "yearly">;
+  billing_cycle: Generated<"monthly" | "quarterly" | "yearly">;
   /**
    * Customer contract/reference number
    */
-  contractNo: Generated<string | null>;
+  contract_no: Generated<string | null>;
   /**
    * Date contract/subscription was signed
    */
-  contractSignedDate: Generated<Date | null>;
-  createdAt: Generated<Date>;
+  contract_signed_date: Generated<Date | null>;
+  created_at: Generated<Date>;
   id: Generated<number>;
   /**
    * Internal platform-owner note, separate from short billing note
    */
-  internalNote: Generated<string | null>;
+  internal_note: Generated<string | null>;
   /**
    * Optional invoice prefix used by back office
    */
-  invoicePrefix: Generated<string | null>;
+  invoice_prefix: Generated<string | null>;
   /**
    * cache จากการจ่ายล่าสุด (tenant_payments)
    */
-  lastPaidDate: Generated<Date | null>;
+  last_paid_date: Generated<Date | null>;
   /**
    * วันครบกำหนดชำระรอบถัดไป
    */
-  nextDueDate: Date;
+  next_due_date: Date;
   /**
    * หมายเหตุของเจ้าของระบบ
    */
@@ -521,82 +521,82 @@ export interface TenantSubscriptions {
   /**
    * วันเริ่มใช้งาน (default = DATE(tenants.created_at))
    */
-  startDate: Date;
+  start_date: Date;
   /**
    * Tax ID / national business registration number
    */
-  taxId: Generated<string | null>;
+  tax_id: Generated<string | null>;
   /**
    * FK tenants.id (1:1)
    */
-  tenantId: number;
+  tenant_id: number;
   /**
    * Trial/grace period end date, if any
    */
-  trialEndsAt: Generated<Date | null>;
-  updatedAt: Generated<Date>;
+  trial_ends_at: Generated<Date | null>;
+  updated_at: Generated<Date>;
 }
 
 export interface TenantUsageSnapshots {
   /**
    * อัปเดตล่าสุดเมื่อ
    */
-  computedAt: Generated<Date | null>;
+  computed_at: Generated<Date | null>;
   id: Generated<number>;
   /**
    * Latest messages.created_at in tenant DB
    */
-  lastMessageAt: Generated<Date | null>;
+  last_message_at: Generated<Date | null>;
   /**
    * Latest transaction/order created_at in tenant DB
    */
-  lastOrderAt: Generated<Date | null>;
+  last_order_at: Generated<Date | null>;
   /**
    * Latest users.created_at in tenant DB
    */
-  lastUserAt: Generated<Date | null>;
+  last_user_at: Generated<Date | null>;
   /**
    * Number of admin_users in tenant DB
    */
-  numAdminUsers: Generated<number | null>;
+  num_admin_users: Generated<number | null>;
   /**
    * Number of line_accounts in tenant DB
    */
-  numLineAccounts: Generated<number | null>;
+  num_line_accounts: Generated<number | null>;
   /**
    * จำนวน messages
    */
-  numMessages: Generated<number | null>;
+  num_messages: Generated<number | null>;
   /**
    * จำนวน orders
    */
-  numOrders: Generated<number | null>;
+  num_orders: Generated<number | null>;
   /**
    * Number of products/business_items in tenant DB
    */
-  numProducts: Generated<number | null>;
+  num_products: Generated<number | null>;
   /**
    * จำนวน users ใน tenant DB (NULL = นับไม่ได้)
    */
-  numUsers: Generated<number | null>;
+  num_users: Generated<number | null>;
   /**
    * FK tenants.id (1:1, latest snapshot)
    */
-  tenantId: number;
+  tenant_id: number;
 }
 
 export interface DB {
   entitlements: Entitlements;
-  masterProducts: MasterProducts;
-  nodeSessions: NodeSessions;
+  master_products: MasterProducts;
+  node_sessions: NodeSessions;
   plans: Plans;
-  platformUsers: PlatformUsers;
-  superAdminAudit: SuperAdminAudit;
-  tenantLineAccountRoutes: TenantLineAccountRoutes;
-  tenantMigrations: TenantMigrations;
-  tenantPayments: TenantPayments;
-  tenantProvisioningLog: TenantProvisioningLog;
+  platform_users: PlatformUsers;
+  super_admin_audit: SuperAdminAudit;
+  tenant_line_account_routes: TenantLineAccountRoutes;
+  tenant_migrations: TenantMigrations;
+  tenant_payments: TenantPayments;
+  tenant_provisioning_log: TenantProvisioningLog;
+  tenant_subscriptions: TenantSubscriptions;
+  tenant_usage_snapshots: TenantUsageSnapshots;
   tenants: Tenants;
-  tenantSubscriptions: TenantSubscriptions;
-  tenantUsageSnapshots: TenantUsageSnapshots;
 }

@@ -1,5 +1,13 @@
 # Phase 2 batch 1 — /users, /user-detail, /dashboard parity harness
 
+> **Phase 2 batch 2 update**: `infra/e2e/parity.mjs` and `infra/e2e/lib/extract.mjs`
+> now ALSO cover `/analytics` (tabs overview/advanced/crm/account),
+> `/activity-logs`, `/loyalty-members` — same file, same single JSON-line
+> output, 27 `pages` entries total (the 14 below + 13 new). See the
+> **"Phase 2 batch 2"** section at the bottom of this file for what's new;
+> everything above this notice still describes batch 1's original 14 entries
+> accurately and is unchanged.
+
 Source of truth: `docs/plans/2026-07-12-nextjs-full-migration-plan.md` Phase 2
 (page-by-page port), §1.5 (strangler edge), §7.3 (canary ramp: demo tenant →
 1 real tenant → 10% → 50% → 100%). Owner: mig-infra (this harness) /
@@ -264,3 +272,270 @@ When mig-orchestrator is ready to ramp ONE of these three routes (independently 
 
 This agent does not perform step 1 for a real ramp — only mig-orchestrator
 authorizes a route flip, per this agent's own "Do not" boundary.
+
+---
+
+# Phase 2 batch 2 — /analytics, /activity-logs, /loyalty-members
+
+Owner: mig-infra (this harness extension) / mig-ui (the two page-porting
+agents whose Next output this batch's new entries verify — same division of
+labor as batch 1) / mig-orchestrator (route-flip authorization, unchanged).
+
+This section documents ONLY what's new. Batch 1's own scope note, JSON output
+shape, and general run mechanics (§1-2 above) all still apply unchanged —
+read those first if you haven't already.
+
+## 6. What's new — the three new page-pairs
+
+`infra/e2e/parity.mjs` now fetches+extracts+diffs 13 additional page-pair
+entries, appended to the SAME `pages` array batch-1's 14 already populate (27
+total). Same `runPagePair()`-per-entry, independent-try/catch pattern — one
+broken/missing new route fails as its own entry, never the others.
+
+### `/analytics?tab={overview|advanced|crm|account}` (PHP: `analytics.php?tab=...`, Next: `/analytics?tab=...`)
+
+4 entries (`analytics:tab=overview|advanced|crm|account`), config-driven via
+`ANALYTICS_TABS` in `parity.mjs`.
+
+- **overview** (`includes/analytics/overview.php` / `OverviewTab.tsx`):
+  followers, newFollowers, activeUsers, messages, broadcasts +
+  broadcastRecipients, orders, revenue, topTagsCount (known-name counting,
+  reuses batch-1's `FIXTURE_TAG_NAMES`), topKeywordsCount (new
+  `FIXTURE_KEYWORD_NAMES`), segmentsCount.
+- **advanced** (`includes/analytics/advanced.php` -> `AnalyticsController` ->
+  `AnalyticsModel` / `AdvancedTab.tsx`): the realtime bar's 4 numbers
+  (activeUsers/messagesPerHour/ordersToday/revenueToday — rendered
+  server-side into a Client Component's `useState(initial)`, so still present
+  in the plain-fetch SSR HTML this harness reads), plus users/messages/orders/
+  revenue KPI totals. Does **not** assert the Customer Funnel numbers or the
+  Broadcast-engagement list — `FunnelChart` is a client island that fetches
+  its own data via a Server Action AFTER mount (confirmed by reading
+  `FunnelChart.tsx`), so it is NOT present in the initial SSR HTML this
+  harness fetches; asserting it would require driving a real browser, out of
+  this batch's scope (see §8's Playwright note below for what WAS captured
+  instead).
+- **crm** (`includes/analytics/crm.php` + `classes/AdvancedCRM.php` /
+  `CrmTab.tsx`): totalUsers, activeUsers (Nd — needs the new
+  `user_behaviors` fixture rows), newUsers (Nd), segmentsCount,
+  topTagsRowCount (known-name counting again).
+- **account** (`includes/analytics/account.php` + `classes/
+  LineAccountManager.php` / `AccountTab.tsx`): verifies the
+  "กรุณาเลือกบอทเพื่อดูสถิติ" (please select a bot) prompt + the account
+  `<select>`'s presence — the ONLY reachable state in this harness (see §7's
+  "why no `line_accounts` rows" below). This is a real, valid tenant state
+  (a fresh tenant with no LINE OA connected yet shows exactly this), not a
+  skipped/faked check.
+
+**FLAGGED FINDING** (extract.mjs's own doc comment on this): the advanced and
+CRM tabs' stat cards render in OPPOSITE label/value order from each other
+(advanced: value-then-label `<p>{value}</p><p>label</p>`; CRM:
+label-then-value `<p>label</p><p>{value}</p>`) — confirmed by reading both
+PHP partials AND both `.tsx` ports in full, not assumed. The extractors use
+`beforeLabel()`/`advanceTo()+afterLabel('</p>')` respectively, matching each
+tab's own real markup.
+
+### `/activity-logs` (PHP: `activity-logs.php`, Next: `/activity-logs`)
+
+7 entries (`activity-logs:baseline|type|action|search|date-range|combined|page2`),
+config-driven via `ACTIVITY_LOGS_COMBOS`. Extraction: `totalLogs` (the "N
+รายการ" count), `rangeStart`/`rangeEnd` (the "แสดงรายการที่ X-Y จาก Z" line,
+only rendered when totalLogs > 0), `rowCount` (`<td>` tags inside `<tbody>`
+÷ 6 fixed columns — a structural count, not a text-label one, chosen because
+neither the row nor its cells carry a class name genuinely shared between
+PHP's bespoke markup and Next's Tailwind-utility port), `emptyStateShown`.
+
+- `type=pharmacy` and `action=login` each exercise a real, non-trivial
+  filter branch.
+- `search=BATCH2SEARCHMARK` exercises `queries.ts`'s search clause (LIKE
+  across description/user_name/admin_name) against 3 marker-tagged fixture
+  rows.
+- `date-range` applies an independent, NARROWER date bound (6-12 days ago)
+  than every other combo's WIDE bound, to actually exercise the date-filter
+  code path (not just avoid the login-noise window — see below).
+- `combined` (`type=consent&action=login`) exercises `type` and `action`
+  filters simultaneously.
+- `page2` exercises OFFSET pagination (`ACTIVITY_LOGS_PER_PAGE = 50`, and
+  this batch's fixture seeds 55 rows specifically so page 2 is non-empty).
+
+**FLAGGED FINDING** (build report, not fixed here — `classes/AdminAuth.php`,
+`packages/auth/**` are out of this agent's allowed paths): `classes/
+AdminAuth.php::login()` calls `ActivityLogger::logAuth(ACTION_LOGIN, ...)`
+on every successful PHP login, which `phpLogin()` triggers — so PHP's
+`activity_logs` table ends up with exactly ONE more row
+(`log_type='auth', action='login'`, dated "today") than Next's after login,
+for the rest of the run. `internal/session-bridge.php`'s `'login-sync'`
+action (what `nextLogin()`'s bridge-sync hits) only assigns raw `$_SESSION`
+keys — verified by reading the full file — it never touches
+`activity_logs`. This is a genuine backend asymmetry in production too (a
+real admin who logs in via the new Next UI today leaves no `activity_logs`
+audit trail for that login, unlike the legacy PHP UI), independent of this
+harness. **Workaround applied here** (not a fix): every fixture row in
+`activity_logs` is dated 2-21 days in the past (never "today"), and every
+`activity-logs` combo in `parity.mjs` applies a `date_to` bound of
+"yesterday" (computed fresh each run via `bangkokDateString(-1)`, never
+hardcoded) so the PHP-only login row is excluded from every comparison on
+both stacks. Flagged for mig-orchestrator: a follow-up ticket may want
+`@reya/auth`'s `login()` to also write an `activity_logs` row for real
+production audit-trail parity — independent of and not blocking this
+harness.
+
+### `/loyalty-members` (PHP: `loyalty-members.php`, Next: `/loyalty-members`)
+
+2 entries (`loyalty-members:baseline|search`). Extraction: the 3 stat-card
+numbers (total/points/today) and which (if either) empty-state message is
+shown (`no-members` vs `no-search-results`).
+
+**Both entries assert the EMPTY state, not a populated member list** — see
+§7 below for the full "why", but in short: `loyalty-members.php`'s (and its
+`queries.ts` port's) entire query is gated behind `if ($lineAccountId > 0)`
+/ `session.currentBotId ?? 0`, and this harness's shared PHP session NEVER
+has a bot auto-selected (deliberately — see §7). This is still a real,
+meaningful assertion: it verifies BOTH stacks read that exact same gate
+condition identically (a regression where one side's gate check drifted from
+the other's — e.g. PHP's `> 0` vs a hypothetical Next `>= 0` — would be
+caught here as a mismatch), not a vacuous always-passing check. The `users`
+rows seeded with `line_user_id LIKE 'offline:%'` (ids 101-105, exercising
+`lmName()`'s 3-branch display-name fallback) are written per this batch's
+brief for completeness and are ready for a future harness revision that DOES
+wire up a real bot selection — they are simply unreachable in THIS run.
+
+## 7. Why this batch's fixture seeds NO `line_accounts` rows
+
+This is the single most important design decision in
+`infra/e2e/seed/40-phase2-batch2-fixture.sql.tmpl` — read that file's own
+(longer) header comment for the full mechanical trace through
+`includes/header.php` / `classes/AdminAuth.php` / `packages/auth/src/
+session.ts`. Summary:
+
+- PHP's `includes/header.php` (required by EVERY protected admin page)
+  auto-selects a bot into `$_SESSION['current_bot_id']` the FIRST time it
+  runs for a session with none set yet, IF `line_accounts` has any
+  `is_active=1` row (our seeded e2e admin is `super_admin`, so this always
+  triggers the instant any such row exists). That selection is STICKY for
+  the rest of that PHP session — every subsequent page fetch, not just the
+  one that triggered it.
+- Next's session has NO equivalent auto-select — `currentBotId` is `null`
+  from `login()` onward, forever, unless something explicitly calls
+  `switchBot()` (nothing in `apps/admin` does yet).
+- Since `parity.mjs`'s `phpSid` is ONE shared PHP session across ALL 27
+  page-pair fetches (batch-1's AND this batch's), seeding even one
+  `line_accounts` row would have silently re-scoped several of batch-1's
+  ALREADY-PASSING queries (`includes/dashboard/crm.php`'s
+  `(line_account_id = ? OR ? IS NULL)` PARAM-nullness pattern, specifically)
+  on the PHP side only, while Next stayed unscoped — corrupting entries this
+  batch was never supposed to touch. This is a correctness hazard, not a
+  style choice — this exact failure mode was reasoned through analytically
+  before any `line_accounts` row was ever seeded (never actually triggered
+  against a running stack, precisely because it was avoided from the start).
+  The "acceptance criterion: all 27 entries pass, not just the new 13" check
+  is what would catch a regression here if a future change ever
+  re-introduces a `line_accounts` row into this fixture.
+- Net effect: `/analytics`'s overview/advanced/crm tabs all use either the
+  `(line_account_id = ? OR line_account_id IS NULL)` COLUMN-nullness pattern
+  or a plain "truthy lineAccountId ? filter : no filter" check — BOTH
+  evaluate to "match everything with `line_account_id IS NULL`" (or
+  literally everything, for the truthy-check tables) when `lineAccountId` is
+  null, which it always is here — so this batch's new fixture rows
+  (`line_account_id = NULL` throughout) show up correctly. `/loyalty-members`
+  and the `/analytics?tab=account` tab, by contrast, are ENTIRELY gated on a
+  real bot being selected, so they render their (real, valid) empty/prompt
+  states instead — see their own sections above.
+
+## 8. Optional Playwright screenshots (non-gating) — SKIPPED this batch
+
+Verified before deciding, per the brief's own instruction: a Chromium build
+IS available at `/opt/pw-browsers` in this environment, but the `playwright`
+npm package itself is not installed anywhere in this repo (no
+`node_modules/playwright`, no `package.json` dependency, in either the root
+workspace or `apps/admin`). Per this batch's own brief ("OPTIONAL,
+non-gating... Skip entirely if it risks slipping the harder requirements
+below"), this was intentionally skipped: adding a net-new `playwright`
+dependency and writing/running a screenshot script would mean an additional
+`npm install` plus at least one more full docker-compose-up +
+`pnpm --filter admin run build` + standalone-server cycle (each already
+costing several minutes in this environment, confirmed by the four full
+harness runs actually executed for the real, gating deliverable above) for a
+convenience artifact this brief explicitly does not gate on. `infra/e2e/
+parity.mjs`'s data-point parity (§9 above) is the actual, complete evidence
+for this batch's acceptance criteria. Not attempted; not partially done —
+flagged here so mig-orchestrator doesn't assume screenshots exist under
+`infra/e2e/screenshots/` when they don't.
+
+## 9. Acceptance evidence (rehearsed in this environment, Phase 2 batch 2)
+
+- `node infra/e2e/parity.mjs` → clean run from a fully torn-down state:
+  `{"result":"PASS", ...}` with **all 27** `pages` entries `ok:true` (the
+  original 14 from batch 1 + 4 `analytics:tab=*` + 7 `activity-logs:*` + 2
+  `loyalty-members:*`), `docker ps -a` empty afterward.
+- Deliberately broke the Next side (renamed `apps/admin/src/app/(tenant)/
+  activity-logs/page.tsx` away before running, restored it after):
+  `{"result":"FAIL", ...}`, exactly the 7 `activity-logs:*` entries
+  `ok:false` with `"extraction/fetch error: ... expected 200, got 404"`, the
+  OTHER 20 entries (batch-1's 14 AND this batch's `analytics:*`/
+  `loyalty-members:*`) still `ok:true`, `docker ps -a` still empty
+  afterward — no hang, no crash, no leftover containers. Re-ran clean after
+  restoring: `{"result":"PASS", ...}`, all 27 `ok:true` again.
+- `node infra/nginx/generate-routes.mjs` runs clean against the updated
+  `routes.json` (now **10 routes**: the original 7 + `/users` +
+  `/user-detail` + `/dashboard` from batch 1, + `/analytics` +
+  `/activity-logs` + `/loyalty-members` from this batch) and regenerates
+  `infra/nginx/generated/strangler-edge.conf` without a schema-validation
+  error.
+- Same "Generated at" nondeterministic-timestamp caveat as batch 1's own §4
+  note still applies — not reintroduced or worsened by this batch.
+
+**`.gitignore` blocker from batch 1's §4 — RESOLVED, not re-flagged**: batch
+1's own write-up flagged that `.gitignore`'s blanket `generated/` rule
+caught `infra/nginx/generated/strangler-edge.conf`, leaving it untracked
+despite needing to be committed. Verified in this batch: `.gitignore` NOW
+has `!infra/nginx/generated/` + `!infra/nginx/generated/*.conf` negation
+lines (same pattern as `packages/db/src/generated/`'s existing exception),
+and `git ls-files infra/nginx/generated/` DOES list the file — it is tracked
+today. This was resolved somewhere between batch 1's write-up and this
+batch's start (visible in `git log -- infra/nginx/generated/
+strangler-edge.conf`, still a single commit — batch 1's own merged commit
+already contains the fix, despite that batch's runbook text claiming
+otherwise at write time). Nothing to do here; noted so mig-orchestrator
+doesn't waste time re-investigating a already-closed item.
+
+## 10. The exact routes.json edit + generate-routes.mjs command — updated for all SIX eligible routes
+
+This batch added THREE more schema-valid placeholder entries to
+`infra/nginx/routes.json` — `/analytics`, `/activity-logs`,
+`/loyalty-members` — each `{"upstream": "php_backend", "tenants": "all"}`,
+identical shape to batch 1's `/users`/`/user-detail`/`/dashboard` entries.
+`routes.json` now has **10 routes total**: the original 7 (`/`, `/miniapp`,
+`/ws`, `/admin-preview` + the 3 from batch 1) + these 3 new ones. All
+functional no-ops today (`php_backend` is already the strangler default).
+
+**All SIX routes now eligible for independent canary ramp** (plan §7.3:
+demo tenant → 1 real tenant → 10% → 50% → 100%), each parity-proven by this
+harness:
+
+| Route | Parity-proven by | Owning brief |
+|---|---|---|
+| `/users` | `users:*` (9 entries) | Phase 2 batch 1 |
+| `/user-detail` | `user-detail:id=*` (3 entries) | Phase 2 batch 1 |
+| `/dashboard` | `dashboard:tab=*` (2 entries) | Phase 2 batch 1 |
+| `/analytics` | `analytics:tab=*` (4 entries) | Phase 2 batch 2 |
+| `/activity-logs` | `activity-logs:*` (7 entries) | Phase 2 batch 2 |
+| `/loyalty-members` | `loyalty-members:*` (2 entries) | Phase 2 batch 2 |
+
+When mig-orchestrator is ready to ramp ONE of these six routes
+(independently — they do not have to flip together):
+
+1. Edit that route's entry in `infra/nginx/routes.json`:
+   - Demo-tenant-only canary: `"tenants": ["demo-tenant"]`.
+   - Wider ramp: `"tenants": ["demo-tenant", "<real-tenant-slug>", ...]`, or
+     once ready for full cutover, `"upstream": "next_admin", "tenants": "all"`.
+2. `node infra/nginx/generate-routes.mjs` — regenerates
+   `infra/nginx/generated/strangler-edge.conf` (validates against
+   `routes.schema.json` first; refuses to write on a schema violation).
+3. `nginx -s reload` on the edge.
+4. Rollback = revert that one line in `routes.json` + step 2 + step 3
+   again — no other file needs to change, for ANY of the six routes,
+   independently of the others.
+
+This agent does not perform step 1 for a real ramp for ANY of the six routes
+— only mig-orchestrator authorizes a route flip, per this agent's own "Do
+not" boundary (unchanged from batch 1).
