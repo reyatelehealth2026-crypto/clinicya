@@ -82,7 +82,7 @@ if (!$sessionId) {
 
 // Get session data
 $stmt = $db->prepare("
-    SELECT ts.*, u.display_name, u.picture_url, u.phone, u.drug_allergies, u.medical_conditions, u.line_account_id
+    SELECT ts.*, u.display_name, u.picture_url, u.phone, u.line_user_id, u.drug_allergies, u.medical_conditions, u.line_account_id
     FROM triage_sessions ts
     LEFT JOIN users u ON ts.user_id = u.id
     WHERE ts.id = ?
@@ -93,6 +93,52 @@ $session = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$session) {
     echo '<div class="text-center py-8 text-red-500"><i class="fas fa-exclamation-circle text-4xl mb-4"></i><p>ไม่พบ Session ที่ระบุ</p></div>';
     return;
+}
+
+// Backfill health data from the LINE Mini App tables (keyed by line_user_id) when
+// the legacy users.* columns are empty — otherwise allergies / conditions the
+// customer entered in the mini app never reach the dispense screen (safety-critical).
+if (!empty($session['line_user_id'])) {
+    $dispenseLid = $session['line_user_id'];
+    if (empty($session['drug_allergies'])) {
+        try {
+            $aStmt = $db->prepare("SELECT drug_name FROM user_drug_allergies WHERE line_user_id = ? ORDER BY created_at DESC");
+            $aStmt->execute([$dispenseLid]);
+            $noneTokens = ['ไม่มี', 'ไม่แพ้', 'none', 'no', 'n/a', '-'];
+            $algNames = [];
+            foreach ($aStmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $n = trim((string)($r['drug_name'] ?? ''));
+                if ($n !== '' && !in_array(mb_strtolower($n), $noneTokens, true)) {
+                    $algNames[] = $n;
+                }
+            }
+            if ($algNames) {
+                $session['drug_allergies'] = implode(', ', $algNames);
+            }
+        } catch (\Throwable $e) {
+            // user_drug_allergies may not exist on legacy tenants.
+        }
+    }
+    if (empty($session['medical_conditions'])) {
+        try {
+            $pStmt = $db->prepare("SELECT medical_conditions FROM user_health_profiles WHERE line_user_id = ? ORDER BY updated_at DESC LIMIT 1");
+            $pStmt->execute([$dispenseLid]);
+            $mc = $pStmt->fetchColumn();
+            if ($mc) {
+                $decoded = json_decode((string)$mc, true);
+                if (is_array($decoded) && $decoded) {
+                    $condList = array_filter(array_map(static function ($c) {
+                        return is_string($c) ? trim($c) : (is_array($c) ? trim((string)($c['name'] ?? '')) : '');
+                    }, $decoded));
+                    if ($condList) {
+                        $session['medical_conditions'] = implode(', ', $condList);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // user_health_profiles may not exist on legacy tenants.
+        }
+    }
 }
 
 $triageData = json_decode($session['triage_data'] ?? '{}', true);

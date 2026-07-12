@@ -25,6 +25,7 @@ try {
         triage_enabled TINYINT(1) DEFAULT 1,
         red_flag_enabled TINYINT(1) DEFAULT 1,
         auto_recommend TINYINT(1) DEFAULT 1,
+        max_questions_per_session INT DEFAULT 7,
         require_pharmacist_approval TINYINT(1) DEFAULT 1,
         video_call_enabled TINYINT(1) DEFAULT 1,
         notification_line_token VARCHAR(255) DEFAULT NULL,
@@ -64,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'triage_enabled' => isset($_POST['triage_enabled']) ? 1 : 0,
                 'red_flag_enabled' => isset($_POST['red_flag_enabled']) ? 1 : 0,
                 'auto_recommend' => isset($_POST['auto_recommend']) ? 1 : 0,
+                'max_questions_per_session' => max(1, min(20, (int) ($_POST['max_questions_per_session'] ?? 7))),
                 'require_pharmacist_approval' => isset($_POST['require_pharmacist_approval']) ? 1 : 0,
                 'video_call_enabled' => isset($_POST['video_call_enabled']) ? 1 : 0,
                 'notification_email' => trim($_POST['notification_email'] ?? ''),
@@ -74,14 +76,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'pharmacy_license' => trim($_POST['pharmacy_license'] ?? ''),
             ];
             
-            $stmt = $db->prepare("INSERT INTO ai_pharmacy_settings 
-                (line_account_id, triage_enabled, red_flag_enabled, auto_recommend, require_pharmacist_approval, 
-                 video_call_enabled, notification_email, working_hours_start, working_hours_end, 
+            $stmt = $db->prepare("INSERT INTO ai_pharmacy_settings
+                (line_account_id, triage_enabled, red_flag_enabled, auto_recommend, max_questions_per_session, require_pharmacist_approval,
+                 video_call_enabled, notification_email, working_hours_start, working_hours_end,
                  emergency_contact, pharmacy_name, pharmacy_license)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
                 triage_enabled = VALUES(triage_enabled), red_flag_enabled = VALUES(red_flag_enabled),
-                auto_recommend = VALUES(auto_recommend), require_pharmacist_approval = VALUES(require_pharmacist_approval),
+                auto_recommend = VALUES(auto_recommend), max_questions_per_session = VALUES(max_questions_per_session),
+                require_pharmacist_approval = VALUES(require_pharmacist_approval),
                 video_call_enabled = VALUES(video_call_enabled), notification_email = VALUES(notification_email),
                 working_hours_start = VALUES(working_hours_start), working_hours_end = VALUES(working_hours_end),
                 emergency_contact = VALUES(emergency_contact), pharmacy_name = VALUES(pharmacy_name),
@@ -105,6 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $triageEnabled = $settings['triage_enabled'] ?? 1;
 $redFlagEnabled = $settings['red_flag_enabled'] ?? 1;
 $autoRecommend = $settings['auto_recommend'] ?? 1;
+$maxQuestionsPerSession = $settings['max_questions_per_session'] ?? 7;
 $requireApproval = $settings['require_pharmacist_approval'] ?? 1;
 $videoCallEnabled = $settings['video_call_enabled'] ?? 1;
 $notificationEmail = $settings['notification_email'] ?? '';
@@ -158,6 +162,11 @@ echo getToastStyles();
                 $triageBody  = renderToggle('triage_enabled', 'เปิดใช้งานระบบซักประวัติ', (bool)$triageEnabled, 'AI จะซักประวัติอาการเป็นขั้นตอนก่อนแนะนำยา', ['color' => 'emerald']);
                 $triageBody .= renderToggle('red_flag_enabled', 'ตรวจจับอาการฉุกเฉิน (Red Flag)', (bool)$redFlagEnabled, 'แจ้งเตือนเมื่อพบอาการที่ต้องพบแพทย์ทันที', ['color' => 'emerald']);
                 $triageBody .= renderToggle('auto_recommend', 'แนะนำยาอัตโนมัติ', (bool)$autoRecommend, 'AI จะแนะนำยาจากคลังสินค้าตามอาการ', ['color' => 'emerald']);
+                $triageBody .= renderField('max_questions_per_session', 'จำนวนคำถามสูงสุดต่อครั้ง', 'number', $maxQuestionsPerSession, [
+                    'min'  => '1',
+                    'max'  => '20',
+                    'help' => 'AI จะหยุดซักประวัติและแนะนำยาหลังถามครบจำนวนนี้ (ค่าเริ่มต้น 7)',
+                ]);
                 $triageBody .= renderToggle('require_pharmacist_approval', 'ต้องให้เภสัชกรอนุมัติ', (bool)$requireApproval, 'ลูกค้าต้องรอเภสัชกรยืนยันก่อนสั่งซื้อยา', ['color' => 'emerald']);
                 echo renderFormSection('ระบบซักประวัติ (Triage)', 'fas fa-stethoscope', '', $triageBody);
 
@@ -193,6 +202,10 @@ echo getToastStyles();
                         <a href="ai-chat-settings.php" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
                             <i class="fas fa-robot text-blue-500"></i>
                             <span class="text-sm">ตั้งค่า AI Chat</span>
+                        </a>
+                        <a href="ai-settings.php" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
+                            <i class="fas fa-microchip text-teal-500"></i>
+                            <span class="text-sm">เลือกโมเดล AI / API Key</span>
                         </a>
                         <a href="pharmacist-dashboard.php" class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all">
                             <i class="fas fa-tachometer-alt text-green-500"></i>

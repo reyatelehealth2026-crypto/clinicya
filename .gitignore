@@ -162,6 +162,11 @@ database/*.sql
 !database/migration_2026-06-30_plans_remodel_platform_settings.sql
 !database/migration_2026-07-03_landing_settings_unique_key.sql
 !database/migration_2026-07-03_inbox_performance_indexes.sql
+!database/migration_2026-07-04_consultation_audit_pdpa.sql
+!database/migration_2026-07-04_ai_usage_counters.sql
+!database/migration_2026-07-04_ai_pharmacy_settings_columns.sql
+!database/migration_2026-07-04_tenant_onboard_progress.sql
+!database/migration_2026-07-04_pdpa_data_rights.sql
 !database/migration_2026-07-10_receipt_points_review.sql
 !docs/adr/*.md
 !CONTEXT.md
@@ -179,6 +184,7 @@ DB_CONNECTION.md
 !docs/superpowers/plans/2026-07-10-receipt-points-review.md
 !docs/superpowers/plans/2026-07-10-receipt-points-review-agent-context.md
 !docs/plans/2026-04-13-line-mini-app-gap-closure.md
+!docs/plans/2026-07-12-nextjs-full-migration-plan.md
 !docs/admin-tutorials/*.md
 !docs/training/*.md
 !docs/ai/**/*.md
@@ -229,3 +235,8 @@ g_out.txt
 # Session/cost reports — throwaway, may contain tokens (Vercel PAT found in one)
 session-report-*.html
 cost-by-*.csv
+
+# Browser profiles captured during screen recordings — never commit (bloat +
+# Windows MAX_PATH breaks worktrees). See chore/remove-chrome-profile-junk.
+**/.chrome-profile*/
+**/.chrome-profile*

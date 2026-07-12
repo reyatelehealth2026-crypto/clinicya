@@ -37,6 +37,12 @@ function logMsg($msg, $isDebug = false) {
     }
 }
 
+/**
+ * Run the reminder sweep against a single (already-selected) tenant DB.
+ * Extracted so the CLI cron can loop every tenant DB — the original single-DB
+ * body only ever hit the legacy fallback DB and never saw real bookings.
+ */
+function reya_run_reminders($db, $debugMode) {
 // Auto-add columns if not exist
 try {
     $cols = $db->query("DESCRIBE appointments")->fetchAll(PDO::FETCH_COLUMN);
@@ -261,6 +267,41 @@ try {
         echo "<pre style='color:red'>" . $e->getTraceAsString() . "</pre>";
     }
 }
+} // end reya_run_reminders()
+
+// ---- Driver ----------------------------------------------------------------
+// CLI (cron): sweep EVERY active tenant DB via the platform registry, so
+// reminders fire for real bookings (which live in reya_tenant_* DBs, not the
+// legacy fallback DB the old single-connection code was hitting).
+// Web (?key=...): the subdomain already resolved $db to one tenant — run it once.
+if ($isCli) {
+    $tenantIds = [];
+    try {
+        $platform = Database::platform()->getConnection();
+        $tenantIds = $platform->query(
+            "SELECT id FROM tenants WHERE status = 'active' ORDER BY id"
+        )->fetchAll(PDO::FETCH_COLUMN);
+    } catch (\Throwable $e) {
+        logMsg("Platform registry unavailable, falling back to default DB: " . $e->getMessage());
+    }
+
+    if (empty($tenantIds)) {
+        reya_run_reminders(Database::getInstance()->getConnection(), $debugMode);
+    } else {
+        logMsg("Sweeping " . count($tenantIds) . " active tenant(s)...");
+        foreach ($tenantIds as $tid) {
+            try {
+                $tdb = Database::forTenant((int) $tid)->getConnection();
+                logMsg("--- tenant #{$tid} ---");
+                reya_run_reminders($tdb, $debugMode);
+            } catch (\Throwable $e) {
+                logMsg("tenant #{$tid} error: " . $e->getMessage());
+            }
+        }
+    }
+} else {
+    reya_run_reminders($db, $debugMode);
+}
 
 logMsg("Done.");
 
@@ -313,6 +354,9 @@ if ($debugMode) {
  * Flex Message ครั้งที่ 1: ก่อน 10 นาที (สีส้ม - เตรียมตัว)
  */
 function buildReminder10MinFlex($apt) {
+    // Some tenant schemas have no varchar `appointment_id` column — fall back to
+    // the numeric row id so the reference/deep-link is never blank.
+    $apt['appointment_id'] = $apt['appointment_id'] ?? $apt['id'] ?? '';
     $baseUrl = rtrim(BASE_URL, '/');
     $appointmentDate = date('d/m/Y', strtotime($apt['appointment_date']));
     $appointmentTime = date('H:i', strtotime($apt['appointment_time']));
@@ -446,7 +490,7 @@ function buildReminder10MinFlex($apt) {
             'paddingAll' => '15px',
             'contents' => [
                 ['type' => 'button', 'style' => 'primary', 'color' => '#FF9500', 'height' => 'md', 'action' => [
-                    'type' => 'uri', 'label' => '�  เตรียมพร้อม Video Call', 'uri' => $videoCallUrl
+                    'type' => 'uri', 'label' => '📹  เตรียมพร้อม Video Call', 'uri' => $videoCallUrl
                 ]]
             ]
         ]
@@ -459,6 +503,7 @@ function buildReminder10MinFlex($apt) {
  * Flex Message ครั้งที่ 2: ถึงเวลาแล้ว (สีเขียว - เริ่มโทรเลย)
  */
 function buildReminderNowFlex($apt) {
+    $apt['appointment_id'] = $apt['appointment_id'] ?? $apt['id'] ?? '';
     $appointmentTime = date('H:i', strtotime($apt['appointment_time']));
     $userName = $apt['first_name'] ?: $apt['user_name'] ?: 'คุณลูกค้า';
     
@@ -586,7 +631,7 @@ function buildReminderNowFlex($apt) {
             'paddingAll' => '15px',
             'spacing' => 'sm',
             'contents' => [
-                ['type' => 'button', 'style' => 'primary', 'color' => '#06C755', 'height' => 'lg', 'action' => [
+                ['type' => 'button', 'style' => 'primary', 'color' => '#06C755', 'height' => 'md', 'action' => [
                     'type' => 'uri', 'label' => '📹 เริ่ม Video Call เลย!', 'uri' => $videoCallUrl
                 ]],
                 ['type' => 'text', 'text' => 'กดปุ่มด้านบนเพื่อเริ่มการสนทนา', 'size' => 'xs', 'color' => '#999999', 'align' => 'center', 'margin' => 'md']

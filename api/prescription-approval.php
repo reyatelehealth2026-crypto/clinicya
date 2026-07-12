@@ -111,9 +111,35 @@ function handleCreateApproval($db) {
         ]);
         
         $approvalId = $db->lastInsertId();
-        
+
         // Log the approval
         error_log("Prescription approval created: ID={$approvalId}, User={$userId}, Pharmacist={$pharmacistId}");
+
+        // Immutable audit trail (issue #15): บันทึกการอนุมัติของเภสัชกร (human gate)
+        // ลง consultation_audit เพื่อพิสูจน์ต่อ อย. ว่าใครรีวิว/อนุมัติเมื่อใด.
+        try {
+            require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+            if (class_exists(\Modules\AIChat\Services\ConsultationAudit::class)) {
+                (new \Modules\AIChat\Services\ConsultationAudit(
+                    $db,
+                    $lineAccountId !== null ? (int) $lineAccountId : null
+                ))->log(
+                    'pharmacist_approve',
+                    'pharmacist',
+                    null,
+                    (int) $userId,
+                    [
+                        'approval_id'    => (int) $approvalId,
+                        'approved_items' => $approvedItems,
+                        'notes'          => $notes,
+                        'video_call_id'  => $videoCallId,
+                    ],
+                    ($pharmacistId !== null && is_numeric($pharmacistId)) ? (int) $pharmacistId : null
+                );
+            }
+        } catch (\Throwable $auditErr) {
+            error_log('[prescription-approval] audit log failed: ' . $auditErr->getMessage());
+        }
         
         echo json_encode([
             'success' => true,

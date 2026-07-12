@@ -113,28 +113,36 @@ class CustomerHealthEngineService
         
         try {
             $stmt = $this->db->prepare("
-                SELECT weight, height, blood_type, medical_conditions, drug_allergies, current_medications
-                FROM users 
+                SELECT line_user_id, weight, height, blood_type, medical_conditions, drug_allergies, current_medications
+                FROM users
                 WHERE id = ?
             ");
             $stmt->execute([$userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if ($user) {
                 $data['weight'] = $user['weight'] ? (float)$user['weight'] : null;
                 $data['height'] = $user['height'] ? (float)$user['height'] : null;
                 $data['bloodType'] = $user['blood_type'] ?? null;
-                
+
                 // Parse medical conditions (stored as text, comma or newline separated)
                 if (!empty($user['medical_conditions'])) {
                     $conditions = preg_split('/[,\n]+/', $user['medical_conditions']);
                     $data['conditions'] = array_map('trim', array_filter($conditions));
                 }
+
+                // Overlay data written by the LINE Mini App (user_health_profiles,
+                // keyed by line_user_id). The mini app is the current source of truth
+                // when the customer fills their health form there; the legacy users.*
+                // columns above remain the fallback for older records.
+                if (!empty($user['line_user_id'])) {
+                    $this->overlayMiniAppHealthProfile($data, (string)$user['line_user_id']);
+                }
             }
         } catch (PDOException $e) {
             error_log("CustomerHealthEngine getUserHealthData error: " . $e->getMessage());
         }
-        
+
         return $data;
     }
 
@@ -213,11 +221,16 @@ class CustomerHealthEngineService
             } catch (PDOException $e) {
                 // user_allergies table might not exist
             }
-            
+
+            // LINE Mini App allergies (user_drug_allergies, keyed by line_user_id).
+            // This is where the mini app writes — without merging it the pharmacist
+            // HUD misses allergies the customer entered in the app (safety-critical).
+            $this->mergeMiniAppAllergies($allergies, $userId);
+
         } catch (PDOException $e) {
             error_log("CustomerHealthEngine getAllergies error: " . $e->getMessage());
         }
-        
+
         return $allergies;
     }
     
@@ -316,12 +329,190 @@ class CustomerHealthEngineService
                     $medications[] = $purchasedMed;
                 }
             }
-            
+
+            // LINE Mini App current medications (user_current_medications, keyed by
+            // line_user_id) — merge so meds entered in the app show on the HUD.
+            $this->mergeMiniAppMedications($medications, $userId);
+
         } catch (PDOException $e) {
             error_log("CustomerHealthEngine getMedications error: " . $e->getMessage());
         }
-        
+
         return $medications;
+    }
+
+    /**
+     * Resolve a user's LINE user id (used to read the mini-app health tables,
+     * which are keyed by line_user_id rather than users.id).
+     */
+    private function resolveLineUserId(int $userId): ?string
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT line_user_id FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $lid = $stmt->fetchColumn();
+            return ($lid !== false && $lid !== null && $lid !== '') ? (string)$lid : null;
+        } catch (PDOException $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Overlay weight/height/blood type/conditions from the mini-app health profile
+     * (user_health_profiles). Mini-app values take precedence over legacy columns.
+     *
+     * @param array<string,mixed> $data
+     */
+    private function overlayMiniAppHealthProfile(array &$data, string $lineUserId): void
+    {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT weight, height, blood_type, medical_conditions
+                FROM user_health_profiles
+                WHERE line_user_id = ?
+                ORDER BY updated_at DESC
+                LIMIT 1
+            ");
+            $stmt->execute([$lineUserId]);
+            $p = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$p) {
+                return;
+            }
+            if (!empty($p['weight'])) { $data['weight'] = (float)$p['weight']; }
+            if (!empty($p['height'])) { $data['height'] = (float)$p['height']; }
+            if (!empty($p['blood_type']) && $p['blood_type'] !== 'unknown') {
+                $data['bloodType'] = $p['blood_type'];
+            }
+            // medical_conditions is JSON in the mini-app table (array of strings or
+            // {name:...} objects). Only override when it actually holds entries.
+            if (!empty($p['medical_conditions'])) {
+                $decoded = json_decode((string)$p['medical_conditions'], true);
+                if (is_array($decoded) && !empty($decoded)) {
+                    $conditions = array_filter(array_map(static function ($c) {
+                        if (is_string($c)) {
+                            return trim($c);
+                        }
+                        return is_array($c) ? trim((string)($c['name'] ?? '')) : '';
+                    }, $decoded));
+                    if (!empty($conditions)) {
+                        $data['conditions'] = array_values($conditions);
+                    }
+                }
+            }
+        } catch (PDOException $e) {
+            // user_health_profiles may not exist on legacy tenants — keep fallback.
+        }
+    }
+
+    /**
+     * Merge allergies written by the LINE Mini App (user_drug_allergies) into the
+     * list, deduping by name. Mini-app rows carry structured severity/reaction.
+     *
+     * @param array<int,array<string,mixed>> $allergies
+     */
+    private function mergeMiniAppAllergies(array &$allergies, int $userId): void
+    {
+        try {
+            $lid = $this->resolveLineUserId($userId);
+            if ($lid === null) {
+                return;
+            }
+            $stmt = $this->db->prepare("
+                SELECT drug_name, severity, reaction_type, reaction_notes
+                FROM user_drug_allergies
+                WHERE line_user_id = ?
+                ORDER BY created_at DESC
+            ");
+            $stmt->execute([$lid]);
+            // "no allergy" sentinels the mini app may store — must NOT surface as a
+            // (false) allergy warning on the HUD.
+            $noneTokens = ['ไม่มี', 'ไม่แพ้', 'ไม่มีประวัติแพ้ยา', 'none', 'no', 'n/a', '-'];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $name = trim((string)($row['drug_name'] ?? ''));
+                if ($name === '' || in_array(mb_strtolower($name), $noneTokens, true)) {
+                    continue;
+                }
+                $exists = false;
+                foreach ($allergies as &$existing) {
+                    if (stripos($existing['name'], $name) !== false ||
+                        stripos($name, $existing['name']) !== false) {
+                        $existing['severity'] = $row['severity'] ?: ($existing['severity'] ?? 'unknown');
+                        $existing['reaction'] = $row['reaction_type'] ?? ($existing['reaction'] ?? null);
+                        $existing['notes']    = $row['reaction_notes'] ?? ($existing['notes'] ?? null);
+                        $existing['source']   = 'miniapp';
+                        $exists = true;
+                        break;
+                    }
+                }
+                unset($existing);
+                if (!$exists) {
+                    $allergies[] = [
+                        'name' => $name,
+                        'severity' => $row['severity'] ?: 'unknown',
+                        'reaction' => $row['reaction_type'] ?? null,
+                        'notes' => $row['reaction_notes'] ?? null,
+                        'source' => 'miniapp',
+                        'isActive' => true
+                    ];
+                }
+            }
+        } catch (PDOException $e) {
+            // user_drug_allergies may not exist on legacy tenants.
+        }
+    }
+
+    /**
+     * Merge current medications written by the LINE Mini App
+     * (user_current_medications) into the list, deduping by name.
+     *
+     * @param array<int,array<string,mixed>> $medications
+     */
+    private function mergeMiniAppMedications(array &$medications, int $userId): void
+    {
+        try {
+            $lid = $this->resolveLineUserId($userId);
+            if ($lid === null) {
+                return;
+            }
+            $stmt = $this->db->prepare("
+                SELECT medication_name, dosage, frequency, notes
+                FROM user_current_medications
+                WHERE line_user_id = ? AND is_active = 1
+                ORDER BY created_at DESC
+            ");
+            $stmt->execute([$lid]);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $name = trim((string)($row['medication_name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $exists = false;
+                foreach ($medications as &$existing) {
+                    if (stripos($existing['name'], $name) !== false ||
+                        stripos($name, $existing['name']) !== false) {
+                        $existing['dosage']    = $row['dosage'] ?: ($existing['dosage'] ?? null);
+                        $existing['frequency'] = $row['frequency'] ?: ($existing['frequency'] ?? null);
+                        $existing['notes']     = $row['notes'] ?? ($existing['notes'] ?? null);
+                        $existing['source']    = 'miniapp';
+                        $exists = true;
+                        break;
+                    }
+                }
+                unset($existing);
+                if (!$exists) {
+                    $medications[] = [
+                        'name' => $name,
+                        'dosage' => $row['dosage'] ?? null,
+                        'frequency' => $row['frequency'] ?? null,
+                        'notes' => $row['notes'] ?? null,
+                        'source' => 'miniapp',
+                        'isActive' => true
+                    ];
+                }
+            }
+        } catch (PDOException $e) {
+            // user_current_medications may not exist on legacy tenants.
+        }
     }
 
     

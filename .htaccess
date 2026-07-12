@@ -8,6 +8,17 @@ RewriteEngine On
 RewriteBase /
 
 # =====================================================
+# SECURITY: block ad-hoc / one-off debug & data-fix scripts at web root.
+# Root-anchored (^ matches the path from the document root), so this only
+# forbids files named with these prefixes DIRECTLY under the web root —
+# api/sync_*.php, cron/check_*.php, install/check_*.php etc. are NOT matched
+# because their path starts with "api/", "cron/", "install/". These scripts
+# have no auth guard of their own and were relocated to /scripts/adhoc/
+# (see issue #13); this rule is defense-in-depth against future strays.
+# =====================================================
+RewriteRule ^(check_|debug_|fix_|final_|sync_|get_|verify_)[^/]*\.php$ - [F,L]
+
+# =====================================================
 # SEO Files - Dynamic sitemap.xml and robots.txt
 # Requirements: 9.1, 9.2, 9.3, 9.4, 9.5
 # =====================================================

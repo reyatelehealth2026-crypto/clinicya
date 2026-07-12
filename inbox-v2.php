@@ -1108,6 +1108,7 @@ $userTags = [];
 $allTags = [];
 $healthProfile = null;
 $customerClassification = null;
+$healthDataConsent = null; // PDPA health-data consent (issue #15): true/false/null-unknown
 
 if (isset($_GET['user']) || isset($_GET['user_id'])) {
     $uid = intval($_GET['user'] ?? $_GET['user_id']);
@@ -1143,6 +1144,24 @@ if (isset($_GET['user']) || isset($_GET['user_id'])) {
             $customerClassification = $healthEngine->classifyCustomer($uid);
         } catch (Exception $e) {
             // Services may not be fully configured
+        }
+
+        // PDPA (issue #15): health-data consent status for the consult HUD.
+        // 3-state: true = granted, false = declined/withdrawn, null = never asked.
+        $healthDataConsent = null;
+        try {
+            $stmt = $db->prepare(
+                "SELECT is_accepted FROM user_consents
+                 WHERE user_id = ? AND consent_type = 'health_data'
+                 ORDER BY id DESC LIMIT 1"
+            );
+            $stmt->execute([$uid]);
+            $consentRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($consentRow !== false) {
+                $healthDataConsent = !empty($consentRow['is_accepted']);
+            }
+        } catch (PDOException $e) {
+            // user_consents may not exist on older tenants — leave as unknown
         }
     }
 }
@@ -4058,6 +4077,35 @@ function formatThaiDateTime($datetime)
                             style="display: none; max-height: calc(100vh - 120px); overflow-y: auto;">
 
                             <div id="hudWidgets" class="pb-4">
+                                <!-- PDPA health-data consent status (issue #15) -->
+                                <?php if ($selectedUser): ?>
+                                    <?php if ($healthDataConsent === true): ?>
+                                        <div class="hud-widget" id="pdpaConsentWidget"
+                                            style="border-left:3px solid #16a34a;">
+                                            <div class="hud-widget-body" style="padding:8px 12px;">
+                                                <span style="color:#16a34a;font-size:12px;font-weight:600;">
+                                                    <i class="fas fa-shield-alt mr-1"></i>ยินยอมใช้ข้อมูลสุขภาพแล้ว (PDPA)
+                                                </span>
+                                            </div>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="hud-widget" id="pdpaConsentWidget"
+                                            style="border-left:3px solid <?= $healthDataConsent === false ? '#dc2626' : '#d97706' ?>;">
+                                            <div class="hud-widget-body" style="padding:8px 12px;">
+                                                <span style="color:<?= $healthDataConsent === false ? '#dc2626' : '#d97706' ?>;font-size:12px;font-weight:600;">
+                                                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                                                    <?= $healthDataConsent === false
+                                                        ? 'ปฏิเสธ/ถอนความยินยอมข้อมูลสุขภาพ (PDPA ม.26)'
+                                                        : 'ยังไม่ได้ให้ความยินยอมใช้ข้อมูลสุขภาพ (PDPA ม.26)' ?>
+                                                </span>
+                                                <div style="color:#6b7280;font-size:11px;margin-top:2px;">
+                                                    ควรขอความยินยอมก่อนบันทึก/แก้ไขข้อมูลอาการ
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+
                                 <!-- Allergy Warning Widget - Requirements: 4.5 -->
                                 <?php if (!empty($selectedUser['drug_allergies'])): ?>
                                         <div class="hud-widget allergy-widget" id="allergyWidget">

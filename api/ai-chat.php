@@ -41,6 +41,10 @@ if (!is_array($input)) {
 $userMessage = trim((string) ($input['message'] ?? ''));
 $history = is_array($input['history'] ?? null) ? $input['history'] : [];
 $mode = strtolower(trim((string) ($input['mode'] ?? '')));
+// ใช้ scope คีย์ AI ให้ตรง tenant/LINE OA ของ request นี้ (Phase 3 · #19 — เดิมดึงคีย์
+// ของทุก tenant มาปนกัน ทำให้ billing/quota อาจไปตกที่ tenant อื่น)
+$requestLineAccountId = isset($input['line_account_id']) && is_numeric($input['line_account_id'])
+    ? (int) $input['line_account_id'] : null;
 
 /**
  * เลือก persona — DEFAULT คือ consult (เภสัชกรผู้ช่วย) เพื่อให้ฝั่งลูกค้าได้ persona ที่ถูก
@@ -125,7 +129,29 @@ $loadKeysFromQuery = function (string $sql, string $col) use ($db, &$diagnostics
     return $out;
 };
 
-// 1) ai_settings — ลอง query แบบง่ายสุดก่อน
+// 1a) ai_settings ของ tenant (line_account_id) นี้โดยเฉพาะก่อนเสมอ (Phase 3 · #19)
+if ($requestLineAccountId !== null) {
+    $tenantScopedStmt = null;
+    try {
+        $tenantScopedStmt = $db->prepare(
+            "SELECT gemini_api_key FROM ai_settings
+             WHERE line_account_id = ? AND gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> ''"
+        );
+        $tenantScopedStmt->execute([$requestLineAccountId]);
+        $tenantRows = $tenantScopedStmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $diagnostics[] = 'ai_settings (tenant=' . $requestLineAccountId . ') → ' . count($tenantRows) . ' rows';
+        foreach ($tenantRows as $r) {
+            $v = isset($r['gemini_api_key']) ? trim((string) $r['gemini_api_key']) : '';
+            if ($v !== '' && !in_array($v, $geminiKeys, true)) {
+                $geminiKeys[] = $v;
+            }
+        }
+    } catch (\Throwable $e) {
+        $diagnostics[] = 'ai_settings tenant-scoped SQL fail: ' . substr($e->getMessage(), 0, 80);
+    }
+}
+
+// 1b) ai_settings — ทุกแถว (fallback เมื่อไม่มีคีย์เฉพาะ tenant, หรือไม่ทราบ tenant)
 foreach ($loadKeysFromQuery(
     "SELECT gemini_api_key FROM ai_settings WHERE gemini_api_key IS NOT NULL AND TRIM(gemini_api_key) <> ''",
     'gemini_api_key'
@@ -216,6 +242,9 @@ if ($isConsultMode) {
             ? (int) $input['line_account_id'] : null;
         $userId = isset($input['user_id']) && is_numeric($input['user_id'])
             ? (int) $input['user_id'] : 0;
+        // ผู้ใช้จริง (มี row ใน users) เท่านั้นที่มี consent PDPA ให้ตรวจได้ —
+        // id แบบ crc32/IP fallback ด้านล่างเป็น synthetic ไม่ผูกกับ user_consents
+        $isRealUser = $userId > 0;
         // 🆕 ถ้าไม่มี user_id → lookup users.id จริงจาก line_user_id ก่อน fallback crc32
         // (สำคัญ: ทำให้ triage_sessions.user_id link กลับมา users ได้ → pharmacy dashboard
         //  + dispense page แสดง display_name + AI chat history ถูกจับคู่)
@@ -226,6 +255,7 @@ if ($isConsultMode) {
                 $userRow = $lookupStmt->fetch(\PDO::FETCH_ASSOC);
                 if ($userRow && !empty($userRow['id'])) {
                     $userId = (int) $userRow['id'];
+                    $isRealUser = true;
                 }
             } catch (\Throwable $e) {
                 error_log('ai-chat user lookup error: ' . $e->getMessage());
@@ -246,9 +276,36 @@ if ($isConsultMode) {
             }
         }
 
+        // PDPA (issue #15): ก่อนซัก triage (เก็บประวัติอาการ = ข้อมูลอ่อนไหว)
+        // บันทึกสถานะ consent 'health_data' ลง audit trail และเตรียม hint ให้ UI.
+        // ตรวจเฉพาะผู้ใช้จริง — synthetic id ไม่มี consent record ให้ตรวจ.
+        $healthConsentMissing = false;
+        if ($isRealUser && $userId > 0 && class_exists(\Modules\AIChat\Services\ConsentGuard::class)) {
+            try {
+                $hasHealthConsent = (new \Modules\AIChat\Services\ConsentGuard($db))->hasHealthDataConsent($userId);
+                $healthConsentMissing = !$hasHealthConsent;
+                if (class_exists(\Modules\AIChat\Services\ConsultationAudit::class)) {
+                    (new \Modules\AIChat\Services\ConsultationAudit($db, $lineAccountId))->log(
+                        $hasHealthConsent ? 'consent_granted' : 'consent_missing',
+                        'customer',
+                        null,
+                        $userId,
+                        ['consent_type' => 'health_data', 'source' => 'ai-chat']
+                    );
+                }
+            } catch (\Throwable $e) {
+                error_log('ai-chat consent check error: ' . $e->getMessage());
+            }
+        }
+
         if ($userId > 0 && class_exists(\Modules\AIChat\Services\TriageRouter::class)) {
             $router = new \Modules\AIChat\Services\TriageRouter($db, $geminiKeys, $lineAccountId);
             $tr = $router->handleTurn($userMessage, $userId);
+            // แนบ hint ให้ UI เตือนขอ consent (advisory — ไม่ตัดการสนทนา)
+            if (is_array($tr) && $healthConsentMissing) {
+                $tr['consent_required'] = true;
+                $tr['consent_type'] = 'health_data';
+            }
             if (is_array($tr) && isset($tr['type']) && $tr['type'] !== 'continue') {
                 // emit สรุปข้อความเป็น token (สำหรับ client ที่ไม่ render structured)
                 if (!empty($tr['question_th'])) {
@@ -408,18 +465,9 @@ if ($isConsultMode) {
                     // Emit the state transition first so any UI listening on
                     // 'state' switches the header chip before the emergency
                     // modal opens (avoids the stale 'greeting' flash).
-                    $emitStructured([
-                        'type'     => 'state',
-                        'state'    => 'escalate',
-                        'label_th' => 'ส่งต่อเภสัชกร',
-                    ]);
+                    $emitStructured(aiChatBuildStateEvent('escalate', 'ส่งต่อเภสัชกร'));
 
-                    $emitStructured([
-                        'type'           => 'emergency',
-                        'severity'       => 'critical',
-                        'symptoms'       => array_values(array_filter($symptoms)),
-                        'recommendation' => trim(implode("\n", array_filter($actions))),
-                    ]);
+                    $emitStructured(aiChatBuildEmergencyEvent($symptoms, $actions, 'critical'));
 
                     // Persist what we have (user turn) so the conversation
                     // history still reflects the escalation event.
@@ -684,7 +732,7 @@ $emitErrorOrCapture = static function (string $msg) use (&$silentMode, &$capture
 /**
  * ลอง Gemini ด้วยคีย์ที่ระบุ คืน true ถ้ามี token ส่งออกอย่างน้อย 1 ตัว
  */
-$tryGemini = function (string $key) use ($payload, $emitToken, &$capturedError, &$emittedAnyToken, &$assistantBuffer): bool {
+$tryGemini = function (string $key) use ($db, $requestLineAccountId, $payload, $emitToken, &$capturedError, &$emittedAnyToken, &$assistantBuffer): bool {
     // Reset the persistence buffer at the start of each attempt so a
     // partially-streamed response from a failed key does not get appended
     // to (and pollute) the response that the fallback key eventually
@@ -773,6 +821,13 @@ $tryGemini = function (string $key) use ($payload, $emitToken, &$capturedError, 
 
     $tokensAfter = $emittedAnyToken ? 1 : 0;
     if ($tokensAfter > $tokenCountBefore) {
+        // Phase 3 · #19 — per-tenant usage metering (never fatal).
+        if (!class_exists('AiUsageMeter') && file_exists(__DIR__ . '/../classes/AiUsageMeter.php')) {
+            require_once __DIR__ . '/../classes/AiUsageMeter.php';
+        }
+        if (class_exists('AiUsageMeter')) {
+            AiUsageMeter::increment($db, $requestLineAccountId, 'gemini', 'gemini-flash-latest');
+        }
         return true;
     }
 
@@ -877,10 +932,42 @@ if (!$success && $openaiKey !== '') {
     }
 }
 
-// 3) ถ้ายังพังอีก → ส่ง error สุดท้ายที่เก็บไว้
+// 3) ถ้ายังพังอีก → degrade อย่างปลอดภัย (Phase 1 · WS-A)
 $silentMode = false;
 if (!$success) {
-    $emitErrorOrCapture($capturedError !== '' ? $capturedError : 'AI ไม่ตอบสนอง — ตรวจสอบคีย์ Gemini/OpenAI');
+    // เก็บสาเหตุจริง (อาจ sensitive เช่นสถานะคีย์) ไว้ที่ log ฝั่ง server เท่านั้น
+    error_log('[ai-chat] all AI providers failed: ' . ($capturedError !== '' ? $capturedError : 'unknown'));
+
+    if ($isConsultMode) {
+        // ฝั่งลูกค้า: ห้ามโชว์ error ดิบ และห้ามพยายามแนะนำยาเองโดยไม่มี LLM.
+        // แสดงข้อความส่งต่ออย่างสุภาพ + escalate หาเภสัชกรจริงให้มารับช่วงต่อ.
+        $emitToken('ขออภัยค่ะ ระบบผู้ช่วย AI ขัดข้องชั่วคราว 🙏 ทางเภสัชกรได้รับแจ้งแล้ว และจะติดต่อกลับมาดูแลคุณโดยเร็วที่สุดค่ะ');
+        try {
+            require_once __DIR__ . '/../modules/AIChat/Autoloader.php';
+            if (class_exists(\Modules\AIChat\Services\PharmacistNotifier::class)) {
+                (new \Modules\AIChat\Services\PharmacistNotifier($ctxLineAccountId))->notifyAllPharmacists([
+                    'session_id'     => $ctxSessionId,
+                    'message'        => 'ระบบ AI ขัดข้องชั่วคราว — ลูกค้ากำลังรอเภสัชกรช่วยตอบ',
+                    'ai_unavailable' => true,
+                ], true);
+            }
+            // บันทึก audit ของการ escalate นี้ (no-op จนกว่า ConsultationAudit จะ merge)
+            if (class_exists(\Modules\AIChat\Services\ConsultationAudit::class)) {
+                (new \Modules\AIChat\Services\ConsultationAudit($db, $ctxLineAccountId))->log(
+                    'ai_unavailable_escalation',
+                    'system',
+                    $ctxSessionId !== null ? (int) $ctxSessionId : null,
+                    $ctxInternalUserId > 0 ? $ctxInternalUserId : null,
+                    ['reason' => 'all_ai_providers_failed']
+                );
+            }
+        } catch (\Throwable $escErr) {
+            error_log('[ai-chat] AI-down pharmacist escalation failed: ' . $escErr->getMessage());
+        }
+    } else {
+        // ฝั่ง admin/dev: คงรายละเอียดทางเทคนิคไว้เพื่อ debug
+        $emitErrorOrCapture($capturedError !== '' ? $capturedError : 'AI ไม่ตอบสนอง — ตรวจสอบคีย์ Gemini/OpenAI');
+    }
 }
 
 // --- PHASE 1 POST-STREAM: persistence + drug-interaction warnings ----------
@@ -908,10 +995,7 @@ if ($isConsultMode && $success && $assistantBuffer !== '') {
             if (!empty($mentions)) {
                 $warnings = aiChatCheckDrugInteractionsSimple($mentions, $ctxUserProfile);
                 if (!empty($warnings)) {
-                    $emitStructured([
-                        'type'     => 'drug_interactions',
-                        'warnings' => $warnings,
-                    ]);
+                    $emitStructured(aiChatBuildDrugInteractionsEvent($warnings));
                 }
             }
         }

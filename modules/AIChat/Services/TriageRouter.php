@@ -25,6 +25,10 @@ class TriageRouter
     private ProductRecommender $recommender;
     private ?RedFlagDetector $redFlag;
     private ?PharmacistNotifier $notifier;
+    private ?ConsultationAudit $audit;
+
+    /** user_id ของ turn ปัจจุบัน — ตั้งใน handleTurn ให้ build* helper บันทึก audit ได้ */
+    private ?int $currentUserId = null;
 
     /**
      * @param list<string> $geminiKeys
@@ -42,6 +46,24 @@ class TriageRouter
 
         $this->redFlag  = class_exists(RedFlagDetector::class) ? new RedFlagDetector() : null;
         $this->notifier = class_exists(PharmacistNotifier::class) ? new PharmacistNotifier($lineAccountId) : null;
+        $this->audit    = class_exists(ConsultationAudit::class) ? new ConsultationAudit($pdo, $lineAccountId) : null;
+    }
+
+    /**
+     * บันทึก audit trail แบบไม่ throw (การ log ห้ามทำให้การสนทนาพัง).
+     *
+     * @param array<string,mixed> $payload
+     */
+    private function audit(string $eventType, string $actorType, ?int $sessionId, array $payload = [], ?int $actorId = null): void
+    {
+        if ($this->audit === null) {
+            return;
+        }
+        try {
+            $this->audit->log($eventType, $actorType, $sessionId, $this->currentUserId, $payload, $actorId);
+        } catch (\Throwable $e) {
+            // ConsultationAudit::log กลืน error อยู่แล้ว — กันไว้อีกชั้น
+        }
     }
 
     /**
@@ -78,6 +100,8 @@ class TriageRouter
         if (!$this->isTriageEnabled()) {
             return ['type' => 'continue'];
         }
+
+        $this->currentUserId = $userId;
 
         // 1. Red flag screen — ดูข้อความผู้ใช้ก่อน triage
         if ($this->redFlag !== null) {
@@ -220,6 +244,10 @@ class TriageRouter
                 error_log('setLastQuestion failed: ' . $e->getMessage());
             }
         }
+        $this->audit('triage_question', 'ai', $sessionId, [
+            'question_id' => $qid,
+            'question_th' => (string) $question['question_th'],
+        ]);
         return [
             'type'        => 'question',
             'session_id'  => $sessionId,
@@ -234,6 +262,10 @@ class TriageRouter
      */
     private function buildEscalateResult(?int $sessionId, string $message): array
     {
+        $this->audit('escalation', 'system', $sessionId, [
+            'message'  => $message,
+            'red_flag' => true,
+        ]);
         if ($sessionId !== null) {
             $this->sessions->escalate($sessionId, $message);
         }
@@ -276,8 +308,25 @@ class TriageRouter
             return ['type' => 'continue'];
         }
 
+        // Tenant toggle "ต้องให้เภสัชกรอนุมัติ" (require_pharmacist_approval, issue #31):
+        // when ON, the AI must NOT present the recommendation to the customer as
+        // final — hold it for a pharmacist to review/approve first (reusing the
+        // existing escalate/PharmacistNotifier path) instead of auto-checkout.
+        if ($this->requiresPharmacistApproval()) {
+            return $this->buildPendingApprovalResult($sessionId, $symptoms, $products);
+        }
+
         $summary = 'ตามอาการที่คุณระบุ แนะนำสินค้าต่อไปนี้ค่ะ';
         $this->sessions->complete($sessionId, 'otc_recommended', $summary);
+
+        $this->audit('ai_recommendation', 'ai', $sessionId, [
+            'symptoms'     => array_values($symptoms),
+            'product_ids'  => array_values(array_filter(array_map(
+                static fn ($p) => is_array($p) ? ($p['id'] ?? $p['product_id'] ?? null) : null,
+                $products
+            ))),
+            'product_count' => count($products),
+        ]);
         $this->fireAndForgetSummary($sessionId);
 
         return [
@@ -285,6 +334,53 @@ class TriageRouter
             'session_id' => $sessionId,
             'products'   => $products,
             'message'    => $summary,
+        ];
+    }
+
+    /**
+     * Hold the recommendation for pharmacist review instead of presenting it to
+     * the customer as final. Marks the session 'refer_doctor' (same outcome
+     * vocabulary TriageSessionManager::complete() already accepts) so the
+     * pharmacist dashboard picks it up, and notifies pharmacists the same way
+     * a red-flag escalation does — just without the "red flag" framing.
+     *
+     * @param list<string>               $symptoms
+     * @param list<array<string, mixed>> $products
+     * @return array<string, mixed>
+     */
+    private function buildPendingApprovalResult(int $sessionId, array $symptoms, array $products): array
+    {
+        $message = 'ระบบได้รับข้อมูลอาการของคุณแล้ว กรุณารอเภสัชกรตรวจสอบและอนุมัติรายการยาก่อนสั่งซื้อค่ะ';
+        $this->sessions->complete($sessionId, 'refer_doctor', $message);
+
+        $this->audit('pending_pharmacist_approval', 'ai', $sessionId, [
+            'symptoms'     => array_values($symptoms),
+            'product_ids'  => array_values(array_filter(array_map(
+                static fn ($p) => is_array($p) ? ($p['id'] ?? $p['product_id'] ?? null) : null,
+                $products
+            ))),
+            'product_count' => count($products),
+        ]);
+
+        if ($this->notifier !== null) {
+            try {
+                $this->notifier->notifyAllPharmacists([
+                    'session_id' => $sessionId,
+                    'message'    => 'มีคำแนะนำยารอการอนุมัติจากเภสัชกร',
+                    'symptoms'   => $symptoms,
+                ], false);
+            } catch (\Throwable $e) {
+                // ignore — notification is best-effort
+            }
+        }
+
+        $this->fireAndForgetSummary($sessionId);
+
+        return [
+            'type'       => 'pending_approval',
+            'session_id' => $sessionId,
+            'products'   => $products,
+            'message'    => $message,
         ];
     }
 
@@ -326,8 +422,13 @@ class TriageRouter
     private function canRecommendProducts(): bool
     {
         try {
+            // Column is `auto_recommend` — matches the toggle saved by
+            // ai-pharmacy-settings.php ("แนะนำยาอัตโนมัติ"). Previously this
+            // queried a non-existent `recommend_products` column, which threw
+            // on every call and silently fell back to `true` — the tenant
+            // toggle had no effect.
             $stmt = $this->pdo->prepare(
-                "SELECT recommend_products FROM ai_pharmacy_settings
+                "SELECT auto_recommend FROM ai_pharmacy_settings
                  WHERE (line_account_id <=> :acc)
                  ORDER BY (line_account_id IS NOT NULL) DESC
                  LIMIT 1"
@@ -337,6 +438,29 @@ class TriageRouter
             return $val === false ? true : !empty($val);
         } catch (\Throwable $e) {
             return true;
+        }
+    }
+
+    /**
+     * Tenant toggle "ต้องให้เภสัชกรอนุมัติ" — ai_pharmacy_settings.require_pharmacist_approval.
+     * Default OFF (false) when unset, matching the pre-existing behaviour
+     * (auto-present recommendations) so tenants that never touched this
+     * setting see no change.
+     */
+    private function requiresPharmacistApproval(): bool
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                "SELECT require_pharmacist_approval FROM ai_pharmacy_settings
+                 WHERE (line_account_id <=> :acc)
+                 ORDER BY (line_account_id IS NOT NULL) DESC
+                 LIMIT 1"
+            );
+            $stmt->execute([':acc' => $this->lineAccountId]);
+            $val = $stmt->fetchColumn();
+            return $val === false ? false : !empty($val);
+        } catch (\Throwable $e) {
+            return false;
         }
     }
 

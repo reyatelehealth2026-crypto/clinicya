@@ -310,6 +310,65 @@ if (!function_exists('aiChatBuildUserContextEvent')) {
     }
 }
 
+/*
+ * Structured SSE event builders (single source of truth for the wire contract).
+ * api/ai-chat.php emits every structured event as {"structured": <builder()>}.
+ * Keeping the shapes here — pure and tested — prevents the safety-critical
+ * emergency / drug-interaction cards from silently drifting between the backend
+ * and the mini-app client. Shapes mirror line-mini-app/src/types/ai-chat.ts.
+ */
+if (!function_exists('aiChatBuildStateEvent')) {
+    /**
+     * `state` event — current triage_sessions.current_state for the UI header.
+     * @return array{type:string,state:string,label_th:string}
+     */
+    function aiChatBuildStateEvent(string $state, string $labelTh): array
+    {
+        return [
+            'type'     => 'state',
+            'state'    => $state,
+            'label_th' => $labelTh,
+        ];
+    }
+}
+
+if (!function_exists('aiChatBuildEmergencyEvent')) {
+    /**
+     * `emergency` event — red-flag card. Behaviour-preserving extraction of the
+     * inline shape previously built in api/ai-chat.php: symptoms are filtered +
+     * re-indexed, recommendation is the filtered actions joined by newlines.
+     *
+     * @param array<int,mixed> $symptoms
+     * @param array<int,mixed> $actions
+     * @return array{type:string,severity:string,symptoms:array<int,mixed>,recommendation:string}
+     */
+    function aiChatBuildEmergencyEvent(array $symptoms, array $actions, string $severity = 'critical'): array
+    {
+        $severity = $severity === 'warning' ? 'warning' : 'critical';
+        return [
+            'type'           => 'emergency',
+            'severity'       => $severity,
+            'symptoms'       => array_values(array_filter($symptoms)),
+            'recommendation' => trim(implode("\n", array_filter($actions))),
+        ];
+    }
+}
+
+if (!function_exists('aiChatBuildDrugInteractionsEvent')) {
+    /**
+     * `drug_interactions` event — allergy / interaction warning card.
+     * @param array<int,mixed> $warnings
+     * @return array{type:string,warnings:array<int,mixed>}
+     */
+    function aiChatBuildDrugInteractionsEvent(array $warnings): array
+    {
+        return [
+            'type'     => 'drug_interactions',
+            'warnings' => array_values($warnings),
+        ];
+    }
+}
+
 if (!function_exists('aiChatSaveConversationMessage')) {
     /**
      * Persist one role/content row to ai_conversation_history.
