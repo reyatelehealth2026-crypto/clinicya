@@ -22,5 +22,23 @@
     "upstream": "next_admin",
     "tenants": ["demo-tenant"],
     "note": "Working example of a per-tenant canary route (plan §7.3 ramp: demo tenant first). apps/admin doesn't exist until Phase 1 — this entry is a placeholder demonstrating the round-trip add/remove mechanics mig-verify checks, not a live flip."
+  },
+  {
+    "path": "/users",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 1 (mig-ui users-pages brief): Next port of users.php's LINE tab lives at apps/admin's /users, parity-proven by infra/e2e/parity.mjs. Schema-valid 'not yet flipped' placeholder (php_backend is already the default, so this is a functional no-op) — mig-orchestrator flips upstream to next_admin only after a completed canary ramp (plan §7.3: demo tenant -> 1 real tenant -> 10% -> 50% -> 100%), never this agent."
+  },
+  {
+    "path": "/user-detail",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 1 (mig-ui users-pages brief): Next port of user-detail.php lives at apps/admin's /user-detail?id=N (same query-param URL shape), parity-proven by infra/e2e/parity.mjs. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/dashboard",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 1 (mig-ui dashboard brief): Next port of dashboard.php (tabs executive/crm) lives at apps/admin's /dashboard — NOT '/', which stays the public storefront (index.php, the pre-existing catch-all above; see docs/runbooks/phase2-batch1-users-dashboard-parity.md for why). Parity-proven by infra/e2e/parity.mjs. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
   }
 ]

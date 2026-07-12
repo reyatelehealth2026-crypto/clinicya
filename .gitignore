@@ -243,6 +243,10 @@ generated/
 # of the blanket generated/ rule above, same pattern as database/migration_*.sql.
 !packages/db/src/generated/
 !packages/db/src/generated/*.d.ts
+# nginx strangler edge conf is generated-but-committed (rendered from
+# infra/nginx/routes.json by generate-routes.mjs — reviewable route flips).
+!infra/nginx/generated/
+!infra/nginx/generated/*.conf
 docs/training/videos/line-setup/yt-frames/
 g_err.txt
 g_out.txt

@@ -27,14 +27,27 @@
 // thrown error — `docker ps` shows zero leftover harness containers after
 // either a PASS or a FAIL run.
 
-import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  REPO_ROOT,
+  HarnessError,
+  createStepTracker,
+  run,
+  makeComposeArgs,
+  composeUp as sharedComposeUp,
+  composeDown as sharedComposeDown,
+  waitContainerHealthy as sharedWaitContainerHealthy,
+  execSql as sharedExecSql,
+  querySql as sharedQuerySql,
+  parseLocalConfigPhp as sharedParseLocalConfigPhp,
+  generateSecrets as sharedGenerateSecrets,
+  generatePhpBcryptHash as sharedGeneratePhpBcryptHash,
+} from './lib/harness-common.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(__dirname, '../..');
 const COMPOSE_FILE = path.join(__dirname, 'docker-compose.yml');
 const SEED_DIR = path.join(__dirname, 'seed');
 const PROJECT = 'reya-e2e-bridge';
@@ -64,57 +77,21 @@ const MASTER_MIGRATIONS = [
 const TENANT_TEMPLATE = 'database/migration_2026-05-25_tenant_template.sql';
 
 // ---------------------------------------------------------------------------
-// Small result-tracking helpers
+// Small result-tracking helpers — delegate to infra/e2e/lib/harness-common.mjs
+// (Phase 2 batch 1 extraction; see that module's header comment). Every
+// name below is kept IDENTICAL to the pre-extraction local implementation
+// (same signature, same call shape) so nothing further down this file had
+// to change — this section is the only place that knows the shared module
+// exists.
 // ---------------------------------------------------------------------------
 
-const steps = {};
-let failedAt = null;
+const tracker = createStepTracker();
+const { steps, markOk, fail } = tracker;
 
-class HarnessError extends Error {
-  constructor(step, message, extra) {
-    super(message);
-    this.step = step;
-    this.extra = extra;
-  }
-}
+const composeArgs = makeComposeArgs(COMPOSE_FILE, PROJECT);
 
-function markOk(step, extra) {
-  steps[step] = { ok: true, ...(extra ? { detail: extra } : {}) };
-}
-
-function fail(step, message, extra) {
-  steps[step] = { ok: false, message, ...(extra ? { detail: extra } : {}) };
-  if (failedAt === null) failedAt = step;
-  throw new HarnessError(step, message, extra);
-}
-
-// ---------------------------------------------------------------------------
-// Process helpers
-// ---------------------------------------------------------------------------
-
-function run(cmd, args, opts = {}) {
-  const result = spawnSync(cmd, args, { cwd: REPO_ROOT, encoding: 'utf8', ...opts });
-  return result;
-}
-
-function runOrThrow(step, cmd, args, opts = {}) {
-  const result = run(cmd, args, opts);
-  if (result.error) {
-    fail(step, `${cmd} failed to spawn: ${result.error.message}`, { cmd, args });
-  }
-  if (result.status !== 0) {
-    fail(step, `${cmd} exited ${result.status}`, {
-      cmd,
-      args,
-      stdout: (result.stdout || '').slice(-4000),
-      stderr: (result.stderr || '').slice(-4000),
-    });
-  }
-  return result;
-}
-
-function composeArgs(...rest) {
-  return ['compose', '-p', PROJECT, '-f', COMPOSE_FILE, ...rest];
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ---------------------------------------------------------------------------
@@ -140,113 +117,38 @@ function ensureAuthDistBuilt() {
 }
 
 // ---------------------------------------------------------------------------
-// config/config.php parsing — DB_NAME/DB_USER/DB_PASS. NEVER write these
-// values into any tracked file (this repo's secrets-discipline guardrail) —
-// they only ever live in this process's memory/env, sourced fresh from the
-// local (gitignored) config/config.php on every run.
+// config/config.php parsing, secrets, docker compose lifecycle, SQL exec —
+// thin adapters over harness-common.mjs preserving this file's original
+// local call signatures (step-first for SQL helpers, no explicit tracker
+// arg) so every call site below is unchanged from before this extraction.
 // ---------------------------------------------------------------------------
 
 function parseLocalConfigPhp() {
-  const configPath = path.join(REPO_ROOT, 'config/config.php');
-  if (!existsSync(configPath)) {
-    fail(
-      'parse_config_php',
-      'config/config.php not found. This harness requires the local (gitignored) ' +
-        'config/config.php to exist in this checkout — see CLAUDE.md: "The local ' +
-        'config/config.php exists in this checkout (gitignored)".'
-    );
-  }
-  const src = readFileSync(configPath, 'utf8');
-  const extract = (name) => {
-    const m = src.match(new RegExp(`define\\(\\s*'${name}'\\s*,\\s*'([^']*)'\\s*\\)`));
-    return m ? m[1] : null;
-  };
-  const name = extract('DB_NAME');
-  const user = extract('DB_USER');
-  const pass = extract('DB_PASS');
-  if (!name || !user || pass === null) {
-    fail('parse_config_php', 'Could not parse DB_NAME/DB_USER/DB_PASS out of config/config.php', {
-      found: { name, user, passPresent: pass !== null },
-    });
-  }
-  markOk('parse_config_php', { name, user });
-  return { name, user, pass };
+  return sharedParseLocalConfigPhp(tracker, 'parse_config_php');
 }
-
-// ---------------------------------------------------------------------------
-// Secrets — generated fresh every run, never written to disk.
-// ---------------------------------------------------------------------------
 
 function generateSecrets() {
-  return {
-    mariadbRootPassword: randomBytes(24).toString('base64url'),
-    sessionBridgeHmacSecret: randomBytes(32).toString('hex'),
-    adminPassword: randomBytes(18).toString('base64url'),
-  };
+  return sharedGenerateSecrets();
 }
 
-// ---------------------------------------------------------------------------
-// docker compose lifecycle
-// ---------------------------------------------------------------------------
-
 function composeUp(env) {
-  console.error('[e2e] docker compose up -d --build ...');
-  runOrThrow('compose_up', 'docker', composeArgs('up', '-d', '--build'), { env });
-  markOk('compose_up');
+  return sharedComposeUp(tracker, composeArgs, env, 'compose_up');
 }
 
 function composeDown(env) {
-  console.error('[e2e] docker compose down -v ...');
-  // Best-effort — teardown must never throw past this point (finally block).
-  run('docker', composeArgs('down', '-v', '--remove-orphans'), { env, stdio: 'inherit' });
+  return sharedComposeDown(composeArgs, env);
 }
 
 async function waitContainerHealthy(step, containerName, timeoutMs = 90_000) {
-  const started = Date.now();
-  for (;;) {
-    const result = run('docker', ['inspect', '--format', '{{.State.Health.Status}}', containerName]);
-    const status = (result.stdout || '').trim();
-    if (status === 'healthy') {
-      markOk(step);
-      return;
-    }
-    if (Date.now() - started > timeoutMs) {
-      fail(step, `${containerName} did not become healthy within ${timeoutMs}ms`, {
-        lastStatus: status || result.stderr?.trim(),
-      });
-    }
-    await sleep(1500);
-  }
+  return sharedWaitContainerHealthy(tracker, containerName, step, timeoutMs);
 }
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// ---------------------------------------------------------------------------
-// SQL seeding — always via `docker compose exec -T mariadb mysql -uroot`
-// (root credentials, harness-internal only) so grants/DDL never depend on
-// the app user's privileges existing yet.
-// ---------------------------------------------------------------------------
 
 function execSql(step, env, rootPassword, sqlText, extraArgs = []) {
-  const result = spawnSync(
-    'docker',
-    composeArgs('exec', '-T', '-e', `MYSQL_PWD=${rootPassword}`, 'mariadb', 'mysql', '-uroot', ...extraArgs),
-    { cwd: REPO_ROOT, encoding: 'utf8', input: sqlText, env }
-  );
-  if (result.status !== 0) {
-    fail(step, `mysql exec failed (exit ${result.status})`, {
-      stderr: (result.stderr || '').slice(-4000),
-    });
-  }
-  return result;
+  return sharedExecSql(tracker, composeArgs, env, rootPassword, sqlText, extraArgs, step);
 }
 
 function querySql(step, env, rootPassword, sqlText, dbName) {
-  const args = dbName ? ['-N', '-B', dbName] : ['-N', '-B'];
-  const result = execSql(step, env, rootPassword, sqlText, args);
-  return result.stdout.trim();
+  return sharedQuerySql(tracker, composeArgs, env, rootPassword, sqlText, dbName, step);
 }
 
 function seedDatabase(env, secrets, dbCreds) {
@@ -332,31 +234,10 @@ function seedAdminUser(env, secrets, dbCreds, passwordHash) {
 /** Generates a REAL PHP bcrypt hash by invoking password_hash() inside the
  * harness's own php container (php:8.2-apache — the production runtime),
  * never bcryptjs and never hand-written. This is what genuinely exercises
- * passwords.ts's verifyLegacyPassword() cross-runtime claim. */
+ * passwords.ts's verifyLegacyPassword() cross-runtime claim. Delegates to
+ * harness-common.mjs (see that module's header comment). */
 function generatePhpBcryptHash(env, plainPassword) {
-  const result = spawnSync(
-    'docker',
-    composeArgs(
-      'exec',
-      '-T',
-      'php',
-      'php',
-      '-r',
-      'echo password_hash($argv[1], PASSWORD_DEFAULT);',
-      '--',
-      plainPassword
-    ),
-    { cwd: REPO_ROOT, encoding: 'utf8', env }
-  );
-  if (result.status !== 0 || !result.stdout || !result.stdout.startsWith('$2y$')) {
-    fail('generate_php_hash', 'php -r password_hash(...) did not return a $2y$ bcrypt hash', {
-      status: result.status,
-      stdout: result.stdout,
-      stderr: (result.stderr || '').slice(-2000),
-    });
-  }
-  markOk('generate_php_hash');
-  return result.stdout;
+  return sharedGeneratePhpBcryptHash(tracker, composeArgs, env, plainPassword, 'generate_php_hash');
 }
 
 async function waitPhpReachable(timeoutMs = 120_000) {
@@ -545,14 +426,14 @@ async function main() {
     result = 'FAIL';
     if (!(err instanceof HarnessError)) {
       // Unexpected/thrown error outside the fail() helper's own bookkeeping.
-      if (failedAt === null) failedAt = 'unexpected_error';
+      tracker.setFailedAt('unexpected_error');
       steps.unexpected_error = { ok: false, message: String(err && err.stack ? err.stack : err) };
     }
   } finally {
     composeDown(composeEnv);
   }
 
-  const output = { result, steps, failedAt };
+  const output = { result, steps, failedAt: tracker.getFailedAt() };
   console.log(JSON.stringify(output));
   process.exitCode = result === 'PASS' ? 0 : 1;
 }

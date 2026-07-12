@@ -1,0 +1,260 @@
+-- infra/e2e/seed/30-phase2-batch1-fixture.sql.tmpl
+--
+-- Phase 2 batch 1 (mig-infra) — data-point parity fixture for the three
+-- page-pairs this batch covers: /users (LINE tab), /user-detail?id=N,
+-- /dashboard?tab=executive|crm. Applied AFTER the tenant-template seed
+-- (database/migration_2026-05-25_tenant_template.sql, already piped in by
+-- infra/e2e/run.mjs's seedDatabase()/parity.mjs's equivalent) against the
+-- SAME app/tenant DB — no USE statement of its own, same convention as
+-- 20-admin-user.sql.tmpl (the caller prepends `USE \`<app-db>\`;`).
+--
+-- No __PLACEHOLDER__ substitution needed (nothing here is DB-name- or
+-- secret-shaped) — the .sql.tmpl extension is kept only to match this
+-- directory's established numbered-template naming convention, per this
+-- batch's brief.
+--
+-- DETERMINISM: every timestamp below is a MySQL/MariaDB relative-date
+-- expression (NOW() / CURDATE() / DATE_SUB(NOW(), INTERVAL n DAY|HOUR)),
+-- never a hardcoded wall-clock literal — the harness's seed step and the
+-- parity runner's PHP/Next fetches happen within the same short-lived
+-- process run, so "today" at seed time and "today" at query time are always
+-- the same calendar day. This mirrors the technique run.mjs/other seed
+-- files use for the same reason (never assume a fixed date survives a
+-- re-run on a different day). Buckets are spaced with a wide safety margin
+-- (3d / 15d / 45d, not 6d / 29d / 31d) precisely so this holds even with
+-- a slow docker build in between seed and query.
+--
+-- CURRENT-BOT-ID NOTE: @reya/auth's login() always sets a fresh tenant
+-- session's currentBotId to null (packages/auth/src/session.ts), and
+-- includes/header.php's own $currentBotId auto-select logic falls back to
+-- null the same way when `line_accounts` has no rows (verified empirically
+-- by infra/e2e/probe-page.md — this harness deliberately never seeds
+-- line_accounts). Both sides are therefore ALWAYS null here. Every query in
+-- users.php/queries.ts, crm.php/crmData.ts, AutoTagManager.php/crmData.ts
+-- that filters with the literal-NULL-safe `(line_account_id = ? OR ? IS
+-- NULL)` pattern (same placeholder bound both sides) is therefore always
+-- unscoped — but the OTHER pattern, `x.line_account_id = ? OR
+-- x.line_account_id IS NULL` (single placeholder, column-vs-NULL on the
+-- right), only matches rows whose OWN line_account_id is NULL. That second
+-- pattern is what user_tags/auto_tag_rules are read through (getAllTags(),
+-- crm.php's tags-with-counts query, AutoTagManager::getRules()) — so every
+-- `user_tags`/`auto_tag_rules` row below is seeded with `line_account_id =
+-- NULL` on purpose. Getting this wrong would make tags/auto-rules silently
+-- vanish from both stacks' dropdowns/counts identically, which would NOT
+-- fail parity (both sides still agree) but WOULD make this fixture
+-- pointless for those data points — a "trivially passing" bug, not a
+-- crashing one, so called out explicitly here.
+
+-- ===========================================================================
+-- 1) user_tags (5) — all line_account_id IS NULL, see note above.
+-- ===========================================================================
+INSERT INTO `user_tags` (`id`, `line_account_id`, `name`, `color`, `tag_type`, `created_at`) VALUES
+  (1, NULL, 'VIP', '#F59E0B', 'manual', NOW()),
+  (2, NULL, 'Regular', '#3B82F6', 'manual', NOW()),
+  (3, NULL, 'Blocked-Test', '#EF4444', 'manual', NOW()),
+  (4, NULL, 'Newsletter', '#10B981', 'manual', NOW()),
+  (5, NULL, 'Auto-Segment', '#8B5CF6', 'auto', NOW());
+
+-- ===========================================================================
+-- 2) users (25) — spans every users.php filter branch. See the harness
+--    runbook (docs/runbooks/phase2-batch1-users-dashboard-parity.md) for the
+--    per-user "why" table. `total_points`/`points` feed user-detail's tier
+--    DISPLAY (DEFAULT_TIERS thresholds 0/1000/5000/15000 — a source
+--    deliberately DIFFERENT from `loyalty_points.tier` below, matching the
+--    already-flagged disconnected-tier-write quirk; do not "fix" the two to
+--    agree, that would hide a real product bug this fixture is meant to keep
+--    visible). line_account_id is NULL throughout (irrelevant — see note
+--    above; the users-list/CRM queries that touch it always fall back to
+--    "unscoped" when currentBotId is null).
+-- ===========================================================================
+INSERT INTO `users`
+  (`id`, `line_user_id`, `display_name`, `real_name`, `phone`, `email`, `birthday`,
+   `is_blocked`, `created_at`, `updated_at`, `total_points`, `points`, `line_account_id`)
+VALUES
+  -- Rich / active — full profile, tags, messages, transactions, points_transactions, video call.
+  (1,  'Uphase2b1u0000000000000000000001', 'คุณสมชาย VIP', 'สมชาย ใจดี', '0811111111', 'somchai@example.invalid', '1985-05-12',
+       0, NOW(), NOW(), 6200, 6200, NULL),
+  -- Rich / active — full profile, tags, messages, transactions, points_transactions. Updated 3d ago (7days bucket, not today).
+  (2,  'Uphase2b1u0000000000000000000002', 'คุณสมหญิง Silver', 'สมหญิง มีสุข', '0822222222', 'somying@example.invalid', '1990-02-20',
+       0, DATE_SUB(NOW(), INTERVAL 20 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY), 1800, 1800, NULL),
+  -- Minimal profile (no real_name/phone/email/birthday) — 30days bucket (not 7days, not today, not inactive).
+  (3,  'Uphase2b1u0000000000000000000003', 'ลูกค้าเงียบ', NULL, NULL, NULL, NULL,
+       0, DATE_SUB(NOW(), INTERVAL 20 DAY), DATE_SUB(NOW(), INTERVAL 15 DAY), 300, 300, NULL),
+  -- Minimal profile — inactive bucket (>30 days).
+  (4,  'Uphase2b1u0000000000000000000004', 'คุณเพชร Platinum', NULL, NULL, NULL, NULL,
+       0, DATE_SUB(NOW(), INTERVAL 60 DAY), DATE_SUB(NOW(), INTERVAL 45 DAY), 20000, 20000, NULL),
+  -- Search-token user: unique display_name substring "Sakura".
+  (5,  'Uphase2b1u0000000000000000000005', 'Sakura Testcase', NULL, '0833333333', 'sakura@example.invalid', NULL,
+       0, NOW(), NOW(), 0, 0, NULL),
+  -- Blocked, tagged.
+  (6,  'Uphase2b1u0000000000000000000006', 'บล็อกแล้ว หนึ่ง', 'บล็อก หนึ่ง', NULL, NULL, NULL,
+       1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW(), 0, 0, NULL),
+  -- Blocked, minimal.
+  (7,  'Uphase2b1u0000000000000000000007', 'บล็อกแล้ว สอง', NULL, NULL, NULL, NULL,
+       1, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 0, 0, NULL),
+  -- Blocked + inactive combo.
+  (8,  'Uphase2b1u0000000000000000000008', 'บล็อกแล้ว สาม (เก่า)', NULL, NULL, NULL, NULL,
+       1, DATE_SUB(NOW(), INTERVAL 50 DAY), DATE_SUB(NOW(), INTERVAL 45 DAY), 0, 0, NULL),
+  -- Purchase filter: has an `orders` row with status != cancelled -> 'purchased'.
+  (9,  'Uphase2b1u0000000000000000000009', 'ลูกค้าซื้อแล้ว หนึ่ง', NULL, NULL, NULL, NULL,
+       0, DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), 700, 700, NULL),
+  -- Purchase filter: another 'purchased' row (different orders.status value, still != cancelled).
+  (10, 'Uphase2b1u0000000000000000000010', 'ลูกค้าซื้อแล้ว สอง', NULL, NULL, NULL, NULL,
+       0, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), 1200, 1200, NULL),
+  -- Purchase filter: no `orders` row at all -> 'never'.
+  (11, 'Uphase2b1u0000000000000000000011', 'ลูกค้ายังไม่ซื้อ หนึ่ง', NULL, NULL, NULL, NULL,
+       0, NOW(), NOW(), 0, 0, NULL),
+  -- Purchase filter: no `orders` row at all -> 'never'.
+  (12, 'Uphase2b1u0000000000000000000012', 'ลูกค้ายังไม่ซื้อ สอง', NULL, NULL, NULL, NULL,
+       0, DATE_SUB(NOW(), INTERVAL 5 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), 0, 0, NULL),
+  -- Purchase filter edge case: ONLY a cancelled `orders` row -> matches NEITHER 'purchased' NOR 'never'.
+  (13, 'Uphase2b1u0000000000000000000013', 'ลูกค้ายกเลิกออเดอร์', NULL, NULL, NULL, NULL,
+       0, NOW(), NOW(), 0, 0, NULL),
+  -- Search token: unique phone substring.
+  (14, 'Uphase2b1u0000000000000000000014', 'ค้นหาด้วยเบอร์', NULL, '0891234567', NULL, NULL,
+       0, NOW(), NOW(), 0, 0, NULL),
+  -- Search token: unique real_name substring.
+  (15, 'Uphase2b1u0000000000000000000015', 'ลูกค้าทดสอบ', 'สมชาย ทดสอบค้นหา', NULL, NULL, NULL,
+       0, NOW(), NOW(), 0, 0, NULL),
+  -- Filler (16-25) — volume for pagination (25 > 20/page => 2 pages on the
+  -- unfiltered listing) + more created_at/updated_at spread. Alternates
+  -- blocked/active and a couple more tag assignments.
+  (16, 'Uphase2b1u0000000000000000000016', 'ลูกค้าทั่วไป 16', NULL, NULL, NULL, NULL, 0, DATE_SUB(NOW(), INTERVAL 6 DAY),  DATE_SUB(NOW(), INTERVAL 6 DAY),  400, 400, NULL),
+  (17, 'Uphase2b1u0000000000000000000017', 'ลูกค้าทั่วไป 17', NULL, NULL, NULL, NULL, 0, DATE_SUB(NOW(), INTERVAL 7 DAY),  DATE_SUB(NOW(), INTERVAL 2 DAY),  0,   0,   NULL),
+  (18, 'Uphase2b1u0000000000000000000018', 'ลูกค้าทั่วไป 18', NULL, NULL, NULL, NULL, 1, DATE_SUB(NOW(), INTERVAL 8 DAY),  DATE_SUB(NOW(), INTERVAL 8 DAY),  0,   0,   NULL),
+  (19, 'Uphase2b1u0000000000000000000019', 'ลูกค้าทั่วไป 19', NULL, NULL, NULL, NULL, 0, DATE_SUB(NOW(), INTERVAL 9 DAY),  DATE_SUB(NOW(), INTERVAL 9 DAY),  0,   0,   NULL),
+  (20, 'Uphase2b1u0000000000000000000020', 'ลูกค้าทั่วไป 20', NULL, NULL, NULL, NULL, 0, DATE_SUB(NOW(), INTERVAL 11 DAY), DATE_SUB(NOW(), INTERVAL 4 DAY),  0,   0,   NULL),
+  (21, 'Uphase2b1u0000000000000000000021', 'ลูกค้าทั่วไป 21', NULL, NULL, NULL, NULL, 0, DATE_SUB(NOW(), INTERVAL 12 DAY), DATE_SUB(NOW(), INTERVAL 12 DAY), 0,   0,   NULL),
+  (22, 'Uphase2b1u0000000000000000000022', 'ลูกค้าทั่วไป 22', NULL, NULL, NULL, NULL, 1, DATE_SUB(NOW(), INTERVAL 13 DAY), DATE_SUB(NOW(), INTERVAL 13 DAY), 0,   0,   NULL),
+  (23, 'Uphase2b1u0000000000000000000023', 'ลูกค้าทั่วไป 23', NULL, NULL, NULL, NULL, 0, DATE_SUB(NOW(), INTERVAL 14 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY),  0,   0,   NULL),
+  (24, 'Uphase2b1u0000000000000000000024', 'ลูกค้าทั่วไป 24', NULL, NULL, NULL, NULL, 0, DATE_SUB(NOW(), INTERVAL 16 DAY), DATE_SUB(NOW(), INTERVAL 16 DAY), 0,   0,   NULL),
+  (25, 'Uphase2b1u0000000000000000000025', 'ลูกค้าทั่วไป 25', NULL, NULL, NULL, NULL, 0, DATE_SUB(NOW(), INTERVAL 18 DAY), NOW(),                            0,   0,   NULL);
+
+-- ===========================================================================
+-- 3) user_tag_assignments — subset of users, one multi-tag case (user 1).
+-- ===========================================================================
+INSERT INTO `user_tag_assignments` (`line_account_id`, `user_id`, `tag_id`, `assigned_by`, `created_at`) VALUES
+  (1, 1, 1, 'manual', NOW()),                          -- user1 -> VIP
+  (1, 1, 4, 'manual', NOW()),                          -- user1 -> Newsletter (multi-tag)
+  (1, 2, 2, 'manual', NOW()),                          -- user2 -> Regular
+  (1, 6, 3, 'manual', NOW()),                          -- user6 -> Blocked-Test
+  (1, 9, 5, 'auto', NOW()),                            -- user9 -> Auto-Segment (auto-assigned)
+  (1, 15, 2, 'manual', NOW());                         -- user15 -> Regular
+
+-- ===========================================================================
+-- 4) auto_tag_rules — line_account_id IS NULL (see note above).
+-- ===========================================================================
+INSERT INTO `auto_tag_rules` (`id`, `line_account_id`, `tag_id`, `rule_name`, `trigger_type`, `conditions`, `is_active`, `priority`, `created_at`) VALUES
+  (1, NULL, 5, 'ลูกค้าแต้มสูงอัตโนมัติ', 'points_threshold', '{"min_points":1000}', 1, 10, NOW()),
+  (2, NULL, 1, 'ลูกค้าใหม่ 7 วัน',       'new_customer',     '{"days":7}',          1, 5,  DATE_SUB(NOW(), INTERVAL 1 DAY));
+
+-- ===========================================================================
+-- 5) loyalty_points — tier/points filter coverage for users.php. DISTINCT
+--    from users.total_points/points above on purpose (see module note).
+-- ===========================================================================
+INSERT INTO `loyalty_points` (`user_id`, `points`, `lifetime_points`, `tier`, `created_at`) VALUES
+  (1, 1200, 1500, 'gold',     NOW()),   -- tier=gold, points bucket 1000+
+  (2, 300,  300,  'silver',  NOW()),   -- tier=silver, points bucket 100-500
+  (3, 50,   50,   'bronze',  NOW()),   -- tier=bronze, points bucket 0-100
+  (4, 1500, 1500, 'platinum', NOW()),   -- tier=platinum, points bucket 1000+
+  (9, 700,  700,  'silver',  NOW());   -- tier=silver, points bucket 500-1000
+
+-- ===========================================================================
+-- 6) business_items — minimal rows for transaction_items to reference.
+-- ===========================================================================
+INSERT INTO `business_items` (`id`, `line_account_id`, `name`, `price`, `stock`) VALUES
+  (1, NULL, 'พาราเซตามอล 500mg', 20.00, 100),
+  (2, NULL, 'วิตามินซี 1000mg', 150.00, 50),
+  (3, NULL, 'น้ำเกลือล้างจมูก', 85.00, 30);
+
+-- ===========================================================================
+-- 7) transactions + transaction_items — user-detail order history/stats AND
+--    dashboard executive KPI (executive.php always finds `transactions`
+--    present, so `orders` below is never read by dashboard.php).
+--    orderCount/totalSpent (user-detail) = status NOT IN ('cancelled','pending').
+-- ===========================================================================
+INSERT INTO `transactions` (`id`, `line_account_id`, `order_number`, `user_id`, `total_amount`, `grand_total`, `status`, `created_at`) VALUES
+  (1, NULL, 'ORD-0001', 1,  350.00, 350.00, 'delivered', DATE_SUB(NOW(), INTERVAL 2 DAY)),
+  (2, NULL, 'ORD-0002', 1,  205.00, 205.00, 'paid',      DATE_SUB(NOW(), INTERVAL 20 DAY)),
+  (3, NULL, 'ORD-0003', 2,  85.00,  85.00,  'confirmed', DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  (4, NULL, 'ORD-0004', 9,  120.00, 120.00, 'pending',   NOW()),
+  (5, NULL, 'ORD-0005', 10, 460.00, 460.00, 'delivered', NOW()),
+  (6, NULL, 'ORD-0006', 1,  50.00,  50.00,  'cancelled', NOW());
+
+INSERT INTO `transaction_items` (`transaction_id`, `product_id`, `product_name`, `product_price`, `quantity`, `subtotal`) VALUES
+  (1, 1, 'พาราเซตามอล 500mg', 20.00, 2, 40.00),
+  (1, 2, 'วิตามินซี 1000mg', 150.00, 1, 150.00),
+  (3, 3, 'น้ำเกลือล้างจมูก', 85.00, 1, 85.00),
+  (5, 2, 'วิตามินซี 1000mg', 150.00, 2, 300.00);
+
+-- ===========================================================================
+-- 8) orders — SEPARATE table from `transactions` (see queries.ts's flagged
+--    quirk: users.php's purchase filter queries `orders`, not `transactions`).
+--    status enum has NO 'completed' value, so the '1000+'/'5000+' purchase
+--    branches always match 0 rows on a stock tenant DB — seeded anyway so
+--    parity exercises that (both sides independently computing the same
+--    empty result is still a real, meaningful assertion).
+-- ===========================================================================
+INSERT INTO `orders` (`id`, `line_account_id`, `order_number`, `user_id`, `total_amount`, `grand_total`, `status`, `created_at`) VALUES
+  (1, NULL, 'ORD-U9-0001',  9,  120.00, 120.00, 'confirmed', NOW()),
+  (2, NULL, 'ORD-U10-0001', 10, 200.00, 200.00, 'paid',      NOW()),
+  (3, NULL, 'ORD-U13-0001', 13, 99.00,  99.00,  'cancelled', NOW());
+
+-- ===========================================================================
+-- 9) points_transactions — earn + redeem for 2 users, drives user-detail's
+--    "available/total/used points" card AND points-history section
+--    (getUserPoints()/getPointsHistory() read this table FIRST, falling
+--    back to the `users` row's point columns only when the sum is 0 — see
+--    apps/admin's _lib/loyalty.ts module doc). Users 3/4 intentionally have
+--    NO points_transactions rows so their points card falls back to (and
+--    exercises) the `users` table branch.
+-- ===========================================================================
+INSERT INTO `points_transactions` (`user_id`, `type`, `points`, `balance_after`, `description`, `created_at`) VALUES
+  (1, 'earn',   800,  800,  'ซื้อสินค้าครบ 500 บาท', DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  (1, 'earn',   700,  1500, 'โปรโมชั่นวันเกิด',       DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  (1, 'redeem', -300, 1200, 'แลกส่วนลด 30 บาท',       NOW()),
+  (2, 'earn',   400,  400,  'ซื้อสินค้าครบ 500 บาท', DATE_SUB(NOW(), INTERVAL 5 DAY));
+
+-- ===========================================================================
+-- 10) video_calls — dashboard executive video KPI (1 completed + 1 pending,
+--     both today).
+-- ===========================================================================
+INSERT INTO `video_calls` (`user_id`, `line_user_id`, `display_name`, `status`, `duration`, `created_at`) VALUES
+  (1, 'Uphase2b1u0000000000000000000001', 'คุณสมชาย VIP',    'completed', 930, NOW()),
+  (2, 'Uphase2b1u0000000000000000000002', 'คุณสมหญิง Silver', 'pending',   0,   NOW());
+
+-- ===========================================================================
+-- 11) messages — TODAY (spread across several hours, for the hourly-activity
+--     histogram + msgStats + problem-message panel + adminPerformance) AND a
+--     few PRIOR days (all-time message_count only — outside dashboard's
+--     default `date`-scoped window, matches users.php/user-detail.php's
+--     own all-time `COUNT(*) FROM messages WHERE user_id = ?` queries).
+--     Problem-keyword messages use the EXACT keyword list from
+--     includes/dashboard/executive.php line 100:
+--     ['ปัญหา','ไม่พอใจ','ช้า','แย่','ผิด','เสีย','ไม่ได้','รอนาน','ไม่ตอบ','complaint','problem'].
+-- ===========================================================================
+INSERT INTO `messages` (`user_id`, `direction`, `content`, `is_read`, `sent_by`, `created_at`) VALUES
+  -- Today, user1 — one problem-keyword message (unread) + admin reply.
+  (1,  'incoming', 'สวัสดีครับ อยากสอบถามเรื่องยา',                    1, NULL,                 DATE_ADD(CURDATE(), INTERVAL 9 HOUR)),
+  (1,  'incoming', 'ทำไมส่งของช้าจังเลย ไม่พอใจมากค่ะ',                 0, NULL,                 DATE_ADD(CURDATE(), INTERVAL 9 HOUR) + INTERVAL 10 MINUTE),
+  (1,  'outgoing', 'ขออภัยด้วยค่ะ กำลังตรวจสอบให้ค่ะ',                  1, 'admin:pharmacist1',  DATE_ADD(CURDATE(), INTERVAL 9 HOUR) + INTERVAL 25 MINUTE),
+  -- Today, user2.
+  (2,  'incoming', 'สอบถามราคาสินค้าหน่อยค่ะ',                          1, NULL,                 DATE_ADD(CURDATE(), INTERVAL 10 HOUR)),
+  (2,  'outgoing', 'ราคาตามในแคตตาล็อกเลยค่ะ',                          1, 'admin:pharmacist1',  DATE_ADD(CURDATE(), INTERVAL 10 HOUR) + INTERVAL 5 MINUTE),
+  -- Today, user3 — two problem keywords in one message (unread).
+  (3,  'incoming', 'ของเสียหาย ผิดออเดอร์ที่สั่งไปเลยค่ะ',              0, NULL,                 DATE_ADD(CURDATE(), INTERVAL 11 HOUR) + INTERVAL 30 MINUTE),
+  (3,  'outgoing', 'ขออภัยในความไม่สะดวกค่ะ จะรีบดำเนินการให้ค่ะ',      1, 'admin:pharmacist2',  DATE_ADD(CURDATE(), INTERVAL 11 HOUR) + INTERVAL 40 MINUTE),
+  -- Today, user9.
+  (9,  'incoming', 'ออเดอร์จะมาถึงเมื่อไหร่คะ',                        1, NULL,                 DATE_ADD(CURDATE(), INTERVAL 13 HOUR)),
+  (9,  'outgoing', 'คาดว่าถึงวันนี้ค่ะ',                                1, 'admin:pharmacist2',  DATE_ADD(CURDATE(), INTERVAL 13 HOUR) + INTERVAL 10 MINUTE),
+  -- Today, user10 — problem keywords "รอนาน"/"ไม่ได้" (unread).
+  (10, 'incoming', 'รอนานมากยังไม่ได้ของเลยค่ะ',                       0, NULL,                 DATE_ADD(CURDATE(), INTERVAL 15 HOUR)),
+  (10, 'outgoing', 'ขออภัยค่ะ กำลังเร่งจัดส่งให้',                      1, 'admin:pharmacist1',  DATE_ADD(CURDATE(), INTERVAL 15 HOUR) + INTERVAL 20 MINUTE),
+  -- Today, user14 — no problem keywords.
+  (14, 'incoming', 'ขอบคุณสำหรับสินค้าค่ะ',                            1, NULL,                 DATE_ADD(CURDATE(), INTERVAL 20 HOUR)),
+  -- Prior days — all-time message_count volume only (outside today's window).
+  (1,  'incoming', 'ข้อความเก่าของ user1 (3 วันก่อน)',                  1, NULL,                 DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  (1,  'outgoing', 'ตอบกลับเก่าของ user1',                              1, 'admin:pharmacist1',  DATE_SUB(NOW(), INTERVAL 3 DAY) + INTERVAL 15 MINUTE),
+  (1,  'incoming', 'ข้อความเก่าของ user1 (10 วันก่อน)',                 1, NULL,                 DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  (2,  'incoming', 'ข้อความเก่าของ user2 (10 วันก่อน)',                 1, NULL,                 DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  (2,  'outgoing', 'ตอบกลับเก่าของ user2',                              1, 'admin:pharmacist2',  DATE_SUB(NOW(), INTERVAL 10 DAY) + INTERVAL 5 MINUTE);
