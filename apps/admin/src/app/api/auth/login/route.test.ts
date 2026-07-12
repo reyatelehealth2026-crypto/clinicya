@@ -86,6 +86,75 @@ describe('POST /api/auth/login', () => {
     expect(response.headers.get('location')).toBe('https://tenant-0002.re-ya.com/dashboard');
   });
 
+  it('on tenant-realm success: also sets a PHPSESSID cookie equal to cookie.value, with attributes copied from the returned descriptor', async () => {
+    const cookieStore = fakeCookieStore();
+    mockCookies.mockResolvedValue(cookieStore);
+
+    const session: Session = {
+      realm: 'tenant',
+      sid: 'sid-xyz',
+      adminUserId: 1,
+      tenantId: 2,
+      currentBotId: 1,
+      role: 'admin',
+      username: 'admin1',
+      displayName: 'Admin One',
+      createdAt: '2026-07-01T00:00:00.000Z',
+      lastSeenAt: '2026-07-12T00:00:00.000Z',
+      expiresAt: '2026-07-13T00:00:00.000Z',
+    };
+    mockLogin.mockResolvedValue({ ok: true, value: { session, cookie: COOKIE, bridgeSynced: true } });
+
+    await POST(formRequest({ realm: 'tenant', username: 'admin1', password: 'secret' }, { 'x-tenant-id': '2' }));
+
+    expect(cookieStore.set).toHaveBeenCalledWith('PHPSESSID', COOKIE.value, {
+      httpOnly: COOKIE.httpOnly,
+      sameSite: COOKIE.sameSite,
+      secure: COOKIE.secure,
+      path: COOKIE.path,
+      maxAge: COOKIE.maxAge,
+    });
+  });
+
+  it('on platform-realm success: also sets a PHPSESSID cookie equal to cookie.value, with attributes copied from the returned descriptor', async () => {
+    const cookieStore = fakeCookieStore();
+    mockCookies.mockResolvedValue(cookieStore);
+
+    const platformCookie: SessionCookieDescriptor = {
+      name: 'reya_platform_sid',
+      value: 'sid-plat',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
+      path: '/',
+      maxAge: 7200,
+    };
+    const session: Session = {
+      realm: 'platform',
+      sid: 'sid-plat',
+      platformUserId: 1,
+      platformRole: 'support',
+      email: 'a@b.com',
+      name: 'A',
+      impersonatedTenantId: null,
+      createdAt: '',
+      lastSeenAt: '',
+      expiresAt: '',
+    };
+    mockLogin.mockResolvedValue({ ok: true, value: { session, cookie: platformCookie, bridgeSynced: true } });
+
+    await POST(formRequest({ realm: 'platform', email: 'a@b.com', password: 'secret' }));
+
+    expect(cookieStore.set).toHaveBeenCalledWith('reya_platform_sid', platformCookie.value, platformCookie);
+    expect(cookieStore.set).toHaveBeenCalledWith('PHPSESSID', platformCookie.value, {
+      httpOnly: platformCookie.httpOnly,
+      sameSite: platformCookie.sameSite,
+      secure: platformCookie.secure,
+      path: platformCookie.path,
+      maxAge: platformCookie.maxAge,
+    });
+  });
+
   it('wraps tenant-realm login() in runWithTenantDb() with the resolved tenant DB (tenantDbContext.ts requirement)', async () => {
     const fakeDb = { __fakeTenantDb: true };
     mockGetTenantDb.mockResolvedValue(fakeDb as never);
@@ -139,7 +208,35 @@ describe('POST /api/auth/login', () => {
     expect(location.searchParams.get('bridgeWarning')).toBe('1');
   });
 
-  it('on failure: redirects back to the login page with the error code, never sets a cookie', async () => {
+  it('on success with bridgeSynced:false: the PHPSESSID cookie is still set (the soft-warning path does not skip the PHP-visible cookie)', async () => {
+    const cookieStore = fakeCookieStore();
+    mockCookies.mockResolvedValue(cookieStore);
+    const session: Session = {
+      realm: 'platform',
+      sid: 'sid-p',
+      platformUserId: 1,
+      platformRole: 'support',
+      email: 'a@b.com',
+      name: 'A',
+      impersonatedTenantId: null,
+      createdAt: '',
+      lastSeenAt: '',
+      expiresAt: '',
+    };
+    mockLogin.mockResolvedValue({ ok: true, value: { session, cookie: COOKIE, bridgeSynced: false } });
+
+    await POST(formRequest({ realm: 'platform', email: 'a@b.com', password: 'secret' }));
+
+    expect(cookieStore.set).toHaveBeenCalledWith('PHPSESSID', COOKIE.value, {
+      httpOnly: COOKIE.httpOnly,
+      sameSite: COOKIE.sameSite,
+      secure: COOKIE.secure,
+      path: COOKIE.path,
+      maxAge: COOKIE.maxAge,
+    });
+  });
+
+  it('on failure: redirects back to the login page with the error code, never sets a cookie (including PHPSESSID)', async () => {
     const cookieStore = fakeCookieStore();
     mockCookies.mockResolvedValue(cookieStore);
     mockLogin.mockResolvedValue({ ok: false, error: { code: 'invalid_credentials' } });
@@ -154,5 +251,6 @@ describe('POST /api/auth/login', () => {
     expect(location.searchParams.get('error')).toBe('invalid_credentials');
     expect(location.searchParams.get('realm')).toBe('tenant');
     expect(cookieStore.set).not.toHaveBeenCalled();
+    expect(cookieStore.set).not.toHaveBeenCalledWith('PHPSESSID', expect.anything(), expect.anything());
   });
 });

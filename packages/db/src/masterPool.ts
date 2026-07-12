@@ -1,6 +1,7 @@
 import { createPool, type Pool as RawMysqlPool, type PoolOptions } from 'mysql2';
 import { Kysely, MysqlDialect } from 'kysely';
 import { loadEnv, PLATFORM_DB_NAME } from '@reya/config';
+import type { DB as MasterDB } from './generated/master-db';
 
 /**
  * masterPool.ts — Kysely instance for the platform/master DB (zrismpsz_reya_platform).
@@ -29,7 +30,7 @@ export interface MasterPoolConfig {
 }
 
 let rawPool: RawMysqlPool | null = null;
-let db: Kysely<any> | null = null;
+let db: Kysely<MasterDB> | null = null;
 
 function buildPoolOptions(config: MasterPoolConfig): PoolOptions {
   const env = loadEnv();
@@ -65,18 +66,20 @@ function attachSessionInit(pool: RawMysqlPool): RawMysqlPool {
  * `config`) return the SAME instance — call resetMasterDb() first if you
  * need to reconfigure it (tests only).
  *
- * Typed `any` for now: no kysely-codegen output exists yet (no live DB to
- * introspect from this container). Once packages/db/scripts/codegen.sh has
- * been run for real, swap the return type for the generated `Database`
- * interface — every call site threads the type through, so it's a
- * one-line change here, not a call-site migration. See packages/db/README.md.
+ * Typed against the generated `DB` interface from
+ * `src/generated/master-db.d.ts` (kysely-codegen output, introspected from a
+ * scratch DB seeded with database/migration_2026-05-25_platform_master.sql +
+ * the other committed master migrations — see packages/db/README.md's
+ * "Regenerating the types" section). Aliased on import (`DB as MasterDB`) —
+ * kysely-codegen always names the generated interface `DB` in both output
+ * files, so the alias is what disambiguates it from the tenant one.
  */
-export function getMasterDb(config: MasterPoolConfig = {}): Kysely<any> {
+export function getMasterDb(config: MasterPoolConfig = {}): Kysely<MasterDB> {
   if (db) {
     return db;
   }
   rawPool = attachSessionInit(createPool(buildPoolOptions(config)));
-  db = new Kysely<any>({ dialect: new MysqlDialect({ pool: rawPool }) });
+  db = new Kysely<MasterDB>({ dialect: new MysqlDialect({ pool: rawPool }) });
   return db;
 }
 

@@ -2,6 +2,7 @@ import { createPool, type Pool as RawMysqlPool } from 'mysql2';
 import { Kysely, MysqlDialect, sql } from 'kysely';
 import { loadEnv } from '@reya/config';
 import { getMasterDb } from './masterPool';
+import type { DB as TenantDB } from './generated/tenant-db';
 
 /**
  * tenantPoolRegistry.ts — LRU registry of per-tenant Kysely instances.
@@ -49,7 +50,7 @@ export interface TenantPoolRegistryConfig {
 }
 
 interface PoolEntry {
-  db: Kysely<any>;
+  db: Kysely<TenantDB>;
   pool: RawMysqlPool;
   evictTimer: ReturnType<typeof setTimeout>;
 }
@@ -93,10 +94,13 @@ export class TenantPoolRegistry {
 
   /**
    * Resolves tenantId -> db_name (60s-cached) -> a live Kysely instance for
-   * that DB, creating/evicting the underlying pool as needed. Typed `any`
-   * for the same reason as getMasterDb() — see its doc comment.
+   * that DB, creating/evicting the underlying pool as needed. Typed against
+   * the generated `DB` interface from `src/generated/tenant-db.d.ts`
+   * (kysely-codegen output, introspected from the ~280-table tenant
+   * template — see packages/db/README.md's "Regenerating the types"
+   * section), aliased on import as `TenantDB`.
    */
-  async getTenantDb(tenantId: number): Promise<Kysely<any>> {
+  async getTenantDb(tenantId: number): Promise<Kysely<TenantDB>> {
     const dbName = await this.resolveDbName(tenantId);
     return this.touchOrCreatePool(dbName).db;
   }
@@ -182,7 +186,7 @@ export class TenantPoolRegistry {
     pool.on('connection', (connection) => {
       connection.query("SET time_zone = '+07:00'", () => {});
     });
-    const db = new Kysely<any>({ dialect: new MysqlDialect({ pool }) });
+    const db = new Kysely<TenantDB>({ dialect: new MysqlDialect({ pool }) });
     return { db, pool, evictTimer: this.scheduleEvictTimer(dbName) };
   }
 
@@ -227,6 +231,6 @@ function endRawPool(pool: RawMysqlPool): Promise<void> {
 /** Process-wide default registry — what application code should use day to day. */
 export const tenantPoolRegistry = new TenantPoolRegistry();
 
-export function getTenantDb(tenantId: number): Promise<Kysely<any>> {
+export function getTenantDb(tenantId: number): Promise<Kysely<TenantDB>> {
   return tenantPoolRegistry.getTenantDb(tenantId);
 }

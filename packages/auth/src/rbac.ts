@@ -1,4 +1,5 @@
 import { sql, type Kysely } from 'kysely';
+import type { TenantDB } from '@reya/db';
 import type { AuthResult, PlatformRole, RoleOf, Session, TenantRole } from './types';
 
 /**
@@ -85,7 +86,7 @@ export interface AdminBotAccessRow {
  *     -> no row -> false; row found -> `$access[$permission] ?? false`
  */
 export async function canAccessBot(
-  tenantDb: Kysely<any>,
+  tenantDb: Kysely<TenantDB>,
   adminUserId: number,
   role: TenantRole,
   lineAccountId: number,
