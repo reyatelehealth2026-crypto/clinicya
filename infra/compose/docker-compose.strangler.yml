@@ -1,0 +1,254 @@
+# infra/compose/docker-compose.strangler.yml
+#
+# Additive Phase 0 overlay (plan §2, §1.5). Layer this ON TOP of
+# docker-compose.dev.yml — never edit docker-compose.{dev,prod,blue,green}.yml
+# in place:
+#
+#   docker compose -f docker-compose.dev.yml -f infra/compose/docker-compose.strangler.yml up -d
+#
+# NOTE on relative paths below: Compose resolves every relative path (build
+# context, bind-mount sources) against the PROJECT DIRECTORY — the directory
+# of the FIRST `-f` file, i.e. the repo root when invoked as documented
+# above — not against this file's own directory. So paths here are written
+# relative to the repo root (`.`, `infra/php/Dockerfile`,
+# `infra/nginx/generated`), matching the `-f docker-compose.dev.yml -f ...`
+# invocation order. Don't apply this file standalone/first.
+#
+# What this adds (nothing here modifies an existing service):
+#   - `php`         : infra/php/Dockerfile (php:8.2-apache) — the replatformed
+#                     monolith runtime. Code (incl. vendor/) is bind-mounted,
+#                     not baked into the image — see infra/php/Dockerfile's
+#                     header comment for why.
+#   - `cron`        : same image as `php`, different command (`cron -f`) —
+#                     the 33-job sidecar (plan §2 item 5). See
+#                     infra/php/crontab's header before treating its
+#                     schedules as production-accurate.
+#   - `mariadb`     : mariadb:10.11 — distinct from the existing `mysql:8.0`
+#                     dev service (the cPanel source dump uses MariaDB's
+#                     json_valid() CHECK idiom; plan context + §2 item 2).
+#                     Binlog is on from the first boot (rollback rehearsal
+#                     replays from it — see docs/runbooks/phase0-cutover-rollback.md).
+#   - `nginx-edge`  : the strangler edge (plan §1.5) — renders
+#                     infra/nginx/routes.json via infra/nginx/generate-routes.mjs
+#                     into nginx map blocks (php_backend/next_admin/
+#                     next_miniapp/ws upstreams, host×path per-tenant canary,
+#                     X-Served-By: php|next on every response). Deliberately
+#                     a NEW service name (not `nginx`) so the existing dev
+#                     reverse proxy is untouched — both can run side by side.
+#
+# `php`, `mariadb`, and Redis (already defined by docker-compose.dev.yml) are
+# singletons OUTSIDE the blue/green color set — plan §4.6: blue-green only
+# ever applies to the Node set (admin/miniapp/worker). Nothing in this file
+# participates in the blue/green flip.
+#
+# No DNS/VPS/TLS/production action happens anywhere in this file — it is a
+# local dev/CI overlay only. Real cutover steps live in
+# docs/runbooks/phase0-cutover-rollback.md.
+
+services:
+  # --- Replatformed PHP monolith (plan §2 item 1) ---
+  php:
+    build:
+      context: .
+      dockerfile: infra/php/Dockerfile
+    container_name: clinicya-php-phase0
+    # Machine-checkable link to infra/nginx/routes.json's upstream name
+    # (labels survive `docker compose config`; YAML comments don't).
+    labels:
+      clinicya.strangler.upstream: php_backend
+    environment:
+      # NOTE: config/config.php hardcodes DB_HOST/DB_NAME/DB_USER/DB_PASS as
+      # literal `define()`s (not getenv() — verified against this repo's
+      # config/config.php) and DB_HOST='localhost' makes PDO's mysql driver
+      # use a *unix socket*, not TCP, regardless of these env vars. So the
+      # real bridge is the shared `mariadb_socket_phase0` volume mounted at
+      # /run/mysqld in both this service and `mariadb` below, plus
+      # `pdo_mysql.default_socket` in infra/php/php.ini pointing at the
+      # socket file MariaDB creates there — that's what makes hardcoded
+      # DB_HOST='localhost' actually reach the `mariadb` container with zero
+      # PHP code changes. MARIADB_DATABASE/USER keep name defaults matching
+      # config.php's hardcoded DB_NAME/DB_USER; MARIADB_PASSWORD has NO
+      # default here — set it in infra/compose/.env (see .env.example) to
+      # the DB_PASS value from your local config/config.php so a fresh
+      # `docker compose up` authenticates (import the real schema per the
+      # runbook to get past "table doesn't exist").
+      # These DB_* env vars are kept anyway (inert today, forward-compatible)
+      # for whenever config.php is made env-aware as part of real Phase 0
+      # execution — see docs/runbooks/phase0-cutover-rollback.md item 4a.
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_NAME: ${MARIADB_DATABASE:-zrismpsz_clinicya}
+      DB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      DB_PASSWORD: ${MARIADB_PASSWORD:?}
+      # Redis-backed session handler (infra/php/session-redis-handler.php).
+      # Reuses the `redis` service docker-compose.dev.yml already defines —
+      # session cache lives on logical DB 1, distinct from the app's DB 0.
+      REDIS_SESSION_HOST: redis
+      REDIS_SESSION_PORT: 6379
+      REDIS_SESSION_DB: ${REDIS_SESSION_DB:-1}
+      COMPOSER_AUTOLOAD: /var/www/html/vendor/autoload.php
+      TZ: Asia/Bangkok
+    volumes:
+      # Lift-and-shift: bind-mount the repo as-is (code + .htaccess +
+      # composer-installed vendor/) instead of COPYing it into the image —
+      # keeps the image buildable without packagist/pecl network access and
+      # matches "ยกมาทั้งดุ้นไม่แก้โค้ด" (no code changes in Phase 0).
+      - .:/var/www/html
+      # Placeholder volume for the uploads/ tree once it's rsynced in from
+      # cPanel (runbook step 3) — kept separate from the code bind mount so
+      # swapping it for a real persistent volume/NFS mount at cutover time
+      # doesn't touch this file's shape.
+      - php_uploads_phase0:/var/www/html/uploads
+      # Shared unix socket dir with `mariadb` — see the DB_* comment above.
+      - mariadb_socket_phase0:/run/mysqld
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - odoo-dashboard-network
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/", "-o", "/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # --- Cron sidecar (plan §2 item 5: 33 jobs) ---
+  # Same image as `php` (so PHP version/extensions never drift between the
+  # two), same code/vendor bind mount, same DB socket bridge — only the
+  # command differs (`cron -f` instead of Apache). Schedules live in
+  # infra/php/crontab, baked into the image at /etc/cron.d/clinicya-cron;
+  # they are INFERRED, not the real cPanel crontab — see that file's header
+  # and docs/runbooks/phase0-cutover-rollback.md item 5 before relying on
+  # this for a real cutover.
+  cron:
+    build:
+      context: .
+      dockerfile: infra/php/Dockerfile
+    container_name: clinicya-cron-phase0
+    command: ["cron", "-f", "-l", "8"]
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_NAME: ${MARIADB_DATABASE:-zrismpsz_clinicya}
+      DB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      DB_PASSWORD: ${MARIADB_PASSWORD:?}
+      REDIS_SESSION_HOST: redis
+      REDIS_SESSION_PORT: 6379
+      REDIS_SESSION_DB: ${REDIS_SESSION_DB:-1}
+      COMPOSER_AUTOLOAD: /var/www/html/vendor/autoload.php
+      TZ: Asia/Bangkok
+    volumes:
+      - .:/var/www/html
+      - php_uploads_phase0:/var/www/html/uploads
+      - mariadb_socket_phase0:/run/mysqld
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - odoo-dashboard-network
+    restart: unless-stopped
+
+  # --- MariaDB 10.11 LTS (plan §2 item 2) ---
+  # Kept distinct from the `mysql` (mysql:8.0) dev service so both can run
+  # side by side without port/volume collisions while Phase 0 artifacts are
+  # rehearsed against a real MariaDB import.
+  mariadb:
+    image: mariadb:10.11
+    container_name: clinicya-mariadb-phase0
+    # Singleton outside the blue/green color set (plan §4.6) — not part of
+    # the strangler upstream map, unlike php/nginx-edge below.
+    labels:
+      clinicya.strangler.role: singleton-db
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?}
+      # Name defaults match config/config.php's hardcoded DB_NAME/DB_USER so
+      # the bind-mounted app code can authenticate without any code change —
+      # the password is deliberately NOT defaulted in this file; set
+      # MARIADB_PASSWORD in infra/compose/.env to your local config.php's
+      # DB_PASS value. See the `php` service's DB_* comment above.
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-zrismpsz_clinicya}
+      MARIADB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?}
+      MARIADB_CHARSET: utf8mb4
+      MARIADB_COLLATION: utf8mb4_unicode_ci
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+07:00
+      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --binlog-expire-logs-seconds=604800
+      --server-id=1
+    ports:
+      # 3307, not 3306 — the dev-compose `mysql` service already claims 3306
+      # on the host when both files run together.
+      - "3307:3306"
+    volumes:
+      - mariadb_data_phase0:/var/lib/mysql
+      # Shared with `php` so PDO's hardcoded DB_HOST='localhost' (a unix
+      # socket connection, not TCP — see the `php` service's comment above)
+      # reaches this container with zero PHP code changes.
+      - mariadb_socket_phase0:/run/mysqld
+    networks:
+      - odoo-dashboard-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # --- Strangler edge (plan §1.5) ---
+  # Consumes the ALREADY-RENDERED config at
+  # infra/nginx/generated/strangler-edge.conf — rendering happens as a build/
+  # CI step (`node infra/nginx/generate-routes.mjs`), not inside this
+  # container, so the edge image stays a stock `nginx:alpine` with no Node
+  # toolchain baked in. Deploy = regenerate the file (edit routes.json,
+  # re-run the generator) + `docker compose exec nginx-edge nginx -s reload`
+  # — "rollback ทุก route = revert 1 บรรทัด + reload" (plan §1.5).
+  nginx-edge:
+    image: nginx:alpine
+    container_name: clinicya-nginx-edge-phase0
+    # The four upstream names infra/nginx/routes.json can route to (see
+    # infra/nginx/generate-routes.mjs's UPSTREAMS map) — machine-checkable
+    # via `docker compose config` (labels survive; YAML comments don't).
+    labels:
+      clinicya.strangler.upstreams: "php_backend,next_admin,next_miniapp,ws"
+    volumes:
+      - ./infra/nginx/generated:/etc/clinicya-edge:ro
+    command: ["nginx", "-g", "daemon off;", "-c", "/etc/clinicya-edge/strangler-edge.conf"]
+    depends_on:
+      - php
+    ports:
+      # Distinct from the dev-compose `nginx` service's 8080 — both edges
+      # can run side by side.
+      - "8091:80"
+    networks:
+      - odoo-dashboard-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/__edge-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  mariadb_data_phase0:
+    driver: local
+  php_uploads_phase0:
+    driver: local
+  mariadb_socket_phase0:
+    driver: local
+
+networks:
+  odoo-dashboard-network:
+    driver: bridge

@@ -1,0 +1,10 @@
+# pnpm workspace manifest for the Next.js migration monorepo (plan §1.1).
+#
+# The PHP monolith stays at the repository root (unaffected by this file —
+# pnpm only walks the globs below). `apps/*` (admin/miniapp/worker) and
+# `packages/*` (db/tenant/auth/core/contracts/ui/config/...) are added
+# incrementally batch by batch; this file just declares the glob so new
+# packages are picked up automatically without further edits here.
+packages:
+  - "apps/*"
+  - "packages/*"
