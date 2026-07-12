@@ -44,6 +44,25 @@ export const envSchema = z.object({
 
   /** Redis connection string — session cache, pub/sub, BullMQ (later phases). */
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
+
+  /**
+   * @reya/auth: internal-network-only URL for internal/session-bridge.php —
+   * the bidirectional PHP session bridge (plan §1.4). Never exposed
+   * publicly; the actual nginx/firewall enforcement that keeps this off the
+   * public internet is mig-infra's job (plan Phase 0/13), not this schema's.
+   */
+  SESSION_BRIDGE_URL: z.string().min(1).default('http://php-internal/internal/session-bridge.php'),
+
+  /**
+   * Shared HMAC-SHA256 secret between @reya/auth's bridgeClient.ts and
+   * internal/session-bridge.php's request-signature check. The default here
+   * is an obvious placeholder for local/dev only — MUST be overridden with a
+   * real secret everywhere else (never a real credential committed to git).
+   */
+  SESSION_BRIDGE_HMAC_SECRET: z.string().min(1).default('change-me-session-bridge-hmac-secret'),
+
+  /** @reya/auth: node_sessions row lifetime in seconds — SessionCookieDescriptor.maxAge mirrors this. */
+  NODE_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
 });
 
 export type Env = z.infer<typeof envSchema>;
