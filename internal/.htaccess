@@ -1,0 +1,28 @@
+# =====================================================
+# internal/ — server-to-server only (Next.js kernel <-> PHP session bridge).
+#
+# Default posture: deny ALL requests via the public Apache vhost. This is a
+# conservative fail-closed default, not the real security boundary — the
+# actual mechanism that lets the Next.js kernel (packages/auth's
+# bridgeClient.ts) reach internal/session-bridge.php is Docker-internal-
+# network isolation / an nginx `internal;` location, which is mig-infra's
+# job (plan Phase 0/13 strangler edge work), not this file's. Until that
+# lands, session-bridge.php is also HMAC-signature-gated on every request
+# (see its own top-of-file comment) as defense-in-depth underneath this.
+#
+# mig-infra: once the internal Docker network CIDR is known, replace the
+# blanket deny below with an `Allow from <that CIDR>` (Apache 2.2) /
+# `Require ip <that CIDR>` (Apache 2.4) scoped rule — do not simply delete
+# this file.
+# =====================================================
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Apache 2.2 (mod_access_compat fallback)
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
