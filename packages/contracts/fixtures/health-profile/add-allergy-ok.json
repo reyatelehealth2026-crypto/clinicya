@@ -1,0 +1,18 @@
+{
+  "description": "POST action=add_allergy — success, returns the newly-inserted allergy row's key fields.",
+  "request": {
+    "action": "add_allergy",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "drug_name": "Penicillin",
+    "reaction_type": "rash",
+    "reaction_notes": "ผื่นขึ้นทั่วตัว",
+    "severity": "severe"
+  },
+  "response": {
+    "success": true,
+    "message": "เพิ่มข้อมูลการแพ้ยาแล้ว",
+    "allergy": { "id": 12, "drug_name": "Penicillin", "reaction_type": "rash", "severity": "severe" }
+  },
+  "status": 200
+}

@@ -1,0 +1,5 @@
+{
+  "description": "GET action=list — no user resolved AND no line_user_id given -> {success:true, reminders:[]} early exit.",
+  "request": { "action": "list" },
+  "response": { "success": true, "reminders": [] }
+}

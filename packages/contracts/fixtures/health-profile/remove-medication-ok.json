@@ -1,0 +1,10 @@
+{
+  "description": "POST action=remove_medication — success (soft delete: UPDATE ... SET is_active = 0 WHERE id = ? AND line_user_id = ?, same no-line_account_id-predicate pattern as remove_allergy).",
+  "request": {
+    "action": "remove_medication",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "medication_id": 30
+  },
+  "response": { "success": true, "message": "ลบยาออกจากรายการแล้ว" },
+  "status": 200
+}

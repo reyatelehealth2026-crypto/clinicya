@@ -1,0 +1,32 @@
+{
+  "description": "GET action=list — two saved slots.",
+  "request": { "action": "list", "line_user_id": "U1234567890abcdef1234567890abcdef", "line_account_id": 1 },
+  "response": {
+    "success": true,
+    "message": "",
+    "addresses": [
+      {
+        "label": "primary",
+        "name": "สมชาย ใจดี",
+        "phone": "0812345678",
+        "address": "123/45 หมู่บ้านสุขใจ",
+        "subdistrict": "บางรัก",
+        "district": "บางรัก",
+        "province": "กรุงเทพมหานคร",
+        "postcode": "10500",
+        "updated_at": "2026-07-01 12:00:00"
+      },
+      {
+        "label": "secondary_1",
+        "name": "สมชาย ใจดี (ที่ทำงาน)",
+        "phone": "0812345678",
+        "address": "999 อาคารสำนักงาน ชั้น 8",
+        "subdistrict": "สีลม",
+        "district": "บางรัก",
+        "province": "กรุงเทพมหานคร",
+        "postcode": "10500",
+        "updated_at": "2026-07-05 09:30:00"
+      }
+    ]
+  }
+}

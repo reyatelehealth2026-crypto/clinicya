@@ -1,0 +1,10 @@
+{
+  "description": "POST action=request_deletion — SOFT flag only (never a DELETE); confirmation_code matches REYA-DEL-XXXXXXXX (no 0/O/1/I).",
+  "request": { "action": "request_deletion", "line_user_id": "U1234567890abcdef1234567890abcdef", "line_account_id": 1, "reason": "ไม่ได้ใช้งานแล้ว" },
+  "response": {
+    "success": true,
+    "message": "รับคำขอลบข้อมูลแล้ว เราจะดำเนินการภายใน 30 วัน",
+    "confirmation_code": "REYA-DEL-A7BQXK9M",
+    "status": "requested"
+  }
+}

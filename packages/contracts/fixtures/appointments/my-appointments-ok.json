@@ -1,0 +1,103 @@
+{
+  "description": "GET action=my_appointments — one upcoming (confirmed, future date) + one past (completed) appointment for the same user; `all` is the unfiltered, unsplit result set in the same DESC order the SQL returns.",
+  "request": { "action": "my_appointments", "line_user_id": "U1234567890abcdef1234567890abcdef", "limit": 20 },
+  "response": {
+    "success": true,
+    "message": "OK",
+    "upcoming": [
+      {
+        "id": 55,
+        "line_account_id": 1,
+        "user_id": 9,
+        "pharmacist_id": 2,
+        "appointment_type": "consultation",
+        "appointment_date": "2026-07-14",
+        "appointment_time": "09:20:00",
+        "duration_minutes": 30,
+        "status": "confirmed",
+        "notes": null,
+        "reminder_sent": 0,
+        "created_at": "2026-07-13 10:00:00",
+        "updated_at": "2026-07-13 10:00:00",
+        "reminder_10min_sent": 0,
+        "reminder_now_sent": 0,
+        "cancelled_reason": null,
+        "pharmacist_name": "ภญ. สมหญิง ใจดี",
+        "pharmacist_title": "เภสัชกร",
+        "specialty": "เภสัชกรรมคลินิก",
+        "pharmacist_image": null
+      }
+    ],
+    "past": [
+      {
+        "id": 40,
+        "line_account_id": 1,
+        "user_id": 9,
+        "pharmacist_id": 2,
+        "appointment_type": "consultation",
+        "appointment_date": "2026-06-01",
+        "appointment_time": "10:00:00",
+        "duration_minutes": 30,
+        "status": "completed",
+        "notes": null,
+        "reminder_sent": 1,
+        "created_at": "2026-05-30 08:00:00",
+        "updated_at": "2026-06-01 10:35:00",
+        "reminder_10min_sent": 1,
+        "reminder_now_sent": 1,
+        "cancelled_reason": null,
+        "pharmacist_name": "ภญ. สมหญิง ใจดี",
+        "pharmacist_title": "เภสัชกร",
+        "specialty": "เภสัชกรรมคลินิก",
+        "pharmacist_image": null
+      }
+    ],
+    "all": [
+      {
+        "id": 55,
+        "line_account_id": 1,
+        "user_id": 9,
+        "pharmacist_id": 2,
+        "appointment_type": "consultation",
+        "appointment_date": "2026-07-14",
+        "appointment_time": "09:20:00",
+        "duration_minutes": 30,
+        "status": "confirmed",
+        "notes": null,
+        "reminder_sent": 0,
+        "created_at": "2026-07-13 10:00:00",
+        "updated_at": "2026-07-13 10:00:00",
+        "reminder_10min_sent": 0,
+        "reminder_now_sent": 0,
+        "cancelled_reason": null,
+        "pharmacist_name": "ภญ. สมหญิง ใจดี",
+        "pharmacist_title": "เภสัชกร",
+        "specialty": "เภสัชกรรมคลินิก",
+        "pharmacist_image": null
+      },
+      {
+        "id": 40,
+        "line_account_id": 1,
+        "user_id": 9,
+        "pharmacist_id": 2,
+        "appointment_type": "consultation",
+        "appointment_date": "2026-06-01",
+        "appointment_time": "10:00:00",
+        "duration_minutes": 30,
+        "status": "completed",
+        "notes": null,
+        "reminder_sent": 1,
+        "created_at": "2026-05-30 08:00:00",
+        "updated_at": "2026-06-01 10:35:00",
+        "reminder_10min_sent": 1,
+        "reminder_now_sent": 1,
+        "cancelled_reason": null,
+        "pharmacist_name": "ภญ. สมหญิง ใจดี",
+        "pharmacist_title": "เภสัชกร",
+        "specialty": "เภสัชกรรมคลินิก",
+        "pharmacist_image": null
+      }
+    ]
+  },
+  "status": 200
+}

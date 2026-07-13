@@ -1,0 +1,10 @@
+{
+  "description": "GET action=available_slots — SUBTLE TRAP fixture: a `pharmacist_holidays` row exists for this date. handleAvailableSlots() calls `jsonResponse(true, 'OK', ['slots'=>[], 'message'=>'วันหยุด'])` — because PHP's array spread puts `...$data` AFTER the literal 'message' key, `$data['message']` SILENTLY OVERRIDES the 'OK' argument. The wire response has message='วันหยุด', NEVER 'OK'. Do not 'fix' a port that returns 'OK' here — that would be a real regression, not a cleanup.",
+  "request": { "action": "available_slots", "pharmacist_id": 2, "date": "2026-12-31" },
+  "response": {
+    "success": true,
+    "message": "วันหยุด",
+    "slots": []
+  },
+  "status": 200
+}

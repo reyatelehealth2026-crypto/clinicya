@@ -1,0 +1,11 @@
+{
+  "description": "POST action=update_medical_history — unknown condition keys are silently filtered out via array_filter(), not rejected (request carries an invalid key 'unknown_condition' which the server drops).",
+  "request": {
+    "action": "update_medical_history",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "conditions": ["diabetes", "hypertension", "unknown_condition"]
+  },
+  "response": { "success": true, "message": "บันทึกประวัติการแพทย์แล้ว" },
+  "status": 200
+}
