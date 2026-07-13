@@ -1,0 +1,16 @@
+{
+  "description": "GET action=available_slots — a normal weekday with the default Mon-Fri 09:00-17:00 schedule (no pharmacist_schedules row -> handleAvailableSlots()'s hardcoded fallback), 20-minute slots, one already booked.",
+  "request": { "action": "available_slots", "pharmacist_id": 2, "date": "2026-07-14" },
+  "response": {
+    "success": true,
+    "message": "OK",
+    "slots": [
+      { "time": "09:00", "available": true },
+      { "time": "09:20", "available": true },
+      { "time": "09:40", "available": false },
+      { "time": "10:00", "available": true }
+    ],
+    "duration": 20
+  },
+  "status": 200
+}

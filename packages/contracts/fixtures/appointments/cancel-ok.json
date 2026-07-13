@@ -1,0 +1,14 @@
+{
+  "description": "POST action=cancel — success. `appointment_id` in the request is the numeric row id (id=55 from my-appointments-ok.json), not the unpersisted 'APT...' string, since the appointments table has no appointment_id column on the committed template (see appointments.ts's DYNAMIC-COLUMN VERIFICATION doc comment).",
+  "request": {
+    "action": "cancel",
+    "appointment_id": 55,
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "reason": "ติดธุระกะทันหัน"
+  },
+  "response": {
+    "success": true,
+    "message": "ยกเลิกนัดหมายสำเร็จ"
+  },
+  "status": 200
+}

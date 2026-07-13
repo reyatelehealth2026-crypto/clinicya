@@ -1,0 +1,182 @@
+-- infra/e2e/seed/60-phase2-batch3-fixture.sql.tmpl
+--
+-- Phase 2 batch 3 (mig-infra) — data-point parity fixture for the SIX new
+-- page-pairs this batch covers: /crm-dashboard-advanced, /system-status,
+-- /templates, /groups, /line-groups, /line-group-detail. Applied AFTER
+-- 30-phase2-batch1-fixture.sql.tmpl and 40-phase2-batch2-fixture.sql.tmpl
+-- (already piped into the SAME app/tenant DB by parity.mjs's
+-- seedDatabase()) — additive only, same pattern 40-* used on top of 30-*
+-- (see that file's own header comment for the precedent). Does not touch
+-- any table those two files already seed (users/messages/orders/
+-- transactions/user_tags/activity_logs/broadcasts/customer_segments/
+-- auto_replies/user_behaviors) — this file only INSERTs into tables no
+-- earlier batch has touched: templates, groups, user_groups, line_groups,
+-- line_group_members, line_group_messages.
+--
+-- No USE statement of its own — same convention as 20-/30-/40-: the caller
+-- (parity.mjs's seedDatabase()) prepends `USE \`<app-db>\`;`.
+--
+-- DETERMINISM: every timestamp is a MySQL relative-date expression
+-- (NOW()/DATE_SUB(NOW(), INTERVAL n DAY|HOUR)), never a wall-clock literal —
+-- same reasoning as 30-*/40-*'s own header comments.
+--
+-- ===========================================================================
+-- WHY NO `line_accounts` ROWS (still true for this batch — read before
+-- adding any). Full mechanical trace lives in
+-- 40-phase2-batch2-fixture.sql.tmpl's own header comment (includes/header.php
+-- lines 138-172, classes/AdminAuth.php::getAccessibleBots(),
+-- packages/auth/src/session.ts) — not repeated verbatim here. Summary as it
+-- applies to THIS batch's two $currentBotId-touching pages, decided jointly
+-- with mig-ui (both pagesA and pagesB) per this batch's brief and written up
+-- in docs/runbooks/phase2-batch1-users-dashboard-parity.md's "Phase 2 batch
+-- 3" section:
+--
+--   - groups.php (line 11: `require_once 'includes/header.php';` BEFORE any
+--     of its own queries) inherits header.php's sticky auto-selected
+--     `$currentBotId`. Seeding even one `is_active=1` line_accounts row would
+--     re-trigger that auto-select on parity.mjs's ONE shared phpSid session —
+--     silently re-scoping every EARLIER batch's already-passing
+--     line_account_id-sensitive query (batch 1's dashboard/crm.php,
+--     batch 2's analytics tabs) for the REST of the run, per the exact
+--     hazard batch 2's file already reasoned through. Still not worth
+--     re-triggering just to populate groups.php's `getAllUsersForGroups()`
+--     dropdown with a non-null bot scope — that query's `(line_account_id =
+--     ? OR line_account_id IS NULL)` single-bind pattern already resolves to
+--     "match every line_account_id IS NULL row" when $currentBotId is null,
+--     which is exactly what every batch 1/2/3 user row is. Decision: NO.
+--   - line-groups.php (line 15: `$currentBotId = $_SESSION['current_bot_id']
+--     ?? null;`, its OWN local read, BEFORE `require_once
+--     'includes/header.php'` on line 130 — confirmed by reading the full
+--     file) never even reaches header.php's auto-select before running its
+--     own queries, and no page in this harness's fixture ever sets
+--     `$_SESSION['current_bot_id']` (no `?switch_bot=` fetch, no active
+--     line_accounts row for header.php to auto-select from on ANY earlier
+--     page fetch either) — so `$currentBotId` is null here regardless.
+--     Seeding a line_accounts row would ALSO risk retroactively feeding
+--     header.php's auto-select on some earlier page in the shared session.
+--     Decision: NO, same as groups.php.
+--
+--   Net effect (verified against the tenant template's own schema, not
+--   guessed): `line_groups.line_account_id` is NOT NULL (no DEFAULT) but has
+--   NO enforced FOREIGN KEY to `line_accounts` — every line_groups row below
+--   uses a SYNTHETIC id (9001/9002) that matches NO row in the (empty)
+--   `line_accounts` table. `line-groups.php`'s LEFT JOIN renders
+--   `bot_name = NULL` -> PHP's `htmlspecialchars($group['bot_name'] ?? '-')`
+--   -> literal "-", a deterministic, fully-comparable state on both stacks
+--   (see extractLineGroupsPage's own doc in infra/e2e/lib/extract.mjs).
+--   `line_group_members.line_account_id` / `line_group_messages.
+--   line_account_id` are NOT NULL DEFAULT 1 — neither line-group-detail.php
+--   nor its Next port ever filters by line_account_id on these two tables
+--   (grepped both — WHERE clauses are `group_id = ?` only), so the exact
+--   synthetic value is inert; set to the owning group's own synthetic id
+--   (9001) purely for fixture readability, not because anything reads it.
+-- ===========================================================================
+
+-- ===========================================================================
+-- 1) templates (5 rows, 3 categories, both message_type values) — exercises
+--    templates.php's category-filter-bar (>=2 categories — here 3: FAQ,
+--    ทักทาย, โปรโมชั่น) and TemplatesClient.tsx/categories.ts's
+--    array_unique-equivalent first-seen-order dedupe (rows 1 and 5 share
+--    category 'ทักทาย'; rows 2 and 4 share 'โปรโมชั่น' — first-seen order
+--    depends on the query's own `ORDER BY category, name`, identical on both
+--    stacks, so this fixture does not need to predict the exact resulting
+--    order, only that both sides compute the SAME one). `line_account_id`
+--    left unset (NULL, the column default) — templates.php has no
+--    line_account_id WHERE clause at all (see templates/queries.ts's own
+--    module doc), so this is a plain global-CRUD fixture, no bot-scoping
+--    concerns.
+-- ===========================================================================
+INSERT INTO `templates` (`id`, `name`, `category`, `message_type`, `content`, `created_at`) VALUES
+  (1, 'ทักทายลูกค้าใหม่', 'ทักทาย', 'text', 'สวัสดีค่ะ ยินดีต้อนรับสู่ร้านขายยาของเรานะคะ มีอะไรให้ช่วยสอบถามได้เลยค่ะ', DATE_SUB(NOW(), INTERVAL 30 DAY)),
+  (2, 'โปรโมชั่นวันนี้', 'โปรโมชั่น', 'text', 'ลดราคาวิตามินซี 20% วันนี้เท่านั้นค่ะ', DATE_SUB(NOW(), INTERVAL 20 DAY)),
+  (3, 'ค่าจัดส่งสินค้า', 'FAQ', 'text', 'จัดส่งฟรีเมื่อซื้อครบ 500 บาทค่ะ นอกเหนือจากนี้คิดค่าจัดส่ง 40 บาท', DATE_SUB(NOW(), INTERVAL 15 DAY)),
+  (4, 'เมนูสินค้าแบบ Flex', 'โปรโมชั่น', 'flex', '{"type":"bubble","body":{"type":"box","layout":"vertical","contents":[{"type":"text","text":"สินค้าแนะนำ"}]}}', DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  (5, 'ทักทายลูกค้าเก่า', 'ทักทาย', 'text', 'ยินดีต้อนรับกลับมาอีกครั้งค่ะ วันนี้มีโปรโมชั่นพิเศษสำหรับคุณด้วยนะคะ', DATE_SUB(NOW(), INTERVAL 5 DAY));
+
+-- ===========================================================================
+-- 2) groups + user_groups — exercises groups.php's list (>=1 empty group,
+--    >=1 group with >=2 members) + view-group detail panel. Members reuse
+--    EXISTING batch-1 users (ids 1, 2, 9 — all `line_account_id IS NULL`,
+--    `is_blocked = 0`, per this file's own "WHY NO line_accounts ROWS"
+--    section above and getAllUsersForGroups()'s `(line_account_id = ? OR
+--    line_account_id IS NULL)` gate, which always matches NULL rows
+--    regardless of $currentBotId) — no new `users` rows needed.
+--    `groups.line_account_id` left unset (NULL, the column default) —
+--    groups.php's own INSERT never sets it either (see groups.php line 18).
+--    `user_groups.line_account_id` left unset (defaults to 1, the column's
+--    own DEFAULT) — groups.php's `add_member` INSERT never sets it either
+--    (line 27), and neither the group-members query nor the add-users-
+--    dropdown query filters `user_groups.line_account_id` at all.
+-- ===========================================================================
+INSERT INTO `groups` (`id`, `name`, `description`, `color`, `created_at`) VALUES
+  (1, 'กลุ่มทดสอบว่างเปล่า', 'กลุ่มนี้ยังไม่มีสมาชิก ใช้ทดสอบ empty state', '#94A3B8', DATE_SUB(NOW(), INTERVAL 8 DAY)),
+  (2, 'กลุ่ม VIP ทดสอบ', 'กลุ่มลูกค้า VIP สำหรับทดสอบ multi-member', '#F59E0B', DATE_SUB(NOW(), INTERVAL 12 DAY));
+
+INSERT INTO `user_groups` (`user_id`, `group_id`) VALUES
+  (1, 2),
+  (2, 2),
+  (9, 2);
+
+-- ===========================================================================
+-- 3) line_groups (2 rows: 1 active, 1 inactive/left) — exercises
+--    line-groups.php's list + stats cards + line-group-detail.php's group
+--    header. Synthetic `line_account_id` (9001/9002 — matches no
+--    `line_accounts` row, table is empty in this fixture) per this file's
+--    own "WHY NO line_accounts ROWS" section above. `member_count`/
+--    `total_messages` vary between the two rows on purpose (3/42 vs 1/5) so
+--    the stats-card SUM()s are non-trivial (not both zero, not both equal).
+-- ===========================================================================
+INSERT INTO `line_groups`
+  (`id`, `line_account_id`, `group_id`, `group_type`, `group_name`, `picture_url`, `member_count`, `is_active`, `joined_at`, `left_at`, `total_messages`, `created_at`)
+VALUES
+  (1, 9001, 'Cphase2b3group0000000000000001', 'group', 'กลุ่มร้านขายยา A', NULL, 3, 1, DATE_SUB(NOW(), INTERVAL 10 DAY), NULL, 42, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  (2, 9002, 'Rphase2b3room00000000000000002', 'room',  'ห้องสนทนาลูกค้า B', NULL, 1, 0, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), 5, DATE_SUB(NOW(), INTERVAL 40 DAY));
+
+-- ===========================================================================
+-- 4) line_group_members (3 rows, all against line_groups.id=1 — the ACTIVE
+--    group) — mixed is_active (2 active, 1 left), exercising
+--    line-group-detail.php's `ORDER BY is_active DESC, total_messages DESC`
+--    and the "ออกแล้ว" (left) badge branch. line_groups.id=2 (inactive
+--    group) deliberately gets NO members/messages rows at all — its
+--    line-group-detail entry exercises the "ยังไม่มีข้อมูลสมาชิก" /
+--    "ยังไม่มีข้อความ" empty states instead (see
+--    docs/runbooks/phase2-batch1-users-dashboard-parity.md's Phase 2 batch 3
+--    section for why both id=1 and id=2 are separate page-pair entries).
+-- ===========================================================================
+INSERT INTO `line_group_members`
+  (`id`, `line_account_id`, `group_id`, `line_user_id`, `display_name`, `picture_url`, `is_active`, `total_messages`, `last_message_at`, `joined_at`)
+VALUES
+  (1, 9001, 1, 'Uphase2b3member0000000000000001', 'คุณลูกค้า Active หนึ่ง', NULL, 1, 20, DATE_SUB(NOW(), INTERVAL 1 HOUR), DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  (2, 9001, 1, 'Uphase2b3member0000000000000002', 'คุณลูกค้า Active สอง', NULL, 1, 15, DATE_SUB(NOW(), INTERVAL 3 HOUR), DATE_SUB(NOW(), INTERVAL 9 DAY)),
+  (3, 9001, 1, 'Uphase2b3member0000000000000003', 'คุณลูกค้าออกจากกลุ่มแล้ว', NULL, 0, 7, DATE_SUB(NOW(), INTERVAL 20 DAY), DATE_SUB(NOW(), INTERVAL 30 DAY));
+
+-- ===========================================================================
+-- 5) line_group_messages (4 rows, all against line_groups.id=1) — exercises:
+--    - message #1 (line_user_id matches member #1): plain 'text', short
+--      content, `display_name` resolves via the LEFT JOIN to
+--      line_group_members ("คุณลูกค้า Active หนึ่ง", not "Unknown").
+--    - message #2 (line_user_id matches member #2): message_type='sticker'
+--      (!= 'text') -> exercises the `[message_type]` prefix branch on both
+--      stacks (line-group-detail.php lines 164-166 /
+--      line-group-detail/page.tsx's `{msg.messageType !== 'text' ? ... :
+--      null}`).
+--    - message #3 (line_user_id matches member #1 again): content is 158
+--      Unicode code points (verified via `Array.from(str).length` / PHP's
+--      `mb_strlen()` — both count code points, not bytes/UTF-16 units, see
+--      line-group-detail/_lib/text.ts's own module doc) -> exercises the
+--      `mb_substr($content, 0, 100)` truncation + literal '...' suffix
+--      branch on both stacks.
+--    - message #4: line_user_id matches NO line_group_members row
+--      ('UphaseB3ghost...') -> exercises the LEFT JOIN's NULL
+--      `display_name` -> PHP's `$msg['display_name'] ?: 'Unknown'` / Next's
+--      `msg.displayName || 'Unknown'` fallback branch.
+--    All 4 rows ORDER BY created_at DESC (the query's own ORDER BY) — spaced
+--    1/2/3/4 hours ago so the DESC order is deterministic and unambiguous.
+-- ===========================================================================
+INSERT INTO `line_group_messages`
+  (`id`, `line_account_id`, `group_id`, `line_user_id`, `message_type`, `content`, `message_id`, `created_at`)
+VALUES
+  (1, 9001, 1, 'Uphase2b3member0000000000000001', 'text', 'สวัสดีค่ะ มีคำถามเรื่องยาแก้ปวดหัวค่ะ', 'Mphase2b3msg00000000000000000001', DATE_SUB(NOW(), INTERVAL 1 HOUR)),
+  (2, 9001, 1, 'Uphase2b3member0000000000000002', 'sticker', '(sticker content placeholder)', 'Mphase2b3msg00000000000000000002', DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+  (3, 9001, 1, 'Uphase2b3member0000000000000001', 'text', 'สวัสดีค่ะ อยากสอบถามเรื่องยาที่หมอสั่งให้ทานหลังอาหารว่าต้องทานติดต่อกันกี่วันคะ แล้วถ้าลืมทานหนึ่งมื้อควรทำอย่างไรดีคะ รบกวนเภสัชกรช่วยแนะนำด้วยนะคะขอบคุณค่ะ', 'Mphase2b3msg00000000000000000003', DATE_SUB(NOW(), INTERVAL 3 HOUR)),
+  (4, 9001, 1, 'Uphase2b3ghost00000000000000009', 'text', 'ข้อความจากคนที่ออกจากกลุ่มไปแล้ว ไม่มีข้อมูลใน line_group_members', 'Mphase2b3msg00000000000000000004', DATE_SUB(NOW(), INTERVAL 4 HOUR));

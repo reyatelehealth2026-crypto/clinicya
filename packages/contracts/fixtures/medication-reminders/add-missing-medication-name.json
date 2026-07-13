@@ -1,0 +1,5 @@
+{
+  "description": "POST action=add — empty medication_name -> Thai validation error (not the generic 'User not found' error).",
+  "request": { "action": "add", "line_user_id": "U1234567890abcdef1234567890abcdef", "line_account_id": 1, "medication_name": "" },
+  "response": { "success": false, "error": "กรุณาระบุชื่อยา" }
+}

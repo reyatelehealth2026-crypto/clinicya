@@ -1,0 +1,13 @@
+{
+  "description": "POST action=cancel — DEAD-CODE-PRESERVED fixture: the appointment is only 5 minutes away, well under the '2 hours' the comment in handleCancel() claims, but $hoursUntil is never actually compared against a threshold anywhere in the PHP source — the only real gate is `appointmentDateTime <= now`. This fixture's appointment is 5 minutes in the FUTURE, so it still succeeds (see cancel-ok.json for the 'already passed' failure shape, which is the actual, only enforced gate).",
+  "request": {
+    "action": "cancel",
+    "appointment_id": 55,
+    "line_user_id": "U1234567890abcdef1234567890abcdef"
+  },
+  "response": {
+    "success": true,
+    "message": "ยกเลิกนัดหมายสำเร็จ"
+  },
+  "status": 200
+}

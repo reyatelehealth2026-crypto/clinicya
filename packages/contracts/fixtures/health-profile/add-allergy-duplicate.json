@@ -1,0 +1,13 @@
+{
+  "description": "POST action=add_allergy — the same line_user_id + line_account_id + drug_name already has an allergy row -> 400, Thai duplicate message (not the generic 'Missing required fields').",
+  "request": {
+    "action": "add_allergy",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "drug_name": "Penicillin",
+    "reaction_type": "rash",
+    "severity": "severe"
+  },
+  "response": { "success": false, "error": "ยานี้มีอยู่ในรายการแพ้ยาแล้ว" },
+  "status": 400
+}

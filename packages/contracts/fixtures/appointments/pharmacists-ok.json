@@ -1,0 +1,55 @@
+{
+  "description": "GET action=pharmacists — one row with every optional column present (matches the committed template — is_active/is_available/rating/review_count filled), one row with NULL rating/review_count/consultation_fee/consultation_duration/title/specialty defaulted by handleGetPharmacists().",
+  "request": { "action": "pharmacists", "line_account_id": 1 },
+  "response": {
+    "success": true,
+    "message": "OK",
+    "pharmacists": [
+      {
+        "id": 2,
+        "name": "ภญ. สมหญิง ใจดี",
+        "title": "เภสัชกร",
+        "specialty": "เภสัชกรรมคลินิก",
+        "is_available": 1,
+        "rating": "4.80",
+        "review_count": 12,
+        "consultation_fee": "0.00",
+        "consultation_duration": 20,
+        "sub_specialty": null,
+        "hospital": null,
+        "license_no": "ภก.12345",
+        "bio": null,
+        "consulting_areas": null,
+        "work_experience": null,
+        "image_url": null,
+        "is_active": 1,
+        "line_account_id": 1,
+        "case_count": 3,
+        "insurances": []
+      },
+      {
+        "id": 1,
+        "name": "ภก. ใหม่ ยังไม่กรอกโปรไฟล์",
+        "title": "",
+        "specialty": "เภสัชกร",
+        "is_available": 1,
+        "rating": 5,
+        "review_count": 0,
+        "consultation_fee": 0,
+        "consultation_duration": 15,
+        "sub_specialty": null,
+        "hospital": null,
+        "license_no": null,
+        "bio": null,
+        "consulting_areas": null,
+        "work_experience": null,
+        "image_url": null,
+        "is_active": 1,
+        "line_account_id": 1,
+        "case_count": 0,
+        "insurances": []
+      }
+    ]
+  },
+  "status": 200
+}

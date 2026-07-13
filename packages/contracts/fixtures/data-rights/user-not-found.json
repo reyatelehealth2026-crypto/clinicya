@@ -1,0 +1,5 @@
+{
+  "description": "Any action, resolveUser() misses on both the line_account_id-scoped AND the line_user_id-only fallback lookup.",
+  "request": { "action": "withdraw_consent", "line_user_id": "Uunknownuser00000000000000000000", "line_account_id": 1 },
+  "response": { "success": false, "message": "User not found" }
+}

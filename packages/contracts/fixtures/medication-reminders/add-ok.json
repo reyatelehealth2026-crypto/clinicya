@@ -1,0 +1,14 @@
+{
+  "description": "POST action=add — reminder_times defaults to ['08:00'] when omitted; frequency defaults to 'daily'.",
+  "request": {
+    "action": "add",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "medication_name": "วิตามินซี",
+    "dosage": "1 เม็ด",
+    "frequency": "daily",
+    "reminder_times": ["09:00"],
+    "start_date": "2026-07-13"
+  },
+  "response": { "success": true, "reminder_id": 11, "message": "เพิ่มการเตือนทานยาแล้ว" }
+}

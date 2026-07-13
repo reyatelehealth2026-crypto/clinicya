@@ -1,0 +1,9 @@
+{
+  "description": "POST action=save — health_data consent accepted, resolving an existing user.",
+  "request": {
+    "action": "save",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "consents": { "health_data": true }
+  },
+  "response": { "success": true, "message": "Consent saved", "user_id": 42 }
+}

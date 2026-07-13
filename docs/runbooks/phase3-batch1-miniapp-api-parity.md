@@ -9,7 +9,11 @@ mig-orchestrator (canary-ramp authorization). Cross-reference:
 this one sits alongside — same JSON-line-output convention, same "single
 seeded tenant, not a live-traffic shadow" limits framing, different
 harness/output shape because this batch ports JSON API endpoints, not
-server-rendered pages).
+server-rendered pages). Extended by
+[`docs/runbooks/phase3-batch2-miniapp-api-parity.md`](./phase3-batch2-miniapp-api-parity.md)
+(takes this SAME harness from 16 to 38 covered endpoint x action pairs — read
+that document for anything added after this one; the content below is
+unchanged from batch 1 and describes only the original 16).
 
 ## Scope note (read first — same documented-limits pattern as
 `infra/e2e/parity.mjs`'s and `infra/e2e/run.mjs`'s own scope notes)

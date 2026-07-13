@@ -15,3 +15,12 @@ export * from './health-profile';
 export * from './member';
 export * from './rewards';
 export * from './wishlist';
+export * from './appointments';
+
+// mig-api, Phase 3 batch 2: addresses (no PHP source — see addresses.ts's doc comment), consent
+// (action=save only), data-rights (all 3 actions), medication-reminders (list/add/delete/mark_taken).
+// Appended at the end, never reordered, never touching the lines above.
+export * from './addresses';
+export * from './consent';
+export * from './data-rights';
+export * from './medication-reminders';

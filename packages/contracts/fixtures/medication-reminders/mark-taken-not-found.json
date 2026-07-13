@@ -1,0 +1,5 @@
+{
+  "description": "POST action=mark_taken — ownership check misses (unlike delete, this DOES check first) -> {success:false, error:'Reminder not found'}.",
+  "request": { "action": "mark_taken", "line_user_id": "U1234567890abcdef1234567890abcdef", "line_account_id": 1, "reminder_id": 999999, "status": "taken" },
+  "response": { "success": false, "error": "Reminder not found" }
+}
