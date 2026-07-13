@@ -1,0 +1,49 @@
+{
+  "description": "GET action=get_card — registered member with a next tier still ahead of them.",
+  "request": { "action": "get_card", "line_user_id": "U1234567890abcdef1234567890abcdef", "line_account_id": 1 },
+  "response": {
+    "success": true,
+    "message": "OK",
+    "member": {
+      "id": 42,
+      "member_id": "M2600001",
+      "is_registered": true,
+      "first_name": "สมชาย",
+      "last_name": "ใจดี",
+      "display_name": "สมชาย ใจดี",
+      "picture_url": "https://profile.line-scdn.net/xyz",
+      "phone": "0812345678",
+      "email": null,
+      "birthday": "1990-05-12",
+      "gender": "male",
+      "address": null,
+      "district": null,
+      "province": null,
+      "postal_code": null,
+      "weight": null,
+      "height": null,
+      "medical_conditions": null,
+      "drug_allergies": null,
+      "points": 120,
+      "total_spent": 1250.5,
+      "total_orders": 3,
+      "registered_at": "2026-01-15 10:22:03"
+    },
+    "tier": {
+      "tier_code": "bronze",
+      "tier_name": "Bronze",
+      "name": "Bronze",
+      "color": "#CD7F32",
+      "icon": "🥉",
+      "discount_percent": 0,
+      "min_points": 0,
+      "current_tier_points": 0,
+      "next_tier_points": 1000,
+      "next_tier_name": "Silver",
+      "points_to_next": 880,
+      "progress_percent": 12
+    },
+    "next_tier": { "tier_code": "silver", "tier_name": "Silver", "min_points": 1000 },
+    "shop": { "name": "ร้านยาคลินิกยา", "logo": "" }
+  }
+}

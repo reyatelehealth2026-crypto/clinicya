@@ -18,6 +18,7 @@ const customJestConfig = {
     '^@reya/tenant$': '<rootDir>/../../packages/tenant/src/index.ts',
     '^@reya/db$': '<rootDir>/../../packages/db/src/index.ts',
     '^@reya/auth$': '<rootDir>/../../packages/auth/src/index.ts',
+    '^@reya/contracts$': '<rootDir>/../../packages/contracts/src/index.ts',
   },
   testMatch: [
     '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',

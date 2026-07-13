@@ -1,0 +1,11 @@
+{
+  "description": "GET action=get_card — user row exists but is_registered=0 -> failure with user_exists:true, user_id set.",
+  "request": { "action": "get_card", "line_user_id": "Uexistingunregistered0000000000000", "line_account_id": 1 },
+  "response": {
+    "success": false,
+    "message": "ยังไม่ได้ลงทะเบียนสมาชิก",
+    "is_registered": false,
+    "user_exists": true,
+    "user_id": 43
+  }
+}

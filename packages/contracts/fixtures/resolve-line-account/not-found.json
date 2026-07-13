@@ -1,0 +1,7 @@
+{
+  "description": "Well-formed liff_id, but no route row and no tenant line_accounts row matches it -> 404 not_found.",
+  "request": { "liff_id": "1655551234-nomatch01" },
+  "response": { "success": false, "error": "not_found" },
+  "status": 404,
+  "cacheControl": "no-store, no-cache, must-revalidate"
+}

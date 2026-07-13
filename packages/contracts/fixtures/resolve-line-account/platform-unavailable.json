@@ -1,0 +1,7 @@
+{
+  "description": "Master/platform DB connection throws -> 503 platform_unavailable (Database::platform()->getConnection() catch branch).",
+  "request": { "liff_id": "2008477880-wmRN2Aln" },
+  "response": { "success": false, "error": "platform_unavailable" },
+  "status": 503,
+  "cacheControl": "no-store, no-cache, must-revalidate"
+}

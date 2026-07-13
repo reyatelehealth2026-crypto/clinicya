@@ -1,0 +1,5 @@
+{
+  "description": "GET action=list — neither userId resolved nor line_user_id given -> early-exit branch with NO `count` key (unlike the normal branch).",
+  "request": {},
+  "response": { "success": true, "items": [] }
+}

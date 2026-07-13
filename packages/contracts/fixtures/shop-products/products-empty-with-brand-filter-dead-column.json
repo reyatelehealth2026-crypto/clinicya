@@ -1,0 +1,16 @@
+{
+  "description": "action=products with a search that matches nothing — categories/brands still populated (they are queried independently of the product WHERE clause's search term).",
+  "request": { "action": "products", "line_account_id": 1, "search": "zzz-no-such-product", "limit": 12, "offset": 0 },
+  "response": {
+    "success": true,
+    "message": "",
+    "products": [],
+    "categories": [{ "id": 3, "name": "ยาสามัญประจำบ้าน", "icon_url": null }],
+    "brands": ["Blackmores", "GPO"],
+    "offset": 0,
+    "limit": 12,
+    "total": 0,
+    "has_more": false
+  },
+  "status": 200
+}

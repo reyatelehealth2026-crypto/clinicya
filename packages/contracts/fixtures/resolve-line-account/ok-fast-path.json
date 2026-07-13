@@ -1,0 +1,7 @@
+{
+  "description": "GET (no action param) — liff_id resolved via the fast-path route table (tenant_line_account_routes.liff_id).",
+  "request": { "liff_id": "2008477880-wmRN2Aln" },
+  "response": { "success": true, "line_account_id": 12, "tenant_id": 3, "tenant_slug": "tenant-0003" },
+  "status": 200,
+  "cacheControl": "no-store, no-cache, must-revalidate"
+}

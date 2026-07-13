@@ -1,0 +1,23 @@
+{
+  "description": "action=get — first call for this line_user_id: getHealthProfile() auto-INSERTs an empty user_health_profiles row, so every personal_info field is null/'unknown' and completion_percent is 0.",
+  "request": { "action": "get", "line_user_id": "Ubrandnewuser000000000000000000", "line_account_id": 1 },
+  "response": {
+    "success": true,
+    "profile": {
+      "personal_info": {
+        "name": null,
+        "age": null,
+        "gender": null,
+        "weight": null,
+        "height": null,
+        "blood_type": "unknown"
+      },
+      "medical_conditions": [],
+      "allergies": [],
+      "medications": [],
+      "completion_percent": 0,
+      "updated_at": null
+    }
+  },
+  "status": 200
+}
