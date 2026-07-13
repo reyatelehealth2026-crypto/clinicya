@@ -1,0 +1,345 @@
+-- infra/e2e/seed/55-phase3-batch2-miniapp-fixture.sql.tmpl
+--
+-- Deterministic tenant-DB fixture for infra/e2e/api-parity.mjs (Phase 3
+-- batch 2 — mig-infra's extension of the JSON API parity harness). Covers
+-- the 22 new endpoint x action pairs mig-api's two batch-2 briefs land:
+-- appointments:{pharmacists,available_slots,book,my_appointments,cancel},
+-- health-profile:{update_personal,update_medical_history,add_allergy,
+-- remove_allergy,add_medication,remove_medication}, consent:save,
+-- data-rights:{withdraw_consent,request_deletion,export_data},
+-- medication-reminders:{list,add,delete,mark_taken}, and the 3 NEXT-ONLY
+-- addresses:{list,upsert,delete} self-consistency cases (see
+-- infra/e2e/lib/api-extract.mjs's NEXT_ONLY_CASES doc comment for why those
+-- 3 are structurally separate from the 19 real PHP-vs-Next diff cases).
+--
+-- Applied by api-parity.mjs AFTER database/migration_2026-05-25_tenant_template.sql
+-- + database/migration_2026-07-04_pdpa_data_rights.sql (both already applied
+-- by the time this file runs — see api-parity.mjs's seedDatabase()) AND after
+-- 45-phase3-batch1-plan-and-tenant.sql.tmpl + 50-phase3-batch1-miniapp-fixture.sql.tmpl
+-- (this file REUSES that SAME tenant/line_accounts rows — line_account_id=1,
+-- is_default=1 — it does NOT create a second tenant or re-seed line_accounts/
+-- shop_settings). `USE __APP_DB_NAME__;` is prefixed by the harness itself,
+-- same convention as 50-'s own file.
+--
+-- SCHEMA-DDL NOTE: no CREATE TABLE statements in this file. Every table this
+-- fixture inserts into (appointments, pharmacists, pharmacist_schedules,
+-- user_health_profiles, user_drug_allergies, user_current_medications,
+-- user_consents, consent_logs, ai_conversation_history, transactions,
+-- transaction_items, medication_reminders, medication_taken_history,
+-- user_addresses) already exists in database/migration_2026-05-25_tenant_template.sql
+-- (verified directly, cross-checked against mig-api's own contract doc
+-- comments — see docs/runbooks/phase3-batch2-miniapp-api-parity.md §3) EXCEPT
+-- `data_deletion_requests` / `users.deletion_status` / `users.deletion_requested_at`,
+-- which come from database/migration_2026-07-04_pdpa_data_rights.sql
+-- (applied by api-parity.mjs's seedDatabase() BEFORE this file — see that
+-- script's own comment). This file therefore seeds DATA ONLY, same
+-- "SCHEMA-DDL NOTE" precedent 50-phase3-batch1-miniapp-fixture.sql.tmpl's own
+-- header already established for its batch.
+--
+-- IDENTITY STRATEGY: same "two separately-seeded identities suffixed -php/
+-- -next" convention as batch 1 (see 50-...'s own header) for every WRITE
+-- case. Every explicit numeric id below is chosen from a batch-2-only range
+-- (4000s for `users`, 6000s for `appointments`/`user_drug_allergies`/
+-- `user_current_medications`/`medication_reminders`, 900s for `pharmacists`)
+-- that does NOT overlap any id 50-phase3-batch1-miniapp-fixture.sql.tmpl
+-- already uses (3000s/500s/600s/700s/800s/5000s/8000s/9000s) — cross-checked
+-- against that file directly, not by convention alone.
+--
+-- RELATIVE DATES: unlike batch 1's fixture (which could use fixed past
+-- timestamps throughout, since read-only GETs never re-validate "is this in
+-- the future"), a few rows here genuinely need to stay in the future (or
+-- within a rolling 7-day window) FOREVER, no matter how long after this file
+-- is written the harness actually runs — those use CURDATE()/NOW()-relative
+-- SQL expressions instead of a fixed literal. Fixed PAST dates are safe to
+-- hardcode forever (time only moves forward) and are used wherever "this row
+-- must already be in the past" is the actual requirement.
+--
+-- ROUTING SIGNAL, EVEN WHEN THE HANDLER NEVER READS IT: several actions'
+-- real PHP handler (and, correspondingly, the real line-mini-app client —
+-- verified against line-mini-app/src/lib/{health-api,appointments-api}.ts)
+-- never sends/reads `line_account_id` at all (health-profile's
+-- remove_allergy/remove_medication, appointments' cancel). Both stacks'
+-- tenant-resolution layer still needs SOME routing signal in the request
+-- with no Host-pinning header (this harness's normal convention), so
+-- infra/e2e/lib/api-extract.mjs's case bodies for those 3 actions add
+-- `line_account_id` anyway — same precedent 50-...'s own fixture/extractor
+-- established for member:update_profile ("line_account_id is REQUIRED here
+-- even though the handler itself never reads it"). Flagged here, not
+-- silently done, per this batch's own "document deviations" instruction.
+
+-- ---------------------------------------------------------------------------
+-- pharmacists — 901 shared (used by `pharmacists` list-read + `available_slots`
+-- read + my_appointments'/cancel's pre-seeded appointment rows); 911/912
+-- DEDICATED to book:php/book:next respectively so the two concurrent book()
+-- calls (Promise.all in api-parity.mjs's runApiCase()) can NEVER race on the
+-- SAME (pharmacist_id, date, time) "slot taken" check — see the runbook's
+-- "book race" note. No pharmacist_schedules/pharmacist_holidays rows are
+-- seeded for ANY of these three (deliberate — exercises the DEFAULT_SCHEDULE_BY_DAY
+-- fallback both PHP and the Next port replicate identically, per
+-- packages/contracts/src/appointments.ts's own DYNAMIC-COLUMN VERIFICATION
+-- note; avoids weekday-dependent fixture complexity entirely).
+-- ---------------------------------------------------------------------------
+INSERT INTO `pharmacists`
+  (`id`, `line_account_id`, `name`, `title`, `specialty`, `consultation_fee`, `consultation_duration`, `is_available`, `is_active`)
+VALUES
+  (901, 1, 'ภญ. ทดสอบ ระบบ (E2E)', 'เภสัชกรคลินิก', 'เภสัชกรรมทั่วไป', 150.00, 20, 1, 1),
+  (911, 1, 'ภก. บุ๊ค พีเอชพี (E2E)', 'เภสัชกร', 'เภสัชกรรมทั่วไป', 100.00, 15, 1, 1),
+  (912, 1, 'ภก. บุ๊ค เน็กซ์ (E2E)', 'เภสัชกร', 'เภสัชกรรมทั่วไป', 100.00, 15, 1, 1);
+
+-- ---------------------------------------------------------------------------
+-- appointments:my_appointments — shared, read-only identity (4001), no PHP
+-- write side effect from a GET, so ONE identity is safe for both stacks'
+-- calls (same "richMember" pattern batch 1 established). One "upcoming"
+-- row (future date, relative) and one "past" row (fixed past date, status
+-- completed) so `upcoming`/`past`/`all` are all non-trivially populated.
+-- ---------------------------------------------------------------------------
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES (4001, 1, 'e2e-mp2-appt-read', 'Appointments Read Test (E2E)', 1, '2026-01-10 09:00:00');
+
+INSERT INTO `appointments`
+  (`id`, `line_account_id`, `user_id`, `pharmacist_id`, `appointment_date`, `appointment_time`, `status`, `created_at`)
+VALUES
+  (6001, 1, 4001, 901, DATE_ADD(CURDATE(), INTERVAL 30 DAY), '11:00:00', 'confirmed', '2026-01-10 09:05:00'),
+  (6002, 1, 4001, 901, '2026-02-01', '11:00:00', 'completed', '2026-01-15 09:05:00');
+
+-- ---------------------------------------------------------------------------
+-- appointments:book — fresh identities (4011 php / 4012 next), no
+-- pre-existing appointment. Each variant books a DIFFERENT dedicated
+-- pharmacist (911/912 — see pharmacists' own comment above) at the SAME
+-- (date, time) so the request BODY stays identical across variants except
+-- `line_user_id`/`pharmacist_id` (api-extract.mjs varies pharmacist_id per
+-- variant too, invisible in the response — AppointmentsBookOk never echoes
+-- pharmacist_id back), matching this harness's "only the identity signal
+-- differs" convention for every other write case.
+-- ---------------------------------------------------------------------------
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (4011, 1, 'e2e-mp2-appt-book-php', 'Appointments Book Test (PHP)', 1, '2026-01-10 09:00:00'),
+  (4012, 1, 'e2e-mp2-appt-book-next', 'Appointments Book Test (Next)', 1, '2026-01-10 09:00:00');
+
+-- ---------------------------------------------------------------------------
+-- appointments:cancel — pre-existing, cancellable (future, non-terminal)
+-- appointment per identity (4021 php -> 6011, 4022 next -> 6012). Relative
+-- future date (+60 days) so `handleCancel()`'s "already passed" gate never
+-- fires no matter how long after this file is authored the harness runs.
+-- ---------------------------------------------------------------------------
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (4021, 1, 'e2e-mp2-appt-cancel-php', 'Appointments Cancel Test (PHP)', 1, '2026-01-10 09:00:00'),
+  (4022, 1, 'e2e-mp2-appt-cancel-next', 'Appointments Cancel Test (Next)', 1, '2026-01-10 09:00:00');
+
+INSERT INTO `appointments`
+  (`id`, `line_account_id`, `user_id`, `pharmacist_id`, `appointment_date`, `appointment_time`, `status`, `created_at`)
+VALUES
+  (6011, 1, 4021, 901, DATE_ADD(CURDATE(), INTERVAL 60 DAY), '10:00:00', 'confirmed', '2026-01-10 09:05:00'),
+  (6012, 1, 4022, 901, DATE_ADD(CURDATE(), INTERVAL 60 DAY), '10:00:00', 'confirmed', '2026-01-10 09:05:00');
+
+-- ---------------------------------------------------------------------------
+-- health-profile write actions — NONE of the six ported handlers
+-- (updatePersonalInfo/updateMedicalHistory/addAllergy/removeAllergy/
+-- addMedication/removeMedication) ever queries the `users` table (verified
+-- reading api/health-profile.php in full — every one of them keys directly
+-- off `line_user_id`/`line_account_id` against user_health_profiles /
+-- user_drug_allergies / user_current_medications), so — unlike every other
+-- write action in this batch — these six identities need NO `users` row at
+-- all. update_personal/update_medical_history/add_allergy/add_medication
+-- exercise the INSERT (no pre-existing row) path; remove_allergy/
+-- remove_medication need pre-existing rows to delete/deactivate.
+-- ---------------------------------------------------------------------------
+
+-- remove_allergy — pre-existing allergy row per identity, explicit id so
+-- api-extract.mjs's request body can reference it as a plain constant.
+INSERT INTO `user_drug_allergies`
+  (`id`, `line_user_id`, `line_account_id`, `drug_name`, `reaction_type`, `reaction_notes`, `severity`, `created_at`)
+VALUES
+  (6201, 'e2e-mp2-hp-rmallergy-php', 1, 'Codeine (E2E)', 'breathing', 'หายใจลำบาก', 'severe', '2026-01-11 09:00:00'),
+  (6202, 'e2e-mp2-hp-rmallergy-next', 1, 'Codeine (E2E)', 'breathing', 'หายใจลำบาก', 'severe', '2026-01-11 09:00:00');
+
+-- remove_medication — pre-existing medication row per identity.
+INSERT INTO `user_current_medications`
+  (`id`, `line_user_id`, `line_account_id`, `medication_name`, `dosage`, `frequency`, `start_date`, `notes`, `is_active`, `created_at`, `updated_at`)
+VALUES
+  (6211, 'e2e-mp2-hp-rmmed-php', 1, 'Warfarin (E2E)', '2mg', 'วันละ 1 ครั้ง', '2025-12-01', 'ก่อนนอน', 1, '2026-01-11 09:10:00', '2026-01-11 09:10:00'),
+  (6212, 'e2e-mp2-hp-rmmed-next', 1, 'Warfarin (E2E)', '2mg', 'วันละ 1 ครั้ง', '2025-12-01', 'ก่อนนอน', 1, '2026-01-11 09:10:00', '2026-01-11 09:10:00');
+
+-- ---------------------------------------------------------------------------
+-- consent:save — fresh identities (NO pre-seeded `users` row — the auto-create
+-- branch, `getUserFromLineId()` misses -> INSERT, IS the thing under test,
+-- same "deliberately absent" reasoning as batch 1's member:check). Real
+-- line-mini-app traffic (line-mini-app/src/lib/consent-api.ts) DOES send
+-- `line_account_id` for this action, so no "extra unread field" caveat here.
+-- ---------------------------------------------------------------------------
+-- (no INSERT — identities e2e-mp2-consent-save-php / -next are intentionally
+-- absent from `users` at seed time)
+
+-- ---------------------------------------------------------------------------
+-- data-rights:* — modules/PDPA/Services/DataRightsService::resolveUser()
+-- NEVER auto-creates (`return null` on a miss -> `{success:false,message:
+-- 'User not found'}`), so EVERY data-rights identity below needs a
+-- pre-existing `users` row, unlike consent:save.
+-- ---------------------------------------------------------------------------
+
+-- withdraw_consent — pre-existing accepted health_data consent per identity,
+-- so withdrawConsent()'s UPDATE has a real `is_accepted=1` row to flip.
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (4211, 1, 'e2e-mp2-dr-withdraw-php', 'Data Rights Withdraw Test (PHP)', 1, '2026-01-12 09:00:00'),
+  (4212, 1, 'e2e-mp2-dr-withdraw-next', 'Data Rights Withdraw Test (Next)', 1, '2026-01-12 09:00:00');
+
+INSERT INTO `user_consents`
+  (`line_account_id`, `user_id`, `consent_type`, `consent_version`, `is_accepted`, `accepted_at`, `created_at`, `updated_at`)
+VALUES
+  (1, 4211, 'health_data', '1.0', 1, '2026-01-12 09:05:00', '2026-01-12 09:05:00', '2026-01-12 09:05:00'),
+  (1, 4212, 'health_data', '1.0', 1, '2026-01-12 09:05:00', '2026-01-12 09:05:00', '2026-01-12 09:05:00');
+
+-- request_deletion — pre-existing user only; no consents needed. This is
+-- also THE case whose dbCheck proves the phpHost Host-header-pin mechanism
+-- actually works (see docs/runbooks/phase3-batch2-miniapp-api-parity.md §2.3 and §7):
+-- the resulting `data_deletion_requests` row is queried straight out of
+-- __APP_DB_NAME__ (the ONE seeded tenant DB) after the PHP-side call, which
+-- only succeeds at all if PHP actually resolved THIS tenant (a wrong/legacy
+-- DB in a non-harness environment would 42S02 "table doesn't exist" or
+-- silently miss the row entirely).
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (4221, 1, 'e2e-mp2-dr-deletion-php', 'Data Rights Deletion Test (PHP)', 1, '2026-01-12 09:00:00'),
+  (4222, 1, 'e2e-mp2-dr-deletion-next', 'Data Rights Deletion Test (Next)', 1, '2026-01-12 09:00:00');
+
+-- export_data — pre-existing user WITH non-trivial consents/consent_logs/
+-- chat_history/orders per identity, so the export shape is proven correct
+-- for real content, not just an empty-arrays pass. Content is DELIBERATELY
+-- IDENTICAL across the php/next pair (only `line_user_id` itself, and
+-- whatever auto-increment PKs MySQL assigns, differ) — see
+-- infra/e2e/lib/api-extract.mjs's `data-rights:export_data` case comment for
+-- exactly which response fields that forces onto the `allow` list (id,
+-- user_id, line_user_id, generated_at) and, just as importantly, which
+-- fields it does NOT (every other field is asserted byte-equal between the
+-- two stacks' calls).
+-- display_name/first_name/last_name/phone/email are DELIBERATELY IDENTICAL
+-- across both rows (only line_user_id/id, which the export's `allow` list
+-- already accounts for, differ) — see the case's own comment in
+-- infra/e2e/lib/api-extract.mjs for why byte-equality is the point here.
+INSERT INTO `users`
+  (`id`, `line_account_id`, `line_user_id`, `display_name`, `first_name`, `last_name`, `phone`, `email`,
+   `is_registered`, `registered_at`, `created_at`)
+VALUES
+  (4231, 1, 'e2e-mp2-dr-export-php', 'Data Rights Export Test (E2E)', 'ส่งออก', 'ทดสอบ', '0822222299', 'export-test@e2e.invalid',
+   1, '2026-01-13 09:00:00', '2026-01-13 09:00:00'),
+  (4232, 1, 'e2e-mp2-dr-export-next', 'Data Rights Export Test (E2E)', 'ส่งออก', 'ทดสอบ', '0822222299', 'export-test@e2e.invalid',
+   1, '2026-01-13 09:00:00', '2026-01-13 09:00:00');
+
+INSERT INTO `user_consents`
+  (`line_account_id`, `user_id`, `consent_type`, `consent_version`, `is_accepted`, `accepted_at`, `created_at`, `updated_at`)
+VALUES
+  (1, 4231, 'health_data', '1.0', 1, '2026-01-13 09:05:00', '2026-01-13 09:05:00', '2026-01-13 09:05:00'),
+  (1, 4231, 'privacy_policy', '1.0', 1, '2026-01-13 09:05:00', '2026-01-13 09:05:00', '2026-01-13 09:05:00'),
+  (1, 4232, 'health_data', '1.0', 1, '2026-01-13 09:05:00', '2026-01-13 09:05:00', '2026-01-13 09:05:00'),
+  (1, 4232, 'privacy_policy', '1.0', 1, '2026-01-13 09:05:00', '2026-01-13 09:05:00', '2026-01-13 09:05:00');
+
+INSERT INTO `consent_logs`
+  (`line_account_id`, `user_id`, `consent_type`, `action`, `consent_version`, `created_at`)
+VALUES
+  (1, 4231, 'health_data', 'accept', '1.0', '2026-01-13 09:05:00'),
+  (1, 4232, 'health_data', 'accept', '1.0', '2026-01-13 09:05:00');
+
+INSERT INTO `ai_conversation_history` (`user_id`, `line_account_id`, `session_id`, `role`, `content`, `created_at`)
+VALUES
+  (4231, 1, 'e2e-export-session', 'user', 'ปวดหัวมา 2 วันค่ะ (E2E)', '2026-01-13 10:00:00'),
+  (4231, 1, 'e2e-export-session', 'assistant', 'แนะนำให้ทานพาราเซตามอลและพักผ่อนค่ะ (E2E)', '2026-01-13 10:00:05'),
+  (4232, 1, 'e2e-export-session', 'user', 'ปวดหัวมา 2 วันค่ะ (E2E)', '2026-01-13 10:00:00'),
+  (4232, 1, 'e2e-export-session', 'assistant', 'แนะนำให้ทานพาราเซตามอลและพักผ่อนค่ะ (E2E)', '2026-01-13 10:00:05');
+
+INSERT INTO `transactions`
+  (`id`, `line_account_id`, `order_number`, `user_id`, `total_amount`, `grand_total`, `status`, `payment_status`, `created_at`, `line_user_id`)
+VALUES
+  (7001, 1, 'E2E-EXPORT-ORDER-1', 4231, 25.00, 25.00, 'completed', 'paid', '2026-01-13 11:00:00', 'e2e-mp2-dr-export-php'),
+  (7002, 1, 'E2E-EXPORT-ORDER-1', 4232, 25.00, 25.00, 'completed', 'paid', '2026-01-13 11:00:00', 'e2e-mp2-dr-export-next');
+
+-- Deliberately ONE item per order (not two): fetchOwnOrders()'s SQL does
+-- `GROUP_CONCAT(ti.product_name SEPARATOR ', ')` with NO inner `ORDER BY` —
+-- a genuine, pre-existing MySQL non-determinism (concatenation order across
+-- multiple rows in one group is unspecified without one), faithfully
+-- inherited by the Next port's identical SQL. Verified empirically: with two
+-- items, PHP and Next occasionally returned the two product names in
+-- different orders even though the underlying data was byte-identical — not
+-- a port bug, just GROUP_CONCAT's own documented behavior. One item per
+-- order sidesteps the ambiguity entirely rather than allowlisting `products`
+-- and weakening the check.
+INSERT INTO `transaction_items`
+  (`line_account_id`, `transaction_id`, `product_name`, `product_price`, `quantity`, `subtotal`)
+VALUES
+  (1, 7001, 'พาราเซตามอล 500mg (E2E)', 25.00, 1, 25.00),
+  (1, 7002, 'พาราเซตามอล 500mg (E2E)', 25.00, 1, 25.00);
+
+-- ---------------------------------------------------------------------------
+-- medication-reminders — unlike health-profile, api/medication-reminders.php
+-- DOES look up `SELECT id FROM users WHERE line_user_id = ?` for every
+-- action (including `list`), so every identity below needs a `users` row.
+-- ---------------------------------------------------------------------------
+
+-- list — shared, read-only identity (4331) with one reminder (6301) and a
+-- mixed taken/missed history WITHIN the last 7 days (relative to whenever
+-- the harness runs, hence NOW()-relative timestamps) so `adherence_percent`
+-- is a non-trivial 50%, not the default-100 "no doses yet" case.
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES (4331, 1, 'e2e-mp2-mr-read', 'Medication Reminders Read Test (E2E)', 1, '2026-01-14 09:00:00');
+
+INSERT INTO `medication_reminders`
+  (`id`, `user_id`, `line_user_id`, `line_account_id`, `medication_name`, `dosage`, `frequency`, `reminder_times`, `start_date`, `is_active`, `created_at`, `updated_at`)
+VALUES
+  (6301, 4331, 'e2e-mp2-mr-read', 1, 'Metformin (E2E)', '500mg', 'twice_daily', '["08:00","20:00"]', '2026-01-01', 1, '2026-01-14 09:00:00', '2026-01-14 09:00:00');
+
+INSERT INTO `medication_taken_history` (`reminder_id`, `user_id`, `scheduled_time`, `taken_at`, `status`)
+VALUES
+  (6301, 4331, '08:00:00', DATE_SUB(NOW(), INTERVAL 1 DAY), 'taken'),
+  (6301, 4331, '08:00:00', DATE_SUB(NOW(), INTERVAL 2 DAY), 'missed');
+
+-- add — fresh identities, no pre-existing reminder.
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (4301, 1, 'e2e-mp2-mr-add-php', 'Medication Reminders Add Test (PHP)', 1, '2026-01-14 09:00:00'),
+  (4302, 1, 'e2e-mp2-mr-add-next', 'Medication Reminders Add Test (Next)', 1, '2026-01-14 09:00:00');
+
+-- delete — pre-existing reminder per identity.
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (4311, 1, 'e2e-mp2-mr-delete-php', 'Medication Reminders Delete Test (PHP)', 1, '2026-01-14 09:00:00'),
+  (4312, 1, 'e2e-mp2-mr-delete-next', 'Medication Reminders Delete Test (Next)', 1, '2026-01-14 09:00:00');
+
+INSERT INTO `medication_reminders`
+  (`id`, `user_id`, `line_user_id`, `line_account_id`, `medication_name`, `dosage`, `frequency`, `reminder_times`, `start_date`, `is_active`, `created_at`, `updated_at`)
+VALUES
+  (6311, 4311, 'e2e-mp2-mr-delete-php', 1, 'Simvastatin (E2E)', '20mg', 'daily', '["21:00"]', '2026-01-01', 1, '2026-01-14 09:05:00', '2026-01-14 09:05:00'),
+  (6312, 4312, 'e2e-mp2-mr-delete-next', 1, 'Simvastatin (E2E)', '20mg', 'daily', '["21:00"]', '2026-01-01', 1, '2026-01-14 09:05:00', '2026-01-14 09:05:00');
+
+-- mark_taken — pre-existing reminder per identity (DOES verify ownership,
+-- unlike delete — see medication-reminders.ts's own "subtle traps" note).
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (4321, 1, 'e2e-mp2-mr-marktaken-php', 'Medication Reminders MarkTaken Test (PHP)', 1, '2026-01-14 09:00:00'),
+  (4322, 1, 'e2e-mp2-mr-marktaken-next', 'Medication Reminders MarkTaken Test (Next)', 1, '2026-01-14 09:00:00');
+
+INSERT INTO `medication_reminders`
+  (`id`, `user_id`, `line_user_id`, `line_account_id`, `medication_name`, `dosage`, `frequency`, `reminder_times`, `start_date`, `is_active`, `created_at`, `updated_at`)
+VALUES
+  (6321, 4321, 'e2e-mp2-mr-marktaken-php', 1, 'Amlodipine (E2E)', '5mg', 'daily', '["08:00"]', '2026-01-01', 1, '2026-01-14 09:10:00', '2026-01-14 09:10:00'),
+  (6322, 4322, 'e2e-mp2-mr-marktaken-next', 1, 'Amlodipine (E2E)', '5mg', 'daily', '["08:00"]', '2026-01-01', 1, '2026-01-14 09:10:00', '2026-01-14 09:10:00');
+
+-- ---------------------------------------------------------------------------
+-- addresses:{list,upsert,delete} — NEXT-ONLY self-consistency cases (NO PHP
+-- source exists for this endpoint — see packages/contracts/src/addresses.ts's
+-- own "PROMINENT FINDING" doc comment). ONE identity per case is sufficient
+-- (no php/next split — each case makes exactly ONE HTTP call, not a
+-- concurrent pair, so there is no twin-identity race to avoid). `list` gets
+-- 2 pre-seeded rows across 2 different labels; `upsert`'s identity has NO
+-- pre-existing row for the label it targets (exercises the INSERT branch of
+-- the `ON DUPLICATE KEY UPDATE`); `delete`'s identity HAS one (exercises a
+-- real delete, not a no-op on an already-empty slot).
+-- ---------------------------------------------------------------------------
+INSERT INTO `user_addresses`
+  (`line_user_id`, `line_account_id`, `label`, `name`, `phone`, `address`, `subdistrict`, `district`, `province`, `postcode`, `created_at`, `updated_at`)
+VALUES
+  ('e2e-mp2-addr-list', 1, 'primary', 'บ้าน (E2E)', '0833333331', '11 ถนนทดสอบ', 'บางรัก', 'บางรัก', 'กรุงเทพมหานคร', '10500', '2026-01-15 09:00:00', '2026-01-15 09:00:00'),
+  ('e2e-mp2-addr-list', 1, 'secondary_1', 'ที่ทำงาน (E2E)', '0833333332', '22 ถนนทดสอบ', 'สีลม', 'บางรัก', 'กรุงเทพมหานคร', '10500', '2026-01-15 09:01:00', '2026-01-15 09:01:00'),
+  ('e2e-mp2-addr-delete', 1, 'secondary_1', 'จะถูกลบ (E2E)', '0833333333', '33 ถนนทดสอบ', 'สีลม', 'บางรัก', 'กรุงเทพมหานคร', '10500', '2026-01-15 09:02:00', '2026-01-15 09:02:00');
+-- 'e2e-mp2-addr-upsert' is deliberately absent from user_addresses entirely.

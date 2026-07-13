@@ -1,0 +1,17 @@
+{
+  "description": "POST action=add_medication — success, no existing medications so checkMedicationInteractions() short-circuits to [] before ever reaching the (schema-mismatched, see mutations.ts's doc comment) drug_interactions query. interactions/has_interactions keys are ABSENT (not present as []/false).",
+  "request": {
+    "action": "add_medication",
+    "line_user_id": "Ubrandnewuser000000000000000000",
+    "line_account_id": 1,
+    "medication_name": "Metformin",
+    "dosage": "500mg",
+    "frequency": "BID"
+  },
+  "response": {
+    "success": true,
+    "message": "เพิ่มยาที่ใช้ประจำแล้ว",
+    "medication": { "id": 30, "medication_name": "Metformin", "dosage": "500mg", "frequency": "BID" }
+  },
+  "status": 200
+}

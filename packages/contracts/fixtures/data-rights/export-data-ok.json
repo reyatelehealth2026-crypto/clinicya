@@ -1,0 +1,63 @@
+{
+  "description": "POST action=export_data — buildExportShape() output; every list is best-effort/isolated per fetchOwn*() query.",
+  "request": { "action": "export_data", "line_user_id": "U1234567890abcdef1234567890abcdef", "line_account_id": 1 },
+  "response": {
+    "success": true,
+    "message": "ส่งออกข้อมูลเรียบร้อยแล้ว",
+    "data": {
+      "export_meta": {
+        "generated_at": "2026-07-13T10:00:00+07:00",
+        "standard": "PDPA (Thailand) — ข้อมูลส่วนบุคคลของเจ้าของข้อมูลเท่านั้น",
+        "user_id": 42
+      },
+      "profile": {
+        "id": 42,
+        "line_account_id": 1,
+        "line_user_id": "U1234567890abcdef1234567890abcdef",
+        "display_name": "สมชาย",
+        "real_name": "สมชาย ใจดี",
+        "first_name": "สมชาย",
+        "last_name": "ใจดี",
+        "phone": "0812345678",
+        "email": null,
+        "birthday": "1990-01-15",
+        "gender": "male",
+        "address": "123/45 หมู่บ้านสุขใจ",
+        "district": "บางรัก",
+        "province": "กรุงเทพมหานคร",
+        "postal_code": "10500",
+        "member_id": "M2600001",
+        "is_registered": 1,
+        "total_orders": 3,
+        "total_spent": 1590,
+        "available_points": 120,
+        "medical_conditions": null,
+        "drug_allergies": null,
+        "current_medications": null,
+        "blood_type": "unknown",
+        "weight": 65,
+        "height": 170,
+        "created_at": "2026-01-15 10:00:00",
+        "registered_at": "2026-01-15 10:05:00",
+        "consent_privacy": 1,
+        "consent_terms": 1,
+        "consent_health_data": 0,
+        "consent_date": "2026-01-15 10:05:00",
+        "deletion_status": "none",
+        "deletion_requested_at": null
+      },
+      "consents": [
+        { "consent_type": "health_data", "consent_version": "1.0", "is_accepted": 0, "accepted_at": null, "withdrawn_at": "2026-07-13 10:00:00", "updated_at": "2026-07-13 10:00:00" }
+      ],
+      "consent_history": [
+        { "consent_type": "health_data", "action": "withdraw", "consent_version": "1.0", "created_at": "2026-07-13 10:00:00" }
+      ],
+      "chat_history": [
+        { "role": "user", "content": "ปวดหัว", "session_id": "sess-1", "created_at": "2026-07-01 08:00:00" }
+      ],
+      "orders": [
+        { "id": 501, "order_number": "ORD-2026-0501", "total_amount": "590.00", "status": "delivered", "created_at": "2026-06-01 09:00:00", "products": "พาราเซตามอล 500 มก., วิตามินซี" }
+      ]
+    }
+  }
+}

@@ -1,8 +1,19 @@
 import type { NextRequest } from 'next/server';
+import type { Kysely } from 'kysely';
+import type { TenantDB } from '@reya/db';
 import { HEALTH_PROFILE_GET_STATUS } from '@reya/contracts';
 import { handleMiniappOptions, miniappJson } from '@/lib/miniapp/cors';
 import { resolveMiniappTenantContext, TENANT_UNRESOLVED_RESPONSE, TENANT_UNRESOLVED_STATUS } from '@/lib/miniapp/tenant';
 import { getHealthProfileAction } from './_lib/query';
+import {
+  addAllergyAction,
+  addMedicationAction,
+  removeAllergyAction,
+  removeMedicationAction,
+  updateMedicalHistoryAction,
+  updatePersonalAction,
+  type ActionResult,
+} from './_lib/mutations';
 
 /**
  * GET /api/miniapp/health-profile — port of api/health-profile.php's
@@ -19,9 +30,75 @@ import { getHealthProfileAction } from './_lib/query';
  * RESPONSE ENVELOPE — `{success, ...}` per handler, WITH real HTTP status
  * codes (400/500), via HEALTH_PROFILE_GET_STATUS — NOT the flat
  * always-200 member.php/rewards.php shape.
+ *
+ * POST /api/miniapp/health-profile — added by mig-api (Phase 3 batch 2,
+ * wt-phase3b2): the SIX write actions with real line-mini-app callers
+ * (line-mini-app/src/lib/health-api.ts) — `update_personal`,
+ * `update_medical_history`, `add_allergy`, `remove_allergy`,
+ * `add_medication`, `remove_medication`. `update_medication` has zero
+ * callers and is NOT ported (see _lib/mutations.ts's doc comment). The GET
+ * export above (and _lib/query.ts) is left functionally untouched by this
+ * addition.
  */
 
 export const OPTIONS = handleMiniappOptions;
+
+const WRITE_ACTIONS = new Set([
+  'update_personal',
+  'update_medical_history',
+  'add_allergy',
+  'remove_allergy',
+  'add_medication',
+  'remove_medication',
+]);
+
+async function parseJsonBody(request: NextRequest): Promise<Record<string, unknown>> {
+  try {
+    const raw = await request.text();
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function dispatchWrite(db: Kysely<TenantDB>, action: string, input: Record<string, unknown>): Promise<ActionResult> {
+  switch (action) {
+    case 'update_personal':
+      return updatePersonalAction(db, input);
+    case 'update_medical_history':
+      return updateMedicalHistoryAction(db, input);
+    case 'add_allergy':
+      return addAllergyAction(db, input);
+    case 'remove_allergy':
+      return removeAllergyAction(db, input);
+    case 'add_medication':
+      return addMedicationAction(db, input);
+    case 'remove_medication':
+      return removeMedicationAction(db, input);
+    default:
+      // Unreachable — POST() below already 400s any action not in WRITE_ACTIONS before calling this.
+      return { status: 400, body: { success: false, error: 'Invalid action' } };
+  }
+}
+
+export async function POST(request: NextRequest): Promise<Response> {
+  const input = await parseJsonBody(request);
+  const action = typeof input.action === 'string' ? input.action : '';
+
+  if (!WRITE_ACTIONS.has(action)) {
+    return miniappJson({ success: false, error: 'Invalid action' }, { status: 400 });
+  }
+
+  const outcome = await resolveMiniappTenantContext(request, { method: 'POST', jsonBody: input });
+  if (!outcome.ok) {
+    return miniappJson(TENANT_UNRESOLVED_RESPONSE, { status: TENANT_UNRESOLVED_STATUS });
+  }
+
+  const result = await dispatchWrite(outcome.context.db, action, input);
+  return miniappJson(result.body, { status: result.status });
+}
 
 export async function GET(request: NextRequest): Promise<Response> {
   const query = Object.fromEntries(request.nextUrl.searchParams.entries());

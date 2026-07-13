@@ -1,0 +1,10 @@
+{
+  "description": "POST action=update_personal — age out of the [0, 150] range -> 400, distinct 'Invalid age' error before any DB write.",
+  "request": {
+    "action": "update_personal",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "age": 200
+  },
+  "response": { "success": false, "error": "Invalid age" },
+  "status": 400
+}

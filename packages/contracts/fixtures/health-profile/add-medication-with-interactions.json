@@ -1,0 +1,27 @@
+{
+  "description": "POST action=add_medication — HYPOTHETICAL/SCHEMA-ONLY fixture: models the shape checkMedicationInteractions() WOULD return if it found a match. NOT reachable against the actual committed tenant template today — drug_interactions there has drug1_name/drug2_name/drug1_generic/drug2_generic columns, NOT the drug1_id/drug2_id the PHP query's JOIN references, so the real query throws a caught PDOException and always resolves to interactions=[] in production. Kept as a schema-fidelity fixture (see mutations.ts's/health-profile.ts's own doc comments) for when/if that schema mismatch is ever fixed by a future migration (out of this batch's scope to fix).",
+  "request": {
+    "action": "add_medication",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "medication_name": "Warfarin",
+    "dosage": "5mg",
+    "frequency": "OD"
+  },
+  "response": {
+    "success": true,
+    "message": "เพิ่มยาที่ใช้ประจำแล้ว",
+    "medication": { "id": 31, "medication_name": "Warfarin", "dosage": "5mg", "frequency": "OD" },
+    "interactions": [
+      {
+        "drug1": "Metformin",
+        "drug2": "Warfarin",
+        "severity": "moderate",
+        "description": "อาจมีปฏิกิริยาระหว่างยา",
+        "recommendation": "ควรปรึกษาเภสัชกร"
+      }
+    ],
+    "has_interactions": true
+  },
+  "status": 200
+}

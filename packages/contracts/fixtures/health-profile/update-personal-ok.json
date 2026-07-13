@@ -1,0 +1,16 @@
+{
+  "description": "POST action=update_personal — success (INSERT ... ON DUPLICATE KEY UPDATE, always 200).",
+  "request": {
+    "action": "update_personal",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "name": "สมชาย ใจดี",
+    "age": 34,
+    "gender": "male",
+    "weight": 68.5,
+    "height": 172,
+    "blood_type": "O"
+  },
+  "response": { "success": true, "message": "บันทึกข้อมูลส่วนตัวแล้ว" },
+  "status": 200
+}

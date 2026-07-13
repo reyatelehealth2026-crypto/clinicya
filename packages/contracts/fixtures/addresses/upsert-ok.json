@@ -1,0 +1,31 @@
+{
+  "description": "POST action=upsert — insert-or-update by (line_user_id, line_account_id, label).",
+  "request": {
+    "action": "upsert",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "label": "primary",
+    "name": "สมชาย ใจดี",
+    "phone": "0812345678",
+    "address": "123/45 หมู่บ้านสุขใจ",
+    "subdistrict": "บางรัก",
+    "district": "บางรัก",
+    "province": "กรุงเทพมหานคร",
+    "postcode": "10500"
+  },
+  "response": {
+    "success": true,
+    "message": "บันทึกที่อยู่แล้ว",
+    "address": {
+      "label": "primary",
+      "name": "สมชาย ใจดี",
+      "phone": "0812345678",
+      "address": "123/45 หมู่บ้านสุขใจ",
+      "subdistrict": "บางรัก",
+      "district": "บางรัก",
+      "province": "กรุงเทพมหานคร",
+      "postcode": "10500",
+      "updated_at": "2026-07-13 10:00:00"
+    }
+  }
+}

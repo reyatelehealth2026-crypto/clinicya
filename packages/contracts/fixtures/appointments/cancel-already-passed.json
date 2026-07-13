@@ -1,0 +1,13 @@
+{
+  "description": "POST action=cancel — the appointment's datetime is in the past -> `appointmentDateTime <= now` gate fires. This IS the real, only-enforced gate in handleCancel() (contrast with cancel-dead-code-hours-gate-not-enforced.json's non-enforced '2 hours' comment).",
+  "request": {
+    "action": "cancel",
+    "appointment_id": 40,
+    "line_user_id": "U1234567890abcdef1234567890abcdef"
+  },
+  "response": {
+    "success": false,
+    "message": "ไม่สามารถยกเลิกนัดหมายที่ผ่านไปแล้ว"
+  },
+  "status": 200
+}

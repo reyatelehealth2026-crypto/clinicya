@@ -84,9 +84,70 @@
 //
 // Single command to run this harness:
 //   node infra/e2e/api-parity.mjs
+//
+// -----------------------------------------------------------------------------
+// PHASE 3 BATCH 2 EXTENSION (mig-infra) — takes this harness from 16 to 38
+// covered endpoint x action pairs: appointments:{pharmacists,available_slots,
+// book,my_appointments,cancel}, health-profile:{update_personal,
+// update_medical_history,add_allergy,remove_allergy,add_medication,
+// remove_medication}, consent:save, data-rights:{withdraw_consent,
+// request_deletion,export_data}, medication-reminders:{list,add,delete,
+// mark_taken} — 19 new PHP-vs-Next diffable ENDPOINT_CASES entries — PLUS 3
+// STRUCTURALLY SEPARATE NEXT_ONLY_CASES entries (addresses:{list,upsert,
+// delete} — NO PHP source exists for this endpoint; see
+// infra/e2e/lib/api-extract.mjs's NEXT_ONLY_CASES doc comment and
+// docs/runbooks/phase3-batch2-miniapp-api-parity.md for the full writeup).
+// Batch-1 content above (up to and including the ENDPOINT_CASES loop in
+// main()) is otherwise UNTOUCHED except where explicitly marked "PHASE 3
+// BATCH 2" below.
+//
+// THREE THINGS THIS EXTENSION ADDS, beyond the new case config itself:
+//   1. seedDatabase() applies database/migration_2026-07-04_pdpa_data_rights.sql
+//      (the `data_deletion_requests` table + `users.deletion_status`/
+//      `deletion_requested_at` columns — CONFIRMED ABSENT from the base
+//      TENANT_TEMPLATE, present only in this separately-committed migration)
+//      immediately after TENANT_TEMPLATE and before any fixture file, same
+//      pattern MASTER_MIGRATIONS already uses for
+//      migration_2026-06-02_route_liff_id.sql.
+//   2. buildContracts() runs `pnpm --filter @reya/contracts run build` before
+//      buildAdmin() — NEW, not present in batch 1 — because
+//      infra/e2e/lib/api-extract.mjs now imports real zod schemas from
+//      packages/contracts/dist/index.js (for NEXT_ONLY_CASES's schema
+//      validation) and that import must never depend on a stale/missing
+//      dist/ left over from a previous session, same "never trust a
+//      possibly-stale build" philosophy buildAdmin() already applies to
+//      apps/admin/.next/standalone.
+//   3. callStack() accepts an optional per-case `phpHost` field (see
+//      infra/e2e/lib/api-extract.mjs's PHP_HOST doc comment) — a `Host`
+//      header pinned on the PHP-side request ONLY, for the 4 cases whose PHP
+//      source (api/consent.php, api/data-rights.php) is missing
+//      `require_once bootstrap/route_by_account.php`. Node's `http.request()`
+//      (httpRequest() in harness-common.mjs) accepts an explicit Host header
+//      override with no special handling — infra/e2e/parity.mjs's own
+//      TENANT_HOST usage already proves this is a low-risk, already-relied-on
+//      mechanism, not new plumbing.
+//   4. buildAdmin() now DISCOVERS where `next build`'s standalone `server.js`
+//      actually landed (resolveAdminStandaloneDir(), below) instead of
+//      assuming the fixed `.next/standalone/apps/admin/` path batch 1's
+//      ADMIN_STANDALONE_DIR hardcoded. Empirically verified necessary in this
+//      batch's own dev environment: Next's Turbopack workspace-root
+//      auto-detection picks the SHALLOWEST of every lockfile it finds on the
+//      filesystem, including ones OUTSIDE this repo entirely (e.g. a stray
+//      `/tmp/package-lock.json` left by an unrelated process on a shared
+//      sandbox host) — when that happens, the standalone output mirrors the
+//      FULL absolute path from that unrelated root instead of from
+//      apps/admin's own nearest pnpm-workspace.yaml, and the batch-1
+//      hardcoded path silently stops matching reality (`build_admin` fails
+//      with "next build did not produce .../standalone/apps/admin/server.js"
+//      even though the build itself succeeded). This is an ENVIRONMENT
+//      quirk, not a batch-2-vs-batch-1 behavioral difference — the fix here
+//      is a robustness improvement to THIS script's own (already-a-
+//      documented-copy-not-import) buildAdmin()/prepareStandaloneStatic()/
+//      startNextServer(), not a change to what they DO.
+// -----------------------------------------------------------------------------
 
 import { spawn } from 'node:child_process';
-import { cpSync, existsSync, readFileSync } from 'node:fs';
+import { cpSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -105,7 +166,7 @@ import {
   waitHttpReachable,
   httpRequest,
 } from './lib/harness-common.mjs';
-import { FIXTURE, FORMAT_CHECKS, ENDPOINT_CASES } from './lib/api-extract.mjs';
+import { FIXTURE, FORMAT_CHECKS, ENDPOINT_CASES, NEXT_ONLY_CASES } from './lib/api-extract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const COMPOSE_FILE = path.join(__dirname, 'docker-compose.yml');
@@ -140,11 +201,24 @@ const MASTER_MIGRATIONS = [
   'packages/db/migrations/master/migration_2026-07-12_node_sessions.sql',
 ];
 const TENANT_TEMPLATE = 'database/migration_2026-05-25_tenant_template.sql';
+// PHASE 3 BATCH 2 — data_deletion_requests / users.deletion_status /
+// users.deletion_requested_at, CONFIRMED ABSENT from TENANT_TEMPLATE above
+// (verified directly — no CREATE TABLE / ALTER TABLE for either anywhere in
+// that file), needed by data-rights:request_deletion / :export_data. Applied
+// immediately after TENANT_TEMPLATE, before any fixture file — see this
+// script's own module doc and seedDatabase() below.
+const PDPA_MIGRATION = 'database/migration_2026-07-04_pdpa_data_rights.sql';
 const PLAN_AND_TENANT_FILE = '45-phase3-batch1-plan-and-tenant.sql.tmpl'; // master DB — own `USE` statement.
 const FIXTURE_FILE = '50-phase3-batch1-miniapp-fixture.sql.tmpl'; // tenant DB — USE-prefixed by seedFixture() below.
+const FIXTURE_FILE_BATCH2 = '55-phase3-batch2-miniapp-fixture.sql.tmpl'; // tenant DB — applied AFTER FIXTURE_FILE, same tenant/line_accounts rows.
 
 const ADMIN_DIR = path.join(REPO_ROOT, 'apps/admin');
-const ADMIN_STANDALONE_DIR = path.join(ADMIN_DIR, '.next/standalone/apps/admin');
+// PHASE 3 BATCH 2 — `let`, not `const`: buildAdmin() below OVERWRITES this
+// with resolveAdminStandaloneDir()'s discovered path once the build actually
+// completes. The literal here is only the batch-1-assumed DEFAULT (used if
+// discovery somehow finds nothing — see resolveAdminStandaloneDir()'s own
+// doc comment for why a fixed assumption is no longer safe to rely on alone).
+let ADMIN_STANDALONE_DIR = path.join(ADMIN_DIR, '.next/standalone/apps/admin');
 
 const tracker = createStepTracker();
 const { steps, markOk, fail } = tracker;
@@ -184,6 +258,14 @@ function seedDatabase(env, secrets, dbCreds) {
   markOk('seed_app_db_create');
   markOk('seed_app_db_template');
 
+  // PHASE 3 BATCH 2 — applied immediately after TENANT_TEMPLATE, before
+  // PLAN_AND_TENANT_FILE/FIXTURE_FILE/FIXTURE_FILE_BATCH2 (all of which may
+  // depend on data_deletion_requests / users.deletion_status existing) — see
+  // PDPA_MIGRATION's own doc comment above.
+  const pdpaMigrationContent = readFileSync(path.join(REPO_ROOT, PDPA_MIGRATION), 'utf8');
+  execSql(tracker, composeArgs, env, rootPw, `USE \`${dbCreds.name}\`;\n${pdpaMigrationContent}`, [], 'seed_app_db_pdpa_migration');
+  markOk('seed_app_db_pdpa_migration', PDPA_MIGRATION);
+
   const planTenantSql = readFileSync(path.join(SEED_DIR, PLAN_AND_TENANT_FILE), 'utf8').replaceAll('__APP_DB_NAME__', dbCreds.name);
   execSql(tracker, composeArgs, env, rootPw, planTenantSql, [], 'seed_plan_and_tenant');
   markOk('seed_plan_and_tenant');
@@ -191,6 +273,12 @@ function seedDatabase(env, secrets, dbCreds) {
   const fixtureSql = readFileSync(path.join(SEED_DIR, FIXTURE_FILE), 'utf8');
   execSql(tracker, composeArgs, env, rootPw, `USE \`${dbCreds.name}\`;\n${fixtureSql}`, [], 'seed_fixture');
   markOk('seed_fixture', FIXTURE_FILE);
+
+  // PHASE 3 BATCH 2 — reuses the SAME tenant/line_accounts rows FIXTURE_FILE
+  // above just seeded; does NOT create a second tenant.
+  const fixtureSqlBatch2 = readFileSync(path.join(SEED_DIR, FIXTURE_FILE_BATCH2), 'utf8');
+  execSql(tracker, composeArgs, env, rootPw, `USE \`${dbCreds.name}\`;\n${fixtureSqlBatch2}`, [], 'seed_fixture_batch2');
+  markOk('seed_fixture_batch2', FIXTURE_FILE_BATCH2);
 
   const tenantId = querySql(
     tracker,
@@ -214,17 +302,89 @@ function seedDatabase(env, secrets, dbCreds) {
 // this is a copy, not an import.
 // ---------------------------------------------------------------------------
 
+// PHASE 3 BATCH 2 — NEW, not present in batch 1. apps/admin's OWN Next build
+// (buildAdmin(), below) imports @reya/contracts transitively (every ported
+// miniapp route's response shape) via its compiled `dist/index.js`
+// (package.json "main" — apps/admin/next.config.ts does NOT transpilePackages
+// it from source), so a fresh contracts build must exist before buildAdmin()
+// runs, same "never trust a possibly-stale build" philosophy buildAdmin()
+// itself already applies to apps/admin/.next/standalone.
+//
+// KNOWN LIMITATION (documented, not a bug): infra/e2e/lib/api-extract.mjs's
+// OWN `import {...} from '../../../packages/contracts/dist/index.js'` (for
+// NEXT_ONLY_CASES's zod validation) is a STATIC top-level ES module import,
+// resolved during api-parity.mjs's own module-load — which happens BEFORE
+// main() (and therefore this function) ever runs. This function's rebuild
+// therefore cannot retroactively freshen that already-resolved import within
+// the SAME process invocation; it only guarantees freshness for buildAdmin()
+// below and any subsequent run. In practice this is a non-issue: dist/ is a
+// build artifact that changes rarely, and if it's missing entirely (not just
+// stale) the static import fails LOUDLY at process start (a hard
+// module-not-found crash, not a silent misbehavior) rather than papering
+// over the gap.
+function buildContracts() {
+  console.error('[api-parity] pnpm --filter @reya/contracts run build ...');
+  const result = run('pnpm', ['--filter', '@reya/contracts', 'run', 'build'], { stdio: 'inherit' });
+  if (result.status !== 0) {
+    fail('build_contracts', `pnpm --filter @reya/contracts run build exited ${result.status}`);
+  }
+  markOk('build_contracts');
+}
+
+// PHASE 3 BATCH 2 — see this script's own module doc, point 4, for the full
+// "why": Turbopack's workspace-root auto-detection can pick a root OUTSIDE
+// this repo entirely (any shallower lockfile anywhere on the filesystem
+// wins), in which case `.next/standalone/<mirrored-full-path>/apps/admin/`
+// replaces the batch-1-assumed `.next/standalone/apps/admin/`. Recursively
+// searches `.next/standalone` for the one `server.js` a single-app Next
+// build produces, and returns its containing directory — correct regardless
+// of whether Turbopack picked apps/admin's own workspace root (the common
+// case; discovery still finds it, just one hop deeper/shallower) or some
+// unrelated shallower root (the environment-quirk case this was written
+// for). Returns `null` (never throws) if nothing is found — buildAdmin()
+// turns that into its own diagnosable `fail()`.
+function findServerJs(dir) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isFile() && entry.name === 'server.js') {
+      return full;
+    }
+    if (entry.isDirectory()) {
+      const found = findServerJs(full);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function resolveAdminStandaloneDir() {
+  const standaloneRoot = path.join(ADMIN_DIR, '.next/standalone');
+  const serverEntry = findServerJs(standaloneRoot);
+  return serverEntry ? path.dirname(serverEntry) : null;
+}
+
 function buildAdmin() {
   console.error('[api-parity] pnpm --filter admin run build ...');
   const result = run('pnpm', ['--filter', 'admin', 'run', 'build'], { stdio: 'inherit' });
   if (result.status !== 0) {
     fail('build_admin', `pnpm --filter admin run build exited ${result.status}`);
   }
-  const serverEntry = path.join(ADMIN_STANDALONE_DIR, 'server.js');
-  if (!existsSync(serverEntry)) {
-    fail('build_admin', `next build did not produce ${serverEntry} — is next.config.ts's output:'standalone' still set?`);
+  const discovered = resolveAdminStandaloneDir();
+  if (!discovered) {
+    fail(
+      'build_admin',
+      `next build did not produce a server.js anywhere under ${path.join(ADMIN_DIR, '.next/standalone')} — ` +
+        `is next.config.ts's output:'standalone' still set?`
+    );
   }
-  markOk('build_admin');
+  ADMIN_STANDALONE_DIR = discovered; // PHASE 3 BATCH 2 — overwrites the batch-1-assumed default with reality.
+  markOk('build_admin', { adminStandaloneDir: ADMIN_STANDALONE_DIR });
 }
 
 function prepareStandaloneStatic() {
@@ -268,19 +428,30 @@ function toQueryString(params) {
   return s ? `?${s}` : '';
 }
 
+// PHASE 3 BATCH 2 — `caseDef.phpHost` (see infra/e2e/lib/api-extract.mjs's
+// PHP_HOST doc comment) is an OPTIONAL per-case Host-header override, applied
+// ONLY to the PHP-side ('php' variant) request — undefined/absent on every
+// case except the 4 consent/data-rights ones whose PHP source is missing
+// `require_once bootstrap/route_by_account.php`. The Next-side ('next'
+// variant) call is NEVER affected by this field, on every case, by
+// construction (the `variant === 'php'` guard below).
+function phpHostHeader(caseDef, variant) {
+  return variant === 'php' && caseDef.phpHost ? { Host: caseDef.phpHost } : {};
+}
+
 async function callStack(baseUrl, caseDef, variant) {
   const method = caseDef.method;
   if (method === 'GET') {
     const query = caseDef.query(variant);
     const url = `${baseUrl}${variant === 'php' ? caseDef.phpPath : caseDef.nextPath}${toQueryString(query)}`;
-    return httpRequest({ url, method: 'GET' });
+    return httpRequest({ url, method: 'GET', headers: phpHostHeader(caseDef, variant) });
   }
   const body = caseDef.body(variant);
   const url = `${baseUrl}${variant === 'php' ? caseDef.phpPath : caseDef.nextPath}`;
   return httpRequest({
     url,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...phpHostHeader(caseDef, variant) },
     body: JSON.stringify(body),
   });
 }
@@ -476,8 +647,21 @@ async function runApiCase(caseDef, env, secrets, dbCreds) {
     if (phpParsed.ok && nextParsed.ok) {
       phpJson = phpParsed.value;
       nextJson = nextParsed.value;
-      mismatches.push(...diffAllow(phpJson, nextJson, caseDef.allow));
-      mismatches.push(...runFormatChecks(caseDef.allow, phpJson, nextJson));
+      // PHASE 3 BATCH 2 — `caseDef.skipResponseBodyDiff` (optional, default
+      // false/absent on every case except consent:save — see that case's own
+      // extensive doc comment in infra/e2e/lib/api-extract.mjs for the
+      // verified, deterministic, pre-existing PHP bug this exists for):
+      // skips the body-level diffAllow()/runFormatChecks() comparison for a
+      // case whose RESPONSE SHAPE legitimately, deterministically differs
+      // between the two stacks for a documented reason unrelated to a Next
+      // port defect — http_status/header comparisons and dbChecks below
+      // still run unconditionally, so this never silently hides a REAL
+      // regression in the one thing that actually matters for that case
+      // (the underlying database write).
+      if (!caseDef.skipResponseBodyDiff) {
+        mismatches.push(...diffAllow(phpJson, nextJson, caseDef.allow));
+        mismatches.push(...runFormatChecks(caseDef.allow, phpJson, nextJson));
+      }
     }
 
     if ((caseDef.dbChecks ?? []).length > 0) {
@@ -496,6 +680,100 @@ async function runApiCase(caseDef, env, secrets, dbCreds) {
   } catch (err) {
     return {
       endpoint: caseDef.name,
+      ok: false,
+      mismatches: [`fetch/diff error: ${err && err.stack ? err.stack : String(err)}`],
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 3 BATCH 2 — runNextOnlyCase() — the addresses:{list,upsert,delete}
+// SELF-CONSISTENCY runner. STRUCTURALLY SEPARATE from runApiCase() above (a
+// DELIBERATE choice, not accidental duplication — see
+// infra/e2e/lib/api-extract.mjs's NEXT_ONLY_CASES doc comment for why a
+// shared runner would be misleading here): there is no PHP call at all, so
+// there is nothing to Promise.all()/diff against. Instead:
+//   1. Calls the Next endpoint only.
+//   2. Parses the JSON body, then validates it against `caseDef.schema` (a
+//      REAL zod schema imported from @reya/contracts, not a hand-rolled
+//      shape) via `.safeParse()` — every failing zod issue becomes one
+//      diagnosable mismatch line, same "one line per problem" convention
+//      runApiCase()'s own diff engine uses.
+//   3. Runs `caseDef.extraCheck(json)` if present (addresses:list's "the two
+//      pre-seeded rows actually came back" assertion — schema validation
+//      alone only proves shape, not content).
+//   4. Runs `caseDef.dbCheck` if present (addresses:upsert/delete) — reuses
+//      buildJsonRowSql()/queryJsonRow() exactly like runDbChecks() above,
+//      but diffs the resulting row against a literal `expect`ed value
+//      instead of a second (nonexistent) php row. diffAllow()'s own
+//      "php=.../next=..." message wording is relabeled to "actual=.../
+//      expected=..." here (a `.replace()` on the returned strings, not a
+//      second diff engine) since there is no php/next pair in this mode.
+//
+// NEVER throws past its own try/catch, same isolation guarantee
+// runApiCase() provides — one broken addresses action can never abort the
+// rest of the run. Every returned result carries `mode:
+// 'next-only-self-consistency'` so it prints visibly distinct from the 35
+// real PHP-vs-Next entries (see main()'s own comment on where this gets
+// merged into the printed `endpoints` array).
+// ---------------------------------------------------------------------------
+
+async function runNextOnlyCase(caseDef, env, secrets, dbCreds) {
+  try {
+    const resp =
+      caseDef.method === 'GET'
+        ? await httpRequest({ url: `${NEXT_BASE_URL}${caseDef.nextPath}${toQueryString(caseDef.query())}`, method: 'GET' })
+        : await httpRequest({
+            url: `${NEXT_BASE_URL}${caseDef.nextPath}`,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(caseDef.body()),
+          });
+
+    const mismatches = [];
+    if (resp.status !== 200) {
+      mismatches.push(`http_status: next=${resp.status} (expected 200 — /api/miniapp/** is always-implicit-200 per addresses.ts's envelope doc comment)`);
+    }
+
+    const parsed = safeJsonParse(resp.text);
+    let json = null;
+    if (!parsed.ok) {
+      mismatches.push(`next response is not valid JSON: ${parsed.error} (body: ${resp.text.slice(0, 500)})`);
+    } else {
+      json = parsed.value;
+      const zodResult = caseDef.schema.safeParse(json);
+      if (!zodResult.success) {
+        for (const issue of zodResult.error.issues) {
+          mismatches.push(`zod[${issue.path.join('.') || '<root>'}]: ${issue.message}`);
+        }
+      }
+      if (caseDef.extraCheck) {
+        mismatches.push(...caseDef.extraCheck(json));
+      }
+    }
+
+    if (caseDef.dbCheck) {
+      const check = caseDef.dbCheck;
+      const sql = buildJsonRowSql(check.table, check.where, check.columns);
+      const row = queryJsonRow(env, secrets, dbCreds, sql);
+      const rowMismatches = diffAllow(row, check.expect, check.allow ?? []).map((m) =>
+        m.replace('php=', 'actual=').replace('next=', 'expected=')
+      );
+      for (const m of rowMismatches) mismatches.push(`dbCheck[${check.label}] ${m}`);
+    }
+
+    return {
+      endpoint: caseDef.name,
+      mode: 'next-only-self-consistency',
+      ok: mismatches.length === 0,
+      mismatches,
+      nextStatus: resp.status,
+      nextBody: json,
+    };
+  } catch (err) {
+    return {
+      endpoint: caseDef.name,
+      mode: 'next-only-self-consistency',
       ok: false,
       mismatches: [`fetch/diff error: ${err && err.stack ? err.stack : String(err)}`],
     };
@@ -535,6 +813,7 @@ async function main() {
 
     await waitHttpReachable(tracker, `${PHP_BASE_URL}/`, 'php_reachable');
 
+    buildContracts(); // PHASE 3 BATCH 2 — see this function's own doc comment.
     buildAdmin();
     prepareStandaloneStatic();
 
@@ -554,6 +833,17 @@ async function main() {
 
     for (const caseDef of ENDPOINT_CASES) {
       endpoints.push(await runApiCase(caseDef, composeEnv, secrets, dbCreds));
+    }
+
+    // PHASE 3 BATCH 2 — addresses:{list,upsert,delete} run through the
+    // SEPARATE runNextOnlyCase() path (see that function's own doc comment)
+    // but land in the SAME `endpoints` array / same printed summary, so
+    // mig-verify's "38 total covered pairs" acceptance check sees one flat
+    // list — each entry's own `mode` field (absent on the 35 real diff
+    // entries, `'next-only-self-consistency'` on these 3) is what keeps a
+    // reader from mistaking one for the other, not a separate top-level key.
+    for (const caseDef of NEXT_ONLY_CASES) {
+      endpoints.push(await runNextOnlyCase(caseDef, composeEnv, secrets, dbCreds));
     }
 
     result = endpoints.every((e) => e.ok) ? 'PASS' : 'FAIL';
@@ -587,13 +877,17 @@ async function main() {
     composeDown(composeArgs, composeEnv);
   }
 
-  // Strip the (potentially large) phpBody/nextBody debugging payloads off
-  // PASSING entries before printing — keep them on failing entries, where
-  // they're the diagnosable evidence mig-verify needs (same convention
-  // parity.mjs uses for pages' phpData/nextData).
+  // Strip the (potentially large) phpBody/nextBody debugging
+  // payloads off PASSING entries before printing — keep them on failing
+  // entries, where they're the diagnosable evidence mig-verify needs (same
+  // convention parity.mjs uses for pages' phpData/nextData). PHASE 3 BATCH 2:
+  // `mode` (present only on the 3 addresses next-only entries) is
+  // DELIBERATELY preserved even on a passing entry — the whole point of that
+  // field is that a reader must never mistake a next-only-self-consistency
+  // PASS for a PHP-vs-Next parity PASS, on EITHER outcome, not just on FAIL.
   const printedEndpoints = endpoints.map((e) =>
     e.ok
-      ? { endpoint: e.endpoint, ok: e.ok, mismatches: e.mismatches }
+      ? { endpoint: e.endpoint, ...(e.mode ? { mode: e.mode } : {}), ok: e.ok, mismatches: e.mismatches }
       : e
   );
 

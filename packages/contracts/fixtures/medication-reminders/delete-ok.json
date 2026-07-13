@@ -1,0 +1,5 @@
+{
+  "description": "POST action=delete — NO existence/ownership pre-check; always {success:true} even for someone else's/nonexistent reminder_id (0 rows affected silently 'succeeds').",
+  "request": { "action": "delete", "line_user_id": "U1234567890abcdef1234567890abcdef", "line_account_id": 1, "reminder_id": 10 },
+  "response": { "success": true, "message": "ลบการเตือนแล้ว" }
+}
