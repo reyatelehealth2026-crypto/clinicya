@@ -76,7 +76,12 @@ export function planCodegen(options: CodegenOptions, env: CodegenEnvLike = {}): 
   const databaseUrl = buildDatabaseUrl(env, dbName);
   const outDir = options.outDir ?? DEFAULT_OUT_DIR;
   const outFile = `${outDir}/${options.target}-db.d.ts`;
-  const args = ['--url', databaseUrl, '--dialect', 'mysql', '--out-file', outFile, '--camel-case'];
+  // Deliberately no flag forcing generated property names into camel
+  // case: they stay snake_case, matching the real column names every raw
+  // `sql` tag in this codebase already targets (see README.md "Regenerating
+  // the types" for the decision record — this is intentional, not an
+  // omission).
+  const args = ['--url', databaseUrl, '--dialect', 'mysql', '--out-file', outFile];
   return { target: options.target, dbName, outFile, databaseUrl, args };
 }
 

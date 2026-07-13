@@ -6,6 +6,17 @@
 // /user-detail.php?id=N vs Next /user-detail?id=N; PHP /dashboard?tab=
 // executive|crm vs Next /dashboard?tab=executive|crm.
 //
+// Phase 2 batch 2 (mig-infra) EXTENDS this same harness (same file, same
+// process, same single JSON-line output — not a second script) with THREE
+// more page-pairs: PHP /analytics?tab={overview|advanced|crm|account} vs
+// Next /analytics?tab=...; PHP /activity-logs.php vs Next /activity-logs;
+// PHP /loyalty-members.php vs Next /loyalty-members. Every batch-2 page/
+// filter-combo list below follows the exact same top-level-array +
+// runPagePair()-per-entry shape batch-1 already established (USERS_FILTER_
+// COMBOS / USER_DETAIL_IDS / DASHBOARD_TABS) — see docs/runbooks/
+// phase2-batch1-users-dashboard-parity.md's "Phase 2 batch 2" section for
+// the full write-up of what's new.
+//
 // SCOPE (read before trusting the PASS line — same documented-limits
 // pattern infra/e2e/run.mjs already uses): this proves DATA-POINT PARITY
 // against ONE seeded tenant/dataset, on the REAL stack (a genuine MariaDB +
@@ -68,7 +79,18 @@ import {
   waitHttpReachable,
   httpRequest,
 } from './lib/harness-common.mjs';
-import { extractUsersPage, extractUserDetailPage, extractExecutiveDashboard, extractCrmDashboard } from './lib/extract.mjs';
+import {
+  extractUsersPage,
+  extractUserDetailPage,
+  extractExecutiveDashboard,
+  extractCrmDashboard,
+  extractActivityLogsPage,
+  extractLoyaltyMembersPage,
+  extractAnalyticsOverview,
+  extractAnalyticsAdvanced,
+  extractAnalyticsCrm,
+  extractAnalyticsAccount,
+} from './lib/extract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const COMPOSE_FILE = path.join(__dirname, 'docker-compose.yml');
@@ -102,7 +124,11 @@ const MASTER_MIGRATIONS = [
   'packages/db/migrations/master/migration_2026-07-12_node_sessions.sql',
 ];
 const TENANT_TEMPLATE = 'database/migration_2026-05-25_tenant_template.sql';
-const FIXTURE_FILE = '30-phase2-batch1-fixture.sql.tmpl';
+// Applied in order — batch 2's fixture is additive on top of batch 1's (same
+// tenant DB, same seedDatabase() call), never a replacement. See
+// infra/e2e/seed/40-phase2-batch2-fixture.sql.tmpl's own header comment for
+// why it's a new numbered file rather than an append to 30-*.
+const FIXTURE_FILES = ['30-phase2-batch1-fixture.sql.tmpl', '40-phase2-batch2-fixture.sql.tmpl'];
 
 const ADMIN_DIR = path.join(REPO_ROOT, 'apps/admin');
 const ADMIN_STANDALONE_DIR = path.join(ADMIN_DIR, '.next/standalone/apps/admin');
@@ -143,11 +169,81 @@ const USER_DETAIL_IDS = [1, 2, 11];
 const DASHBOARD_TABS = ['executive', 'crm'];
 
 // ---------------------------------------------------------------------------
+// Phase 2 batch 2 page/filter configs — same "top-level array, looped with
+// runPagePair()" shape as the batch-1 configs above (config-driven per the
+// brief: mig-verify runs this harness only after both mig-ui page agents
+// have landed, so nothing here may assume a page already exists while this
+// file is being developed — runPagePair()'s own try/catch is what makes a
+// still-missing route fail as its own {ok:false} entry instead of aborting).
+// ---------------------------------------------------------------------------
+
+const BANGKOK_TZ = 'Asia/Bangkok';
+
+/** 'YYYY-MM-DD' for (now + offsetDays) in Asia/Bangkok — mirrors apps/admin's analytics/_lib/period.ts's own daysAgoInBangkok() helper, reimplemented here (not imported — this file has no dependency on apps/admin's source, only on its BUILT OUTPUT via HTTP, same as every other extraction in this harness). */
+function bangkokDateString(offsetDays, now = new Date()) {
+  const shifted = new Date(now.getTime() + offsetDays * 86_400_000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: BANGKOK_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(shifted);
+}
+
+/**
+ * Every activity-logs combo below applies a `date_to` bound of "yesterday"
+ * (Asia/Bangkok) — see infra/e2e/seed/40-phase2-batch2-fixture.sql.tmpl's
+ * activity_logs section header comment for why: classes/AdminAuth.php's
+ * login() writes a log_type='auth'/action='login' row to `activity_logs` on
+ * every PHP login (this harness's own `phpLogin()` triggers it), but Next's
+ * `internal/session-bridge.php` 'login-sync' path does not — a genuine,
+ * dated-"today" backend asymmetry that would otherwise make PHP's totalLogs
+ * exactly 1 higher than Next's on every combo. Bounding date_to to
+ * yesterday excludes that row on both stacks while including every
+ * fixture-seeded row (all dated 2-21 days ago, never "today").
+ */
+function activityLogsDateBounds(now = new Date()) {
+  return { from: bangkokDateString(-25, now), to: bangkokDateString(-1, now) };
+}
+function activityLogsNarrowBounds(now = new Date()) {
+  return { from: bangkokDateString(-12, now), to: bangkokDateString(-6, now) };
+}
+
+/**
+ * One entry per activity-logs.php filter branch actually read from
+ * classes/ActivityLogger.php / queries.ts's buildWhere()/countLogs()
+ * (type, action, search, date_from/date_to) plus pagination — see
+ * infra/e2e/seed/40-phase2-batch2-fixture.sql.tmpl's own comments for which
+ * fixture rows each combo is expected to intersect. `qs(bounds, narrow)` is
+ * a function (not a static string) because the date bound is computed once
+ * per run from the real wall clock, never hardcoded.
+ */
+const ACTIVITY_LOGS_COMBOS = [
+  { name: 'baseline', qs: (b) => `date_from=${b.from}&date_to=${b.to}` },
+  { name: 'type', qs: (b) => `type=pharmacy&date_from=${b.from}&date_to=${b.to}` },
+  { name: 'action', qs: (b) => `action=login&date_from=${b.from}&date_to=${b.to}` },
+  { name: 'search', qs: (b) => `search=BATCH2SEARCHMARK&date_from=${b.from}&date_to=${b.to}` },
+  { name: 'date-range', qs: (_b, n) => `date_from=${n.from}&date_to=${n.to}` },
+  { name: 'combined', qs: (b) => `type=consent&action=login&date_from=${b.from}&date_to=${b.to}` },
+  { name: 'page2', qs: (b) => `date_from=${b.from}&date_to=${b.to}&page=2` },
+];
+
+/** loyalty-members.php's only filter is `?q=` (search). Both combos assert the SAME empty-state parity in this harness — see extract.mjs's extractLoyaltyMembersPage doc for why (no `line_accounts` rows seeded, so `lineAccountId`/`currentBotId` is always 0 on both stacks and the underlying query never runs). */
+const LOYALTY_MEMBERS_SEARCHES = [
+  { name: 'baseline', qs: '' },
+  { name: 'search', qs: 'q=ทดสอบ' },
+];
+
+/** analytics.php's 4 tabs — each fetched with an explicit `?tab=` on both stacks (same convention DASHBOARD_TABS above already uses). */
+const ANALYTICS_TABS = [
+  { name: 'overview', qs: 'tab=overview', extractPhp: extractAnalyticsOverview, extractNext: extractAnalyticsOverview },
+  { name: 'advanced', qs: 'tab=advanced', extractPhp: extractAnalyticsAdvanced, extractNext: extractAnalyticsAdvanced },
+  { name: 'crm', qs: 'tab=crm', extractPhp: extractAnalyticsCrm, extractNext: extractAnalyticsCrm },
+  { name: 'account', qs: 'tab=account', extractPhp: extractAnalyticsAccount, extractNext: extractAnalyticsAccount },
+];
+
+// ---------------------------------------------------------------------------
 // Database seeding — mirrors run.mjs's seedDatabase()/seedAdminUser() shape
 // (same shared helpers, see harness-common.mjs), PLUS this batch's own
 // 15-plan-and-tenant.sql.tmpl (own tenant slug — see that file's header
-// comment for why it's not a reuse of run.mjs's 10-*) and
-// 30-phase2-batch1-fixture.sql.tmpl (the data-point fixture).
+// comment for why it's not a reuse of run.mjs's 10-*) and the two data-point
+// fixtures in FIXTURE_FILES (30-phase2-batch1-fixture.sql.tmpl +
+// 40-phase2-batch2-fixture.sql.tmpl, applied in order onto the SAME tenant DB).
 // ---------------------------------------------------------------------------
 
 function seedDatabase(env, secrets, dbCreds) {
@@ -187,9 +283,11 @@ function seedDatabase(env, secrets, dbCreds) {
   execSql(tracker, composeArgs, env, rootPw, planTenantSql, [], 'seed_plan_and_tenant');
   markOk('seed_plan_and_tenant');
 
-  const fixtureSql = readFileSync(path.join(SEED_DIR, FIXTURE_FILE), 'utf8');
-  execSql(tracker, composeArgs, env, rootPw, `USE \`${dbCreds.name}\`;\n${fixtureSql}`, [], 'seed_fixture');
-  markOk('seed_fixture');
+  for (const fixtureFile of FIXTURE_FILES) {
+    const fixtureSql = readFileSync(path.join(SEED_DIR, fixtureFile), 'utf8');
+    execSql(tracker, composeArgs, env, rootPw, `USE \`${dbCreds.name}\`;\n${fixtureSql}`, [], 'seed_fixture');
+  }
+  markOk('seed_fixture', FIXTURE_FILES);
 
   const tenantId = querySql(
     tracker,
@@ -520,6 +618,54 @@ async function main() {
                   nextData: extractExecutiveDashboard(nextHtml, 'next'),
                 }
               : { phpData: extractCrmDashboard(phpHtml), nextData: extractCrmDashboard(nextHtml) }
+        )
+      );
+    }
+
+    // --- Phase 2 batch 2: /analytics?tab={overview|advanced|crm|account} ---
+    for (const tab of ANALYTICS_TABS) {
+      pages.push(
+        await runPagePair(
+          `analytics:tab=${tab.name}`,
+          async () => ({
+            phpResp: await fetchPhpPage(`/analytics.php?${tab.qs}`, phpSid),
+            nextResp: await fetchNextPage(`/analytics?${tab.qs}`, nextSid),
+          }),
+          (phpHtml, nextHtml) => ({ phpData: tab.extractPhp(phpHtml), nextData: tab.extractNext(nextHtml) })
+        )
+      );
+    }
+
+    // --- Phase 2 batch 2: /activity-logs (5 filter branches + pagination) ---
+    const activityLogsNow = new Date();
+    const activityLogsBounds = activityLogsDateBounds(activityLogsNow);
+    const activityLogsNarrow = activityLogsNarrowBounds(activityLogsNow);
+    for (const combo of ACTIVITY_LOGS_COMBOS) {
+      const qs = combo.qs(activityLogsBounds, activityLogsNarrow);
+      pages.push(
+        await runPagePair(
+          `activity-logs:${combo.name}`,
+          async () => ({
+            phpResp: await fetchPhpPage(`/activity-logs.php?${qs}`, phpSid),
+            nextResp: await fetchNextPage(`/activity-logs?${qs}`, nextSid),
+          }),
+          (phpHtml, nextHtml) => ({ phpData: extractActivityLogsPage(phpHtml, 'php'), nextData: extractActivityLogsPage(nextHtml, 'next') })
+        )
+      );
+    }
+
+    // --- Phase 2 batch 2: /loyalty-members (?q= search) ---
+    for (const combo of LOYALTY_MEMBERS_SEARCHES) {
+      const phpQs = combo.qs ? `?${combo.qs}` : '';
+      const nextQs = combo.qs ? `?${combo.qs}` : '';
+      pages.push(
+        await runPagePair(
+          `loyalty-members:${combo.name}`,
+          async () => ({
+            phpResp: await fetchPhpPage(`/loyalty-members.php${phpQs}`, phpSid),
+            nextResp: await fetchNextPage(`/loyalty-members${nextQs}`, nextSid),
+          }),
+          (phpHtml, nextHtml) => ({ phpData: extractLoyaltyMembersPage(phpHtml), nextData: extractLoyaltyMembersPage(nextHtml) })
         )
       );
     }

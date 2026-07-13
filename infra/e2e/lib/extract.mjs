@@ -449,3 +449,255 @@ export function extractCrmDashboard(html) {
     recentCustomersRowCount,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 batch 2 (mig-infra) additions — /analytics (tabs overview/advanced/
+// crm/account), /activity-logs, /loyalty-members. Same label-anchored
+// HtmlCursor technique as everything above; no new extraction primitives
+// needed. See infra/e2e/seed/40-phase2-batch2-fixture.sql.tmpl's own header
+// comment for the full "why no line_accounts rows" rationale these
+// extractors are built around (every analytics tab below is read with
+// lineAccountId/currentBotId == null on BOTH stacks, by design).
+// ---------------------------------------------------------------------------
+
+/** Reused by both analytics:overview and analytics:crm — same 5 fixture tags (batch-1's, all line_account_id IS NULL) are visible on every tab that reads user_tags unscoped. */
+export const FIXTURE_KEYWORD_NAMES = ['ราคา', 'จัดส่ง'];
+
+// ---------------------------------------------------------------------------
+// /activity-logs page extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts activity-logs' data-point list: totalLogs (page-header subtitle
+ * "N รายการ"), the "แสดงรายการที่ X-Y จาก Z" range line (X/Y — only rendered
+ * when totalLogs > 0, which every fixture-backed combo in this batch
+ * guarantees), and a structural (not text-label) row count: <td> tags inside
+ * <tbody> divided by the table's fixed 6 columns (เวลา/ประเภท/การกระทำ/
+ * รายละเอียด/ผู้ดำเนินการ/IP — same on both stacks, verified by reading both
+ * markups). Counting <td> rather than <tr> sidesteps the empty-state row
+ * (colspan="6", a single <td>) skewing a naive <tr> count — emptyStateShown
+ * is reported separately instead.
+ */
+/**
+ * FLAGGED FINDING (build report): unlike /users, /user-detail, /dashboard
+ * above, activity-logs.php does NOT use the shared PHP page-header partial
+ * at all — verified empirically against this batch's own real page fetch —
+ * it has its own bespoke `<div class="log-count">N รายการ</div>` markup,
+ * while Next's port uses the shared `<PageHeader subtitle=.../>` component
+ * (`<p class="page-header-subtitle">N รายการ</p>`). A plain text search for
+ * "รายการ" (no class anchor at all) is UNSAFE here specifically: this
+ * codebase's shared admin layout renders a hidden command-palette/quick-nav
+ * widget INSIDE `.main-content` (confirmed via a real fetch — a
+ * `data-nav-title="รายการสั่งซื้อ"` / `command-result-title` block sits well
+ * before the log-count div on the PHP side), so a bare "รายการ" search finds
+ * THAT first and returns null. This is genuinely a per-stack MARKUP
+ * difference (bespoke div vs. shared component), not just a class-naming
+ * difference already proven identical elsewhere — so, same precedent as
+ * extractHourlyActivityTotal()'s stack-branching above, this extractor takes
+ * an explicit `stack` argument and anchors on each side's OWN real class.
+ */
+export function extractActivityLogsPage(html, stack) {
+  const main = sliceMainContent(html);
+  const cursor = new HtmlCursor(main);
+
+  const totalLogs =
+    stack === 'php'
+      ? parseLeadingNumber(cursor.afterLabel('class="log-count">'))
+      : parseLeadingNumber(cursor.afterLabel('class="page-header-subtitle">'));
+
+  // Only rendered when totalLogs > 0 (both stacks — `{totalLogs > 0 ? ... : null}` / `<?php if ($totalLogs > 0): ?>`).
+  const rangeChunk = main.includes('แสดงรายการที่') ? cursor.afterLabel('แสดงรายการที่') : null;
+  const rangeMatch = rangeChunk ? rangeChunk.match(/([\d,]+)\s*-\s*([\d,]+)/) : null;
+  const rangeStart = rangeMatch ? Number(rangeMatch[1].replace(/,/g, '')) : null;
+  const rangeEnd = rangeMatch ? Number(rangeMatch[2].replace(/,/g, '')) : null;
+
+  cursor.advanceTo('<tbody');
+  const tbodySlice = cursor.sliceUntil(['</tbody>']);
+  const emptyStateShown = tbodySlice.includes('ไม่พบข้อมูล');
+  const tdCount = (tbodySlice.match(/<td/g) ?? []).length;
+  const rowCount = emptyStateShown ? 0 : Math.round(tdCount / 6);
+
+  return { totalLogs, rangeStart, rangeEnd, rowCount, emptyStateShown };
+}
+
+// ---------------------------------------------------------------------------
+// /loyalty-members page extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts loyalty-members' 3 stat-card numbers + which (if either) empty
+ * message is shown. In THIS harness (no `line_accounts` rows — see the
+ * fixture file's header comment) `lineAccountId`/`currentBotId` is always 0,
+ * so `stats` is always the zeroed default and `members` is always [] on
+ * BOTH stacks — a real, meaningful assertion (both sides short-circuit the
+ * SAME gate identically), just never the "non-empty member list" case.
+ */
+export function extractLoyaltyMembersPage(html) {
+  const main = sliceMainContent(html);
+  const cursor = new HtmlCursor(main);
+
+  const total = parseLeadingNumber(cursor.beforeLabel('สมาชิกเบอร์ทั้งหมด'));
+  const points = parseLeadingNumber(cursor.beforeLabel('แต้มคงเหลือรวม'));
+  const today = parseLeadingNumber(cursor.beforeLabel('เพิ่มวันนี้'));
+
+  let emptyMessage = null;
+  if (main.includes('ยังไม่มีสมาชิกเบอร์')) emptyMessage = 'no-members';
+  else if (main.includes('ไม่พบสมาชิกที่ค้นหา')) emptyMessage = 'no-search-results';
+
+  return { total, points, today, emptyMessage };
+}
+
+// ---------------------------------------------------------------------------
+// /analytics?tab=overview extraction
+// ---------------------------------------------------------------------------
+
+export function extractAnalyticsOverview(html) {
+  const main = sliceMainContent(html);
+  const cursor = new HtmlCursor(main);
+
+  const followers = parseLeadingNumber(cursor.afterLabel('ผู้ติดตาม'));
+  const newFollowers = parseLeadingNumber(cursor.beforeLabel('ใหม่'));
+  const activeUsers = parseLeadingNumber(cursor.afterLabel('Active Users'));
+  const messages = parseLeadingNumber(cursor.afterLabel('ข้อความ'));
+  const broadcasts = parseLeadingNumber(cursor.afterLabel('Broadcast'));
+  const broadcastRecipients = parseLeadingNumber(cursor.beforeLabel('ผู้รับ'));
+  const orders = parseLeadingNumber(cursor.afterLabel('ออเดอร์'));
+  const revenue = parseLeadingNumber(cursor.afterLabel('รายได้'));
+
+  cursor.advanceTo('Top Tags');
+  const topTagsCount = FIXTURE_TAG_NAMES.reduce(
+    (count, name) => count + (cursor.sliceUntil(['Top Keywords']).includes(name) ? 1 : 0),
+    0
+  );
+
+  cursor.advanceTo('Top Keywords');
+  const topKeywordsCount = FIXTURE_KEYWORD_NAMES.reduce(
+    (count, kw) => count + (cursor.sliceUntil(['Quick Actions']).includes(kw) ? 1 : 0),
+    0
+  );
+
+  cursor.advanceTo('Quick Actions');
+  const segmentsCount = parseLeadingNumber(cursor.afterLabel('Segments ('));
+
+  return {
+    followers,
+    newFollowers,
+    activeUsers,
+    messages,
+    broadcasts,
+    broadcastRecipients,
+    orders,
+    revenue,
+    topTagsCount,
+    topKeywordsCount,
+    segmentsCount,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// /analytics?tab=advanced extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Advanced tab's stat cards render VALUE-then-LABEL (`<p>{value}</p><p>label</p>`
+ * — verified against both includes/analytics/advanced.php ->
+ * app/Views/analytics/dashboard.php and AdvancedTab.tsx), the OPPOSITE order
+ * from the CRM tab below (LABEL-then-VALUE) — beforeLabel()/the
+ * advanceTo()+afterLabel('</p>') idiom are used respectively, matching each
+ * tab's own real markup order (read, not assumed).
+ */
+export function extractAnalyticsAdvanced(html) {
+  const main = sliceMainContent(html);
+  const cursor = new HtmlCursor(main);
+
+  const realtimeActiveUsers = parseLeadingNumber(cursor.afterLabel('Active Users:'));
+  const realtimeMessagesPerHour = parseLeadingNumber(cursor.afterLabel('Messages/hr:'));
+  const realtimeOrdersToday = parseLeadingNumber(cursor.afterLabel('Orders Today:'));
+  const realtimeRevenueToday = parseLeadingNumber(cursor.afterLabel('Revenue Today:'));
+
+  const usersTotal = parseLeadingNumber(cursor.beforeLabel('ผู้ใช้ทั้งหมด'));
+  const usersNew = parseLeadingNumber(cursor.afterLabel('ใหม่ '));
+  const usersActive = parseLeadingNumber(cursor.afterLabel('Active '));
+
+  const messagesTotal = parseLeadingNumber(cursor.beforeLabel('ข้อความทั้งหมด'));
+  const messagesIncoming = parseLeadingNumber(cursor.afterLabel('เข้า '));
+  const messagesOutgoing = parseLeadingNumber(cursor.afterLabel('ออก '));
+
+  const ordersTotal = parseLeadingNumber(cursor.beforeLabel('คำสั่งซื้อ'));
+  const ordersPaid = parseLeadingNumber(cursor.afterLabel('ชำระแล้ว '));
+
+  const revenueTotal = parseLeadingNumber(cursor.beforeLabel('รายได้'));
+
+  return {
+    realtimeActiveUsers,
+    realtimeMessagesPerHour,
+    realtimeOrdersToday,
+    realtimeRevenueToday,
+    usersTotal,
+    usersNew,
+    usersActive,
+    messagesTotal,
+    messagesIncoming,
+    messagesOutgoing,
+    ordersTotal,
+    ordersPaid,
+    revenueTotal,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// /analytics?tab=crm extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * CRM tab's stat cards render LABEL-then-VALUE (`<p>label</p><p>{value}</p>`
+ * — includes/analytics/crm.php vs CrmTab.tsx, both read in full) — the
+ * `advanceTo(label); afterLabel('</p>')` idiom jumps past the label
+ * paragraph's own closing tag into the immediately-following value
+ * paragraph, same technique user-detail's Tags-heading extraction already
+ * established for "the next card's content, not this card's own label".
+ */
+export function extractAnalyticsCrm(html) {
+  const main = sliceMainContent(html);
+  const cursor = new HtmlCursor(main);
+
+  cursor.advanceTo('Total Users');
+  const totalUsers = parseLeadingNumber(cursor.afterLabel('</p>'));
+
+  cursor.advanceTo('Active Users (');
+  const activeUsers = parseLeadingNumber(cursor.afterLabel('</p>'));
+
+  cursor.advanceTo('New Users (');
+  const newUsers = parseLeadingNumber(cursor.afterLabel('</p>'));
+
+  cursor.advanceTo('Segments');
+  const segmentsCount = parseLeadingNumber(cursor.afterLabel('</p>'));
+
+  cursor.advanceTo('Top Tags');
+  const topTagsRowCount = FIXTURE_TAG_NAMES.reduce(
+    (count, name) => count + (cursor.sliceUntil(['Customer Segments']).includes(name) ? 1 : 0),
+    0
+  );
+
+  return { totalUsers, activeUsers, newUsers, segmentsCount, topTagsRowCount };
+}
+
+// ---------------------------------------------------------------------------
+// /analytics?tab=account extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * This harness never seeds `line_accounts` (see the fixture file's header
+ * comment — a real row would corrupt PHP's currentBotId auto-select for
+ * every OTHER page in the shared session), so account.php/AccountTab.tsx are
+ * always in the "no bot selected" state — a real, valid tenant state (a
+ * fresh tenant that hasn't connected a LINE OA yet), not a fixture gap. This
+ * extractor verifies that both stacks render the SAME prompt/selector state
+ * identically, which is the only account-tab state reachable here.
+ */
+export function extractAnalyticsAccount(html) {
+  const main = sliceMainContent(html);
+  const promptShown = main.includes('กรุณาเลือกบอทเพื่อดูสถิติ');
+  const accountSelectorPresent = main.includes('-- เลือกบอท --');
+  return { promptShown, accountSelectorPresent };
+}

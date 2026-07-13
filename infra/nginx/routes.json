@@ -40,5 +40,23 @@
     "upstream": "php_backend",
     "tenants": "all",
     "note": "Phase 2 batch 1 (mig-ui dashboard brief): Next port of dashboard.php (tabs executive/crm) lives at apps/admin's /dashboard — NOT '/', which stays the public storefront (index.php, the pre-existing catch-all above; see docs/runbooks/phase2-batch1-users-dashboard-parity.md for why). Parity-proven by infra/e2e/parity.mjs. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/analytics",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 2 (mig-ui analytics brief): Next port of analytics.php (tabs overview/advanced/crm/account) lives at apps/admin's /analytics, parity-proven by infra/e2e/parity.mjs. Schema-valid 'not yet flipped' placeholder (php_backend is already the default, so this is a functional no-op) — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/activity-logs",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 2 (mig-ui analytics brief): Next port of activity-logs.php lives at apps/admin's /activity-logs, parity-proven by infra/e2e/parity.mjs. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/loyalty-members",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 2 (mig-ui analytics brief): Next port of loyalty-members.php lives at apps/admin's /loyalty-members, parity-proven by infra/e2e/parity.mjs. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
   }
 ]

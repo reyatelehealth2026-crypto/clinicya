@@ -21,6 +21,7 @@ export function DashboardCommandStrip({ dateFilter, dateDisplay }: DashboardComm
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <input
           type="date"
+          className="dashboard-date-input"
           aria-label="เลือกวันที่ / Select date"
           defaultValue={dateFilter}
           data-testid="dashboard-date-filter"
@@ -34,6 +35,7 @@ export function DashboardCommandStrip({ dateFilter, dateDisplay }: DashboardComm
         />
         <button
           type="button"
+          className="dashboard-print-btn"
           onClick={() => window.print()}
           style={{ padding: '8px 12px', fontSize: 14, fontWeight: 500, color: '#4b5563', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}
         >

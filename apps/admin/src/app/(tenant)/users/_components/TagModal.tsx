@@ -103,7 +103,7 @@ export function TagModal({ open, userId, userName, allTags, onClose }: TagModalP
       title="จัดการ Tags"
       size="sm"
       footer={
-        <button type="button" onClick={onClose}>
+        <button type="button" className="tag-modal-close-btn" onClick={onClose}>
           ปิด
         </button>
       }
@@ -112,11 +112,13 @@ export function TagModal({ open, userId, userName, allTags, onClose }: TagModalP
 
       <div style={{ marginBottom: 16 }}>
         <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 8 }}>Tags ปัจจุบัน</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, minHeight: 32 }}>
+        <div className="tag-modal-current">
           {loading ? (
             <span>กำลังโหลด...</span>
           ) : error ? (
-            <span role="alert">{error}</span>
+            <span role="alert" className="tag-modal-error">
+              {error}
+            </span>
           ) : tags.length === 0 ? (
             <span>ยังไม่มี Tags</span>
           ) : (
@@ -132,6 +134,7 @@ export function TagModal({ open, userId, userName, allTags, onClose }: TagModalP
         <div style={{ display: 'flex', gap: 8 }}>
           <select
             aria-label="เลือก Tag"
+            className="tag-modal-select"
             value={selectedTagId}
             onChange={(e) => setSelectedTagId(e.target.value === '' ? '' : Number(e.target.value))}
           >
@@ -142,7 +145,7 @@ export function TagModal({ open, userId, userName, allTags, onClose }: TagModalP
               </option>
             ))}
           </select>
-          <button type="button" onClick={handleAssign} disabled={selectedTagId === ''}>
+          <button type="button" className="tag-modal-add-btn" onClick={handleAssign} disabled={selectedTagId === ''}>
             เพิ่ม
           </button>
         </div>

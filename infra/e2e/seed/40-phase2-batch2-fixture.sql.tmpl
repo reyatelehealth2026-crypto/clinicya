@@ -1,0 +1,283 @@
+-- infra/e2e/seed/40-phase2-batch2-fixture.sql.tmpl
+--
+-- Phase 2 batch 2 (mig-infra) — data-point parity fixture for the three
+-- NEW page-pairs this batch covers: /analytics (tabs overview/advanced/crm/
+-- account), /activity-logs, /loyalty-members. Applied AFTER
+-- 30-phase2-batch1-fixture.sql.tmpl (already piped into the SAME app/tenant
+-- DB by parity.mjs's seedDatabase()) — reuses batch-1's `users`/`messages`/
+-- `orders`/`transactions`/`user_tags`/`user_tag_assignments` rows wherever
+-- the query being tested is unscoped by line_account_id (see the "WHY NO
+-- line_accounts ROWS" note below), and adds NEW tables/rows batch-1 never
+-- touched. Deliberately a NEW numbered file (not appended to 30-*, not
+-- reusing 15-/10-) for the exact reason batch-1's own 15- file gave for not
+-- reusing run.mjs's 10-: different purpose (a different batch's fixture),
+-- avoid collision — see docs/runbooks/phase2-batch1-users-dashboard-parity.md
+-- §1 step 2 for that precedent.
+--
+-- No USE statement of its own — same convention as 20-/30-: the caller
+-- (parity.mjs's seedDatabase()) prepends `USE \`<app-db>\`;`.
+--
+-- DETERMINISM: every timestamp is a MySQL relative-date expression
+-- (NOW()/CURDATE()/DATE_SUB(...)), never a wall-clock literal — same
+-- reasoning as 30-*'s own header comment.
+--
+-- ===========================================================================
+-- WHY NO `line_accounts` ROWS (read before adding any — this is the single
+-- most important constraint on this file, verified by reading
+-- includes/header.php lines 138-172, classes/AdminAuth.php's
+-- getAccessibleBots()/getCurrentBotId(), and packages/auth/src/session.ts):
+--
+-- PHP's includes/header.php (required by EVERY protected admin page,
+-- including analytics.php/activity-logs.php/loyalty-members.php) contains a
+-- currentBotId AUTO-SELECT fallback: the FIRST time header.php runs for a
+-- session with no `$_SESSION['current_bot_id']` set yet, if
+-- getAccessibleBots() returns ANY row (which it does the instant
+-- `line_accounts` has ANY `is_active=1` row and the admin is super_admin —
+-- our seeded e2e admin IS super_admin), header.php auto-selects that bot and
+-- WRITES it into `$_SESSION['current_bot_id']` — permanently, for the rest
+-- of that PHP session (every subsequent page fetch in the same phpSid).
+--
+-- Next's session (packages/auth/src/session.ts line ~172) has NO equivalent
+-- auto-select: `login()` always sets `currentBotId: null`, and the ONLY way
+-- it ever becomes non-null is an explicit `switchBot()` call — which
+-- apps/admin does not yet wire into any UI (verified: no `switch_bot`/
+-- `switchBot(` call site under apps/admin/src, confirmed by grep).
+--
+-- Consequence: if this file seeded even ONE `line_accounts` row, the VERY
+-- FIRST PHP page fetch in parity.mjs's shared phpSid session (which is
+-- `users:baseline`, batch-1's own first entry — run before any of this
+-- batch's new entries) would silently auto-select a real bot ID into
+-- $_SESSION for the ENTIRE REST OF THE RUN, while Next's session stays null
+-- forever. Several of batch-1's ALREADY-PASSING queries
+-- (includes/dashboard/crm.php's `(line_account_id = ? OR ? IS NULL)`
+-- PARAM-nullness pattern — see extract.mjs's FIXTURE_TAG_NAMES section) would
+-- then silently re-scope to `line_account_id = <that bot>` on PHP while
+-- staying unscoped on Next — a false FAIL (or worse, a false PASS on
+-- different underlying data) for entries that have NOTHING to do with this
+-- batch's pages. This is a hard, cross-batch correctness hazard, not a
+-- style preference — this file MUST NOT seed `line_accounts`,
+-- `account_followers`, `account_events`, or `account_daily_stats` (the
+-- account-tab tables, which are unreachable without a real line_accounts row
+-- anyway — see the "account" tab note below).
+--
+-- Net effect (FLAGGED FINDING for the build report, not fixed here — out of
+-- this agent's allowed paths, which are infra-only):
+--   - analytics.php's overview/advanced/crm tabs use the
+--     `(line_account_id = ? OR line_account_id IS NULL)` COLUMN-nullness
+--     pattern (overview.php, crm.php) or a plain "$this->lineAccountId ?
+--     filter : no filter" truthy check (AnalyticsModel.php, the 'advanced'
+--     tab) — BOTH evaluate to "every row with line_account_id IS NULL" (or
+--     literally every row, for the truthy-check tables) whenever
+--     $lineAccountId/currentBotId is null, which it always is here. So this
+--     file seeds every new analytics row with `line_account_id = NULL` and
+--     they show up correctly on BOTH stacks.
+--   - loyalty-members.php/queries.ts gate their ENTIRE query behind
+--     `if ($lineAccountId > 0)` / `session.currentBotId ?? 0`. With no
+--     line_accounts row, lineAccountId is ALWAYS 0 on BOTH stacks, so the
+--     query never runs at all — stats stay {total:0,points:0,today:0},
+--     members stay []. The `users` rows seeded below (`line_user_id LIKE
+--     'offline:%'`) are written for completeness per this batch's brief
+--     ("loyalty-tier/points rows matching loyalty-members.php's actual
+--     query") and to enable a future harness that DOES wire up a bot
+--     switch, but are INERT in this run — the loyalty-members parity
+--     entries verify the (still perfectly real and meaningful) "zero bots
+--     selected -> empty state" equality, not a populated list. See
+--     docs/runbooks's Phase 2 batch 2 section for the full writeup.
+--   - analytics.php's "account" tab (สถิติแยกตามบอท) is INHERENTLY about
+--     per-bot stats; with zero `line_accounts` rows it legitimately renders
+--     the "กรุณาเลือกบอทเพื่อดูสถิติ" (please select a bot) prompt on a real
+--     production tenant that hasn't set up a LINE OA yet, too — this is not
+--     a fixture gap, it's a real, valid, testable state. No account_* rows
+--     seeded; the account-tab parity entry verifies that prompt state.
+-- ===========================================================================
+
+-- ===========================================================================
+-- 1) activity_logs (55 rows) — exercises activity-logs.php's `type`, `action`,
+--    `search`, `date_from`/`date_to` filter branches (queries.ts's buildWhere/
+--    countLogs, ported 1:1 from classes/ActivityLogger.php lines 216-304).
+--
+--    FLAGGED FINDING: classes/AdminAuth.php::login() (lines 173-183) calls
+--    ActivityLogger::logAuth(ACTION_LOGIN, ...) on every successful PHP
+--    login — so parity.mjs's own `phpLogin()` call adds ONE extra
+--    log_type='auth'/action='login' row to `activity_logs` AFTER this file
+--    seeds it. `internal/session-bridge.php`'s 'login-sync' action (what
+--    Next's `nextLogin()` bridge-sync hits) only assigns raw `$_SESSION`
+--    keys (verified by reading the full file) — it does NOT call
+--    ActivityLogger. Net: PHP's activity_logs table has ONE MORE row than
+--    Next's for the rest of the run — a genuine backend asymmetry (Next's
+--    login() has no activity-log side effect PHP's does), not a fixture or
+--    extraction bug. WORKAROUND (not a fix — apps/admin/**, classes/**,
+--    packages/auth/** are all out of this agent's allowed paths): every row
+--    below is dated 2-21 days in the past (NEVER "today"), and every
+--    activity-logs parity entry in parity.mjs applies a `date_to` bound of
+--    "yesterday" (computed at run time, never hardcoded) so the PHP-only
+--    login row — always dated "today" — is excluded from every comparison.
+--    Flagged for mig-orchestrator: a future ticket may want `@reya/auth`'s
+--    login() to also write an activity_logs row for real audit-trail parity
+--    in production, independent of this harness.
+--
+--    3 rows contain the literal marker "BATCH2SEARCHMARK" for the `search`
+--    filter test (queries.ts's search clause: description/user_name/
+--    admin_name LIKE). The remaining 52 rows cycle through all 11 log_types
+--    (auth/user/admin/data/consent/message/order/pharmacy/ai/api/system —
+--    the exact keys activity-logs.php's own $logTypes array uses) x all 10
+--    actions (create/read/update/delete/login/logout/export/send/approve/
+--    reject — activity-logs.php's own $actions array), so every filter
+--    dropdown option has real, non-empty matches. `action=login` (i%10==4)
+--    hits exactly 6 rows, used by the `action` filter test. `type=pharmacy`
+--    hits 6 rows (5 cyclic + 1 marker), used by the `type` filter test.
+--    `type=consent AND action=login` hits exactly 1 row, used by the
+--    `combined` filter test. All spread 2-21 days ago so the wide
+--    date_from=25d-ago/date_to=yesterday bound (used by every entry, see
+--    above) includes all 55 rows.
+-- ===========================================================================
+INSERT INTO `activity_logs`
+  (`log_type`, `action`, `description`, `user_id`, `user_name`, `admin_id`, `admin_name`, `entity_type`, `entity_id`, `ip_address`, `line_account_id`, `created_at`)
+VALUES
+  ('pharmacy', 'approve', 'อนุมัติใบสั่งยา BATCH2SEARCHMARK ล็อต A', 1, 'คุณสมชาย VIP', NULL, 'เภสัชกร A', 'prescription', 9001, '198.51.100.11', NULL, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  ('order', 'update', 'แก้ไขคำสั่งซื้อ BATCH2SEARCHMARK เลขที่ ORD-B2-01', 9, 'ลูกค้าซื้อแล้ว หนึ่ง', NULL, NULL, 'order', 9002, '198.51.100.12', NULL, DATE_SUB(NOW(), INTERVAL 12 DAY)),
+  ('ai', 'send', 'ส่งคำตอบ AI BATCH2SEARCHMARK ให้ลูกค้า', 2, 'คุณสมหญิง Silver', NULL, NULL, NULL, NULL, '198.51.100.13', NULL, DATE_SUB(NOW(), INTERVAL 18 DAY)),
+  ('consent', 'login', 'กิจกรรมทดสอบ E2E Batch2 #4 (consent/login)', NULL, NULL, NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.5', NULL, DATE_SUB(NOW(), INTERVAL 6 DAY)),
+  ('message', 'logout', 'กิจกรรมทดสอบ E2E Batch2 #5 (message/logout)', NULL, NULL, NULL, NULL, 'user', 5, '203.0.113.6', NULL, DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('order', 'export', 'กิจกรรมทดสอบ E2E Batch2 #6 (order/export)', 9, 'ลูกค้าซื้อแล้ว หนึ่ง', NULL, NULL, NULL, NULL, '203.0.113.7', NULL, DATE_SUB(NOW(), INTERVAL 8 DAY)),
+  ('pharmacy', 'send', 'กิจกรรมทดสอบ E2E Batch2 #7 (pharmacy/send)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.8', NULL, DATE_SUB(NOW(), INTERVAL 9 DAY)),
+  ('ai', 'approve', 'กิจกรรมทดสอบ E2E Batch2 #8 (ai/approve)', NULL, NULL, NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.9', NULL, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  ('api', 'reject', 'กิจกรรมทดสอบ E2E Batch2 #9 (api/reject)', 2, 'คุณสมหญิง Silver', NULL, NULL, NULL, NULL, '203.0.113.10', NULL, DATE_SUB(NOW(), INTERVAL 11 DAY)),
+  ('system', 'create', 'กิจกรรมทดสอบ E2E Batch2 #10 (system/create)', NULL, NULL, NULL, NULL, 'transaction', 10, '203.0.113.11', NULL, DATE_SUB(NOW(), INTERVAL 12 DAY)),
+  ('auth', 'read', 'กิจกรรมทดสอบ E2E Batch2 #11 (auth/read)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.12', NULL, DATE_SUB(NOW(), INTERVAL 13 DAY)),
+  ('user', 'update', 'กิจกรรมทดสอบ E2E Batch2 #12 (user/update)', 1, 'คุณสมชาย VIP', NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.13', NULL, DATE_SUB(NOW(), INTERVAL 14 DAY)),
+  ('admin', 'delete', 'กิจกรรมทดสอบ E2E Batch2 #13 (admin/delete)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.14', NULL, DATE_SUB(NOW(), INTERVAL 15 DAY)),
+  ('data', 'login', 'กิจกรรมทดสอบ E2E Batch2 #14 (data/login)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.15', NULL, DATE_SUB(NOW(), INTERVAL 16 DAY)),
+  ('consent', 'logout', 'กิจกรรมทดสอบ E2E Batch2 #15 (consent/logout)', 10, 'ลูกค้าซื้อแล้ว สอง', NULL, NULL, 'order', 15, '203.0.113.16', NULL, DATE_SUB(NOW(), INTERVAL 17 DAY)),
+  ('message', 'export', 'กิจกรรมทดสอบ E2E Batch2 #16 (message/export)', NULL, NULL, NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.17', NULL, DATE_SUB(NOW(), INTERVAL 18 DAY)),
+  ('order', 'send', 'กิจกรรมทดสอบ E2E Batch2 #17 (order/send)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.18', NULL, DATE_SUB(NOW(), INTERVAL 19 DAY)),
+  ('pharmacy', 'approve', 'กิจกรรมทดสอบ E2E Batch2 #18 (pharmacy/approve)', 9, 'ลูกค้าซื้อแล้ว หนึ่ง', NULL, NULL, NULL, NULL, '203.0.113.19', NULL, DATE_SUB(NOW(), INTERVAL 20 DAY)),
+  ('ai', 'reject', 'กิจกรรมทดสอบ E2E Batch2 #19 (ai/reject)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.20', NULL, DATE_SUB(NOW(), INTERVAL 21 DAY)),
+  ('api', 'create', 'กิจกรรมทดสอบ E2E Batch2 #20 (api/create)', NULL, NULL, NULL, 'เภสัชกร A', 'user', 20, '203.0.113.21', NULL, DATE_SUB(NOW(), INTERVAL 2 DAY)),
+  ('system', 'read', 'กิจกรรมทดสอบ E2E Batch2 #21 (system/read)', 2, 'คุณสมหญิง Silver', NULL, NULL, NULL, NULL, '203.0.113.22', NULL, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  ('auth', 'update', 'กิจกรรมทดสอบ E2E Batch2 #22 (auth/update)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.23', NULL, DATE_SUB(NOW(), INTERVAL 4 DAY)),
+  ('user', 'delete', 'กิจกรรมทดสอบ E2E Batch2 #23 (user/delete)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.24', NULL, DATE_SUB(NOW(), INTERVAL 5 DAY)),
+  ('admin', 'login', 'กิจกรรมทดสอบ E2E Batch2 #24 (admin/login)', 1, 'คุณสมชาย VIP', NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.25', NULL, DATE_SUB(NOW(), INTERVAL 6 DAY)),
+  ('data', 'logout', 'กิจกรรมทดสอบ E2E Batch2 #25 (data/logout)', NULL, NULL, NULL, NULL, 'transaction', 25, '203.0.113.26', NULL, DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('consent', 'export', 'กิจกรรมทดสอบ E2E Batch2 #26 (consent/export)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.27', NULL, DATE_SUB(NOW(), INTERVAL 8 DAY)),
+  ('message', 'send', 'กิจกรรมทดสอบ E2E Batch2 #27 (message/send)', 10, 'ลูกค้าซื้อแล้ว สอง', NULL, NULL, NULL, NULL, '203.0.113.28', NULL, DATE_SUB(NOW(), INTERVAL 9 DAY)),
+  ('order', 'approve', 'กิจกรรมทดสอบ E2E Batch2 #28 (order/approve)', NULL, NULL, NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.29', NULL, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  ('pharmacy', 'reject', 'กิจกรรมทดสอบ E2E Batch2 #29 (pharmacy/reject)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.30', NULL, DATE_SUB(NOW(), INTERVAL 11 DAY)),
+  ('ai', 'create', 'กิจกรรมทดสอบ E2E Batch2 #30 (ai/create)', 9, 'ลูกค้าซื้อแล้ว หนึ่ง', NULL, NULL, 'order', 30, '203.0.113.31', NULL, DATE_SUB(NOW(), INTERVAL 12 DAY)),
+  ('api', 'read', 'กิจกรรมทดสอบ E2E Batch2 #31 (api/read)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.32', NULL, DATE_SUB(NOW(), INTERVAL 13 DAY)),
+  ('system', 'update', 'กิจกรรมทดสอบ E2E Batch2 #32 (system/update)', NULL, NULL, NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.33', NULL, DATE_SUB(NOW(), INTERVAL 14 DAY)),
+  ('auth', 'delete', 'กิจกรรมทดสอบ E2E Batch2 #33 (auth/delete)', 2, 'คุณสมหญิง Silver', NULL, NULL, NULL, NULL, '203.0.113.34', NULL, DATE_SUB(NOW(), INTERVAL 15 DAY)),
+  ('user', 'login', 'กิจกรรมทดสอบ E2E Batch2 #34 (user/login)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.35', NULL, DATE_SUB(NOW(), INTERVAL 16 DAY)),
+  ('admin', 'logout', 'กิจกรรมทดสอบ E2E Batch2 #35 (admin/logout)', NULL, NULL, NULL, NULL, 'user', 35, '203.0.113.36', NULL, DATE_SUB(NOW(), INTERVAL 17 DAY)),
+  ('data', 'export', 'กิจกรรมทดสอบ E2E Batch2 #36 (data/export)', 1, 'คุณสมชาย VIP', NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.37', NULL, DATE_SUB(NOW(), INTERVAL 18 DAY)),
+  ('consent', 'send', 'กิจกรรมทดสอบ E2E Batch2 #37 (consent/send)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.38', NULL, DATE_SUB(NOW(), INTERVAL 19 DAY)),
+  ('message', 'approve', 'กิจกรรมทดสอบ E2E Batch2 #38 (message/approve)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.39', NULL, DATE_SUB(NOW(), INTERVAL 20 DAY)),
+  ('order', 'reject', 'กิจกรรมทดสอบ E2E Batch2 #39 (order/reject)', 10, 'ลูกค้าซื้อแล้ว สอง', NULL, NULL, NULL, NULL, '203.0.113.40', NULL, DATE_SUB(NOW(), INTERVAL 21 DAY)),
+  ('pharmacy', 'create', 'กิจกรรมทดสอบ E2E Batch2 #40 (pharmacy/create)', NULL, NULL, NULL, 'เภสัชกร A', 'transaction', 40, '203.0.113.41', NULL, DATE_SUB(NOW(), INTERVAL 2 DAY)),
+  ('ai', 'read', 'กิจกรรมทดสอบ E2E Batch2 #41 (ai/read)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.42', NULL, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  ('api', 'update', 'กิจกรรมทดสอบ E2E Batch2 #42 (api/update)', 9, 'ลูกค้าซื้อแล้ว หนึ่ง', NULL, NULL, NULL, NULL, '203.0.113.43', NULL, DATE_SUB(NOW(), INTERVAL 4 DAY)),
+  ('system', 'delete', 'กิจกรรมทดสอบ E2E Batch2 #43 (system/delete)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.44', NULL, DATE_SUB(NOW(), INTERVAL 5 DAY)),
+  ('auth', 'login', 'กิจกรรมทดสอบ E2E Batch2 #44 (auth/login)', NULL, NULL, NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.45', NULL, DATE_SUB(NOW(), INTERVAL 6 DAY)),
+  ('user', 'logout', 'กิจกรรมทดสอบ E2E Batch2 #45 (user/logout)', 2, 'คุณสมหญิง Silver', NULL, NULL, 'order', 45, '203.0.113.46', NULL, DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('admin', 'export', 'กิจกรรมทดสอบ E2E Batch2 #46 (admin/export)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.47', NULL, DATE_SUB(NOW(), INTERVAL 8 DAY)),
+  ('data', 'send', 'กิจกรรมทดสอบ E2E Batch2 #47 (data/send)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.48', NULL, DATE_SUB(NOW(), INTERVAL 9 DAY)),
+  ('consent', 'approve', 'กิจกรรมทดสอบ E2E Batch2 #48 (consent/approve)', 1, 'คุณสมชาย VIP', NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.49', NULL, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  ('message', 'reject', 'กิจกรรมทดสอบ E2E Batch2 #49 (message/reject)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.50', NULL, DATE_SUB(NOW(), INTERVAL 11 DAY)),
+  ('order', 'create', 'กิจกรรมทดสอบ E2E Batch2 #50 (order/create)', NULL, NULL, NULL, NULL, 'user', 50, '203.0.113.51', NULL, DATE_SUB(NOW(), INTERVAL 12 DAY)),
+  ('pharmacy', 'read', 'กิจกรรมทดสอบ E2E Batch2 #51 (pharmacy/read)', 10, 'ลูกค้าซื้อแล้ว สอง', NULL, NULL, NULL, NULL, '203.0.113.52', NULL, DATE_SUB(NOW(), INTERVAL 13 DAY)),
+  ('ai', 'update', 'กิจกรรมทดสอบ E2E Batch2 #52 (ai/update)', NULL, NULL, NULL, 'เภสัชกร A', NULL, NULL, '203.0.113.53', NULL, DATE_SUB(NOW(), INTERVAL 14 DAY)),
+  ('api', 'delete', 'กิจกรรมทดสอบ E2E Batch2 #53 (api/delete)', NULL, NULL, NULL, NULL, NULL, NULL, '203.0.113.54', NULL, DATE_SUB(NOW(), INTERVAL 15 DAY)),
+  ('system', 'login', 'กิจกรรมทดสอบ E2E Batch2 #54 (system/login)', 9, 'ลูกค้าซื้อแล้ว หนึ่ง', NULL, NULL, NULL, NULL, '203.0.113.55', NULL, DATE_SUB(NOW(), INTERVAL 16 DAY)),
+  ('auth', 'logout', 'กิจกรรมทดสอบ E2E Batch2 #55 (auth/logout)', NULL, NULL, NULL, NULL, 'transaction', 55, '203.0.113.56', NULL, DATE_SUB(NOW(), INTERVAL 17 DAY));
+
+-- ===========================================================================
+-- 2) users (offline phone loyalty members, ids 101-105) — loyalty-members.php's
+--    query shape (`line_user_id LIKE 'offline:%'`), matching queries.ts's
+--    getLoyaltyMembersData()'s SELECT list exactly (id, display_name,
+--    real_name, first_name, last_name, phone, available_points, total_points,
+--    created_at). IDs start at 101 to avoid colliding with batch-1's users
+--    1-25. INERT in this run (see "WHY NO line_accounts ROWS" above) — kept
+--    for completeness per this batch's brief and to exercise lmName()'s
+--    3-branch fallback (real_name -> first+last -> display_name -> 'ลูกค้า')
+--    the moment a future harness wires up a real bot selection.
+-- ===========================================================================
+INSERT INTO `users`
+  (`id`, `line_user_id`, `display_name`, `real_name`, `first_name`, `last_name`, `phone`, `is_blocked`, `created_at`, `updated_at`, `available_points`, `total_points`, `line_account_id`)
+VALUES
+  (101, 'offline:0891112223', 'ลูกค้าหน้าร้าน หนึ่ง', 'มานี มีนา',    NULL,     NULL,   '0891112223', 0, NOW(), NOW(), 250, 400, NULL),
+  (102, 'offline:0892223334', NULL,                    NULL,          'มานะ',   'ใจดี', '0892223334', 0, DATE_SUB(NOW(), INTERVAL 5 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), 80, 80, NULL),
+  (103, 'offline:0893334445', 'ลูกค้าหน้าร้าน สาม',    NULL,          NULL,     NULL,   '0893334445', 0, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), 0, 150, NULL),
+  (104, 'offline:0894445556', NULL,                    NULL,          NULL,     NULL,   '0894445556', 0, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), 30, 30, NULL),
+  (105, 'offline:0895556667', 'ลูกค้าหน้าร้าน ห้า',    'สมศรี รักไทย', NULL,   NULL,   '0895556667', 0, NOW(), NOW(), 500, 900, NULL);
+
+-- ===========================================================================
+-- 3) broadcasts (overview.php's Broadcast KPI tile + broadcastRecipients) —
+--    status='sent', sent_at within the overview tab's default 30-day window,
+--    never "today" (keeps this file's own internal convention of avoiding
+--    same-day ambiguity, though broadcasts aren't touched by the
+--    activity_logs login-noise issue above).
+-- ===========================================================================
+INSERT INTO `broadcasts` (`line_account_id`, `title`, `message_type`, `content`, `target_type`, `sent_count`, `status`, `sent_at`, `created_at`) VALUES
+  (NULL, 'โปรโมชั่นวิตามินซี Batch2', 'text', 'ลดราคาวิตามินซี 20% วันนี้เท่านั้น', 'all', 340, 'sent', DATE_SUB(NOW(), INTERVAL 4 DAY), DATE_SUB(NOW(), INTERVAL 4 DAY)),
+  (NULL, 'แจ้งเตือนแต้มสะสม Batch2', 'text', 'แต้มสะสมของท่านใกล้หมดอายุ', 'segment', 120, 'sent', DATE_SUB(NOW(), INTERVAL 9 DAY), DATE_SUB(NOW(), INTERVAL 9 DAY));
+
+-- ===========================================================================
+-- 4) customer_segments (overview.php's Segments quick-action count +
+--    crm.php/AdvancedCRM::getSegments()'s Segments KPI + list).
+-- ===========================================================================
+INSERT INTO `customer_segments` (`line_account_id`, `name`, `description`, `segment_type`, `conditions`, `user_count`, `is_active`, `created_at`) VALUES
+  (NULL, 'ลูกค้า VIP Batch2', 'ลูกค้าที่มียอดซื้อสูง', 'dynamic', '{"min_points":1000}', 8, 1, DATE_SUB(NOW(), INTERVAL 6 DAY)),
+  (NULL, 'ลูกค้าใหม่ Batch2', 'สมัครใน 30 วันล่าสุด', 'dynamic', '{"days":30}', 15, 1, DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  (NULL, 'ลูกค้าเงียบ Batch2', 'ไม่มีการซื้อใน 60 วัน', 'static', '{"inactive_days":60}', 4, 1, DATE_SUB(NOW(), INTERVAL 1 DAY));
+
+-- ===========================================================================
+-- 5) auto_replies (overview.php's Top Keywords list — is_active=1,
+--    ORDER BY hit_count DESC).
+-- ===========================================================================
+INSERT INTO `auto_replies` (`line_account_id`, `keyword`, `match_type`, `reply_type`, `reply_content`, `is_active`, `priority`, `use_count`, `created_at`) VALUES
+  (NULL, 'ราคา', 'contains', 'text', 'สอบถามราคาได้ที่แอดมินค่ะ', 1, 10, 240, DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  (NULL, 'จัดส่ง', 'contains', 'text', 'จัดส่งภายใน 1-2 วันทำการค่ะ', 1, 5, 95, DATE_SUB(NOW(), INTERVAL 12 DAY));
+
+-- ===========================================================================
+-- 6) user_behaviors (crm.php/AdvancedCRM::getUserAnalytics()'s Active Users
+--    (Nd) KPI — `COUNT(DISTINCT user_id) ... created_at > NOW() - INTERVAL
+--    days DAY`). All within the default 30-day window, never "today".
+-- ===========================================================================
+INSERT INTO `user_behaviors` (`line_account_id`, `user_id`, `behavior_type`, `behavior_category`, `source`, `created_at`) VALUES
+  (NULL, 1,  'page_view',    'shop',    'miniapp', DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  (NULL, 2,  'search',       'shop',    'miniapp', DATE_SUB(NOW(), INTERVAL 5 DAY)),
+  (NULL, 9,  'add_to_cart',  'shop',    'miniapp', DATE_SUB(NOW(), INTERVAL 8 DAY)),
+  (NULL, 10, 'page_view',    'article', 'miniapp', DATE_SUB(NOW(), INTERVAL 14 DAY));
+
+-- ===========================================================================
+-- 7) orders (ids 101-102, NEW — distinct from batch-1's orders 1-3) +
+--    order_items — advanced tab's (AnalyticsModel::getRevenueStats())
+--    revenue.total needs `payment_status='paid'`, which batch-1's orders
+--    fixture never sets (defaults to 'pending' — batch-1 only sets `status`,
+--    a DIFFERENT column). Dated 2/4 days ago — within the advanced tab's
+--    default 7-day window, but NOT "today" (batch-1's own 3 orders already
+--    are "today" and already give the realtime bar's ordersToday/
+--    revenueToday non-zero values for free — see docs/runbooks).
+-- ===========================================================================
+INSERT INTO `orders` (`id`, `line_account_id`, `order_number`, `user_id`, `total_amount`, `grand_total`, `status`, `payment_status`, `created_at`) VALUES
+  (101, NULL, 'ORD-B2-0001', 1, 890.00, 890.00, 'paid',      'paid', DATE_SUB(NOW(), INTERVAL 2 DAY)),
+  (102, NULL, 'ORD-B2-0002', 2, 450.50, 450.50, 'delivered', 'paid', DATE_SUB(NOW(), INTERVAL 4 DAY));
+
+INSERT INTO `order_items` (`order_id`, `product_name`, `product_price`, `quantity`, `subtotal`) VALUES
+  (101, 'พาราเซตามอล 500mg', 20.00, 2, 40.00),
+  (101, 'วิตามินซี 1000mg', 150.00, 5, 750.00),
+  (102, 'น้ำเกลือล้างจมูก', 85.00, 5, 425.00);
+
+-- ===========================================================================
+-- 8) transactions (ids 101-103, NEW — distinct from batch-1's 1-6) —
+--    overview.php's `รายได้`/orders KPI needs `status='completed'`, a value
+--    batch-1's transactions fixture never uses (delivered/paid/confirmed/
+--    pending/cancelled only — see that file's own header comment). `status`
+--    is a plain varchar(50) here (not an enum), so 'completed' is valid.
+--    Dated 5/8/12 days ago — within overview's default 30-day window, never
+--    "today".
+-- ===========================================================================
+INSERT INTO `transactions` (`id`, `line_account_id`, `order_number`, `user_id`, `total_amount`, `grand_total`, `status`, `created_at`) VALUES
+  (101, NULL, 'ORD-B2-T001', 1, 620.00, 620.00, 'completed', DATE_SUB(NOW(), INTERVAL 5 DAY)),
+  (102, NULL, 'ORD-B2-T002', 2, 340.00, 340.00, 'completed', DATE_SUB(NOW(), INTERVAL 8 DAY)),
+  (103, NULL, 'ORD-B2-T003', 9, 275.50, 275.50, 'completed', DATE_SUB(NOW(), INTERVAL 12 DAY));

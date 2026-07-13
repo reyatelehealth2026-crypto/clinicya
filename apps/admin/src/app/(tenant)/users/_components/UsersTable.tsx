@@ -84,18 +84,7 @@ export function UsersTable({ users, allTags }: UsersTableProps) {
         return (
           <>
             {u.tags.split(', ').map((tagName) => (
-              <span
-                key={tagName}
-                style={{
-                  display: 'inline-block',
-                  padding: '2px 8px',
-                  background: 'rgba(59,130,246,0.1)',
-                  color: '#2563eb',
-                  borderRadius: 9999,
-                  fontSize: 11,
-                  marginRight: 4,
-                }}
-              >
+              <span key={tagName} className="table-tag-chip">
                 {tagName}
               </span>
             ))}

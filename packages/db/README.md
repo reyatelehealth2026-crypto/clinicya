@@ -150,6 +150,21 @@ MariaDB container, never against a shared/persistent DB, and the container
 was torn down afterward — nothing about the scratch environment itself is
 committed, only the two `.d.ts` files and this procedure.
 
+Generated property names are **snake_case** (`created_at`, `line_account_id`,
+…), matching the real column names one-for-one — `src/codegen.ts` does not
+pass `--camel-case` to `kysely-codegen`, and neither `masterPool.ts` nor
+`tenantPoolRegistry.ts` configures a `CamelCasePlugin` on its `Kysely`
+instance. This is deliberate, not an oversight: every real query in this
+codebase today is a raw `sql` tag written against real snake_case column
+names (see `apps/admin/src/app/(tenant)/users/queries.ts`'s own module doc),
+so camelCase types would only ever describe an API surface (`.selectFrom()`)
+nothing calls, while quietly making the two access paths disagree on casing
+for the same table the moment something *did* call it — `sql\`select *
+from users\`` would keep returning `{ created_at }` while
+`.selectFrom('users').selectAll()` would return `{ createdAt }`. Keeping both
+paths snake_case means they agree byte-for-byte with zero plugin config to
+maintain.
+
 **1. Bring up a scratch MariaDB (plain `docker run`, not a compose file):**
 
 ```bash

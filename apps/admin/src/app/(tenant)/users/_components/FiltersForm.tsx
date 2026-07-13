@@ -81,9 +81,13 @@ export function FiltersForm({ filters, allTags }: FiltersFormProps) {
         </select>
       </div>
 
-      <div>
-        <button type="submit">กรองข้อมูล</button>
-        <a href="/users">ล้างตัวกรอง</a>
+      <div className="filters-actions">
+        <button type="submit" className="filters-submit-btn">
+          กรองข้อมูล
+        </button>
+        <a href="/users" className="filters-reset-link">
+          ล้างตัวกรอง
+        </a>
       </div>
     </div>
   );
