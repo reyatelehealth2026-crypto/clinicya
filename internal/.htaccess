@@ -1,0 +1,52 @@
+# =====================================================
+# internal/ — server-to-server only (Next.js kernel <-> PHP session bridge).
+#
+# Default posture: deny ALL requests via the public Apache vhost. This is a
+# conservative fail-closed default, not the real security boundary — the
+# actual mechanism that lets the Next.js kernel (packages/auth's
+# bridgeClient.ts) reach internal/session-bridge.php is Docker-internal-
+# network isolation / an nginx `internal;` location, which is mig-infra's
+# job (plan Phase 0/13 strangler edge work), not this file's. Until that
+# lands, session-bridge.php is also HMAC-signature-gated on every request
+# (see its own top-of-file comment) as defense-in-depth underneath this.
+#
+# mig-infra: once the internal Docker network CIDR is known, replace the
+# blanket deny below with an `Allow from <that CIDR>` (Apache 2.2) /
+# `Require ip <that CIDR>` (Apache 2.4) scoped rule — do not simply delete
+# this file.
+#
+# --------------------------------------------------------------------------
+# mig-infra, 2026-07-12 — infra/e2e/ harness carve-out (Phase 1 batch 3).
+#
+# The rule below scopes access to 172.30.99.0/24 ONLY — the FIXED subnet
+# infra/e2e/docker-compose.yml's dedicated `e2e-net` bridge network declares
+# (see that file's `networks.e2e-net.ipam` block). It exists so the E2E
+# bridge harness's Node runner (infra/e2e/run.mjs, running on the HOST, not
+# inside any container) can reach this container's published port and POST
+# to internal/session-bridge.php — verified empirically: a host-originated
+# request to a container's published port on a custom bridge network is
+# SNAT'd to that network's gateway IP (172.30.99.1 for this subnet), which
+# is why the whole /24 is allow-listed, not a single host IP.
+#
+# This is a NARROW, HARNESS-SCOPED carve-out for a throwaway local/CI
+# compose project — it is NOT the production Phase 0 cutover decision. The
+# real production CIDR (whatever Docker network Phase 0's docker-compose
+# actually runs the `php` + Next.js kernel containers on) is a SEPARATE
+# decision tracked in docs/plans/2026-07-12-nextjs-full-migration-plan.md
+# Phase 0/13 — do not assume 172.30.99.0/24 means anything there, and do not
+# widen this rule to cover it. When that production CIDR is decided, add a
+# SECOND scoped rule alongside this one (or replace it, if the harness is
+# retired) rather than loosening this one.
+# --------------------------------------------------------------------------
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    Require ip 172.30.99.0/24
+</IfModule>
+
+# Apache 2.2 (mod_access_compat fallback)
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+    Allow from 172.30.99.0/24
+</IfModule>

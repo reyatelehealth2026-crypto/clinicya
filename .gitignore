@@ -57,6 +57,15 @@ package-lock.json
 # Next.js build
 .next/
 
+# Monorepo (pnpm workspaces + Turborepo) — packages/*, apps/* (plan §1.1)
+# tsc -b's incremental buildinfo now lives inside dist/ (tsBuildInfoFile),
+# so this one rule covers build output + buildinfo for every package.
+packages/*/dist/
+apps/*/dist/
+packages/*/coverage/
+apps/*/coverage/
+.turbo/
+
 # Test & Cache
 test*.php
 !tests/
@@ -177,6 +186,7 @@ DB_CONNECTION.md
 !ONTOLOGY.md
 !REFLECTIONS.md
 !PROACTIVE.md
+!docs/runbooks/*.md
 !docs/plans/2026-04-12-line-mini-app-implementation-checklist.md
 !docs/plans/2026-04-13-line-mini-app-100pct-subagent-orchestration.md
 !docs/plans/2026-04-13-line-mini-app-human-vs-ai.md
@@ -185,6 +195,7 @@ DB_CONNECTION.md
 !docs/superpowers/plans/2026-07-10-receipt-points-review-agent-context.md
 !docs/plans/2026-04-13-line-mini-app-gap-closure.md
 !docs/plans/2026-07-12-nextjs-full-migration-plan.md
+!docs/agents/*.md
 !docs/admin-tutorials/*.md
 !docs/training/*.md
 !docs/ai/**/*.md
@@ -193,6 +204,9 @@ DB_CONNECTION.md
 !docs/superpowers/plans/2026-07-10-receipt-points-review.md
 !.claude/agents/*.md
 !.agents/skills/**/*.md
+# Monorepo package/app READMEs (plan §1.1) — track docs for packages/*, apps/*
+!packages/*/README.md
+!apps/*/README.md
 *.bak*
 *.bak-*
 
@@ -229,6 +243,15 @@ _prod_backups/
 
 # Build/scratch artifacts — not source (excluded from the session commit)
 generated/
+# packages/db's kysely-codegen output IS source (committed, regenerable via
+# packages/db/README.md's "Regenerating the types" recipe) — whitelist it out
+# of the blanket generated/ rule above, same pattern as database/migration_*.sql.
+!packages/db/src/generated/
+!packages/db/src/generated/*.d.ts
+# nginx strangler edge conf is generated-but-committed (rendered from
+# infra/nginx/routes.json by generate-routes.mjs — reviewable route flips).
+!infra/nginx/generated/
+!infra/nginx/generated/*.conf
 docs/training/videos/line-setup/yt-frames/
 g_err.txt
 g_out.txt

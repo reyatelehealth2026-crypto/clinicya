@@ -1,0 +1,240 @@
+-- infra/e2e/seed/50-phase3-batch1-miniapp-fixture.sql.tmpl
+--
+-- Deterministic tenant-DB fixture for infra/e2e/api-parity.mjs (Phase 3
+-- batch 1 — mig-infra's JSON API parity harness covering the six ported
+-- /api/miniapp/** endpoints x 16 actions: resolve-line-account,
+-- points-history:history, shop-products:{products,product_detail,categories},
+-- health-profile:get, member:{check,get_card,register,update_profile},
+-- rewards:{list,redeem,my_redemptions}, wishlist:{list,toggle,remove}).
+--
+-- Applied by api-parity.mjs AFTER database/migration_2026-05-25_tenant_template.sql
+-- (same TENANT_TEMPLATE parity.mjs already applies) and AFTER
+-- 45-phase3-batch1-plan-and-tenant.sql.tmpl, with `USE __APP_DB_NAME__;`
+-- prefixed by the harness (same convention as
+-- 30-phase2-batch1-fixture.sql.tmpl / 40-phase2-batch2-fixture.sql.tmpl).
+--
+-- SCHEMA-DDL NOTE (corrects a premise in the originating brief): the brief
+-- asked this file to ALSO carry verbatim CREATE TABLE DDL for
+-- `user_wishlist` (api/wishlist.php) and `user_health_profiles` /
+-- `user_drug_allergies` / `user_current_medications` (api/health-profile.php)
+-- on the claim those 4 tables are "NOT in database/install_complete_latest.sql
+-- or the tenant template migration". Verified false by reading both files: all
+-- 4 tables already exist, with IDENTICAL column definitions to the PHP
+-- runtime auto-create blocks, in database/migration_2026-05-25_tenant_template.sql
+-- (user_wishlist at its line ~298, user_current_medications/user_drug_allergies/
+-- user_health_profiles at its lines ~2696-2743) — the same template file
+-- TENANT_TEMPLATE already applies before this fixture runs. Duplicating
+-- `CREATE TABLE IF NOT EXISTS` here would be a harmless no-op (IF NOT EXISTS)
+-- but is dead weight given the tables are already guaranteed present; this
+-- file therefore seeds DATA ONLY. Flagged here (not silently dropped) per
+-- this batch's own instruction to surface brief/reality mismatches rather
+-- than silently "fixing" them.
+--
+-- IDENTITY STRATEGY FOR WRITE ACTIONS (member:check, member:register,
+-- member:update_profile, rewards:redeem, wishlist:toggle, wishlist:remove):
+-- each gets TWO separately-seeded, structurally-identical identities —
+-- suffixed `-php` / `-next` — one exercised against the PHP stack, one
+-- against the Next stack, so neither run consumes state the other run's
+-- assertions depend on (api-parity.mjs's own header comment documents this
+-- same strategy — see that file for why "two seeded users" was chosen over
+-- a reset-between-runs step: it lets both calls happen in either order
+-- without a teardown step between them, and keeps the DB-row-shape
+-- comparison meaningful — querying the PHP-identity's resulting row against
+-- the Next-identity's resulting row directly, modulo the allowlist).
+--
+-- All row IDs below are EXPLICIT (not left to AUTO_INCREMENT) so
+-- infra/e2e/lib/api-extract.mjs's request builders can reference them as
+-- plain constants — this is a fresh, ephemeral, single-tenant DB (docker
+-- compose down -v every run), so explicit PK values never collide with
+-- anything the tenant template itself seeds (it seeds none of these tables).
+--
+-- All `created_at`/`updated_at`/`registered_at`/`approved_at` values below
+-- are explicit, fixed, past timestamps — deliberately NOT relying on
+-- CURRENT_TIMESTAMP defaults — so the ONLY genuinely-nondeterministic values
+-- the harness must allowlist are the ones a request handler itself
+-- generates at request time (redemption_code, newly auto-registered
+-- member_id/user id, member:register's freshly-INSERTed id, health-profile's
+-- write-side timestamps are irrelevant here since `get` is read-only and
+-- every row below is pre-seeded, never freshly INSERTed by the GET itself).
+
+-- ---------------------------------------------------------------------------
+-- line_accounts — id=1 is_default=1 (rewards:list default-account-fallback
+-- source + resolve-line-account's liff_id fast-path target), id=2 has no
+-- rewards of its own (fallback TARGET side of that same scenario).
+-- ---------------------------------------------------------------------------
+INSERT INTO `line_accounts`
+  (`id`, `name`, `channel_id`, `channel_secret`, `liff_id`, `channel_access_token`, `is_active`, `is_default`, `bot_mode`)
+VALUES
+  (1, 'E2E Miniapp Primary', 'e2e-miniapp-channel-1', 'e2e-miniapp-secret-1', '1234567890-e2eminiapp', 'e2e-dummy-token-1', 1, 1, 'shop'),
+  (2, 'E2E Miniapp Secondary', 'e2e-miniapp-channel-2', 'e2e-miniapp-secret-2', NULL, 'e2e-dummy-token-2', 1, 0, 'shop');
+
+INSERT INTO `shop_settings` (`line_account_id`, `shop_name`, `order_data_source`)
+VALUES (1, 'E2E Miniapp Shop', 'shop');
+
+-- ---------------------------------------------------------------------------
+-- business_categories / business_items — checkout.php's handleGetProducts()/
+-- handleGetProductDetail() source (shop-products:products / :product_detail).
+-- Item 601 has a sale_price < price (exercises the discount_percent/badges
+-- computation); item 602 has no sale_price (exercises the "no discount" path).
+-- ---------------------------------------------------------------------------
+INSERT INTO `business_categories` (`id`, `line_account_id`, `name`, `sort_order`, `is_active`)
+VALUES
+  (501, 1, 'ยาแก้ปวด', 1, 1),
+  (502, 1, 'วิตามิน', 2, 1);
+
+INSERT INTO `business_items`
+  (`id`, `line_account_id`, `category_id`, `name`, `price`, `sale_price`, `stock`, `sku`, `barcode`,
+   `manufacturer`, `generic_name`, `usage_instructions`, `unit`, `is_active`, `is_flash_sale`)
+VALUES
+  (601, 1, 501, 'พาราเซตามอล 500mg', 25.00, 20.00, 100, 'PARA500', '8850000000601',
+   'ACME Pharma', 'Paracetamol', 'รับประทานครั้งละ 1-2 เม็ด ทุก 4-6 ชั่วโมง', 'แผง', 1, 0),
+  (602, 1, 502, 'วิตามินซี 1000mg', 150.00, NULL, 50, 'VITC1000', '8850000000602',
+   'HealthCo', 'Ascorbic Acid', 'รับประทานวันละ 1 เม็ดหลังอาหาร', 'ขวด', 1, 0);
+
+-- item_categories — shop-products.php's OWN standalone `categories` action
+-- (non-Odoo fallback branch: order_data_source='shop' above -> useOdoo=false).
+INSERT INTO `item_categories` (`id`, `line_account_id`, `name`, `is_active`)
+VALUES
+  (701, 1, 'ยา (E2E)', 1),
+  (702, 1, 'อาหารเสริม (E2E)', 1);
+
+-- ---------------------------------------------------------------------------
+-- rewards — 801 active (unlimited stock, used by redeem + list + fallback);
+-- 802 inactive (proves the is_active=1 filter behaves identically on both
+-- stacks by NOT appearing in either stack's `list` response).
+-- ---------------------------------------------------------------------------
+INSERT INTO `rewards`
+  (`id`, `line_account_id`, `name`, `description`, `points_required`, `reward_type`, `stock`, `is_active`, `max_per_user`, `terms`, `created_at`)
+VALUES
+  (801, 1, 'ส่วนลด 50 บาท (E2E)', 'คูปองส่วนลด 50 บาท สำหรับทดสอบ', 200, 'discount', -1, 1, 0, 'ใช้ได้ 1 ครั้งต่อผู้ใช้', '2026-06-01 09:00:00'),
+  (802, 1, 'รางวัลปิดใช้งาน (E2E)', 'ไม่ควรปรากฏในรายการ', 100, 'discount', -1, 0, 0, NULL, '2026-06-01 09:00:00');
+
+-- Deliberately NO rows in `tier_settings` / `member_tiers` for this tenant —
+-- both PHP's TierService::getTiers() and its Next port fall through to the
+-- identical hardcoded DEFAULT_TIERS array in that case (tier_settings query
+-- succeeds but returns zero rows -> `member_tiers` is never even attempted,
+-- see apps/admin/src/app/api/miniapp/member/_lib/tierService.ts's own doc
+-- comment on that exact PHP try/catch nesting) — the simplest way to get
+-- tier calculations byte-identical on both stacks without seeding tier data.
+
+-- ---------------------------------------------------------------------------
+-- richMember (id=3001) — the ONE shared, read-only identity used by every
+-- GET-only, non-mutating action (points-history:history, shop-products:products
+-- /:product_detail's is_favorite join, health-profile:get, member:get_card,
+-- rewards:my_redemptions, wishlist:list). Safe to share across both PHP and
+-- Next calls because none of those actions write to the DB.
+-- ---------------------------------------------------------------------------
+INSERT INTO `users`
+  (`id`, `line_account_id`, `line_user_id`, `display_name`, `first_name`, `last_name`, `real_name`,
+   `phone`, `birthday`, `gender`, `is_registered`, `member_id`, `registered_at`,
+   `total_points`, `available_points`, `used_points`, `points`, `created_at`)
+VALUES
+  (3001, 1, 'e2e-mp-rich-member', 'Rich Member', 'สมชาย', 'ใจดี', 'สมชาย ใจดี',
+   '0812345678', '1990-01-01', 'male', 1, 'M26E2E01', '2026-01-01 10:00:00',
+   1000, 800, 200, 800, '2026-01-01 10:00:00');
+
+-- points_transactions — points-history:history reads THIS table (not
+-- points_history — see the two-points-tables note in the runbook / member.ts's
+-- contractNote §8). Sums to available_points=800 / total_points(earn-only
+-- sum)=1000 / used_points=200, matching the `users` row above exactly so
+-- LoyaltyPoints::getUserPoints() (member:get_card, rewards:redeem) and the
+-- raw `users` row (points-history:history) never disagree in this fixture.
+INSERT INTO `points_transactions`
+  (`id`, `user_id`, `line_account_id`, `type`, `points`, `balance_after`, `reference_type`, `reference_id`, `description`, `created_at`)
+VALUES
+  (5001, 3001, 1, 'earn', 1000, 1000, 'order', 1001, 'Order #1001 (E2E)', '2026-01-02 09:00:00'),
+  (5002, 3001, 1, 'redeem', -200, 800, 'reward', 801, 'แลกรางวัล: ส่วนลด 50 บาท (E2E)', '2026-01-03 09:00:00');
+
+-- user_wishlist — richMember already favorited product 601 (sale_price 20.00
+-- < price_when_added 25.00 -> is_on_sale=1, discount_percent=20).
+INSERT INTO `user_wishlist`
+  (`id`, `user_id`, `line_user_id`, `product_id`, `line_account_id`, `price_when_added`, `notify_on_sale`, `created_at`)
+VALUES
+  (9101, 3001, 'e2e-mp-rich-member', 601, 1, 25.00, 1, '2026-01-04 09:00:00');
+
+-- user_health_profiles — PRE-SEEDED (not left for the GET handler's own
+-- auto-INSERT-on-first-view) precisely so BOTH stacks' `get` calls take the
+-- "existing row" branch and never race each other to INSERT the same
+-- (line_user_id, line_account_id) unique-key row first — see this file's own
+-- header comment ("IDENTITY STRATEGY") and health-profile/_lib/query.ts's own
+-- module doc for why that asymmetry (INSERT-then-read vs plain read) would
+-- otherwise make `updated_at` differ between the two stacks' responses.
+INSERT INTO `user_health_profiles`
+  (`line_user_id`, `line_account_id`, `name`, `age`, `gender`, `weight`, `height`, `blood_type`, `medical_conditions`, `created_at`, `updated_at`)
+VALUES
+  ('e2e-mp-rich-member', 1, 'สมชาย ใจดี', 35, 'male', 70.50, 175.00, 'O', '["diabetes","hypertension"]', '2026-01-01 10:00:00', '2026-01-01 10:00:00');
+
+INSERT INTO `user_drug_allergies`
+  (`line_user_id`, `line_account_id`, `drug_name`, `reaction_type`, `reaction_notes`, `severity`, `created_at`)
+VALUES
+  ('e2e-mp-rich-member', 1, 'Aspirin', 'rash', 'ผื่นแดงหลังทาน', 'moderate', '2026-01-01 10:05:00');
+
+INSERT INTO `user_current_medications`
+  (`line_user_id`, `line_account_id`, `medication_name`, `dosage`, `frequency`, `start_date`, `notes`, `is_active`, `created_at`, `updated_at`)
+VALUES
+  ('e2e-mp-rich-member', 1, 'Metformin', '500mg', 'วันละ 2 ครั้ง', '2025-06-01', 'หลังอาหาร', 1, '2026-01-01 10:10:00', '2026-01-01 10:10:00');
+
+-- reward_redemptions — rewards:my_redemptions reads this for richMember.
+INSERT INTO `reward_redemptions`
+  (`id`, `user_id`, `reward_id`, `line_account_id`, `points_used`, `status`, `created_at`, `redemption_code`, `approved_at`, `expires_at`)
+VALUES
+  (8001, 3001, 801, 1, 200, 'approved', '2026-01-03 09:00:00', 'RWE2EFIXEDCODE01', '2026-01-03 09:05:00', NULL);
+
+-- ---------------------------------------------------------------------------
+-- WRITE-action identity pairs — see this file's header comment
+-- ("IDENTITY STRATEGY FOR WRITE ACTIONS"). member:check's two identities are
+-- deliberately NOT inserted here (the whole point of the auto-register
+-- branch under test is that no `users` row exists yet for them).
+-- ---------------------------------------------------------------------------
+
+-- member:update_profile — pre-existing rows so the UPDATE has something real
+-- to mutate and a resulting DB row to diff (api-parity.mjs re-queries these
+-- by id after the POST).
+INSERT INTO `users`
+  (`id`, `line_account_id`, `line_user_id`, `display_name`, `first_name`, `last_name`, `real_name`,
+   `phone`, `is_registered`, `registered_at`, `created_at`)
+VALUES
+  (3101, 1, 'e2e-mp-updateprofile-php', 'Update Profile Test (PHP)', 'เดิม', 'ทดสอบ', 'เดิม ทดสอบ',
+   '0800000001', 1, '2026-01-05 10:00:00', '2026-01-05 10:00:00'),
+  (3102, 1, 'e2e-mp-updateprofile-next', 'Update Profile Test (Next)', 'เดิม', 'ทดสอบ', 'เดิม ทดสอบ',
+   '0800000002', 1, '2026-01-05 10:00:00', '2026-01-05 10:00:00');
+
+-- rewards:redeem — pre-existing rows with a points_transactions balance of
+-- 500 each (matched to `users.available_points` for the same reason
+-- richMember's is — see that comment above), enough to redeem reward 801
+-- (points_required=200) with room to spare, deterministic new_balance=300.
+INSERT INTO `users`
+  (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `registered_at`,
+   `total_points`, `available_points`, `used_points`, `points`, `created_at`)
+VALUES
+  (3201, 1, 'e2e-mp-redeem-php', 'Redeem Test (PHP)', 1, '2026-01-06 10:00:00', 500, 500, 0, 500, '2026-01-06 10:00:00'),
+  (3202, 1, 'e2e-mp-redeem-next', 'Redeem Test (Next)', 1, '2026-01-06 10:00:00', 500, 500, 0, 500, '2026-01-06 10:00:00');
+
+INSERT INTO `points_transactions`
+  (`id`, `user_id`, `line_account_id`, `type`, `points`, `balance_after`, `reference_type`, `reference_id`, `description`, `created_at`)
+VALUES
+  (5201, 3201, 1, 'earn', 500, 500, 'order', 1002, 'Order #1002 (E2E, PHP identity)', '2026-01-06 10:00:00'),
+  (5202, 3202, 1, 'earn', 500, 500, 'order', 1003, 'Order #1003 (E2E, Next identity)', '2026-01-06 10:00:00');
+
+-- wishlist:toggle — registered users with NO pre-existing wishlist row for
+-- product 602, so calling `toggle` deterministically ADDS it (is_favorite:
+-- true) on both stacks.
+INSERT INTO `users`
+  (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (3301, 1, 'e2e-mp-wishtoggle-php', 'Wishlist Toggle Test (PHP)', 1, '2026-01-07 10:00:00'),
+  (3302, 1, 'e2e-mp-wishtoggle-next', 'Wishlist Toggle Test (Next)', 1, '2026-01-07 10:00:00');
+
+-- wishlist:remove — registered users WITH a pre-existing wishlist row for
+-- product 602, so calling `remove` deterministically deletes it on both stacks.
+INSERT INTO `users`
+  (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (3401, 1, 'e2e-mp-wishremove-php', 'Wishlist Remove Test (PHP)', 1, '2026-01-07 10:00:00'),
+  (3402, 1, 'e2e-mp-wishremove-next', 'Wishlist Remove Test (Next)', 1, '2026-01-07 10:00:00');
+
+INSERT INTO `user_wishlist`
+  (`id`, `user_id`, `line_user_id`, `product_id`, `line_account_id`, `price_when_added`, `notify_on_sale`, `created_at`)
+VALUES
+  (9401, 3401, 'e2e-mp-wishremove-php', 602, 1, 150.00, 1, '2026-01-07 10:05:00'),
+  (9402, 3402, 'e2e-mp-wishremove-next', 602, 1, 150.00, 1, '2026-01-07 10:05:00');

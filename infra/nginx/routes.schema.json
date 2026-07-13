@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://re-ya.com/schemas/strangler-routes.schema.json",
+  "title": "Strangler edge route manifest",
+  "description": "Route manifest as code for the nginx strangler edge (plan §1.5). One entry per path prefix; the generator (infra/nginx/generate-routes.mjs) renders this into nginx map/location blocks. A route flip = edit one entry's `upstream`/`tenants` here + regenerate + reload; rollback = revert that one line + regenerate + reload.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["path", "upstream", "tenants"],
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "URL path prefix this route matches, rendered as an nginx `location` prefix match. Must start with '/'. Exactly one entry with path \"/\" is required as the default catch-all.",
+        "pattern": "^/[a-zA-Z0-9/_-]*$"
+      },
+      "upstream": {
+        "type": "string",
+        "description": "Target upstream service name. php_backend is the strangler default (plan §1.5); the other three are the Node set that participates in blue-green (plan §4.6).",
+        "enum": ["php_backend", "next_admin", "next_miniapp", "ws"]
+      },
+      "tenants": {
+        "description": "\"all\" routes every tenant's traffic on this path to `upstream`. An array of tenant slugs scopes the flip to only those tenants (per-tenant canary, plan §7.3); every other tenant falls back to php_backend for this path.",
+        "oneOf": [
+          {
+            "type": "string",
+            "const": "all"
+          },
+          {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+            }
+          }
+        ]
+      },
+      "note": {
+        "type": "string",
+        "description": "Free-text rationale for this route (why it's flipped, which phase/ticket owns it). Not rendered into nginx config; documentation only."
+      }
+    }
+  }
+}

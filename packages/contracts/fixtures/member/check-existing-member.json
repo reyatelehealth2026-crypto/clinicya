@@ -1,0 +1,25 @@
+{
+  "description": "GET action=check — existing, already-registered member (exact line_user_id + line_account_id match).",
+  "request": {
+    "action": "check",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "display_name": "สมชาย ใจดี",
+    "picture_url": "https://profile.line-scdn.net/xyz"
+  },
+  "response": {
+    "success": true,
+    "message": "OK",
+    "exists": true,
+    "is_registered": true,
+    "has_profile": true,
+    "member_id": "M2600001",
+    "first_name": "สมชาย",
+    "last_name": "ใจดี",
+    "display_name": "สมชาย ใจดี",
+    "tier": "bronze",
+    "tier_name": "Bronze",
+    "points": 120,
+    "auto_registered": true
+  }
+}

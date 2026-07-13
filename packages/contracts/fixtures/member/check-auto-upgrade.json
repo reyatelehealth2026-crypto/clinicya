@@ -1,0 +1,23 @@
+{
+  "description": "GET action=check — a `users` row exists (e.g. created by an earlier webhook interaction) but is_registered=0 -> autoUpgradeMember() fires, adds 50pt to the EXISTING points balance (COALESCE(points,0)+50) instead of setting it to a fresh 50.",
+  "request": {
+    "action": "check",
+    "line_user_id": "Uexistingunregistered0000000000000",
+    "line_account_id": 1
+  },
+  "response": {
+    "success": true,
+    "message": "OK",
+    "exists": true,
+    "is_registered": true,
+    "has_profile": false,
+    "member_id": "M2600003",
+    "first_name": null,
+    "last_name": null,
+    "display_name": "แขก ขาจร",
+    "tier": "bronze",
+    "tier_name": "Bronze",
+    "points": 80,
+    "auto_registered": true
+  }
+}

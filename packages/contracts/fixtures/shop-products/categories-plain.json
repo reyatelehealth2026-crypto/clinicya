@@ -1,0 +1,13 @@
+{
+  "description": "action=categories, non-Odoo tenant (useShopProductCatalog() false) -> item_categories fallback branch: numeric ids, no `code` key.",
+  "request": { "action": "categories", "line_account_id": 1 },
+  "response": {
+    "success": true,
+    "categories": [
+      { "id": 3, "name": "ยาสามัญประจำบ้าน" },
+      { "id": 4, "name": "วิตามินและอาหารเสริม" }
+    ],
+    "category_id_is_string": false
+  },
+  "status": 200
+}

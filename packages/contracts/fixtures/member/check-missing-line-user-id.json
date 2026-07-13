@@ -1,0 +1,5 @@
+{
+  "description": "GET action=check — missing line_user_id -> jsonResponse(false, 'Missing line_user_id'), no data payload. Still HTTP 200 (jsonResponse() never sets a status code).",
+  "request": { "action": "check", "line_user_id": "" },
+  "response": { "success": false, "message": "Missing line_user_id" }
+}

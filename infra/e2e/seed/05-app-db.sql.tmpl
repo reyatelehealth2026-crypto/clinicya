@@ -1,0 +1,18 @@
+-- infra/e2e/seed/05-app-db.sql.tmpl
+--
+-- Creates the app/tenant DB shell. __APP_DB_NAME__ is substituted by
+-- run.mjs at runtime with whatever DB_NAME config/config.php's local
+-- (gitignored) copy actually defines — NEVER hardcoded here, per this
+-- repo's secrets-discipline guardrail (config/config.php's values must
+-- never be copied into a tracked file). In practice this resolves to
+-- `zrismpsz_clinicya` (config/config.php's literal define()), but the
+-- template never assumes that.
+--
+-- database/migration_2026-05-25_tenant_template.sql (the ~280-table
+-- template) is piped in immediately after this by run.mjs, with a
+-- `USE \`__APP_DB_NAME__\`;` line prepended (that file has no USE statement
+-- of its own — it's designed to be applied against an already-selected
+-- tenant DB by the real provisioning flow, classes/TenantProvisioning.php).
+CREATE DATABASE IF NOT EXISTS `__APP_DB_NAME__`
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;

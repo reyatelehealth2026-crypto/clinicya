@@ -1,0 +1,6 @@
+{
+  "description": "line_user_id omitted entirely -> the file-level `if (!$lineUserId)` short-circuit, still HTTP 200.",
+  "request": {},
+  "response": { "success": false, "error": "Missing line_user_id" },
+  "status": 200
+}

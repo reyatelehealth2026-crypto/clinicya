@@ -1,0 +1,7 @@
+{
+  "description": "liff_id fails rla_valid_liff_id() (empty string) -> 400 invalid_liff_id.",
+  "request": { "liff_id": "" },
+  "response": { "success": false, "error": "invalid_liff_id" },
+  "status": 400,
+  "cacheControl": "no-store, no-cache, must-revalidate"
+}

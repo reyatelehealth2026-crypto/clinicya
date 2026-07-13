@@ -1,0 +1,33 @@
+{
+  "description": "action=history — existing member with a mixed earn/redeem transaction log, scoped by line_account_id.",
+  "request": { "action": "history", "line_user_id": "U1234567890abcdef1234567890abcdef", "line_account_id": 1, "limit": 20 },
+  "response": {
+    "success": true,
+    "user": { "name": "สมชาย ใจดี", "total_points": 620, "available_points": 470, "used_points": 150 },
+    "history": [
+      {
+        "id": 88,
+        "type": "redeem",
+        "points": -150,
+        "balance_after": 470,
+        "description": "แลกรางวัล: ส่วนลด 50 บาท",
+        "reference_type": "reward_redemption",
+        "reference_id": 12,
+        "created_at": "2026-07-10 14:32:05",
+        "formatted_date": "10/07/2026 14:32"
+      },
+      {
+        "id": 61,
+        "type": "earn",
+        "points": 120,
+        "balance_after": 620,
+        "description": "ได้รับแต้มจากคำสั่งซื้อ #SO-2607-0004",
+        "reference_type": "order",
+        "reference_id": 4,
+        "created_at": "2026-07-02 09:11:47",
+        "formatted_date": "02/07/2026 09:11"
+      }
+    ]
+  },
+  "status": 200
+}

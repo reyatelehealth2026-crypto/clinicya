@@ -1,0 +1,13 @@
+{
+  "description": "action=categories, Odoo/shop_products storefront active for this line_account_id (useShopProductCatalog() true) -> DISTINCT category label strings double as id/name/code.",
+  "request": { "action": "categories", "account": 7 },
+  "response": {
+    "success": true,
+    "categories": [
+      { "id": "ยาแก้ปวด", "name": "ยาแก้ปวด", "code": "ยาแก้ปวด" },
+      { "id": "อาหารเสริม", "name": "อาหารเสริม", "code": "อาหารเสริม" }
+    ],
+    "category_id_is_string": true
+  },
+  "status": 200
+}

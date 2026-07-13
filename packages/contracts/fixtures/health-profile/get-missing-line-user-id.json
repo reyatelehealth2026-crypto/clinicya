@@ -1,0 +1,6 @@
+{
+  "description": "line_user_id omitted/empty -> `if (empty($lineUserId))` early jsonResponse(['success'=>false,'error'=>'Missing line_user_id'], 400).",
+  "request": { "action": "get" },
+  "response": { "success": false, "error": "Missing line_user_id" },
+  "status": 400
+}

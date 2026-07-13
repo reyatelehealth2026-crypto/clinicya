@@ -1,0 +1,51 @@
+-- infra/e2e/seed/10-plan-and-tenant.sql.tmpl
+--
+-- Applied against zrismpsz_reya_platform AFTER the six committed master
+-- migrations (run.mjs's MASTER_MIGRATIONS list — migration_2026-05-25_platform_master.sql
+-- already INSERT IGNOREs 3 default plans, but this harness seeds its own
+-- distinct plan row so it never depends on that file's seed data surviving
+-- future edits). __APP_DB_NAME__ is substituted by run.mjs — see
+-- 05-app-db.sql.tmpl's header comment for why it can't be hardcoded here.
+--
+-- `plans` uses INSERT IGNORE — its content is static reference data, so a
+-- collision with a pre-existing row (same content) is a harmless no-op.
+--
+-- `tenants` uses DELETE-then-INSERT (same reasoning as
+-- 20-admin-user.sql.tmpl's header comment) — NOT INSERT IGNORE. Verified
+-- empirically during this batch's build: INSERT IGNORE on the unique `slug`
+-- would silently keep a STALE row (e.g. one written by an earlier
+-- interrupted/crashed seed attempt with a different db_name) instead of
+-- refreshing it, and a stale/wrong `db_name` here is exactly the field this
+-- harness's Node-side getTenantDb(tenantId) depends on being correct.
+
+USE `zrismpsz_reya_platform`;
+
+INSERT IGNORE INTO `plans` (`slug`, `display_name`, `description`, `price_monthly_thb`, `is_active`, `is_visible_public`)
+VALUES (
+  'e2e-bridge-harness',
+  'E2E Bridge Harness (internal test plan / แผนทดสอบภายใน)',
+  'infra/e2e/ scratch plan — not a real subscription tier, never shown publicly.',
+  0.00,
+  1,
+  0
+);
+
+-- Slug deliberately NOT in bootstrap/resolve_subdomain.php's
+-- reya_reserved_subdomains() whitelist. Not that it matters for the probe
+-- request itself (the probe's Host header is the harness's own address, not
+-- a `*.re-ya.com` subdomain, so bootstrap/resolve_subdomain.php never
+-- matches it and PHP legacy-falls-back to the hardcoded DB_NAME connection
+-- — see docs/runbooks/phase0-cutover-rollback.md's E2E section) — this row
+-- exists so the Node side's getTenantDb(tenantId) / runWithTenantDb() has a
+-- real master.tenants row to resolve db_name from.
+DELETE FROM `tenants` WHERE `slug` = 'e2e-bridge-harness';
+
+INSERT INTO `tenants` (`slug`, `display_name`, `db_name`, `db_host`, `plan_id`, `status`)
+VALUES (
+  'e2e-bridge-harness',
+  'E2E Bridge Harness Tenant (ทดสอบภายใน)',
+  '__APP_DB_NAME__',
+  'localhost',
+  (SELECT id FROM `plans` WHERE `slug` = 'e2e-bridge-harness' LIMIT 1),
+  'active'
+);

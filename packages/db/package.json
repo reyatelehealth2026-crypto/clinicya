@@ -1,0 +1,41 @@
+{
+  "name": "@reya/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kysely + mysql2 tenant pool registry, migrate-all runner, and kysely-codegen wrapper — replaces modules/Core/Database.php's per-request PDO factory.",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "migrate-all": "tsx src/bin/migrate-all.ts",
+    "codegen": "tsx src/bin/codegen.ts"
+  },
+  "dependencies": {
+    "@reya/config": "workspace:*",
+    "kysely": "^0.29.3",
+    "mysql2": "^3.22.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "kysely-codegen": "^0.20.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "description": "action=product_detail — product_id well-formed but no matching active row (or belongs to a different line_account_id) -> success:false, message:'Product not found', still HTTP 200.",
+  "request": { "action": "product_detail", "product_id": 999999, "line_account_id": 1 },
+  "response": { "success": false, "message": "Product not found" },
+  "status": 200
+}

@@ -156,6 +156,144 @@ export function apiUrl(path: string) {
   return `${appConfig.apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-endpoint canary override map (Phase 3 prereq — nextjs-full-migration-plan
+// contractNote #10).
+//
+// WHY: line-mini-app is ONE static export shared by every tenant, so nginx's
+// tenant-keyed routes.json canary mechanism (used for Phase-2 admin pages)
+// cannot express "10% of mini-app traffic goes to the new Next endpoint" the
+// way the migration plan's ramp (demo tenant -> 1 real tenant -> 10% -> 50% ->
+// 100%) requires for a bundle every tenant shares. `resolveEndpointTarget()`
+// is the client-side, per-endpoint, config-driven mechanism that lets mig-orc
+// flip ONE endpoint at a time via an env/build value, independent of
+// infra/nginx.
+//
+// BACKWARD COMPATIBILITY (required — see phase-3-batch-1 brief): every call
+// site that does not pass an explicit `endpointKey` (all pre-existing
+// wrapper files) must resolve to EXACTLY `${resolvePhpApiBaseUrl()}${path}`,
+// byte for byte, until an override is actually configured for that key.
+// Because `NEXT_PUBLIC_MINIAPP_ENDPOINT_OVERRIDES` defaults to unset/empty,
+// that is always true out of the box.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MiniappEndpointOverride {
+  /** Origin to call instead of resolvePhpApiBaseUrl(), e.g. the Next admin app's own origin. */
+  origin: string
+  /** Path on that origin, e.g. `/api/miniapp/resolve-line-account`. */
+  path: string
+}
+
+// Memoised by the RAW env-var string, not "computed once forever": in a real
+// deployment NEXT_PUBLIC_* values are inlined at build time and never change,
+// so this is a true parse-once cache. In tests, mutating
+// process.env.NEXT_PUBLIC_MINIAPP_ENDPOINT_OVERRIDES between cases still
+// re-parses (the raw string changed), so tests never see stale results.
+let _lastOverridesRaw: string | undefined
+let _lastOverridesParsed: Record<string, MiniappEndpointOverride> = {}
+
+function isEndpointOverride(value: unknown): value is MiniappEndpointOverride {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Record<string, unknown>).origin === 'string' &&
+    typeof (value as Record<string, unknown>).path === 'string'
+  )
+}
+
+/**
+ * Parse `NEXT_PUBLIC_MINIAPP_ENDPOINT_OVERRIDES` (a single JSON object
+ * mapping `"${METHOD} ${legacyPath}"` — or any caller-chosen key — to
+ * `{origin, path}`). Malformed JSON, a non-object value, or a per-key value
+ * missing `origin`/`path` NEVER throws — it is treated as "no override for
+ * that key", falling back to default PHP resolution.
+ */
+function parseEndpointOverrides(): Record<string, MiniappEndpointOverride> {
+  const raw = process.env.NEXT_PUBLIC_MINIAPP_ENDPOINT_OVERRIDES || ''
+  if (raw === _lastOverridesRaw) {
+    return _lastOverridesParsed
+  }
+  _lastOverridesRaw = raw
+
+  const parsed: Record<string, MiniappEndpointOverride> = {}
+  if (raw.trim() !== '') {
+    try {
+      const decoded: unknown = JSON.parse(raw)
+      if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
+        for (const [key, value] of Object.entries(decoded as Record<string, unknown>)) {
+          if (isEndpointOverride(value)) {
+            parsed[key] = { origin: value.origin, path: value.path }
+          }
+        }
+      }
+    } catch {
+      // Malformed JSON — fall back to "no overrides configured" (empty map), never throw.
+    }
+  }
+
+  _lastOverridesParsed = parsed
+  return parsed
+}
+
+/**
+ * Resolve where a legacy PHP endpoint should actually be called.
+ *
+ * `endpointKey` (when passed by the caller — see php-bridge.ts's phpGet/
+ * phpPost) is looked up in the override map; a hit returns that entry's
+ * `{origin, path}` verbatim. A miss (including when `endpointKey` is
+ * omitted, the map is empty, or overrides JSON is malformed) returns the
+ * exact pre-refactor default: `{origin: resolvePhpApiBaseUrl(), path: legacyPath}`.
+ */
+export function resolveEndpointTarget(
+  legacyPath: string,
+  endpointKey?: string
+): { origin: string; path: string } {
+  const overrides = parseEndpointOverrides()
+  const key = endpointKey ?? legacyPath
+  const override = overrides[key]
+
+  if (override) {
+    return { origin: override.origin, path: override.path }
+  }
+
+  return { origin: resolvePhpApiBaseUrl(), path: legacyPath }
+}
+
+/** `{origin}{path}`, normalising a missing leading slash — same join `apiUrl()` has always done. */
+function joinOriginPath(origin: string, path: string): string {
+  return `${origin}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+/**
+ * Pure URL builder used by php-bridge.ts's phpGet/phpPost. Kept here (not in
+ * php-bridge.ts) and free of any `@/` alias imports — like data-rights-request.ts,
+ * this makes it directly importable by the project's `node --test` runner
+ * without a bundler. See php-bridge.test.ts.
+ *
+ * `endpointKey` default (when the caller passes none): `` `${method} ${legacyPath}` ``
+ * — computed by php-bridge.ts's phpGet/phpPost, not here, since only they know
+ * the HTTP method. Passing no key at all (both args omitted) still works and
+ * behaves the same as passing `legacyPath` itself as the key.
+ */
+export function buildPhpRequestUrl(
+  legacyPath: string,
+  params: Record<string, string | number | undefined> | undefined,
+  endpointKey?: string
+): string {
+  const target = resolveEndpointTarget(legacyPath, endpointKey)
+  const url = new URL(joinOriginPath(target.origin, target.path))
+
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        url.searchParams.set(key, String(value))
+      }
+    })
+  }
+
+  return url.toString()
+}
+
 /**
  * True when the page is being served from a tenant subdomain (e.g.
  * banyarimchol.re-ya.com), as opposed to the root domain / localhost. On a

@@ -1,0 +1,14 @@
+{
+  "description": "POST action=register — new member, all required fields present.",
+  "request": {
+    "action": "register",
+    "line_user_id": "Unewregister0000000000000000000000",
+    "line_account_id": 1,
+    "first_name": "วิภา",
+    "last_name": "สุขใจ",
+    "birthday": "1995-08-20",
+    "gender": "female",
+    "phone": "0898765432"
+  },
+  "response": { "success": true, "message": "สมัครสมาชิกสำเร็จ!", "member_id": "M2600004", "welcome_bonus": 50, "tier": "bronze" }
+}

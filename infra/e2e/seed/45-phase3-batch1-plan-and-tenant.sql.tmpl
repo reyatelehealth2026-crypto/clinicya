@@ -1,0 +1,68 @@
+-- infra/e2e/seed/45-phase3-batch1-plan-and-tenant.sql.tmpl
+--
+-- api-parity.mjs's OWN plan + tenant + tenant_line_account_routes rows
+-- (Phase 3 batch 1, mig-infra). Structurally identical to
+-- infra/e2e/seed/15-plan-and-tenant.sql.tmpl (parity.mjs, Phase 2 batch 1)
+-- but with its own distinct tenant slug ('e2e-api-parity-harness') — same
+-- rationale as that file's own header comment: two independent harnesses
+-- coincidentally sharing one hardcoded tenant slug string would be a
+-- confusing cross-reference. Numbered "45" (between parity.mjs's "40" batch
+-- and this batch's own "50" fixture) purely to keep infra/e2e/seed/ sorted
+-- in apply order at a glance — api-parity.mjs applies files by explicit path,
+-- not by directory glob, so the number is documentation, not a mechanism.
+--
+-- ADDITIONALLY seeds tenant_line_account_routes — the master-DB routing
+-- index BOTH bootstrap/route_by_account.php (PHP) and
+-- @reya/tenant's routeByLineAccount() (Next, via
+-- createMasterLineAccountRouteRepository()) consult to resolve a tenant from
+-- a bare line_account_id on root-domain traffic (contractNote point 2b/2d —
+-- this harness deliberately never sets a tenant-pinning Host header; every
+-- /api/miniapp/** request below relies on this table, exactly like real
+-- root-domain line-mini-app traffic does). Two routes are seeded:
+--   line_account_id 1 -> this tenant, liff_id set (resolve-line-account's
+--     FAST PATH — migration_2026-06-02_route_liff_id.sql's column).
+--   line_account_id 2 -> this tenant, no liff_id (used only by the
+--     rewards:list default-account-fallback scenario in
+--     50-phase3-batch1-miniapp-fixture.sql.tmpl).
+--
+-- __APP_DB_NAME__ substituted by api-parity.mjs at runtime — see
+-- 05-app-db.sql.tmpl's header comment for why it can't be hardcoded here.
+
+USE `zrismpsz_reya_platform`;
+
+INSERT IGNORE INTO `plans` (`slug`, `display_name`, `description`, `price_monthly_thb`, `is_active`, `is_visible_public`)
+VALUES (
+  'e2e-api-parity-harness',
+  'E2E API Parity Harness (internal test plan / แผนทดสอบภายใน)',
+  'infra/e2e/api-parity.mjs scratch plan — not a real subscription tier, never shown publicly.',
+  0.00,
+  1,
+  0
+);
+
+-- DELETE-then-INSERT, not INSERT IGNORE — see 10-plan-and-tenant.sql.tmpl's
+-- header comment for the empirically-verified reason (a stale db_name from
+-- an earlier interrupted run must never silently survive a re-seed).
+DELETE FROM `tenants` WHERE `slug` = 'e2e-api-parity-harness';
+
+INSERT INTO `tenants` (`slug`, `display_name`, `db_name`, `db_host`, `plan_id`, `status`)
+VALUES (
+  'e2e-api-parity-harness',
+  'E2E API Parity Harness Tenant (ทดสอบภายใน)',
+  '__APP_DB_NAME__',
+  'localhost',
+  (SELECT id FROM `plans` WHERE `slug` = 'e2e-api-parity-harness' LIMIT 1),
+  'active'
+);
+
+-- tenant_line_account_routes — DELETE-then-INSERT on the two channel_ids this
+-- fixture owns (unique key), same "never silently keep a stale row" reasoning.
+DELETE FROM `tenant_line_account_routes` WHERE `channel_id` IN ('e2e-miniapp-channel-1', 'e2e-miniapp-channel-2');
+
+INSERT INTO `tenant_line_account_routes`
+  (`line_account_id`, `tenant_id`, `tenant_db_name`, `oa_name`, `channel_id`, `liff_id`, `is_active`)
+VALUES
+  (1, (SELECT id FROM `tenants` WHERE `slug` = 'e2e-api-parity-harness' LIMIT 1), '__APP_DB_NAME__',
+   'E2E Miniapp Primary', 'e2e-miniapp-channel-1', '1234567890-e2eminiapp', 1),
+  (2, (SELECT id FROM `tenants` WHERE `slug` = 'e2e-api-parity-harness' LIMIT 1), '__APP_DB_NAME__',
+   'E2E Miniapp Secondary', 'e2e-miniapp-channel-2', NULL, 1);

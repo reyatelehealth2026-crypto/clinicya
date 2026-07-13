@@ -1,0 +1,27 @@
+{
+  "description": "GET action=my_redemptions.",
+  "request": { "action": "my_redemptions", "line_user_id": "U1234567890abcdef1234567890abcdef", "line_account_id": 1, "limit": 20 },
+  "response": {
+    "success": true,
+    "message": "OK",
+    "redemptions": [
+      {
+        "id": 501,
+        "user_id": 42,
+        "reward_id": 10,
+        "line_account_id": 1,
+        "points_used": 500,
+        "redemption_code": "RW9K3XA1B2C3",
+        "status": "pending",
+        "expires_at": null,
+        "created_at": "2026-07-10 09:12:00",
+        "approved_at": null,
+        "approved_by": null,
+        "delivered_at": null,
+        "notes": null,
+        "reward_name": "ส่วนลด 50 บาท",
+        "reward_image": null
+      }
+    ]
+  }
+}

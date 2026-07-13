@@ -1,0 +1,10 @@
+{
+  "description": "action=history — member exists but has no points_transactions rows yet (never earned/redeemed).",
+  "request": { "action": "history", "line_user_id": "Ubrandnewuser000000000000000000" },
+  "response": {
+    "success": true,
+    "user": { "name": "ลูกค้าใหม่", "total_points": 0, "available_points": 0, "used_points": 0 },
+    "history": []
+  },
+  "status": 200
+}

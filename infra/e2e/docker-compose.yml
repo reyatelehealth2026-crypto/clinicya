@@ -1,0 +1,209 @@
+# infra/e2e/docker-compose.yml
+#
+# Self-contained E2E harness (Phase 1 batch 3, plan §1.4 + §1.5) that proves
+# the Next-side login() -> internal/session-bridge.php -> real PHP
+# $_SESSION -> auth_check-gated PHP page mechanism end-to-end on the REAL
+# stack. See docs/runbooks/phase0-cutover-rollback.md's "E2E bridge harness
+# (Phase 1)" section for how to run this and what it does/does not prove.
+#
+# NOT meant to be `docker compose up` standalone — infra/e2e/run.mjs is the
+# documented single entry point. It generates every secret below as a
+# throwaway, runtime-only value (never written to any tracked file) and
+# passes them in via process env before shelling out to
+# `docker compose -f infra/e2e/docker-compose.yml ...`. Every ${VAR:?}
+# below has no default and will hard-fail a bare `docker compose up` without
+# run.mjs — that's intentional (same pattern infra/compose/docker-compose.strangler.yml
+# already uses for MARIADB_PASSWORD).
+#
+# Container/volume/network naming uses an `e2e-` prefix throughout — per
+# mig-orc's coordinate note, mig-kernel concurrently runs its own scratch
+# DBs (`codegen-mariadb-scratch` et al) for the codegen batch; this project
+# name + prefix + dedicated network/ports keep the two fully apart.
+#
+# `php` builds from the EXISTING infra/php/Dockerfile — NOT forked/copied
+# (out of scope per this batch's brief; infra/php/Dockerfile itself is
+# owned by Phase 0 and untouched here). Build context is the repo root,
+# same as infra/compose/docker-compose.strangler.yml, so Docker's layer
+# cache is shared between the two — a `php` image already built for the
+# strangler overlay makes this harness's build near-instant.
+
+services:
+  # --- MariaDB 10.11 (matches infra/compose/docker-compose.strangler.yml's
+  #     choice — the cPanel source dump / tenant template use MariaDB-specific
+  #     idioms). Scratch, ephemeral: both volumes below are removed by
+  #     run.mjs's `docker compose down -v` in its finally block on every
+  #     exit path (PASS, FAIL, or thrown error). ---
+  mariadb:
+    image: mariadb:10.11
+    container_name: e2e-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: ${E2E_MARIADB_ROOT_PASSWORD:?}
+      # MARIADB_DATABASE/USER/PASSWORD bootstrap the APP db + its user on
+      # first init (official mariadb image behavior: creates the DB, creates
+      # '<user>'@'%' with ALL PRIVILEGES on it). run.mjs separately creates
+      # zrismpsz_reya_platform (the master DB — fixed name, not env-driven,
+      # see infra/e2e/seed/00-master-db.sql) and GRANTs this same user
+      # access to it too, since both config/config.php's hardcoded DB_USER
+      # and packages/config's DB_USER env var are the ONE credential both
+      # the PHP legacy-fallback connection and every Node mysql2 pool
+      # (master + tenant) authenticate with.
+      #
+      # E2E_APP_DB_NAME/USER/PASSWORD are NOT hardcoded anywhere in this
+      # repo's tracked files — run.mjs parses them at runtime straight out
+      # of the local (gitignored) config/config.php (DB_NAME/DB_USER/DB_PASS
+      # literal defines) so this harness always matches whatever that file
+      # actually says, and so its value never has to be copied into a
+      # tracked file (this repo's secrets-discipline guardrail).
+      MARIADB_DATABASE: ${E2E_APP_DB_NAME:?}
+      MARIADB_USER: ${E2E_APP_DB_USER:?}
+      MARIADB_PASSWORD: ${E2E_APP_DB_PASSWORD:?}
+      MARIADB_CHARSET: utf8mb4
+      MARIADB_COLLATION: utf8mb4_unicode_ci
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+07:00
+      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+    ports:
+      # Host port 3306 DIRECTLY (not a high/remapped port) — see this
+      # harness's run.mjs / docs/runbooks/phase0-cutover-rollback.md E2E
+      # section "port gotcha" note: packages/db's masterPool.ts /
+      # tenantPoolRegistry.ts build mysql2's PoolOptions from env.DB_HOST
+      # alone (no DB_PORT anywhere in packages/config's env schema, and
+      # mysql2's `host` option does not parse "host:port"), so the Node
+      # runner — which runs on the HOST, not inside this compose network —
+      # can only reach MariaDB on mysql2's hard-coded default port, 3306.
+      # mig-kernel's concurrent codegen scratch DB already uses a distinct
+      # high port (33061 at the time this harness was built), so this does
+      # not collide with it; if some other process genuinely holds 3306,
+      # that's the real packages/db DB_PORT gap the brief asks to flag back
+      # rather than work around here.
+      - "3306:3306"
+    volumes:
+      - e2e_mariadb_data:/var/lib/mysql
+      # Shared with `php` below — config/config.php hardcodes DB_HOST to
+      # 'localhost', which PDO's mysql driver treats as "connect via unix
+      # socket" no matter what env vars a container sets (same fact
+      # infra/compose/docker-compose.strangler.yml's `php` service comment
+      # already documents). infra/php/php.ini (baked into the existing
+      # infra/php/Dockerfile image, unmodified) points
+      # pdo_mysql.default_socket at /run/mysqld/mysqld.sock — this volume
+      # is what makes that path actually resolve to THIS container.
+      - e2e_mariadb_socket:/run/mysqld
+    networks:
+      e2e-net:
+        ipv4_address: 172.30.99.10
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
+  # --- Redis — session cache for BOTH sides of the bridge: PHP's
+  #     infra/php/session-redis-handler.php (auto_prepend_file, unmodified)
+  #     and @reya/auth's SessionCache (packages/auth/src/redisClient.ts).
+  #     One instance, two logical DBs (session handler defaults to DB 1,
+  #     leaving DB 0 free) — mirrors infra/compose/docker-compose.strangler.yml's
+  #     REDIS_SESSION_DB convention. ---
+  redis:
+    image: redis:7-alpine
+    container_name: e2e-redis
+    ports:
+      # Host-mapped so the Node runner (on the host) can reach it via
+      # REDIS_URL — distinct high port, no gotcha here (ioredis parses a
+      # full connection URL, host:port and all).
+      - "16379:6379"
+    networks:
+      e2e-net:
+        ipv4_address: 172.30.99.11
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  # --- Replatformed PHP monolith — infra/php/Dockerfile UNMODIFIED (no
+  #     fork/copy). Same lift-and-shift shape as
+  #     infra/compose/docker-compose.strangler.yml's `php` service: code is
+  #     bind-mounted (not baked in), DB reached via the shared unix-socket
+  #     volume, sessions via Redis (infra/php/session-redis-handler.php,
+  #     auto_prepend_file). ---
+  php:
+    build:
+      context: ../..
+      dockerfile: infra/php/Dockerfile
+    container_name: e2e-php
+    environment:
+      # Inert for the actual DB connection (config/config.php's DB_HOST is
+      # a hardcoded 'localhost' literal define(), not getenv() — see the
+      # `mariadb` service's comment above) but kept for parity with
+      # infra/compose/docker-compose.strangler.yml and forward-compat once
+      # config.php is made env-aware.
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_NAME: ${E2E_APP_DB_NAME:?}
+      DB_USER: ${E2E_APP_DB_USER:?}
+      DB_PASSWORD: ${E2E_APP_DB_PASSWORD:?}
+      REDIS_SESSION_HOST: redis
+      REDIS_SESSION_PORT: 6379
+      REDIS_SESSION_DB: 1
+      COMPOSER_AUTOLOAD: /var/www/html/vendor/autoload.php
+      TZ: Asia/Bangkok
+      # internal/session-bridge.php's own HMAC gate (defense-in-depth
+      # underneath the internal/.htaccess CIDR carve-out this batch adds —
+      # see that file's header comment). Same generated value run.mjs sets
+      # in its own process env before calling login()/logout(), so the two
+      # sides' signatures match. NOT written to any tracked file.
+      SESSION_BRIDGE_HMAC_SECRET: ${E2E_SESSION_BRIDGE_HMAC_SECRET:?}
+    volumes:
+      - ../..:/var/www/html
+      - e2e_mariadb_socket:/run/mysqld
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      e2e-net:
+        ipv4_address: 172.30.99.12
+    ports:
+      # Host-mapped so both (a) run.mjs's probe-page fetches and (b) the
+      # Node runner's syncToPhpBridge() POSTs to
+      # http://127.0.0.1:18092/internal/session-bridge.php can reach this
+      # container from the host. internal/.htaccess's CIDR carve-out
+      # (172.30.99.0/24, this network's fixed subnet) is what makes the
+      # second one succeed instead of 403ing — see that file's header
+      # comment for the empirical basis (host-origin traffic through a
+      # published port on a custom bridge network is SNAT'd to the
+      # network's gateway IP, 172.30.99.1, which is inside that /24).
+      - "18092:80"
+    healthcheck:
+      # Deliberately NOT gating run.mjs's orchestration on this — see
+      # run.mjs's own comment: this container's first real request depends
+      # on the DB being seeded (a run.mjs orchestration step that happens
+      # AFTER `docker compose up`), so this healthcheck may legitimately
+      # report unhealthy for a while without anything being wrong. Kept
+      # anyway for `docker compose ps` / `docker inspect` visibility.
+      test: ["CMD", "curl", "-fsS", "http://localhost/", "-o", "/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+volumes:
+  e2e_mariadb_data:
+    driver: local
+  e2e_mariadb_socket:
+    driver: local
+
+networks:
+  e2e-net:
+    driver: bridge
+    ipam:
+      config:
+        # FIXED subnet — internal/.htaccess's CIDR carve-out for this
+        # harness is scoped to exactly this range. Do not change one
+        # without the other.
+        - subnet: 172.30.99.0/24

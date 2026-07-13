@@ -1,0 +1,1700 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+ * globals.css — REYA design-token infrastructure for apps/admin.
+ *
+ * Source of truth (read verbatim, faithfully re-derived — NOT frontend/'s
+ * tailwind.config.ts, whose palette is an unrelated generic sky-blue):
+ *   1. assets/css/design-tokens.css — base :root custom properties (color
+ *      scales incl. REYA emerald `--color-primary-*`, glass tokens, radius,
+ *      shadow, spacing, typography, transition tokens).
+ *   2. assets/css/reya-theme.css — the brand overlay `:root` block, loaded
+ *      SECOND in includes/header.php ("Loaded after the legacy inline CSS
+ *      … so its tokens win") — reproduced here in the same order so its
+ *      re-points (`--primary`, `--sidebar-active-*`, `--font-display`, the
+ *      REYA surface/shadow tokens) win the cascade exactly like the PHP app.
+ *   3. includes/components/{data-table,pagination,modal,tabs,toolbar,
+ *      page-header,empty-state,kpi-card,section-card}.php's own
+ *      getXxxStyles() — NOT assets/css/components.css. Read-the-source
+ *      finding: the shared primitives ported in apps/admin/src/components/
+ *      (DataTable, Pagination, Modal, Tabs, Toolbar, PageHeader, EmptyState)
+ *      already reuse these PHP partials' own class names 1:1
+ *      (`.data-table-card`, `.pagination-bar`, `.modal-shell`, `.tabs-nav`,
+ *      …), NOT assets/css/components.css's dark-glass classes
+ *      (`.table-glass`, `.pagination-glass`, …) — components.css is loaded
+ *      only by a few standalone dashboard pages (dashboard.php,
+ *      odoo-dashboard.php, …) via kpi-card.php/section-card.php's sibling
+ *      "Archetype B" partials, not by users.php/user-detail.php's "Archetype
+ *      A" list/detail partials this batch ports. Porting the *real* CSS each
+ *      component's real PHP source already ships (all design-tokens-driven)
+ *      is what actually reproduces REYA emerald — copying components.css's
+ *      hardcoded indigo/violet (#6366f1/#8b5cf6) gradients would not.
+ * ========================================================================== */
+
+/* -----------------------------------------------------------------------
+   1) design-tokens.css — base custom properties
+   ----------------------------------------------------------------------- */
+:root {
+  /* Primary Colors — REYA emerald (legacy `--color-primary-*` name kept so
+     every consumer below inherits the rebrand automatically). */
+  --color-primary-50: #ecfaf3;
+  --color-primary-100: #d6f1e3;
+  --color-primary-200: #aedfc4;
+  --color-primary-300: #79c79f;
+  --color-primary-400: #4dad7e;
+  --color-primary-500: #2c7656;
+  --color-primary-600: #235e45;
+  --color-primary-700: #1b4a36;
+  --color-primary-800: #143527;
+  --color-primary-900: #0d2418;
+
+  /* Accent Colors - Emerald (distinct bright-teal accent family, used by
+     kpi-card.php's "emerald" variant — separate from the primary brand
+     emerald above, matching design-tokens.css exactly). */
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+  --color-emerald-800: #065f46;
+  --color-emerald-900: #064e3b;
+
+  /* Accent Colors - Amber */
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
+  --color-amber-800: #92400e;
+  --color-amber-900: #78350f;
+
+  /* Accent Colors - Rose */
+  --color-rose-50: #fff1f2;
+  --color-rose-100: #ffe4e6;
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-rose-600: #e11d48;
+  --color-rose-700: #be123c;
+  --color-rose-800: #9f1239;
+  --color-rose-900: #881337;
+
+  /* Dark Theme Background Colors */
+  --color-dark-900: #0f172a;
+  --color-dark-800: #1e293b;
+  --color-dark-700: #334155;
+  --color-dark-600: #475569;
+  --color-dark-500: #64748b;
+
+  /* Light Theme Slate (completes the Tailwind slate scale for light-theme
+     admin UI; --color-dark-500..900 already alias slate-500..900). */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+
+  /* Supplementary badge / accent colors used by shared components */
+  --color-blue-500: #3b82f6;
+  --color-violet-600: #7c3aed;
+
+  /* Glass Backgrounds (kept for parity with design-tokens.css even though
+     apps/admin's Archetype A/B partials don't currently use them — future
+     glass-styled pages, e.g. Odoo dashboards, will need these). */
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-bg-light: rgba(255, 255, 255, 0.12);
+  --glass-bg-medium: rgba(255, 255, 255, 0.18);
+  --glass-bg-strong: rgba(255, 255, 255, 0.25);
+  --glass-bg-dark: rgba(15, 23, 42, 0.6);
+  --glass-bg-darker: rgba(15, 23, 42, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-border-medium: rgba(255, 255, 255, 0.25);
+  --glass-border-strong: rgba(255, 255, 255, 0.4);
+  --glass-border-glow: rgba(44, 118, 86, 0.3);
+  --blur-sm: blur(8px);
+  --blur-md: blur(16px);
+  --blur-lg: blur(24px);
+  --blur-xl: blur(32px);
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.15);
+  --shadow-glass-md: 0 8px 32px rgba(0, 0, 0, 0.2);
+  --shadow-glass-lg: 0 16px 48px rgba(0, 0, 0, 0.25);
+  --shadow-glass-xl: 0 24px 64px rgba(0, 0, 0, 0.3);
+  --shadow-glow-primary: 0 0 30px rgba(44, 118, 86, 0.4);
+  --shadow-glow-emerald: 0 0 30px rgba(16, 185, 129, 0.4);
+  --shadow-glow-amber: 0 0 30px rgba(245, 158, 11, 0.4);
+  --shadow-glow-rose: 0 0 30px rgba(244, 63, 94, 0.4);
+  --shadow-inner: inset 0 1px 2px rgba(255, 255, 255, 0.1);
+  --shadow-inner-glow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Typography (overridden by the reya-theme.css block below, which loads
+     second — same cascade order as includes/header.php). */
+  --font-sans: 'Inter', 'Noto Sans Thai', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 350ms ease;
+  --transition-bounce: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* -----------------------------------------------------------------------
+   2) reya-theme.css — brand overlay (loaded second → wins the cascade)
+   ----------------------------------------------------------------------- */
+
+/* LINE Seed Sans TH + Geist (REYA brand typefaces). Font files are not yet
+   copied into apps/admin/public/ (out of this batch's allowed paths —
+   apps/admin/public/** wasn't in the brief's allowed-paths fence); these
+   @font-face rules point at the same /assets/fonts/reya/ path the PHP app
+   serves so they activate for free once that copy happens. Until then the
+   browser 404s silently and falls back to Inter/Noto Sans Thai/system-ui,
+   same graceful-degradation behavior the PHP app itself relies on. */
+@font-face {
+  font-family: 'LINESeedSansTH';
+  font-weight: 300;
+  font-display: swap;
+  src: url('/assets/fonts/reya/LINESeedSansTH_Th.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'LINESeedSansTH';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/fonts/reya/LINESeedSansTH_Rg.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'LINESeedSansTH';
+  font-weight: 600;
+  font-display: swap;
+  src: url('/assets/fonts/reya/LINESeedSansTH_Bd.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'LINESeedSansTH';
+  font-weight: 700;
+  font-display: swap;
+  src: url('/assets/fonts/reya/LINESeedSansTH_XBd.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'LINESeedSansTH';
+  font-weight: 800;
+  font-display: swap;
+  src: url('/assets/fonts/reya/LINESeedSansTH_He.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Geist';
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/assets/fonts/reya/GeistVF.woff') format('woff');
+}
+@font-face {
+  font-family: 'GeistMono';
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/assets/fonts/reya/GeistMonoVF.woff') format('woff');
+}
+
+:root {
+  --reya-emerald-50: #ecfaf3;
+  --reya-emerald-100: #d6f1e3;
+  --reya-emerald-200: #aedfc4;
+  --reya-emerald-300: #79c79f;
+  --reya-emerald-400: #4dad7e;
+  --reya-emerald-500: #2c7656;
+  --reya-emerald-600: #235e45;
+  --reya-emerald-700: #1b4a36;
+  --reya-emerald-800: #143527;
+  --reya-emerald-900: #0d2418;
+
+  --primary: #2c7656;
+  --primary-dark: #235e45;
+  --primary-light: #3a9170;
+
+  --erp-accent: #2c7656;
+  --erp-accent-soft: rgba(44, 118, 86, 0.1);
+  --erp-accent-strong: #1b4a36;
+
+  --sidebar-active-bg: linear-gradient(90deg, rgba(44, 118, 86, 0.12) 0%, rgba(44, 118, 86, 0.04) 100%);
+  --sidebar-active-text: #143527;
+  --sidebar-active-border: #2c7656;
+
+  --font-sans: 'LINESeedSansTH', 'Inter', 'Noto Sans Thai', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Geist', 'LINESeedSansTH', 'Inter', sans-serif;
+  --font-mono: 'GeistMono', 'JetBrains Mono', 'Fira Code', monospace;
+
+  --reya-surface: #ffffff;
+  --reya-surface-muted: #f4f7f5;
+  --reya-border: #d9e6df;
+  --reya-shadow-card: 0 6px 18px rgba(20, 53, 39, 0.08);
+  --reya-radius: 14px;
+}
+
+body {
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(44, 118, 86, 0.07), transparent 32%),
+    radial-gradient(circle at 100% 100%, rgba(44, 118, 86, 0.05), transparent 36%),
+    linear-gradient(180deg, #f5f9f6 0%, #eef3f0 100%);
+  color: var(--color-dark-800);
+  margin: 0;
+}
+
+.dark body {
+  background: var(--color-dark-900);
+  color: var(--color-slate-100);
+}
+
+h1,
+h2,
+h3,
+.reya-display,
+.page-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* =============================================================================
+ * 3) Component CSS — ported verbatim (class-for-class) from each real PHP
+ *    partial's getXxxStyles() (source cited per block). These are the
+ *    classes apps/admin/src/components/*.tsx already render.
+ * ========================================================================== */
+
+/* ── includes/components/data-table.php → DataTable.tsx ─────────────────── */
+.data-table-card {
+  background: #ffffff;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+.data-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm, 14px);
+}
+.data-table-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-slate-50);
+  padding: 12px var(--space-3, 12px);
+  text-align: left;
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-dark-500);
+  border-bottom: 1px solid var(--color-slate-200);
+  white-space: nowrap;
+}
+.data-table-th-left {
+  text-align: left;
+}
+.data-table-th-center {
+  text-align: center;
+}
+.data-table-th-right {
+  text-align: right;
+}
+.data-table-sort-link {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--transition-fast, 150ms ease);
+}
+.data-table-sort-link:hover {
+  color: var(--color-primary-600);
+}
+.data-table-sort-icon {
+  margin-left: 4px;
+  font-size: 10px;
+}
+.data-table-sort-idle {
+  opacity: 0.4;
+}
+.data-table-td {
+  padding: var(--space-3, 12px);
+  color: var(--color-dark-800);
+  border-bottom: 1px solid var(--color-slate-100);
+  vertical-align: middle;
+}
+.data-table-td-left {
+  text-align: left;
+}
+.data-table-td-center {
+  text-align: center;
+}
+.data-table-td-right {
+  text-align: right;
+}
+.data-table-row {
+  transition: background var(--transition-fast, 150ms ease);
+}
+.data-table-row:hover {
+  background: var(--color-slate-50);
+}
+.data-table-row:last-child .data-table-td {
+  border-bottom: none;
+}
+.data-table-th-checkbox,
+.data-table-td-checkbox {
+  text-align: center;
+  width: 40px;
+}
+.data-table-checkbox {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  accent-color: var(--color-primary-600);
+}
+.data-table-empty-cell {
+  padding: 0 !important;
+  background: #ffffff;
+  border-bottom: none !important;
+}
+.data-table-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.data-table-row-action {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 8px);
+  color: var(--color-dark-500);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--transition-fast, 150ms ease);
+  font-size: var(--text-sm, 14px);
+}
+.data-table-row-action:hover {
+  background: var(--color-slate-100);
+  color: var(--color-primary-600);
+}
+.data-table-row-action-danger:hover {
+  background: var(--color-rose-50);
+  color: var(--color-rose-600);
+}
+.dark .data-table-card {
+  background: var(--color-dark-800);
+  border-color: var(--color-dark-700);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.dark .data-table-th {
+  background: var(--color-dark-900);
+  color: var(--color-slate-400);
+  border-bottom-color: var(--color-dark-700);
+}
+.dark .data-table-sort-link:hover {
+  color: var(--color-primary-300);
+}
+.dark .data-table-td {
+  color: var(--color-slate-100);
+  border-bottom-color: var(--color-dark-700);
+}
+.dark .data-table-row:hover {
+  background: var(--color-dark-700);
+}
+.dark .data-table-empty-cell {
+  background: var(--color-dark-800);
+}
+.dark .data-table-row-action {
+  color: var(--color-slate-400);
+}
+.dark .data-table-row-action:hover {
+  background: var(--color-dark-700);
+  color: var(--color-primary-300);
+}
+.dark .data-table-row-action-danger:hover {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--color-rose-300);
+}
+.dark .data-table-checkbox {
+  accent-color: var(--color-primary-400);
+}
+
+/* ── includes/components/pagination.php → Pagination.tsx ────────────────── */
+.pagination-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  font-size: var(--text-sm, 14px);
+  color: var(--color-dark-500);
+  margin-top: var(--space-6, 24px);
+}
+.pagination-info {
+  color: var(--color-dark-500);
+}
+.pagination-info b {
+  color: var(--color-dark-800);
+  font-weight: 600;
+}
+.pagination-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pagination-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--color-slate-200);
+  background: #ffffff;
+  color: var(--color-dark-700);
+  font-size: var(--text-sm, 14px);
+  font-weight: 500;
+  text-decoration: none;
+  transition: all var(--transition-fast, 150ms ease);
+}
+.pagination-link:hover {
+  background: var(--color-slate-50);
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-600);
+}
+.pagination-link-current,
+.pagination-link-current:hover {
+  background: var(--color-primary-600);
+  border-color: var(--color-primary-600);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(44, 118, 86, 0.25);
+  cursor: default;
+}
+.pagination-link-disabled,
+.pagination-link-disabled:hover {
+  background: var(--color-slate-50);
+  color: var(--color-slate-300);
+  border-color: var(--color-slate-200);
+  cursor: not-allowed;
+}
+.pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 36px;
+  color: var(--color-slate-400);
+}
+@media (max-width: 640px) {
+  .pagination-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pagination-nav {
+    justify-content: center;
+  }
+}
+.dark .pagination-info {
+  color: var(--color-slate-400);
+}
+.dark .pagination-info b {
+  color: var(--color-slate-100);
+}
+.dark .pagination-link {
+  background: var(--color-dark-800);
+  border-color: var(--color-dark-700);
+  color: var(--color-slate-300);
+}
+.dark .pagination-link:hover {
+  background: var(--color-dark-700);
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-300);
+}
+.dark .pagination-link-current,
+.dark .pagination-link-current:hover {
+  background: var(--color-primary-500);
+  border-color: var(--color-primary-500);
+  color: #ffffff;
+}
+.dark .pagination-link-disabled,
+.dark .pagination-link-disabled:hover {
+  background: var(--color-dark-800);
+  color: var(--color-dark-600);
+  border-color: var(--color-dark-700);
+}
+.dark .pagination-ellipsis {
+  color: var(--color-dark-600);
+}
+
+/* ── includes/components/modal.php → Modal.tsx ───────────────────────────
+   (React unmounts instead of toggling [hidden]; the animation + backdrop +
+   panel/header/body/footer rules all still apply unchanged.) */
+.modal-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4, 16px);
+}
+.modal-shell-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.modal-shell-panel {
+  position: relative;
+  background: #ffffff;
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.25), 0 0 0 1px var(--color-slate-200);
+  width: 100%;
+  max-height: 95vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalShellIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-shell-sm {
+  max-width: 420px;
+}
+.modal-shell-md {
+  max-width: 640px;
+}
+.modal-shell-lg {
+  max-width: 960px;
+}
+.modal-shell-xl {
+  max-width: 1200px;
+}
+@keyframes modalShellIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.modal-shell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  border-bottom: 1px solid var(--color-slate-200);
+  background: var(--color-slate-50);
+}
+.modal-shell-title {
+  font-size: var(--text-lg, 18px);
+  font-weight: 600;
+  color: var(--color-dark-800);
+  margin: 0;
+}
+.modal-shell-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm, 8px);
+  border: none;
+  background: transparent;
+  color: var(--color-dark-500);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast, 150ms ease);
+  font-size: 18px;
+  line-height: 1;
+}
+.modal-shell-close:hover {
+  background: var(--color-slate-200);
+  color: var(--color-dark-800);
+}
+.modal-shell-body {
+  padding: var(--space-5, 20px);
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+.modal-shell-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2, 8px);
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  border-top: 1px solid var(--color-slate-200);
+  background: var(--color-slate-50);
+}
+@media (max-width: 640px) {
+  .modal-shell {
+    padding: var(--space-2, 8px);
+  }
+  .modal-shell-panel {
+    max-height: 96vh;
+    border-radius: var(--radius-md, 12px);
+  }
+}
+.dark .modal-shell-backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
+.dark .modal-shell-panel {
+  background: var(--color-dark-800);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--color-dark-700);
+}
+.dark .modal-shell-header,
+.dark .modal-shell-footer {
+  background: var(--color-dark-900);
+  border-color: var(--color-dark-700);
+}
+.dark .modal-shell-title {
+  color: var(--color-slate-100);
+}
+.dark .modal-shell-close {
+  color: var(--color-slate-400);
+}
+.dark .modal-shell-close:hover {
+  background: var(--color-dark-700);
+  color: var(--color-slate-100);
+}
+
+/* ── includes/components/tabs.php → Tabs.tsx ─────────────────────────────── */
+.tabs-component {
+  margin-bottom: 24px;
+}
+.tabs-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px;
+  background: var(--color-slate-100);
+  border-radius: 12px;
+}
+.tabs-pills .tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-dark-500);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.tabs-pills .tab-item:hover {
+  color: var(--color-dark-800);
+  background: rgba(255, 255, 255, 0.5);
+}
+.tabs-pills .tab-item.active {
+  background: #ffffff;
+  color: var(--color-primary-600);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.tabs-pills .tab-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tabs-md .tab-item {
+  padding: 10px 16px;
+  font-size: 14px;
+}
+.tab-label {
+  white-space: nowrap;
+}
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  color: #ffffff;
+}
+.badge-red {
+  background: var(--color-rose-500);
+}
+.badge-yellow {
+  background: var(--color-amber-500);
+}
+.badge-green {
+  background: var(--color-emerald-500);
+}
+.badge-blue {
+  background: var(--color-blue-500);
+}
+.badge-purple {
+  background: var(--color-violet-600);
+}
+.badge-gray {
+  background: var(--color-dark-500);
+}
+@media (max-width: 640px) {
+  .tabs-nav {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tabs-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .tab-item {
+    flex-shrink: 0;
+  }
+}
+.dark .tabs-nav {
+  background: var(--color-dark-800);
+}
+.dark .tabs-pills .tab-item {
+  color: var(--color-slate-400);
+}
+.dark .tabs-pills .tab-item:hover {
+  color: var(--color-slate-100);
+  background: rgba(255, 255, 255, 0.05);
+}
+.dark .tabs-pills .tab-item.active {
+  background: var(--color-dark-700);
+  color: var(--color-primary-400);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* ── includes/components/toolbar.php → Toolbar.tsx ───────────────────────
+   Base search/select/submit/reset rules ported verbatim; the
+   `.toolbar-advanced*` rules below them are a Next-only addition (Toolbar.tsx's
+   own doc comment: a native <details> replaces users.php's
+   toggleAdvancedFilters() inline <script> — no PHP class to port, styled to
+   match the same design-token language as the rest of the toolbar). */
+.toolbar {
+  background: #ffffff;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-lg, 16px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3, 12px);
+  margin-bottom: var(--space-4, 16px);
+}
+.toolbar-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+.toolbar-search {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 200px;
+  max-width: 360px;
+}
+.toolbar-search-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-slate-50);
+  font-size: var(--text-sm, 14px);
+  color: var(--color-dark-800);
+  transition: all var(--transition-fast, 150ms ease);
+}
+.toolbar-search-input::placeholder {
+  color: var(--color-slate-400);
+}
+.toolbar-search-input:focus {
+  outline: none;
+  background: #ffffff;
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px rgba(44, 118, 86, 0.12);
+}
+.form-select-glass,
+.toolbar-select {
+  height: 40px;
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-slate-50);
+  color: var(--color-dark-800);
+  font-size: var(--text-sm, 14px);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: all var(--transition-fast, 150ms ease);
+}
+.toolbar-select:focus {
+  outline: none;
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px rgba(44, 118, 86, 0.12);
+}
+.toolbar-submit,
+.toolbar-reset {
+  height: 40px;
+  min-width: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--color-primary-600);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-primary-600);
+  color: #ffffff;
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: all var(--transition-fast, 150ms ease);
+}
+.toolbar-submit:hover,
+.toolbar-reset:hover {
+  background: var(--color-primary-700);
+  border-color: var(--color-primary-700);
+}
+.toolbar-reset {
+  background: var(--color-slate-50);
+  color: var(--color-dark-700);
+  border-color: var(--color-slate-200);
+  font-weight: 500;
+}
+.toolbar-reset:hover {
+  background: #ffffff;
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-600);
+}
+.toolbar-meta {
+  font-size: var(--text-xs, 12px);
+  color: var(--color-dark-500);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.toolbar-advanced {
+  width: 100%;
+}
+.toolbar-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-slate-50);
+  color: var(--color-dark-700);
+  font-size: var(--text-sm, 14px);
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+  transition: all var(--transition-fast, 150ms ease);
+}
+.toolbar-advanced-toggle::-webkit-details-marker {
+  display: none;
+}
+.toolbar-advanced-toggle:hover {
+  background: #ffffff;
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-600);
+}
+.toolbar-advanced[open] .toolbar-advanced-toggle {
+  border-color: var(--color-primary-400);
+  color: var(--color-primary-700);
+  background: var(--color-primary-50);
+}
+.toolbar-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-primary-600);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.toolbar-advanced-body {
+  margin-top: var(--space-3, 12px);
+  padding-top: var(--space-3, 12px);
+  border-top: 1px dashed var(--color-slate-200);
+  width: 100%;
+}
+@media (max-width: 640px) {
+  .toolbar-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .toolbar-meta {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+.dark .toolbar {
+  background: var(--color-dark-800);
+  border-color: var(--color-dark-700);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.dark .toolbar-search-input,
+.dark .toolbar-select,
+.dark .toolbar-reset,
+.dark .toolbar-advanced-toggle {
+  background: var(--color-dark-900);
+  border-color: var(--color-dark-700);
+  color: var(--color-slate-100);
+}
+.dark .toolbar-search-input::placeholder {
+  color: var(--color-dark-500);
+}
+.dark .toolbar-meta {
+  color: var(--color-slate-400);
+}
+
+/* ── includes/components/page-header.php → PageHeader.tsx ───────────────── */
+.page-header {
+  margin-bottom: var(--space-6, 24px);
+}
+.page-header-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs, 12px);
+  color: var(--color-dark-500);
+  margin-bottom: var(--space-3, 12px);
+}
+.page-header-crumb {
+  color: var(--color-dark-500);
+  text-decoration: none;
+  transition: color var(--transition-fast, 150ms ease);
+}
+.page-header-crumb:hover {
+  color: var(--color-primary-600);
+}
+.page-header-crumb-current {
+  color: var(--color-dark-800);
+  font-weight: 500;
+}
+.page-header-crumb-sep {
+  font-size: 10px;
+  color: var(--color-slate-300);
+}
+.page-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4, 16px);
+}
+.page-header-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.page-header-title {
+  font-family: var(--font-display, var(--font-sans));
+  font-size: var(--text-2xl, 24px);
+  font-weight: 700;
+  color: var(--color-dark-800);
+  line-height: 1.2;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.page-header-subtitle {
+  font-size: var(--text-sm, 14px);
+  color: var(--color-dark-500);
+  margin: var(--space-1, 4px) 0 0 0;
+  line-height: 1.45;
+}
+.page-header-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: 10px var(--space-4, 16px);
+  border-radius: var(--radius-md, 12px);
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-fast, 150ms ease);
+  white-space: nowrap;
+}
+.page-header-action-primary {
+  background: var(--color-primary-600);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(44, 118, 86, 0.25);
+}
+.page-header-action-primary:hover {
+  background: var(--color-primary-700);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(44, 118, 86, 0.32);
+}
+.page-header-action-success {
+  background: var(--color-emerald-500);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+.page-header-action-success:hover {
+  background: var(--color-emerald-600);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.32);
+}
+@media (max-width: 640px) {
+  .page-header-title {
+    font-size: var(--text-xl, 20px);
+  }
+  .page-header-row {
+    gap: var(--space-3, 12px);
+  }
+  .page-header-action {
+    width: 100%;
+    justify-content: center;
+  }
+}
+.dark .page-header-title {
+  color: var(--color-slate-100);
+}
+.dark .page-header-subtitle,
+.dark .page-header-crumb,
+.dark .page-header-breadcrumb {
+  color: var(--color-slate-400);
+}
+.dark .page-header-crumb-current {
+  color: var(--color-slate-100);
+}
+.dark .page-header-crumb:hover {
+  color: var(--color-primary-400);
+}
+.dark .page-header-action-primary {
+  background: var(--color-primary-500);
+}
+.dark .page-header-action-primary:hover {
+  background: var(--color-primary-600);
+}
+
+/* ── includes/components/empty-state.php → EmptyState.tsx ───────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-12, 48px) var(--space-6, 24px);
+  gap: var(--space-3, 12px);
+}
+.empty-state-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-full, 9999px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-slate-100);
+  color: var(--color-slate-400);
+  font-size: 28px;
+  margin-bottom: var(--space-2, 8px);
+}
+.empty-state-heading {
+  font-size: var(--text-base, 16px);
+  font-weight: 600;
+  color: var(--color-dark-800);
+  margin: 0;
+}
+.empty-state-sub {
+  font-size: var(--text-sm, 14px);
+  color: var(--color-dark-500);
+  max-width: 380px;
+  line-height: 1.5;
+  margin: 0;
+}
+.empty-state-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-3, 12px);
+  padding: 10px var(--space-4, 16px);
+  border-radius: var(--radius-md, 12px);
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  background: var(--color-primary-600);
+  color: #ffffff;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+  box-shadow: 0 4px 12px rgba(44, 118, 86, 0.22);
+}
+.empty-state-cta:hover {
+  background: var(--color-primary-700);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(44, 118, 86, 0.3);
+}
+.dark .empty-state-icon {
+  background: var(--color-dark-700);
+  color: var(--color-slate-400);
+}
+.dark .empty-state-heading {
+  color: var(--color-slate-100);
+}
+.dark .empty-state-sub {
+  color: var(--color-slate-400);
+}
+.dark .empty-state-cta {
+  background: var(--color-primary-500);
+}
+
+/* ── includes/components/kpi-card.php → dashboard/_components/KpiCard.tsx ──
+   KpiCard.tsx renders `.kpi-card.kpi-card--{accent}` (matches the PHP root
+   class exactly) but sets the rail/value colors via inline `style` for the
+   4 categorical accents — inline style wins the cascade for those specific
+   properties, so this block supplies the real hover/elevation/dark-mode
+   polish the inline styles can't express (documented as a known limitation
+   in the build report: full accent-color parity for KpiCard/SectionCard
+   would require editing their inline `style` objects, out of this batch's
+   className-only allowed-paths fence). */
+.kpi-card {
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
+}
+.kpi-card:hover {
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08), 0 8px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+.dark .kpi-card {
+  background: var(--color-dark-800);
+  border-color: var(--color-dark-700) !important;
+}
+.dark .kpi-card__value,
+.dark .kpi-card .kpi-card__value {
+  color: #f1f5f9;
+}
+
+/* ── includes/components/section-card.php → dashboard/_components/SectionCard.tsx ── */
+.section-card__ghost-btn {
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+.section-card__ghost-btn:hover {
+  background: var(--color-primary-50);
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-700);
+}
+.sc-empty {
+  color: var(--color-dark-500);
+}
+
+/* dashboard.php's own `$extraStyles` shell rule (dashboard.php line 81-84). */
+.db-shell {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* =============================================================================
+ * 4) New primitives with no single 1:1 PHP source (documented in each
+ *    component's own file header) — styled consistently with the tokens
+ *    above rather than any placeholder color.
+ * ========================================================================== */
+
+/* Badge.tsx — status/tone pill. users.php/user-detail.php previously inlined
+   these as raw `<span style="...">`; Badge.tsx consolidates them into one
+   reusable primitive (see that file's header comment) styled like the rest
+   of the Archetype A component set (soft tint bg + saturated fg, matching
+   .toolbar-chip-*'s treatment). */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.badge-success {
+  background: var(--color-emerald-50);
+  color: var(--color-emerald-700);
+}
+.badge-danger {
+  background: var(--color-rose-50);
+  color: var(--color-rose-700);
+}
+.badge-neutral {
+  background: var(--color-slate-100);
+  color: var(--color-dark-700);
+}
+.badge-primary {
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+.dark .badge-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--color-emerald-300);
+}
+.dark .badge-danger {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--color-rose-300);
+}
+.dark .badge-neutral {
+  background: var(--color-dark-700);
+  color: var(--color-slate-300);
+}
+.dark .badge-primary {
+  background: rgba(44, 118, 86, 0.18);
+  color: var(--color-primary-300);
+}
+.tag-chip {
+  font-family: var(--font-sans);
+  line-height: 1.3;
+}
+.ud-save-toast {
+  margin-bottom: var(--space-4, 16px);
+}
+
+/* =============================================================================
+ * 5) Bespoke page markup (className-only additions — see build report for
+ *    exactly which files/elements gained a className vs. already had one).
+ * ========================================================================== */
+
+/* users/_components/FiltersForm.tsx — the 6-select advanced filter grid.
+   users.php's own version of this grid is raw Tailwind-CDN utility classes
+   (`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4`, `bg-green-500`
+   buttons) kept intact as legacy in the PHP source per its own comment;
+   this Next port instead uses the same design-token language as the rest
+   of the Archetype A component set for visual consistency across the page. */
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4, 16px);
+}
+@media (min-width: 768px) {
+  .filters-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  .filters-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.filters-grid label {
+  display: block;
+  font-size: var(--text-sm, 14px);
+  font-weight: 500;
+  color: var(--color-dark-700);
+  margin-bottom: 6px;
+}
+.filters-grid select,
+.filters-grid input {
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-slate-50);
+  color: var(--color-dark-800);
+  font-size: var(--text-sm, 14px);
+}
+.filters-grid select:focus,
+.filters-grid input:focus {
+  outline: none;
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px rgba(44, 118, 86, 0.12);
+}
+.filters-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2, 8px);
+}
+.filters-submit-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--color-primary-600);
+  background: var(--color-primary-600);
+  color: #ffffff;
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  cursor: pointer;
+}
+.filters-submit-btn:hover {
+  background: var(--color-primary-700);
+  border-color: var(--color-primary-700);
+}
+.filters-reset-link {
+  height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--color-slate-200);
+  color: var(--color-dark-700);
+  font-size: var(--text-sm, 14px);
+  text-decoration: none;
+}
+.filters-reset-link:hover {
+  background: var(--color-slate-50);
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-600);
+}
+
+/* users/_components/TagModal.tsx — modal body form controls. */
+.tag-modal-current {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+}
+.tag-modal-select {
+  flex: 1 1 auto;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-slate-50);
+  color: var(--color-dark-800);
+  font-size: var(--text-sm, 14px);
+}
+.tag-modal-add-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--color-primary-600);
+  background: var(--color-primary-600);
+  color: #ffffff;
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tag-modal-add-btn:hover:not(:disabled) {
+  background: var(--color-primary-700);
+}
+.tag-modal-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tag-modal-close-btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--color-slate-200);
+  background: #ffffff;
+  color: var(--color-dark-700);
+  font-size: var(--text-sm, 14px);
+  font-weight: 500;
+  cursor: pointer;
+}
+.tag-modal-close-btn:hover {
+  background: var(--color-slate-50);
+}
+.tag-modal-error {
+  color: var(--color-rose-600);
+  font-size: var(--text-sm, 14px);
+}
+
+/* users/_components/UsersTable.tsx — bulk-action bar + inline tag pills. */
+.bulk-actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  margin-bottom: var(--space-3, 12px);
+  background: var(--color-primary-50);
+  border: 1px solid var(--color-primary-200);
+  border-radius: var(--radius-lg, 16px);
+  font-size: var(--text-sm, 14px);
+  color: var(--color-primary-800);
+}
+.bulk-actions-bar select {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-primary-200);
+  border-radius: var(--radius-sm, 8px);
+  background: #ffffff;
+  font-size: var(--text-sm, 14px);
+}
+.bulk-actions-bar button {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--color-primary-600);
+  background: var(--color-primary-600);
+  color: #ffffff;
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  cursor: pointer;
+}
+.bulk-actions-bar button:hover:not(:disabled) {
+  background: var(--color-primary-700);
+}
+.bulk-actions-bar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.table-tag-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  margin-right: 4px;
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+  border-radius: var(--radius-full, 9999px);
+  font-size: 11px;
+}
+
+/* dashboard/_components/HourlyActivityChart.tsx — SVG bars. CSS `fill`
+   (author stylesheet) overrides the `fill="#6366f1"` SVG presentation
+   attribute the component still carries as a harmless fallback, so the
+   chart renders REYA emerald without touching any non-className prop. */
+.hourly-bar {
+  fill: var(--color-primary-500);
+}
+
+/* dashboard/_components/DashboardCommandStrip.tsx — date filter + print. */
+.dashboard-date-input,
+.dashboard-print-btn {
+  transition: border-color var(--transition-fast, 150ms ease), color var(--transition-fast, 150ms ease);
+}
+.dashboard-date-input:focus {
+  outline: none;
+  border-color: var(--color-primary-400) !important;
+  box-shadow: 0 0 0 3px rgba(44, 118, 86, 0.12);
+}
+.dashboard-print-btn:hover {
+  border-color: var(--color-primary-300) !important;
+  color: var(--color-primary-700) !important;
+}
+
+/* user-detail/page.tsx — bespoke detail-page cards (`.ud-*`), styled like
+   the rest of the Archetype A card language (white surface, slate border,
+   --radius-lg, soft shadow) since user-detail.php's own cards use the same
+   visual grammar as data-table.php/toolbar.php/page-header.php. */
+.ud-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6, 24px);
+}
+@media (min-width: 1024px) {
+  .ud-grid {
+    grid-template-columns: 380px 1fr;
+    align-items: start;
+  }
+}
+.ud-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+  min-width: 0;
+}
+.ud-card {
+  background: #ffffff;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+.ud-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  border-bottom: 1px solid var(--color-slate-100);
+  background: var(--color-slate-50);
+}
+.ud-card-title {
+  font-size: var(--text-base, 16px);
+  font-weight: 700;
+  color: var(--color-dark-800);
+  margin: 0;
+}
+.ud-card-body {
+  padding: var(--space-5, 20px);
+  font-size: var(--text-sm, 14px);
+  color: var(--color-dark-700);
+}
+.ud-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-slate-100);
+  font-size: var(--text-sm, 14px);
+}
+.ud-stat-row:last-child {
+  border-bottom: none;
+}
+.ud-field {
+  display: block;
+  margin-bottom: var(--space-4, 16px);
+  font-size: var(--text-sm, 14px);
+  font-weight: 500;
+  color: var(--color-dark-700);
+}
+.ud-input,
+.ud-select,
+.ud-textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-slate-50);
+  color: var(--color-dark-800);
+  font-size: var(--text-sm, 14px);
+  font-family: inherit;
+}
+.ud-textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+.ud-input:focus,
+.ud-select:focus,
+.ud-textarea:focus {
+  outline: none;
+  background: #ffffff;
+  border-color: var(--color-primary-400);
+  box-shadow: 0 0 0 3px rgba(44, 118, 86, 0.12);
+}
+.ud-btn-primary {
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-md, 12px);
+  border: 1px solid var(--color-primary-600);
+  background: var(--color-primary-600);
+  color: #ffffff;
+  font-size: var(--text-sm, 14px);
+  font-weight: 600;
+  cursor: pointer;
+}
+.ud-btn-primary:hover {
+  background: var(--color-primary-700);
+  border-color: var(--color-primary-700);
+}
+.ud-order-row {
+  display: block;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-slate-100);
+  text-decoration: none;
+  color: inherit;
+}
+.ud-order-row:last-child {
+  border-bottom: none;
+}
+.ud-order-row:hover {
+  background: var(--color-slate-50);
+}
+.ud-order-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ud-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-slate-100);
+  font-size: var(--text-sm, 14px);
+}
+.ud-info-row:last-child {
+  border-bottom: none;
+}
+.ud-info-label {
+  color: var(--color-dark-500);
+}
+.ud-health-metric {
+  text-align: center;
+}
+.ud-health-metric p:first-child {
+  font-size: var(--text-lg, 18px);
+  font-weight: 700;
+  color: var(--color-dark-800);
+  margin: 0;
+}
+.ud-health-metric p:last-child {
+  font-size: 11px;
+  color: var(--color-dark-500);
+  margin: 2px 0 0 0;
+}
+.ud-condition-chip {
+  display: inline-flex;
+  padding: 3px 10px;
+  margin: 4px 4px 0 0;
+  background: var(--color-amber-50);
+  color: var(--color-amber-700);
+  border-radius: var(--radius-full, 9999px);
+  font-size: 12px;
+}
+.dark .ud-card {
+  background: var(--color-dark-800);
+  border-color: var(--color-dark-700);
+}
+.dark .ud-card-header {
+  background: var(--color-dark-900);
+  border-bottom-color: var(--color-dark-700);
+}
+.dark .ud-card-title {
+  color: var(--color-slate-100);
+}
+.dark .ud-card-body {
+  color: var(--color-slate-300);
+}
+.dark .ud-stat-row,
+.dark .ud-order-row,
+.dark .ud-info-row {
+  border-bottom-color: var(--color-dark-700);
+}
