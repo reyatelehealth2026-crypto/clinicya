@@ -17,6 +17,7 @@
   "dependencies": {
     "@reya/auth": "workspace:*",
     "@reya/config": "workspace:*",
+    "@reya/contracts": "workspace:*",
     "@reya/db": "workspace:*",
     "@reya/tenant": "workspace:*",
     "kysely": "^0.29.3",

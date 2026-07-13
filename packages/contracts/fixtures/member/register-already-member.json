@@ -1,0 +1,12 @@
+{
+  "description": "POST action=register — user already is_registered=1 -> short-circuits with existing member_id, no re-registration.",
+  "request": {
+    "action": "register",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "first_name": "สมชาย",
+    "birthday": "1990-05-12",
+    "gender": "male"
+  },
+  "response": { "success": false, "message": "คุณเป็นสมาชิกอยู่แล้ว", "member_id": "M2600001" }
+}

@@ -1,0 +1,23 @@
+{
+  "description": "GET action=check — brand-new LINE user, no `users` row exists yet -> autoRegisterMember() fires, welcome bonus 50pt, has_profile=false (no first_name yet). auto_registered is hardcoded true on EVERY success response, not just this branch — see api/member.php::handleCheck().",
+  "request": {
+    "action": "check",
+    "line_user_id": "Unewuser000000000000000000000000",
+    "line_account_id": 1
+  },
+  "response": {
+    "success": true,
+    "message": "OK",
+    "exists": true,
+    "is_registered": true,
+    "has_profile": false,
+    "member_id": "M2600002",
+    "first_name": null,
+    "last_name": null,
+    "display_name": null,
+    "tier": "bronze",
+    "tier_name": "Bronze",
+    "points": 50,
+    "auto_registered": true
+  }
+}

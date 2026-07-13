@@ -1,0 +1,5 @@
+{
+  "description": "POST action=update_profile — updates a subset of allowed fields.",
+  "request": { "action": "update_profile", "line_user_id": "U1234567890abcdef1234567890abcdef", "phone": "0899999999", "address": "123/45 ถ.สุขุมวิท" },
+  "response": { "success": true, "message": "อัพเดทข้อมูลสำเร็จ" }
+}

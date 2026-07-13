@@ -1,0 +1,5 @@
+{
+  "description": "POST action=remove.",
+  "request": { "action": "remove", "line_user_id": "U1234567890abcdef1234567890abcdef", "product_id": 200, "line_account_id": 1 },
+  "response": { "success": true, "message": "ลบออกจากรายการโปรดแล้ว" }
+}

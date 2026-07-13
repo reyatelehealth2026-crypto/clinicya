@@ -1,0 +1,6 @@
+{
+  "description": "action=product_detail — product_id omitted/<=0 -> the file's `if ($productId <= 0)` early jsonResponse(false, 'Missing product_id') branch.",
+  "request": { "action": "product_detail" },
+  "response": { "success": false, "message": "Missing product_id" },
+  "status": 200
+}

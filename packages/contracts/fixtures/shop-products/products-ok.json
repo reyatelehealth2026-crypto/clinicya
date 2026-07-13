@@ -1,0 +1,79 @@
+{
+  "description": "action=products — a page of business_items rows, embedded categories + brands, one product with a computed discount badge (sale_price < price).",
+  "request": {
+    "action": "products",
+    "line_account_id": 1,
+    "category_id": "3",
+    "sort": "latest",
+    "limit": 12,
+    "offset": 0
+  },
+  "response": {
+    "success": true,
+    "message": "",
+    "products": [
+      {
+        "id": 101,
+        "name": "พาราเซตามอล 500mg",
+        "description": "ยาลดไข้ บรรเทาปวด",
+        "price": 45,
+        "sale_price": 35,
+        "stock": 240,
+        "sku": "MED-PARA-500",
+        "barcode": "8850001234567",
+        "manufacturer": "GPO",
+        "generic_name": "Paracetamol",
+        "usage_instructions": "รับประทานครั้งละ 1-2 เม็ด ทุก 4-6 ชั่วโมง",
+        "properties_other": null,
+        "unit": "แผง",
+        "category_id": 3,
+        "category_name": "ยาสามัญประจำบ้าน",
+        "image_gallery": ["https://cdn.example.com/products/para500-1.jpg"],
+        "photo_path": "uploads/products/para500.jpg",
+        "image_url": "uploads/products/para500.jpg",
+        "is_favorite": false,
+        "is_flash_sale": 0,
+        "promotion_label": "โปรโมชัน",
+        "discount_percent": 22,
+        "badges": [{ "text": "-22%", "color": "red" }],
+        "brand": "GPO"
+      },
+      {
+        "id": 102,
+        "name": "วิตามินซี 1000mg",
+        "description": null,
+        "price": 180,
+        "sale_price": null,
+        "stock": 60,
+        "sku": "SUP-VITC-1000",
+        "barcode": null,
+        "manufacturer": "Blackmores",
+        "generic_name": null,
+        "usage_instructions": null,
+        "properties_other": null,
+        "unit": "ขวด",
+        "category_id": 3,
+        "category_name": "ยาสามัญประจำบ้าน",
+        "image_gallery": [],
+        "photo_path": null,
+        "image_url": null,
+        "is_favorite": true,
+        "is_flash_sale": 0,
+        "promotion_label": null,
+        "discount_percent": null,
+        "badges": [],
+        "brand": "Blackmores"
+      }
+    ],
+    "categories": [
+      { "id": 3, "name": "ยาสามัญประจำบ้าน", "icon_url": null },
+      { "id": 4, "name": "วิตามินและอาหารเสริม", "icon_url": null }
+    ],
+    "brands": ["Blackmores", "GPO"],
+    "offset": 0,
+    "limit": 12,
+    "total": 2,
+    "has_more": false
+  },
+  "status": 200
+}

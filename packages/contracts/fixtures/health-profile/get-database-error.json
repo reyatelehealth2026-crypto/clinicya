@@ -1,0 +1,6 @@
+{
+  "description": "A PDOException anywhere in getHealthProfile()'s try block -> jsonResponse(['success'=>false,'error'=>'Database error'], 500).",
+  "request": { "action": "get", "line_user_id": "U1234567890abcdef1234567890abcdef" },
+  "response": { "success": false, "error": "Database error" },
+  "status": 500
+}

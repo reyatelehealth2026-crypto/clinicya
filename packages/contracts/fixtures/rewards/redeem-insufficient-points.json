@@ -1,0 +1,5 @@
+{
+  "description": "POST action=redeem — LoyaltyPoints::redeemReward() returns success:false because available_points < points_required. No data payload beyond the message (matches api/rewards.php::handleRedeem()'s `else jsonResponse(false, $result['message'])` branch).",
+  "request": { "action": "redeem", "line_user_id": "Ulowpoints00000000000000000000000", "line_account_id": 1, "reward_id": 11 },
+  "response": { "success": false, "message": "แต้มไม่เพียงพอ" }
+}

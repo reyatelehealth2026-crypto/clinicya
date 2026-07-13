@@ -1,0 +1,6 @@
+{
+  "description": "line_user_id well-formed but no matching row in users (neither line_account_id-scoped nor the unscoped fallback query) -> HTTP 200 with success:false.",
+  "request": { "line_user_id": "Uneverregistered0000000000000000" },
+  "response": { "success": false, "error": "User not found" },
+  "status": 200
+}

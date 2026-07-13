@@ -7,6 +7,18 @@
 > **"Phase 2 batch 2"** section at the bottom of this file for what's new;
 > everything above this notice still describes batch 1's original 14 entries
 > accurately and is unchanged.
+>
+> **Phase 3 batch 1 (sibling harness, not an update to this one)**: the
+> ported `/api/miniapp/**` JSON endpoints (resolve-line-account,
+> points-history, shop-products, health-profile, member, rewards, wishlist)
+> are proven by a SEPARATE script/file, `infra/e2e/api-parity.mjs` +
+> `infra/e2e/lib/api-extract.mjs` — a different harness (JSON request/response
+> diffing, not server-rendered HTML data-point extraction) with its own
+> `{result, endpoints, steps, failedAt}` output shape. See
+> `docs/runbooks/phase3-batch1-miniapp-api-parity.md`. It is a sibling to this
+> file, not a batch appended to it, and — like `parity.mjs`/`run.mjs` — cannot
+> run concurrently with this harness (same fixed container names/ports in
+> `infra/e2e/docker-compose.yml`).
 
 Source of truth: `docs/plans/2026-07-12-nextjs-full-migration-plan.md` Phase 2
 (page-by-page port), §1.5 (strangler edge), §7.3 (canary ramp: demo tenant →

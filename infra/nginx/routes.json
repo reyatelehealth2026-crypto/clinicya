@@ -58,5 +58,11 @@
     "upstream": "php_backend",
     "tenants": "all",
     "note": "Phase 2 batch 2 (mig-ui analytics brief): Next port of loyalty-members.php lives at apps/admin's /loyalty-members, parity-proven by infra/e2e/parity.mjs. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/api/miniapp",
+    "upstream": "next_admin",
+    "tenants": "all",
+    "note": "Phase 3 batch 1 (mig-api-reads/mig-api-writes briefs; parity-proven by infra/e2e/api-parity.mjs): line-mini-app's public JSON API surface (resolve-line-account, points-history, shop-products, health-profile, member, rewards, wishlist), ported to apps/admin's /api/miniapp/** Route Handlers. DELIBERATE DEVIATION from the prior phase-2 'default php_backend, schema-valid not-yet-flipped placeholder' convention: /api/miniapp/** is a BRAND NEW path PHP has never served — the ported endpoints reuse legacy paths like /api/member.php only as the origin-map fallback line-mini-app's client-side php-bridge.ts override targets, they do not live at those literal paths in apps/admin. A php_backend placeholder is therefore meaningless here (nothing on that upstream serves this path), unlike /users, /dashboard, etc. which mirror an existing PHP page 1:1 — so this entry points directly at next_admin, unconditionally, for every tenant. The actual canary ramp (demo tenant -> 1 tenant -> 10% -> 50% -> 100%) for this surface is NOT driven by this file at all — line-mini-app is one static bundle shared by every tenant, so a host×path nginx flip can't express a traffic percentage the way it can for a per-tenant-hostname admin page. mig-orchestrator instead ramps traffic client-side via line-mini-app's NEXT_PUBLIC_MINIAPP_ENDPOINT_OVERRIDES env/config (php-bridge.ts's per-endpoint override map) — see docs/runbooks/phase3-batch1-miniapp-api-parity.md. This specific routing decision is mig-orchestrator's explicit, already-given sign-off (documented, not a question for mig-verify to re-litigate)."
   }
 ]

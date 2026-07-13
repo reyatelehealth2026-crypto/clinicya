@@ -1,0 +1,35 @@
+{
+  "description": "action=product_detail — single business_items row, is_favorite true because the given line_user_id resolved to a real user with a matching user_wishlist row.",
+  "request": { "action": "product_detail", "product_id": 101, "line_account_id": 1, "line_user_id": "U1234567890abcdef1234567890abcdef" },
+  "response": {
+    "success": true,
+    "message": "",
+    "product": {
+      "id": 101,
+      "name": "พาราเซตามอล 500mg",
+      "description": "ยาลดไข้ บรรเทาปวด",
+      "price": 45,
+      "sale_price": 35,
+      "stock": 240,
+      "sku": "MED-PARA-500",
+      "barcode": "8850001234567",
+      "manufacturer": "GPO",
+      "generic_name": "Paracetamol",
+      "usage_instructions": "รับประทานครั้งละ 1-2 เม็ด ทุก 4-6 ชั่วโมง",
+      "properties_other": null,
+      "unit": "แผง",
+      "category_id": 3,
+      "category_name": "ยาสามัญประจำบ้าน",
+      "image_gallery": ["https://cdn.example.com/products/para500-1.jpg"],
+      "photo_path": "uploads/products/para500.jpg",
+      "image_url": "uploads/products/para500.jpg",
+      "is_favorite": true,
+      "is_flash_sale": 0,
+      "promotion_label": "โปรโมชัน",
+      "discount_percent": 22,
+      "badges": [{ "text": "-22%", "color": "red" }],
+      "brand": "GPO"
+    }
+  },
+  "status": 200
+}
