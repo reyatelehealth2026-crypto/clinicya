@@ -1,0 +1,83 @@
+-- infra/e2e/seed/60-worker-smoke-tenants.sql.tmpl
+--
+-- infra/e2e/worker-smoke.mjs's OWN plan + tenant rows (Phase 8/10 scaffold
+-- batch — docs/runbooks/worker-scaffold-boot-drain.md). Applied against
+-- zrismpsz_reya_platform AFTER the master migrations (the same
+-- MASTER_MIGRATIONS list run.mjs/parity.mjs/api-parity.mjs each already
+-- carry their own copy of) AND AFTER each of the three scratch tenant DBs
+-- below has already been CREATEd + had
+-- database/migration_2026-05-25_tenant_template.sql applied to it — see
+-- worker-smoke.mjs's seedTenantDatabases(), which reuses the exact
+-- 05-app-db.sql.tmpl-style "CREATE DATABASE ... ; USE db; <tenant
+-- template>;" apply flow every other harness in this directory already
+-- uses. This file only writes the master.tenants rows that POINT AT those
+-- already-provisioned DBs — same division of labour
+-- 10-/15-/45-plan-and-tenant.sql.tmpl already establish (tenant DB
+-- provisioning is a separate step from the master.tenants row).
+--
+-- THREE scratch tenants, not one — unlike every other harness's
+-- single-tenant fixture, this batch's whole point is proving
+-- apps/worker/src/jobs/heartbeat.ts's forEachActiveTenant() fan-out
+-- actually FILTERS on `status`, not merely that it can reach one tenant:
+--   - two rows with status='active'   -> MUST each get a fresh
+--     activity_logs(action='worker.heartbeat') row per heartbeat firing.
+--   - one row with status='suspended' -> MUST NOT get one (proves the SQL
+--     `WHERE status = 'active'` in forEachActiveTenant.ts is doing real
+--     work, not just happening to only see active rows because no other
+--     kind exists in this harness's DB).
+--
+-- __TENANT_ACTIVE_1_SLUG__/__TENANT_ACTIVE_1_DB__ (and the _2_/_SUSPENDED_
+-- equivalents) are substituted by worker-smoke.mjs from ONE JS source of
+-- truth (its WORKER_SMOKE_TENANTS constant), the same way __APP_DB_NAME__
+-- is substituted elsewhere — not because these particular values are
+-- secrets (they are fixed scratch identifiers, safe to read here), but so
+-- the SQL and the script's own DB-creation/polling/assertion code can never
+-- silently drift apart into two different slugs/db names.
+--
+-- DELETE-then-INSERT, not INSERT IGNORE — same empirically-verified reason
+-- 10-plan-and-tenant.sql.tmpl's header comment documents (a stale db_name
+-- from an earlier interrupted run must never silently survive a re-seed;
+-- this matters even more here since a stale row could point at a
+-- since-dropped scratch DB from a prior failed run).
+
+USE `zrismpsz_reya_platform`;
+
+INSERT IGNORE INTO `plans` (`slug`, `display_name`, `description`, `price_monthly_thb`, `is_active`, `is_visible_public`)
+VALUES (
+  'e2e-worker-smoke',
+  'E2E Worker Smoke Harness (internal test plan / แผนทดสอบภายใน)',
+  'infra/e2e/worker-smoke.mjs scratch plan — not a real subscription tier, never shown publicly.',
+  0.00,
+  1,
+  0
+);
+
+DELETE FROM `tenants`
+  WHERE `slug` IN ('__TENANT_ACTIVE_1_SLUG__', '__TENANT_ACTIVE_2_SLUG__', '__TENANT_SUSPENDED_SLUG__');
+
+INSERT INTO `tenants` (`slug`, `display_name`, `db_name`, `db_host`, `plan_id`, `status`)
+VALUES
+  (
+    '__TENANT_ACTIVE_1_SLUG__',
+    'Worker Smoke Active Tenant 1 (ทดสอบภายใน)',
+    '__TENANT_ACTIVE_1_DB__',
+    'localhost',
+    (SELECT id FROM `plans` WHERE `slug` = 'e2e-worker-smoke' LIMIT 1),
+    'active'
+  ),
+  (
+    '__TENANT_ACTIVE_2_SLUG__',
+    'Worker Smoke Active Tenant 2 (ทดสอบภายใน)',
+    '__TENANT_ACTIVE_2_DB__',
+    'localhost',
+    (SELECT id FROM `plans` WHERE `slug` = 'e2e-worker-smoke' LIMIT 1),
+    'active'
+  ),
+  (
+    '__TENANT_SUSPENDED_SLUG__',
+    'Worker Smoke Suspended Tenant (ทดสอบภายใน — ต้องไม่ได้รับ heartbeat)',
+    '__TENANT_SUSPENDED_DB__',
+    'localhost',
+    (SELECT id FROM `plans` WHERE `slug` = 'e2e-worker-smoke' LIMIT 1),
+    'suspended'
+  );

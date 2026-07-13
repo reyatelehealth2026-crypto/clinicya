@@ -1,0 +1,109 @@
+# infra/compose/docker-compose.worker.yml
+#
+# Additive Phase 8/10 scaffolding overlay (plan §1.1 apps/worker, Phase 8,
+# Phase 10, §4.6). Layer this ON TOP OF BOTH docker-compose.dev.yml AND
+# infra/compose/docker-compose.strangler.yml — same "never edit an existing
+# compose file in place" discipline docker-compose.strangler.yml's own
+# header comment already documents, extended one layer further:
+#
+#   docker compose --env-file infra/compose/.env \
+#     -f docker-compose.dev.yml \
+#     -f infra/compose/docker-compose.strangler.yml \
+#     -f infra/compose/docker-compose.worker.yml \
+#     up -d worker
+#
+# NOTE on relative paths: same rule docker-compose.strangler.yml documents —
+# Compose resolves every relative path (build context) against the
+# directory of the FIRST `-f` file, i.e. the repo root when invoked exactly
+# as above. `context: .` below means "repo root", not "infra/compose/".
+#
+# What this file supplies: ONLY the `worker` service. It deliberately does
+# NOT define `mariadb` or `redis` itself:
+#   - `redis`   comes from docker-compose.dev.yml (already healthchecked).
+#   - `mariadb` comes from infra/compose/docker-compose.strangler.yml (the
+#     MariaDB 10.11 instance — NOT docker-compose.dev.yml's `mysql:8.0`
+#     service; those two are intentionally distinct, see
+#     docker-compose.strangler.yml's own `mariadb` service comment. The
+#     worker needs MariaDB's `json_valid()` CHECK-constraint idiom that the
+#     real tenant-template schema uses).
+# Both are referenced purely by service name (`redis`, `mariadb`) in
+# `depends_on` / `environment` below — this file has no opinion on how
+# they're built, only that the 3-file invocation above brings them up first.
+#
+# `worker` is a member of the Node blue/green set (admin/miniapp/worker —
+# plan §4.6): "สีใช้กับ Node set เท่านั้น (admin/miniapp/worker) — PHP/
+# MariaDB/Redis เป็น singleton นอกสี". No blue/green color split exists yet
+# at this scaffolding stage (that's a later CI/CD batch) — the label below
+# just records the eventual membership so it's machine-checkable
+# (`docker compose config` / `docker inspect`) rather than only living in
+# this comment.
+#
+# Env var NAMES below (DB_HOST/DB_PORT/DB_USER/DB_PASS/REDIS_URL) are
+# apps/worker's OWN contract — see apps/worker/src/env.ts (`DB_USER`/
+# `DB_PASS` are literally @reya/config's zod envSchema keys,
+# packages/config/src/env.ts). The underlying ${MARIADB_USER}/
+# ${MARIADB_PASSWORD} substitution vars are reused VERBATIM from
+# docker-compose.strangler.yml's `php` service / infra/compose/.env.example
+# — not invented parallel names — so one infra/compose/.env file (copied
+# from .env.example) configures every service in this 3-layer stack.
+#
+# WORKER_HEALTH_PORT/WORKER_HEARTBEAT_INTERVAL_MS/WORKER_SHUTDOWN_TIMEOUT_MS
+# are apps/worker's own env-read (apps/worker/src/env.ts) — NOT yet part of
+# @reya/config's zod envSchema (see docs/runbooks/worker-scaffold-boot-drain.md
+# forward note (a)). Only WORKER_HEALTH_PORT is set explicitly below (the
+# image already defaults it to 8099 too — see infra/worker/Dockerfile — this
+# is just self-documenting); WORKER_HEARTBEAT_INTERVAL_MS/
+# WORKER_SHUTDOWN_TIMEOUT_MS are left at apps/worker's own defaults (60s
+# heartbeat cadence, 25s hard-kill fallback) for this compose service, since
+# a fast heartbeat cadence is only useful for the smoke-test harness
+# (infra/e2e/worker-smoke.mjs sets its own short interval directly on the
+# `docker run` it drives, independent of this file).
+
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: infra/worker/Dockerfile
+    container_name: clinicya-worker-phase8-10
+    labels:
+      # Machine-checkable record of plan §4.6 membership (see header
+      # comment) — no color suffix yet, this is pre-blue/green scaffolding.
+      clinicya.blue-green.set: "node"
+      clinicya.blue-green.member: "worker"
+    environment:
+      REDIS_URL: redis://redis:6379
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      DB_PASS: ${MARIADB_PASSWORD:?}
+      WORKER_HEALTH_PORT: 8099
+      TZ: Asia/Bangkok
+    depends_on:
+      redis:
+        condition: service_healthy
+      mariadb:
+        condition: service_healthy
+    networks:
+      - odoo-dashboard-network
+    healthcheck:
+      # Alpine's busybox wget (already in the runner image — no extra
+      # install needed) — same target infra/worker/Dockerfile's own
+      # HEALTHCHECK instruction polls.
+      test: ["CMD", "wget", "-qO-", "http://localhost:8099/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    # Comfortably ABOVE apps/worker/src/shutdown.ts's own
+    # WORKER_SHUTDOWN_TIMEOUT_MS hard-kill fallback (default 25_000ms — see
+    # apps/worker/src/env.ts) so Docker's own SIGKILL never races the app's
+    # own graceful drain (Worker#close() awaiting the in-flight job, then the
+    # health server closing, then a clean process.exit(0)) — see
+    # shutdown.ts's own doc comment, which flags this exact requirement back
+    # to mig-infra by name.
+    stop_grace_period: 40s
+
+networks:
+  odoo-dashboard-network:
+    driver: bridge
