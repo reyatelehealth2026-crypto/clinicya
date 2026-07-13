@@ -17,6 +17,22 @@
 // phase2-batch1-users-dashboard-parity.md's "Phase 2 batch 2" section for
 // the full write-up of what's new.
 //
+// Phase 2 batch 3 (mig-infra) EXTENDS this same harness AGAIN with SIX more
+// page-pairs: PHP /templates.php vs Next /templates; PHP /groups.php?view=N
+// vs Next /groups?view=N; PHP /line-groups.php vs Next /line-groups; PHP
+// /line-group-detail.php?id=N vs Next /line-group-detail?id=N; PHP
+// /crm-dashboard-advanced.php vs Next /crm-dashboard-advanced (a DELIBERATE
+// exception to the usual PHP-vs-Next diff shape — see
+// runCrmDashboardAdvancedChecks() below); PHP /system-status.php vs Next
+// /system-status (an 11-portable/8-placeholder split — see
+// extractSystemStatusPage()'s own doc in lib/extract.mjs). Same top-level-
+// array + runPagePair()-per-entry shape as every batch before it. See
+// docs/runbooks/phase2-batch1-users-dashboard-parity.md's "Phase 2 batch 3"
+// section for the full write-up of what's new, including the two decisions
+// made jointly with mig-ui (the $currentBotId/no-line_accounts invariant
+// reuse for groups.php/line-groups.php, and the crm-dashboard-advanced
+// 500-vs-200 exception mechanism).
+//
 // SCOPE (read before trusting the PASS line — same documented-limits
 // pattern infra/e2e/run.mjs already uses): this proves DATA-POINT PARITY
 // against ONE seeded tenant/dataset, on the REAL stack (a genuine MariaDB +
@@ -59,7 +75,7 @@
 // in a finally block, even on a thrown error.
 
 import { spawn } from 'node:child_process';
-import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -90,6 +106,15 @@ import {
   extractAnalyticsAdvanced,
   extractAnalyticsCrm,
   extractAnalyticsAccount,
+  extractTemplatesPage,
+  extractGroupsPage,
+  extractLineGroupsPage,
+  extractLineGroupDetailPage,
+  extractLineGroupDetailHeaderPhpDefect,
+  extractLineGroupDetailHeaderNext,
+  extractCrmDashboardAdvancedDefensiveEmpty,
+  extractCrmDashboardAdvancedPipelineDefensiveEmpty,
+  extractSystemStatusPage,
 } from './lib/extract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -124,14 +149,23 @@ const MASTER_MIGRATIONS = [
   'packages/db/migrations/master/migration_2026-07-12_node_sessions.sql',
 ];
 const TENANT_TEMPLATE = 'database/migration_2026-05-25_tenant_template.sql';
-// Applied in order — batch 2's fixture is additive on top of batch 1's (same
-// tenant DB, same seedDatabase() call), never a replacement. See
-// infra/e2e/seed/40-phase2-batch2-fixture.sql.tmpl's own header comment for
-// why it's a new numbered file rather than an append to 30-*.
-const FIXTURE_FILES = ['30-phase2-batch1-fixture.sql.tmpl', '40-phase2-batch2-fixture.sql.tmpl'];
+// Applied in order — batch 2's fixture is additive on top of batch 1's, and
+// batch 3's is additive on top of both (same tenant DB, same
+// seedDatabase() call), never a replacement. See
+// infra/e2e/seed/40-phase2-batch2-fixture.sql.tmpl's and
+// infra/e2e/seed/60-phase2-batch3-fixture.sql.tmpl's own header comments for
+// why each is a new numbered file rather than an append to the previous one.
+const FIXTURE_FILES = [
+  '30-phase2-batch1-fixture.sql.tmpl',
+  '40-phase2-batch2-fixture.sql.tmpl',
+  '60-phase2-batch3-fixture.sql.tmpl',
+];
 
 const ADMIN_DIR = path.join(REPO_ROOT, 'apps/admin');
-const ADMIN_STANDALONE_DIR = path.join(ADMIN_DIR, '.next/standalone/apps/admin');
+// Computed by buildAdmin() below (not a fixed path) — see that function's
+// own comment for why: Next's `output: 'standalone'` bundle layout depends
+// on its own inferred *workspace* root, not just this repo's root.
+let ADMIN_STANDALONE_DIR = path.join(ADMIN_DIR, '.next/standalone/apps/admin');
 
 const tracker = createStepTracker();
 const { steps, markOk, fail } = tracker;
@@ -238,6 +272,73 @@ const ANALYTICS_TABS = [
 ];
 
 // ---------------------------------------------------------------------------
+// Phase 2 batch 3 page/filter configs — same "top-level array, looped with
+// runPagePair()" shape as every config above. See
+// infra/e2e/seed/60-phase2-batch3-fixture.sql.tmpl for the exact fixture
+// rows each combo below exercises.
+// ---------------------------------------------------------------------------
+
+/** templates.php has no query-param filters at all (its category filter is 100% client-side JS, both on the PHP page and in TemplatesClient.tsx) — one baseline fetch is the whole surface. */
+const TEMPLATES_VARIANTS = [{ name: 'baseline', qs: '' }];
+
+/**
+ * groups.php's only query param is `?view=<group id>`. `view-empty` (group
+ * id 1) and `view-members` (group id 2) are BOTH real, distinct detail-panel
+ * states from 60-phase2-batch3-fixture.sql.tmpl (an empty group and a
+ * >=2-member group respectively) — not the same state fetched twice.
+ */
+const GROUPS_VARIANTS = [
+  { name: 'baseline', qs: '' },
+  { name: 'view-empty', qs: 'view=1' },
+  { name: 'view-members', qs: 'view=2' },
+];
+
+/** line-groups.php has no query-param filters (its actions are all POST-only mutations, out of this read-only harness's scope) — one baseline fetch. */
+const LINE_GROUPS_VARIANTS = [{ name: 'baseline', qs: '' }];
+
+/**
+ * line-group-detail.php's only param is `?id=<line_groups id>`. id=1 is the
+ * ACTIVE group with seeded members/messages (mixed is_active, a non-'text'
+ * message, a >100-char truncated message); id=2 is the INACTIVE/left group
+ * with NO members/messages rows, exercising both empty-state branches — see
+ * 60-phase2-batch3-fixture.sql.tmpl's own per-table comments.
+ */
+const LINE_GROUP_DETAIL_IDS = [1, 2];
+
+/**
+ * FLAGGED FINDING (discovered by this batch's own harness run, not by
+ * pagesB — see extractLineGroupDetailPage()'s module doc in
+ * infra/e2e/lib/extract.mjs for the full root-cause trace):
+ * line-group-detail.php's group HEADER is permanently broken in real
+ * production — `includes/header.php`'s own `foreach ($menuGroups as
+ * $group)` (line 449, no `unset()` afterward) clobbers line-group-detail.php's
+ * own fetched `$group` row in the shared global scope, since both files are
+ * plain top-level includes, not functions. Every request to this page shows
+ * "Unknown Group" / 0 members / 0 messages / the "Left" badge / "Group"
+ * (never "Room"), regardless of the real group. This is 100% independent of
+ * the requested id — verified against BOTH a real active group (id 1) AND a
+ * real inactive one (id 2) in this fixture, both rendering the identical
+ * broken output. The MEMBERS/MESSAGES panels are unaffected (keyed off the
+ * plain scalar `$groupId`, never touched by the collision) and remain a
+ * normal PHP-vs-Next diff via the `line-group-detail:id=N` entries below.
+ *
+ * The header itself is proven via TWO separate, positively-asserting,
+ * single-stack checks per id (mirroring runCrmDashboardAdvancedChecks()'s
+ * precedent) rather than a diff — diffing Next's genuinely-correct header
+ * against PHP's genuinely-broken one would just look like "Next is wrong"
+ * and bury the real finding. This lookup table is the ONE place this
+ * batch's fixture's real header values are encoded (same "kept in one
+ * place, not duplicated" precedent as FIXTURE_TAG_NAMES in extract.mjs) —
+ * used only by the Next-side assertion; the PHP-side assertion needs no
+ * fixture data at all (the defect is the same broken constant regardless of
+ * id).
+ */
+const LINE_GROUP_DETAIL_EXPECTED_HEADER = {
+  1: { groupName: 'กลุ่มร้านขายยา A', groupType: 'group', memberCountBadge: 3, totalMessagesBadge: 42, isActive: true },
+  2: { groupName: 'ห้องสนทนาลูกค้า B', groupType: 'room', memberCountBadge: 1, totalMessagesBadge: 5, isActive: false },
+};
+
+// ---------------------------------------------------------------------------
 // Database seeding — mirrors run.mjs's seedDatabase()/seedAdminUser() shape
 // (same shared helpers, see harness-common.mjs), PLUS this batch's own
 // 15-plan-and-tenant.sql.tmpl (own tenant slug — see that file's header
@@ -329,17 +430,59 @@ async function fireThrowawayProbeRequest() {
 // process on the host.
 // ---------------------------------------------------------------------------
 
+/**
+ * Finds the real `apps/admin/server.js` inside a `next build --output
+ * standalone` bundle. Usually that's exactly `.next/standalone/apps/admin/
+ * server.js` (ADMIN_STANDALONE_DIR's own default above) — but Next infers
+ * its OWN workspace/turbopack root by walking UP from cwd looking for a
+ * lockfile, and when this repo is checked out somewhere deeply nested under
+ * a directory that itself contains an unrelated stray lockfile (observed
+ * empirically in this environment: a `/tmp/package-lock.json` with no
+ * relation to this repo, several directories above REPO_ROOT — Next's own
+ * "Warning: Next.js inferred your workspace root" text names the exact
+ * file), Next picks THAT ancestor as root instead, and mirrors this repo's
+ * FULL path under `.next/standalone/` (e.g.
+ * `.next/standalone/tmp/.../apps/admin/server.js`) rather than collapsing
+ * it to just `apps/admin/server.js`. Fixing this properly is a one-line
+ * `turbopack.root` add to apps/admin/next.config.ts — outside this agent's
+ * allowed paths (apps/admin/** is mig-ui's) — so this harness instead
+ * SEARCHES for wherever `server.js` actually landed, rather than assuming a
+ * fixed relative path. Never searches inside `node_modules` (Next itself
+ * ships several unrelated files literally named `server.js` there).
+ */
+function findAdminServerJs(standaloneRoot) {
+  const preferred = path.join(standaloneRoot, 'apps/admin/server.js');
+  if (existsSync(preferred)) {
+    return preferred;
+  }
+  if (!existsSync(standaloneRoot)) {
+    return null;
+  }
+  for (const rel of readdirSync(standaloneRoot, { recursive: true })) {
+    if (rel.split(path.sep).includes('node_modules')) continue;
+    if (rel.endsWith(path.join('apps', 'admin', 'server.js'))) {
+      return path.join(standaloneRoot, rel);
+    }
+  }
+  return null;
+}
+
 function buildAdmin() {
   console.error('[parity] pnpm --filter admin run build ...');
   const result = run('pnpm', ['--filter', 'admin', 'run', 'build'], { stdio: 'inherit' });
   if (result.status !== 0) {
     fail('build_admin', `pnpm --filter admin run build exited ${result.status}`);
   }
-  const serverEntry = path.join(ADMIN_STANDALONE_DIR, 'server.js');
-  if (!existsSync(serverEntry)) {
-    fail('build_admin', `next build did not produce ${serverEntry} — is next.config.ts's output:'standalone' still set?`);
+  const standaloneRoot = path.join(ADMIN_DIR, '.next/standalone');
+  const serverEntry = findAdminServerJs(standaloneRoot);
+  if (!serverEntry) {
+    fail(
+      'build_admin',
+      `next build did not produce an apps/admin/server.js anywhere under ${standaloneRoot} — is next.config.ts's output:'standalone' still set?`
+    );
   }
-  markOk('build_admin');
+  ADMIN_STANDALONE_DIR = path.dirname(serverEntry);
+  markOk('build_admin', { serverEntry });
 }
 
 /** Next's `output: 'standalone'` does NOT copy `.next/static` into the standalone bundle (documented Next.js behavior) — this harness's own responsibility to copy it before starting the server, every build. */
@@ -365,7 +508,12 @@ function startNextServer(env) {
   child.stderr.on('data', (d) => {
     stderr += d.toString();
   });
-  child.getLogs = () => ({ stdout: stdout.slice(-4000), stderr: stderr.slice(-4000) });
+  // 20000 chars (not 4000) — only ever printed on a FAIL, and a too-short
+  // tail was observed empirically (this batch's own build report) to cut
+  // off the actual uncaught-error stack trace behind a real bug, leaving
+  // only its defensively-caught SIBLING queries' console.error() output
+  // visible and the real cause invisible.
+  child.getLogs = () => ({ stdout: stdout.slice(-20000), stderr: stderr.slice(-20000) });
   markOk('start_next_server', { pid: child.pid });
   return child;
 }
@@ -500,21 +648,143 @@ function diff(php, next) {
  * FAIL with a diagnosable mismatch, not hang/crash).
  */
 async function runPagePair(name, fetchBoth, extractBoth) {
+  let phpResp = null;
+  let nextResp = null;
   try {
-    const { phpResp, nextResp } = await fetchBoth();
+    ({ phpResp, nextResp } = await fetchBoth());
     assertAuthedOk(phpResp, `${name} (php)`);
     assertAuthedOk(nextResp, `${name} (next)`);
     const { phpData, nextData } = extractBoth(phpResp.text, nextResp.text);
     const mismatches = diff(phpData, nextData);
-    if (mismatches.length > 0 && process.env.PARITY_DUMP_HTML) {
-      const safe = name.replace(/[^a-zA-Z0-9_.=-]/g, '_');
-      writeFileSync(`/tmp/parity-debug-${safe}-php.html`, phpResp.text);
-      writeFileSync(`/tmp/parity-debug-${safe}-next.html`, nextResp.text);
+    if (mismatches.length > 0) {
+      dumpHtmlIfEnabled(name, phpResp, nextResp);
     }
     return { page: name, ok: mismatches.length === 0, mismatches, phpData, nextData };
   } catch (err) {
+    // Dump whatever we managed to fetch even when EXTRACTION itself threw
+    // (not just on a value mismatch) — an extraction error is exactly the
+    // case a human most needs the raw HTML for (a label an extractor
+    // expected genuinely isn't there), so PARITY_DUMP_HTML=1 covers both
+    // failure shapes, not just mismatches.
+    dumpHtmlIfEnabled(name, phpResp, nextResp);
     return { page: name, ok: false, mismatches: [`extraction/fetch error: ${err && err.message ? err.message : String(err)}`] };
   }
+}
+
+function dumpHtmlIfEnabled(name, phpResp, nextResp) {
+  if (!process.env.PARITY_DUMP_HTML) return;
+  const safe = name.replace(/[^a-zA-Z0-9_.=-]/g, '_');
+  if (phpResp) writeFileSync(`/tmp/parity-debug-${safe}-php.html`, phpResp.text);
+  if (nextResp) writeFileSync(`/tmp/parity-debug-${safe}-next.html`, nextResp.text);
+}
+
+/**
+ * Phase 2 batch 3 — the ONE narrowly-scoped variant of runPagePair() this
+ * harness needs, for crm-dashboard-advanced ONLY (see this module's own
+ * header comment + docs/runbooks/phase2-batch1-users-dashboard-parity.md's
+ * "Phase 2 batch 3" section for the full "why"). Unlike runPagePair(),
+ * this fetches and asserts against ONE stack only — there is no PHP HTML to
+ * diff against Next's here (PHP 500s, see runCrmDashboardAdvancedChecks()
+ * below), so assertAuthedOk()'s "both sides must be 200" assumption does not
+ * apply to this page. Same NEVER-THROWS contract as runPagePair() (any
+ * failure becomes `{page, ok:false, mismatches:[...]}`, never aborts the
+ * run or skips teardown) — `assertAndExtract` is expected to throw on a
+ * failed assertion, which this function catches and reports exactly like
+ * runPagePair() catches a fetch/extraction error.
+ */
+async function runSingleSideCheck(name, fetchOne, assertAndExtract) {
+  let resp = null;
+  try {
+    resp = await fetchOne();
+    const data = assertAndExtract(resp);
+    return { page: name, ok: true, mismatches: [], data };
+  } catch (err) {
+    if (process.env.PARITY_DUMP_HTML && resp && typeof resp.text === 'string') {
+      const safe = name.replace(/[^a-zA-Z0-9_.=-]/g, '_');
+      writeFileSync(`/tmp/parity-debug-${safe}.html`, resp.text);
+    }
+    return { page: name, ok: false, mismatches: [`assertion error: ${err && err.message ? err.message : String(err)}`] };
+  }
+}
+
+/**
+ * Phase 2 batch 3 — crm-dashboard-advanced's deliberate exception to the
+ * harness's usual PHP-vs-Next diff shape (per pagesA's CRITICAL FINDING,
+ * jointly resolved with mig-ui — see both queries.ts's and page.tsx's own
+ * module docs in apps/admin/src/app/(tenant)/crm-dashboard-advanced/, and
+ * this batch's runbook section): `crm_deals`/`crm_tickets` are absent from
+ * the committed tenant template, so PHP's own crm-dashboard-advanced.php
+ * throws an uncaught PDOException on THIS SAME fixture schema and returns
+ * 500 — a pre-existing PHP defect, not a harness bug, not fixable here
+ * (database/** is outside this agent's allowed paths). Returns THREE
+ * `pages`-shaped entries, each independently `ok`/`mismatches`:
+ *
+ *   1. `crm-dashboard-advanced:php-500-expected` — POSITIVELY asserts PHP
+ *      still returns exactly 500 on its default (`?tab=overview`) landing
+ *      tab (not silently skipped, not merely "!== 200" — a future PHP fix
+ *      that starts returning e.g. a 302 would also fail this, on purpose:
+ *      any status other than the documented 500 is a signal worth
+ *      investigating). This is what makes the check "catch a real fix to
+ *      CRMDashboardService.php" per this batch's acceptance criteria.
+ *   2. `crm-dashboard-advanced:next-overview-200-defensive-empty` —
+ *      RE-WIRED (mig-verify parity-miss fix, per this batch's runbook
+ *      section 13.3): previously asserted a 500 here too, because
+ *      `getRevenueAnalytics()` queried `odoo_webhooks_log.created_at`, a
+ *      column absent from the committed tenant template, with NO try/catch
+ *      (unlike every sibling crm_deals/crm_tickets query in queries.ts) — a
+ *      faithful 1:1 port of PHP's own identical, equally-unguarded query
+ *      (classes/CRMDashboardService.php lines 701-724). queries.ts now wraps
+ *      that query the same way as its siblings (empty `daily` series on
+ *      failure, `summary` placeholder untouched), so Next's default
+ *      `?tab=overview` reaches 200 with the documented defensive-empty shape
+ *      — asserted via extractCrmDashboardAdvancedDefensiveEmpty(), symmetric
+ *      with check #3 below.
+ *   3. `crm-dashboard-advanced:next-pipeline-200-defensive-empty` — proves
+ *      the AUTHORIZED RESOLUTION pattern genuinely works where it IS
+ *      applied: `?tab=pipeline` (SalesPipelineTab) never calls
+ *      `getRevenueAnalytics()` at all, only the properly-defended
+ *      `getPipelineData()`/`getCustomers()`, so it reaches 200 with the
+ *      documented defensive-empty shape today
+ *      (extractCrmDashboardAdvancedPipelineDefensiveEmpty() in
+ *      infra/e2e/lib/extract.mjs — throws on any violation).
+ *
+ * See extractCrmDashboardAdvancedDefensiveEmpty()'s own module doc in
+ * infra/e2e/lib/extract.mjs for the full field-by-field defensive-empty
+ * contract, and this batch's runbook section for the complete write-up.
+ */
+async function runCrmDashboardAdvancedChecks(phpSid, nextSid) {
+  const phpCheck = await runSingleSideCheck(
+    'crm-dashboard-advanced:php-500-expected',
+    () => fetchPhpPage('/crm-dashboard-advanced.php', phpSid),
+    (resp) => {
+      if (resp.status !== 500) {
+        throw new Error(
+          `expected PHP crm-dashboard-advanced.php to return 500 (crm_deals/crm_tickets absent from the committed tenant template — see CRMDashboardService.php's getExecutiveOverview(), an uncaught PDOException) but got ${resp.status}. If CRMDashboardService.php now guards these queries (or the schema gained crm_deals/crm_tickets), this exception is stale — update/remove runCrmDashboardAdvancedChecks() in infra/e2e/parity.mjs per docs/runbooks/phase2-batch1-users-dashboard-parity.md's "Phase 2 batch 3" section, and switch this page to a normal runPagePair() PHP-vs-Next diff.`
+        );
+      }
+      return { status: resp.status };
+    }
+  );
+
+  const nextOverviewCheck = await runSingleSideCheck(
+    'crm-dashboard-advanced:next-overview-200-defensive-empty',
+    () => fetchNextPage('/crm-dashboard-advanced', nextSid),
+    (resp) => {
+      assertAuthedOk(resp, 'crm-dashboard-advanced (next, default overview tab)');
+      return extractCrmDashboardAdvancedDefensiveEmpty(resp.text);
+    }
+  );
+
+  const nextPipelineCheck = await runSingleSideCheck(
+    'crm-dashboard-advanced:next-pipeline-200-defensive-empty',
+    () => fetchNextPage('/crm-dashboard-advanced?tab=pipeline', nextSid),
+    (resp) => {
+      assertAuthedOk(resp, 'crm-dashboard-advanced?tab=pipeline (next)');
+      return extractCrmDashboardAdvancedPipelineDefensiveEmpty(resp.text);
+    }
+  );
+
+  return [phpCheck, nextOverviewCheck, nextPipelineCheck];
 }
 
 // ---------------------------------------------------------------------------
@@ -669,6 +939,106 @@ async function main() {
         )
       );
     }
+
+    // --- Phase 2 batch 3: /templates (no query-param filters) ---
+    for (const variant of TEMPLATES_VARIANTS) {
+      const qs = variant.qs ? `?${variant.qs}` : '';
+      pages.push(
+        await runPagePair(
+          `templates:${variant.name}`,
+          async () => ({
+            phpResp: await fetchPhpPage(`/templates.php${qs}`, phpSid),
+            nextResp: await fetchNextPage(`/templates${qs}`, nextSid),
+          }),
+          (phpHtml, nextHtml) => ({ phpData: extractTemplatesPage(phpHtml), nextData: extractTemplatesPage(nextHtml) })
+        )
+      );
+    }
+
+    // --- Phase 2 batch 3: /groups (baseline + ?view=N) ---
+    for (const variant of GROUPS_VARIANTS) {
+      const qs = variant.qs ? `?${variant.qs}` : '';
+      pages.push(
+        await runPagePair(
+          `groups:${variant.name}`,
+          async () => ({
+            phpResp: await fetchPhpPage(`/groups.php${qs}`, phpSid),
+            nextResp: await fetchNextPage(`/groups${qs}`, nextSid),
+          }),
+          (phpHtml, nextHtml) => ({ phpData: extractGroupsPage(phpHtml), nextData: extractGroupsPage(nextHtml) })
+        )
+      );
+    }
+
+    // --- Phase 2 batch 3: /line-groups (no query-param filters) ---
+    for (const variant of LINE_GROUPS_VARIANTS) {
+      const qs = variant.qs ? `?${variant.qs}` : '';
+      pages.push(
+        await runPagePair(
+          `line-groups:${variant.name}`,
+          async () => ({
+            phpResp: await fetchPhpPage(`/line-groups.php${qs}`, phpSid),
+            nextResp: await fetchNextPage(`/line-groups${qs}`, nextSid),
+          }),
+          (phpHtml, nextHtml) => ({ phpData: extractLineGroupsPage(phpHtml), nextData: extractLineGroupsPage(nextHtml) })
+        )
+      );
+    }
+
+    // --- Phase 2 batch 3: /line-group-detail?id=N (members/messages diff) ---
+    for (const id of LINE_GROUP_DETAIL_IDS) {
+      pages.push(
+        await runPagePair(
+          `line-group-detail:id=${id}`,
+          async () => ({
+            phpResp: await fetchPhpPage(`/line-group-detail.php?id=${id}`, phpSid),
+            nextResp: await fetchNextPage(`/line-group-detail?id=${id}`, nextSid),
+          }),
+          (phpHtml, nextHtml) => ({ phpData: extractLineGroupDetailPage(phpHtml), nextData: extractLineGroupDetailPage(nextHtml) })
+        )
+      );
+    }
+
+    // --- Phase 2 batch 3: /line-group-detail?id=N header — the PHP
+    // `$group`-clobbering defect exception (see LINE_GROUP_DETAIL_EXPECTED_HEADER's
+    // own doc above + extractLineGroupDetailPage()'s module doc in lib/extract.mjs) ---
+    for (const id of LINE_GROUP_DETAIL_IDS) {
+      pages.push(
+        await runSingleSideCheck(
+          `line-group-detail:php-header-defect id=${id}`,
+          () => fetchPhpPage(`/line-group-detail.php?id=${id}`, phpSid),
+          (resp) => {
+            assertAuthedOk(resp, `line-group-detail header (php) id=${id}`);
+            return extractLineGroupDetailHeaderPhpDefect(resp.text);
+          }
+        )
+      );
+      pages.push(
+        await runSingleSideCheck(
+          `line-group-detail:next-header id=${id}`,
+          () => fetchNextPage(`/line-group-detail?id=${id}`, nextSid),
+          (resp) => {
+            assertAuthedOk(resp, `line-group-detail header (next) id=${id}`);
+            return extractLineGroupDetailHeaderNext(resp.text, LINE_GROUP_DETAIL_EXPECTED_HEADER[id]);
+          }
+        )
+      );
+    }
+
+    // --- Phase 2 batch 3: /crm-dashboard-advanced — 500-vs-200 exception (see runCrmDashboardAdvancedChecks()'s own doc) ---
+    pages.push(...(await runCrmDashboardAdvancedChecks(phpSid, nextSid)));
+
+    // --- Phase 2 batch 3: /system-status (no query-param filters) ---
+    pages.push(
+      await runPagePair(
+        'system-status:baseline',
+        async () => ({
+          phpResp: await fetchPhpPage('/system-status.php', phpSid),
+          nextResp: await fetchNextPage('/system-status', nextSid),
+        }),
+        (phpHtml, nextHtml) => ({ phpData: extractSystemStatusPage(phpHtml), nextData: extractSystemStatusPage(nextHtml) })
+      )
+    );
 
     result = pages.every((p) => p.ok) ? 'PASS' : 'FAIL';
     if (result === 'PASS') {

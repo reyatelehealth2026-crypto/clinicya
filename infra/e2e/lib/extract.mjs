@@ -701,3 +701,690 @@ export function extractAnalyticsAccount(html) {
   const accountSelectorPresent = main.includes('-- เลือกบอท --');
   return { promptShown, accountSelectorPresent };
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 batch 3 (mig-infra) additions — /templates, /groups, /line-groups,
+// /line-group-detail, /crm-dashboard-advanced, /system-status. Same
+// label-anchored HtmlCursor technique as everything above. See
+// docs/runbooks/phase2-batch1-users-dashboard-parity.md's "Phase 2 batch 3"
+// section for the full write-up of what's new and the two joint decisions
+// made with mig-ui (the $currentBotId/no-line_accounts invariant reuse, and
+// the crm-dashboard-advanced 500-vs-200 exception shape).
+// ---------------------------------------------------------------------------
+
+/**
+ * Splits `html` into its tag-delimited visible text chunks (decoded,
+ * trimmed, empty chunks dropped) — the same technique firstVisibleChunk()/
+ * lastVisibleChunk() use internally (stripTags() marks tag boundaries with
+ * ``, comments stripped first, never treated as a boundary — see this
+ * module's own doc for why). Exposed as its own local helper (not exported)
+ * because several batch-3 extractors below need MULTIPLE consecutive
+ * visible chunks out of one bounded HTML slice (e.g. a template card's
+ * name-then-category-then-type, all three plain-text siblings with no
+ * shared class between the PHP and Next markup to anchor on individually —
+ * see extractTemplatesPage()), not just "the first" or "the last" the
+ * existing two helpers give you.
+ */
+function visibleChunks(html) {
+  return stripTags(html)
+    .split('')
+    .map((s) => decodeEntities(s).trim())
+    .filter((s) => s.length > 0);
+}
+
+// ---------------------------------------------------------------------------
+// /templates page extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts templates.php's data-point list: the category-filter-bar's
+ * button labels IN RENDER ORDER (['ทั้งหมด', ...array_unique-deduped
+ * categories] — templates/_lib/categories.ts's own module doc explains why
+ * this must be first-seen order, not `.sort()`'d, and this extractor
+ * deliberately does NOT re-sort either, so a regression to alphabetical
+ * order on either stack would show up as a mismatch here), plus one
+ * {name, category, messageType} tuple per rendered template card, in row
+ * order (both stacks run the identical `ORDER BY category, name` query, so
+ * row order is a real, meaningful parity signal here, not just a count).
+ *
+ * DESIGN — anchored on the `data-category="..."` attribute, not on any CSS
+ * class: templates.php's `.template-card`/`.template-card-name`/
+ * `.template-card-cat`/`.template-type-badge` classes have NO Tailwind-
+ * utility equivalent in TemplateCard.tsx (verified by reading both — the
+ * Next port uses plain utility classes throughout, none shared with PHP's
+ * bespoke `<style>` block). `data-category` is the ONE attribute both sides
+ * genuinely share byte-for-byte (PHP: `data-category="<?=
+ * htmlspecialchars($template['category']) ?>"` on the PHP `.template-card`
+ * div; Next: `data-category={template.category ?? ''}` on TemplateCard.tsx's
+ * outer div) — used here purely as a per-card DELIMITER, not as the
+ * category value itself (the category value is instead read from the
+ * card's own visible text, same as the name/messageType, so a hypothetical
+ * future drift between the attribute and the displayed text would still be
+ * caught).
+ */
+export function extractTemplatesPage(html) {
+  const main = sliceMainContent(html);
+
+  const allBtnTextIdx = main.indexOf('>ทั้งหมด<');
+  if (allBtnTextIdx === -1) {
+    throw new Error('extractTemplatesPage: "ทั้งหมด" (all-categories) filter button not found');
+  }
+  // lastIndexOf(..., allBtnTextIdx), not the text match itself, so the slice
+  // below starts at this button's OWN opening `<button` tag rather than
+  // mid-tag (mid-tag would silently drop the "ทั้งหมด" button from
+  // categoryButtons below — caught empirically by this batch's own unit
+  // test before ever touching a real browser/docker build).
+  const filterBarStart = main.lastIndexOf('<button', allBtnTextIdx);
+  const firstCardIdx = main.indexOf('data-category="');
+  const filterBarSlice = firstCardIdx === -1 ? main.slice(filterBarStart) : main.slice(filterBarStart, firstCardIdx);
+  const categoryButtons = [...filterBarSlice.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => decodeEntities(m[1]).trim());
+
+  // `[^>]*>` after the captured attribute value consumes the REST of the
+  // card's own opening tag (its other attributes + the tag's closing `>`)
+  // before group 2 starts — omitting this left a stray, un-stripped `>`
+  // character as visibleChunks()'s first "chunk" (caught by this batch's
+  // own unit test).
+  const CARD_RE = /data-category="([^"]*)"[^>]*>([\s\S]*?)(?=data-category="|$)/g;
+  const cards = [...main.matchAll(CARD_RE)].map((m) => {
+    const category = decodeEntities(m[1]).trim();
+    const chunks = visibleChunks(m[2]);
+    // Render order within one card (verified identical on both stacks —
+    // templates.php lines 168-178 vs TemplateCard.tsx lines 55-66): name,
+    // then the category-display line (falls back to 'ไม่มีหมวดหมู่' when
+    // empty — same fallback text both sides), then the message-type badge.
+    return { name: chunks[0] ?? null, categoryDisplay: chunks[1] ?? null, messageType: chunks[2] ?? null, dataCategory: category || null };
+  });
+
+  const emptyStateShown = main.includes('ยังไม่มีเทมเพลต');
+
+  return { categoryButtons, cardCount: cards.length, cards, emptyStateShown };
+}
+
+// ---------------------------------------------------------------------------
+// /groups page extraction (baseline + ?view=N variant — same extractor,
+// the detail-panel fields are simply null when no `viewGroup` resolved)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts groups.php's data-point list: the left-hand groups list (name +
+ * memberCount per row, in `ORDER BY g.name` order) and, when `?view=<id>`
+ * resolves to a real group, the right-hand detail panel (group name +
+ * description + member rows).
+ *
+ * DESIGN: group rows are delimited by their own `href` containing
+ * `view=<id>"` — PHP: `<a href="?view=<?= $group['id'] ?>" ...>`; Next:
+ * `<a href={\`/groups?view=${group.id}\`} ...>` — both contain the literal
+ * substring `view=<id>"` right before the rest of the tag's attributes, a
+ * reliable per-row delimiter shared by construction (both are literally the
+ * SAME URL query param). The member-count text ("N สมาชิก") is one
+ * concatenated chunk on both stacks (PHP: `<?= $group['member_count'] ?>
+ * สมาชิก`; Next: `{group.memberCount} สมาชิก` — a JSX expression followed by
+ * a string-literal sibling, never split by an intervening tag, so no
+ * hydration-comment concern here even though this module's own doc flags
+ * that pattern elsewhere).
+ *
+ * The detail panel's `<h3 class="font-semibold">` is genuinely
+ * class-identical on both stacks (GroupsPanel.tsx line 87 vs groups.php line
+ * 97) but occurs TWICE on a `?view=` page — once for the static left-panel
+ * heading ("กลุ่มทั้งหมด"), once for the dynamic viewGroup name. Anchoring
+ * past the FIRST occurrence via `cursor.advanceTo('กลุ่มทั้งหมด')` before
+ * searching for the second is what makes this safe (same "known collision,
+ * anchor past it" technique extractCrmDashboard() already uses for its own
+ * "Tags" KPI-tile-vs-heading collision).
+ */
+export function extractGroupsPage(html) {
+  const main = sliceMainContent(html);
+
+  const groupRows = [...main.matchAll(/view=(\d+)"[^>]*>([\s\S]*?)<\/a>/g)].map((m) => {
+    const chunks = visibleChunks(m[2]);
+    const name = chunks[0] ?? null;
+    const countMatch = chunks[1] ? chunks[1].match(/(\d+)/) : null;
+    return { name, memberCount: countMatch ? Number(countMatch[1]) : null };
+  });
+  const groupListEmptyShown = main.includes('ยังไม่มีกลุ่ม');
+
+  const cursor = new HtmlCursor(main);
+  cursor.advanceTo('กลุ่มทั้งหมด');
+  const detailPlaceholderShown = main.includes('เลือกกลุ่มเพื่อดูรายละเอียด', cursor.pos);
+
+  let viewGroupName = null;
+  let viewGroupDescription = null;
+  let memberRows = [];
+  let membersEmptyShown = null;
+
+  if (!detailPlaceholderShown) {
+    viewGroupName = cursor.afterLabel('class="font-semibold">');
+    viewGroupDescription = cursor.afterLabel('class="text-sm text-gray-500">');
+    cursor.advanceTo('เพิ่มสมาชิก');
+    const membersSlice = cursor.sliceUntil([]);
+    memberRows = [...membersSlice.matchAll(/class="font-medium">([^<]*)</g)].map((m) => decodeEntities(m[1]).trim());
+    membersEmptyShown = membersSlice.includes('ยังไม่มีสมาชิกในกลุ่ม');
+  }
+
+  return {
+    groupCount: groupRows.length,
+    groupRows,
+    groupListEmptyShown,
+    detailPlaceholderShown,
+    viewGroupName,
+    viewGroupDescription,
+    memberCount: memberRows.length,
+    memberRows,
+    membersEmptyShown,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// /line-groups page extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts line-groups.php's data-point list: the 4 stats-card numbers
+ * (total/active/totalMembers/totalMessages — genuinely CLASS-IDENTICAL on
+ * both stacks, `text-3xl font-bold text-{blue,green,purple,orange}-500`,
+ * verified by reading both line-groups.php lines 152-167 and
+ * page.tsx lines 48-63), the "N กลุ่ม" list-header count, and one row per
+ * group ({groupName, botName, memberCount, totalMessages, isActive}, in
+ * `ORDER BY is_active DESC, joined_at DESC` order — identical on both
+ * stacks). Row fields are also read off shared classes (`class="font-
+ * medium"` — appears twice per row, group name then member-count span, see
+ * LineGroupRow.tsx lines 48/57 vs line-groups.php lines 210/219;
+ * `class="text-sm text-gray-600"` for botName; the EXACT (non-prefixed)
+ * `class="text-gray-600"` for totalMessages, deliberately distinct from the
+ * `text-sm text-gray-600` bot-name span so the two never collide).
+ */
+export function extractLineGroupsPage(html) {
+  const main = sliceMainContent(html);
+  const cursor = new HtmlCursor(main);
+
+  const statsTotal = parseLeadingNumber(cursor.afterLabel('text-3xl font-bold text-blue-500">'));
+  const statsActive = parseLeadingNumber(cursor.afterLabel('text-3xl font-bold text-green-500">'));
+  const statsTotalMembers = parseLeadingNumber(cursor.afterLabel('text-3xl font-bold text-purple-500">'));
+  const statsTotalMessages = parseLeadingNumber(cursor.afterLabel('text-3xl font-bold text-orange-500">'));
+
+  const listCount = parseLeadingNumber(cursor.afterLabel('class="text-sm text-gray-500">'));
+  const emptyStateShown = main.includes('ยังไม่มีกลุ่มที่บอทเข้าร่วม');
+
+  const rows = [...main.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)]
+    .map((m) => m[1])
+    .filter((rowHtml) => rowHtml.includes('class="font-medium">')) // skips the <thead> header row, which has no such cell
+    .map((rowHtml) => {
+      const fontMediumMatches = [...rowHtml.matchAll(/class="font-medium">([^<]*)</g)].map((mm) => decodeEntities(mm[1]).trim());
+      const groupName = fontMediumMatches[0] ?? null;
+      const memberCount = fontMediumMatches[1] !== undefined ? parseLeadingNumber(fontMediumMatches[1]) : null;
+      const botNameMatch = rowHtml.match(/class="text-sm text-gray-600">([^<]*)</);
+      const botName = botNameMatch ? decodeEntities(botNameMatch[1]).trim() : null;
+      const totalMessagesMatch = rowHtml.match(/class="text-gray-600">([^<]*)</);
+      const totalMessages = totalMessagesMatch ? parseLeadingNumber(totalMessagesMatch[1]) : null;
+      const isActive = rowHtml.includes('>Active<');
+      const isLeft = rowHtml.includes('>Left<');
+      return { groupName, botName, memberCount, totalMessages, isActive, isLeft };
+    });
+
+  return {
+    stats: { total: statsTotal, active: statsActive, totalMembers: statsTotalMembers, totalMessages: statsTotalMessages },
+    listCount,
+    emptyStateShown,
+    rowCount: rows.length,
+    rows,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// /line-group-detail?id=N page extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * FLAGGED FINDING (build report, discovered by this batch's own harness run
+ * against REAL rendered PHP HTML — not visible from reading
+ * line-group-detail.php in isolation, which is why pagesB's own port doc
+ * doesn't mention it): line-group-detail.php's group HEADER (name,
+ * member/message-count badges, active/left status, group type, bot name) is
+ * PERMANENTLY BROKEN in real production, on every request, for every group.
+ * Root cause (confirmed by reading includes/header.php in full):
+ * `foreach ($menuGroups as $group) { ... }` at header.php line 449 (no
+ * `unset($group)` afterward) reuses the exact same variable name
+ * `$group` as line-group-detail.php's own fetched DB row — and since
+ * `require_once 'includes/header.php'` (line-group-detail.php line 58) runs
+ * as a plain top-level include, NOT inside a function, both files share the
+ * SAME global scope, so header.php's loop OVERWRITES line-group-detail.php's
+ * `$group` with header.php's own LAST menu-group array entry before the HTML
+ * body ever reads it. `$pageTitle` (line 29, computed BEFORE header.php
+ * runs) is unaffected and correctly shows the real group name — only the
+ * <title>/sidebar breadcrumb see the real data; the page's own H1/badges see
+ * header.php's leftover menu-group array instead, whose absent keys make
+ * `$group['group_name'] ?: 'Unknown Group'` -> 'Unknown Group',
+ * `number_format($group['member_count'])`/`...['total_messages']` ->
+ * `number_format(null)` -> '0', `$group['is_active']` -> falsy -> always the
+ * "Left" badge, `$group['group_type'] === 'room'` -> always false -> always
+ * "Group". This is 100% independent of THIS fixture's data (verified against
+ * BOTH a real active AND a real inactive seeded group, both showing the
+ * identical broken output) — a real, pre-existing production defect, not
+ * fixable here (line-group-detail.php/includes/header.php are off-limits).
+ *
+ * Consequence for this harness: the header fields are NOT part of
+ * extractLineGroupDetailPage()'s returned (diffed) object at all — diffing
+ * Next's genuinely-correct header against PHP's genuinely-broken one would
+ * just look like "Next has a bug" and bury the real finding. Instead, TWO
+ * separate, single-stack, POSITIVELY-ASSERTING functions verify each
+ * stack's own header behavior independently (mirroring
+ * extractCrmDashboardAdvancedDefensiveEmpty()'s precedent) — see
+ * extractLineGroupDetailHeaderPhpDefect() / extractLineGroupDetailHeaderNext()
+ * below, wired up via parity.mjs's own runSingleSideCheck() entries. See
+ * this batch's runbook section for the full write-up.
+ *
+ * Extracts the members panel (heading count + one row per member:
+ * displayName, totalMessages, isLeft) and the recent-messages panel
+ * (heading count + one row per message: displayName, hasTypePrefix,
+ * isTruncated) — genuinely comparable on both stacks (both read off
+ * `$groupId`/`groupId`, a plain scalar param never touched by the
+ * `$group`-clobbering bug above).
+ *
+ * The two panels are read from bounded SLICES (members: from the "สมาชิก ("
+ * heading up to "ข้อความล่าสุด"; messages: from there up to the first
+ * trailing `<script` tag — NOT unbounded to end-of-document, which would
+ * otherwise sweep in Next's own React-hydration RSC payload script, a
+ * `self.__next_f.push(...)` blob that JSON-serializes this same page's props
+ * a SECOND time with different escaping, verified empirically to contain
+ * spurious extra `"..."` occurrences that inflated messageTruncatedCount
+ * before this bound was added — see PARITY_DUMP_HTML-captured evidence in
+ * this batch's build report). Comments are stripped from both slices before
+ * any regex runs against them (`<!-- -->` hydration boundary markers — this
+ * file's own module doc explains why — verified empirically to sit directly
+ * between "ข้อความ: " and its digit in `memberMessageCounts`' underlying
+ * markup, silently breaking a naive `\s*` gap in the regex before this fix).
+ */
+function extractLineGroupDetailBody(main) {
+  const membersHeadingIdx = main.indexOf('สมาชิก (');
+  if (membersHeadingIdx === -1) {
+    throw new Error('extractLineGroupDetailPage: "สมาชิก (" members-panel heading not found');
+  }
+  const membersHeadingCount = parseLeadingNumber(new HtmlCursor(main.slice(membersHeadingIdx)).afterLabel('สมาชิก ('));
+
+  const messagesHeadingIdx = main.indexOf('ข้อความล่าสุด', membersHeadingIdx);
+  if (messagesHeadingIdx === -1) {
+    throw new Error('extractLineGroupDetailPage: "ข้อความล่าสุด" messages-panel heading not found');
+  }
+  const scriptIdx = main.indexOf('<script', messagesHeadingIdx);
+  const bodyEnd = scriptIdx === -1 ? main.length : scriptIdx;
+
+  const stripComments = (s) => s.replace(/<!--[\s\S]*?-->/g, '');
+  const membersSlice = stripComments(main.slice(membersHeadingIdx, messagesHeadingIdx));
+  const messagesSlice = stripComments(main.slice(messagesHeadingIdx, bodyEnd));
+
+  const membersEmptyShown = membersSlice.includes('ยังไม่มีข้อมูลสมาชิก');
+  const memberDisplayNames = [...membersSlice.matchAll(/class="font-medium">([^<]*)</g)].map((m) => decodeEntities(m[1]).trim());
+  const memberMessageCounts = [...membersSlice.matchAll(/ข้อความ:\s*([\d,]+)/g)].map((m) => Number(m[1].replace(/,/g, '')));
+  const memberLeftCount = (membersSlice.match(/ออกแล้ว/g) ?? []).length;
+
+  const messagesEmptyShown = messagesSlice.includes('ยังไม่มีข้อความ');
+  const messageRowCount = (messagesSlice.match(/class="border-b pb-2">/g) ?? []).length;
+  const messageDisplayNames = [...messagesSlice.matchAll(/class="font-medium text-sm">([^<]*)</g)].map((m) => decodeEntities(m[1]).trim());
+  const messageTypePrefixCount = (messagesSlice.match(/class="text-gray-400">\[/g) ?? []).length;
+  const messageTruncatedCount = (messagesSlice.match(/\.\.\./g) ?? []).length;
+
+  return {
+    membersHeadingCount,
+    membersEmptyShown,
+    memberCount: memberDisplayNames.length,
+    memberDisplayNames,
+    memberMessageCounts,
+    memberLeftCount,
+    messagesEmptyShown,
+    messageRowCount,
+    messageDisplayNames,
+    messageTypePrefixCount,
+    messageTruncatedCount,
+  };
+}
+
+export function extractLineGroupDetailPage(html) {
+  const main = sliceMainContent(html);
+  return extractLineGroupDetailBody(main);
+}
+
+/** Reads the group-header fields (see extractLineGroupDetailPage()'s module doc for why these are read separately from everything else). Not exported on its own — only ever used by the two stack-specific assertion functions below, which is the ONLY place this batch's harness reads them. */
+function readLineGroupDetailHeader(main) {
+  const cursor = new HtmlCursor(main);
+  const groupName = cursor.afterLabel('class="text-2xl font-bold">');
+  const headerLine = cursor.afterLabel('class="text-gray-500">'); // "Group • บอท: -" (or "Room • บอท: <name>")
+  const groupType = headerLine && headerLine.startsWith('Room') ? 'room' : 'group';
+  const botNameMatch = headerLine ? headerLine.match(/บอท:\s*(.*)$/) : null;
+  const botName = botNameMatch ? botNameMatch[1].trim() : null;
+  const memberCountBadge = parseLeadingNumber(cursor.afterLabel('text-2xl font-bold text-blue-500">'));
+  const totalMessagesBadge = parseLeadingNumber(cursor.afterLabel('text-2xl font-bold text-green-500">'));
+  cursor.advanceTo('เข้าร่วมเมื่อ'); // anchors just past the Active/Left badge, which renders immediately before this label on both stacks.
+  const headerSlice = main.slice(0, cursor.pos);
+  const isActive = headerSlice.includes('>Active<');
+  return { groupName, groupType, botName, memberCountBadge, totalMessagesBadge, isActive };
+}
+
+/**
+ * Positively asserts PHP's line-group-detail.php header shows the KNOWN
+ * `$group`-clobbering defect (see extractLineGroupDetailPage()'s module doc)
+ * — throws if it doesn't, so a future fix to header.php's variable
+ * collision (or line-group-detail.php starting to defend against it) is
+ * CAUGHT, not silently masked. Deliberately does NOT vary by group id — the
+ * defect is structural (which menu group header.php's OWN loop last
+ * iterated), not data-dependent, so the same assertion applies to every id.
+ */
+export function extractLineGroupDetailHeaderPhpDefect(html) {
+  const header = readLineGroupDetailHeader(sliceMainContent(html));
+  const problems = [];
+  if (header.groupName !== 'Unknown Group') problems.push(`groupName=${JSON.stringify(header.groupName)}, expected "Unknown Group"`);
+  if (header.memberCountBadge !== 0) problems.push(`memberCountBadge=${header.memberCountBadge}, expected 0`);
+  if (header.totalMessagesBadge !== 0) problems.push(`totalMessagesBadge=${header.totalMessagesBadge}, expected 0`);
+  if (header.isActive !== false) problems.push(`isActive=${header.isActive}, expected false (always renders the "Left" badge)`);
+  if (header.groupType !== 'group') problems.push(`groupType=${JSON.stringify(header.groupType)}, expected "group" (never resolves 'room')`);
+  if (problems.length > 0) {
+    throw new Error(
+      `line-group-detail.php's known header \`$group\`-clobbering defect (includes/header.php:449) did not reproduce: ${problems.join('; ')}. If header.php or line-group-detail.php were fixed, this assertion is stale — remove it and switch line-group-detail's header fields back to a normal PHP-vs-Next diff per docs/runbooks/phase2-batch1-users-dashboard-parity.md's "Phase 2 batch 3" section.`
+    );
+  }
+  return { defectConfirmed: true };
+}
+
+/**
+ * Positively asserts Next's line-group-detail header shows the REAL,
+ * correct data (Next has no equivalent of PHP's `$group`-clobbering bug —
+ * apps/admin's session/db plumbing never reuses a global `$group`-like
+ * variable) — throws if it drifts from `expected` (the fixture's own known
+ * truth, passed in by parity.mjs, kept there rather than duplicated here so
+ * there is exactly one place per batch that encodes "what the fixture
+ * contains", matching FIXTURE_TAG_NAMES's existing precedent in this file).
+ */
+export function extractLineGroupDetailHeaderNext(html, expected) {
+  const header = readLineGroupDetailHeader(sliceMainContent(html));
+  const problems = [];
+  for (const key of ['groupName', 'groupType', 'memberCountBadge', 'totalMessagesBadge', 'isActive']) {
+    if (header[key] !== expected[key]) {
+      problems.push(`${key}=${JSON.stringify(header[key])}, expected ${JSON.stringify(expected[key])}`);
+    }
+  }
+  if (problems.length > 0) {
+    throw new Error(`line-group-detail (next) header does not match the fixture's known data: ${problems.join('; ')}`);
+  }
+  return header;
+}
+
+// ---------------------------------------------------------------------------
+// /crm-dashboard-advanced — Next-only defensive-empty extraction (the ONE
+// deliberate exception to this file's usual PHP-vs-Next diff shape)
+// ---------------------------------------------------------------------------
+
+/**
+ * PHP's crm-dashboard-advanced.php 500s unconditionally on this fixture's
+ * schema (`crm_deals`/`crm_tickets` absent — see queries.ts's own "CRITICAL
+ * FINDING" module doc and this batch's runbook section) — there is no PHP
+ * HTML to extract data points FROM, so this function, unlike every other
+ * extractor in this file, is called ONLY against Next's response and never
+ * fed into parity.mjs's generic PHP-vs-Next diff(). Its job is different:
+ * assert the page renders Next's own AUTHORIZED, DOCUMENTED defensive-empty
+ * shape and THROW if it doesn't (a real regression here — e.g. someone
+ * removes queries.ts's try/catch and the page starts 500ing too, or someone
+ * "fixes" a query to return non-zero placeholder data — must fail loudly,
+ * not silently pass).
+ *
+ * FORMERLY a SECOND FLAGGED FINDING (mig-verify parity-miss, now fixed): this
+ * function was originally NOT wired into parity.mjs's active checks for the
+ * DEFAULT (`?tab=overview`) tab, because that tab ALSO 500'd on Next — a
+ * SEPARATE, narrower gap in the "AUTHORIZED RESOLUTION" than the
+ * crm_deals/crm_tickets one pagesA/mig-ui already documented.
+ * `getRevenueAnalytics()` in queries.ts queried `odoo_webhooks_log.created_at`
+ * with NO try/catch (unlike every sibling crm_deals/crm_tickets-touching
+ * query in the same file) — and `odoo_webhooks_log` genuinely has no
+ * `created_at` column in the committed tenant template (it has `received_at`/
+ * `processed_at` instead; confirmed via `ER_BAD_FIELD_ERROR` in a real Next
+ * server log). This was a FAITHFUL 1:1 port of PHP's own
+ * `CRMDashboardService::getRevenueAnalytics()` (identical query, confirmed
+ * by reading classes/CRMDashboardService.php lines 701-724) — real PHP would
+ * throw the exact same class of error here too, had it ever gotten past its
+ * OWN earlier, unguarded `crm_deals` query first.
+ *
+ * FIX: `getRevenueAnalytics()` now wraps that query in the same try/catch
+ * shape as its crm_deals/crm_tickets siblings (empty `daily` series on
+ * failure, `summary` untouched — it was already an unconditional hardcoded
+ * placeholder). Next's `?tab=overview` now reaches 200 with the documented
+ * defensive-empty shape, so this function IS wired into
+ * parity.mjs's runCrmDashboardAdvancedChecks() as
+ * `next-overview-200-defensive-empty`, symmetric with the pipeline-tab
+ * check below.
+ *
+ * `?tab=pipeline` (SalesPipelineTab) does NOT call `getRevenueAnalytics()`
+ * at all — only `getPipelineData()` and `getCustomers()`, both genuinely
+ * defensive — so it DOES reach 200 today and is what
+ * runCrmDashboardAdvancedChecks() actually exercises for the "Next shows the
+ * documented defensive-empty shape" half of this exception, via the sibling
+ * extractCrmDashboardAdvancedPipelineDefensiveEmpty() below.
+ */
+export function extractCrmDashboardAdvancedDefensiveEmpty(html) {
+  const main = sliceMainContent(html);
+  const cursor = new HtmlCursor(main);
+
+  const totalCustomers = parseLeadingNumber(cursor.afterLabel('>Total Customers</div>'));
+  const pipelineValue = parseLeadingNumber(cursor.afterLabel('>Pipeline Value</div>'));
+  const activeDealsValue = parseLeadingNumber(cursor.beforeLabel('active deals'));
+  parseLeadingNumber(cursor.afterLabel('>Monthly Revenue</div>')); // read for cursor-order correctness; not part of the defensive-empty contract (this metric is a hardcoded 125000 placeholder in BOTH real PHP and this port, never touches crm_deals/crm_tickets).
+  const openTicketsValue = parseLeadingNumber(cursor.afterLabel('>Open Tickets</div>'));
+
+  const alertsPresent = main.includes('data-testid="alerts"');
+  const noDealsFoundShown = main.includes('No deals found');
+  const noRecentActivityShown = main.includes('No recent activity');
+
+  const problems = [];
+  if (totalCustomers === null || totalCustomers < 0) {
+    problems.push(`totalCustomers=${totalCustomers} — expected a real non-negative count (this query never touches crm_deals/crm_tickets, so it is NOT part of the defensive-empty fallback)`);
+  }
+  if (pipelineValue !== 0) {
+    problems.push(`pipelineValue=${pipelineValue}, expected 0 (crm_deals absent from schema -> defensive default)`);
+  }
+  if (activeDealsValue !== 0) {
+    problems.push(`activeDealsValue=${activeDealsValue}, expected 0 (crm_deals absent from schema -> defensive default)`);
+  }
+  if (openTicketsValue !== 0) {
+    problems.push(`openTicketsValue=${openTicketsValue}, expected 0 (crm_tickets absent from schema -> defensive default)`);
+  }
+  if (alertsPresent) {
+    problems.push('alerts section rendered, expected none (both alert queries touch crm_tickets/crm_deals -> should defensively resolve to [])');
+  }
+  if (!noDealsFoundShown) {
+    problems.push('"No deals found" not shown (getDealsList() is an unconditional stub that always returns { deals: [] })');
+  }
+  if (!noRecentActivityShown) {
+    problems.push('"No recent activity" not shown (both activity queries touch crm_deals/crm_tickets -> should defensively resolve to [])');
+  }
+  if (problems.length > 0) {
+    throw new Error(`crm-dashboard-advanced defensive-empty invariant violated: ${problems.join('; ')}`);
+  }
+
+  return { totalCustomers, pipelineValue, activeDealsValue, openTicketsValue, alertsPresent, noDealsFoundShown, noRecentActivityShown };
+}
+
+/**
+ * The variant of the defensive-empty check actually wired into
+ * parity.mjs's runCrmDashboardAdvancedChecks() — see
+ * extractCrmDashboardAdvancedDefensiveEmpty()'s own module doc above ("SECOND
+ * FLAGGED FINDING") for the full "why `?tab=pipeline`, not the default
+ * `?tab=overview`" explanation. Reads SalesPipelineTab.tsx's "Total
+ * Pipeline: ฿{value} ({count} deals)" summary line (both `value`/`count`
+ * come from `getPipelineData()`'s try/catch fallback -> 0 when `crm_deals`
+ * is absent) plus `winRate` (`calculateWinRate()`'s hardcoded 35.0
+ * placeholder — untouched by the crm_deals absence, asserted here as a
+ * simple, deterministic sanity check that the page rendered real content,
+ * not a blank/error shell).
+ */
+export function extractCrmDashboardAdvancedPipelineDefensiveEmpty(html) {
+  const main = sliceMainContent(html);
+  const cursor = new HtmlCursor(main);
+
+  const totalPipelineValue = parseLeadingNumber(cursor.afterLabel('Total Pipeline:'));
+  const totalDeals = parseLeadingNumber(cursor.beforeLabel('deals)'));
+  const winRate = parseLeadingNumber(cursor.afterLabel('Win Rate:'));
+
+  const problems = [];
+  if (totalPipelineValue !== 0) {
+    problems.push(`totalPipelineValue=${totalPipelineValue}, expected 0 (crm_deals absent from schema -> defensive default)`);
+  }
+  if (totalDeals !== 0) {
+    problems.push(`totalDeals=${totalDeals}, expected 0 (crm_deals absent from schema -> defensive default)`);
+  }
+  if (winRate !== 35) {
+    problems.push(`winRate=${winRate}, expected 35 (calculateWinRate() hardcoded placeholder, unrelated to crm_deals's absence)`);
+  }
+  if (problems.length > 0) {
+    throw new Error(`crm-dashboard-advanced (pipeline tab) defensive-empty invariant violated: ${problems.join('; ')}`);
+  }
+
+  return { totalPipelineValue, totalDeals, winRate };
+}
+
+// ---------------------------------------------------------------------------
+// /system-status page extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * system-status.php's 19 named checks split into two groups (per pagesA's
+ * brief, mirrored exactly by apps/admin/src/app/(tenant)/system-status/
+ * queries.ts's own module doc — read that file before changing this list):
+ *
+ *   - 11 "portable" checks: pure SQL probes (`SELECT 1`, `SELECT COUNT(*)`)
+ *     that run IDENTICALLY against the same physical MySQL database
+ *     regardless of which stack issues them — `database`, the 5 `table_*`
+ *     checks, the 3 `v2_table_*` checks, `message_stats`, `user_stats`.
+ *     Their `status` (ok/warning/error) is a real, diffable data point.
+ *   - 8 "placeholder" checks: PHP-class-instantiation probes
+ *     (`VibeSellingHelper`, `InboxService`, the 4 V2 `*Service` classes,
+ *     `LineAccountManager`/`LineAPI`, AIChat's `GeminiChatAdapter`) with NO
+ *     Next-side equivalent yet (Phase 4/6/7 per the migration plan) — Next
+ *     renders these as a fixed `not_ported`/🚧 row instead of faking 'ok'.
+ *     PRESENCE-ONLY here: this extractor proves the check ROW exists (via
+ *     `cursor.advanceTo()`, which throws — surfacing as a diagnosable
+ *     extraction/fetch error — if a key ever goes missing on either stack),
+ *     but never reads/diffs its status or message text, which are EXPECTED
+ *     to differ (PHP: whatever that class's real runtime behavior is;
+ *     Next: always 🚧/not_ported).
+ *
+ * `overallStatus` (the green/yellow/red banner) is DELIBERATELY NOT
+ * extracted at all — queries.ts's own module doc documents that Next folds
+ * ONLY the 11 portable checks into it, while PHP folds all 19 (including
+ * the 8 placeholder ones) into its cascade. This is an intentional,
+ * documented behavioral difference, not a bug on either side — diffing it
+ * here would produce a false mismatch the instant any placeholder check's
+ * real PHP behavior isn't a clean 'ok' (e.g. `line_api` warning-ing because
+ * `$currentBotId=1` matches no real `line_accounts` row), for a signal this
+ * harness has no way to independently verify is "PHP's fault" vs "a real
+ * product decision gap" — see this batch's runbook section for the full
+ * write-up.
+ *
+ * Each check card is matched via CHECK_CARD_RE — a SEQUENTIAL regex over the
+ * whole grid (not a per-check HtmlCursor label search) that captures
+ * {emoji, label, message} straight off each card's real structure
+ * (`<span class="text-2xl">EMOJI</span>...<h3 class="font-medium
+ * text-gray-800 truncate">LABEL</h3><p class="text-sm text-gray-500
+ * mt-1">MESSAGE</p>`), then zips the 19 matches (in DOM order) against
+ * SYSTEM_STATUS_CHECKS BY POSITION, not by re-searching for each label's own
+ * text. This is a deliberate departure from every other extractor in this
+ * file (which anchor on exact literal label text via HtmlCursor) — verified
+ * necessary empirically: system-status.php's real (un-minified) PHP template
+ * pads every `<h3>...LABEL                    </h3>` with substantial
+ * trailing whitespace/newlines before the closing tag (Next's SSR output has
+ * none), so a literal `${label}</h3>` substring search that works on every
+ * OTHER page in this harness never matches here at all. Regex-matching the
+ * card's STRUCTURE and reading whatever text falls inside each capture group
+ * (trimmed) sidesteps the whitespace difference entirely, and per-check
+ * identity comes from ARRAY POSITION (both stacks push all 19 checks in the
+ * exact same order — verified by reading both system-status.php and
+ * queries.ts in full), same "order is a real, meaningful signal" principle
+ * already established for extractUsersPage's row ordering etc.
+ *
+ * Each portable check's status comes from the captured emoji (✅/⚠️/❌ on
+ * both stacks — Next's STATUS_ICON map uses the identical 3 glyphs for
+ * ok/warning/error, plus a 4th, 🚧, ONLY for `not_ported`, which portable
+ * checks never produce).
+ *
+ * `currentBotId` (the System Info footer's "Current Bot ID: N" line) is
+ * DELIBERATELY NOT extracted. FLAGGED FINDING (build report): confirmed via
+ * a real page dump that `$currentBotId` in system-status.php's OWN footer
+ * display is empty/blank in practice — a THIRD instance of the exact same
+ * `includes/header.php`-clobbers-a-caller's-global-variable defect class
+ * documented in full for `$group` on extractLineGroupDetailPage()'s own
+ * module doc above (header.php line ~172's `$currentBotId = $currentBot['id']
+ * ?? null;`, running via `require_once 'includes/header.php'` on
+ * system-status.php line 176 — AFTER the checks section computed its OWN
+ * `$currentBotId = $_SESSION['current_bot_id'] ?? 1` at line 16 and already
+ * used it correctly for the message_stats/user_stats queries above, but
+ * BEFORE the footer HTML renders). The 19 health checks themselves are
+ * UNAFFECTED (they all run and render before header.php's clobbering
+ * assignment) — only this one decorative footer field is tainted. Given two
+ * prior instances of this exact bug class already have dedicated,
+ * documented exception mechanisms in this batch (crm-dashboard-advanced,
+ * line-group-detail's header), a THIRD parallel mechanism for one
+ * low-value decorative field was judged not worth the added harness
+ * complexity — simply dropped from what this extractor reads at all. Flagged
+ * here (and in this batch's runbook) as a real, reproducible product finding
+ * for mig-orchestrator, not silently absorbed.
+ */
+const CHECK_CARD_RE =
+  /class="text-2xl">([\s\S]*?)<\/span>[\s\S]*?class="font-medium text-gray-800 truncate"[^>]*>([\s\S]*?)<\/h3>\s*<p class="text-sm text-gray-500 mt-1"[^>]*>([\s\S]*?)<\/p>/g;
+const SYSTEM_STATUS_EMOJI_TO_STATUS = { '✅': 'ok', '⚠️': 'warning', '❌': 'error', '🚧': 'not_ported' };
+
+const SYSTEM_STATUS_CHECKS = [
+  { key: 'database', label: 'Database', portable: true },
+  { key: 'vibe_selling', label: 'Vibe Selling', portable: false },
+  { key: 'inbox_service', label: 'Inbox Service', portable: false },
+  { key: 'v2_DrugPricingEngineService', label: 'V2 DrugPricingEngineService', portable: false },
+  { key: 'v2_CustomerHealthEngineService', label: 'V2 CustomerHealthEngineService', portable: false },
+  { key: 'v2_PharmacyImageAnalyzerService', label: 'V2 PharmacyImageAnalyzerService', portable: false },
+  { key: 'v2_PharmacyGhostDraftService', label: 'V2 PharmacyGhostDraftService', portable: false },
+  { key: 'table_users', label: 'Table Users', portable: true },
+  { key: 'table_messages', label: 'Table Messages', portable: true },
+  { key: 'table_line_accounts', label: 'Table Line Accounts', portable: true },
+  { key: 'table_user_tags', label: 'Table User Tags', portable: true },
+  { key: 'table_admin_users', label: 'Table Admin Users', portable: true },
+  { key: 'v2_table_customer_health_profiles', label: 'V2 Table Customer Health Profiles', portable: true },
+  { key: 'v2_table_drug_pricing_rules', label: 'V2 Table Drug Pricing Rules', portable: true },
+  { key: 'v2_table_ghost_draft_learning', label: 'V2 Table Ghost Draft Learning', portable: true },
+  { key: 'line_api', label: 'Line Api', portable: false },
+  { key: 'ai_module', label: 'Ai Module', portable: false },
+  { key: 'message_stats', label: 'Message Stats', portable: true },
+  { key: 'user_stats', label: 'User Stats', portable: true },
+];
+
+/** The 11 portable check keys, exported so parity.mjs's runbook-facing assertions/tests can reference the exact same list this extractor iterates (kept in one place, not duplicated by hand). */
+export const SYSTEM_STATUS_PORTABLE_KEYS = SYSTEM_STATUS_CHECKS.filter((c) => c.portable).map((c) => c.key);
+/** The 8 presence-only placeholder check keys — see this section's module doc. */
+export const SYSTEM_STATUS_PLACEHOLDER_KEYS = SYSTEM_STATUS_CHECKS.filter((c) => !c.portable).map((c) => c.key);
+
+export function extractSystemStatusPage(html) {
+  const main = sliceMainContent(html);
+  const cards = [...main.matchAll(CHECK_CARD_RE)].map((m) => ({
+    emoji: decodeEntities(stripTags(m[1])).trim(),
+    label: decodeEntities(stripTags(m[2])).trim(),
+    message: decodeEntities(stripTags(m[3])).trim(),
+  }));
+
+  if (cards.length !== SYSTEM_STATUS_CHECKS.length) {
+    throw new Error(`extractSystemStatusPage: found ${cards.length} check card(s), expected exactly ${SYSTEM_STATUS_CHECKS.length}`);
+  }
+
+  const portable = {};
+  SYSTEM_STATUS_CHECKS.forEach(({ key, label, portable: isPortable }, i) => {
+    const card = cards[i];
+    if (card.label !== label) {
+      throw new Error(`extractSystemStatusPage: check #${i} label=${JSON.stringify(card.label)}, expected ${JSON.stringify(label)} (key=${key}) — DOM order drifted from SYSTEM_STATUS_CHECKS`);
+    }
+    if (!isPortable) {
+      return; // presence-only — label equality above already proves the row exists in the right slot; status/message deliberately not read (see module doc).
+    }
+    portable[key] = { status: SYSTEM_STATUS_EMOJI_TO_STATUS[card.emoji] ?? card.emoji };
+    if (key === 'message_stats' || key === 'user_stats') {
+      const numbers = [...card.message.matchAll(/(\d[\d,]*)/g)].map((m) => Number(m[1].replace(/,/g, '')));
+      portable[key].total = numbers[0] ?? null;
+      if (key === 'message_stats') {
+        portable[key].unread = numbers[1] ?? null;
+      }
+    }
+  });
+
+  return { checks: portable };
+}

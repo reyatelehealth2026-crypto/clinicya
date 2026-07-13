@@ -60,6 +60,42 @@
     "note": "Phase 2 batch 2 (mig-ui analytics brief): Next port of loyalty-members.php lives at apps/admin's /loyalty-members, parity-proven by infra/e2e/parity.mjs. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
   },
   {
+    "path": "/crm-dashboard-advanced",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 3 (mig-ui crm-dashboard-advanced/system-status brief): Next port of crm-dashboard-advanced.php lives at apps/admin's /crm-dashboard-advanced, parity-proven by infra/e2e/parity.mjs's runCrmDashboardAdvancedChecks() (a deliberate exception to the harness's usual PHP-vs-Next diff — PHP 500s on crm_deals/crm_tickets absent from the committed tenant schema, Next returns 200 with an authorized defensive-empty fallback; see docs/runbooks/phase2-batch1-users-dashboard-parity.md's 'Phase 2 batch 3' section). Schema-valid 'not yet flipped' placeholder (php_backend is already the default, so this is a functional no-op) — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/system-status",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 3 (mig-ui crm-dashboard-advanced/system-status brief): Next port of system-status.php lives at apps/admin's /system-status, parity-proven by infra/e2e/parity.mjs's system-status:baseline entry (11 value-diffed portable checks + 8 presence-only placeholder checks — see extractSystemStatusPage() in infra/e2e/lib/extract.mjs and the runbook's 'Phase 2 batch 3' section for the split). Unrelated to and non-conflicting with parity.mjs's own PROBE_PATH, which fetches /system-status.php UNAUTHENTICATED against the PHP container directly, purely to trigger admin_users' auto-create sequencing before this batch's page-pair entries ever run. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/templates",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 3 (mig-ui templates/groups brief): Next port of templates.php lives at apps/admin's /templates, parity-proven by infra/e2e/parity.mjs's templates:baseline entry. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/groups",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 3 (mig-ui templates/groups brief): Next port of groups.php (incl. its ?view=<id> detail panel) lives at apps/admin's /groups?view=<id> (same query-param URL shape), parity-proven by infra/e2e/parity.mjs's groups:baseline|view-empty|view-members entries. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/line-groups",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 3 (mig-ui line-groups brief): Next port of line-groups.php lives at apps/admin's /line-groups, parity-proven by infra/e2e/parity.mjs's line-groups:baseline entry. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
+    "path": "/line-group-detail",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 batch 3 (mig-ui line-groups brief): Next port of line-group-detail.php lives at apps/admin's /line-group-detail?id=N (same query-param URL shape, a SEPARATE top-level route from /line-groups per the pagesB brief's grep-verified ?id= finding, matching /user-detail?id=N's established precedent), parity-proven by infra/e2e/parity.mjs's line-group-detail:id=1|2 entries. Schema-valid 'not yet flipped' placeholder — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
     "path": "/api/miniapp",
     "upstream": "next_admin",
     "tenants": "all",
