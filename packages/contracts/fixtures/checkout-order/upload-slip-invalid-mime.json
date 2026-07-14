@@ -1,0 +1,17 @@
+{
+  "description": "POST action=upload_slip — the uploaded file's MIME type is not in the allowed set (['image/jpeg','image/png','image/gif','image/webp']) — here a PDF. Rejected before the order_id is even looked up against the DB (validation order per L1741-1766: order_id presence -> file presence -> MIME -> size -> DB lookup), so no payment_slips row is written and no notify functions run.",
+  "request": {
+    "action": "upload_slip",
+    "order_id": 900,
+    "line_account_id": 1,
+    "slip": {
+      "filename": "slip.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 40960
+    }
+  },
+  "response": {
+    "success": false,
+    "message": "Invalid file type"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "description": "POST action=create_order — payment_method='cod' -> status jumps straight to 'confirmed' (COD skips the 'awaiting payment' step) AND `transactions.wms_status` is set to 'pending_pick' inside the same transaction (L1582-1590). payment_status is STILL 'pending' (never 'paid' at creation time, regardless of payment method — the acceptance criteria's non-negotiable point). shipping_fee=0 here because the tenant's shop_settings row has shipping_fee=0 (a flat-rate-free-shipping tenant), independent of the free_shipping_min comparison. total = subtotal (100) + shipping_fee (0) = 100.",
+  "request": {
+    "action": "create_order",
+    "line_user_id": "U2222222222222222222222222222bb",
+    "line_account_id": 1,
+    "payment_method": "cod",
+    "address": { "name": "วิภา สวยงาม", "phone": "0898765432", "address": "45/2 ถนนพระราม 4" },
+    "cart_items": [
+      { "product_id": 610, "name": "วิตามินซี 1000mg", "price": 100, "quantity": 1, "product_source": "business_items" }
+    ]
+  },
+  "response": {
+    "success": true,
+    "message": "Order created",
+    "order_id": 9002,
+    "order_number": "TXN202607140002",
+    "total": 100,
+    "payment_method": "cod",
+    "ar_id": null
+  }
+}

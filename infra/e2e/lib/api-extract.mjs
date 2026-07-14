@@ -198,6 +198,32 @@ export const FIXTURE = {
   addrListLineUserId: 'e2e-mp2-addr-list', // 2 pre-seeded rows: primary, secondary_1
   addrUpsertLineUserId: 'e2e-mp2-addr-upsert', // no pre-existing row for the 'primary' label it targets
   addrDeleteLineUserId: 'e2e-mp2-addr-delete', // pre-seeded 'secondary_1' row to delete
+
+  // -------------------------------------------------------------------------
+  // PHASE 3 BATCH 3 additions — MUST stay in sync with
+  // infra/e2e/seed/65-phase3-batch3-miniapp-fixture.sql.tmpl (same
+  // hand-authored-together convention as batch 1/2's identities above).
+  // Reuses lineAccountPrimary above (and, for `cart`, batch 1's
+  // richMemberLineUserId/productParacetamol/productVitaminC) — no new
+  // line_accounts rows.
+  // -------------------------------------------------------------------------
+
+  // checkout-cart:cart reuses richMemberLineUserId (id=3001) directly — no
+  // new identity constant needed; 65-...'s own fixture gives it two
+  // pre-seeded cart_items rows (products 601 qty2 / 602 qty1).
+
+  // checkout-order:create_order's race-guard products — stock=1 each, TWO
+  // DEDICATED rows (not one shared row) — see 65-...'s own comment on why.
+  ccProductLowStock: { php: 1601, next: 1602 },
+
+  ccAddToCartLineUserId: { php: 'e2e-mp3-cart-add-php', next: 'e2e-mp3-cart-add-next' }, // no pre-existing users/cart_items row (auto-create + INSERT branch).
+  ccUpdateCartLineUserId: { php: 'e2e-mp3-cart-update-php', next: 'e2e-mp3-cart-update-next' }, // pre-existing cart_items row, product 601 qty2.
+  ccRemoveFromCartLineUserId: { php: 'e2e-mp3-cart-remove-php', next: 'e2e-mp3-cart-remove-next' }, // pre-existing cart_items row, product 602 qty3.
+  ccClearCartLineUserId: { php: 'e2e-mp3-cart-clear-php', next: 'e2e-mp3-cart-clear-next' }, // pre-existing cart_items rows, products 601+602.
+
+  coCreateOrderLineUserId: { php: 'e2e-mp3-order-create-php', next: 'e2e-mp3-order-create-next' },
+  coUploadSlipLineUserId: { php: 'e2e-mp3-slip-upload-php', next: 'e2e-mp3-slip-upload-next' },
+  coUploadSlipOrderId: { php: 8101, next: 8102 }, // pre-existing `transactions` rows to attach a slip to.
 };
 
 // ---------------------------------------------------------------------------
@@ -231,6 +257,18 @@ export const FORMAT_CHECKS = {
   // Batch 2 additions — regexes copied verbatim from mig-api's own contract doc comments (per the brief).
   appointment_id: /^APT\d{15}$/, // packages/contracts/src/appointments.ts's APPOINTMENT_ID_FORMAT_REGEX ('APT' + ymdHis(12 digits) + rand(100,999)).
   confirmation_code: /^REYA-DEL-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/, // packages/contracts/src/data-rights.ts's DATA_RIGHTS_CONFIRMATION_CODE_REGEX.
+  // Batch 3 additions.
+  order_number: /^TXN\d{8}\d{4}$/, // api/checkout.php's handleCreateOrder(): 'TXN' . date('Ymd') . str_pad(mt_rand(1,9999),4,'0',STR_PAD_LEFT).
+  // handleUploadSlip() builds an ABSOLUTE, host-derived URL
+  // (`$scheme://$_SERVER['HTTP_HOST']/uploads/slips/slip_{order_number}_{time()}.{ext}`)
+  // — the php and next calls hit DIFFERENT hosts/ports in this harness
+  // (127.0.0.1:18092 vs 127.0.0.1:3220 — see PHP_BASE_URL/NEXT_BASE_URL in
+  // api-parity.mjs) AND different pre-seeded order_numbers (see
+  // FIXTURE.coUploadSlipOrderId), so this can never be a literal byte-diff —
+  // same "format not exact equality" treatment as member_id/redemption_code/
+  // appointment_id/confirmation_code above. `[^/]+` deliberately matches
+  // EITHER host so one regex covers both stacks' responses.
+  image_url: /^https?:\/\/[^/]+\/uploads\/slips\/slip_[A-Za-z0-9_-]+_\d+\.(jpg|jpeg|png|gif|webp)$/,
 };
 
 // ---------------------------------------------------------------------------
@@ -1286,6 +1324,355 @@ export const ENDPOINT_CASES = [
         table: 'medication_taken_history',
         where: (variant) => `reminder_id = ${FIXTURE.mrMarkTakenReminderId[variant]}`,
         columns: ['__row_count__'],
+        allow: [],
+      },
+    ],
+  },
+
+  // ===========================================================================
+  // PHASE 3 BATCH 3 (mig-infra) — 8 new PHP-vs-Next diffable cases appended
+  // below: checkout-cart:{cart,add_to_cart,update_cart,remove_from_cart,
+  // clear_cart}, checkout-pricing:validate_promo,
+  // checkout-order:{create_order,upload_slip}. Every batch-1/2 case above is
+  // untouched. See docs/runbooks/phase3-batch3-miniapp-api-parity.md for the
+  // full writeup. `checkout-order:upload_slip` is the ONE case in this whole
+  // harness (batch 1/2/3) that sets `multipart: true` — see that case's own
+  // comment and infra/e2e/lib/harness-common.mjs's `buildMultipartBody()`/
+  // `httpRequestMultipart()` doc comments for the plumbing this required.
+  //
+  // CONFIG-DRIVEN, SAME AS EVERY PRIOR BATCH: these 8 entries are added
+  // regardless of whether apps/admin/src/app/api/miniapp/checkout/order/**
+  // exists yet in this checkout — a still-missing/broken route fails as its
+  // OWN {ok:false, mismatches:[...]} entry, exactly like every other case in
+  // this file (see this file's own top-of-file module doc); it never aborts
+  // the run or skips any other entry.
+  // ===========================================================================
+
+  // -------------------------------------------------------------------------
+  // checkout-cart:cart — read-only, reuses batch 1's shared richMember
+  // identity (id=3001). 65-phase3-batch3-miniapp-fixture.sql.tmpl gives it
+  // two pre-seeded cart_items rows (business_items 601 qty2 sale_price=20 ->
+  // lineUnit 40; 602 qty1 no sale_price -> lineUnit 150) -> subtotal=190
+  // (below free_shipping_min=500) -> shipping_fee=50, total=240,
+  // item_count=2 — fully deterministic, asserted byte-equal (no allowlist).
+  // -------------------------------------------------------------------------
+  {
+    name: 'checkout-cart:cart',
+    method: 'GET',
+    phpPath: '/api/checkout.php',
+    nextPath: '/api/miniapp/checkout/cart',
+    query: () => ({
+      action: 'cart',
+      line_user_id: FIXTURE.richMemberLineUserId,
+      line_account_id: FIXTURE.lineAccountPrimary,
+    }),
+    allow: [],
+  },
+
+  // -------------------------------------------------------------------------
+  // checkout-cart:add_to_cart — fresh identities, no pre-existing
+  // users/cart_items row (INSERT branch of `ON DUPLICATE KEY UPDATE`).
+  // Targets product 601 (batch 1's own row, stock=100 — add_to_cart never
+  // decrements business_items.stock, only create_order does, so reusing this
+  // read-mostly catalog row across batches is safe, same precedent
+  // shop-products:products/:product_detail already established).
+  // -------------------------------------------------------------------------
+  {
+    name: 'checkout-cart:add_to_cart',
+    method: 'POST',
+    phpPath: '/api/checkout.php',
+    nextPath: '/api/miniapp/checkout/cart',
+    body: (variant) => ({
+      action: 'add_to_cart',
+      line_user_id: FIXTURE.ccAddToCartLineUserId[variant],
+      line_account_id: FIXTURE.lineAccountPrimary,
+      product_id: FIXTURE.productParacetamol,
+      quantity: 2,
+    }),
+    allow: [],
+    dbChecks: [
+      {
+        label: 'cart_items row after add_to_cart',
+        table: 'cart_items',
+        where: (variant) =>
+          `user_id = (SELECT id FROM users WHERE line_user_id = '${FIXTURE.ccAddToCartLineUserId[variant]}') AND product_id = ${FIXTURE.productParacetamol}`,
+        columns: ['quantity', 'product_source'],
+        allow: [],
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // checkout-cart:update_cart — pre-existing cart_items row per identity
+  // (product 601, quantity=2) so `quantity=5` in the request body is a REAL
+  // update (handleUpdateCart() issues a plain UPDATE, no upsert).
+  // -------------------------------------------------------------------------
+  {
+    name: 'checkout-cart:update_cart',
+    method: 'POST',
+    phpPath: '/api/checkout.php',
+    nextPath: '/api/miniapp/checkout/cart',
+    body: (variant) => ({
+      action: 'update_cart',
+      line_user_id: FIXTURE.ccUpdateCartLineUserId[variant],
+      line_account_id: FIXTURE.lineAccountPrimary,
+      product_id: FIXTURE.productParacetamol,
+      quantity: 5,
+    }),
+    allow: [],
+    dbChecks: [
+      {
+        label: 'cart_items.quantity after update_cart',
+        table: 'cart_items',
+        where: (variant) =>
+          `user_id = (SELECT id FROM users WHERE line_user_id = '${FIXTURE.ccUpdateCartLineUserId[variant]}') AND product_id = ${FIXTURE.productParacetamol}`,
+        columns: ['quantity'],
+        allow: [],
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // checkout-cart:remove_from_cart — pre-existing cart_items row per
+  // identity (product 602) so the delete is real, not a no-op.
+  // -------------------------------------------------------------------------
+  {
+    name: 'checkout-cart:remove_from_cart',
+    method: 'POST',
+    phpPath: '/api/checkout.php',
+    nextPath: '/api/miniapp/checkout/cart',
+    body: (variant) => ({
+      action: 'remove_from_cart',
+      line_user_id: FIXTURE.ccRemoveFromCartLineUserId[variant],
+      line_account_id: FIXTURE.lineAccountPrimary,
+      product_id: FIXTURE.productVitaminC,
+    }),
+    allow: [],
+    dbChecks: [
+      {
+        label: 'cart_items row count after remove_from_cart',
+        table: 'cart_items',
+        where: (variant) =>
+          `user_id = (SELECT id FROM users WHERE line_user_id = '${FIXTURE.ccRemoveFromCartLineUserId[variant]}') AND product_id = ${FIXTURE.productVitaminC}`,
+        columns: ['__row_count__'],
+        allow: [],
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // checkout-cart:clear_cart — TWO pre-existing cart_items rows per identity
+  // (products 601+602) so the case proves the WHOLE cart is cleared.
+  // -------------------------------------------------------------------------
+  {
+    name: 'checkout-cart:clear_cart',
+    method: 'POST',
+    phpPath: '/api/checkout.php',
+    nextPath: '/api/miniapp/checkout/cart',
+    body: (variant) => ({
+      action: 'clear_cart',
+      line_user_id: FIXTURE.ccClearCartLineUserId[variant],
+      line_account_id: FIXTURE.lineAccountPrimary,
+    }),
+    allow: [],
+    dbChecks: [
+      {
+        label: 'cart_items row count after clear_cart',
+        table: 'cart_items',
+        where: (variant) => `user_id = (SELECT id FROM users WHERE line_user_id = '${FIXTURE.ccClearCartLineUserId[variant]}')`,
+        columns: ['__row_count__'],
+        allow: [],
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // checkout-pricing:validate_promo — THE PROMOTIONS-TABLE-ABSENT CASE (see
+  // the runbook's §2). No fixture rows at all: `promotions` does not exist
+  // anywhere in database/migration_2026-05-25_tenant_template.sql (verified
+  // directly — grep for `CREATE TABLE.*promotions` comes up empty), so
+  // handleValidatePromo()'s `SHOW TABLES LIKE 'promotions'` runtime probe
+  // (and its Next port's `promotionsTableExists()`, see
+  // apps/admin/src/app/api/miniapp/checkout/pricing/_lib/handlers.ts's own
+  // module doc — a REAL, LIVE runtime branch on this harness, not simplified
+  // away) always comes back empty on both stacks, falling through to
+  // validateHardcodedPromo()'s 4 fixed codes. `code` sent LOWERCASE on
+  // purpose (`welcome10`) — exercises `strtoupper(trim())`/
+  // `.trim().toUpperCase()` normalization identically on both stacks.
+  // subtotal=200 -> WELCOME10 (10% off, min 100) -> discount=20. NOTE:
+  // `discount_type` is HARDCODED `'fixed'` in this response branch
+  // (verified in api/checkout.php's handleValidatePromo(), L2221-2226) even
+  // though WELCOME10 is internally a `percentage` promo — a real, faithfully
+  // preserved PHP quirk, not a Next-port bug, asserted byte-equal below (not
+  // allowlisted) precisely because both stacks must reproduce it identically.
+  // -------------------------------------------------------------------------
+  {
+    name: 'checkout-pricing:validate_promo',
+    method: 'POST',
+    phpPath: '/api/checkout.php',
+    nextPath: '/api/miniapp/checkout/pricing',
+    body: () => ({
+      action: 'validate_promo',
+      code: 'welcome10',
+      line_account_id: FIXTURE.lineAccountPrimary,
+      subtotal: 200,
+    }),
+    allow: [],
+  },
+
+  // -------------------------------------------------------------------------
+  // checkout-order:create_order — THE RACE-GUARD CASE (plan risk register
+  // #9 — see the runbook's §3 for the full writeup; the single highest-risk
+  // assertion in this batch). Pre-existing `users` row + ONE pre-existing
+  // cart_items row per identity, each referencing its OWN DEDICATED
+  // low-stock product (1601 php / 1602 next, both stock=1 — see
+  // 65-phase3-batch3-miniapp-fixture.sql.tmpl's own comment on why TWO
+  // separate rows, not one shared row) at quantity=5 (> stock). Request body
+  // carries NO `cart_items` field — matches the REAL client shape
+  // (line-mini-app/src/lib/shop-api.ts's createShopOrder() never sends
+  // cart_items), forcing both stacks through the
+  // loadCheckoutCartLinesFromDb()/DB-cart branch, not the
+  // request-body-cart_items branch. payment_method='transfer' deliberately
+  // avoids the AccountReceivableService branch entirely (only
+  // 'credit'/'cod'/'term'/'invoice' trigger it) — see the runbook's §4.
+  //
+  // `skipResponseBodyDiff: true` — A SECOND, INDEPENDENTLY-DISCOVERED
+  // instance of the consent.php-class "DDL-inside-an-open-transaction causes
+  // an implicit commit" bug (see docs/runbooks/phase3-batch2-miniapp-api-parity.md
+  // §2's consent:save writeup for the first instance), found EMPIRICALLY by
+  // actually running this harness (not by static reading alone — see the
+  // runbook's §3.3 for the full writeup): `handleCreateOrder()` runs `$db->exec("ALTER
+  // TABLE transactions ADD COLUMN IF NOT EXISTS payment_status ...")` INSIDE
+  // its own `$db->beginTransaction()`/`$db->commit()` block, on EVERY call,
+  // unconditionally — even though `payment_status` already exists on the
+  // committed schema (confirmed absent-of-effect, but MySQL/InnoDB's
+  // implicit-commit rule fires on the DDL STATEMENT ITSELF, not on whether
+  // it changed anything). This flips `PDO::inTransaction()` to false
+  // mid-transaction; the later `$db->commit()` then throws
+  // `PDOException("There is no active transaction")`, which
+  // `handleCreateOrder()`'s own `catch (Exception $e) { ...; throw $e; }`
+  // re-surfaces verbatim as `{success:false, message:"There is no active
+  // transaction"}` — but the transactions/transaction_items/business_items
+  // writes BEFORE that point already executed as individually-autocommitted
+  // statements (MySQL's own implicit-commit semantics) and PERSISTED. The
+  // dbChecks below (unaffected by `skipResponseBodyDiff`, run unconditionally
+  // exactly like consent:save's own) are what actually verify this — and DO
+  // confirm the PHP-side row landed correctly despite the reported failure.
+  // The Next port does NOT reproduce this: `createOrder.ts`'s own module doc
+  // already (independently, before this bug was found) drops the ALTER
+  // TABLE entirely as a "SIMPLIFICATION" (`payment_status` is unconditionally
+  // present per generated Kysely types) — meaning the Next port's
+  // `{success:true}` response is not just port-fidelity, it is a **real,
+  // deliberate correctness improvement over the PHP original**, same
+  // category of deviation batch 2's consent:save/data-rights already
+  // established a precedent for. `order_id`/`order_number`/`total`/
+  // `payment_method`/`ar_id` are all consequently PRESENT on next / ABSENT
+  // on php (PHP never reaches its own `jsonResponse(true, ...)` call) —
+  // exactly why a body diff is meaningless here, not merely noisy.
+  // -------------------------------------------------------------------------
+  {
+    name: 'checkout-order:create_order',
+    method: 'POST',
+    phpPath: '/api/checkout.php',
+    nextPath: '/api/miniapp/checkout/order',
+    body: (variant) => ({
+      action: 'create_order',
+      line_user_id: FIXTURE.coCreateOrderLineUserId[variant],
+      line_account_id: FIXTURE.lineAccountPrimary,
+      address: {
+        name: 'ทดสอบ ลูกค้า (E2E)',
+        phone: '0855555555',
+        address: '55 ถนนทดสอบ',
+        subdistrict: 'คลองตัน',
+        district: 'คลองเตย',
+        province: 'กรุงเทพมหานคร',
+        postcode: '10110',
+      },
+      payment_method: 'transfer',
+    }),
+    skipResponseBodyDiff: true, // see this case's own doc comment above — the ALTER-TABLE-inside-transaction PHP bug.
+    allow: [], // unused (skipResponseBodyDiff bypasses body diffing) — kept empty, not deleted, for shape consistency with consent:save.
+    dbChecks: [
+      {
+        label: 'transactions row after create_order (race-guard: stock=1, quantity=5) — proves the write happened despite PHP reporting failure',
+        table: 'transactions',
+        where: (variant) =>
+          `user_id = (SELECT id FROM users WHERE line_user_id = '${FIXTURE.coCreateOrderLineUserId[variant]}') AND transaction_type = 'purchase'`,
+        columns: ['total_amount', 'shipping_fee', 'grand_total', 'payment_method', 'status', 'payment_status'],
+        allow: [],
+      },
+      {
+        label: 'transaction_items row after create_order (race-guard)',
+        table: 'transaction_items',
+        where: (variant) =>
+          `transaction_id = (SELECT id FROM transactions WHERE user_id = (SELECT id FROM users WHERE line_user_id = '${FIXTURE.coCreateOrderLineUserId[variant]}') AND transaction_type = 'purchase') ` +
+          `AND product_id = ${FIXTURE.ccProductLowStock[variant]}`,
+        columns: ['product_name', 'product_price', 'quantity', 'subtotal'],
+        // product_name is allowlisted ONLY because 65-...'s own fixture deliberately gives the two
+        // dedicated race-guard products distinct, readable names ("... (E2E, PHP)" / "... (E2E, Next)") for
+        // debuggability — price/quantity/subtotal (the financially load-bearing fields) are still asserted
+        // byte-equal, not allowlisted.
+        allow: ['product_name'],
+      },
+      {
+        // THE race-guard assertion itself: `UPDATE business_items SET
+        // stock=stock-? WHERE id=? AND stock>=?` fails its own WHERE guard
+        // (stock=1 < quantity=5) on BOTH stacks, but NEITHER
+        // handleCreateOrder() nor its Next port checks the UPDATE's
+        // rowCount()/affected-rows before proceeding — the order is created
+        // regardless (see the two dbChecks above) and stock is left
+        // UNTOUCHED. Two dedicated rows (1601/1602) means this genuinely
+        // diffs "PHP's real, verified guard-preserving behavior" against
+        // "Next's guard-preserving behavior," not a row compared to itself.
+        label: 'business_items.stock UNCHANGED after create_order (no rowCount short-circuit on either stack)',
+        table: 'business_items',
+        where: (variant) => `id = ${FIXTURE.ccProductLowStock[variant]}`,
+        columns: ['stock'],
+        allow: [],
+      },
+    ],
+  },
+
+  // -------------------------------------------------------------------------
+  // checkout-order:upload_slip — THE FIRST multipart/form-data CASE in this
+  // whole migration effort (see infra/e2e/lib/harness-common.mjs's
+  // `buildMultipartBody()`/`httpRequestMultipart()` doc comments and the
+  // runbook's §5). `multipart: true` + `fields`/`file` (not `body`) — see
+  // api-parity.mjs's `callStack()` for how this flag is dispatched. Two
+  // pre-existing `transactions` rows (8101 php / 8102 next — see
+  // 65-...'s own comment) so the upload has a real `order_id` to attach to;
+  // deliberately a SEPARATE order from create_order's own case above (kept
+  // independent, no cross-case ordering dependency). `image_url` is
+  // host-derived (differs by construction between the php/next origins AND
+  // by pre-seeded order_number AND by request-time `time()`) — allowlisted +
+  // format-checked via FORMAT_CHECKS.image_url, same "format not exact
+  // equality" treatment as order_number above. `line_account_id` is sent in
+  // the form body purely as a tenant-routing signal (real client,
+  // `uploadPaymentSlip()` in shop-api.ts, sends it too, even though
+  // `handleUploadSlip()` itself never reads it) — same "unread but required
+  // for routing" precedent member:update_profile/appointments:cancel/etc.
+  // already established. `qr_data` (client-side QR pre-decode,
+  // best-effort) is deliberately OMITTED — see the runbook's §5 for why.
+  // -------------------------------------------------------------------------
+  {
+    name: 'checkout-order:upload_slip',
+    method: 'POST',
+    phpPath: '/api/checkout.php',
+    nextPath: '/api/miniapp/checkout/order',
+    multipart: true,
+    fields: (variant) => ({
+      action: 'upload_slip',
+      order_id: String(FIXTURE.coUploadSlipOrderId[variant]),
+      line_account_id: String(FIXTURE.lineAccountPrimary),
+    }),
+    file: { name: 'slip', filename: 'slip.png', contentType: 'image/png' },
+    allow: ['image_url'],
+    dbChecks: [
+      {
+        label: 'payment_slips row after upload_slip (status=pending)',
+        table: 'payment_slips',
+        where: (variant) => `order_id = ${FIXTURE.coUploadSlipOrderId[variant]}`,
+        columns: ['status'],
         allow: [],
       },
     ],
