@@ -19,11 +19,13 @@
     "@reya/config": "workspace:*",
     "@reya/contracts": "workspace:*",
     "@reya/db": "workspace:*",
+    "@reya/line": "workspace:*",
     "@reya/tenant": "workspace:*",
     "kysely": "^0.29.3",
     "next": "^16.2.4",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "socket.io-client": "^4.7.4"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.2.0",
