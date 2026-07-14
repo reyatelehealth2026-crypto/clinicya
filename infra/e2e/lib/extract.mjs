@@ -1565,3 +1565,365 @@ export function extractInboxThreadPage(html, markers) {
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 settings batch 1 (mig-infra) — /settings?tab={welcome,email,
+// consent,shop_tax} extraction. See parity.mjs's own module doc + docs/
+// runbooks/phase2-settings-tabs-batch1-parity.md for the full page-pair
+// write-up (which PHP source AND which Next component each extractor was
+// read against, in full, before writing — includes/settings/{welcome,email,
+// consent,shop-tax}.php and apps/admin/src/app/(tenant)/settings/
+// _components/{WelcomeTab,WelcomeMessageForm,EmailTab,ConsentTab,
+// ShopTaxTab}.tsx).
+//
+// TAG-ATTRIBUTE HELPERS — this batch's forms are plain `<input>`/`<select>`/
+// `<textarea>` elements, not the repeated-row/KPI-card shapes every earlier
+// extractor above anchors on. `findInputTag()`/`attrValue()` below match a
+// whole `<input ...>` (or `<select>`) tag by requiring a set of literal
+// substrings ANYWHERE inside it (not by assuming attribute ORDER) — PHP's
+// source (includes/settings/{welcome,email,shop-tax}.php) and Next's port
+// don't necessarily emit attributes in the same order (e.g. PHP interpolates
+// `value="..."` via inline `<?= ?>` wherever the template happens to put it;
+// React's JSX prop order becomes SSR attribute order, which is whatever
+// order that component's author wrote the props in — verified: ShopTaxTab
+// .tsx writes `type`, `name`, `maxLength`, `required`, `defaultValue`,
+// `className`, `placeholder`, a DIFFERENT order than PHP's own
+// `type`/`name`/`maxlength`/`value`/`class`/`placeholder`) — matching on tag
+// STRUCTURE + substring presence, not position, is what keeps this robust to
+// that difference, same "label-anchored, not class/order-anchored"
+// philosophy this file's own module doc establishes for everything else.
+// ---------------------------------------------------------------------------
+
+/** Returns the full `<input ...>` (self-closing, single-tag) source for the FIRST `<input>` whose tag text contains every string in `mustInclude`, or null. Order-independent by design — see this section's own header comment. */
+function findInputTag(html, mustInclude) {
+  for (const m of html.matchAll(/<input\b[^>]*>/gi)) {
+    if (mustInclude.every((s) => m[0].includes(s))) return m[0];
+  }
+  return null;
+}
+
+/** Pulls `attr="..."` out of a single already-matched tag string (NOT a full-document search) — returns the entity-decoded value, or null if the tag is null or the attribute is absent. */
+function attrValue(tag, attr) {
+  if (!tag) return null;
+  const m = tag.match(new RegExp(`${attr}="([^"]*)"`, 'i'));
+  return m ? decodeEntities(m[1]) : null;
+}
+
+/** True if `tag`'s own source contains a bare/standalone `checked` (React SSR: `checked=""` or `checked`; PHP: literal ` checked` from `<?= $x ? 'checked' : '' ?>`) — both forms match `\bchecked\b`. */
+function hasCheckedAttr(tag) {
+  return tag !== null && /\bchecked\b/.test(tag);
+}
+
+/** Given the INNER html of a `<select>...</select>` (NOT the whole document), returns the `value="..."` of whichever `<option>` carries a `selected` attribute, or null if none do. Same order-independent tag-substring approach as findInputTag()/attrValue() above — do not assume `value=` appears before `selected` in the emitted markup. */
+function selectedOptionValue(selectInnerHtml) {
+  for (const m of selectInnerHtml.matchAll(/<option\b[^>]*>/gi)) {
+    if (/\bselected\b/.test(m[0])) {
+      const valueMatch = m[0].match(/value="([^"]*)"/i);
+      if (valueMatch) return valueMatch[1];
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// /settings?tab=welcome — genuine PHP-vs-Next diff, BUT both sides are
+// EXPECTED to land on the exact same hardcoded default greeting.
+//
+// CONFIRMED FINDING (see infra/e2e/seed/75-phase2-settings-batch1-fixture.sql
+// .tmpl's own "welcome_settings" section + apps/admin's welcome-queries.ts
+// module doc for the full trace): `welcome_settings` does not exist in the
+// committed tenant template and is created by no PHP file — on THIS schema,
+// includes/settings/welcome.php's own `SELECT * FROM welcome_settings ...`
+// (lines 11-17) always throws PDOException, caught, and
+// `if (!$welcomeSettings)` (line 19) falls through to the hardcoded default
+// greeting object (lines 20-25). apps/admin's getWelcomeSettings() ports
+// this exact try/catch-then-default contract (see that file's own "CONFIRMED
+// FINDING" doc). So this is a genuine two-sided diff() that is EXPECTED to
+// come back empty (both sides equal) under today's schema — not a one-sided
+// assertion like settings:email below. If a future migration adds
+// `welcome_settings` (or seeds a row), this extractor keeps working exactly
+// the same way — it reads whatever is actually rendered, it does not assume
+// the default.
+//
+// `isDefaultGreeting` is a MARKER (substring-of-the-well-known-default-
+// greeting-text), not the full raw textarea contents — deliberately, to stay
+// robust to incidental whitespace-normalization differences between a raw
+// PHP `<textarea>...</textarea>` text node (htmlspecialchars() does not
+// touch `\n`) and React's SSR'd `defaultValue` text node (also preserves
+// `\n` verbatim — verified by reading WelcomeMessageForm.tsx in full — but a
+// marker is still the more resilient signal for a 100+ character bilingual
+// string with an emoji in it).
+// ---------------------------------------------------------------------------
+
+const WELCOME_DEFAULT_GREETING_MARKER = 'ยินดีต้อนรับ! 🎉';
+const WELCOME_TEXT_CONTENT_TEXTAREA_RE = /<textarea\b[^>]*name="text_content"[^>]*>([\s\S]*?)<\/textarea>/i;
+
+export function extractSettingsWelcomeTab(html) {
+  const main = sliceMainContent(html);
+
+  const enableTag = findInputTag(main, ['name="is_enabled"']);
+  const isEnabled = hasCheckedAttr(enableTag);
+
+  const textRadioTag = findInputTag(main, ['name="message_type"', 'value="text"']);
+  const flexRadioTag = findInputTag(main, ['name="message_type"', 'value="flex"']);
+  const messageType = hasCheckedAttr(textRadioTag) ? 'text' : hasCheckedAttr(flexRadioTag) ? 'flex' : null;
+
+  const textAreaMatch = main.match(WELCOME_TEXT_CONTENT_TEXTAREA_RE);
+  const textContentValue = textAreaMatch ? decodeEntities(textAreaMatch[1]) : null;
+  const isDefaultGreeting = textContentValue !== null && textContentValue.includes(WELCOME_DEFAULT_GREETING_MARKER);
+
+  return { isEnabled, messageType, isDefaultGreeting };
+}
+
+// ---------------------------------------------------------------------------
+// /settings?tab=email — the ONE deliberate one-sided-assertion exception in
+// this batch, same family as extractCrmDashboardAdvancedDefensiveEmpty() /
+// extractInboxSidebarPage() elsewhere in this file (see either's own module
+// doc for the general pattern this follows).
+//
+// WHY THIS IS ONE-SIDED, NOT A DIFF (confirmed by reading root /settings.php
+// in full — the LIVE 941-LOC file, not the dead 562-LOC
+// includes/settings/settings.php duplicate, which has zero includes/requires
+// anywhere in the repo): settings.php's own `$tabs` whitelist (lines 33-46)
+// has `'email' => [...]` COMMENTED OUT. `getActiveTab()`
+// (includes/components/tabs.php lines 336-351) validates `?tab=` with
+// `isset($tabs[$tab])` and silently falls back to the explicit default
+// ('line', settings.php line 48: `getActiveTab($tabs, 'line')`) on ANY
+// unrecognized key — so `settings.php?tab=email` ALWAYS renders
+// includes/settings/line.php's LINE-accounts-manager markup, NEVER
+// includes/settings/email.php's, even though email.php's own code still
+// works perfectly if reached some other way. Next's port (apps/admin/src/
+// app/(tenant)/settings/page.tsx) deliberately does NOT reproduce this
+// fallback for 'email' — its own module doc calls this out explicitly as an
+// intentional, documented one-sided divergence: `ROUTABLE_TAB_KEYS` includes
+// 'email' (so `/settings?tab=email` genuinely renders EmailTab, a working
+// port) while `SETTINGS_TABS` (the visible nav pill list) stays at the same
+// 7 keys PHP's live whitelist has, so the nav UI still matches PHP exactly —
+// only DIRECT `?tab=email` navigation differs, and only in the
+// "more capable, not less" direction.
+//
+// extractSettingsEmailPhpFallback() — run against PHP's response — asserts
+// PHP shows LINE-tab markup and does NOT show email-tab markup (throws
+// otherwise, so a future re-enabling of the 'email' key in settings.php's
+// $tabs whitelist is CAUGHT, not silently masked — see the thrown message).
+//
+// extractSettingsEmailTab() — run against Next's response — asserts the
+// seeded infra/e2e/seed/75-phase2-settings-batch1-fixture.sql.tmpl
+// email_settings row (id=1) actually round-trips through the real form
+// (throws on any field mismatch, same "positively assert the fixture's own
+// known truth" shape as extractLineGroupDetailHeaderNext() elsewhere in this
+// file). `smtp_pass`'s LITERAL VALUE is deliberately not asserted (only
+// field-presence) — no reason to echo even an obviously-fake fixture
+// password value back out of a test assertion string.
+// ---------------------------------------------------------------------------
+
+const SETTINGS_EMAIL_FIXTURE = {
+  smtpHost: 'smtp.e2e-fixture.invalid',
+  smtpPort: 587,
+  smtpUser: 'notify@e2e-fixture.invalid',
+  smtpSecure: 'tls',
+  fromEmail: 'noreply@e2e-fixture.invalid',
+  fromName: 'Reya E2E Fixture Sender',
+};
+
+export function extractSettingsEmailPhpFallback(html) {
+  const main = sliceMainContent(html);
+  const hasLineHeading = main.includes('บัญชี LINE Official Account'); // includes/settings/line.php line 42
+  const hasLineModalTrigger = main.includes('openLineModal()'); // includes/settings/line.php line 49
+  const hasEmailHeading = main.includes('ตั้งค่า Email/SMTP'); // includes/settings/email.php line 40 — must be ABSENT
+  const hasSmtpHostField = main.includes('name="smtp_host"'); // includes/settings/email.php line 56 — must be ABSENT
+
+  const problems = [];
+  if (!hasLineHeading) problems.push('LINE-tab heading "บัญชี LINE Official Account" not found');
+  if (!hasLineModalTrigger) problems.push('LINE-tab "openLineModal()" trigger not found');
+  if (hasEmailHeading) problems.push('email-tab heading "ตั้งค่า Email/SMTP" IS present');
+  if (hasSmtpHostField) problems.push('smtp_host field IS present');
+  if (problems.length > 0) {
+    throw new Error(
+      `settings.php?tab=email fallback-to-line invariant violated: ${problems.join('; ')}. If 'email' was re-enabled in settings.php's $tabs whitelist (settings.php lines 33-46), this exception is stale — switch settings:email back to a normal two-sided runPagePair() diff per docs/runbooks/phase2-settings-tabs-batch1-parity.md's "PHP email tab unreachable" section.`
+    );
+  }
+  return { fallsBackToLineTab: true };
+}
+
+export function extractSettingsEmailTab(html) {
+  const main = sliceMainContent(html);
+
+  const smtpHost = attrValue(findInputTag(main, ['name="smtp_host"']), 'value');
+  const smtpPortRaw = attrValue(findInputTag(main, ['name="smtp_port"']), 'value');
+  const smtpUser = attrValue(findInputTag(main, ['name="smtp_user"']), 'value');
+  const smtpPassPresent = findInputTag(main, ['name="smtp_pass"']) !== null;
+  const fromEmail = attrValue(findInputTag(main, ['name="from_email"']), 'value');
+  const fromName = attrValue(findInputTag(main, ['name="from_name"']), 'value');
+
+  const selectMatch = main.match(/<select\b[^>]*name="smtp_secure"[^>]*>([\s\S]*?)<\/select>/i);
+  const smtpSecure = selectMatch ? selectedOptionValue(selectMatch[1]) : null;
+
+  const smtpPort = smtpPortRaw === null ? null : Number(smtpPortRaw);
+
+  const problems = [];
+  if (smtpHost !== SETTINGS_EMAIL_FIXTURE.smtpHost) problems.push(`smtp_host=${JSON.stringify(smtpHost)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.smtpHost)}`);
+  if (smtpPort !== SETTINGS_EMAIL_FIXTURE.smtpPort) problems.push(`smtp_port=${JSON.stringify(smtpPortRaw)}, expected ${SETTINGS_EMAIL_FIXTURE.smtpPort}`);
+  if (smtpUser !== SETTINGS_EMAIL_FIXTURE.smtpUser) problems.push(`smtp_user=${JSON.stringify(smtpUser)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.smtpUser)}`);
+  if (!smtpPassPresent) problems.push('smtp_pass field not found');
+  if (fromEmail !== SETTINGS_EMAIL_FIXTURE.fromEmail) problems.push(`from_email=${JSON.stringify(fromEmail)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.fromEmail)}`);
+  if (fromName !== SETTINGS_EMAIL_FIXTURE.fromName) problems.push(`from_name=${JSON.stringify(fromName)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.fromName)}`);
+  if (smtpSecure !== SETTINGS_EMAIL_FIXTURE.smtpSecure) problems.push(`smtp_secure selected option=${JSON.stringify(smtpSecure)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.smtpSecure)}`);
+  if (problems.length > 0) {
+    throw new Error(`settings?tab=email (next) did not render the seeded email_settings fixture row (id=1): ${problems.join('; ')}`);
+  }
+
+  return { smtpHost, smtpPort, smtpUser, smtpPassPresent, fromEmail, fromName, smtpSecure };
+}
+
+// ---------------------------------------------------------------------------
+// /settings?tab=consent — genuine PHP-vs-Next diff. AUTO-DETECTS which of
+// TWO valid states rendered (both stacks share the exact same branch — see
+// below) rather than assuming one:
+//
+//   (a) the red error banner ("❌ ... กรุณารัน migration ก่อน") — fires if
+//       ANY of consent.php's 4 shared-try-block queries throws (PHP) / if
+//       getConsentPageData()'s single try throws (Next) — see either's own
+//       module doc.
+//   (b) the populated stats+tables view — 4 stat-card numbers (lines 91-108
+//       in consent.php / ConsentTab.tsx's matching JSX) via label-anchored
+//       HtmlCursor lookups (each number sits immediately BEFORE its own
+//       label in a sibling `<div>`, same "number div, then label div" shape
+//       extractUserDetailPage() already anchors on with beforeLabel()
+//       elsewhere in this file), plus a row count for each of the two log
+//       tables via the KNOWN, DISTINCT `ip_address` literals
+//       infra/e2e/seed/75-phase2-settings-batch1-fixture.sql.tmpl seeds
+//       (203.0.113.101-104 for consent_logs, 203.0.113.201-202 for
+//       data_access_logs) — real DB column values both stacks echo verbatim,
+//       same "known-value row-counting" technique this file's module doc
+//       documents for avatar-fallback/tag-name counting elsewhere, just keyed
+//       on IP strings because IP address is the one column this fixture can
+//       make PER-ROW-UNIQUE without predicting any display-name truncation/
+//       formatting logic.
+//
+// WHY AUTO-DETECT RATHER THAN ASSUME (b) OR (a) — apps/admin's
+// consent-queries.ts module doc claims (a) is the PERMANENT state on any
+// committed-schema tenant DB, reasoning that `admin_users` is a
+// platform-level table absent from every tenant DB. That is true of the
+// COMMITTED MIGRATION FILE alone, but classes/AdminAuth.php's constructor
+// (ensureTables()) auto-creates `admin_users` at RUNTIME, in the SAME
+// physical tenant database `Database::getInstance()->getConnection()`
+// returns — and this harness's own login flow (fireThrowawayProbeRequest() +
+// phpLogin()) guarantees that table exists, in that exact database, well
+// before EITHER stack's /settings?tab=consent is ever fetched (see
+// infra/e2e/seed/75-phase2-settings-batch1-fixture.sql.tmpl's "SEQUENCING
+// TRAP" section for the full trace). Whether consent.php's/
+// getConsentPageData()'s LEFT JOIN against that (now-existing, but
+// `line_account_id`-column-less) `admin_users` table actually throws is
+// something this extractor decides EMPIRICALLY from the real response, not
+// something parity.mjs assumes going in — see docs/runbooks/
+// phase2-settings-tabs-batch1-parity.md's "does consent.php's admin_users
+// JOIN actually throw?" section for this batch's own rehearsed answer.
+// Designed this way BOTH so a real regression (one stack lands in (a) while
+// the other lands in (b)) is still caught as an ordinary mismatch, AND so
+// this extractor does not need to be revisited if a future schema change
+// flips which state is reachable.
+//
+// FLAGGED FINDING (build report; discovered by THIS batch's own harness run,
+// not previously documented anywhere in this file): the KNOWN-VALUE
+// row-counting technique above ONLY works correctly against a copy of `main`
+// with every `<script>...</script>` block stripped out FIRST — verified
+// empirically via `PARITY_DUMP_HTML=1` against this batch's own real Next
+// response: EACH fixture IP literal (e.g. `203.0.113.101`) appears TWICE in
+// the raw SSR HTML — once in the real, visible `<td>` markup, and a SECOND
+// time inside a `self.__next_f.push(...)` RSC hydration payload `<script>`
+// tag (a JSON-escaped re-serialization of the same row data, used by React
+// to hydrate without a second fetch). This is the SAME general quirk
+// extractLineGroupDetailBody() (elsewhere in this file) already documents
+// and works around — but THAT page's fix ("cut the slice off at the first
+// trailing `<script` tag") does NOT generalize here: ConsentTab's hydration
+// `<script>` chunks are INTERLEAVED throughout the document (verified:
+// Next.js's streaming SSR here emits several `<script>` tags starting well
+// BEFORE the visible table markup, not only after it), so a single
+// "cut before the first `<script`" bound would incorrectly discard REAL
+// content too. `stripScriptBlocks()` below instead removes EVERY
+// `<script>...</script>` block wherever it falls, which was verified
+// (via the same real dump) to bring every fixture IP's count down to exactly
+// 1 on BOTH stacks. PHP is unaffected either way (consent.php's own
+// `<script>` block, the CSS-tab-toggle JS, contains no IP-address-shaped
+// text) — applied to both sides uniformly regardless, for symmetry and so a
+// future page reusing this same technique doesn't have to rediscover this.
+// See docs/runbooks/phase2-settings-tabs-batch1-parity.md's "RSC hydration
+// payload double-counts row markers" section for the full write-up.
+// ---------------------------------------------------------------------------
+
+const CONSENT_ERROR_BANNER_MARKER = 'กรุณารัน migration ก่อน';
+const CONSENT_LOG_IP_RE = /203\.0\.113\.10[1-4]/g;
+const DATA_ACCESS_LOG_IP_RE = /203\.0\.113\.20[1-2]/g;
+
+/** Removes every `<script>...</script>` block (tag + contents) — see this section's own "FLAGGED FINDING" doc for why plain known-value substring counting needs this first, unlike every other extractor in this file (which anchor on HTML TAG SYNTAX or immediately-adjacent label text, neither of which coincidentally re-appears verbatim inside a JSON-escaped RSC hydration payload the way a bare data value does). */
+function stripScriptBlocks(html) {
+  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+}
+
+export function extractSettingsConsentTab(html) {
+  const main = sliceMainContent(html);
+
+  if (main.includes(CONSENT_ERROR_BANNER_MARKER)) {
+    return { errorState: true };
+  }
+
+  const cursor = new HtmlCursor(main);
+  const totalConsented = parseLeadingNumber(cursor.beforeLabel('ผู้ใช้ที่ยินยอมแล้ว'));
+  const privacyPolicyCount = parseLeadingNumber(cursor.beforeLabel('ยอมรับ Privacy Policy'));
+  const termsOfServiceCount = parseLeadingNumber(cursor.beforeLabel('ยอมรับ Terms of Service'));
+  const healthDataCount = parseLeadingNumber(cursor.beforeLabel('ยินยอมข้อมูลสุขภาพ'));
+
+  const rowCountSource = stripScriptBlocks(main);
+  const consentLogRowCount = (rowCountSource.match(CONSENT_LOG_IP_RE) ?? []).length;
+  const accessLogRowCount = (rowCountSource.match(DATA_ACCESS_LOG_IP_RE) ?? []).length;
+
+  return { errorState: false, totalConsented, privacyPolicyCount, termsOfServiceCount, healthDataCount, consentLogRowCount, accessLogRowCount };
+}
+
+// ---------------------------------------------------------------------------
+// /settings?tab=shop_tax — genuine PHP-vs-Next diff, BUT — same shape as
+// settings:welcome above — expected to land on shop-tax.php's DEFAULT/EMPTY
+// values under THIS harness's own invariants, not the seeded
+// shop_tax_info row's populated values. See infra/e2e/seed/
+// 75-phase2-settings-batch1-fixture.sql.tmpl's own "shop_tax_info" section
+// for the full $lineAccountId-always-0 trace (read against
+// includes/settings/shop-tax.php, includes/header.php, classes/
+// AdminAuth.php, AND apps/admin's shop-tax-queries.ts — all four agree on
+// the same falls-through-to-default outcome under this harness's zero-
+// `line_accounts`-rows invariant).
+//
+// RESOLVED FINDING (was a real, confirmed FAIL earlier in this batch's own
+// development, fixed by settingsConsentTax before this batch's final
+// acceptance run — recorded here so the history isn't lost, not because it
+// still fails): PHP's own hardcoded default `default_vat_rate` is the float
+// literal `7.00`; `(string)7.00` in real PHP is `"7"` (verified: `php -r
+// 'var_dump((string)7.00);'` -> `string(1) "7"` — PHP's float-to-string
+// conversion drops the trailing `.00` for a whole-number float), so
+// shop-tax.php's DEFAULT-path HTML is `value="7"`. apps/admin's
+// shop-tax-queries.ts `DEFAULT_SHOP_TAX_INFO.defaultVatRate` used to be the
+// STRING literal `'7.00'` — a mismatch with PHP's ACTUAL default-path output
+// caught by this exact extractor. Flagged in an earlier build report; routed
+// back to settingsConsentTax; that file's `DEFAULT_SHOP_TAX_INFO` constant
+// now reads `defaultVatRate: '7'` with its own doc explaining why (matching
+// PHP's default-path float-to-string output, not the populated-row PDO
+// string), confirmed by reading the current source (not assumed) — see
+// docs/runbooks/phase2-settings-tabs-batch1-parity.md's "settings:shop-tax"
+// section for the full before/after. This extractor deliberately still does
+// a plain, unmodified string comparison (no normalizing "7"/"7.00") — now
+// that both sides emit the SAME literal string, exact equality is not
+// papering over anything; if a future regression reintroduces the mismatch
+// (either side), this extractor catches it exactly as it did the first time.
+// ---------------------------------------------------------------------------
+
+export function extractSettingsShopTaxTab(html) {
+  const main = sliceMainContent(html);
+
+  const businessName = attrValue(findInputTag(main, ['name="business_name"']), 'value');
+  const taxId = attrValue(findInputTag(main, ['name="tax_id"']), 'value');
+  const vatRegisteredTag = findInputTag(main, ['name="is_vat_registered"']);
+  const isVatRegisteredChecked = hasCheckedAttr(vatRegisteredTag);
+  const defaultVatRate = attrValue(findInputTag(main, ['name="default_vat_rate"']), 'value');
+
+  return { businessName, taxId, isVatRegisteredChecked, defaultVatRate };
+}

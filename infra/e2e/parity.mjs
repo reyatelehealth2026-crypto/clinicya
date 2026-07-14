@@ -56,6 +56,30 @@
 // batch doesn't have to re-litigate it), the golden-dataset fixture's shape,
 // and this batch's explicit deferred-scope list.
 //
+// Phase 2 settings batch 1 (mig-infra) EXTENDS this same harness AGAIN with
+// FOUR new page-pairs: PHP /settings.php?tab=welcome vs Next /settings?tab=
+// welcome; PHP /settings.php?tab=email vs Next /settings?tab=email (a
+// DELIBERATE one-sided-assertion EXCEPTION, same family as
+// runCrmDashboardAdvancedChecks()/runInboxSidebarChecks() — see
+// runSettingsEmailChecks() below); PHP /settings.php?tab=consent vs Next
+// /settings?tab=consent; PHP /settings.php?tab=shop_tax vs Next /settings?
+// tab=shop_tax. Root /settings.php (941 LOC — NOT the dead, unreferenced
+// 562-LOC duplicate at includes/settings/settings.php, zero includes/
+// requires anywhere in the repo, confirmed by grep) is the live hub; only
+// 4 of its 7 live-whitelisted tabs (line/platform/general/shop_tax/welcome/
+// notifications/consent) are ported this batch — see
+// infra/nginx/routes.json's own `/settings` entry note and docs/runbooks/
+// phase2-settings-tabs-batch1-parity.md for the full write-up, including
+// TWO confirmed, still-live findings this batch's fixture/extractors work
+// around rather than "fix" (welcome_settings table absent from the
+// committed schema; PHP's own `?tab=email` is unreachable via its `$tabs`
+// whitelist, always falling back to the LINE tab's markup instead), PLUS
+// ONE finding that started as a real, confirmed FAIL during this harness's
+// own development (a one-field mismatch in apps/admin's shop-tax default
+// value, `default_vat_rate`) and was fixed by settingsConsentTax before
+// this batch's final acceptance run — see extractSettingsShopTaxTab()'s own
+// doc in lib/extract.mjs for the confirmed-fixed write-up.
+//
 // SCOPE (read before trusting the PASS line — same documented-limits
 // pattern infra/e2e/run.mjs already uses): this proves DATA-POINT PARITY
 // against ONE seeded tenant/dataset, on the REAL stack (a genuine MariaDB +
@@ -140,6 +164,11 @@ import {
   extractSystemStatusPage,
   extractInboxSidebarPage,
   extractInboxThreadPage,
+  extractSettingsWelcomeTab,
+  extractSettingsEmailPhpFallback,
+  extractSettingsEmailTab,
+  extractSettingsConsentTab,
+  extractSettingsShopTaxTab,
 } from './lib/extract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -185,6 +214,7 @@ const FIXTURE_FILES = [
   '40-phase2-batch2-fixture.sql.tmpl',
   '60-phase2-batch3-fixture.sql.tmpl',
   '70-phase4-batch1-inbox-fixture.sql.tmpl',
+  '75-phase2-settings-batch1-fixture.sql.tmpl',
 ];
 
 const ADMIN_DIR = path.join(REPO_ROOT, 'apps/admin');
@@ -1220,6 +1250,58 @@ async function runMessagesCursorWalk(nextSid) {
   }
 }
 
+/**
+ * Phase 2 settings batch 1 — /settings?tab=email. NOT a runPagePair() diff —
+ * same family as runCrmDashboardAdvancedChecks()/runInboxSidebarChecks()
+ * above: PHP and Next are EXPECTED to render two genuinely different things
+ * here (PHP falls back to the LINE tab's markup; Next renders a real,
+ * working EmailTab), so diffing their extracted data points against each
+ * other would either always "mismatch" on an intentional, documented
+ * divergence or require force-fitting two unrelated shapes into one
+ * comparable object. Two independent runSingleSideCheck() calls instead —
+ * see extractSettingsEmailPhpFallback()/extractSettingsEmailTab()'s own
+ * module doc in infra/e2e/lib/extract.mjs for the full "why" (root
+ * /settings.php's `$tabs` whitelist has 'email' commented out;
+ * getActiveTab() silently falls back to 'line' for any unrecognized tab
+ * key).
+ *
+ * Returns TWO `pages`-shaped entries (`settings:email-php-line-fallback`,
+ * `settings:email-next-real`) rather than the single `settings:email` name
+ * this batch's brief used loosely — deliberate, documented in
+ * docs/runbooks/phase2-settings-tabs-batch1-parity.md's "settings:email is
+ * two entries, not one" section: forcing this into one entry would mean
+ * either (a) only checking one side (losing coverage), or (b) baking a
+ * cross-side assertion into a single fetchOne()/assertAndExtract() pair,
+ * which runSingleSideCheck()'s own contract doesn't support (assertAndExtract
+ * runs synchronously against ONE already-fetched response, see that
+ * function's own signature above) without changing that shared helper's
+ * signature — out of this batch's allowed-paths (append-only, no helper
+ * signature changes). Two independently-`ok`/`mismatches` entries is exactly
+ * the same shape crm-dashboard-advanced's 3-entries-for-1-page and
+ * /inbox-sidebar's 2-entries-for-1-page precedents already use.
+ */
+async function runSettingsEmailChecks(phpSid, nextSid) {
+  const phpCheck = await runSingleSideCheck(
+    'settings:email-php-line-fallback',
+    () => fetchPhpPage('/settings.php?tab=email', phpSid),
+    (resp) => {
+      assertAuthedOk(resp, 'settings.php?tab=email (php)');
+      return extractSettingsEmailPhpFallback(resp.text);
+    }
+  );
+
+  const nextCheck = await runSingleSideCheck(
+    'settings:email-next-real',
+    () => fetchNextPage('/settings?tab=email', nextSid),
+    (resp) => {
+      assertAuthedOk(resp, 'settings?tab=email (next)');
+      return extractSettingsEmailTab(resp.text);
+    }
+  );
+
+  return [phpCheck, nextCheck];
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -1495,6 +1577,45 @@ async function main() {
     // --- Phase 4 batch 1: JSON cursor-pagination contract walks (no PHP side — see each function's own doc) ---
     pages.push(await runConversationsCursorWalk(nextSid));
     pages.push(await runMessagesCursorWalk(nextSid));
+
+    // --- Phase 2 settings batch 1: /settings?tab={welcome,email,consent,shop_tax} ---
+    pages.push(
+      await runPagePair(
+        'settings:welcome',
+        async () => ({
+          phpResp: await fetchPhpPage('/settings.php?tab=welcome', phpSid),
+          nextResp: await fetchNextPage('/settings?tab=welcome', nextSid),
+        }),
+        (phpHtml, nextHtml) => ({ phpData: extractSettingsWelcomeTab(phpHtml), nextData: extractSettingsWelcomeTab(nextHtml) })
+      )
+    );
+
+    // settings:email is a DELIBERATE one-sided-assertion exception (PHP's
+    // ?tab=email always falls back to the LINE tab's markup — see
+    // runSettingsEmailChecks()'s own doc above) — TWO entries, not a diff.
+    pages.push(...(await runSettingsEmailChecks(phpSid, nextSid)));
+
+    pages.push(
+      await runPagePair(
+        'settings:consent',
+        async () => ({
+          phpResp: await fetchPhpPage('/settings.php?tab=consent', phpSid),
+          nextResp: await fetchNextPage('/settings?tab=consent', nextSid),
+        }),
+        (phpHtml, nextHtml) => ({ phpData: extractSettingsConsentTab(phpHtml), nextData: extractSettingsConsentTab(nextHtml) })
+      )
+    );
+
+    pages.push(
+      await runPagePair(
+        'settings:shop-tax',
+        async () => ({
+          phpResp: await fetchPhpPage('/settings.php?tab=shop_tax', phpSid),
+          nextResp: await fetchNextPage('/settings?tab=shop_tax', nextSid),
+        }),
+        (phpHtml, nextHtml) => ({ phpData: extractSettingsShopTaxTab(phpHtml), nextData: extractSettingsShopTaxTab(nextHtml) })
+      )
+    );
 
     result = pages.every((p) => p.ok) ? 'PASS' : 'FAIL';
     if (result === 'PASS') {

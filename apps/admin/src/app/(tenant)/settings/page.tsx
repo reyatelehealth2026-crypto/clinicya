@@ -5,6 +5,9 @@ import { requireTenantPageContext } from '../users/_lib/session';
 import { WelcomeTab } from './_components/WelcomeTab';
 import { EmailTab } from './_components/EmailTab';
 import { NotYetMigratedTab } from './_components/NotYetMigratedTab';
+import { ConsentTab } from './_components/ConsentTab';
+import { ShopTaxTab } from './_components/ShopTaxTab';
+import { resolveLineAccountId, getShopTaxInfo } from './_lib/shop-tax-queries';
 
 /**
  * (tenant)/settings/page.tsx — Server Component shell/hub port of root
@@ -153,19 +156,35 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     case 'notifications':
       tabContent = NotYetMigratedTab({ tabKey: activeTab });
       break;
-    // settingsConsentTax appends real cases here:
-    //   case 'consent':
-    //     tabContent = await ConsentTab({ db, ... });
-    //     break;
-    //   case 'shop_tax':
-    //     tabContent = await ShopTaxTab({ db, ... });
-    //     break;
+    case 'consent':
+      // consent.php has zero mutations/Server Actions — a pure read, same
+      // `await Tab({ db })` direct-invocation convention as welcome/email
+      // above (see (tenant)/settings/_components/ConsentTab.tsx's module doc).
+      tabContent = await ConsentTab({ db });
+      break;
+    case 'shop_tax': {
+      // ShopTaxTab is a Client Component (owns the same-page showAlert()-style
+      // success/error banner, no redirect/reload — see its module doc for why
+      // this can't follow the plain `await Tab({db})` Server Component
+      // convention every other case here uses: a Kysely `db` instance can't
+      // cross the Server/Client boundary as a prop). The tenant resolution +
+      // read that would otherwise happen inside an `await Tab({db})` call
+      // happen here instead, and only the resulting serializable row is
+      // handed down.
+      const lineAccountId = await resolveLineAccountId({
+        db,
+        sessionCurrentBotId: session.currentBotId,
+        sessionAdminUserId: session.adminUserId,
+      });
+      const shopTaxInfo = await getShopTaxInfo(db, lineAccountId);
+      tabContent = <ShopTaxTab initialData={shopTaxInfo} />;
+      break;
+    }
     default: {
-      // Interim safety net for 'consent'/'shop_tax' only, reached until
-      // settingsConsentTax appends its own cases above — a minimal, honest
-      // placeholder (NOT NotYetMigratedTab, whose 5-key union deliberately
-      // does not include these two) and NEVER a silent fallback to
-      // welcome's/any other tab's content.
+      // Interim safety net for any future not-yet-appended tab key — a
+      // minimal, honest placeholder (NOT NotYetMigratedTab, whose 5-key union
+      // deliberately does not include these two) and NEVER a silent fallback
+      // to welcome's/any other tab's content.
       const tabMeta = SETTINGS_TABS.find((t) => t.key === activeTab);
       tabContent = (
         <div className="bg-white rounded-xl shadow-sm p-10 text-center text-gray-500">
