@@ -155,6 +155,13 @@ COPY --from=builder --chown=nodejs:nodejs /app/apps/worker apps/worker
 USER nodejs
 
 EXPOSE 8099
+# Dedicated Socket.io realtime relay server (realtime/socketServer.ts),
+# separate http.Server from WORKER_HEALTH_PORT above — see
+# apps/worker/src/env.ts's WORKER_REALTIME_PORT doc comment (default 8100).
+# Documentation-only in Docker terms (the image doesn't publish ports on its
+# own), but keeps the image's declared surface accurate — see
+# docs/runbooks/worker-realtime-relay-smoke.md.
+EXPOSE 8100
 
 # Same `node -e "fetch(...)"` idiom backend/Dockerfile already uses — no
 # extra curl/wget binary needed in the runner image.

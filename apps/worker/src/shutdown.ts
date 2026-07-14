@@ -15,16 +15,32 @@ import type { Server } from 'node:http';
  * comfortably longer than WORKER_SHUTDOWN_TIMEOUT_MS, or the container
  * runtime's own SIGKILL will land before this file's own hard-kill fallback
  * ever gets a chance to run (and log/exit cleanly).
+ *
+ * `closeRealtimeServer`/`redisSubscriber` are ADDITIVE and OPTIONAL —
+ * realtime/socketServer.ts's dedicated Socket.io server and
+ * redis.ts's dedicated pub/sub connection (realtime/inboxRelay.ts's
+ * subscriber). Existing callers/tests that omit them see no behavior
+ * change. When present, both are drained after healthServer.close(),
+ * mirroring websocket-server.js's own gracefulShutdown() order (HTTP/
+ * Socket.io server close, then `await redisSubscriber.quit()`).
  */
 
 export interface WorkerLike {
   close(): Promise<void>;
 }
 
+export interface RedisSubscriberLike {
+  quit(): Promise<unknown>;
+}
+
 export interface ShutdownDeps {
   worker: WorkerLike;
   healthServer: Server;
   shutdownTimeoutMs: number;
+  /** OPTIONAL — realtime/socketServer.ts's `RealtimeServer#close()` (Socket.io `Server#close()`, which also closes its own dedicated http.Server). */
+  closeRealtimeServer?: () => Promise<void>;
+  /** OPTIONAL — the dedicated ioredis pub/sub connection from redis.ts's getRedisSubscriberClient(). Closed via `.quit()` for a graceful UNSUBSCRIBE + QUIT round trip. */
+  redisSubscriber?: RedisSubscriberLike;
   /** Test seam — defaults to `process.exit`. Tests inject a spy so they don't kill the test runner. */
   exit?: (code: number) => void;
 }
@@ -54,6 +70,12 @@ export async function runShutdown(deps: ShutdownDeps): Promise<void> {
     // mid-write (e.g. heartbeat.ts's in-flight per-tenant INSERT loop).
     await deps.worker.close();
     await new Promise<void>((resolve) => deps.healthServer.close(() => resolve()));
+    if (deps.closeRealtimeServer) {
+      await deps.closeRealtimeServer();
+    }
+    if (deps.redisSubscriber) {
+      await deps.redisSubscriber.quit();
+    }
     if (!settled) {
       settled = true;
       clearTimeout(hardKill);
