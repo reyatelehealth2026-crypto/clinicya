@@ -1,0 +1,457 @@
+{
+    "description": "toMessage() — sender given as a preset key string (\"shop\"), no quickReply.",
+    "request": {
+        "fn": "toMessage",
+        "contents": {
+            "type": "bubble",
+            "size": "mega",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "ร้านยา",
+                        "weight": "bold",
+                        "size": "xl",
+                        "color": "#FFFFFF",
+                        "align": "center",
+                        "wrap": true
+                    }
+                ],
+                "backgroundColor": "#006400",
+                "paddingAll": "lg"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "⚠️ ตั้งครรภ์ แพ้ยา มีโรคประจำตัว กรุณาแจ้งเภสัชกร",
+                                "size": "xxs",
+                                "color": "#FFFFFF",
+                                "wrap": true,
+                                "align": "center",
+                                "weight": "bold"
+                            }
+                        ],
+                        "backgroundColor": "#B91C1C",
+                        "paddingAll": "sm",
+                        "cornerRadius": "md"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "℞ ฉลากยา",
+                                "size": "md",
+                                "weight": "bold",
+                                "color": "#006400",
+                                "flex": 1
+                            },
+                            {
+                                "type": "text",
+                                "text": "MEDICINE LABEL",
+                                "size": "xs",
+                                "color": "#666666",
+                                "align": "end",
+                                "gravity": "center",
+                                "flex": 1
+                            }
+                        ],
+                        "margin": "md"
+                    },
+                    {
+                        "type": "separator",
+                        "color": "#E5E7EB",
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "ผู้ป่วย",
+                                        "size": "xxs",
+                                        "color": "#666666"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "ลูกค้าทั่วไป",
+                                        "size": "md",
+                                        "weight": "bold",
+                                        "color": "#000000",
+                                        "wrap": true,
+                                        "margin": "xs"
+                                    }
+                                ],
+                                "flex": 2
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "วันที่จ่ายยา",
+                                        "size": "xxs",
+                                        "color": "#666666",
+                                        "align": "end"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "14/07/2026",
+                                        "size": "sm",
+                                        "color": "#000000",
+                                        "align": "end",
+                                        "margin": "xs"
+                                    }
+                                ],
+                                "flex": 1
+                            }
+                        ],
+                        "margin": "md",
+                        "paddingAll": "md",
+                        "backgroundColor": "#F9FAFB",
+                        "cornerRadius": "md",
+                        "borderWidth": "1px",
+                        "borderColor": "#E5E7EB"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "image",
+                                        "url": "https://via.placeholder.com/100x100?text=No+Image",
+                                        "size": "full",
+                                        "aspectMode": "cover",
+                                        "aspectRatio": "1:1"
+                                    }
+                                ],
+                                "width": "64px",
+                                "height": "64px",
+                                "cornerRadius": "md",
+                                "flex": 0
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "ชื่อสินค้า",
+                                        "size": "xxs",
+                                        "color": "#666666"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "ยาสามัญประจำบ้าน",
+                                        "size": "md",
+                                        "weight": "bold",
+                                        "wrap": true,
+                                        "color": "#000000"
+                                    }
+                                ],
+                                "flex": 1,
+                                "margin": "md"
+                            }
+                        ],
+                        "margin": "md",
+                        "paddingAll": "md",
+                        "backgroundColor": "#E8F5E9",
+                        "cornerRadius": "md",
+                        "borderWidth": "1px",
+                        "borderColor": "#006400"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "จำนวน:",
+                                "size": "sm",
+                                "color": "#666666"
+                            },
+                            {
+                                "type": "text",
+                                "text": "1 ชิ้น",
+                                "size": "sm",
+                                "weight": "bold",
+                                "align": "end",
+                                "color": "#000000"
+                            }
+                        ],
+                        "margin": "lg"
+                    }
+                ],
+                "paddingAll": "lg",
+                "backgroundColor": "#FFFFFF"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "เปิดทำการทุกวัน เวลา 08:00-24:00 น.",
+                        "size": "xs",
+                        "color": "#006400",
+                        "align": "center",
+                        "weight": "bold"
+                    }
+                ],
+                "paddingAll": "md",
+                "backgroundColor": "#E8F5E9"
+            }
+        },
+        "altText": "ฉลากยาของคุณ",
+        "sender": "shop",
+        "quickReply": null
+    },
+    "response": {
+        "type": "flex",
+        "altText": "ฉลากยาของคุณ",
+        "contents": {
+            "type": "bubble",
+            "size": "mega",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "ร้านยา",
+                        "weight": "bold",
+                        "size": "xl",
+                        "color": "#FFFFFF",
+                        "align": "center",
+                        "wrap": true
+                    }
+                ],
+                "backgroundColor": "#006400",
+                "paddingAll": "lg"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "⚠️ ตั้งครรภ์ แพ้ยา มีโรคประจำตัว กรุณาแจ้งเภสัชกร",
+                                "size": "xxs",
+                                "color": "#FFFFFF",
+                                "wrap": true,
+                                "align": "center",
+                                "weight": "bold"
+                            }
+                        ],
+                        "backgroundColor": "#B91C1C",
+                        "paddingAll": "sm",
+                        "cornerRadius": "md"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "℞ ฉลากยา",
+                                "size": "md",
+                                "weight": "bold",
+                                "color": "#006400",
+                                "flex": 1
+                            },
+                            {
+                                "type": "text",
+                                "text": "MEDICINE LABEL",
+                                "size": "xs",
+                                "color": "#666666",
+                                "align": "end",
+                                "gravity": "center",
+                                "flex": 1
+                            }
+                        ],
+                        "margin": "md"
+                    },
+                    {
+                        "type": "separator",
+                        "color": "#E5E7EB",
+                        "margin": "sm"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "ผู้ป่วย",
+                                        "size": "xxs",
+                                        "color": "#666666"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "ลูกค้าทั่วไป",
+                                        "size": "md",
+                                        "weight": "bold",
+                                        "color": "#000000",
+                                        "wrap": true,
+                                        "margin": "xs"
+                                    }
+                                ],
+                                "flex": 2
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "วันที่จ่ายยา",
+                                        "size": "xxs",
+                                        "color": "#666666",
+                                        "align": "end"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "14/07/2026",
+                                        "size": "sm",
+                                        "color": "#000000",
+                                        "align": "end",
+                                        "margin": "xs"
+                                    }
+                                ],
+                                "flex": 1
+                            }
+                        ],
+                        "margin": "md",
+                        "paddingAll": "md",
+                        "backgroundColor": "#F9FAFB",
+                        "cornerRadius": "md",
+                        "borderWidth": "1px",
+                        "borderColor": "#E5E7EB"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "image",
+                                        "url": "https://via.placeholder.com/100x100?text=No+Image",
+                                        "size": "full",
+                                        "aspectMode": "cover",
+                                        "aspectRatio": "1:1"
+                                    }
+                                ],
+                                "width": "64px",
+                                "height": "64px",
+                                "cornerRadius": "md",
+                                "flex": 0
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "text",
+                                        "text": "ชื่อสินค้า",
+                                        "size": "xxs",
+                                        "color": "#666666"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": "ยาสามัญประจำบ้าน",
+                                        "size": "md",
+                                        "weight": "bold",
+                                        "wrap": true,
+                                        "color": "#000000"
+                                    }
+                                ],
+                                "flex": 1,
+                                "margin": "md"
+                            }
+                        ],
+                        "margin": "md",
+                        "paddingAll": "md",
+                        "backgroundColor": "#E8F5E9",
+                        "cornerRadius": "md",
+                        "borderWidth": "1px",
+                        "borderColor": "#006400"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "จำนวน:",
+                                "size": "sm",
+                                "color": "#666666"
+                            },
+                            {
+                                "type": "text",
+                                "text": "1 ชิ้น",
+                                "size": "sm",
+                                "weight": "bold",
+                                "align": "end",
+                                "color": "#000000"
+                            }
+                        ],
+                        "margin": "lg"
+                    }
+                ],
+                "paddingAll": "lg",
+                "backgroundColor": "#FFFFFF"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "เปิดทำการทุกวัน เวลา 08:00-24:00 น.",
+                        "size": "xs",
+                        "color": "#006400",
+                        "align": "center",
+                        "weight": "bold"
+                    }
+                ],
+                "paddingAll": "md",
+                "backgroundColor": "#E8F5E9"
+            }
+        },
+        "sender": {
+            "name": "🛒 Shop",
+            "iconUrl": "https://i.imgur.com/BOBkgJA.png"
+        }
+    }
+}
