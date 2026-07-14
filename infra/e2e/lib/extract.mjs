@@ -1388,3 +1388,180 @@ export function extractSystemStatusPage(html) {
 
   return { checks: portable };
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 batch 1 (mig-infra) — /inbox (conversationList sidebar) and
+// /inbox/[userId] (messageThread chat pane) page-pair extractors. See
+// docs/runbooks/phase4-batch1-inbox-reads-parity.md for the full contract
+// this batch proves, the identity-model decision, and the deferred-scope
+// list.
+//
+// BOTH extractors below deliberately do NOT use the label-anchored
+// HtmlCursor pattern the rest of this file uses (see module doc "ORDERING
+// MATTERS") — inbox-v2.php's sidebar/chat-thread markup carries real,
+// STABLE data-* attributes (data-user-id/data-tags/data-assigned/
+// data-chat-status/data-msg-id) that this port reproduces byte-for-byte
+// (see (tenant)/inbox/_components/ConversationListItem.tsx's own module doc:
+// "data-* attributes are NOT decorative" — FilterBar.tsx's client-side
+// filtering reads them directly, so they are a load-bearing, not
+// incidental, part of the contract). Anchoring on those attributes is a
+// STRONGER, more literal parity signal than searching for visible label
+// text would be here, and sidesteps the ordering fragility a forward-only
+// cursor would otherwise have across ~200 near-identical repeated rows.
+// ---------------------------------------------------------------------------
+
+/**
+ * extractInboxSidebarPage — PHP inbox-v2.php's sidebar list (lines
+ * 2930-3172) vs Next (tenant)/inbox/layout.tsx + ConversationListItem.tsx.
+ * Both SSR the SAME `id="totalUnread"` badge, and both stamp identical
+ * `data-user-id`/`data-tags`/`data-assigned`/`data-chat-status` attributes
+ * per conversation row (PHP: inbox-v2.php lines 3097-3102; Next:
+ * ConversationListItem.tsx lines 84-89).
+ *
+ * NOT WIRED AS A runPagePair() DIFF (read before assuming it should be) —
+ * see parity.mjs's runInboxSidebarChecks() and
+ * docs/runbooks/phase4-batch1-inbox-reads-parity.md's "PHP inbox sidebar is
+ * permanently empty under this harness" section for the full trace: a
+ * CONFIRMED, PRE-EXISTING PHP DEFECT (discovered by this batch's own harness
+ * run, not previously flagged) makes inbox-v2.php's LINE-tab conversation
+ * list ALWAYS EMPTY whenever the session has zero accessible `line_accounts`
+ * rows — the exact, deliberately-maintained state EVERY fixture in this
+ * harness keeps throughout the whole run (see 30-phase2-batch1-fixture's own
+ * "WHY NO line_accounts ROWS" reasoning, inherited by every later batch).
+ * inbox-v2.php pre-computes its own `$currentBotId = $_SESSION
+ * ['current_bot_id'] ?? 1` (line 81) BEFORE `require_once
+ * 'includes/header.php'` (line 991) — but header.php is a plain top-level
+ * include sharing inbox-v2.php's global scope (same class of bug as this
+ * repo's already-documented line-group-detail.php `$group`-clobbering
+ * defect), and unconditionally OVERWRITES that same variable at
+ * includes/header.php line 174 (`$currentBotId = $currentBot['id'] ?? null`)
+ * — `null` when there are no accessible bots. The conversation-list SQL that
+ * runs AFTER header.php (inbox-v2.php lines 1023-1054) then binds that
+ * clobbered `NULL` into `u.line_account_id = ?`, which — per SQL's 3-valued
+ * logic — matches ZERO rows, including rows whose `line_account_id` is
+ * itself `NULL` (an equality test, unlike the `(line_account_id = ? OR
+ * line_account_id IS NULL)` NULL-tolerant pattern users.php/groups.php use).
+ * This function is still used for BOTH sides — just via two SEPARATE
+ * `runSingleSideCheck()` calls with DIFFERENT expected values, not one
+ * diffed pair, since there is no dataset this harness could seed that would
+ * make PHP's side genuinely non-empty without also breaking every earlier
+ * batch's own zero-line_accounts invariant.
+ *
+ * Presence-only (not full-count) BY DESIGN, on the NEXT side — the exact
+ * `unread_count`/`tags`/`assignees` VALUES for every one of the fixture's
+ * 215 conversations are already proven byte-for-byte by this batch's
+ * conversations-cursor-walk (a JSON diff against the golden fixture — far
+ * stronger than scraping a rendered badge digit out of HTML). This extractor
+ * only proves the SSR'd HTML actually carries the same per-conversation
+ * markers the JSON API says it should.
+ *
+ * `knownConversations` — array of `{ name, id, attrs: string[] }`; `attrs`
+ * are literal `data-*="value"` substrings expected on that row (both stacks
+ * render attribute values in the same order/format — see
+ * ConversationListItem.tsx's own module doc for why: `data-tags`/
+ * `data-assignees` are plain `.join(',')` over integers on both stacks, no
+ * i18n/formatting divergence possible).
+ */
+export function extractInboxSidebarPage(html, knownConversations) {
+  const totalUnreadMatch = /id="totalUnread"[^>]*>\s*(\d+)/.exec(html);
+  const totalUnreadBadge = totalUnreadMatch ? Number(totalUnreadMatch[1]) : null;
+  // PHP's empty-state text (inbox-v2.php line 3075) — not rendered by Next
+  // at all when the list is non-empty (EmptyState is only used by the
+  // no-selection /inbox route.tsx, a DIFFERENT page than the sidebar), so
+  // this is only ever asserted `true` on the PHP-defect side, never diffed
+  // against Next directly.
+  const emptyStateVisible = html.includes('ยังไม่มีแชท');
+
+  const conversations = {};
+  for (const conv of knownConversations) {
+    const anchor = `data-user-id="${conv.id}"`;
+    const visible = html.includes(anchor);
+    const attrs = {};
+    for (const attr of conv.attrs ?? []) {
+      attrs[attr] = html.includes(attr);
+    }
+    conversations[conv.name] = { visible, ...attrs };
+  }
+  return { totalUnreadBadge, emptyStateVisible, conversations };
+}
+
+/**
+ * extractInboxThreadPage — chat header (name/tags) + message-type coverage
+ * for a single conversation, port of inbox-v2.php's "CENTER: Chat Area"
+ * (lines 3174-3538) vs (tenant)/inbox/[userId]/page.tsx + ChatHeader.tsx +
+ * MessageBubble.tsx.
+ *
+ * `headerName` uses the ONE HtmlCursor lookup in this pair (both stacks
+ * render the EXACT literal `<h3 class="font-bold text-gray-800">` — verified
+ * by reading both ChatHeader.tsx and inbox-v2.php's chat-header markup — so
+ * a forward label search is safe and unambiguous here, unlike the
+ * repeated-row sidebar above).
+ *
+ * `messageCount` counts `data-msg-id="<digits>"` occurrences — NOT a bare
+ * `data-msg-id="` count (verified empirically against this batch's own
+ * harness run: inbox-v2.php ALSO embeds three client-side JS templates
+ * containing the literal string `data-msg-id="${msg.id}"` — a websocket
+ * live-append handler and its own duplicate-detection querySelector, lines
+ * 4780/4815/8625 — inside `<script>` blocks that are never executed by this
+ * fetch-only harness but ARE present in the raw HTML text a naive substring
+ * count would over-count by exactly 3. Requiring one-or-more DIGITS inside
+ * the quotes excludes all three (`${msg.id}` is not a digit run) while still
+ * matching every REAL SSR'd bubble on both stacks (PHP: inbox-v2.php line
+ * 3281's `data-msg-id="<?= $msg['id'] ?>"` renders a literal integer; Next:
+ * MessageBubble.tsx's `data-msg-id={message.id}` also always serializes to a
+ * quoted digit string).
+ *
+ * FLEX MESSAGE RENDERING ASYMMETRY (read before extending `markers` for a
+ * flex/carousel case) — PHP defers ALL flex rendering to a client-side
+ * `<script>` (inbox-v2.php lines 3473-3505, `renderFlexMessage()` in JS,
+ * never executed by this fetch-only harness — no browser/JS engine
+ * involved anywhere in this harness); this port renders the SAME tree
+ * SERVER-SIDE (FlexBubble/FlexCarousel/FlexText/FlexButton/... — real HTML
+ * in the initial response, see flex/FlexMessage's own module doc). The two
+ * representations are structurally different (PHP: a raw,
+ * htmlspecialchars()-escaped JSON string sitting inside a
+ * `data-flex-content='...'` attribute; Next: a real DOM tree of nested
+ * `<div>`s) but BOTH still contain the same literal Thai/English marker text
+ * verbatim — htmlspecialchars() does not alter non-ASCII text or a
+ * quote-free string, and every marker string this fixture uses is
+ * quote-free by construction. A plain substring-inclusion check is
+ * therefore the CORRECT level of assertion for flex content here, not a
+ * structural diff (which would need real JS execution on the PHP side to
+ * ever pass, and would be testing this harness's fetch mechanics rather
+ * than the product) — this is a documented, deliberate exception in the
+ * same family as runCrmDashboardAdvancedChecks()'s 500-vs-200 exception in
+ * parity.mjs, not an extraction gap.
+ *
+ * `markers` — array of `{ name, text }`; each becomes a boolean
+ * `cleanHtml.includes(text)` — diffed structurally like every other
+ * extractor (a marker present on one side and absent on the other surfaces
+ * as a normal `true`-vs-`false` mismatch line). Checked against a
+ * COMMENT-STRIPPED copy of the html (same `<!--...-->`-removal `stripTags()`
+ * already applies elsewhere in this file, reapplied here directly since
+ * these marker checks intentionally do NOT go through `stripTags()`'s own
+ * tag-removal — some markers are attribute/URL values, not visible text) —
+ * required for any marker whose source text spans MORE THAN ONE adjacent
+ * JSX expression, e.g. LocationContent's `{lat}, {lng}` (MessageBubble.tsx):
+ * verified empirically against this batch's own harness run that React's
+ * SSR renderer inserts an empty `<!-- -->` between `{lat}` and the literal
+ * `, `/`{lng}` text nodes (the same hydration-boundary-marker quirk this
+ * file's own module doc already documents for other pages), which would
+ * otherwise split `"13.7563, 100.5018"` into `"13.7563<!-- -->,
+ * <!-- -->100.5018"` and produce a false negative ONLY on the Next side.
+ */
+export function extractInboxThreadPage(html, markers) {
+  let headerName = null;
+  try {
+    headerName = new HtmlCursor(html).afterLabel('font-bold text-gray-800">');
+  } catch {
+    headerName = null;
+  }
+  const messageCount = (html.match(/data-msg-id="\d+"/g) || []).length;
+  const cleanHtml = html.replace(/<!--[\s\S]*?-->/g, '');
+
+  const result = { headerName, messageCount };
+  for (const marker of markers) {
+    result[marker.name] = cleanHtml.includes(marker.text);
+  }
+  return result;
+}
