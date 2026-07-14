@@ -169,7 +169,7 @@
 // -----------------------------------------------------------------------------
 
 import { spawn } from 'node:child_process';
-import { cpSync, readdirSync, readFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -425,6 +425,32 @@ function prepareStandaloneStatic() {
   const dest = path.join(ADMIN_STANDALONE_DIR, '.next/static');
   cpSync(src, dest, { recursive: true, force: true });
   markOk('prepare_standalone_static');
+}
+
+// checkout-order:upload_slip is the first ENDPOINT_CASES entry that exercises
+// a real filesystem write inside the `php` container (api/checkout.php's
+// move_uploaded_file() into uploads/slips/). infra/e2e/docker-compose.yml
+// bind-mounts the WHOLE repo (`../..:/var/www/html`, see that file's own
+// comment) straight from the host — unlike infra/compose/docker-compose.strangler.yml's
+// production shape, which deliberately gives uploads/ its own named Docker
+// volume (php_uploads_phase0) precisely so this never depends on host
+// ownership. Apache inside php:8.2-apache serves requests as `www-data`
+// (non-root); if the host-side uploads/slips/ directory happens to be
+// owned by another user with a restrictive mode (e.g. a root-owned
+// checkout at 0755, the case that surfaced this), move_uploaded_file()
+// fails with no PHP-side code defect at all — api/checkout.php is
+// untouched and correct. World-writable is harness-scratch-only (this
+// bind-mounted uploads/ tree is never what production actually serves
+// from) and is reset on every harness run, so 0o777 here carries none of
+// the risk it would in a real deployment.
+function ensureUploadsWritable() {
+  const uploadsSlipsDir = path.join(REPO_ROOT, 'uploads/slips');
+  if (!existsSync(uploadsSlipsDir)) {
+    mkdirSync(uploadsSlipsDir, { recursive: true });
+  }
+  chmodSync(path.join(REPO_ROOT, 'uploads'), 0o777);
+  chmodSync(uploadsSlipsDir, 0o777);
+  markOk('uploads_dir_writable', { dir: uploadsSlipsDir });
 }
 
 function startNextServer(env) {
@@ -860,6 +886,7 @@ async function main() {
     seedDatabase(composeEnv, secrets, dbCreds);
 
     await waitHttpReachable(tracker, `${PHP_BASE_URL}/`, 'php_reachable');
+    ensureUploadsWritable();
 
     buildContracts(); // PHASE 3 BATCH 2 — see this function's own doc comment.
     buildAdmin();
