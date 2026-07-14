@@ -177,10 +177,32 @@ async function sendTestEmailViaSmtp(db: Kysely<TenantDB>, to: string): Promise<b
   return rejected.length === 0;
 }
 
+/**
+ * PHP's `date('Y-m-d H:i:s')` reads the process-wide default timezone set by
+ * `date_default_timezone_set(TIMEZONE)` in config/config.php, where
+ * `TIMEZONE` is the hardcoded constant `'Asia/Bangkok'` (config/config.php
+ * line 30) — so the stamp below must be Bangkok wall-clock time, not the
+ * Node process's own (typically UTC-in-Docker) local time. Same fixed
+ * +07:00-shift-via-UTC-getters pattern as packages/auth/src/sessionStore.ts's
+ * `toMySqlDateTime()` (not imported — that helper is module-private and
+ * MySQL-DATETIME-literal-specific; packages/auth is outside this batch's
+ * allowed paths regardless), replicated locally since this repo has no
+ * shared `packages/core/dates` package yet (confirmed absent).
+ */
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+function formatBangkokDateTime(instant: Date): string {
+  const bangkok = new Date(instant.getTime() + BANGKOK_OFFSET_MS);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return (
+    `${bangkok.getUTCFullYear()}-${pad(bangkok.getUTCMonth() + 1)}-${pad(bangkok.getUTCDate())} ` +
+    `${pad(bangkok.getUTCHours())}:${pad(bangkok.getUTCMinutes())}:${pad(bangkok.getUTCSeconds())}`
+  );
+}
+
 /** Verbatim (Thai text + structure) port of EmailService::buildTestEmailBody(). */
 function buildTestEmailBody(): string {
-  const now = new Date();
-  const stamp = now.toISOString().slice(0, 19).replace('T', ' ');
+  const stamp = formatBangkokDateTime(new Date());
   return `
 <!DOCTYPE html>
 <html>

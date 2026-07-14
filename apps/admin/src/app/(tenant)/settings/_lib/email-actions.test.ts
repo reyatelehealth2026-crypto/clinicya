@@ -165,6 +165,24 @@ describe('sendTestEmailAction', () => {
     );
   });
 
+  it('stamps the test email body with Bangkok-local time (+07:00), matching PHP\'s date_default_timezone_set(TIMEZONE)', async () => {
+    wireFakeDb(() => [CONFIGURED_SMTP_ROW]);
+    mockSendMail.mockResolvedValue({ accepted: ['test@example.com'], rejected: [] });
+
+    // 03:00:00 UTC -> 10:00:00 Bangkok (+07:00) on the same calendar day —
+    // deliberately NOT midnight-adjacent, so a naive UTC stamp (e.g. from
+    // `.toISOString()`) would be unambiguously wrong here, not just off by
+    // an hour that could be mistaken for a DST/rounding quirk.
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-14T03:00:00.000Z'));
+    try {
+      await expect(sendTestEmailAction(formData({ test_email: 'test@example.com' }))).rejects.toThrow('REDIRECT:');
+    } finally {
+      jest.useRealTimers();
+    }
+
+    expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({ html: expect.stringContaining('2026-07-14 10:00:00') }));
+  });
+
   it('redirects with the SMTP-failure message when sendMail rejects', async () => {
     wireFakeDb(() => [CONFIGURED_SMTP_ROW]);
     mockSendMail.mockRejectedValue(new Error('connection refused'));
