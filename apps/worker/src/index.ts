@@ -1,10 +1,12 @@
 import { Queue, QueueEvents, Worker, type Job } from 'bullmq';
 import { loadWorkerEnv } from './env';
-import { getRedisClient } from './redis';
+import { getRedisClient, getRedisSubscriberClient } from './redis';
 import { registerJob, getJob } from './jobs/registry';
 import { heartbeatJob, HEARTBEAT_JOB_NAME } from './jobs/heartbeat';
 import { createDlq, wireDlq } from './dlq';
 import { createHealthServer } from './health/server';
+import { createRealtimeServer } from './realtime/socketServer';
+import { wireInboxRelay } from './realtime/inboxRelay';
 import { registerShutdown } from './shutdown';
 
 /**
@@ -13,6 +15,13 @@ import { registerShutdown } from './shutdown';
  * endpoint, and a graceful SIGTERM/SIGINT drain. Phase 8 (Odoo)/Phase 10
  * (cron -> BullMQ) batches add real jobs on top of this registry — none of
  * that job logic is ported here.
+ *
+ * Also starts realtime/socketServer.ts's dedicated Socket.io server on
+ * env.WORKER_REALTIME_PORT and wires realtime/inboxRelay.ts's Redis
+ * 'inbox_updates' relay onto it, using a SECOND dedicated ioredis
+ * connection (getRedisSubscriberClient()) — ioredis's pub/sub SUBSCRIBE
+ * requires its own connection, distinct from the one issuing BullMQ's other
+ * commands (mirrors websocket-server.js's `redisClient.duplicate()`).
  */
 
 export const MAIN_QUEUE_NAME = 'worker-main';
@@ -70,10 +79,17 @@ export async function main(): Promise<void> {
   });
   healthServer.listen(env.WORKER_HEALTH_PORT);
 
+  const redisSubscriber = getRedisSubscriberClient();
+  const realtimeServer = createRealtimeServer();
+  wireInboxRelay(realtimeServer.io, redisSubscriber);
+  await realtimeServer.start(env.WORKER_REALTIME_PORT);
+
   registerShutdown({
     worker,
     healthServer,
     shutdownTimeoutMs: env.WORKER_SHUTDOWN_TIMEOUT_MS,
+    closeRealtimeServer: realtimeServer.close,
+    redisSubscriber,
   });
 }
 

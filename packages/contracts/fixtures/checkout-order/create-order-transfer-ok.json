@@ -1,0 +1,30 @@
+{
+  "description": "POST action=create_order — payment_method='transfer' -> status stays 'pending' (only 'cod' skips straight to 'confirmed'), payment_status is ALWAYS 'pending' at creation time regardless of method (never 'paid'). subtotal is computed from the client-provided cart_items (unit price 20 x quantity 2 = 40); shipping_fee=40 from the tenant's shop_settings row since subtotal (40) is below free_shipping_min (500); total = 40 + 40 = 80. ar_id is always null this round (AccountReceivableService::createFromTransaction() is deferred — see createOrder.ts's TODO). order_number's numeric suffix (mt_rand(1,9999)) is non-deterministic — the value below is illustrative; only the `TXN{Ymd}{4 digits}` SHAPE is asserted by createOrder.test.ts.",
+  "request": {
+    "action": "create_order",
+    "line_user_id": "U1111111111111111111111111111aa",
+    "line_account_id": 1,
+    "payment_method": "transfer",
+    "address": {
+      "name": "สมชาย ใจดี",
+      "phone": "0812345678",
+      "address": "123 ถนนสุขุมวิท",
+      "subdistrict": "คลองตัน",
+      "district": "วัฒนา",
+      "province": "กรุงเทพมหานคร",
+      "postcode": "10110"
+    },
+    "cart_items": [
+      { "product_id": 501, "name": "พาราเซตามอล 500mg", "price": 20, "quantity": 2, "product_source": "business_items" }
+    ]
+  },
+  "response": {
+    "success": true,
+    "message": "Order created",
+    "order_id": 9001,
+    "order_number": "TXN202607140001",
+    "total": 80,
+    "payment_method": "transfer",
+    "ar_id": null
+  }
+}

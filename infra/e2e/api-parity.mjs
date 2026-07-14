@@ -145,9 +145,31 @@
 //      documented-copy-not-import) buildAdmin()/prepareStandaloneStatic()/
 //      startNextServer(), not a change to what they DO.
 // -----------------------------------------------------------------------------
+//
+// PHASE 3 BATCH 3 EXTENSION (mig-infra) — takes this harness from 38 to 46
+// covered endpoint x action pairs: checkout-cart:{cart,add_to_cart,
+// update_cart,remove_from_cart,clear_cart}, checkout-pricing:validate_promo,
+// checkout-order:{create_order,upload_slip} - 8 new PHP-vs-Next diffable
+// ENDPOINT_CASES entries (see infra/e2e/lib/api-extract.mjs). Batch-1/2
+// content above is otherwise UNTOUCHED except where explicitly marked
+// "PHASE 3 BATCH 3" below. See docs/runbooks/phase3-batch3-miniapp-api-parity.md
+// for the full writeup. TWO THINGS THIS EXTENSION ADDS, beyond the new case
+// config itself:
+//   1. seedDatabase() applies 65-phase3-batch3-miniapp-fixture.sql.tmpl
+//      (FIXTURE_FILE_BATCH3) immediately after FIXTURE_FILE_BATCH2, same
+//      "reuse the one seeded tenant, apply in order" pattern batch 2
+//      established for its own fixture file.
+//   2. callStack() accepts an optional per-case `multipart: true` flag
+//      (checkout-order:upload_slip only) - routes through
+//      httpRequestMultipart()/TINY_PNG_FIXTURE
+//      (infra/e2e/lib/harness-common.mjs, NEW plumbing this batch adds -
+//      see that module's own doc comment) instead of the JSON-body path
+//      every prior case uses. This is the FIRST file-upload endpoint ported
+//      anywhere in this migration effort.
+// -----------------------------------------------------------------------------
 
 import { spawn } from 'node:child_process';
-import { cpSync, readdirSync, readFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -165,6 +187,8 @@ import {
   generateSecrets,
   waitHttpReachable,
   httpRequest,
+  httpRequestMultipart, // PHASE 3 BATCH 3 — checkout-order:upload_slip, the one multipart case.
+  TINY_PNG_FIXTURE, // PHASE 3 BATCH 3 — see harness-common.mjs's own doc comment.
 } from './lib/harness-common.mjs';
 import { FIXTURE, FORMAT_CHECKS, ENDPOINT_CASES, NEXT_ONLY_CASES } from './lib/api-extract.mjs';
 
@@ -211,6 +235,7 @@ const PDPA_MIGRATION = 'database/migration_2026-07-04_pdpa_data_rights.sql';
 const PLAN_AND_TENANT_FILE = '45-phase3-batch1-plan-and-tenant.sql.tmpl'; // master DB — own `USE` statement.
 const FIXTURE_FILE = '50-phase3-batch1-miniapp-fixture.sql.tmpl'; // tenant DB — USE-prefixed by seedFixture() below.
 const FIXTURE_FILE_BATCH2 = '55-phase3-batch2-miniapp-fixture.sql.tmpl'; // tenant DB — applied AFTER FIXTURE_FILE, same tenant/line_accounts rows.
+const FIXTURE_FILE_BATCH3 = '65-phase3-batch3-miniapp-fixture.sql.tmpl'; // tenant DB — applied AFTER FIXTURE_FILE_BATCH2, same tenant/line_accounts rows (PHASE 3 BATCH 3).
 
 const ADMIN_DIR = path.join(REPO_ROOT, 'apps/admin');
 // PHASE 3 BATCH 2 — `let`, not `const`: buildAdmin() below OVERWRITES this
@@ -279,6 +304,14 @@ function seedDatabase(env, secrets, dbCreds) {
   const fixtureSqlBatch2 = readFileSync(path.join(SEED_DIR, FIXTURE_FILE_BATCH2), 'utf8');
   execSql(tracker, composeArgs, env, rootPw, `USE \`${dbCreds.name}\`;\n${fixtureSqlBatch2}`, [], 'seed_fixture_batch2');
   markOk('seed_fixture_batch2', FIXTURE_FILE_BATCH2);
+
+  // PHASE 3 BATCH 3 — reuses the SAME tenant/line_accounts rows, applied
+  // AFTER FIXTURE_FILE_BATCH2 (its own UPDATE statements against
+  // line_accounts/shop_settings depend on those rows already existing — see
+  // 65-...'s own header comment).
+  const fixtureSqlBatch3 = readFileSync(path.join(SEED_DIR, FIXTURE_FILE_BATCH3), 'utf8');
+  execSql(tracker, composeArgs, env, rootPw, `USE \`${dbCreds.name}\`;\n${fixtureSqlBatch3}`, [], 'seed_fixture_batch3');
+  markOk('seed_fixture_batch3', FIXTURE_FILE_BATCH3);
 
   const tenantId = querySql(
     tracker,
@@ -394,6 +427,32 @@ function prepareStandaloneStatic() {
   markOk('prepare_standalone_static');
 }
 
+// checkout-order:upload_slip is the first ENDPOINT_CASES entry that exercises
+// a real filesystem write inside the `php` container (api/checkout.php's
+// move_uploaded_file() into uploads/slips/). infra/e2e/docker-compose.yml
+// bind-mounts the WHOLE repo (`../..:/var/www/html`, see that file's own
+// comment) straight from the host — unlike infra/compose/docker-compose.strangler.yml's
+// production shape, which deliberately gives uploads/ its own named Docker
+// volume (php_uploads_phase0) precisely so this never depends on host
+// ownership. Apache inside php:8.2-apache serves requests as `www-data`
+// (non-root); if the host-side uploads/slips/ directory happens to be
+// owned by another user with a restrictive mode (e.g. a root-owned
+// checkout at 0755, the case that surfaced this), move_uploaded_file()
+// fails with no PHP-side code defect at all — api/checkout.php is
+// untouched and correct. World-writable is harness-scratch-only (this
+// bind-mounted uploads/ tree is never what production actually serves
+// from) and is reset on every harness run, so 0o777 here carries none of
+// the risk it would in a real deployment.
+function ensureUploadsWritable() {
+  const uploadsSlipsDir = path.join(REPO_ROOT, 'uploads/slips');
+  if (!existsSync(uploadsSlipsDir)) {
+    mkdirSync(uploadsSlipsDir, { recursive: true });
+  }
+  chmodSync(path.join(REPO_ROOT, 'uploads'), 0o777);
+  chmodSync(uploadsSlipsDir, 0o777);
+  markOk('uploads_dir_writable', { dir: uploadsSlipsDir });
+}
+
 function startNextServer(env) {
   console.error('[api-parity] starting apps/admin standalone server ...');
   const child = spawn('node', ['server.js'], {
@@ -439,6 +498,16 @@ function phpHostHeader(caseDef, variant) {
   return variant === 'php' && caseDef.phpHost ? { Host: caseDef.phpHost } : {};
 }
 
+// PHASE 3 BATCH 3 — `caseDef.multipart` (see infra/e2e/lib/api-extract.mjs's
+// `checkout-order:upload_slip` case) routes through `httpRequestMultipart()`
+// instead of the JSON-body path below, using `caseDef.fields(variant)` (plain
+// form fields — mirrors `caseDef.body(variant)`'s shape/role for the JSON
+// cases) plus a fixed `TINY_PNG_FIXTURE` file part named per `caseDef.file`
+// (`{name, filename, contentType}` — no `data`; the actual bytes always come
+// from the one shared fixture constant, since this harness has exactly ONE
+// multipart case, so there is nothing to gain from letting per-case config
+// supply arbitrary bytes). GET is never multipart (no case combines the two),
+// so this only needs to branch inside the POST arm.
 async function callStack(baseUrl, caseDef, variant) {
   const method = caseDef.method;
   if (method === 'GET') {
@@ -446,8 +515,13 @@ async function callStack(baseUrl, caseDef, variant) {
     const url = `${baseUrl}${variant === 'php' ? caseDef.phpPath : caseDef.nextPath}${toQueryString(query)}`;
     return httpRequest({ url, method: 'GET', headers: phpHostHeader(caseDef, variant) });
   }
-  const body = caseDef.body(variant);
   const url = `${baseUrl}${variant === 'php' ? caseDef.phpPath : caseDef.nextPath}`;
+  if (caseDef.multipart) {
+    const fields = caseDef.fields(variant);
+    const file = { ...caseDef.file, data: TINY_PNG_FIXTURE };
+    return httpRequestMultipart({ url, method: 'POST', headers: phpHostHeader(caseDef, variant), fields, file });
+  }
+  const body = caseDef.body(variant);
   return httpRequest({
     url,
     method: 'POST',
@@ -812,6 +886,7 @@ async function main() {
     seedDatabase(composeEnv, secrets, dbCreds);
 
     await waitHttpReachable(tracker, `${PHP_BASE_URL}/`, 'php_reachable');
+    ensureUploadsWritable();
 
     buildContracts(); // PHASE 3 BATCH 2 — see this function's own doc comment.
     buildAdmin();

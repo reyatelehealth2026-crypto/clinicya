@@ -1,0 +1,22 @@
+{
+  "description": "POST action=create_order — race-guard path (this batch's acceptance criteria, NON-NEGOTIABLE): the seeded business_items row for product_id=777 has stock=0, but the requested quantity is 5. The guarded UPDATE `UPDATE business_items SET stock = stock - ? WHERE id = ? AND stock >= ?` (byte-for-byte, WHERE guard never weakened) silently no-ops (0 rows affected, stock column stays 0 — the guard condition `stock >= 5` never matches a row with stock=0). PHP NEVER checks the UPDATE's affected-row-count afterward, so handleCreateOrder() proceeds to commit the order regardless: the `transactions` row AND its `transaction_items` line are still created, and the response is a NORMAL success — identical in shape to create-order-transfer-ok.json, not a distinct failure branch. DB-STATE ASSERTION (for mig-infra's future dbCheck wiring against this fixture, not expressible in this request/response-only JSON shape): after this call, `business_items.stock` for product_id=777 MUST still equal 0 (unchanged, never negative), and both a `transactions` row (order_number below) and a `transaction_items` row (product_id=777, quantity=5) MUST exist. subtotal (50 = price 10 x qty 5) plus an illustrative seeded shipping_fee (50) gives total 100 below — the exact shipping_fee/total depend on whatever shop_settings row the e2e seed provides; only subtotal (50) is fixed by the request itself.",
+  "request": {
+    "action": "create_order",
+    "line_user_id": "U4444444444444444444444444444dd",
+    "line_account_id": 1,
+    "payment_method": "transfer",
+    "address": { "name": "ทดสอบ สต็อกไม่พอ" },
+    "cart_items": [
+      { "product_id": 777, "name": "ยาทดสอบสต็อกหมด", "price": 10, "quantity": 5, "product_source": "business_items" }
+    ]
+  },
+  "response": {
+    "success": true,
+    "message": "Order created",
+    "order_id": 9004,
+    "order_number": "TXN202607140004",
+    "total": 100,
+    "payment_method": "transfer",
+    "ar_id": null
+  }
+}

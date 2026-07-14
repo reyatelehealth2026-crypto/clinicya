@@ -33,6 +33,29 @@
 // reuse for groups.php/line-groups.php, and the crm-dashboard-advanced
 // 500-vs-200 exception mechanism).
 //
+// Phase 4 batch 1 (mig-infra) EXTENDS this same harness AGAIN — same file,
+// same process, same single JSON-line output — with the read-only /inbox
+// surface (conversationList's /api/inbox/conversations + /api/inbox/messages
+// Route Handlers; messageThread's /inbox + /inbox/[userId] pages): TWO new
+// JSON cursor-pagination contract walks (runConversationsCursorWalk(),
+// runMessagesCursorWalk() — neither has a PHP side to diff against, since
+// they test the NEW Next-only Route Handlers' own pagination contract, not a
+// PHP-vs-Next comparison) PLUS one ordinary runPagePair() page-pair entry
+// (inbox-thread:id=7001) PLUS runInboxSidebarChecks() (`/inbox` itself — a
+// DELIBERATE EXCEPTION to the usual PHP-vs-Next diff shape, same family as
+// runCrmDashboardAdvancedChecks(): a confirmed, pre-existing PHP defect
+// (discovered by this batch's own harness run) makes inbox-v2.php's
+// conversation list permanently empty under this harness's own
+// zero-line_accounts invariant — see that function's own doc), all using the
+// SAME identity model (tenant Host header + session cookie) every entry
+// above already uses — deliberately NOT api-parity.mjs's unauthenticated
+// root-domain model, since /inbox is tenant-scoped and admin-session-gated
+// exactly like /users, not line_account_id-resolved like /api/miniapp. See
+// docs/runbooks/phase4-batch1-inbox-reads-parity.md for the full contract,
+// the identity-model rationale (written up there so a later inbox-actions
+// batch doesn't have to re-litigate it), the golden-dataset fixture's shape,
+// and this batch's explicit deferred-scope list.
+//
 // SCOPE (read before trusting the PASS line — same documented-limits
 // pattern infra/e2e/run.mjs already uses): this proves DATA-POINT PARITY
 // against ONE seeded tenant/dataset, on the REAL stack (a genuine MariaDB +
@@ -115,6 +138,8 @@ import {
   extractCrmDashboardAdvancedDefensiveEmpty,
   extractCrmDashboardAdvancedPipelineDefensiveEmpty,
   extractSystemStatusPage,
+  extractInboxSidebarPage,
+  extractInboxThreadPage,
 } from './lib/extract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -159,6 +184,7 @@ const FIXTURE_FILES = [
   '30-phase2-batch1-fixture.sql.tmpl',
   '40-phase2-batch2-fixture.sql.tmpl',
   '60-phase2-batch3-fixture.sql.tmpl',
+  '70-phase4-batch1-inbox-fixture.sql.tmpl',
 ];
 
 const ADMIN_DIR = path.join(REPO_ROOT, 'apps/admin');
@@ -337,6 +363,79 @@ const LINE_GROUP_DETAIL_EXPECTED_HEADER = {
   1: { groupName: 'กลุ่มร้านขายยา A', groupType: 'group', memberCountBadge: 3, totalMessagesBadge: 42, isActive: true },
   2: { groupName: 'ห้องสนทนาลูกค้า B', groupType: 'room', memberCountBadge: 1, totalMessagesBadge: 5, isActive: false },
 };
+
+// ---------------------------------------------------------------------------
+// Phase 4 batch 1 config — golden-dataset constants mirrored from
+// infra/e2e/seed/70-phase4-batch1-inbox-fixture.sql.tmpl's own "GOLDEN
+// DATASET CONSTANTS" footer comment (keep both in sync if that file's shape
+// ever changes) plus the marker lists the HTML/JSON extractors below check.
+// ---------------------------------------------------------------------------
+
+const INBOX_HERO_ID = 7001;
+const INBOX_HERO_TOTAL_MESSAGES = 130;
+const INBOX_TAGGED_ID = 7002;
+const INBOX_ASSIGNED_STATUS_ID = 7003;
+const INBOX_MULTI_ASSIGNEE_ID = 7004;
+const INBOX_PENDING_STATUS_ID = 7005;
+const INBOX_UNREAD_ID = 7006;
+const INBOX_FILLER_START = 7007;
+const INBOX_FILLER_END = 7215;
+const INBOX_TOTAL_CONVERSATIONS = 1 + 5 + (INBOX_FILLER_END - INBOX_FILLER_START + 1); // 215
+
+/** Sidebar page-pair (inbox:baseline) — which conversations to spot-check and which literal data-* attribute(s) each must carry. See extractInboxSidebarPage()'s own module doc in lib/extract.mjs for why data-* attributes, not visible text. */
+const INBOX_SIDEBAR_KNOWN_CONVERSATIONS = [
+  { name: 'hero', id: INBOX_HERO_ID, attrs: [] },
+  { name: 'tagged', id: INBOX_TAGGED_ID, attrs: ['data-tags="1"'] },
+  { name: 'multiAssignee', id: INBOX_MULTI_ASSIGNEE_ID, attrs: ['data-assigned="1"'] },
+  { name: 'pendingStatus', id: INBOX_PENDING_STATUS_ID, attrs: ['data-chat-status="pending"'] },
+];
+
+/** Thread page-pair (inbox-thread:id=7001) — literal marker substrings expected somewhere in BOTH stacks' raw HTML for HERO's 13 marked messages. See extractInboxThreadPage()'s own module doc for the flex-rendering-asymmetry rationale these markers rely on. Kept in the exact same string form the fixture generator used (infra/e2e/seed/70-phase4-batch1-inbox-fixture.sql.tmpl) — not re-derived here. */
+const INBOX_THREAD_HTML_MARKERS = [
+  { name: 'plainText', text: 'INBOXB1-PLAINTEXT-001' },
+  { name: 'quickReplyText', text: 'INBOXB1-QRTEXT-002' },
+  { name: 'quickReplyLabel1', text: 'INBOXB1-QRLABEL-ดูสินค้า' },
+  { name: 'quickReplyLabel2', text: 'INBOXB1-QRLABEL-ติดต่อเรา' },
+  { name: 'textAsVideoSrc', text: 'api/line_content.php?id=/uploads/line_videos/inboxb1-demo-clip.mp4' },
+  { name: 'imageIdSrc', text: 'api/line_content.php?id=778899' },
+  { name: 'imageAbsoluteSrc', text: 'https://picsum.photos/seed/inboxb1demo/400/300' },
+  { name: 'stickerJsonSrc', text: 'https://stickershop.line-scdn.net/stickershop/v1/sticker/52002734/android/sticker.png' },
+  { name: 'stickerLegacySrc', text: 'https://stickershop.line-scdn.net/stickershop/v1/sticker/183892/android/sticker.png' },
+  { name: 'flexBubbleText', text: 'INBOXB1-FLEXBUBBLE-สินค้าแนะนำวันนี้' },
+  { name: 'carouselBubble1Text', text: 'INBOXB1-CAROUSEL-BUBBLE1-พาราเซตามอล' },
+  { name: 'carouselBubble2Text', text: 'INBOXB1-CAROUSEL-BUBBLE2-วิตามินซี' },
+  { name: 'carouselBtn1Label', text: 'INBOXB1-CAROUSEL-BTN1-สั่งซื้อ' },
+  { name: 'carouselBtn2Label', text: 'INBOXB1-CAROUSEL-BTN2-เพิ่มลงตะกร้า' },
+  { name: 'fileNameMarker', text: 'INBOXB1-FILE-ใบรับรองยา.pdf' },
+  { name: 'videoAbsoluteSrc', text: 'https://example-media.invalid/videos/inboxb1-clip2.mp4' },
+  { name: 'audioIdSrc', text: 'api/line_content.php?id=990011' },
+  { name: 'locationAddress', text: 'INBOXB1-LOCATION-ร้านขายยาทดสอบ กรุงเทพฯ' },
+  { name: 'locationLatLng', text: '13.7563, 100.5018' },
+];
+
+/** GET /api/inbox/messages?user_id=7001 cursor walk — one predicate per marked message this batch's brief requires coverage of (13 total — the CLAUDE.md-list's two gaps, location + text-as-video, included). Operates on the raw JSON row (message_type/content), NOT on rendered HTML — this is the Next-only Route Handler contract walk, not a page-pair diff. */
+const INBOX_MESSAGE_TYPE_CHECKS = [
+  { name: 'plainText', match: (m) => m.message_type === 'text' && m.content.includes('INBOXB1-PLAINTEXT-001') },
+  { name: 'quickReplyText', match: (m) => m.message_type === 'text' && m.content.includes('INBOXB1-QRTEXT-002') },
+  { name: 'textAsVideo', match: (m) => m.message_type === 'text' && m.content.includes('/uploads/line_videos/inboxb1-demo-clip.mp4') },
+  { name: 'imageIdForm', match: (m) => m.message_type === 'image' && m.content === 'ID:778899' },
+  { name: 'imageAbsoluteForm', match: (m) => m.message_type === 'image' && m.content.startsWith('https://picsum.photos/seed/inboxb1demo/') },
+  { name: 'stickerJsonForm', match: (m) => m.message_type === 'sticker' && m.content.includes('"stickerId":"52002734"') },
+  { name: 'stickerLegacyForm', match: (m) => m.message_type === 'sticker' && m.content === 'Sticker: 183892' },
+  { name: 'flexBubble', match: (m) => m.message_type === 'flex' && m.content.includes('INBOXB1-FLEXBUBBLE-') },
+  {
+    name: 'flexCarousel',
+    match: (m) =>
+      m.message_type === 'flex' &&
+      m.content.includes('"type":"carousel"') &&
+      m.content.includes('INBOXB1-CAROUSEL-BUBBLE1-') &&
+      m.content.includes('INBOXB1-CAROUSEL-BUBBLE2-'),
+  },
+  { name: 'file', match: (m) => m.message_type === 'file' && m.content.includes('INBOXB1-FILE-') },
+  { name: 'video', match: (m) => m.message_type === 'video' && m.content.includes('inboxb1-clip2.mp4') },
+  { name: 'audio', match: (m) => m.message_type === 'audio' && m.content === 'ID:990011' },
+  { name: 'location', match: (m) => m.message_type === 'location' && m.content.includes('INBOXB1-LOCATION-') },
+];
 
 // ---------------------------------------------------------------------------
 // Database seeding — mirrors run.mjs's seedDatabase()/seedAdminUser() shape
@@ -608,6 +707,37 @@ function assertAuthedOk(resp, label) {
   }
 }
 
+/**
+ * fetchNextJson — same tenant-Host + session-cookie identity model as
+ * fetchNextPage() above (see this file's module doc's Phase 4 batch 1
+ * paragraph for why: /api/inbox/** is tenant-scoped + admin-session-gated,
+ * not api-parity.mjs's unauthenticated root-domain model), for the two new
+ * JSON Route Handlers this batch's cursor walks call directly. Throws
+ * loudly and diagnosably (never returns a half-parsed/undefined shape) on a
+ * non-200 status, invalid JSON, or `{success:false}` — this is what makes
+ * "the route doesn't exist yet" fail as a clear, attributable error instead
+ * of a confusing downstream TypeError deep inside a walk loop.
+ */
+async function fetchNextJson(pathAndQuery, sid) {
+  const resp = await httpRequest({
+    url: `${NEXT_BASE_URL}${pathAndQuery}`,
+    headers: { Host: TENANT_HOST, Cookie: `reya_sid=${sid}` },
+  });
+  if (resp.status !== 200) {
+    throw new Error(`${pathAndQuery}: expected 200, got ${resp.status} — body(0..300)=${resp.text.slice(0, 300)}`);
+  }
+  let json;
+  try {
+    json = JSON.parse(resp.text);
+  } catch (err) {
+    throw new Error(`${pathAndQuery}: response body was not valid JSON (${err.message}) — body(0..300)=${resp.text.slice(0, 300)}`);
+  }
+  if (json.success !== true) {
+    throw new Error(`${pathAndQuery}: {success:false} response — ${JSON.stringify(json).slice(0, 300)}`);
+  }
+  return json;
+}
+
 // ---------------------------------------------------------------------------
 // Diffing — plain structural deepEqual over the small JSON-safe objects
 // infra/e2e/lib/extract.mjs's extractors return. Never touches raw HTML.
@@ -785,6 +915,309 @@ async function runCrmDashboardAdvancedChecks(phpSid, nextSid) {
   );
 
   return [phpCheck, nextOverviewCheck, nextPipelineCheck];
+}
+
+/**
+ * Phase 4 batch 1 — /inbox sidebar checks. NOT a runPagePair() diff — see
+ * extractInboxSidebarPage()'s own module doc in lib/extract.mjs for the full
+ * trace of WHY: a confirmed, pre-existing PHP defect (discovered by this
+ * batch's own harness run) makes inbox-v2.php's LINE-tab conversation list
+ * ALWAYS EMPTY under the exact zero-`line_accounts` state every fixture in
+ * this harness deliberately maintains throughout the whole run
+ * (`includes/header.php` line 174 clobbers inbox-v2.php's own line-81
+ * `$currentBotId` to `NULL` via shared top-level-include scope, and the
+ * conversation list's `u.line_account_id = ?` is an equality test, not the
+ * NULL-tolerant pattern most other pages use). Same "two positively-asserting
+ * single-stack checks, never a diff of a genuinely-broken PHP page against a
+ * genuinely-correct Next one" shape as runCrmDashboardAdvancedChecks() /
+ * the line-group-detail header-defect entries above — see
+ * docs/runbooks/phase4-batch1-inbox-reads-parity.md for the full write-up.
+ *
+ * If a future PHP fix resolves the clobbering (e.g. inbox-v2.php stops
+ * relying on a pre-header.php $currentBotId, or header.php stops
+ * unconditionally overwriting it), the `inbox:php-empty-currentbotid-clobbered`
+ * check below will start failing ITS OWN assertion (PHP no longer
+ * genuinely empty) — that failure is the signal to delete this exception and
+ * switch back to a normal runPagePair() diff, per the same forward-looking
+ * pattern runCrmDashboardAdvancedChecks()'s own error message already uses.
+ */
+async function runInboxSidebarChecks(phpSid, nextSid) {
+  const phpCheck = await runSingleSideCheck(
+    'inbox:php-empty-currentbotid-clobbered',
+    () => fetchPhpPage('/inbox-v2.php', phpSid),
+    (resp) => {
+      assertAuthedOk(resp, 'inbox-v2.php (php, baseline)');
+      const data = extractInboxSidebarPage(resp.text, INBOX_SIDEBAR_KNOWN_CONVERSATIONS);
+      if (data.totalUnreadBadge !== 0 || !data.emptyStateVisible) {
+        throw new Error(
+          `expected inbox-v2.php's sidebar to be confirmed-empty (totalUnreadBadge=0, "ยังไม่มีแชท" visible) per the $currentBotId-clobbering defect (see this function's own doc), got totalUnreadBadge=${data.totalUnreadBadge} emptyStateVisible=${data.emptyStateVisible}. If includes/header.php or inbox-v2.php changed how $currentBotId is resolved, this exception may be stale — update/remove runInboxSidebarChecks() per docs/runbooks/phase4-batch1-inbox-reads-parity.md and switch /inbox back to a normal runPagePair() diff.`
+        );
+      }
+      for (const conv of INBOX_SIDEBAR_KNOWN_CONVERSATIONS) {
+        if (data.conversations[conv.name]?.visible) {
+          throw new Error(`expected conversation ${conv.name} (id=${conv.id}) to be ABSENT from PHP's confirmed-empty sidebar, but it was visible`);
+        }
+      }
+      return data;
+    }
+  );
+
+  const nextCheck = await runSingleSideCheck(
+    'inbox:next-baseline',
+    () => fetchNextPage('/inbox', nextSid),
+    (resp) => {
+      assertAuthedOk(resp, '/inbox (next, baseline)');
+      const data = extractInboxSidebarPage(resp.text, INBOX_SIDEBAR_KNOWN_CONVERSATIONS);
+      const mismatches = [];
+      if (data.totalUnreadBadge !== 200) {
+        mismatches.push(`totalUnreadBadge expected 200 (SSR cap), got ${data.totalUnreadBadge}`);
+      }
+      for (const conv of INBOX_SIDEBAR_KNOWN_CONVERSATIONS) {
+        const row = data.conversations[conv.name];
+        if (!row?.visible) {
+          mismatches.push(`conversation ${conv.name} (id=${conv.id}) expected visible, was not`);
+          continue;
+        }
+        for (const attr of conv.attrs ?? []) {
+          if (!row[attr]) {
+            mismatches.push(`conversation ${conv.name} (id=${conv.id}) expected attribute ${attr}, was not present`);
+          }
+        }
+      }
+      if (mismatches.length > 0) {
+        throw new Error(mismatches.join('; '));
+      }
+      return data;
+    }
+  );
+
+  return [phpCheck, nextCheck];
+}
+
+/**
+ * Phase 4 batch 1 — GET /api/inbox/conversations cursor-pagination contract
+ * walk. Unlike every runPagePair()/runSingleSideCheck() entry above, this
+ * has NO PHP side to diff against — it proves the NEW Next-only Route
+ * Handler's own pagination contract against the golden dataset (215
+ * conversations, infra/e2e/seed/70-phase4-batch1-inbox-fixture.sql.tmpl),
+ * following the same "config-driven, page/filter combos in a loop" spirit
+ * as every USERS_FILTER_COMBOS-style array above, just expressed as a
+ * while-loop because a cursor walk's page COUNT isn't known up front.
+ *
+ * Same NEVER-THROWS contract as runPagePair()/runSingleSideCheck() (any
+ * failure — including "the route 404s because conversationList's code
+ * doesn't exist yet" — becomes `{page, ok:false, mismatches:[...]}`, never
+ * aborts the run or skips teardown); fetchNextJson() is what turns a
+ * missing-route 404 into a loud, attributable Error this function's own
+ * try/catch then reports as this step's mismatch.
+ *
+ * Asserts, in order: (1) the envelope shape (`data.conversations` array,
+ * `next_cursor`/`has_more`/`count`); (2) the documented 100-row-per-page
+ * internal cap (api/inbox/conversations/_lib/query.ts's own "ARCHITECTURE
+ * NOTE" — a confirmed PHP quirk this port preserves, not a bug); (3) no
+ * duplicate ids across pages and a strictly non-increasing
+ * `last_message_at` across the WHOLE walk (proves the cursor genuinely
+ * advances rather than looping/skipping); (4) the walk terminates with
+ * `has_more:false` + `next_cursor:null`; (5) the total distinct id count
+ * equals the fixture's own golden total (215) and covers every expected id;
+ * (6) a targeted re-fetch (`limit=10`, the 10 most-recent conversations)
+ * spot-checks each badge satellite's enrichment fields (tags/assigned_to/
+ * assignment_status/assignees/chat_status/unread_count) against the exact
+ * values the fixture seeded — this is the strong, byte-for-byte proof the
+ * lighter-weight inbox:baseline HTML page-pair deliberately defers to (see
+ * extractInboxSidebarPage()'s own module doc in lib/extract.mjs).
+ */
+async function runConversationsCursorWalk(nextSid) {
+  const name = 'inbox-conversations-cursor-walk';
+  try {
+    const seenIds = new Set();
+    const seenTimestamps = [];
+    let cursor = null;
+    let pageCount = 0;
+    const MAX_PAGES = 10; // ceil(215/100) = 3 expected — generous guard against an infinite loop if the cursor never advances.
+    for (;;) {
+      pageCount++;
+      if (pageCount > MAX_PAGES) {
+        throw new Error(`did not terminate within ${MAX_PAGES} pages (has_more kept returning true) — possible cursor-advance bug`);
+      }
+      const qs = cursor ? `limit=100&cursor=${encodeURIComponent(cursor)}` : 'limit=100';
+      const json = await fetchNextJson(`/api/inbox/conversations?${qs}`, nextSid);
+      const data = json.data;
+      if (!data || !Array.isArray(data.conversations)) {
+        throw new Error(`page ${pageCount}: data.conversations was not an array — ${JSON.stringify(data).slice(0, 200)}`);
+      }
+      if (pageCount < 3 && data.conversations.length !== 100) {
+        throw new Error(`page ${pageCount}: expected exactly 100 rows (documented internal cap), got ${data.conversations.length}`);
+      }
+      if (data.has_more === true && data.conversations.length !== 100) {
+        throw new Error(`page ${pageCount}: has_more=true but only ${data.conversations.length} rows returned (expected exactly 100)`);
+      }
+      for (const conv of data.conversations) {
+        if (seenIds.has(conv.id)) {
+          throw new Error(`duplicate conversation id ${conv.id} returned across pages — cursor did not advance correctly`);
+        }
+        seenIds.add(conv.id);
+        seenTimestamps.push(conv.last_message_at);
+      }
+      if (!data.has_more) {
+        if (data.next_cursor !== null) {
+          throw new Error(`has_more=false but next_cursor=${JSON.stringify(data.next_cursor)}, expected null`);
+        }
+        break;
+      }
+      if (!data.next_cursor) {
+        throw new Error(`has_more=true but next_cursor is falsy: ${JSON.stringify(data.next_cursor)}`);
+      }
+      cursor = data.next_cursor;
+    }
+
+    for (let i = 1; i < seenTimestamps.length; i++) {
+      if (seenTimestamps[i] > seenTimestamps[i - 1]) {
+        throw new Error(`ordering violated at index ${i}: ${seenTimestamps[i - 1]} then ${seenTimestamps[i]} (expected non-increasing last_message_at across the whole walk)`);
+      }
+    }
+
+    if (seenIds.size !== INBOX_TOTAL_CONVERSATIONS) {
+      throw new Error(`expected exactly ${INBOX_TOTAL_CONVERSATIONS} distinct conversations across the whole walk, got ${seenIds.size}`);
+    }
+    const expectedIds = [INBOX_HERO_ID, INBOX_TAGGED_ID, INBOX_ASSIGNED_STATUS_ID, INBOX_MULTI_ASSIGNEE_ID, INBOX_PENDING_STATUS_ID, INBOX_UNREAD_ID];
+    for (let id = INBOX_FILLER_START; id <= INBOX_FILLER_END; id++) expectedIds.push(id);
+    for (const id of expectedIds) {
+      if (!seenIds.has(id)) {
+        throw new Error(`expected conversation id ${id} missing from the cursor walk`);
+      }
+    }
+
+    // Badge-satellite enrichment spot check — a fresh, small-limit request
+    // covering exactly the 6 most-recent conversations (HERO + the 5 badge
+    // satellites — see the fixture's own "CONVERSATION LAYOUT" header
+    // comment for the ordering guarantee).
+    const spot = await fetchNextJson('/api/inbox/conversations?limit=10', nextSid);
+    const byId = Object.fromEntries(spot.data.conversations.map((c) => [c.id, c]));
+    const hero = byId[INBOX_HERO_ID];
+    const tagged = byId[INBOX_TAGGED_ID];
+    const assignedStatus = byId[INBOX_ASSIGNED_STATUS_ID];
+    const multiAssignee = byId[INBOX_MULTI_ASSIGNEE_ID];
+    const pendingStatus = byId[INBOX_PENDING_STATUS_ID];
+    const unread = byId[INBOX_UNREAD_ID];
+    const spotMismatches = [];
+    if (!hero || hero.unread_count !== 0) {
+      spotMismatches.push(`hero(${INBOX_HERO_ID}).unread_count expected 0, got ${hero?.unread_count}`);
+    }
+    if (!tagged || !(tagged.tags ?? []).some((t) => t.id === 1 && t.name === 'VIP')) {
+      spotMismatches.push(`tagged(${INBOX_TAGGED_ID}).tags expected to include {id:1,name:'VIP'}, got ${JSON.stringify(tagged?.tags)}`);
+    }
+    if (!assignedStatus || assignedStatus.assigned_to !== 1 || assignedStatus.assignment_status !== 'active') {
+      spotMismatches.push(
+        `assignedStatus(${INBOX_ASSIGNED_STATUS_ID}).assigned_to/assignment_status expected 1/active, got ${assignedStatus?.assigned_to}/${assignedStatus?.assignment_status}`
+      );
+    }
+    if (!multiAssignee || !(multiAssignee.assignees ?? []).includes(1)) {
+      spotMismatches.push(`multiAssignee(${INBOX_MULTI_ASSIGNEE_ID}).assignees expected to include 1, got ${JSON.stringify(multiAssignee?.assignees)}`);
+    }
+    if (!pendingStatus || pendingStatus.chat_status !== 'pending') {
+      spotMismatches.push(`pendingStatus(${INBOX_PENDING_STATUS_ID}).chat_status expected 'pending', got ${pendingStatus?.chat_status}`);
+    }
+    if (!unread || unread.unread_count !== 2) {
+      spotMismatches.push(`unread(${INBOX_UNREAD_ID}).unread_count expected 2, got ${unread?.unread_count}`);
+    }
+    if (spotMismatches.length > 0) {
+      throw new Error(`badge-satellite spot checks failed: ${spotMismatches.join('; ')}`);
+    }
+
+    return { page: name, ok: true, mismatches: [], data: { totalConversations: seenIds.size, pages: pageCount } };
+  } catch (err) {
+    return { page: name, ok: false, mismatches: [err && err.message ? err.message : String(err)] };
+  }
+}
+
+/**
+ * Phase 4 batch 1 — GET /api/inbox/messages cursor-pagination contract walk
+ * for HERO (user_id=7001, 130 messages spanning every marked message
+ * type/form this batch's brief lists). Same "no PHP side, NEVER THROWS"
+ * shape as runConversationsCursorWalk() above — see that function's own doc
+ * for the rationale.
+ *
+ * Asserts, in order: (1) the envelope shape; (2) each page's `messages` are
+ * strictly ascending by `id` (the documented "reverse DESC-fetched rows to
+ * ascending" contract — classes/InboxService.php::getMessagesCursor() lines
+ * 769-831, ported literally in api/inbox/messages/_lib/query.ts); (3) the
+ * documented `max(1,min(100,limit))` cap — this walk requests limit=20, well
+ * under the cap, so every non-final page must return exactly 20 rows; (4)
+ * `next_cursor` equals the oldest (`min`) id returned on that page, matching
+ * the `id < cursor` WHERE-clause contract; (5) no duplicate ids across
+ * pages; (6) the total distinct id count equals HERO's golden total (130);
+ * (7) every one of the 13 marked message types/forms (INBOX_MESSAGE_TYPE_CHECKS)
+ * was seen at least once somewhere across the whole walk.
+ */
+async function runMessagesCursorWalk(nextSid) {
+  const name = 'inbox-messages-cursor-walk';
+  try {
+    const seenIds = new Set();
+    const matchedMarkers = new Set();
+    let cursor = null;
+    let pageCount = 0;
+    const MAX_PAGES = 20; // ceil(130/20) = 7 expected.
+    for (;;) {
+      pageCount++;
+      if (pageCount > MAX_PAGES) {
+        throw new Error(`did not terminate within ${MAX_PAGES} pages (has_more kept returning true) — possible cursor-advance bug`);
+      }
+      const qs = cursor
+        ? `user_id=${INBOX_HERO_ID}&limit=20&cursor=${encodeURIComponent(cursor)}`
+        : `user_id=${INBOX_HERO_ID}&limit=20`;
+      const json = await fetchNextJson(`/api/inbox/messages?${qs}`, nextSid);
+      const data = json.data;
+      if (!data || !Array.isArray(data.messages)) {
+        throw new Error(`page ${pageCount}: data.messages was not an array — ${JSON.stringify(data).slice(0, 200)}`);
+      }
+      for (let i = 1; i < data.messages.length; i++) {
+        if (!(data.messages[i].id > data.messages[i - 1].id)) {
+          throw new Error(`page ${pageCount}: messages not strictly ascending by id at index ${i} (${data.messages[i - 1].id} then ${data.messages[i].id})`);
+        }
+      }
+      if (data.has_more === true && data.messages.length !== 20) {
+        throw new Error(`page ${pageCount}: has_more=true but only ${data.messages.length} rows returned (expected exactly 20, the requested+documented cap)`);
+      }
+      for (const m of data.messages) {
+        if (seenIds.has(m.id)) {
+          throw new Error(`duplicate message id ${m.id} across pages — cursor did not advance correctly`);
+        }
+        seenIds.add(m.id);
+        for (const marker of INBOX_MESSAGE_TYPE_CHECKS) {
+          if (!matchedMarkers.has(marker.name) && marker.match(m)) {
+            matchedMarkers.add(marker.name);
+          }
+        }
+      }
+      if (!data.has_more) {
+        if (data.next_cursor !== null) {
+          throw new Error(`has_more=false but next_cursor=${JSON.stringify(data.next_cursor)}, expected null`);
+        }
+        break;
+      }
+      if (!data.next_cursor) {
+        throw new Error(`has_more=true but next_cursor is falsy: ${JSON.stringify(data.next_cursor)}`);
+      }
+      const minIdThisPage = Math.min(...data.messages.map((m) => m.id));
+      if (String(data.next_cursor) !== String(minIdThisPage)) {
+        throw new Error(`page ${pageCount}: next_cursor=${data.next_cursor} does not equal this page's own minimum id ${minIdThisPage}`);
+      }
+      cursor = data.next_cursor;
+    }
+
+    if (seenIds.size !== INBOX_HERO_TOTAL_MESSAGES) {
+      throw new Error(`expected exactly ${INBOX_HERO_TOTAL_MESSAGES} messages for user_id=${INBOX_HERO_ID}, got ${seenIds.size}`);
+    }
+    const missingMarkers = INBOX_MESSAGE_TYPE_CHECKS.filter((m) => !matchedMarkers.has(m.name)).map((m) => m.name);
+    if (missingMarkers.length > 0) {
+      throw new Error(`missing message-type coverage across the whole walk: ${missingMarkers.join(', ')}`);
+    }
+
+    return { page: name, ok: true, mismatches: [], data: { totalMessages: seenIds.size, pages: pageCount, markersCovered: [...matchedMarkers] } };
+  } catch (err) {
+    return { page: name, ok: false, mismatches: [err && err.message ? err.message : String(err)] };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1039,6 +1472,29 @@ async function main() {
         (phpHtml, nextHtml) => ({ phpData: extractSystemStatusPage(phpHtml), nextData: extractSystemStatusPage(nextHtml) })
       )
     );
+
+    // --- Phase 4 batch 1: /inbox (sidebar) — two single-side checks, not a
+    // diff (PHP is confirmed-empty here — see runInboxSidebarChecks()'s own doc) ---
+    pages.push(...(await runInboxSidebarChecks(phpSid, nextSid)));
+
+    // --- Phase 4 batch 1: /inbox-v2.php?user=N vs /inbox/N (HERO thread) ---
+    pages.push(
+      await runPagePair(
+        `inbox-thread:id=${INBOX_HERO_ID}`,
+        async () => ({
+          phpResp: await fetchPhpPage(`/inbox-v2.php?user=${INBOX_HERO_ID}`, phpSid),
+          nextResp: await fetchNextPage(`/inbox/${INBOX_HERO_ID}`, nextSid),
+        }),
+        (phpHtml, nextHtml) => ({
+          phpData: extractInboxThreadPage(phpHtml, INBOX_THREAD_HTML_MARKERS),
+          nextData: extractInboxThreadPage(nextHtml, INBOX_THREAD_HTML_MARKERS),
+        })
+      )
+    );
+
+    // --- Phase 4 batch 1: JSON cursor-pagination contract walks (no PHP side — see each function's own doc) ---
+    pages.push(await runConversationsCursorWalk(nextSid));
+    pages.push(await runMessagesCursorWalk(nextSid));
 
     result = pages.every((p) => p.ok) ? 'PASS' : 'FAIL';
     if (result === 'PASS') {

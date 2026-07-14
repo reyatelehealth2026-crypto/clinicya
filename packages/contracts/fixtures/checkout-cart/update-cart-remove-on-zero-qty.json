@@ -1,0 +1,5 @@
+{
+  "description": "POST action=update_cart — quantity<=0 takes the DELETE branch instead of UPDATE (handleUpdateCart() L1001-1004); response shape is identical to a normal update ({success, message:'Cart updated', cart_count}), just reflecting the line having been removed.",
+  "request": { "action": "update_cart", "line_user_id": "U5555555555555555555555555555ee", "product_id": 501, "quantity": 0 },
+  "response": { "success": true, "message": "Cart updated", "cart_count": 0 }
+}

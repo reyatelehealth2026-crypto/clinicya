@@ -77,6 +77,13 @@ services:
       DB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
       DB_PASS: ${MARIADB_PASSWORD:?}
       WORKER_HEALTH_PORT: 8099
+      # Dedicated Socket.io realtime relay server (realtime/socketServer.ts)
+      # — separate http.Server/port from WORKER_HEALTH_PORT above. The image
+      # already defaults this to 8100 (infra/worker/Dockerfile's
+      # apps/worker/src/env.ts DEFAULT_WORKER_REALTIME_PORT) — set explicitly
+      # here purely to be self-documenting, same posture as WORKER_HEALTH_PORT
+      # one line up. See docs/runbooks/worker-realtime-relay-smoke.md.
+      WORKER_REALTIME_PORT: 8100
       TZ: Asia/Bangkok
     depends_on:
       redis:

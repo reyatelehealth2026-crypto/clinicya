@@ -1,0 +1,5 @@
+{
+  "description": "POST action=validate_promo — no `promotions` table on the committed tenant template (verified: not in packages/db's generated tenant-db.d.ts), so handleValidatePromo() falls through to validateHardcodedPromo(). code is uppercased/trimmed server-side (`strtoupper(trim(...))`) before matching. WELCOME10 is a 10% code (min order 100, no max cap) — subtotal 200 -> discount 20. PHP QUIRK preserved verbatim: discount_type in the response is HARDCODED the literal string 'fixed' on this fallback branch regardless of the matched code's actual percentage/fixed type (see validateHardcodedPromo()'s caller, L2221-2226) — do not 'fix' this into the real type.",
+  "request": { "action": "validate_promo", "code": "welcome10", "line_user_id": "U8888888888888888888888888888bb", "subtotal": 200 },
+  "response": { "success": true, "message": "โค้ดถูกต้อง", "valid": true, "discount": 20, "discount_type": "fixed", "code": "WELCOME10" }
+}
