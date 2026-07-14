@@ -1565,3 +1565,298 @@ export function extractInboxThreadPage(html, markers) {
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 tail — /articles (list), /articles/[slug] (detail) + its
+// view-count-increment side effect, /pharmacists. Same label-anchored,
+// never-CSS-class convention as every extractor above — read this module's
+// own doc comment at the top of the file first if you haven't already.
+// ---------------------------------------------------------------------------
+
+/**
+ * Shared per-card delimiter for BOTH articles.php's list grid AND
+ * article.php's "related articles" grid: every card on either page is a
+ * single `<a href="...SLUG...">...</a>` block, and the SLUG itself is a
+ * literal, byte-identical substring of that href on both stacks — PHP:
+ * `article.php?slug=<?= htmlspecialchars($article['slug']) ?>` (note the
+ * SINGULAR "article.php", the detail-page filename — deliberately distinct
+ * from "articles.php", the plural list-page filename category chips/back
+ * links/tag links all point at, so this pattern can never accidentally match
+ * one of those); Next: `/articles/${encodeURIComponent(article.slug)}` (this
+ * batch's fixture uses plain lowercase-ascii-hyphen slugs, so
+ * encodeURIComponent leaves them byte-identical to the raw slug — no
+ * decoding gymnastics needed, `decodeURIComponent()` below is a no-op safety
+ * net, not load-bearing). Verified against both templates' full source that
+ * NEITHER the share-button hrefs (both stacks urlencode/percent-escape the
+ * `?`/`=`/`/` characters of the embedded share URL, so neither raw pattern
+ * appears there) NOR the JSON-LD/og:url meta tags (both sit in `<head>`,
+ * before `<main>` — already excluded by `sliceMainContent()`) can produce a
+ * false match.
+ */
+const ARTICLE_CARD_HREF_RE = /(?:article\.php\?slug=|\/articles\/)([a-z0-9][a-z0-9-]*)"[^>]*>([\s\S]*?)<\/a>/g;
+
+/** Tag-chip hrefs on both the list-page card meta AND the detail page's own tag row share the same `?tag=<value>"...>#<TAGTEXT></a>` shape (PHP: `articles.php?tag=<?= urlencode($tag) ?>` / `#<?= htmlspecialchars($tag) ?>`; Next: `/articles?tag=${encodeURIComponent(tag)}` / `#{tag}`) — the leading literal `#` is part of both stacks' own visible link text, not a URL fragment. */
+const ARTICLE_TAG_HREF_RE = /\?tag=[^"]*"[^>]*>#([^<]*)<\/a>/g;
+
+/**
+ * Extracts articles.php's data-point list: the category-filter-bar's chip
+ * labels IN RENDER ORDER (same "ทั้งหมด"-anchored, first-seen-order
+ * technique `extractTemplatesPage()` already established for its own
+ * category chips — only rendered at all when `!empty($categories)`, so an
+ * empty array here is a legitimate result, not an extraction failure), plus
+ * one `{slug, isFeatured}` tuple per rendered article card IN ROW ORDER.
+ * Row order matters and is exactly the parity signal this function is FOR:
+ * `getPublishedArticles()` orders `is_featured DESC, published_at DESC`
+ * while `search()` orders `published_at DESC` only (no is_featured
+ * precedence) — a wrong order or a wrong row set (e.g. the `is_published`
+ * filter leaking a draft, or the category filter's WHERE clause drifting)
+ * shows up here as a mismatched `cards` array.
+ *
+ * DELIBERATELY NOT a full field reconstruction (title/author/date per
+ * card): PHP's per-card author/date markers are icon-FONT glyphs
+ * (`<i class="fas fa-user-md">`, invisible to this fetch-only, no-CSS
+ * extractor — icon fonts render via `::before` CSS content, never a real
+ * text node), while Next's ArticleCard.tsx renders literal emoji TEXT
+ * characters (👨‍⚕️/🗓️) for the same spots instead — an unavoidable
+ * structural asymmetry between the two ports (same family as this module's
+ * "flex rendering asymmetry" note on `extractInboxThreadPage()`), not a bug
+ * on either side. `slug` (identity + order + count) and `isFeatured` (does
+ * this card's own `<a>...</a>` body contain the literal "แนะนำ"
+ * featured-badge text) already prove everything this page's filters/
+ * ordering are actually FOR, without that fragility.
+ */
+export function extractArticlesListPage(html) {
+  // Comments stripped BEFORE any regex below runs — PHP's card/tag markup
+  // has no comment concept at all, but Next's SSR output can insert an
+  // empty `<!-- -->` hydration-boundary marker between two adjacent
+  // text-producing children (this module's own top-of-file doc; verified
+  // empirically for this exact page in this batch's own harness run: the
+  // "#{tag}" / "฿{fee}" literal-then-expression shape). Stripping (not
+  // splitting on) comments merges both sides back into one run, matching
+  // PHP's un-annotated text exactly — same technique `stripTags()` already
+  // uses for the label-anchored `HtmlCursor` extractors; the plain regexes
+  // below need the same treatment applied up front since they don't go
+  // through `HtmlCursor` at all.
+  const main = sliceMainContent(html).replace(/<!--[\s\S]*?-->/g, '');
+
+  // Anchored on the PLAIN "ทั้งหมด" text, not a tight `>ทั้งหมด<` boundary —
+  // PHP's own template renders this chip's text on its OWN indented line
+  // (`<a ...>\n    ทั้งหมด\n</a>`, confirmed by reading articles.php in
+  // full), so a `>ทั้งหมด<` search (no whitespace tolerance) never matches
+  // real PHP output at all; caught by this batch's own real harness run,
+  // not assumed.
+  const allChipIdx = main.indexOf('ทั้งหมด');
+  let categoryButtons = [];
+  if (allChipIdx !== -1) {
+    const barStart = main.lastIndexOf('<a', allChipIdx);
+    const firstCardMatch = new RegExp(ARTICLE_CARD_HREF_RE.source).exec(main.slice(barStart));
+    const barEnd = firstCardMatch ? barStart + firstCardMatch.index : main.length;
+    const barSlice = main.slice(barStart, barEnd);
+    categoryButtons = [...barSlice.matchAll(/<a[^>]*>([^<]*)<\/a>/g)].map((m) => decodeEntities(m[1]).trim());
+  }
+
+  const cards = [...main.matchAll(ARTICLE_CARD_HREF_RE)].map((m) => ({
+    slug: decodeURIComponent(m[1]),
+    isFeatured: m[2].includes('แนะนำ'),
+  }));
+
+  const emptyStateShown = main.includes('ไม่พบบทความ');
+
+  return { categoryButtons, cardCount: cards.length, cards, emptyStateShown };
+}
+
+/**
+ * Extracts article.php's data-point list for a single resolved article:
+ * `title` (the `<h1>...</h1>` text — a bare-tag-name anchor, not a CSS
+ * class, since PHP's `.article-title` and Next's Tailwind utility string
+ * share no class token; both stacks render the title as the h1's ONLY
+ * child, so no nested-tag/hydration-comment concern here), `tags` (the
+ * `#tagname` chip row, in array order — proves `json_decode`/`JSON.parse`
+ * of the `tags` column round-trips identically), and the related-articles
+ * grid (`relatedSectionShown` + `relatedSlugs` in row order, reusing
+ * `ARTICLE_CARD_HREF_RE` — on this page it can ONLY match related-card
+ * anchors, see that const's own doc for why the list-grid/share-button/
+ * meta-tag false-match cases are already ruled out).
+ *
+ * `view_count` IS DELIBERATELY NOT RETURNED HERE — see `extractArticleViewCount()`'s
+ * own doc for why a direct PHP-vs-Next diff of it would be a guaranteed,
+ * non-bug false mismatch on this harness's shared-database setup, and how
+ * the dedicated two-fetch check proves the increment side effect instead.
+ *
+ * Comments stripped up front before any regex runs below — same reasoning
+ * as `extractArticlesListPage()`'s own doc comment (caught the SAME way:
+ * Next's `#{tag}` tag-chip row genuinely renders a hydration comment
+ * between the literal "#" and the `{tag}` expression in this batch's own
+ * real harness run, which silently zeroed out `tags` entirely before this
+ * fix — a regex requiring an unbroken `#TAGTEXT` run has nowhere to
+ * "skip past" a comment sitting in the middle of it, so the whole match
+ * fails rather than just mis-capturing).
+ */
+export function extractArticleDetailPage(html) {
+  const main = sliceMainContent(html).replace(/<!--[\s\S]*?-->/g, '');
+
+  const titleMatch = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(main);
+  const title = titleMatch ? firstVisibleChunk(titleMatch[1]) : null;
+
+  const tags = [...main.matchAll(ARTICLE_TAG_HREF_RE)].map((m) => decodeEntities(m[1]).trim());
+
+  const relatedSectionShown = main.includes('บทความที่เกี่ยวข้อง');
+  const relatedSlugs = [...main.matchAll(ARTICLE_CARD_HREF_RE)].map((m) => decodeURIComponent(m[1]));
+
+  return { title, tags, relatedSectionShown, relatedCount: relatedSlugs.length, relatedSlugs };
+}
+
+/**
+ * Extracts JUST the rendered view-count number from an article.php /
+ * `/articles/[slug]` response — `HealthArticleService::getBySlug()` (PHP)
+ * and `[slug]/page.tsx`'s `incrementViewCountAction()` (Next) both display
+ * the PRE-increment value the same request's own SELECT captured (the
+ * increment UPDATE fires AFTER that value is already in hand — read both
+ * sources: PHP increments inside `getBySlug()` itself, after fetching the
+ * row it's about to `return`; Next's `queries.ts::getArticleBySlug()` is a
+ * pure read, with the increment fired separately, afterward, from
+ * `actions.ts`), so EVERY successful fetch of the same slug increments the
+ * DB counter by exactly 1 regardless of which stack served it.
+ *
+ * THIS IS WHY `extractArticleDetailPage()` never returns `view_count`: this
+ * harness's PHP and Next stacks share the SAME physical MariaDB row (one
+ * tenant DB, one `health_articles` table — see this file's module doc/
+ * parity.mjs's own header for the "real stack, no mocks" design). A
+ * `runPagePair()` PHP-then-Next fetch of the SAME slug would show PHP the
+ * PRE-increment count and Next the count ONE HIGHER (Next's SELECT runs
+ * after PHP's own UPDATE already landed) — a real, guaranteed, order-
+ * dependent off-by-one that is NOT a product bug, just an artifact of this
+ * fetch-only harness's shared-database setup. `runArticleViewCountIncrementChecks()`
+ * in parity.mjs uses this extractor for a same-stack, two-fetch check
+ * instead (`runSingleSideCheck()`'s pattern) — that comparison is immune to
+ * the cross-stack ordering issue since it never compares PHP's count to
+ * Next's count directly, only a stack's own count against its own earlier
+ * count.
+ *
+ * Anchored on the literal, English "views" label text — `HtmlCursor`'s
+ * `beforeLabel()` already strips the hydration comment React's SSR inserts
+ * between the `{formatNumber(...)}` expression and the adjacent " views"
+ * text-literal sibling (the same "baht-sign-plus-value pattern" this
+ * module's own top-of-file doc already documents as handled by
+ * `stripTags()`'s comment removal, not a new case).
+ */
+export function extractArticleViewCount(html) {
+  const cursor = new HtmlCursor(html);
+  const raw = cursor.beforeLabel('views');
+  const n = parseLeadingNumber(raw);
+  if (n === null) {
+    throw new Error(`extractArticleViewCount: could not parse a number immediately before the "views" label (raw=${JSON.stringify(raw)})`);
+  }
+  return n;
+}
+
+/**
+ * Per-pharmacist-card delimiter for /pharmacists: unlike every OTHER
+ * extractor in this file that can lean on a shared `data-*`/class anchor,
+ * PHP's `includes/pharmacy/pharmacists.php` card markup carries NO
+ * per-pharmacist identifying attribute at all (grepped the full file — no
+ * `data-pharmacist-id`, no `id="pharm-<n>"`); Next's `PharmacistCard.tsx`
+ * DOES add `data-pharmacist-id={pharmacist.id}`, but only on its own side —
+ * a one-sided hook is useless as a shared delimiter. The one thing both
+ * sides genuinely share, byte-for-byte, per card: the avatar `<img>`'s
+ * `src` — `PharmacistCard.tsx`'s own doc comment confirms it reproduces
+ * PHP's `image_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' +
+ * urlencode(name)` fallback "exactly" (Next uses `encodeURIComponent`, not
+ * `urlencode` — the two differ for a literal space character, `+` vs
+ * `%20`, but this extractor never needs to decode the seeded NAME back out,
+ * only to find where each card BEGINS, so that divergence is harmless
+ * here). This fixture's seed file sets every pharmacist's `image_url` to
+ * NULL specifically so this fallback — and therefore this delimiter —
+ * fires for every card, every run.
+ */
+const PHARMACIST_CARD_MARKER = 'svg?seed=';
+
+/**
+ * Extracts /pharmacists' data-point list: `emptyStateShown` (PHP: "ยังไม่มีเภสัชกร"
+ * text; Next: `EmptyState`'s `heading` prop, same literal string) plus one
+ * per-card object, split on `PHARMACIST_CARD_MARKER` (see that const's own
+ * doc). Per card:
+ *   - `isActive` — PHP's `<?= !$p['is_active'] ? 'opacity-60' : '' ?>` /
+ *     Next's `${!pharmacist.isActive ? 'opacity-60' : ''}` share the
+ *     literal `opacity-60` class TOKEN (verified by reading both sources —
+ *     `PharmacistCard.tsx` was ported preserving this exact utility class,
+ *     unlike most other ported pages in this codebase) — searched in a
+ *     bounded BACKWARD window from the card marker (the outer card `<div>`'s
+ *     own opening tag, which carries this class, sits BEFORE the avatar
+ *     `<img>` in render order on both stacks).
+ *   - `isAvailable` — the `title="พร้อมให้บริการ"` green-dot indicator's
+ *     attribute text (only rendered `if ($p['is_available'])` /
+ *     `pharmacist.isAvailable`) — an attribute VALUE, not visible text, but
+ *     still literal raw-HTML substring content this fetch-only extractor
+ *     can see regardless.
+ *   - `upcomingCount` / `completedCount` — the two correlated-subquery
+ *     numbers (`(SELECT COUNT(*) FROM appointments WHERE ... status IN
+ *     ('pending','confirmed') AND appointment_date >= CURDATE())` /
+ *     `status = 'completed'`), read via `beforeLabel('นัดหมายรอ')`/
+ *     `beforeLabel('เสร็จสิ้น')` — the single highest-value signal this
+ *     extractor can prove, since it's the one part of this page backed by a
+ *     real, easy-to-drift-independently SQL computation rather than a
+ *     straight column passthrough.
+ *   - `isFree` / `feeAmount` — PHP's `$p['consultation_fee'] > 0` branch
+ *     (`฿<?= number_format(...) ?>` vs the literal "ฟรี" free label); `฿`
+ *     is the same shared numeric-value anchor `extractLineGroupsPage()`'s
+ *     doc and this module's top-of-file "baht-sign-plus-value pattern" note
+ *     already establish as comment-safe.
+ *   - `consultationDuration` — `beforeLabel('นาที')`.
+ *
+ * LAST-CARD BOUNDARY TRAP (caught by this batch's own real harness run, not
+ * assumed): the naive "next marker or `main.length`" slice is UNBOUNDED for
+ * the LAST card, and PHP's Add/Edit modal (`#pharmacistModal`) is rendered
+ * UNCONDITIONALLY, just CSS-`hidden` — including its OWN
+ * `title="พร้อมให้บริการ"`-equivalent checkbox label
+ * (`<span>พร้อมให้บริการ</span>`) — so an unbounded last-card slice was
+ * silently absorbing that trailing modal's own "is_available" checkbox
+ * label and reporting `isAvailable: true` for whichever pharmacist happened
+ * to render last, REGARDLESS of that pharmacist's real value (Next's own
+ * `PharmacistFormModal` returns `null` until opened — closed by default —
+ * so it never had this problem, an asymmetry between the two ports that is
+ * NOT itself a bug: both render an identical closed-by-default modal to the
+ * end user, PHP just always ships its markup, hidden, in the initial
+ * response). Fixed by additionally bounding every card's forward slice at
+ * its OWN delete button — `bg-red-100 text-red-600 rounded-lg
+ * hover:bg-red-200 text-sm`, verified by reading both `includes/pharmacy/
+ * pharmacists.php` (lines 235-238) and `PharmacistCard.tsx` (the delete
+ * button) as a genuinely shared, per-card, occurs-exactly-once class
+ * string — nothing in either modal reuses it (checked: the modals' own
+ * buttons use `bg-green-500`/plain-border/`text-red-500` shades, not
+ * `bg-red-100`).
+ */
+const PHARMACIST_DELETE_BTN_CLASS = 'bg-red-100';
+
+export function extractPharmacistsPage(html) {
+  const main = sliceMainContent(html);
+  const emptyStateShown = main.includes('ยังไม่มีเภสัชกร');
+
+  const starts = [];
+  for (let from = 0; ; ) {
+    const idx = main.indexOf(PHARMACIST_CARD_MARKER, from);
+    if (idx === -1) break;
+    starts.push(idx);
+    from = idx + PHARMACIST_CARD_MARKER.length;
+  }
+
+  const cards = starts.map((start, i) => {
+    const end = i + 1 < starts.length ? starts[i + 1] : main.length;
+    const rawForward = main.slice(start, end);
+    const deleteBtnIdx = rawForward.indexOf(PHARMACIST_DELETE_BTN_CLASS);
+    const forward = deleteBtnIdx === -1 ? rawForward : rawForward.slice(0, deleteBtnIdx + PHARMACIST_DELETE_BTN_CLASS.length);
+    const backward = main.slice(Math.max(0, start - WINDOW_CHARS), start);
+
+    const isActive = !backward.includes('opacity-60');
+    const isAvailable = forward.includes('พร้อมให้บริการ');
+    const upcomingCount = parseLeadingNumber(new HtmlCursor(forward).beforeLabel('นัดหมายรอ'));
+    const completedCount = parseLeadingNumber(new HtmlCursor(forward).beforeLabel('เสร็จสิ้น'));
+    const isFree = forward.includes('>ฟรี<');
+    const feeAmount = isFree ? 0 : parseLeadingNumber(new HtmlCursor(forward).afterLabel('฿'));
+    const consultationDuration = parseLeadingNumber(new HtmlCursor(forward).beforeLabel('นาที'));
+
+    return { isActive, isAvailable, upcomingCount, completedCount, isFree, feeAmount, consultationDuration };
+  });
+
+  return { cardCount: cards.length, emptyStateShown, cards };
+}
