@@ -21,10 +21,12 @@
     "@reya/tenant": "workspace:*",
     "bullmq": "^5.80.2",
     "ioredis": "5.10.1",
-    "kysely": "^0.29.3"
+    "kysely": "^0.29.3",
+    "socket.io": "^4.7.4"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
+    "socket.io-client": "^4.7.4",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
