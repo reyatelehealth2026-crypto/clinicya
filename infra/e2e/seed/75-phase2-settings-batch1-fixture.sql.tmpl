@@ -1,0 +1,346 @@
+-- infra/e2e/seed/75-phase2-settings-batch1-fixture.sql.tmpl
+--
+-- Phase 2 settings batch 1 (mig-infra) — data-point parity fixture for the
+-- FOUR new /settings?tab={welcome,email,consent,shop_tax} page-pairs this
+-- batch adds to infra/e2e/parity.mjs. Applied AFTER 30-/40-/60-phase2-*.sql
+-- .tmpl and 70-phase4-batch1-inbox-fixture.sql.tmpl (already piped into the
+-- SAME app/tenant DB by parity.mjs's seedDatabase(), in FIXTURE_FILES order)
+-- — additive only, same pattern every earlier numbered file already
+-- established. Does not touch any table an earlier batch already seeds rows
+-- into (users/messages/orders/transactions/user_tags/activity_logs/
+-- broadcasts/customer_segments/auto_replies/user_behaviors/templates/groups/
+-- user_groups/line_groups/line_group_members/line_group_messages) — only
+-- INSERTs into: users (new synthetic ids, see below), user_consents,
+-- consent_logs, data_access_logs, shop_tax_info, email_settings.
+--
+-- No USE statement of its own — same convention as every fixture before it:
+-- the caller (parity.mjs's seedDatabase()) prepends `USE \`<app-db>\`;`.
+--
+-- DETERMINISM: no wall-clock literals — every timestamp is NOW() or a
+-- DATE_SUB(NOW(), INTERVAL n ...) expression, same reasoning as every
+-- earlier fixture's own header comment.
+--
+-- ===========================================================================
+-- SEQUENCING TRAP — read before adding a SECOND "real admin_user_id" row
+-- anywhere in this file or a future one.
+-- ===========================================================================
+-- parity.mjs's seedDatabase() (which runs every file in FIXTURE_FILES,
+-- INCLUDING THIS ONE) executes strictly BEFORE fireThrowawayProbeRequest()
+-- and seedAdminUser() (see parity.mjs's main() — the exact order is
+-- composeUp -> waitContainerHealthy(mariadb) -> waitContainerHealthy(redis)
+-- -> seedDatabase() -> waitHttpReachable('/') -> fireThrowawayProbeRequest()
+-- -> generatePhpBcryptHash() -> seedAdminUser()). `admin_users` does NOT
+-- exist in the committed tenant template (deliberately excluded — see
+-- infra/e2e/seed/20-admin-user.sql.tmpl's own header comment, and
+-- database/migration_2026-05-25_tenant_template.sql's own header note that
+-- platform-level tables live in `reya_platform`) and is only auto-created by
+-- classes/AdminAuth.php's constructor fallback (ensureTables(), lines
+-- 32-72), which only runs the FIRST time includes/auth_check.php
+-- instantiates `new AdminAuth($db)` on a real page load — against
+-- `Database::getInstance()->getConnection()`, i.e. the CURRENT TENANT DB
+-- (bootstrap/resolve_subdomain.php's resolution), the SAME physical database
+-- this file's own INSERTs below land in — i.e. NOT yet, at the point THIS
+-- file's INSERTs run. Two consequences, both verified by reading
+-- classes/AdminAuth.php, includes/auth_check.php,
+-- infra/e2e/seed/20-admin-user.sql.tmpl, and parity.mjs's main() in full
+-- (not guessed):
+--
+--   1. This file CANNOT `SELECT id FROM admin_users WHERE username = ...`
+--      in a subquery — the table doesn't exist yet at this point in the
+--      sequence and such a statement would abort the whole seeding run.
+--      `data_access_logs.admin_user_id` has NO foreign-key constraint
+--      (plain `int(11) DEFAULT NULL`, confirmed by reading the tenant
+--      template's CREATE TABLE) so a literal integer is safe to insert here
+--      even though no admin_users row with that id exists YET — the FK-like
+--      relationship is only ever read via consent.php's own
+--      `LEFT JOIN admin_users au ON dal.admin_user_id = au.id`, which
+--      doesn't run until the actual page fetch, long after
+--      fireThrowawayProbeRequest()/seedAdminUser() have both completed —
+--      by which point `admin_users` genuinely exists IN THIS SAME DB (see
+--      point 2's own note on the runtime-auto-create-vs-committed-template
+--      distinction — this matters a great deal for how
+--      extractSettingsConsentTab() is designed; see that function's own
+--      module doc in infra/e2e/lib/extract.mjs and this batch's runbook).
+--
+--   2. The literal id to use for "the harness's own real admin" is
+--      DETERMINISTIC, not guessed: AdminAuth::ensureTables() (lines 34-43)
+--      tries `SELECT 1 FROM admin_users LIMIT 1` first; on a fresh DB that
+--      throws (table doesn't exist), so the `catch` block (lines 44-71)
+--      creates the table AND does exactly ONE
+--      `INSERT IGNORE INTO admin_users (username, ...) VALUES ('admin', ...)`
+--      (line 65-68) — this is the FIRST ever row, so it gets id=1.
+--      `fireThrowawayProbeRequest()` (an unauthenticated GET to
+--      /system-status.php) is the FIRST request in the whole harness run
+--      that reaches includes/auth_check.php's unconditional
+--      `new AdminAuth($db)` (auth_check.php line 17, instantiated BEFORE the
+--      `isset($_SESSION['admin_user'])` gate, so it fires even for a
+--      logged-out request) — nothing earlier in parity.mjs's sequence hits
+--      any auth_check.php-gated PHP page. Immediately after that,
+--      seedAdminUser() applies infra/e2e/seed/20-admin-user.sql.tmpl, which
+--      does `DELETE FROM admin_users WHERE username = '__ADMIN_USERNAME__'`
+--      (a no-op — different username, nothing to delete) then
+--      `INSERT INTO admin_users (username, ...) VALUES ('__ADMIN_USERNAME__' /* e2e_parity_admin */, ...)`
+--      — the SECOND row ever inserted into a freshly-created table, so it
+--      deterministically gets id=2. `docker compose down -v` in
+--      parity.mjs's finally block (composeDown()) removes the MariaDB
+--      volume every run, so AUTO_INCREMENT always restarts at 1 — this is
+--      NOT a "usually works" assumption, it is guaranteed by the harness's
+--      own fresh-volume-per-run contract.
+--
+--   Net effect: `admin_user_id = 2` below IS the harness's own
+--   `e2e_parity_admin` row (role 'super_admin', username 'e2e_parity_admin'
+--   — see infra/e2e/seed/20-admin-user.sql.tmpl), by construction, every
+--   single run. If a FUTURE batch's fixture (applied earlier in
+--   FIXTURE_FILES, i.e. a lower-numbered file than this one) starts hitting
+--   ANY auth_check.php-gated PHP page during ITS OWN seeding (none do today
+--   — every existing fixture is pure SQL), that would change this id and
+--   this file's `data_access_logs` row would need updating; a future author
+--   changing FIXTURE_FILES' ORDER or adding an earlier HTTP-hitting seed
+--   step should grep this file for `admin_user_id` and re-verify.
+--
+--   IMPORTANT CORROLARY (see docs/runbooks/phase2-settings-tabs-batch1-parity
+--   .md's "does consent.php's admin_users JOIN actually throw?" section for
+--   the full write-up): apps/admin/src/app/(tenant)/settings/_lib/
+--   consent-queries.ts's own module doc claims the `LEFT JOIN admin_users`
+--   query ALWAYS throws because "admin_users does not exist inside a tenant
+--   DB" — true of the COMMITTED MIGRATION FILE alone, but NOT necessarily
+--   true of a REAL RUNNING STACK, where PHP's own AdminAuth::ensureTables()
+--   auto-creates that exact table, in that exact DB, the moment ANY admin
+--   page is hit — which THIS HARNESS's own login flow guarantees happens
+--   before either stack's /settings?tab=consent is ever fetched. This
+--   fixture's rows are written to be meaningful under EITHER outcome (see
+--   extractSettingsConsentTab()'s own auto-detecting error-vs-populated
+--   design) — do not assume one outcome when adding to this file.
+-- ===========================================================================
+
+-- ===========================================================================
+-- 1) users (3 new synthetic rows, ids 9201-9203, line_account_id IS NULL —
+--    same "no active line_accounts row" invariant every earlier batch's
+--    fixture maintains, see 60-phase2-batch3-fixture.sql.tmpl's own "WHY NO
+--    line_accounts ROWS" section for the full blast-radius reasoning this
+--    batch inherits unchanged) — consent.php's `consent_logs cl JOIN users u
+--    ON cl.user_id = u.id` is an INNER JOIN, so every consent_logs row below
+--    MUST reference a real users.id or the whole recent-logs query silently
+--    drops that row (not an error, just a missing row — verified by reading
+--    consent.php lines 28-35 in full).
+-- ===========================================================================
+INSERT INTO `users`
+  (`id`, `line_user_id`, `display_name`, `real_name`, `phone`, `email`, `birthday`,
+   `is_blocked`, `created_at`, `updated_at`, `total_points`, `points`, `line_account_id`)
+VALUES
+  (9201, 'Uphase2settingsb1u000000000001', 'คุณสมศรี ยินยอมครบ', 'สมศรี ยินยอมครบ', '0861112221', 'somsri.consent@example.invalid', '1988-03-01',
+       0, DATE_SUB(NOW(), INTERVAL 14 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY), 0, 0, NULL),
+  (9202, 'Uphase2settingsb1u000000000002', 'คุณประเสริฐ ถอนยินยอม', 'ประเสริฐ ถอนยินยอม', '0862223332', 'prasert.consent@example.invalid', '1979-11-19',
+       0, DATE_SUB(NOW(), INTERVAL 9 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY), 0, 0, NULL),
+  (9203, 'Uphase2settingsb1u000000000003', 'คุณมาลี สุขภาพ', 'มาลี สุขภาพ', '0863334443', 'malee.consent@example.invalid', '1995-07-22',
+       0, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW(), 0, 0, NULL);
+
+-- ===========================================================================
+-- 2) user_consents (is_accepted=1 rows only — consent.php's stat queries
+--    both filter `WHERE is_accepted = 1`, lines 15 and 19-24) — sized so the
+--    4 KPI cards are non-trivial AND independently verifiable:
+--      total_consented   = COUNT(DISTINCT user_id) = 3  (9201, 9202, 9203)
+--      by_type.privacy_policy      = 2  (9201, 9202)
+--      by_type.terms_of_service    = 1  (9201 only)
+--      by_type.health_data         = 1  (9203 only)
+--      (marketing intentionally absent -> consent.php's
+--       `$consentStats['by_type']['marketing'] ?? 0` fallback path, not
+--       separately asserted by this batch's extractor but harmless either
+--       way)
+--    Neither consent.php's stat queries NOR shop-tax.php-style code filter
+--    by line_account_id here (consent.php lines 15/19-24 have no
+--    line_account_id predicate at all, confirmed by reading the full file)
+--    — `line_account_id` is left at the column's own DEFAULT (1), inert.
+-- ===========================================================================
+INSERT INTO `user_consents`
+  (`user_id`, `consent_type`, `consent_version`, `is_accepted`, `accepted_at`, `ip_address`, `created_at`, `updated_at`)
+VALUES
+  (9201, 'privacy_policy',     '1.0', 1, DATE_SUB(NOW(), INTERVAL 14 DAY), '203.0.113.101', DATE_SUB(NOW(), INTERVAL 14 DAY), DATE_SUB(NOW(), INTERVAL 14 DAY)),
+  (9201, 'terms_of_service',   '1.0', 1, DATE_SUB(NOW(), INTERVAL 14 DAY), '203.0.113.102', DATE_SUB(NOW(), INTERVAL 14 DAY), DATE_SUB(NOW(), INTERVAL 14 DAY)),
+  (9202, 'privacy_policy',     '1.0', 1, DATE_SUB(NOW(), INTERVAL 9 DAY),  '203.0.113.103', DATE_SUB(NOW(), INTERVAL 9 DAY),  DATE_SUB(NOW(), INTERVAL 9 DAY)),
+  (9203, 'health_data',        '2.0', 1, DATE_SUB(NOW(), INTERVAL 3 DAY),  '203.0.113.104', DATE_SUB(NOW(), INTERVAL 3 DAY),  DATE_SUB(NOW(), INTERVAL 3 DAY));
+
+-- ===========================================================================
+-- 3) consent_logs (4 rows, ALL 3 required consent_type values represented —
+--    privacy_policy/terms_of_service/health_data, per this batch's brief —
+--    plus one 'withdraw' action so the action!=accept branch is exercised
+--    too) — consent.php's own query has NO line_account_id filter (lines
+--    28-35) and ORDERs BY created_at DESC with LIMIT 50; well under the
+--    limit, so all 4 rows always render (in the populated-view branch — see
+--    this file's own "SEQUENCING TRAP" section above for the error-vs-
+--    populated question). Each row's `ip_address` is a DISTINCT literal
+--    (203.0.113.101-104) used purely as a row-counting marker by
+--    extractSettingsConsentTab() in infra/e2e/lib/extract.mjs (same
+--    "known-value row counting" technique that file's own module doc already
+--    documents for avatar-fallback/tag-name counting) — chosen to be DATA (a
+--    DB column value both stacks echo verbatim), not UI copy, so it is
+--    robust to any class-name/markup difference between the PHP partial and
+--    its Next port.
+-- ===========================================================================
+INSERT INTO `consent_logs`
+  (`user_id`, `consent_type`, `action`, `consent_version`, `ip_address`, `created_at`)
+VALUES
+  (9201, 'privacy_policy',   'accept',   '1.0', '203.0.113.101', DATE_SUB(NOW(), INTERVAL 14 DAY)),
+  (9201, 'terms_of_service', 'accept',   '1.0', '203.0.113.102', DATE_SUB(NOW(), INTERVAL 13 DAY)),
+  (9202, 'privacy_policy',   'withdraw', '1.0', '203.0.113.103', DATE_SUB(NOW(), INTERVAL 2 DAY)),
+  (9203, 'health_data',      'accept',   '2.0', '203.0.113.104', DATE_SUB(NOW(), INTERVAL 3 DAY));
+
+-- ===========================================================================
+-- 4) data_access_logs (2 rows — one NULL admin_user_id to exercise
+--    consent.php's `htmlspecialchars($log['admin_name'] ?? 'System')`
+--    fallback, line 193; one REAL admin_user_id=2, see this file's own
+--    "SEQUENCING TRAP" section above for exactly why 2 is deterministic) —
+--    `user_id` on row 1 references a real users row (9201) to also exercise
+--    the truthy `$log['target_user']` branch (consent.php lines 200-202);
+--    row 2's user_id is NULL (dal LEFT JOIN users u — target_user resolves
+--    NULL -> that branch's `if ($log['target_user'])` is skipped, PHP prints
+--    nothing extra, still a valid row). Distinct `ip_address` literals
+--    (203.0.113.201/202) — same known-value row-counting technique as
+--    consent_logs above, deliberately a DIFFERENT numeric family (20x vs
+--    10x) so extractSettingsConsentTab() can count each table's rows with a
+--    single, non-overlapping regex.
+-- ===========================================================================
+INSERT INTO `data_access_logs`
+  (`admin_user_id`, `user_id`, `action`, `resource_type`, `ip_address`, `created_at`)
+VALUES
+  (NULL, 9201, 'view_profile',        'user_profile', '203.0.113.201', DATE_SUB(NOW(), INTERVAL 5 DAY)),
+  (2,    NULL, 'export_consent_log',  'consent_log',  '203.0.113.202', DATE_SUB(NOW(), INTERVAL 1 DAY));
+
+-- ===========================================================================
+-- 5) shop_tax_info (ONE row, line_account_id=1, ALL fields populated,
+--    is_vat_registered=1) — seeded exactly as this batch's brief asks, BUT
+--    read this CONFIRMED FINDING before assuming settings:shop-tax's
+--    harness entry actually exercises it:
+--
+--    includes/settings/shop-tax.php resolves its OWN local `$lineAccountId`
+--    independently of settings.php's outer variable (PHP `include` shares
+--    scope, so this local reassignment at shop-tax.php line 16 wins for the
+--    rest of that tab's render):
+--
+--      $lineAccountId = (int)($_SESSION['current_bot_id'] ?? $_SESSION['line_account_id'] ?? 0);
+--      if ($lineAccountId <= 0 && !empty($_SESSION['user_id'])) {
+--          try { SELECT line_account_id FROM admin_users WHERE id = ? } catch (\Throwable $e) {}
+--      }
+--      if ($lineAccountId <= 0) {
+--          try { SELECT id FROM line_accounts WHERE is_active = 1 ORDER BY id ASC LIMIT 1 } catch (\Throwable $e) {}
+--      }
+--      if ($lineAccountId > 0) { SELECT * FROM shop_tax_info WHERE line_account_id = ? }
+--
+--    Traced against THIS harness's own invariants (confirmed by reading
+--    includes/header.php lines 117-174, classes/AdminAuth.php's admin_users
+--    CREATE TABLE at lines 47-59 — NO `line_account_id` column exists on
+--    that table regardless of whether the table itself exists yet — and this
+--    exact fixture's own state):
+--      - $_SESSION['current_bot_id'] is NEVER set anywhere in this harness's
+--        run (includes/header.php only auto-sets it when `$lineAccounts`
+--        (getAccessibleBots()) is non-empty, i.e. only when a `line_accounts`
+--        row exists — this harness deliberately seeds ZERO, same invariant
+--        60-phase2-batch3-fixture.sql.tmpl's "WHY NO line_accounts ROWS"
+--        section already established and every later batch inherits).
+--      - $_SESSION['line_account_id'] is never assigned anywhere in this
+--        codebase at all (grepped) — dead fallback.
+--      - The admin_users lookup ALWAYS throws regardless of whether the
+--        table itself exists by query time — `admin_users` (AdminAuth's own
+--        schema, see this file's "SEQUENCING TRAP" section) has NO
+--        `line_account_id` column, so `SELECT line_account_id FROM
+--        admin_users WHERE id = ?` throws "Unknown column" — caught,
+--        silently ignored, EITHER WAY.
+--      - `line_accounts` is empty (same invariant) -> that fallback also
+--        resolves to 0.
+--    So `$lineAccountId` is ALWAYS 0 in this harness, the final
+--    `if ($lineAccountId > 0)` gate is ALWAYS false, and shop-tax.php's
+--    pre-initialized `$row` array (lines 31-44 — business_name='',
+--    tax_id='', branch_code='00000', is_vat_registered=0,
+--    default_vat_rate=7.00 — a PHP FLOAT LITERAL, see below) is what ALWAYS
+--    renders — this row below is, under TODAY's harness invariant,
+--    UNREACHABLE on EITHER stack (apps/admin's shop-tax-queries.ts ports the
+--    identical 3-tier-falls-through-to-default chain — see that file's own
+--    module doc). This is a fixture-invariant limitation, not a PHP defect
+--    (production tenants DO have a real current_bot_id) — same class of
+--    "confirmed, out-of-scope-to-change-here" finding as
+--    crm-dashboard-advanced's missing crm_deals/crm_tickets tables and
+--    settings:welcome's missing welcome_settings table. Seeded anyway (a)
+--    because the brief asks for it, (b) because a future batch that
+--    legitimately needs ONE active line_accounts row (accepting that
+--    fixture's own documented blast radius on every EARLIER page-pair) will
+--    make this row start being exercised for free, with zero fixture
+--    changes.
+--
+--    SEPARATE FINDING on the default (unreached) path itself, RESOLVED
+--    before this batch's final acceptance run (verified with `php -r
+--    'var_dump((string)7.00);'` -> `string(1) "7"`): PHP's own hardcoded
+--    default `default_vat_rate` is the FLOAT literal `7.00`, and
+--    shop-tax.php's `$h()` helper casts it `(string)` before
+--    `htmlspecialchars()` — PHP's float-to-string conversion of a
+--    whole-number float DROPS the trailing `.00`, so PHP's DEFAULT-path HTML
+--    is `value="7"`. apps/admin's shop-tax-queries.ts
+--    `DEFAULT_SHOP_TAX_INFO.defaultVatRate` USED TO BE the STRING literal
+--    `'7.00'` (a mismatch caught by an earlier run of this exact fixture +
+--    extractor pair) — flagged in this agent's build report, routed to
+--    settingsConsentTax (apps/admin/** is outside this agent's allowed
+--    paths), and fixed there: `DEFAULT_SHOP_TAX_INFO.defaultVatRate` now
+--    reads `'7'`, confirmed by reading the current source. See
+--    extractSettingsShopTaxTab()'s own module doc in infra/e2e/lib/
+--    extract.mjs and docs/runbooks/phase2-settings-tabs-batch1-parity.md's
+--    "settings:shop-tax" section for the full before/after. This row (and
+--    the always-0 `$lineAccountId` trace above) is still what makes this
+--    exact default-path comparison the one this harness exercises — kept
+--    seeded anyway per (a)/(b) above.
+-- ===========================================================================
+INSERT INTO `shop_tax_info`
+  (`line_account_id`, `business_name`, `business_name_en`, `tax_id`, `branch_code`, `address`, `phone`, `email`, `logo_url`, `authorized_signer`, `signer_position`, `is_vat_registered`, `default_vat_rate`)
+VALUES
+  (1, 'บริษัท เรยา เซตติ้งส์ แบทช์วัน จำกัด', 'Reya Settings Batch One Co., Ltd.', '0105566123456', '00001',
+   '123 ถนนทดสอบ แขวงทดสอบ เขตทดสอบ กรุงเทพฯ 10110', '02-000-1111', 'taxinfo.e2e-fixture@example.invalid',
+   'https://example.invalid/e2e-fixture-logo.png', 'นางสาวทดสอบ ระบบฟิกซ์เจอร์', 'ผู้จัดการฝ่ายบัญชี', 1, 8.00);
+
+-- ===========================================================================
+-- 6) email_settings (id=1 row, FULL SMTP config) — the table itself IS
+--    present in the committed tenant template (confirmed: database/
+--    migration_2026-05-25_tenant_template.sql, CREATE TABLE `email_settings`
+--    around line 4380 — no missing-table gap here, unlike welcome_settings).
+--    includes/settings/email.php's own read (`SELECT * FROM email_settings
+--    WHERE id = 1`, line 26) and apps/admin's email-queries.ts's
+--    getEmailSettings() are BOTH unscoped by line_account_id/currentBotId
+--    (a single global settings row per tenant DB — each tenant already has
+--    its own DB under ADR-001), so — unlike shop_tax_info above — this row
+--    IS actually reached regardless of the $currentBotId-always-null
+--    invariant. `smtp_pass` is an obviously-fake, harness-only placeholder
+--    string (GitGuardian secrets-scan discipline — not a real credential).
+--    `ON DUPLICATE KEY UPDATE` (not a plain INSERT) purely as a defensive
+--    habit matching settings.php's own save_email action's own SQL shape
+--    (line 671-677) — the committed tenant template ships email_settings
+--    EMPTY, so in practice this always takes the INSERT branch.
+-- ===========================================================================
+INSERT INTO `email_settings`
+  (`id`, `smtp_host`, `smtp_port`, `smtp_user`, `smtp_pass`, `smtp_secure`, `from_email`, `from_name`)
+VALUES
+  (1, 'smtp.e2e-fixture.invalid', 587, 'notify@e2e-fixture.invalid', 'e2e-fixture-not-a-real-secret', 'tls', 'noreply@e2e-fixture.invalid', 'Reya E2E Fixture Sender')
+ON DUPLICATE KEY UPDATE
+  smtp_host = VALUES(smtp_host), smtp_port = VALUES(smtp_port),
+  smtp_user = VALUES(smtp_user), smtp_pass = VALUES(smtp_pass),
+  smtp_secure = VALUES(smtp_secure), from_email = VALUES(from_email),
+  from_name = VALUES(from_name);
+
+-- ===========================================================================
+-- 7) welcome_settings — DELIBERATELY NO ROWS, NO CREATE TABLE, HERE ON
+--    PURPOSE. CONFIRMED FINDING: `welcome_settings` does not exist anywhere
+--    in database/migration_2026-05-25_tenant_template.sql (grepped: zero
+--    `CREATE TABLE` matches) and is not auto-created by any PHP file
+--    (grepped `welcome_settings` repo-wide — every hit is a SELECT/INSERT/
+--    UPDATE against it, never a CREATE TABLE) — on the committed schema
+--    BOTH includes/settings/welcome.php's own SELECT (try/catch-wrapped,
+--    degrades to the hardcoded default greeting) and settings.php's
+--    save_welcome INSERT/UPDATE (wrapped in that action's own try/catch,
+--    sets $error) hit a genuine missing-table PDOException today, on both
+--    the PHP page-read AND apps/admin's getWelcomeSettings() (same
+--    degrade-to-defaults contract — see that file's own module doc). Adding
+--    a CREATE TABLE here would defeat the entire point of
+--    settings:welcome's harness entry, which is to prove BOTH stacks
+--    degrade to the IDENTICAL hardcoded default greeting under this real,
+--    pre-existing schema gap — same handling precedent as
+--    crm-dashboard-advanced's missing crm_deals/crm_tickets finding. Do NOT
+--    "fix" this by adding a migration — database/** is out of scope for
+--    this batch and the degrade behavior being proven here is the point,
+--    not a bug to route around.
+-- ===========================================================================
