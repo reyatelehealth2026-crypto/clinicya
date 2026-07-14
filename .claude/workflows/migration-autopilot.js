@@ -10,12 +10,16 @@ export const meta = {
 const WT_ROOT = '/tmp/claude-0/-home-user-clinicya/c8338dc7-e596-54f1-b5cb-64bae9a6109a/scratchpad/worktrees'
 const REPO_ROOT = '/home/user/clinicya'
 
-// Fallback stream plan used when the Workflow tool's `args` param isn't delivered as a
-// real object (observed: it can arrive stringified, making `args.streams` undefined) and
-// when no explicit args.streams is supplied. Edit/replace this per round; keep it in sync
-// with whatever stream plan the coordinator actually wants run next. Empty array disables
-// the fallback and falls through to the mig-orchestrator planning agent instead.
-const DEFAULT_STREAMS = [
+// HISTORICAL RECORD ONLY — this was Round 1's stream plan (PR #64). It is NOT a live
+// fallback: a prior "fix" silently substituted this whenever args.streams failed to
+// parse, which meant a later round (args.streams genuinely non-empty, but `args` itself
+// arrived stringified — see the defensive JSON.parse below) silently re-ran this
+// already-merged Round 1 work instead of erroring, burning a full agent fleet for zero
+// new output and no visible failure signal. Never resurrect a silent default-streams
+// fallback in this script — a coordinator script must fail LOUDLY when it can't
+// determine what to run, never quietly substitute unrelated old work. Kept here only so
+// the shape/style of a real stream spec is easy to find; not read by any code below.
+const ROUND_1_STREAMS_FOR_REFERENCE_ONLY = [
   {
     id: 'inbox-reads',
     worktreeName: 'wt-inbox-reads',
@@ -329,16 +333,51 @@ async function runStream(spec) {
 
 phase('Plan')
 
-let streamSpecs = args && Array.isArray(args.streams) && args.streams.length ? args.streams : null
+// The Workflow tool's `args` param has been observed to arrive stringified (a JSON-encoded
+// string) instead of as a live object — defend against that ONE case, but do not paper over
+// anything else: if after this, streams still can't be found, THROW with full diagnostics
+// rather than silently substituting unrelated work. A coordinator script that can run
+// different work every round must never guess at "probably fine" defaults when its actual
+// input didn't arrive — that failure mode is worse than crashing (see the block comment
+// above ROUND_1_STREAMS_FOR_REFERENCE_ONLY for exactly how this went wrong once already).
+let resolvedArgs = args
+if (typeof resolvedArgs === 'string') {
+  try {
+    resolvedArgs = JSON.parse(resolvedArgs)
+    log('args arrived as a JSON string, not an object — parsed it defensively.')
+  } catch (e) {
+    throw new Error(
+      'migration-autopilot: args arrived as a string and failed JSON.parse (' +
+        e.message +
+        '). First 300 chars: ' +
+        String(args).slice(0, 300)
+    )
+  }
+}
 
-if (!streamSpecs && DEFAULT_STREAMS.length) {
-  log('No usable args.streams received — using the DEFAULT_STREAMS fallback baked into the script for this round.')
-  streamSpecs = DEFAULT_STREAMS
+let streamSpecs = null
+if (resolvedArgs && resolvedArgs.streams !== undefined) {
+  if (Array.isArray(resolvedArgs.streams) && resolvedArgs.streams.length > 0) {
+    streamSpecs = resolvedArgs.streams
+  } else if (Array.isArray(resolvedArgs.streams) && resolvedArgs.streams.length === 0) {
+    // Explicit empty array = "let the planner decide" — documented, intentional, not a bug.
+    log('args.streams was an explicit empty array — falling through to the mig-orchestrator planning agent.')
+  } else {
+    // Present but not an array at all (string/object/number/etc) — unambiguously a caller
+    // bug (e.g. streams double-JSON-encoded, or nested one level too deep). Never guess
+    // which one it is; surface exactly what arrived so the caller can fix the real problem.
+    throw new Error(
+      'migration-autopilot: args.streams was present but is not an array. typeof=' +
+        typeof resolvedArgs.streams +
+        ' value(first 500 chars)=' +
+        JSON.stringify(resolvedArgs.streams).slice(0, 500)
+    )
+  }
 }
 
 if (!streamSpecs) {
   const priorityHint =
-    (args && args.priorityHint) ||
+    (resolvedArgs && resolvedArgs.priorityHint) ||
     'Get to a demoable, internally-usable prototype as fast as possible. Odoo/WMS/POS/accounting (plan Stream B: phases 8-9 and everything depending on them) are explicitly OUT OF SCOPE for now — do not schedule them. Prefer Stream A (2->3->4->5->6->7) work, sized so each stream is realistically finishable and gate-passable in one round.'
 
   const planPrompt =

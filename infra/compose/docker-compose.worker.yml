@@ -85,6 +85,14 @@ services:
       # one line up. See docs/runbooks/worker-realtime-relay-smoke.md.
       WORKER_REALTIME_PORT: 8100
       TZ: Asia/Bangkok
+    ports:
+      # Phase 4 batch 2 (mig-infra plumbing brief): publish ONLY the realtime
+      # Socket.io port to the host, not WORKER_HEALTH_PORT (8099 stays
+      # container-internal — out of scope for this batch). apps/admin has no
+      # container yet, so a developer running it on the host via `next dev`
+      # (NEXT_PUBLIC_REALTIME_URL, see infra/compose/.env.example) needs a
+      # host-reachable path to this container's realtime server.
+      - "${WORKER_REALTIME_HOST_PORT:-8100}:8100"
     depends_on:
       redis:
         condition: service_healthy

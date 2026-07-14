@@ -6,6 +6,7 @@ import { SearchBox } from './_components/SearchBox';
 import { ChannelSwitcher } from './_components/ChannelSwitcher';
 import { FilterBar } from './_components/FilterBar';
 import { ConversationListLoader } from './_components/ConversationListLoader';
+import { RealtimeSocketProvider } from './_components/RealtimeSocketProvider';
 
 /**
  * (tenant)/inbox/layout.tsx — persistent left-pane sidebar wrapping every
@@ -47,6 +48,7 @@ export default async function InboxLayout({ children }: { children: ReactNode })
   ]);
 
   return (
+    <RealtimeSocketProvider lineAccountId={accountId}>
     <div className="h-full min-h-[calc(100vh-4rem)] flex bg-white overflow-hidden">
       <div id="inboxSidebar" className="w-72 flex-shrink-0 bg-white border-r flex flex-col">
         <div className="p-3 border-b flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)' }}>
@@ -90,5 +92,6 @@ export default async function InboxLayout({ children }: { children: ReactNode })
 
       <div className="flex-1 min-w-0 flex flex-col">{children}</div>
     </div>
+    </RealtimeSocketProvider>
   );
 }

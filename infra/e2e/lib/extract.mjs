@@ -1565,3 +1565,660 @@ export function extractInboxThreadPage(html, markers) {
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 tail — /articles (list), /articles/[slug] (detail) + its
+// view-count-increment side effect, /pharmacists. Same label-anchored,
+// never-CSS-class convention as every extractor above — read this module's
+// own doc comment at the top of the file first if you haven't already.
+// ---------------------------------------------------------------------------
+
+/**
+ * Shared per-card delimiter for BOTH articles.php's list grid AND
+ * article.php's "related articles" grid: every card on either page is a
+ * single `<a href="...SLUG...">...</a>` block, and the SLUG itself is a
+ * literal, byte-identical substring of that href on both stacks — PHP:
+ * `article.php?slug=<?= htmlspecialchars($article['slug']) ?>` (note the
+ * SINGULAR "article.php", the detail-page filename — deliberately distinct
+ * from "articles.php", the plural list-page filename category chips/back
+ * links/tag links all point at, so this pattern can never accidentally match
+ * one of those); Next: `/articles/${encodeURIComponent(article.slug)}` (this
+ * batch's fixture uses plain lowercase-ascii-hyphen slugs, so
+ * encodeURIComponent leaves them byte-identical to the raw slug — no
+ * decoding gymnastics needed, `decodeURIComponent()` below is a no-op safety
+ * net, not load-bearing). Verified against both templates' full source that
+ * NEITHER the share-button hrefs (both stacks urlencode/percent-escape the
+ * `?`/`=`/`/` characters of the embedded share URL, so neither raw pattern
+ * appears there) NOR the JSON-LD/og:url meta tags (both sit in `<head>`,
+ * before `<main>` — already excluded by `sliceMainContent()`) can produce a
+ * false match.
+ */
+const ARTICLE_CARD_HREF_RE = /(?:article\.php\?slug=|\/articles\/)([a-z0-9][a-z0-9-]*)"[^>]*>([\s\S]*?)<\/a>/g;
+
+/** Tag-chip hrefs on both the list-page card meta AND the detail page's own tag row share the same `?tag=<value>"...>#<TAGTEXT></a>` shape (PHP: `articles.php?tag=<?= urlencode($tag) ?>` / `#<?= htmlspecialchars($tag) ?>`; Next: `/articles?tag=${encodeURIComponent(tag)}` / `#{tag}`) — the leading literal `#` is part of both stacks' own visible link text, not a URL fragment. */
+const ARTICLE_TAG_HREF_RE = /\?tag=[^"]*"[^>]*>#([^<]*)<\/a>/g;
+
+/**
+ * Extracts articles.php's data-point list: the category-filter-bar's chip
+ * labels IN RENDER ORDER (same "ทั้งหมด"-anchored, first-seen-order
+ * technique `extractTemplatesPage()` already established for its own
+ * category chips — only rendered at all when `!empty($categories)`, so an
+ * empty array here is a legitimate result, not an extraction failure), plus
+ * one `{slug, isFeatured}` tuple per rendered article card IN ROW ORDER.
+ * Row order matters and is exactly the parity signal this function is FOR:
+ * `getPublishedArticles()` orders `is_featured DESC, published_at DESC`
+ * while `search()` orders `published_at DESC` only (no is_featured
+ * precedence) — a wrong order or a wrong row set (e.g. the `is_published`
+ * filter leaking a draft, or the category filter's WHERE clause drifting)
+ * shows up here as a mismatched `cards` array.
+ *
+ * DELIBERATELY NOT a full field reconstruction (title/author/date per
+ * card): PHP's per-card author/date markers are icon-FONT glyphs
+ * (`<i class="fas fa-user-md">`, invisible to this fetch-only, no-CSS
+ * extractor — icon fonts render via `::before` CSS content, never a real
+ * text node), while Next's ArticleCard.tsx renders literal emoji TEXT
+ * characters (👨‍⚕️/🗓️) for the same spots instead — an unavoidable
+ * structural asymmetry between the two ports (same family as this module's
+ * "flex rendering asymmetry" note on `extractInboxThreadPage()`), not a bug
+ * on either side. `slug` (identity + order + count) and `isFeatured` (does
+ * this card's own `<a>...</a>` body contain the literal "แนะนำ"
+ * featured-badge text) already prove everything this page's filters/
+ * ordering are actually FOR, without that fragility.
+ */
+export function extractArticlesListPage(html) {
+  // Comments stripped BEFORE any regex below runs — PHP's card/tag markup
+  // has no comment concept at all, but Next's SSR output can insert an
+  // empty `<!-- -->` hydration-boundary marker between two adjacent
+  // text-producing children (this module's own top-of-file doc; verified
+  // empirically for this exact page in this batch's own harness run: the
+  // "#{tag}" / "฿{fee}" literal-then-expression shape). Stripping (not
+  // splitting on) comments merges both sides back into one run, matching
+  // PHP's un-annotated text exactly — same technique `stripTags()` already
+  // uses for the label-anchored `HtmlCursor` extractors; the plain regexes
+  // below need the same treatment applied up front since they don't go
+  // through `HtmlCursor` at all.
+  const main = sliceMainContent(html).replace(/<!--[\s\S]*?-->/g, '');
+
+  // Anchored on the PLAIN "ทั้งหมด" text, not a tight `>ทั้งหมด<` boundary —
+  // PHP's own template renders this chip's text on its OWN indented line
+  // (`<a ...>\n    ทั้งหมด\n</a>`, confirmed by reading articles.php in
+  // full), so a `>ทั้งหมด<` search (no whitespace tolerance) never matches
+  // real PHP output at all; caught by this batch's own real harness run,
+  // not assumed.
+  const allChipIdx = main.indexOf('ทั้งหมด');
+  let categoryButtons = [];
+  if (allChipIdx !== -1) {
+    const barStart = main.lastIndexOf('<a', allChipIdx);
+    const firstCardMatch = new RegExp(ARTICLE_CARD_HREF_RE.source).exec(main.slice(barStart));
+    const barEnd = firstCardMatch ? barStart + firstCardMatch.index : main.length;
+    const barSlice = main.slice(barStart, barEnd);
+    categoryButtons = [...barSlice.matchAll(/<a[^>]*>([^<]*)<\/a>/g)].map((m) => decodeEntities(m[1]).trim());
+  }
+
+  const cards = [...main.matchAll(ARTICLE_CARD_HREF_RE)].map((m) => ({
+    slug: decodeURIComponent(m[1]),
+    isFeatured: m[2].includes('แนะนำ'),
+  }));
+
+  const emptyStateShown = main.includes('ไม่พบบทความ');
+
+  return { categoryButtons, cardCount: cards.length, cards, emptyStateShown };
+}
+
+/**
+ * Extracts article.php's data-point list for a single resolved article:
+ * `title` (the `<h1>...</h1>` text — a bare-tag-name anchor, not a CSS
+ * class, since PHP's `.article-title` and Next's Tailwind utility string
+ * share no class token; both stacks render the title as the h1's ONLY
+ * child, so no nested-tag/hydration-comment concern here), `tags` (the
+ * `#tagname` chip row, in array order — proves `json_decode`/`JSON.parse`
+ * of the `tags` column round-trips identically), and the related-articles
+ * grid (`relatedSectionShown` + `relatedSlugs` in row order, reusing
+ * `ARTICLE_CARD_HREF_RE` — on this page it can ONLY match related-card
+ * anchors, see that const's own doc for why the list-grid/share-button/
+ * meta-tag false-match cases are already ruled out).
+ *
+ * `view_count` IS DELIBERATELY NOT RETURNED HERE — see `extractArticleViewCount()`'s
+ * own doc for why a direct PHP-vs-Next diff of it would be a guaranteed,
+ * non-bug false mismatch on this harness's shared-database setup, and how
+ * the dedicated two-fetch check proves the increment side effect instead.
+ *
+ * Comments stripped up front before any regex runs below — same reasoning
+ * as `extractArticlesListPage()`'s own doc comment (caught the SAME way:
+ * Next's `#{tag}` tag-chip row genuinely renders a hydration comment
+ * between the literal "#" and the `{tag}` expression in this batch's own
+ * real harness run, which silently zeroed out `tags` entirely before this
+ * fix — a regex requiring an unbroken `#TAGTEXT` run has nowhere to
+ * "skip past" a comment sitting in the middle of it, so the whole match
+ * fails rather than just mis-capturing).
+ */
+export function extractArticleDetailPage(html) {
+  const main = sliceMainContent(html).replace(/<!--[\s\S]*?-->/g, '');
+
+  const titleMatch = /<h1[^>]*>([\s\S]*?)<\/h1>/.exec(main);
+  const title = titleMatch ? firstVisibleChunk(titleMatch[1]) : null;
+
+  const tags = [...main.matchAll(ARTICLE_TAG_HREF_RE)].map((m) => decodeEntities(m[1]).trim());
+
+  const relatedSectionShown = main.includes('บทความที่เกี่ยวข้อง');
+  const relatedSlugs = [...main.matchAll(ARTICLE_CARD_HREF_RE)].map((m) => decodeURIComponent(m[1]));
+
+  return { title, tags, relatedSectionShown, relatedCount: relatedSlugs.length, relatedSlugs };
+}
+
+/**
+ * Extracts JUST the rendered view-count number from an article.php /
+ * `/articles/[slug]` response — `HealthArticleService::getBySlug()` (PHP)
+ * and `[slug]/page.tsx`'s `incrementViewCountAction()` (Next) both display
+ * the PRE-increment value the same request's own SELECT captured (the
+ * increment UPDATE fires AFTER that value is already in hand — read both
+ * sources: PHP increments inside `getBySlug()` itself, after fetching the
+ * row it's about to `return`; Next's `queries.ts::getArticleBySlug()` is a
+ * pure read, with the increment fired separately, afterward, from
+ * `actions.ts`), so EVERY successful fetch of the same slug increments the
+ * DB counter by exactly 1 regardless of which stack served it.
+ *
+ * THIS IS WHY `extractArticleDetailPage()` never returns `view_count`: this
+ * harness's PHP and Next stacks share the SAME physical MariaDB row (one
+ * tenant DB, one `health_articles` table — see this file's module doc/
+ * parity.mjs's own header for the "real stack, no mocks" design). A
+ * `runPagePair()` PHP-then-Next fetch of the SAME slug would show PHP the
+ * PRE-increment count and Next the count ONE HIGHER (Next's SELECT runs
+ * after PHP's own UPDATE already landed) — a real, guaranteed, order-
+ * dependent off-by-one that is NOT a product bug, just an artifact of this
+ * fetch-only harness's shared-database setup. `runArticleViewCountIncrementChecks()`
+ * in parity.mjs uses this extractor for a same-stack, two-fetch check
+ * instead (`runSingleSideCheck()`'s pattern) — that comparison is immune to
+ * the cross-stack ordering issue since it never compares PHP's count to
+ * Next's count directly, only a stack's own count against its own earlier
+ * count.
+ *
+ * Anchored on the literal, English "views" label text — `HtmlCursor`'s
+ * `beforeLabel()` already strips the hydration comment React's SSR inserts
+ * between the `{formatNumber(...)}` expression and the adjacent " views"
+ * text-literal sibling (the same "baht-sign-plus-value pattern" this
+ * module's own top-of-file doc already documents as handled by
+ * `stripTags()`'s comment removal, not a new case).
+ */
+export function extractArticleViewCount(html) {
+  const cursor = new HtmlCursor(html);
+  const raw = cursor.beforeLabel('views');
+  const n = parseLeadingNumber(raw);
+  if (n === null) {
+    throw new Error(`extractArticleViewCount: could not parse a number immediately before the "views" label (raw=${JSON.stringify(raw)})`);
+  }
+  return n;
+}
+
+/**
+ * Per-pharmacist-card delimiter for /pharmacists: unlike every OTHER
+ * extractor in this file that can lean on a shared `data-*`/class anchor,
+ * PHP's `includes/pharmacy/pharmacists.php` card markup carries NO
+ * per-pharmacist identifying attribute at all (grepped the full file — no
+ * `data-pharmacist-id`, no `id="pharm-<n>"`); Next's `PharmacistCard.tsx`
+ * DOES add `data-pharmacist-id={pharmacist.id}`, but only on its own side —
+ * a one-sided hook is useless as a shared delimiter. The one thing both
+ * sides genuinely share, byte-for-byte, per card: the avatar `<img>`'s
+ * `src` — `PharmacistCard.tsx`'s own doc comment confirms it reproduces
+ * PHP's `image_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' +
+ * urlencode(name)` fallback "exactly" (Next uses `encodeURIComponent`, not
+ * `urlencode` — the two differ for a literal space character, `+` vs
+ * `%20`, but this extractor never needs to decode the seeded NAME back out,
+ * only to find where each card BEGINS, so that divergence is harmless
+ * here). This fixture's seed file sets every pharmacist's `image_url` to
+ * NULL specifically so this fallback — and therefore this delimiter —
+ * fires for every card, every run.
+ */
+const PHARMACIST_CARD_MARKER = 'svg?seed=';
+
+/**
+ * Extracts /pharmacists' data-point list: `emptyStateShown` (PHP: "ยังไม่มีเภสัชกร"
+ * text; Next: `EmptyState`'s `heading` prop, same literal string) plus one
+ * per-card object, split on `PHARMACIST_CARD_MARKER` (see that const's own
+ * doc). Per card:
+ *   - `isActive` — PHP's `<?= !$p['is_active'] ? 'opacity-60' : '' ?>` /
+ *     Next's `${!pharmacist.isActive ? 'opacity-60' : ''}` share the
+ *     literal `opacity-60` class TOKEN (verified by reading both sources —
+ *     `PharmacistCard.tsx` was ported preserving this exact utility class,
+ *     unlike most other ported pages in this codebase) — searched in a
+ *     bounded BACKWARD window from the card marker (the outer card `<div>`'s
+ *     own opening tag, which carries this class, sits BEFORE the avatar
+ *     `<img>` in render order on both stacks).
+ *   - `isAvailable` — the `title="พร้อมให้บริการ"` green-dot indicator's
+ *     attribute text (only rendered `if ($p['is_available'])` /
+ *     `pharmacist.isAvailable`) — an attribute VALUE, not visible text, but
+ *     still literal raw-HTML substring content this fetch-only extractor
+ *     can see regardless.
+ *   - `upcomingCount` / `completedCount` — the two correlated-subquery
+ *     numbers (`(SELECT COUNT(*) FROM appointments WHERE ... status IN
+ *     ('pending','confirmed') AND appointment_date >= CURDATE())` /
+ *     `status = 'completed'`), read via `beforeLabel('นัดหมายรอ')`/
+ *     `beforeLabel('เสร็จสิ้น')` — the single highest-value signal this
+ *     extractor can prove, since it's the one part of this page backed by a
+ *     real, easy-to-drift-independently SQL computation rather than a
+ *     straight column passthrough.
+ *   - `isFree` / `feeAmount` — PHP's `$p['consultation_fee'] > 0` branch
+ *     (`฿<?= number_format(...) ?>` vs the literal "ฟรี" free label); `฿`
+ *     is the same shared numeric-value anchor `extractLineGroupsPage()`'s
+ *     doc and this module's top-of-file "baht-sign-plus-value pattern" note
+ *     already establish as comment-safe.
+ *   - `consultationDuration` — `beforeLabel('นาที')`.
+ *
+ * LAST-CARD BOUNDARY TRAP (caught by this batch's own real harness run, not
+ * assumed): the naive "next marker or `main.length`" slice is UNBOUNDED for
+ * the LAST card, and PHP's Add/Edit modal (`#pharmacistModal`) is rendered
+ * UNCONDITIONALLY, just CSS-`hidden` — including its OWN
+ * `title="พร้อมให้บริการ"`-equivalent checkbox label
+ * (`<span>พร้อมให้บริการ</span>`) — so an unbounded last-card slice was
+ * silently absorbing that trailing modal's own "is_available" checkbox
+ * label and reporting `isAvailable: true` for whichever pharmacist happened
+ * to render last, REGARDLESS of that pharmacist's real value (Next's own
+ * `PharmacistFormModal` returns `null` until opened — closed by default —
+ * so it never had this problem, an asymmetry between the two ports that is
+ * NOT itself a bug: both render an identical closed-by-default modal to the
+ * end user, PHP just always ships its markup, hidden, in the initial
+ * response). Fixed by additionally bounding every card's forward slice at
+ * its OWN delete button — `bg-red-100 text-red-600 rounded-lg
+ * hover:bg-red-200 text-sm`, verified by reading both `includes/pharmacy/
+ * pharmacists.php` (lines 235-238) and `PharmacistCard.tsx` (the delete
+ * button) as a genuinely shared, per-card, occurs-exactly-once class
+ * string — nothing in either modal reuses it (checked: the modals' own
+ * buttons use `bg-green-500`/plain-border/`text-red-500` shades, not
+ * `bg-red-100`).
+ */
+const PHARMACIST_DELETE_BTN_CLASS = 'bg-red-100';
+
+export function extractPharmacistsPage(html) {
+  const main = sliceMainContent(html);
+  const emptyStateShown = main.includes('ยังไม่มีเภสัชกร');
+
+  const starts = [];
+  for (let from = 0; ; ) {
+    const idx = main.indexOf(PHARMACIST_CARD_MARKER, from);
+    if (idx === -1) break;
+    starts.push(idx);
+    from = idx + PHARMACIST_CARD_MARKER.length;
+  }
+
+  const cards = starts.map((start, i) => {
+    const end = i + 1 < starts.length ? starts[i + 1] : main.length;
+    const rawForward = main.slice(start, end);
+    const deleteBtnIdx = rawForward.indexOf(PHARMACIST_DELETE_BTN_CLASS);
+    const forward = deleteBtnIdx === -1 ? rawForward : rawForward.slice(0, deleteBtnIdx + PHARMACIST_DELETE_BTN_CLASS.length);
+    const backward = main.slice(Math.max(0, start - WINDOW_CHARS), start);
+
+    const isActive = !backward.includes('opacity-60');
+    const isAvailable = forward.includes('พร้อมให้บริการ');
+    const upcomingCount = parseLeadingNumber(new HtmlCursor(forward).beforeLabel('นัดหมายรอ'));
+    const completedCount = parseLeadingNumber(new HtmlCursor(forward).beforeLabel('เสร็จสิ้น'));
+    const isFree = forward.includes('>ฟรี<');
+    const feeAmount = isFree ? 0 : parseLeadingNumber(new HtmlCursor(forward).afterLabel('฿'));
+    const consultationDuration = parseLeadingNumber(new HtmlCursor(forward).beforeLabel('นาที'));
+
+    return { isActive, isAvailable, upcomingCount, completedCount, isFree, feeAmount, consultationDuration };
+  });
+
+  return { cardCount: cards.length, emptyStateShown, cards };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 settings batch 1 (mig-infra) — /settings?tab={welcome,email,
+// consent,shop_tax} extraction. See parity.mjs's own module doc + docs/
+// runbooks/phase2-settings-tabs-batch1-parity.md for the full page-pair
+// write-up (which PHP source AND which Next component each extractor was
+// read against, in full, before writing — includes/settings/{welcome,email,
+// consent,shop-tax}.php and apps/admin/src/app/(tenant)/settings/
+// _components/{WelcomeTab,WelcomeMessageForm,EmailTab,ConsentTab,
+// ShopTaxTab}.tsx).
+//
+// TAG-ATTRIBUTE HELPERS — this batch's forms are plain `<input>`/`<select>`/
+// `<textarea>` elements, not the repeated-row/KPI-card shapes every earlier
+// extractor above anchors on. `findInputTag()`/`attrValue()` below match a
+// whole `<input ...>` (or `<select>`) tag by requiring a set of literal
+// substrings ANYWHERE inside it (not by assuming attribute ORDER) — PHP's
+// source (includes/settings/{welcome,email,shop-tax}.php) and Next's port
+// don't necessarily emit attributes in the same order (e.g. PHP interpolates
+// `value="..."` via inline `<?= ?>` wherever the template happens to put it;
+// React's JSX prop order becomes SSR attribute order, which is whatever
+// order that component's author wrote the props in — verified: ShopTaxTab
+// .tsx writes `type`, `name`, `maxLength`, `required`, `defaultValue`,
+// `className`, `placeholder`, a DIFFERENT order than PHP's own
+// `type`/`name`/`maxlength`/`value`/`class`/`placeholder`) — matching on tag
+// STRUCTURE + substring presence, not position, is what keeps this robust to
+// that difference, same "label-anchored, not class/order-anchored"
+// philosophy this file's own module doc establishes for everything else.
+// ---------------------------------------------------------------------------
+
+/** Returns the full `<input ...>` (self-closing, single-tag) source for the FIRST `<input>` whose tag text contains every string in `mustInclude`, or null. Order-independent by design — see this section's own header comment. */
+function findInputTag(html, mustInclude) {
+  for (const m of html.matchAll(/<input\b[^>]*>/gi)) {
+    if (mustInclude.every((s) => m[0].includes(s))) return m[0];
+  }
+  return null;
+}
+
+/** Pulls `attr="..."` out of a single already-matched tag string (NOT a full-document search) — returns the entity-decoded value, or null if the tag is null or the attribute is absent. */
+function attrValue(tag, attr) {
+  if (!tag) return null;
+  const m = tag.match(new RegExp(`${attr}="([^"]*)"`, 'i'));
+  return m ? decodeEntities(m[1]) : null;
+}
+
+/** True if `tag`'s own source contains a bare/standalone `checked` (React SSR: `checked=""` or `checked`; PHP: literal ` checked` from `<?= $x ? 'checked' : '' ?>`) — both forms match `\bchecked\b`. */
+function hasCheckedAttr(tag) {
+  return tag !== null && /\bchecked\b/.test(tag);
+}
+
+/** Given the INNER html of a `<select>...</select>` (NOT the whole document), returns the `value="..."` of whichever `<option>` carries a `selected` attribute, or null if none do. Same order-independent tag-substring approach as findInputTag()/attrValue() above — do not assume `value=` appears before `selected` in the emitted markup. */
+function selectedOptionValue(selectInnerHtml) {
+  for (const m of selectInnerHtml.matchAll(/<option\b[^>]*>/gi)) {
+    if (/\bselected\b/.test(m[0])) {
+      const valueMatch = m[0].match(/value="([^"]*)"/i);
+      if (valueMatch) return valueMatch[1];
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// /settings?tab=welcome — genuine PHP-vs-Next diff, BUT both sides are
+// EXPECTED to land on the exact same hardcoded default greeting.
+//
+// CONFIRMED FINDING (see infra/e2e/seed/75-phase2-settings-batch1-fixture.sql
+// .tmpl's own "welcome_settings" section + apps/admin's welcome-queries.ts
+// module doc for the full trace): `welcome_settings` does not exist in the
+// committed tenant template and is created by no PHP file — on THIS schema,
+// includes/settings/welcome.php's own `SELECT * FROM welcome_settings ...`
+// (lines 11-17) always throws PDOException, caught, and
+// `if (!$welcomeSettings)` (line 19) falls through to the hardcoded default
+// greeting object (lines 20-25). apps/admin's getWelcomeSettings() ports
+// this exact try/catch-then-default contract (see that file's own "CONFIRMED
+// FINDING" doc). So this is a genuine two-sided diff() that is EXPECTED to
+// come back empty (both sides equal) under today's schema — not a one-sided
+// assertion like settings:email below. If a future migration adds
+// `welcome_settings` (or seeds a row), this extractor keeps working exactly
+// the same way — it reads whatever is actually rendered, it does not assume
+// the default.
+//
+// `isDefaultGreeting` is a MARKER (substring-of-the-well-known-default-
+// greeting-text), not the full raw textarea contents — deliberately, to stay
+// robust to incidental whitespace-normalization differences between a raw
+// PHP `<textarea>...</textarea>` text node (htmlspecialchars() does not
+// touch `\n`) and React's SSR'd `defaultValue` text node (also preserves
+// `\n` verbatim — verified by reading WelcomeMessageForm.tsx in full — but a
+// marker is still the more resilient signal for a 100+ character bilingual
+// string with an emoji in it).
+// ---------------------------------------------------------------------------
+
+const WELCOME_DEFAULT_GREETING_MARKER = 'ยินดีต้อนรับ! 🎉';
+const WELCOME_TEXT_CONTENT_TEXTAREA_RE = /<textarea\b[^>]*name="text_content"[^>]*>([\s\S]*?)<\/textarea>/i;
+
+export function extractSettingsWelcomeTab(html) {
+  const main = sliceMainContent(html);
+
+  const enableTag = findInputTag(main, ['name="is_enabled"']);
+  const isEnabled = hasCheckedAttr(enableTag);
+
+  const textRadioTag = findInputTag(main, ['name="message_type"', 'value="text"']);
+  const flexRadioTag = findInputTag(main, ['name="message_type"', 'value="flex"']);
+  const messageType = hasCheckedAttr(textRadioTag) ? 'text' : hasCheckedAttr(flexRadioTag) ? 'flex' : null;
+
+  const textAreaMatch = main.match(WELCOME_TEXT_CONTENT_TEXTAREA_RE);
+  const textContentValue = textAreaMatch ? decodeEntities(textAreaMatch[1]) : null;
+  const isDefaultGreeting = textContentValue !== null && textContentValue.includes(WELCOME_DEFAULT_GREETING_MARKER);
+
+  return { isEnabled, messageType, isDefaultGreeting };
+}
+
+// ---------------------------------------------------------------------------
+// /settings?tab=email — the ONE deliberate one-sided-assertion exception in
+// this batch, same family as extractCrmDashboardAdvancedDefensiveEmpty() /
+// extractInboxSidebarPage() elsewhere in this file (see either's own module
+// doc for the general pattern this follows).
+//
+// WHY THIS IS ONE-SIDED, NOT A DIFF (confirmed by reading root /settings.php
+// in full — the LIVE 941-LOC file, not the dead 562-LOC
+// includes/settings/settings.php duplicate, which has zero includes/requires
+// anywhere in the repo): settings.php's own `$tabs` whitelist (lines 33-46)
+// has `'email' => [...]` COMMENTED OUT. `getActiveTab()`
+// (includes/components/tabs.php lines 336-351) validates `?tab=` with
+// `isset($tabs[$tab])` and silently falls back to the explicit default
+// ('line', settings.php line 48: `getActiveTab($tabs, 'line')`) on ANY
+// unrecognized key — so `settings.php?tab=email` ALWAYS renders
+// includes/settings/line.php's LINE-accounts-manager markup, NEVER
+// includes/settings/email.php's, even though email.php's own code still
+// works perfectly if reached some other way. Next's port (apps/admin/src/
+// app/(tenant)/settings/page.tsx) deliberately does NOT reproduce this
+// fallback for 'email' — its own module doc calls this out explicitly as an
+// intentional, documented one-sided divergence: `ROUTABLE_TAB_KEYS` includes
+// 'email' (so `/settings?tab=email` genuinely renders EmailTab, a working
+// port) while `SETTINGS_TABS` (the visible nav pill list) stays at the same
+// 7 keys PHP's live whitelist has, so the nav UI still matches PHP exactly —
+// only DIRECT `?tab=email` navigation differs, and only in the
+// "more capable, not less" direction.
+//
+// extractSettingsEmailPhpFallback() — run against PHP's response — asserts
+// PHP shows LINE-tab markup and does NOT show email-tab markup (throws
+// otherwise, so a future re-enabling of the 'email' key in settings.php's
+// $tabs whitelist is CAUGHT, not silently masked — see the thrown message).
+//
+// extractSettingsEmailTab() — run against Next's response — asserts the
+// seeded infra/e2e/seed/75-phase2-settings-batch1-fixture.sql.tmpl
+// email_settings row (id=1) actually round-trips through the real form
+// (throws on any field mismatch, same "positively assert the fixture's own
+// known truth" shape as extractLineGroupDetailHeaderNext() elsewhere in this
+// file). `smtp_pass`'s LITERAL VALUE is deliberately not asserted (only
+// field-presence) — no reason to echo even an obviously-fake fixture
+// password value back out of a test assertion string.
+// ---------------------------------------------------------------------------
+
+const SETTINGS_EMAIL_FIXTURE = {
+  smtpHost: 'smtp.e2e-fixture.invalid',
+  smtpPort: 587,
+  smtpUser: 'notify@e2e-fixture.invalid',
+  smtpSecure: 'tls',
+  fromEmail: 'noreply@e2e-fixture.invalid',
+  fromName: 'Reya E2E Fixture Sender',
+};
+
+export function extractSettingsEmailPhpFallback(html) {
+  const main = sliceMainContent(html);
+  const hasLineHeading = main.includes('บัญชี LINE Official Account'); // includes/settings/line.php line 42
+  const hasLineModalTrigger = main.includes('openLineModal()'); // includes/settings/line.php line 49
+  const hasEmailHeading = main.includes('ตั้งค่า Email/SMTP'); // includes/settings/email.php line 40 — must be ABSENT
+  const hasSmtpHostField = main.includes('name="smtp_host"'); // includes/settings/email.php line 56 — must be ABSENT
+
+  const problems = [];
+  if (!hasLineHeading) problems.push('LINE-tab heading "บัญชี LINE Official Account" not found');
+  if (!hasLineModalTrigger) problems.push('LINE-tab "openLineModal()" trigger not found');
+  if (hasEmailHeading) problems.push('email-tab heading "ตั้งค่า Email/SMTP" IS present');
+  if (hasSmtpHostField) problems.push('smtp_host field IS present');
+  if (problems.length > 0) {
+    throw new Error(
+      `settings.php?tab=email fallback-to-line invariant violated: ${problems.join('; ')}. If 'email' was re-enabled in settings.php's $tabs whitelist (settings.php lines 33-46), this exception is stale — switch settings:email back to a normal two-sided runPagePair() diff per docs/runbooks/phase2-settings-tabs-batch1-parity.md's "PHP email tab unreachable" section.`
+    );
+  }
+  return { fallsBackToLineTab: true };
+}
+
+export function extractSettingsEmailTab(html) {
+  const main = sliceMainContent(html);
+
+  const smtpHost = attrValue(findInputTag(main, ['name="smtp_host"']), 'value');
+  const smtpPortRaw = attrValue(findInputTag(main, ['name="smtp_port"']), 'value');
+  const smtpUser = attrValue(findInputTag(main, ['name="smtp_user"']), 'value');
+  const smtpPassPresent = findInputTag(main, ['name="smtp_pass"']) !== null;
+  const fromEmail = attrValue(findInputTag(main, ['name="from_email"']), 'value');
+  const fromName = attrValue(findInputTag(main, ['name="from_name"']), 'value');
+
+  const selectMatch = main.match(/<select\b[^>]*name="smtp_secure"[^>]*>([\s\S]*?)<\/select>/i);
+  const smtpSecure = selectMatch ? selectedOptionValue(selectMatch[1]) : null;
+
+  const smtpPort = smtpPortRaw === null ? null : Number(smtpPortRaw);
+
+  const problems = [];
+  if (smtpHost !== SETTINGS_EMAIL_FIXTURE.smtpHost) problems.push(`smtp_host=${JSON.stringify(smtpHost)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.smtpHost)}`);
+  if (smtpPort !== SETTINGS_EMAIL_FIXTURE.smtpPort) problems.push(`smtp_port=${JSON.stringify(smtpPortRaw)}, expected ${SETTINGS_EMAIL_FIXTURE.smtpPort}`);
+  if (smtpUser !== SETTINGS_EMAIL_FIXTURE.smtpUser) problems.push(`smtp_user=${JSON.stringify(smtpUser)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.smtpUser)}`);
+  if (!smtpPassPresent) problems.push('smtp_pass field not found');
+  if (fromEmail !== SETTINGS_EMAIL_FIXTURE.fromEmail) problems.push(`from_email=${JSON.stringify(fromEmail)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.fromEmail)}`);
+  if (fromName !== SETTINGS_EMAIL_FIXTURE.fromName) problems.push(`from_name=${JSON.stringify(fromName)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.fromName)}`);
+  if (smtpSecure !== SETTINGS_EMAIL_FIXTURE.smtpSecure) problems.push(`smtp_secure selected option=${JSON.stringify(smtpSecure)}, expected ${JSON.stringify(SETTINGS_EMAIL_FIXTURE.smtpSecure)}`);
+  if (problems.length > 0) {
+    throw new Error(`settings?tab=email (next) did not render the seeded email_settings fixture row (id=1): ${problems.join('; ')}`);
+  }
+
+  return { smtpHost, smtpPort, smtpUser, smtpPassPresent, fromEmail, fromName, smtpSecure };
+}
+
+// ---------------------------------------------------------------------------
+// /settings?tab=consent — genuine PHP-vs-Next diff. AUTO-DETECTS which of
+// TWO valid states rendered (both stacks share the exact same branch — see
+// below) rather than assuming one:
+//
+//   (a) the red error banner ("❌ ... กรุณารัน migration ก่อน") — fires if
+//       ANY of consent.php's 4 shared-try-block queries throws (PHP) / if
+//       getConsentPageData()'s single try throws (Next) — see either's own
+//       module doc.
+//   (b) the populated stats+tables view — 4 stat-card numbers (lines 91-108
+//       in consent.php / ConsentTab.tsx's matching JSX) via label-anchored
+//       HtmlCursor lookups (each number sits immediately BEFORE its own
+//       label in a sibling `<div>`, same "number div, then label div" shape
+//       extractUserDetailPage() already anchors on with beforeLabel()
+//       elsewhere in this file), plus a row count for each of the two log
+//       tables via the KNOWN, DISTINCT `ip_address` literals
+//       infra/e2e/seed/75-phase2-settings-batch1-fixture.sql.tmpl seeds
+//       (203.0.113.101-104 for consent_logs, 203.0.113.201-202 for
+//       data_access_logs) — real DB column values both stacks echo verbatim,
+//       same "known-value row-counting" technique this file's module doc
+//       documents for avatar-fallback/tag-name counting elsewhere, just keyed
+//       on IP strings because IP address is the one column this fixture can
+//       make PER-ROW-UNIQUE without predicting any display-name truncation/
+//       formatting logic.
+//
+// WHY AUTO-DETECT RATHER THAN ASSUME (b) OR (a) — apps/admin's
+// consent-queries.ts module doc claims (a) is the PERMANENT state on any
+// committed-schema tenant DB, reasoning that `admin_users` is a
+// platform-level table absent from every tenant DB. That is true of the
+// COMMITTED MIGRATION FILE alone, but classes/AdminAuth.php's constructor
+// (ensureTables()) auto-creates `admin_users` at RUNTIME, in the SAME
+// physical tenant database `Database::getInstance()->getConnection()`
+// returns — and this harness's own login flow (fireThrowawayProbeRequest() +
+// phpLogin()) guarantees that table exists, in that exact database, well
+// before EITHER stack's /settings?tab=consent is ever fetched (see
+// infra/e2e/seed/75-phase2-settings-batch1-fixture.sql.tmpl's "SEQUENCING
+// TRAP" section for the full trace). Whether consent.php's/
+// getConsentPageData()'s LEFT JOIN against that (now-existing, but
+// `line_account_id`-column-less) `admin_users` table actually throws is
+// something this extractor decides EMPIRICALLY from the real response, not
+// something parity.mjs assumes going in — see docs/runbooks/
+// phase2-settings-tabs-batch1-parity.md's "does consent.php's admin_users
+// JOIN actually throw?" section for this batch's own rehearsed answer.
+// Designed this way BOTH so a real regression (one stack lands in (a) while
+// the other lands in (b)) is still caught as an ordinary mismatch, AND so
+// this extractor does not need to be revisited if a future schema change
+// flips which state is reachable.
+//
+// FLAGGED FINDING (build report; discovered by THIS batch's own harness run,
+// not previously documented anywhere in this file): the KNOWN-VALUE
+// row-counting technique above ONLY works correctly against a copy of `main`
+// with every `<script>...</script>` block stripped out FIRST — verified
+// empirically via `PARITY_DUMP_HTML=1` against this batch's own real Next
+// response: EACH fixture IP literal (e.g. `203.0.113.101`) appears TWICE in
+// the raw SSR HTML — once in the real, visible `<td>` markup, and a SECOND
+// time inside a `self.__next_f.push(...)` RSC hydration payload `<script>`
+// tag (a JSON-escaped re-serialization of the same row data, used by React
+// to hydrate without a second fetch). This is the SAME general quirk
+// extractLineGroupDetailBody() (elsewhere in this file) already documents
+// and works around — but THAT page's fix ("cut the slice off at the first
+// trailing `<script` tag") does NOT generalize here: ConsentTab's hydration
+// `<script>` chunks are INTERLEAVED throughout the document (verified:
+// Next.js's streaming SSR here emits several `<script>` tags starting well
+// BEFORE the visible table markup, not only after it), so a single
+// "cut before the first `<script`" bound would incorrectly discard REAL
+// content too. `stripScriptBlocks()` below instead removes EVERY
+// `<script>...</script>` block wherever it falls, which was verified
+// (via the same real dump) to bring every fixture IP's count down to exactly
+// 1 on BOTH stacks. PHP is unaffected either way (consent.php's own
+// `<script>` block, the CSS-tab-toggle JS, contains no IP-address-shaped
+// text) — applied to both sides uniformly regardless, for symmetry and so a
+// future page reusing this same technique doesn't have to rediscover this.
+// See docs/runbooks/phase2-settings-tabs-batch1-parity.md's "RSC hydration
+// payload double-counts row markers" section for the full write-up.
+// ---------------------------------------------------------------------------
+
+const CONSENT_ERROR_BANNER_MARKER = 'กรุณารัน migration ก่อน';
+const CONSENT_LOG_IP_RE = /203\.0\.113\.10[1-4]/g;
+const DATA_ACCESS_LOG_IP_RE = /203\.0\.113\.20[1-2]/g;
+
+/** Removes every `<script>...</script>` block (tag + contents) — see this section's own "FLAGGED FINDING" doc for why plain known-value substring counting needs this first, unlike every other extractor in this file (which anchor on HTML TAG SYNTAX or immediately-adjacent label text, neither of which coincidentally re-appears verbatim inside a JSON-escaped RSC hydration payload the way a bare data value does). */
+function stripScriptBlocks(html) {
+  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+}
+
+export function extractSettingsConsentTab(html) {
+  const main = sliceMainContent(html);
+
+  if (main.includes(CONSENT_ERROR_BANNER_MARKER)) {
+    return { errorState: true };
+  }
+
+  const cursor = new HtmlCursor(main);
+  const totalConsented = parseLeadingNumber(cursor.beforeLabel('ผู้ใช้ที่ยินยอมแล้ว'));
+  const privacyPolicyCount = parseLeadingNumber(cursor.beforeLabel('ยอมรับ Privacy Policy'));
+  const termsOfServiceCount = parseLeadingNumber(cursor.beforeLabel('ยอมรับ Terms of Service'));
+  const healthDataCount = parseLeadingNumber(cursor.beforeLabel('ยินยอมข้อมูลสุขภาพ'));
+
+  const rowCountSource = stripScriptBlocks(main);
+  const consentLogRowCount = (rowCountSource.match(CONSENT_LOG_IP_RE) ?? []).length;
+  const accessLogRowCount = (rowCountSource.match(DATA_ACCESS_LOG_IP_RE) ?? []).length;
+
+  return { errorState: false, totalConsented, privacyPolicyCount, termsOfServiceCount, healthDataCount, consentLogRowCount, accessLogRowCount };
+}
+
+// ---------------------------------------------------------------------------
+// /settings?tab=shop_tax — genuine PHP-vs-Next diff, BUT — same shape as
+// settings:welcome above — expected to land on shop-tax.php's DEFAULT/EMPTY
+// values under THIS harness's own invariants, not the seeded
+// shop_tax_info row's populated values. See infra/e2e/seed/
+// 75-phase2-settings-batch1-fixture.sql.tmpl's own "shop_tax_info" section
+// for the full $lineAccountId-always-0 trace (read against
+// includes/settings/shop-tax.php, includes/header.php, classes/
+// AdminAuth.php, AND apps/admin's shop-tax-queries.ts — all four agree on
+// the same falls-through-to-default outcome under this harness's zero-
+// `line_accounts`-rows invariant).
+//
+// RESOLVED FINDING (was a real, confirmed FAIL earlier in this batch's own
+// development, fixed by settingsConsentTax before this batch's final
+// acceptance run — recorded here so the history isn't lost, not because it
+// still fails): PHP's own hardcoded default `default_vat_rate` is the float
+// literal `7.00`; `(string)7.00` in real PHP is `"7"` (verified: `php -r
+// 'var_dump((string)7.00);'` -> `string(1) "7"` — PHP's float-to-string
+// conversion drops the trailing `.00` for a whole-number float), so
+// shop-tax.php's DEFAULT-path HTML is `value="7"`. apps/admin's
+// shop-tax-queries.ts `DEFAULT_SHOP_TAX_INFO.defaultVatRate` used to be the
+// STRING literal `'7.00'` — a mismatch with PHP's ACTUAL default-path output
+// caught by this exact extractor. Flagged in an earlier build report; routed
+// back to settingsConsentTax; that file's `DEFAULT_SHOP_TAX_INFO` constant
+// now reads `defaultVatRate: '7'` with its own doc explaining why (matching
+// PHP's default-path float-to-string output, not the populated-row PDO
+// string), confirmed by reading the current source (not assumed) — see
+// docs/runbooks/phase2-settings-tabs-batch1-parity.md's "settings:shop-tax"
+// section for the full before/after. This extractor deliberately still does
+// a plain, unmodified string comparison (no normalizing "7"/"7.00") — now
+// that both sides emit the SAME literal string, exact equality is not
+// papering over anything; if a future regression reintroduces the mismatch
+// (either side), this extractor catches it exactly as it did the first time.
+// ---------------------------------------------------------------------------
+
+export function extractSettingsShopTaxTab(html) {
+  const main = sliceMainContent(html);
+
+  const businessName = attrValue(findInputTag(main, ['name="business_name"']), 'value');
+  const taxId = attrValue(findInputTag(main, ['name="tax_id"']), 'value');
+  const vatRegisteredTag = findInputTag(main, ['name="is_vat_registered"']);
+  const isVatRegisteredChecked = hasCheckedAttr(vatRegisteredTag);
+  const defaultVatRate = attrValue(findInputTag(main, ['name="default_vat_rate"']), 'value');
+
+  return { businessName, taxId, isVatRegisteredChecked, defaultVatRate };
+}
