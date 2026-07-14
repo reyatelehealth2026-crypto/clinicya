@@ -1,0 +1,17 @@
+{
+  "description": "POST action=upload_slip — order_id doesn't match any transactions row in THIS tenant's DB (deleted/never existed/belongs to a different tenant). Scoped strictly to the current tenant DB (`SELECT * FROM transactions WHERE id = ?`, no cross-tenant fallback scan) — see uploadSlip.ts's own module doc / PHP's L1768-1772 security comment (the old cross-tenant scan was an IDOR, letting a caller upload a slip onto any tenant's order by guessing the sequential id; removed). MIME/size validation already passed at this point (a valid image was uploaded), but no file is written to disk and no payment_slips row is created — the DB lookup happens before the filesystem write (L1768-1790).",
+  "request": {
+    "action": "upload_slip",
+    "order_id": 999999,
+    "line_account_id": 1,
+    "slip": {
+      "filename": "slip.jpg",
+      "contentType": "image/jpeg",
+      "sizeBytes": 20480
+    }
+  },
+  "response": {
+    "success": false,
+    "message": "Order not found"
+  }
+}

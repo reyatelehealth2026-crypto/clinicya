@@ -1,0 +1,242 @@
+-- infra/e2e/seed/65-phase3-batch3-miniapp-fixture.sql.tmpl
+--
+-- Deterministic tenant-DB fixture for infra/e2e/api-parity.mjs (Phase 3
+-- batch 3 — mig-infra's extension of the JSON API parity harness). Covers
+-- the 8 new endpoint x action pairs the cartAndPricing + orderCreation
+-- builders land: checkout-cart:{cart,add_to_cart,update_cart,
+-- remove_from_cart,clear_cart}, checkout-pricing:validate_promo,
+-- checkout-order:{create_order,upload_slip}.
+--
+-- Applied by api-parity.mjs AFTER database/migration_2026-05-25_tenant_template.sql
+-- + database/migration_2026-07-04_pdpa_data_rights.sql + 45-phase3-batch1-plan-and-tenant.sql.tmpl
+-- + 50-phase3-batch1-miniapp-fixture.sql.tmpl + 55-phase3-batch2-miniapp-fixture.sql.tmpl
+-- (all already applied by the time this file runs — see api-parity.mjs's
+-- seedDatabase()). This file REUSES the SAME tenant/line_accounts rows
+-- (line_account_id=1, is_default=1) — it does NOT create a second tenant.
+-- `USE __APP_DB_NAME__;` is prefixed by the harness itself, same convention
+-- as 50-'s/55-'s own files.
+--
+-- SCHEMA-DDL NOTE: no CREATE TABLE statements in this file. Every table this
+-- fixture inserts into (business_items, cart_items, users, transactions,
+-- telegram_settings) already exists in
+-- database/migration_2026-05-25_tenant_template.sql (verified directly).
+-- This file seeds DATA ONLY, same "SCHEMA-DDL NOTE" precedent 50-/55- already
+-- established for their batches.
+--
+-- IDENTITY STRATEGY: same "two separately-seeded identities suffixed -php/
+-- -next" convention as batch 1/2 for every WRITE case (add_to_cart,
+-- update_cart, remove_from_cart, clear_cart, create_order, upload_slip).
+-- `cart` (GET) and `validate_promo` are the two read/stateless-compute
+-- exceptions:
+--   - `cart` reuses batch 1's shared "richMember" identity (line_user_id
+--     `e2e-mp-rich-member`, id=3001) — a GET never mutates cart_items, so
+--     the SAME two pre-seeded rows are safe for both the php and next call
+--     to read concurrently (identical "shared read-only identity" precedent
+--     rewards:my_redemptions/wishlist:list/health-profile:get already use).
+--   - `validate_promo` touches NO table at all on the committed template
+--     (see docs/runbooks/phase3-batch3-miniapp-api-parity.md §2 — the
+--     `promotions` table is absent, so handleValidatePromo()/
+--     handleValidatePromo()'s Next port both take the pure-computation
+--     `validateHardcodedPromo()` branch) — no fixture rows are seeded for it
+--     at all, by design, not merely omitted.
+--
+-- All new numeric ids below are chosen from a batch-3-only range (1601 for
+-- business_items, 5000s for `users`, 8100s for `transactions`) that does NOT
+-- overlap any id 50-/55-'s own fixtures already use (500s/600s/700s/800s/
+-- 3000s from batch 1; 900s/4000s/6000s/7000s from batch 2) — cross-checked
+-- against both files directly, not by convention alone.
+--
+-- NOTIFICATION-GUARD DETERMINISM (do not "wire real credentials into a CI
+-- fixture" — see the round brief): `handleCreateOrder()`/`handleUploadSlip()`
+-- both call notifyTelegramNewOrder()/notifyTelegramPayment() (telegram_settings
+-- WHERE id=1 — short-circuits on `!$settings['is_enabled']`) and
+-- sendOrderConfirmation()/sendReceiptMessage() (both guarded by
+-- `!$userData['channel_access_token']`). Batch 1's own line_accounts rows
+-- (id 1/2) were seeded with NON-EMPTY dummy tokens (`e2e-dummy-token-1`/`-2`)
+-- for header-pin/routing purposes unrelated to LINE messaging — harmless for
+-- every batch-1/2 case (verified: none of those actions call LINE's push API
+-- at all), but batch 3's create_order/upload_slip DO reach these guards, and
+-- a non-empty (if fake) token would make PHP actually attempt a real
+-- `curl_exec()` to `api.line.me` with a bogus bearer token — slow,
+-- network-dependent, and a bad look in a CI fixture even though the token
+-- itself is inert. The UPDATE below empties both tokens so the guard
+-- short-circuits identically on both stacks with zero network I/O,
+-- regardless of whether the Next port replicates these side-effecting
+-- integrations at all (see the runbook's §4 "deferred-scope" discussion).
+UPDATE `line_accounts` SET `channel_access_token` = '' WHERE `id` IN (1, 2);
+
+-- telegram_settings — explicit id=1 (both notifyTelegramNewOrder() and
+-- notifyTelegramPayment() hardcode `WHERE id = 1`), is_enabled=0 so the
+-- `!$settings['is_enabled']` guard fires before bot_token/chat_id are even
+-- read. bot_token/chat_id left EMPTY (not merely unset) on purpose, so a
+-- future edit that reorders/loosens the guard still can't leak a real-looking
+-- credential out of this fixture.
+INSERT INTO `telegram_settings`
+  (`id`, `line_account_id`, `is_enabled`, `bot_token`, `chat_id`, `notify_new_order`, `notify_payment`)
+VALUES
+  (1, 1, 0, '', '', 0, 0);
+
+-- shop_settings — CONFIRMED already seeded by 50-phase3-batch1-miniapp-fixture.sql.tmpl
+-- (`shipping_fee`=50.00, `free_shipping_min`=500.00 via column defaults,
+-- `promptpay_number`/`promptpay_name` NULL, `order_data_source`='shop') for
+-- line_account_id=1 — `shop_settings.line_account_id` carries a UNIQUE KEY
+-- (`uniq_la`), so a second INSERT here would break the fixture; this UPDATE
+-- is idempotent and simply pins the exact values this file's own dbCheck
+-- math (cart's subtotal/shipping_fee/total, create_order's shipping
+-- recompute) depends on, defensively, in case a future edit to 50-'s fixture
+-- ever changes them.
+UPDATE `shop_settings` SET `shipping_fee` = 50.00, `free_shipping_min` = 500.00 WHERE `line_account_id` = 1;
+
+-- ---------------------------------------------------------------------------
+-- business_items — 1601/1602, TWO DEDICATED low-stock products for
+-- create_order's race-guard assertion (checkout-order:create_order, see that
+-- case's own comment in infra/e2e/lib/api-extract.mjs and the runbook's
+-- §3). Two rows, not one shared row, for the SAME reason
+-- 55-phase3-batch2-miniapp-fixture.sql.tmpl's pharmacists 911/912 exist
+-- (appointments:book's own dedicated-pharmacist comment): the case's php/next
+-- calls run CONCURRENTLY (Promise.all in runApiCase()), and this harness's
+-- dbCheck mechanism diffs "the php-run's query result" against "the
+-- next-run's query result" — querying ONE shared row from both sides would
+-- make that diff a tautology (comparing the row to itself, unable to
+-- distinguish a real per-stack regression from "both sides happen to read
+-- the same already-correct value"). Two independent rows means the dbCheck
+-- genuinely proves NEXT's guard-preservation behavior matches PHP's
+-- real, already-exercised behavior, not merely "the two queries see the same
+-- database row." Both stock=1, no sale_price (checkoutOrderUnitPrice() ->
+-- unit price = price = 99.00 on both, deterministic). NOT reused by any
+-- other case in this file or any prior batch.
+-- ---------------------------------------------------------------------------
+INSERT INTO `business_items`
+  (`id`, `line_account_id`, `category_id`, `name`, `price`, `sale_price`, `stock`, `sku`, `barcode`,
+   `manufacturer`, `generic_name`, `usage_instructions`, `unit`, `is_active`, `is_flash_sale`)
+VALUES
+  (1601, 1, 501, 'ยาทดสอบสต๊อกต่ำ (E2E, PHP)', 99.00, NULL, 1, 'LOWSTOCK1', '8850000001601',
+   'ACME Pharma', 'Test Compound', 'สำหรับทดสอบ race-guard เท่านั้น (PHP)', 'กล่อง', 1, 0),
+  (1602, 1, 501, 'ยาทดสอบสต๊อกต่ำ (E2E, Next)', 99.00, NULL, 1, 'LOWSTOCK2', '8850000001602',
+   'ACME Pharma', 'Test Compound', 'สำหรับทดสอบ race-guard เท่านั้น (Next)', 'กล่อง', 1, 0);
+
+-- ---------------------------------------------------------------------------
+-- checkout-cart:cart (GET) — reuses batch 1's shared richMember identity
+-- (id=3001, line_user_id='e2e-mp-rich-member'). Two lines: product 601
+-- (business_items, sale_price=20.00 -> lineUnit=20*2=40) and product 602
+-- (business_items, no sale_price -> lineUnit=150*1=150). subtotal=190 (below
+-- free_shipping_min=500) -> shipping_fee=50, total=240, item_count=2 —
+-- fully deterministic, asserted byte-equal (not allowlisted) by the case.
+-- ---------------------------------------------------------------------------
+INSERT INTO `cart_items` (`user_id`, `line_user_id`, `product_id`, `product_source`, `quantity`)
+VALUES
+  (3001, 'e2e-mp-rich-member', 601, 'business_items', 2),
+  (3001, 'e2e-mp-rich-member', 602, 'business_items', 1);
+
+-- ---------------------------------------------------------------------------
+-- checkout-cart:add_to_cart — fresh identities, deliberately NO pre-seeded
+-- `users` row (auto-create branch, same "deliberately absent" reasoning as
+-- batch 1's member:check) and NO pre-seeded `cart_items` row (exercises the
+-- INSERT side of add_to_cart's `ON DUPLICATE KEY UPDATE`). Targets product
+-- 601 (stock=100, batch 1's own row) — reused read-only by this write case
+-- (add_to_cart never decrements business_items.stock, only create_order
+-- does), same "safe to reuse a read-only catalog row across batches"
+-- precedent shop-products:products/product_detail already established.
+-- ---------------------------------------------------------------------------
+-- (no INSERT — identities e2e-mp3-cart-add-php / -next are intentionally
+-- absent from `users` and `cart_items` at seed time)
+
+-- ---------------------------------------------------------------------------
+-- checkout-cart:update_cart — pre-existing cart_items row per identity
+-- (quantity=2 on product 601) so the case's `quantity=5` request body is a
+-- REAL update, not a no-op UPDATE against a nonexistent row (handleUpdateCart
+-- issues a plain `UPDATE ... WHERE user_id=? AND product_id=?`, no upsert —
+-- see cart/_lib/handlers.ts's own module doc).
+-- ---------------------------------------------------------------------------
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (5011, 1, 'e2e-mp3-cart-update-php', 'Checkout Cart Update Test (PHP)', 1, '2026-01-20 09:00:00'),
+  (5012, 1, 'e2e-mp3-cart-update-next', 'Checkout Cart Update Test (Next)', 1, '2026-01-20 09:00:00');
+
+INSERT INTO `cart_items` (`user_id`, `line_user_id`, `product_id`, `product_source`, `quantity`)
+VALUES
+  (5011, 'e2e-mp3-cart-update-php', 601, 'business_items', 2),
+  (5012, 'e2e-mp3-cart-update-next', 601, 'business_items', 2);
+
+-- ---------------------------------------------------------------------------
+-- checkout-cart:remove_from_cart — pre-existing cart_items row per identity
+-- (product 602) so the delete is real, not a no-op on an already-empty slot.
+-- ---------------------------------------------------------------------------
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (5021, 1, 'e2e-mp3-cart-remove-php', 'Checkout Cart Remove Test (PHP)', 1, '2026-01-20 09:00:00'),
+  (5022, 1, 'e2e-mp3-cart-remove-next', 'Checkout Cart Remove Test (Next)', 1, '2026-01-20 09:00:00');
+
+INSERT INTO `cart_items` (`user_id`, `line_user_id`, `product_id`, `product_source`, `quantity`)
+VALUES
+  (5021, 'e2e-mp3-cart-remove-php', 602, 'business_items', 3),
+  (5022, 'e2e-mp3-cart-remove-next', 602, 'business_items', 3);
+
+-- ---------------------------------------------------------------------------
+-- checkout-cart:clear_cart — TWO pre-existing cart_items rows per identity
+-- (products 601 + 602) so the case proves the WHOLE cart is cleared, not
+-- just one line.
+-- ---------------------------------------------------------------------------
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (5031, 1, 'e2e-mp3-cart-clear-php', 'Checkout Cart Clear Test (PHP)', 1, '2026-01-20 09:00:00'),
+  (5032, 1, 'e2e-mp3-cart-clear-next', 'Checkout Cart Clear Test (Next)', 1, '2026-01-20 09:00:00');
+
+INSERT INTO `cart_items` (`user_id`, `line_user_id`, `product_id`, `product_source`, `quantity`)
+VALUES
+  (5031, 'e2e-mp3-cart-clear-php', 601, 'business_items', 1),
+  (5031, 'e2e-mp3-cart-clear-php', 602, 'business_items', 2),
+  (5032, 'e2e-mp3-cart-clear-next', 601, 'business_items', 1),
+  (5032, 'e2e-mp3-cart-clear-next', 602, 'business_items', 2);
+
+-- ---------------------------------------------------------------------------
+-- checkout-order:create_order — THE RACE-GUARD CASE (plan risk register #9 —
+-- see the runbook's §3 for the full writeup). Pre-existing `users` row +
+-- ONE pre-existing cart_items row per identity, each referencing its OWN
+-- DEDICATED low-stock product (1601 php / 1602 next, both stock=1 — see
+-- those rows' own comment above for why two, not one shared row) at
+-- quantity=5 (> stock). The case's request body carries NO `cart_items`
+-- field (matching the REAL client shape — line-mini-app/src/lib/shop-api.ts's
+-- createShopOrder() never sends cart_items, only {action,line_user_id,
+-- line_account_id,address,payment_method,subtotal?}), forcing
+-- handleCreateOrder()/its Next port through the loadCheckoutCartLinesFromDb()
+-- branch, not the request-body-cart_items branch — the one real traffic
+-- actually takes. payment_method='transfer' (not 'cod'/'credit'/'term'/
+-- 'invoice') deliberately AVOIDS the AccountReceivableService branch entirely
+-- (`in_array(strtolower($paymentMethod), ['credit','cod','term','invoice'])`
+-- is false for 'transfer') — keeps this case's assertions scoped to core
+-- order-creation behavior, sidestepping whichever AR-porting decision the
+-- orderCreation builder made (see the runbook's §4).
+-- ---------------------------------------------------------------------------
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (5041, 1, 'e2e-mp3-order-create-php', 'Checkout Order Create Test (PHP)', 1, '2026-01-20 09:00:00'),
+  (5042, 1, 'e2e-mp3-order-create-next', 'Checkout Order Create Test (Next)', 1, '2026-01-20 09:00:00');
+
+INSERT INTO `cart_items` (`user_id`, `line_user_id`, `product_id`, `product_source`, `quantity`)
+VALUES
+  (5041, 'e2e-mp3-order-create-php', 1601, 'business_items', 5),
+  (5042, 'e2e-mp3-order-create-next', 1602, 'business_items', 5);
+
+-- ---------------------------------------------------------------------------
+-- checkout-order:upload_slip — pre-existing `transactions` row per identity
+-- (8101 php / 8102 next) so the multipart POST has a real `order_id` to
+-- attach a slip to (handleUploadSlip() SELECTs `transactions WHERE id=?` and
+-- 404-shapes a false response if it's missing — see api/checkout.php's own
+-- "SECURITY: cross-tenant fallback removed" comment on that query).
+-- Deliberately a SEPARATE identity/order pair from create_order's own case
+-- above (not "upload a slip onto the order create_order just made") — keeps
+-- the two cases independent so either can be re-run/isolated without the
+-- other's side effects.
+-- ---------------------------------------------------------------------------
+INSERT INTO `users` (`id`, `line_account_id`, `line_user_id`, `display_name`, `is_registered`, `created_at`)
+VALUES
+  (5051, 1, 'e2e-mp3-slip-upload-php', 'Checkout Upload Slip Test (PHP)', 1, '2026-01-20 09:00:00'),
+  (5052, 1, 'e2e-mp3-slip-upload-next', 'Checkout Upload Slip Test (Next)', 1, '2026-01-20 09:00:00');
+
+INSERT INTO `transactions`
+  (`id`, `line_account_id`, `transaction_type`, `order_number`, `user_id`, `line_user_id`,
+   `total_amount`, `shipping_fee`, `grand_total`, `payment_method`, `status`, `payment_status`, `created_at`)
+VALUES
+  (8101, 1, 'purchase', 'E2E-UPLOADSLIP-PHP-1', 5051, 'e2e-mp3-slip-upload-php', 100.00, 50.00, 150.00, 'transfer', 'pending', 'pending', '2026-01-20 09:05:00'),
+  (8102, 1, 'purchase', 'E2E-UPLOADSLIP-NEXT-1', 5052, 'e2e-mp3-slip-upload-next', 100.00, 50.00, 150.00, 'transfer', 'pending', 'pending', '2026-01-20 09:05:00');

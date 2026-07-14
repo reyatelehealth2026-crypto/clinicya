@@ -1,0 +1,5 @@
+{
+  "description": "POST action=add_to_cart — business_items product with enough stock. cart_count is the SUM(quantity) across the user's whole cart after the INSERT ... ON DUPLICATE KEY UPDATE, not just this line's quantity.",
+  "request": { "action": "add_to_cart", "line_user_id": "U2222222222222222222222222222bb", "product_id": 501, "quantity": 2 },
+  "response": { "success": true, "message": "Added to cart", "cart_count": 2, "product_name": "พาราเซตามอล 500mg" }
+}

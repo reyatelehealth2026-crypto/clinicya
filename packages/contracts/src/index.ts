@@ -24,3 +24,5 @@ export * from './addresses';
 export * from './consent';
 export * from './data-rights';
 export * from './medication-reminders';
+export * from './checkout-cart';
+export * from './checkout-order';
