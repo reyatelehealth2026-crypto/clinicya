@@ -27,10 +27,12 @@ logs/
 *.code-workspace
 NUL
 
-# AI Tools — track shared Claude Code agents; keep other local plugin state ignored
+# AI Tools — track shared Claude Code agents + workflows; keep other local plugin state ignored
 .claude/*
 !.claude/agents/
 !.claude/agents/**
+!.claude/workflows/
+!.claude/workflows/**
 .kiro/
 .gemini/
 .assistant/
