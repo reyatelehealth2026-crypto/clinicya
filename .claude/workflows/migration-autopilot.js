@@ -10,6 +10,77 @@ export const meta = {
 const WT_ROOT = '/tmp/claude-0/-home-user-clinicya/c8338dc7-e596-54f1-b5cb-64bae9a6109a/scratchpad/worktrees'
 const REPO_ROOT = '/home/user/clinicya'
 
+// Fallback stream plan used when the Workflow tool's `args` param isn't delivered as a
+// real object (observed: it can arrive stringified, making `args.streams` undefined) and
+// when no explicit args.streams is supplied. Edit/replace this per round; keep it in sync
+// with whatever stream plan the coordinator actually wants run next. Empty array disables
+// the fallback and falls through to the mig-orchestrator planning agent instead.
+const DEFAULT_STREAMS = [
+  {
+    id: 'inbox-reads',
+    worktreeName: 'wt-inbox-reads',
+    branch: 'claude/phase4-batch1-inbox-reads',
+    builders: [
+      { key: 'conversationList', agentType: 'mig-api' },
+      { key: 'messageThread', agentType: 'mig-ui' },
+    ],
+    infraAgentType: 'mig-infra',
+    briefContext:
+      "Phase 4 batch 1 of docs/plans/2026-07-12-nextjs-full-migration-plan.md Phase 4 (Inbox v2) — READS ONLY this round. Do NOT port send_message, tag/note, dispense, or any of the ~19 AI-copilot actions — those are deferred to later batches per the plan's 'actions ทีละ ~5' guidance. Read in full before writing anything: inbox-v2.php (14,518 LOC, page + list markup + filter UI — study the read/render path only), api/inbox-v2.php (3,560 LOC AJAX action switch — study only getConversations/getMessages and other read actions), classes/InboxService.php (the getConversationsDelta($lineAccountId, $since, $cursor, $limit, $search, $filters) method). CLAUDE.md documents the binding contract: returns {conversations, next_cursor, has_more}; cursor = last conversation's last_message_at (DESC sort, keyset pagination); page server-renders 200 rows then a ConversationLoader IIFE auto-loads more via GET api/inbox-v2.php?action=getConversations&cursor=...&limit=200; API caps limit at 500, defaults to 200 — do not lower these. Deliverables: (1) conversationList builder — a Route Handler under apps/admin/src/app/api/inbox/** replicating the cursor contract exactly, reading via packages/db Kysely against the tenant DB, plus the conversation-list Server Component (search, filter chips, unread counts, tag chips); (2) messageThread builder — Server Components under apps/admin/src/app/(tenant)/inbox/** rendering every message type in use today (text/image/sticker/flex/file/video/audio), rendering flex messages to structurally match classes/FlexTemplates output (byte-parity is out of scope here — that lives in the sibling line-package stream). Explicitly OUT of scope: any mutation/action, AI copilot sidebar, websocket/realtime wiring (sibling 'realtime-worker' stream owns apps/worker this round — do not touch it). Do not modify inbox-v2.php or api/inbox-v2.php (PHP stays unchanged). Do not touch apps/admin/src/app/api/miniapp/** (owned by the sibling 'checkout-completion' stream this round).",
+    coordinationNotes:
+      "conversationList builder (mig-api) owns the Route Handler + cursor-pagination data layer under apps/admin/src/app/api/inbox/**; messageThread builder (mig-ui) owns the Server Components/UI under apps/admin/src/app/(tenant)/inbox/**. Treat the API route's response shape as an interface contract defined in the brief — do not co-edit each other's files.",
+    highRisk: false,
+    commitSummary:
+      'Phase 4 batch 1: inbox-v2 reads-only port — cursor-paginated conversation list Route Handler + message thread rendering for all message types, no mutations/actions this round.',
+  },
+  {
+    id: 'line-package',
+    worktreeName: 'wt-line-package',
+    branch: 'claude/phase6-prep-line-package',
+    builders: [
+      { key: 'lineApi', agentType: 'mig-line' },
+      { key: 'flexTemplates', agentType: 'mig-line' },
+    ],
+    infraAgentType: 'mig-infra',
+    briefContext:
+      "Foundation stream ahead of Phase 6, unblocking two already-merged TODOs: apps/admin/src/app/(tenant)/loyalty-members/_lib/pointsClaim.ts and apps/admin/src/app/(tenant)/line-groups/actions.ts, both of which have doc comments stating they need LINE push/notify but 'packages/line doesn't exist yet'. lineApi builder: port classes/LineAPI.php's validateSignature (HMAC-SHA256 webhook signature check) and the smart sendMessage() (checks reply_token first to avoid push-message quota, falls back to pushMessage() only when reply_token is unavailable — this exact preference order is documented in CLAUDE.md and must be preserved). Explicitly OUT of scope: rich menu management, multicast/narrowcast, LIFF-specific helpers — defer to Phase 6 proper. flexTemplates builder: port classes/FlexTemplates.php's medicineLabel(), medicineLabelsCarousel() (auto-used when count(items) > 1 per CLAUDE.md), and toMessage(), with golden JSON fixtures captured from the real PHP class's actual output (byte-diff harness) — this becomes the dependency the future Phase 5 dispense port imports rather than re-implementing Flex JSON, so fixture fidelity matters more than coverage breadth. Deliverables: packages/line/src/api.ts (lineApi builder), packages/line/src/flex.ts + packages/line/src/__fixtures__/*.json (flexTemplates builder), both exported from packages/line/src/index.ts using the append-only barrel convention already established in packages/contracts. No live LINE API calls needed this round — signature verification and Flex JSON structure are pure-function testable.",
+    coordinationNotes:
+      "lineApi builder owns packages/line/src/api.ts; flexTemplates builder owns packages/line/src/flex.ts + __fixtures__/**. Both append their own export line to packages/line/src/index.ts — do not rewrite each other's lines, only append.",
+    highRisk: false,
+    commitSummary:
+      'Phase 6 prep: packages/line foundation — LineAPI signature-verify + smart sendMessage, FlexTemplates port with golden JSON fixtures, unblocking loyalty-members and line-groups TODOs.',
+  },
+  {
+    id: 'checkout-completion',
+    worktreeName: 'wt-checkout',
+    branch: 'claude/phase3-checkout',
+    builders: [
+      { key: 'cartAndPricing', agentType: 'mig-api' },
+      { key: 'orderCreation', agentType: 'mig-api' },
+    ],
+    infraAgentType: 'mig-infra',
+    briefContext:
+      "Completes docs/plans/2026-07-12-nextjs-full-migration-plan.md Phase 3 — the remaining, NOT-yet-ported piece of api/checkout.php (2,794 LOC). Phase 3 batch 1 already shipped apps/admin/src/app/api/miniapp/shop-products/** covering products and product_detail actions — DO NOT re-port those; read that existing route FIRST and match its established house style (apps/admin/src/lib/miniapp/{cors,tenant}.ts helpers, packages/contracts zod+fixtures pattern), documented as binding in docs/runbooks/phase3-batch1-miniapp-api-parity.md and phase3-batch2-miniapp-api-parity.md. This round ports: cart pricing/calculation actions (cartAndPricing builder) and create_order + the payment/slip upload flow (orderCreation builder) from api/checkout.php — read the full 2,794-line file before writing anything. Must preserve byte-for-byte: the guarded stock decrement UPDATE business_items SET stock = stock - qty WHERE id=? AND stock >= qty (race-safe — never weaken the WHERE guard), and the pending-transaction seed shape for transfer/later payment methods (delivery_info JSON referencing dispense_id where applicable). Tenant resolution via routeByLineAccount() from packages/tenant, same un-gated public mini-app API model as shop-products (trust-on-input identity: line_user_id + line_account_id, NOT behind the admin session gate, permissive CORS via the shared miniapp/{cors,tenant}.ts helpers). Deliverables: apps/admin/src/app/api/miniapp/checkout/** (cartAndPricing: pricing/cart sub-paths; orderCreation: a distinct .../checkout/order/** sub-path, to avoid file collision) plus packages/contracts zod schemas + golden fixtures for every new endpoint. HIGH RISK — mig-verify PASS authorizes merge of code+tests only; production traffic flip needs a follow-up mig-orchestrator co-sign (routes.json stays default-php regardless of this round's outcome).",
+    coordinationNotes:
+      'cartAndPricing builder owns apps/admin/src/app/api/miniapp/checkout/(cart + pricing sub-paths, not /order); orderCreation builder owns apps/admin/src/app/api/miniapp/checkout/order/** (create_order, slip upload, payment). Keep these as physically separate route directories. Both import (never duplicate) the existing shop-products tenant/cors helpers.',
+    highRisk: true,
+    commitSummary:
+      'Phase 3 completion: checkout.php cart pricing + create_order + payment/slip flow ported to apps/admin/src/app/api/miniapp/checkout/** with zod contracts and golden fixtures. HIGH RISK — merge-only, no traffic flip.',
+  },
+  {
+    id: 'realtime-worker',
+    worktreeName: 'wt-realtime-worker',
+    branch: 'claude/phase4-realtime-worker',
+    builders: [{ key: 'wsInboxRelay', agentType: 'mig-worker' }],
+    infraAgentType: 'mig-infra',
+    briefContext:
+      "Extends the already-merged apps/worker scaffold (BullMQ job registry, forEachActiveTenant()/withTenant() tenant fan-out, worker-heartbeat proof-of-life job, DLQ, plain-HTTP health endpoint — read them first to match conventions) with real functionality: port websocket-server.js's (repo root) Redis inbox_updates pub/sub relay — the exact channel PHP's classes/WebSocketNotifier already publishes to during the coexistence period (do not touch that PHP class; it keeps publishing unchanged, this is additive). Read websocket-server.js in full to find the subscribe/relay logic for the inbox_updates channel and its Socket.io room/broadcast semantics. Deliverable: a new module in apps/worker (e.g. apps/worker/src/realtime/inboxRelay.ts) that subscribes to the same Redis channel and re-emits to connected Socket.io clients, matching the existing message envelope shape byte-for-byte (a future round wires a socket client into the inbox-reads UI — not this round). Explicitly OUT of scope: the WebRTC/video signaling namespace in websocket-server.js, and consolidating the other 2 legacy websocket implementations. Live-test with a smoke test in the spirit of infra/e2e/worker-smoke.mjs: publish a synthetic inbox_updates message to Redis, assert a connected test Socket.io client receives it relayed correctly.",
+    highRisk: false,
+    commitSummary:
+      "Phase 4 realtime: port websocket-server.js's Redis inbox_updates relay into apps/worker as a new Socket.io relay module, live-smoke-tested; WebRTC signaling and full websocket consolidation deferred.",
+  },
+]
+
 const BUILDER_BRIEF_SHAPE = {
   type: 'object',
   required: ['scope', 'deliverables', 'acceptance', 'boundaries'],
@@ -258,7 +329,12 @@ async function runStream(spec) {
 
 phase('Plan')
 
-let streamSpecs = args && args.streams ? args.streams : null
+let streamSpecs = args && Array.isArray(args.streams) && args.streams.length ? args.streams : null
+
+if (!streamSpecs && DEFAULT_STREAMS.length) {
+  log('No usable args.streams received — using the DEFAULT_STREAMS fallback baked into the script for this round.')
+  streamSpecs = DEFAULT_STREAMS
+}
 
 if (!streamSpecs) {
   const priorityHint =
@@ -266,7 +342,7 @@ if (!streamSpecs) {
     'Get to a demoable, internally-usable prototype as fast as possible. Odoo/WMS/POS/accounting (plan Stream B: phases 8-9 and everything depending on them) are explicitly OUT OF SCOPE for now — do not schedule them. Prefer Stream A (2->3->4->5->6->7) work, sized so each stream is realistically finishable and gate-passable in one round.'
 
   const planPrompt =
-    'You are acting per your agent definition (mig-autopilot). Read docs/plans/2026-07-12-nextjs-full-migration-plan.md in full, docs/agents/nextjs-migration-team.md in full, and `git log --oneline -30` to see what is actually merged (not what any stale summary claims). Priority hint from the user: ' +
+    'You are acting as a program-level scheduler for the PHP -> Next.js migration (mig-autopilot role). Read docs/plans/2026-07-12-nextjs-full-migration-plan.md in full, docs/agents/nextjs-migration-team.md in full, and `git log --oneline -30` to see what is actually merged (not what any stale summary claims). Priority hint from the user: ' +
     priorityHint +
     "\n\nPropose 2-5 parallel, file-disjoint streams for THIS ROUND ONLY. For each stream, decide: a short id (kebab-case), a worktreeName (wt-<id>), a branch (claude/<id>), 1-3 builder agent assignments (agentType must be one of: mig-ui, mig-api, mig-line, mig-ai, mig-worker, mig-kernel, mig-infra — pick per the team doc's phase mapping), whether an infra/parity builder is also needed (almost always yes for anything live-testable), a detailed briefContext (name the exact PHP files + approximate LOC to read, state explicitly what IS and is NOT in scope this round, flag any known coupling hazard with sibling streams or future phases), optional coordinationNotes (only if 2+ builders in this stream could otherwise collide on file boundaries), whether the stream is highRisk (true only for surfaces matching the team doc's explicit list: VPS cutover, checkout endpoint, dispense/document-numbering, LINE webhook, AI SSE), and a one-paragraph commitSummary."
 
@@ -306,7 +382,12 @@ if (!streamSpecs) {
     },
   }
 
-  const plan = await agent(planPrompt, { agentType: 'mig-autopilot', model: 'sonnet', schema: planSchema, label: 'plan', phase: 'Plan' })
+  // 'mig-autopilot' is defined in .claude/agents/mig-autopilot.md but custom agent
+  // definitions created mid-session aren't picked up by the Workflow agent registry
+  // (snapshotted at session start) — fall back to the registered 'mig-orchestrator'
+  // type, briefed with the same program-level-scheduler framing above, until a fresh
+  // session picks up mig-autopilot natively.
+  const plan = await agent(planPrompt, { agentType: 'mig-orchestrator', model: 'sonnet', schema: planSchema, label: 'plan', phase: 'Plan' })
   streamSpecs = plan.streams
 }
 
