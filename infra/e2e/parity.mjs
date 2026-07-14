@@ -56,6 +56,25 @@
 // batch doesn't have to re-litigate it), the golden-dataset fixture's shape,
 // and this batch's explicit deferred-scope list.
 //
+// Phase 2 tail (mig-infra) EXTENDS this same harness AGAIN — same file, same
+// process, same single JSON-line output — with the two new URL surfaces this
+// round's page-builder agents own: PHP /articles.php (list) + /article.php?slug=X
+// (detail) vs Next /articles + /articles/[slug] (articlesCms brief — a URL-SHAPE
+// change, the two top-level PHP files fold into one nested Next route tree);
+// PHP /pharmacy.php?tab=pharmacists vs Next /pharmacists (pharmacistsDirectory
+// brief — the Next port sources from the LIVE tab partial
+// includes/pharmacy/pharmacists.php, not the dead 301-redirect stub at the
+// repo-root pharmacists.php). Same top-level-array + runPagePair()-per-entry
+// shape as every batch before it, PLUS one dedicated two-fetch
+// runSingleSideCheck() pair proving article.php's/[slug]/page.tsx's
+// view-count-increment side effect (see runArticleViewCountIncrementChecks()'s
+// own doc for why this is NOT an ordinary runPagePair() diff). See
+// docs/runbooks/phase2-batch1-users-dashboard-parity.md's "Phase 2 tail"
+// section for the full write-up, including the ACCESS-MODEL DEVIATION flagged
+// for mig-orchestrator (articles.php/article.php are public/unauthenticated in
+// PHP; the Next port sits behind (tenant)'s session gate) — an open item this
+// round's placeholder routes.json entries do NOT resolve, only document.
+//
 // SCOPE (read before trusting the PASS line — same documented-limits
 // pattern infra/e2e/run.mjs already uses): this proves DATA-POINT PARITY
 // against ONE seeded tenant/dataset, on the REAL stack (a genuine MariaDB +
@@ -140,6 +159,10 @@ import {
   extractSystemStatusPage,
   extractInboxSidebarPage,
   extractInboxThreadPage,
+  extractArticlesListPage,
+  extractArticleDetailPage,
+  extractArticleViewCount,
+  extractPharmacistsPage,
 } from './lib/extract.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -185,6 +208,7 @@ const FIXTURE_FILES = [
   '40-phase2-batch2-fixture.sql.tmpl',
   '60-phase2-batch3-fixture.sql.tmpl',
   '70-phase4-batch1-inbox-fixture.sql.tmpl',
+  '75-phase2-tail-articles-pharmacists-fixture.sql.tmpl',
 ];
 
 const ADMIN_DIR = path.join(REPO_ROOT, 'apps/admin');
@@ -435,6 +459,34 @@ const INBOX_MESSAGE_TYPE_CHECKS = [
   { name: 'video', match: (m) => m.message_type === 'video' && m.content.includes('inboxb1-clip2.mp4') },
   { name: 'audio', match: (m) => m.message_type === 'audio' && m.content === 'ID:990011' },
   { name: 'location', match: (m) => m.message_type === 'location' && m.content.includes('INBOXB1-LOCATION-') },
+];
+
+// ---------------------------------------------------------------------------
+// Phase 2 tail config — golden-dataset constants mirrored from
+// infra/e2e/seed/75-phase2-tail-articles-pharmacists-fixture.sql.tmpl's own
+// "GOLDEN DATASET CONSTANTS" footer comment (keep both in sync if that
+// file's shape ever changes).
+// ---------------------------------------------------------------------------
+
+/** health_article_categories.id for 'โรคทั่วไปและการดูแลสุขภาพ' — 2 published articles (7601, 7602). */
+const ARTICLE_CATEGORY_ID = 7501;
+/** Literal marker embedded in ONLY health_articles.id=7602's excerpt — same "ASCII marker inside Thai text" technique ACTIVITY_LOGS_COMBOS's own search combo already established, avoiding any Thai-substring collision ambiguity. */
+const ARTICLE_SEARCH_TERM = 'PHASE2TAILSEARCHMARK';
+/** health_articles.slug for id=7601 — the featured, published article-detail:slug=... target (has tags + exactly one related-article match, id 7602). */
+const ARTICLE_DETAIL_SLUG = 'phase2-tail-featured-article';
+
+/**
+ * /articles list variants — same "top-level array, looped with
+ * runPagePair()" shape as TEMPLATES_VARIANTS/GROUPS_VARIANTS above. `qs` is
+ * the SAME literal query string on both stacks (articles.php's `$_GET['category']`/
+ * `$_GET['q']` and the Next port's `_lib/params.ts` read the identical param
+ * names — confirmed by reading both) — unlike USERS_FILTER_COMBOS, no
+ * per-stack qs translation is needed here.
+ */
+const ARTICLES_LIST_VARIANTS = [
+  { name: 'baseline', qs: '' },
+  { name: `category=${ARTICLE_CATEGORY_ID}`, qs: `category=${ARTICLE_CATEGORY_ID}` },
+  { name: `search=${ARTICLE_SEARCH_TERM}`, qs: `q=${encodeURIComponent(ARTICLE_SEARCH_TERM)}` },
 ];
 
 // ---------------------------------------------------------------------------
@@ -995,6 +1047,71 @@ async function runInboxSidebarChecks(phpSid, nextSid) {
 }
 
 /**
+ * Phase 2 tail — the dedicated view-count-increment check for
+ * article.php/`/articles/[slug]`. NOT an ordinary runPagePair() diff — see
+ * extractArticleViewCount()'s own doc in infra/e2e/lib/extract.mjs for the
+ * full "why": both `HealthArticleService::getBySlug()` (PHP) and
+ * `[slug]/page.tsx` (Next) display the PRE-increment view_count their own
+ * request's SELECT captured, then fire the increment afterward — so on this
+ * harness's SHARED physical database (one MariaDB tenant DB, fetched by both
+ * stacks), a plain PHP-then-Next runPagePair() diff of `view_count` would be
+ * a GUARANTEED off-by-one mismatch (Next's SELECT always runs after PHP's
+ * own increment already landed), not a real product bug. Comparing a
+ * stack's OWN count across two of its OWN consecutive fetches sidesteps that
+ * cross-stack ordering entirely — the assertion is "did fetching the article
+ * again increment the counter by exactly 1", proven independently, once per
+ * stack, using `runSingleSideCheck()`'s established pattern (each `fetchOne`
+ * performs BOTH of its own stack's two fetches internally and returns them
+ * together — `assertAndExtract()` must stay synchronous, per that helper's
+ * own contract, so the async work happens entirely inside `fetchOne`).
+ */
+async function runArticleViewCountIncrementChecks(phpSid, nextSid) {
+  const phpCheck = await runSingleSideCheck(
+    'article-detail:view-count-increment php',
+    async () => {
+      const first = await fetchPhpPage(`/article.php?slug=${ARTICLE_DETAIL_SLUG}`, phpSid);
+      const second = await fetchPhpPage(`/article.php?slug=${ARTICLE_DETAIL_SLUG}`, phpSid);
+      return { first, second, text: second.text };
+    },
+    (resp) => {
+      assertAuthedOk(resp.first, 'article.php view-count (php, first fetch)');
+      assertAuthedOk(resp.second, 'article.php view-count (php, second fetch)');
+      const firstCount = extractArticleViewCount(resp.first.text);
+      const secondCount = extractArticleViewCount(resp.second.text);
+      if (secondCount !== firstCount + 1) {
+        throw new Error(
+          `expected view_count to increment by exactly 1 between two consecutive PHP fetches of the same slug, got first=${firstCount} second=${secondCount}`
+        );
+      }
+      return { firstCount, secondCount };
+    }
+  );
+
+  const nextCheck = await runSingleSideCheck(
+    'article-detail:view-count-increment next',
+    async () => {
+      const first = await fetchNextPage(`/articles/${ARTICLE_DETAIL_SLUG}`, nextSid);
+      const second = await fetchNextPage(`/articles/${ARTICLE_DETAIL_SLUG}`, nextSid);
+      return { first, second, text: second.text };
+    },
+    (resp) => {
+      assertAuthedOk(resp.first, '/articles/[slug] view-count (next, first fetch)');
+      assertAuthedOk(resp.second, '/articles/[slug] view-count (next, second fetch)');
+      const firstCount = extractArticleViewCount(resp.first.text);
+      const secondCount = extractArticleViewCount(resp.second.text);
+      if (secondCount !== firstCount + 1) {
+        throw new Error(
+          `expected view_count to increment by exactly 1 between two consecutive Next fetches of the same slug, got first=${firstCount} second=${secondCount}`
+        );
+      }
+      return { firstCount, secondCount };
+    }
+  );
+
+  return [phpCheck, nextCheck];
+}
+
+/**
  * Phase 4 batch 1 — GET /api/inbox/conversations cursor-pagination contract
  * walk. Unlike every runPagePair()/runSingleSideCheck() entry above, this
  * has NO PHP side to diff against — it proves the NEW Next-only Route
@@ -1495,6 +1612,48 @@ async function main() {
     // --- Phase 4 batch 1: JSON cursor-pagination contract walks (no PHP side — see each function's own doc) ---
     pages.push(await runConversationsCursorWalk(nextSid));
     pages.push(await runMessagesCursorWalk(nextSid));
+
+    // --- Phase 2 tail: /articles (baseline + ?category=N + ?q=<search term>) ---
+    for (const variant of ARTICLES_LIST_VARIANTS) {
+      const qs = variant.qs ? `?${variant.qs}` : '';
+      pages.push(
+        await runPagePair(
+          `articles:${variant.name}`,
+          async () => ({
+            phpResp: await fetchPhpPage(`/articles.php${qs}`, phpSid),
+            nextResp: await fetchNextPage(`/articles${qs}`, nextSid),
+          }),
+          (phpHtml, nextHtml) => ({ phpData: extractArticlesListPage(phpHtml), nextData: extractArticlesListPage(nextHtml) })
+        )
+      );
+    }
+
+    // --- Phase 2 tail: /articles/[slug] detail (title/tags/related — view_count excluded, see below) ---
+    pages.push(
+      await runPagePair(
+        `article-detail:slug=${ARTICLE_DETAIL_SLUG}`,
+        async () => ({
+          phpResp: await fetchPhpPage(`/article.php?slug=${ARTICLE_DETAIL_SLUG}`, phpSid),
+          nextResp: await fetchNextPage(`/articles/${ARTICLE_DETAIL_SLUG}`, nextSid),
+        }),
+        (phpHtml, nextHtml) => ({ phpData: extractArticleDetailPage(phpHtml), nextData: extractArticleDetailPage(nextHtml) })
+      )
+    );
+
+    // --- Phase 2 tail: article.php's/[slug]/page.tsx's view-count-increment side effect — dedicated two-fetch, single-stack checks (see runArticleViewCountIncrementChecks()'s own doc for why this is not an ordinary diff) ---
+    pages.push(...(await runArticleViewCountIncrementChecks(phpSid, nextSid)));
+
+    // --- Phase 2 tail: /pharmacists (PHP: pharmacy.php?tab=pharmacists live tab partial; Next: /pharmacists) ---
+    pages.push(
+      await runPagePair(
+        'pharmacists:baseline',
+        async () => ({
+          phpResp: await fetchPhpPage('/pharmacy.php?tab=pharmacists', phpSid),
+          nextResp: await fetchNextPage('/pharmacists', nextSid),
+        }),
+        (phpHtml, nextHtml) => ({ phpData: extractPharmacistsPage(phpHtml), nextData: extractPharmacistsPage(nextHtml) })
+      )
+    );
 
     result = pages.every((p) => p.ok) ? 'PASS' : 'FAIL';
     if (result === 'PASS') {
