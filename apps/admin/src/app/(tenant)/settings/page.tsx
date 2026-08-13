@@ -7,6 +7,9 @@ import { EmailTab } from './_components/EmailTab';
 import { NotYetMigratedTab } from './_components/NotYetMigratedTab';
 import { ConsentTab } from './_components/ConsentTab';
 import { ShopTaxTab } from './_components/ShopTaxTab';
+import { LineAccountsTab } from './_components/LineAccountsTab';
+import { PlatformTab } from './_components/PlatformTab';
+import { GeneralTab } from './_components/GeneralTab';
 import { resolveLineAccountId, getShopTaxInfo } from './_lib/shop-tax-queries';
 
 /**
@@ -67,12 +70,11 @@ import { resolveLineAccountId, getShopTaxInfo } from './_lib/shop-tax-queries';
  * uses. settingsConsentTax appends `case 'consent':`/`case 'shop_tax':` to
  * the switch below (its own `_components/{ConsentTab,ShopTaxTab}.tsx`, not
  * touched by this batch) rather than editing any other entry. Later batches
- * (line/platform/general/notifications/quick-access, then telegram/liff/
- * vibe-selling) replace their own `NotYetMigratedTab` case with a real one
- * the same way.
+ * (notifications/quick-access, then telegram/liff/vibe-selling) replace
+ * their own `NotYetMigratedTab` case with a real one the same way.
  *
  * Every other currently-live-but-unported tab key
- * (line/platform/general/notifications) renders `NotYetMigratedTab` — an
+ * (notifications) renders `NotYetMigratedTab` — an
  * explicit "ยังไม่ได้ย้ายมาที่นี่ — ใช้หน้าเดิม" placeholder linking back to
  * `/settings.php?tab=X` — NEVER a silent fallback to `welcome`'s or any
  * other tab's content. `quick-access` is not part of `SETTINGS_TABS`/
@@ -151,8 +153,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       tabContent = await EmailTab({ db });
       break;
     case 'line':
+      tabContent = await LineAccountsTab({ db });
+      break;
     case 'platform':
+      tabContent = await PlatformTab({ db });
+      break;
     case 'general':
+      tabContent = await GeneralTab({ db, currentBotId: session.currentBotId });
+      break;
     case 'notifications':
       tabContent = NotYetMigratedTab({ tabKey: activeTab });
       break;
