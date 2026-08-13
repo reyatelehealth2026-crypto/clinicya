@@ -42,17 +42,6 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('heading', { name: 'ข้อความต้อนรับ' })).not.toBeInTheDocument();
   });
 
-  it.each(['notifications'])(
-    'renders the NotYetMigratedTab placeholder (linking back to /settings.php?tab=%s) for the live-but-unported "%s" tab',
-    async (tab) => {
-      wireFakeDb();
-      const element = await SettingsPage({ searchParams: Promise.resolve({ tab }) });
-      render(element);
-      const links = screen.getAllByRole('link').filter((a) => a.getAttribute('href') === `/settings.php?tab=${tab}`);
-      expect(links.length).toBeGreaterThan(0);
-    }
-  );
-
   it('renders the real LineAccountsTab content for ?tab=line', async () => {
     wireFakeDb();
     const element = await SettingsPage({ searchParams: Promise.resolve({ tab: 'line' }) });
@@ -81,6 +70,15 @@ describe('SettingsPage', () => {
     const element = await SettingsPage({ searchParams: Promise.resolve({ tab: 'welcome' }) });
     render(element);
     expect(screen.getByRole('heading', { name: 'ข้อความต้อนรับ' })).toBeInTheDocument();
+  });
+
+  it('renders the real NotificationsTab content for ?tab=notifications', async () => {
+    wireFakeDb(() => []);
+    const element = await SettingsPage({ searchParams: Promise.resolve({ tab: 'notifications' }) });
+    render(element);
+    expect(screen.getByRole('heading', { name: /ตั้งค่าการแจ้งเตือน/ })).toBeInTheDocument();
+    // Not the NotYetMigratedTab placeholder any more.
+    expect(screen.queryByText(/ยังไม่ได้ย้ายมาที่นี่/)).not.toBeInTheDocument();
   });
 
   it('renders the real EmailTab content for ?tab=email even though email has no nav pill', async () => {
