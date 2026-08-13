@@ -4,12 +4,12 @@ import { Tabs } from '@/components/Tabs';
 import { requireTenantPageContext } from '../users/_lib/session';
 import { WelcomeTab } from './_components/WelcomeTab';
 import { EmailTab } from './_components/EmailTab';
-import { NotYetMigratedTab } from './_components/NotYetMigratedTab';
 import { ConsentTab } from './_components/ConsentTab';
 import { ShopTaxTab } from './_components/ShopTaxTab';
 import { LineAccountsTab } from './_components/LineAccountsTab';
 import { PlatformTab } from './_components/PlatformTab';
 import { GeneralTab } from './_components/GeneralTab';
+import { NotificationsTab } from './_components/NotificationsTab';
 import { resolveLineAccountId, getShopTaxInfo } from './_lib/shop-tax-queries';
 
 /**
@@ -162,7 +162,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       tabContent = await GeneralTab({ db, currentBotId: session.currentBotId });
       break;
     case 'notifications':
-      tabContent = NotYetMigratedTab({ tabKey: activeTab });
+      tabContent = await NotificationsTab({ db, currentBotId: session.currentBotId });
       break;
     case 'consent':
       // consent.php has zero mutations/Server Actions — a pure read, same
