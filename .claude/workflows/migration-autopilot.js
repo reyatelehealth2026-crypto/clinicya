@@ -317,7 +317,9 @@ async function runStream(spec) {
       spec.branch +
       '): run `git status` to review the full diff, `git add -A`, then `git commit` with a Conventional Commits message (feat(migration): ...) summarizing: ' +
       (spec.commitSummary || spec.id) +
-      '. Do NOT push. Do NOT merge into any other branch. Report the resulting commit SHA, `git log --oneline -1`, and a concise paragraph suitable for inclusion in a PR description.'
+      '. Then IMMEDIATELY run `git push -u origin ' +
+      spec.branch +
+      "` (retry up to 3 times on network failure with a short backoff) — this branch is a scratch worktree on ephemeral disk that can be reclaimed at any time, so the commit is not safe until it exists on GitHub; do not skip this step or leave it for later. Do NOT merge into any other branch, and do NOT open a pull request (the coordinator does that once, after merging all of this round's streams together). Report the resulting commit SHA, `git log --oneline -1`, confirmation the push succeeded (paste the push command's output), and a concise paragraph suitable for inclusion in a PR description."
     commitInfo = await agent(commitPrompt, { agentType: 'mig-infra', model: 'sonnet', label: 'commit:' + spec.id, phase: 'Streams' })
   }
 

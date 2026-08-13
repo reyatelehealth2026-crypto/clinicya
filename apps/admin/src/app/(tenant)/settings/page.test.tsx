@@ -25,24 +25,24 @@ beforeEach(() => {
 });
 
 describe('SettingsPage', () => {
-  it('defaults to the "line" tab (not-yet-migrated placeholder) when ?tab= is absent', async () => {
+  it('defaults to the "line" tab (real LineAccountsTab content) when ?tab= is absent', async () => {
     wireFakeDb();
     const element = await SettingsPage({ searchParams: Promise.resolve({}) });
     render(element);
-    expect(screen.getByText('LINE Accounts — ยังไม่ได้ย้ายมาที่นี่ — ใช้หน้าเดิม')).toBeInTheDocument();
+    expect(screen.getByText('บัญชี LINE Official Account')).toBeInTheDocument();
   });
 
   it('defaults to the "line" tab for an unrecognized ?tab= value, never a different tab\'s content', async () => {
     wireFakeDb();
     const element = await SettingsPage({ searchParams: Promise.resolve({ tab: 'not-a-real-tab' }) });
     render(element);
-    expect(screen.getByText('LINE Accounts — ยังไม่ได้ย้ายมาที่นี่ — ใช้หน้าเดิม')).toBeInTheDocument();
+    expect(screen.getByText('บัญชี LINE Official Account')).toBeInTheDocument();
     // The "ข้อความต้อนรับ" nav pill always renders (all 7 tabs are always
     // listed) — what must NOT render is welcome's actual <h2> tab content.
     expect(screen.queryByRole('heading', { name: 'ข้อความต้อนรับ' })).not.toBeInTheDocument();
   });
 
-  it.each(['line', 'platform', 'general', 'notifications'])(
+  it.each(['notifications'])(
     'renders the NotYetMigratedTab placeholder (linking back to /settings.php?tab=%s) for the live-but-unported "%s" tab',
     async (tab) => {
       wireFakeDb();
@@ -52,6 +52,27 @@ describe('SettingsPage', () => {
       expect(links.length).toBeGreaterThan(0);
     }
   );
+
+  it('renders the real LineAccountsTab content for ?tab=line', async () => {
+    wireFakeDb();
+    const element = await SettingsPage({ searchParams: Promise.resolve({ tab: 'line' }) });
+    render(element);
+    expect(screen.getByText('บัญชี LINE Official Account')).toBeInTheDocument();
+  });
+
+  it('renders the real PlatformTab content for ?tab=platform', async () => {
+    wireFakeDb();
+    const element = await SettingsPage({ searchParams: Promise.resolve({ tab: 'platform' }) });
+    render(element);
+    expect(screen.getByRole('heading', { name: /การเชื่อมต่อแพลตฟอร์ม/ })).toBeInTheDocument();
+  });
+
+  it('renders the real GeneralTab content for ?tab=general', async () => {
+    wireFakeDb();
+    const element = await SettingsPage({ searchParams: Promise.resolve({ tab: 'general' }) });
+    render(element);
+    expect(document.getElementById('settings-general-form')).toBeInTheDocument();
+  });
 
   it('renders the real WelcomeTab content for ?tab=welcome', async () => {
     wireFakeDb(() => {
