@@ -222,13 +222,21 @@ define('ODOO_WEBHOOK_URL', APP_URL . '/api/webhook/odoo.php');
 define('ODOO_LINE_ACCOUNT_MODE', 'shared');
 
 // ============================================================================
-// Redis Cache Configuration — Redis Cloud (shared ทั้ง odoo + inboxreya)
-// Host: redis-13718.fcrce172.us-east-1-1.ec2.cloud.redislabs.com:13718
+// Redis Cache Configuration — shared cache (odoo + inboxreya)
+//
+// Credentials come from env vars only, same rule as the Odoo block above: this
+// file is tracked in a public repository, so a hardcoded fallback is published
+// the moment it is committed. Set REDIS_HOST/PORT/USERNAME/PASSWORD/DB in the
+// server environment for any host that uses the managed Redis instance.
+//
+// Leaving them unset is safe, not fatal: RedisCache falls back to the on-disk
+// file cache when it cannot connect (classes/RedisCache.php), so a host without
+// Redis configured is slower but fully functional.
 // ============================================================================
-define('REDIS_HOST',     getenv('REDIS_HOST')     ?: 'redis-13718.fcrce172.us-east-1-1.ec2.cloud.redislabs.com');
-define('REDIS_PORT',     getenv('REDIS_PORT')     ?: 13718);
-define('REDIS_USERNAME', getenv('REDIS_USERNAME') ?: 'default');
-define('REDIS_PASSWORD', getenv('REDIS_PASSWORD') ?: '8aOsi5ZlcevxIxkXOFn4b4qshhMTHKC5');
+define('REDIS_HOST',     getenv('REDIS_HOST')     ?: '127.0.0.1');
+define('REDIS_PORT',     getenv('REDIS_PORT')     ?: 6379);
+define('REDIS_USERNAME', getenv('REDIS_USERNAME') ?: '');
+define('REDIS_PASSWORD', getenv('REDIS_PASSWORD') ?: '');
 define('REDIS_DB',       getenv('REDIS_DB')       ?: 0);     // DB index (0–15)
 define('REDIS_TIMEOUT',  3.0);                               // วินาที (cloud ต้องการนานกว่า local)
 define('REDIS_PREFIX',   'cny:');                            // prefix สำหรับทุก key
