@@ -39,15 +39,15 @@ webhook ไป cPanel — แต่**ขาออกส่งจริง** ก�
 | `redis` | `redis:7-alpine` | PHP sessions, worker queues |
 | `php` | `infra/php/Dockerfile` | the monolith, code bind-mounted unchanged |
 | `next-admin` | `infra/admin/Dockerfile` | the Next.js admin — UI **and** its API routes |
+| `next-miniapp` | `infra/miniapp/Dockerfile` | LINE Mini App — static export served by nginx |
 | `worker` | `infra/worker/Dockerfile` | BullMQ jobs + realtime relay |
 | `ws` | `infra/ws/Dockerfile` | legacy `websocket-server.js` (what production runs today) |
 | `nginx-edge` | `nginx:alpine` | strangler edge, sets `X-Served-By` |
 | `cron` | `infra/php/Dockerfile` | **profile-gated, off by default** — see step 7 |
 | `caddy` | `caddy:2-alpine` | **optional overlay** — TLS for one hostname, needed only for real LINE webhooks (§11.3) |
 
-Not included: `next-miniapp`. `line-mini-app` has no Dockerfile in this repo and
-is deployed separately today, so **`/miniapp` returns 502 from this stack**.
-That is expected. Every other route works.
+All four upstreams the edge can route to (`php_backend`, `next_admin`,
+`next_miniapp`, `ws`) have a service, so no route 502s.
 
 ---
 
@@ -238,6 +238,10 @@ curl -sSI $E/ | grep -i x-served-by                                  # php
 curl -sSI -H 'Host: tenant-demo-tenant.re-ya.com' $E/admin-preview | grep -i x-served-by   # next
 curl -sSI -H 'Host: tenant-0001.re-ya.com'        $E/admin-preview | grep -i x-served-by   # php
 
+# the LINE Mini App (static export, served at /miniapp/)
+curl -sSI $E/miniapp  | grep -i 'x-served-by\|^HTTP'      # 308 -> /miniapp/, next
+curl -sSI $E/miniapp/ | grep -i 'x-served-by\|^HTTP'      # 200, next
+
 # a real tenant hostname, without touching DNS
 curl -sS --resolve tenant-0001.re-ya.com:80:<vps-ip> \
      http://tenant-0001.re-ya.com/ -o /dev/null -w '%{http_code}\n'
@@ -409,7 +413,6 @@ cPanel crontab.
 | Gap | Impact | Where it is tracked |
 |---|---|---|
 | No wildcard TLS | Base stack is HTTP-only; the optional Caddy overlay (§11.3) covers **one** hostname via HTTP-01. A real cutover needs `*.re-ya.com` via DNS-01. | `phase0-cutover-rollback.md` §6 |
-| `/miniapp` → 502 | `line-mini-app` has no Dockerfile here. | this file, §"What comes up" |
 | `TenantProvisioning` is cPanel-`uapi`-only | Cannot create a **new** tenant on this stack. Existing imported tenants work. | Codex handoff §4 / A1 |
 | `cron` schedules inferred | Left off by default. | `phase0-cutover-rollback.md` item 5 |
 | No CI | Nothing gates a broken build. | Codex handoff §4 / A4 |
@@ -433,7 +436,24 @@ Performed against this repo, with a real Docker daemon:
   reached healthy.
 - Edge routing confirmed live: `/__edge-health` → 200; `/` → `X-Served-By: php`;
   `/admin-preview` → `next` for `tenant-demo-tenant.re-ya.com` and `php` for
-  `tenant-0001.re-ya.com`; `/miniapp` → 502 as documented.
+  `tenant-0001.re-ya.com`; `/miniapp` → 502 at that time (no `next-miniapp`
+  service existed yet — closed since, see the miniapp entry below).
+
+Added later, for `infra/miniapp/Dockerfile`:
+
+- Image builds; container reports healthy. Through the edge: `/miniapp` → 308 to
+  `/miniapp/`, `/miniapp/` and `/miniapp/shop/` → 200 with `X-Served-By: next`, the
+  `_next/static` CSS the HTML actually references → 200, an unknown path → the
+  exported 404 page. `<title>Re-Ya LINE Mini App</title>` renders, so it is real
+  content rather than an empty shell.
+- Two defects were found and fixed during that smoke test: `GET /` returned 200
+  serving nginx's stock welcome page (that file survives replacing
+  `conf.d/default.conf`), and `_next/static` responses carried **two**
+  `Cache-Control` headers because `expires 1y` emits its own alongside the
+  `add_header`. Both re-verified after the fix: `/` → 404, exactly one
+  `Cache-Control`.
+- Confirmed no regression to the other routes in the same run: `/` still
+  `X-Served-By: php`, `/admin-preview` still `next` for the canary tenant.
 
 Added later, for the functional-trial pieces (§11):
 
