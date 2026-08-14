@@ -6,6 +6,11 @@ config/notify_config.php
 .env
 .env.local
 .env.*.local
+# VPS trial stack env (infra/compose/docker-compose.vps.yml) — real DB
+# passwords + session-bridge HMAC secret live here. NOT matched by the
+# .env.*.local pattern above, so it needs its own rule.
+infra/compose/.env.vps
+infra/compose/.env
 
 # Uploads
 uploads/*

@@ -77,7 +77,7 @@ flipped. Verify with:
 
 ```bash
 node infra/nginx/generate-routes.mjs --validate-only
-python3 -c "import json;d=json.load(open('infra/nginx/routes.json'));print(len(d['routes']),'routes');print({r.get('upstream') for r in d['routes']})"
+python3 -c "import json;d=json.load(open('infra/nginx/routes.json'));print(len(d),'routes');print({r.get('upstream','php_backend') for r in d})"
 ```
 
 ### 1.3 Monorepo layout
@@ -132,13 +132,18 @@ Read all of these. They encode expensive lessons.
    in Phase 13, gated on the traffic flip that hasn't happened.
 
 5. **Secrets discipline.** GitGuardian scans this repo. Never commit a literal credential, password,
-   API token, private key, or connection string with embedded auth. Note that `config/config.php` **is
-   tracked in git** even though `.gitignore` lists it (it was committed before the ignore rule, and
-   `.gitignore` does not untrack existing files). Verify before you edit it:
+   API token, private key, or connection string with embedded auth.
+
+   Beware a repo-wide trap: `.gitignore` listing a path does **not** untrack files already committed
+   under it. `config/config.php`, `composer.lock`, and the entire `vendor/` tree (1,151 files) are all
+   matched by `.gitignore` rules **and all tracked**. So `composer install` mutates tracked files, and
+   editing `config/config.php` produces a real commit. Always check before assuming a path is ignored:
    ```bash
-   git ls-files --error-unmatch config/config.php
+   git ls-files --error-unmatch config/config.php composer.lock
+   git ls-files vendor/ | wc -l          # -> 1151, not 0
+   git status --short                    # after any composer command
    ```
-   Any value you add there must come from `getenv()` with a safe non-secret default.
+   Any value you add to `config/config.php` must come from `getenv()` with a safe non-secret default.
 
 6. **Tests must never make real network calls.** No real LINE Messaging API calls, no real Gemini/OpenAI
    calls, no real Odoo JSON-RPC. Mock at a seam. Existing tests show the pattern — see
@@ -632,10 +637,13 @@ resolution touching `infra/nginx/routes.json`, run **both**:
 
 ```bash
 node infra/nginx/generate-routes.mjs --validate-only
-python3 -c "import json;d=json.load(open('infra/nginx/routes.json'));print(len(d['routes']),'routes')"
+python3 -c "import json;d=json.load(open('infra/nginx/routes.json'));print(len(d),'routes')"
 ```
 
 and eyeball the route count against what you expected.
+
+Note the shape: `routes.json` is a **top-level JSON array** of route objects, not an object with a
+`routes` key. `d['routes']` raises `TypeError`.
 
 ### 7.4 `.gitignore` swallows files silently
 
