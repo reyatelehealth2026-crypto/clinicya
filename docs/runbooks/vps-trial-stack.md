@@ -19,9 +19,15 @@ stack (see "Verification evidence" at the end for what was proven and what was n
 ขั้นตอนย่อ: เตรียม VPS → clone repo → `composer install` → เอา dump มาลง →
 `docker compose up` → ทดสอบด้วย `curl --resolve`
 
-จุดที่ต้องระวังที่สุด: **`cron` ไม่ได้เปิดโดยอัตโนมัติ** เพราะตารางเวลาใน
-`infra/php/crontab` เป็นการเดา ถ้าเปิดทับ dump ของจริง มันอาจยิง broadcast
-ไปหาลูกค้าจริง
+VPS จะรัน **สำเนา PHP ของตัวเอง** (clone มา bind-mount เข้า container) พร้อม DB สำเนา
+และ uploads สำเนา — ไม่ได้ยิงกลับไปหา cPanel เป็นคนละโลกกันสมบูรณ์ โค้ด PHP
+ไม่ต้องแก้แม้แต่บรรทัดเดียว
+
+**จุดที่ต้องระวังที่สุด — อ่านหัวข้อ 7b ก่อนกดอะไรในหน้า admin บน VPS:**
+dump ที่ import มามี LINE channel access token ตัวจริงติดมาด้วย (เก็บในตาราง
+`line_accounts` ไม่ใช่ใน config) ขาเข้าปลอดภัยเพราะ DNS ยังไม่ย้าย LINE ยังยิง
+webhook ไป cPanel — แต่**ขาออกส่งจริง** กดจ่ายยาหรือ broadcast บน VPS
+= ลูกค้าจริงได้รับข้อความจริง
 
 ---
 
@@ -160,6 +166,51 @@ the schedules (`phase0-cutover-rollback.md` item 5):
 ```bash
 docker compose ... --profile cron up -d cron
 ```
+
+## 7b. ⚠️ The trial stack can send real messages to real customers
+
+This is the most dangerous property of the whole setup, and it is not obvious.
+
+The VPS runs its **own complete copy** of everything — its own PHP code (bind-mounted
+from the clone), its own database (imported from your dump), its own uploads volume.
+It never talks back to cPanel. Two independent worlds.
+
+That isolation is one-directional. **Inbound is safe:** LINE, Facebook, TikTok and
+Telegram still deliver webhooks to cPanel, because DNS has not moved. Nothing external
+reaches the VPS.
+
+**Outbound is not.** LINE channel access tokens are stored per row in the
+`line_accounts` table and passed into `LineAPI`'s constructor — they are not read from
+a config constant you could blank out in one place. So a database imported from
+production carries live, working credentials. Anything on the VPS that sends a message
+sends it **for real, to real customers**:
+
+- clicking dispense (`inbox-v2.php`) → a real Flex medicine label
+- sending a broadcast → real messages to the real audience
+- any admin action with a LINE push side effect
+- the `cron` sidecar, if enabled (which is why it is off by default — step 7)
+
+Same applies to Odoo sync, Telegram and email notifications.
+
+Pick one before letting anyone touch the trial admin UI:
+
+```sql
+-- Option A (safest): neuter outbound credentials in the COPY, right after import.
+-- Run against the VPS MariaDB only. Never against production.
+UPDATE line_accounts SET channel_access_token = '', channel_secret = '';
+```
+
+- **Option B** — import only a test tenant's database, not the real ones.
+- **Option C** — treat the trial as strictly read-only: look at pages, never click
+  anything that sends.
+
+Verify which database you are connected to before running any UPDATE:
+
+```bash
+docker exec -it clinicya-vps-mariadb mariadb -uroot -p -e 'SELECT @@hostname, DATABASE();'
+```
+
+---
 
 ## 8. Verify
 
