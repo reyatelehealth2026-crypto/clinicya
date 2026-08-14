@@ -435,7 +435,22 @@ Performed against this repo, with a real Docker daemon:
   `/admin-preview` → `next` for `tenant-demo-tenant.re-ya.com` and `php` for
   `tenant-0001.re-ya.com`; `/miniapp` → 502 as documented.
 
+Added later, for the functional-trial pieces (§11):
+
+- `docker compose config` across both `-f` files resolves 8 services; Caddy holds
+  80/443/443udp and `nginx-edge` resolves to `127.0.0.1:8091` only. The `!override`
+  tag on that ports list is required — without it the resolved config lists **both**
+  the public and the loopback binding, because compose merges sequence fields across
+  `-f` files instead of replacing them.
+
 Not verified:
+
+- `database/trial-safe-mode.sql` has never been executed — that needs a real imported
+  dump. Read it before running it, and run the `SELECT @@hostname, DATABASE()` check
+  at the top first.
+- Caddy was never started, so no certificate was issued. ACME HTTP-01 needs a public
+  hostname and open ports 80/443, neither of which exists in the authoring
+  environment.
 
 - `worker` and `ws` images were not built in the authoring environment — its
   proxy intercepts TLS and the build containers lack its CA, so `corepack`/`npm`
