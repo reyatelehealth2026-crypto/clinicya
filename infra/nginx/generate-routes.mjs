@@ -310,11 +310,27 @@ ${servedByMapLines}
     }
 
     # --- Tier 1: host -> tenant slug. Production hostnames are
-    #     tenant-XXXX.re-ya.com (subdomain routing, ADR-001); anything else
-    #     (root domain, reserved subdomains) has no tenant scope. ---
+    #     <slug>.re-ya.com (subdomain routing, ADR-001); anything else
+    #     (root domain, reserved subdomains) has no tenant scope.
+    #
+    #     The capture is the WHOLE first label, deliberately. It previously read
+    #     ~^tenant-(?<slug>[a-z0-9-]+)\\. — hardcoding and then STRIPPING a
+    #     "tenant-" prefix, so host tenant-0001.re-ya.com yielded slug "0001".
+    #     But bootstrap/resolve_subdomain.php captures the full label
+    #     ("tenant-0001") and looks that up against master.tenants.slug, which
+    #     also stores "tenant-0001". nginx and PHP therefore disagreed about
+    #     what a slug IS, and every per-tenant canary list written with the real
+    #     slug silently never matched — the route quietly fell through to
+    #     php_backend with no error anywhere. Found on the VPS trial: 16 routes
+    #     flipped, conf rendered, nginx reloaded, and every request still served
+    #     php. Keep this regex in step with resolve_subdomain.php.
+    #
+    #     Reserved subdomains (www/api/admin/...) now produce a non-empty slug
+    #     here, unlike before. Harmless: a Tier 2 map only matches slugs that
+    #     appear in some route's canary list, and reserved names never do. ---
     map $host $tenant_slug {
-        ~^tenant-(?<slug>[a-z0-9-]+)\\.re-ya\\.com$   $slug;
-        default                                       "";
+        ~^(?<slug>[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\\.re-ya\\.com$   $slug;
+        default                                                     "";
     }
 
     # --- Tier 2: per-route tenant -> upstream maps (only emitted for routes
