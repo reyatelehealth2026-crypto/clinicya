@@ -81,7 +81,11 @@ function buildCookie(realm: Realm, sid: string, ttlSeconds: number): SessionCook
     value: sid,
     httpOnly: true,
     sameSite: 'lax',
-    secure: env.NODE_ENV !== 'development',
+    // Secure by default everywhere but development. SESSION_COOKIE_INSECURE=1
+    // is a deliberate, documented opt-out for HTTP-only trial stacks — without
+    // it the browser discards the cookie over plain http and login silently
+    // never sticks (see the env var's doc comment in packages/config).
+    secure: env.NODE_ENV !== 'development' && env.SESSION_COOKIE_INSECURE !== '1',
     path: '/',
     maxAge: ttlSeconds,
   };

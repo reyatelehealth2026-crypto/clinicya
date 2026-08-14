@@ -206,7 +206,16 @@ function renderLocation(route, varName) {
     `    location ${loc} {`,
     `        set $upstream_name ${assign}`,
     '        proxy_http_version 1.1;',
-    '        proxy_set_header Host $host;',
+    // $http_host, not $host: $host drops the port, so an upstream that builds
+    // an absolute redirect from the request (Next.js does, for its 303 after
+    // login) re-appends its OWN listening port and sends the browser to
+    // http://tenant-0001.re-ya.com:3000/... — unreachable from outside. Seen on
+    // the VPS trial, which runs the edge on 38080. $http_host preserves
+    // "hostname:port" exactly as the client sent it.
+    // NOTE the Tier 1 tenant-slug map deliberately keeps using $host, since it
+    // wants the hostname WITHOUT the port (matching resolve_subdomain.php,
+    // which strips the port before matching).
+    '        proxy_set_header Host $http_host;',
     '        proxy_set_header X-Real-IP $remote_addr;',
     '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
     '        proxy_set_header X-Forwarded-Proto $scheme;',

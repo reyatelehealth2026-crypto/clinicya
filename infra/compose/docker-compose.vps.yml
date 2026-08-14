@@ -217,6 +217,13 @@ services:
       # Set in infra/compose/.env.vps — see .env.vps.example.
       SESSION_BRIDGE_HMAC_SECRET: ${SESSION_BRIDGE_HMAC_SECRET:?}
       NODE_SESSION_TTL_SECONDS: ${NODE_SESSION_TTL_SECONDS:-86400}
+      # Session cookies are Secure outside development, and a browser DISCARDS
+      # a Secure cookie served over plain http — so on this HTTP-only stack
+      # login silently never sticks: the POST succeeds, the 303 fires, and the
+      # next request arrives with no session. Set SESSION_COOKIE_INSECURE=1 in
+      # .env.vps for a throwaway trial; leave it 0 and terminate TLS
+      # (docker-compose.vps-tls.yml) for anything that matters.
+      SESSION_COOKIE_INSECURE: ${SESSION_COOKIE_INSECURE:-0}
       TZ: Asia/Bangkok
     depends_on:
       mariadb: { condition: service_healthy }
