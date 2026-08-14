@@ -80,7 +80,14 @@ export async function main(): Promise<void> {
   healthServer.listen(env.WORKER_HEALTH_PORT);
 
   const redisSubscriber = getRedisSubscriberClient();
-  const realtimeServer = createRealtimeServer();
+  // getRedisStatus reads the SAME dedicated pub/sub connection's live
+  // ioredis `.status` ('ready' means connected) for realtime/socketServer.ts's
+  // GET /health + GET /status `redis` field — see that file's
+  // RealtimeServerDeps doc comment. Trivial to wire (the connection already
+  // exists on this line) and adds no new dependency.
+  const realtimeServer = createRealtimeServer({
+    getRedisStatus: () => (redisSubscriber.status === 'ready' ? 'connected' : 'disconnected'),
+  });
   wireInboxRelay(realtimeServer.io, redisSubscriber);
   await realtimeServer.start(env.WORKER_REALTIME_PORT);
 
