@@ -1,0 +1,32 @@
+{
+    "description": "resolveAutoReply() — match_type=all: matches ANY text unconditionally, regardless of keyword content.",
+    "request": {
+        "fn": "resolveAutoReply",
+        "rules": [
+            {
+                "id": 7,
+                "line_account_id": null,
+                "keyword": "",
+                "match_type": "all",
+                "reply_type": "text",
+                "reply_content": "ขอบคุณสำหรับข้อความค่ะ เดี๋ยวแอดมินตอบกลับนะคะ",
+                "alt_text": null,
+                "sender_name": null,
+                "sender_icon": null,
+                "quick_reply": null,
+                "enable_share": 0,
+                "share_button_label": null,
+                "is_active": 1,
+                "priority": 0
+            }
+        ],
+        "text": "ข้อความสุ่มอะไรก็ได้ที่พิมพ์เข้ามา 12345",
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": {
+        "type": "text",
+        "text": "ขอบคุณสำหรับข้อความค่ะ เดี๋ยวแอดมินตอบกลับนะคะ"
+    }
+}

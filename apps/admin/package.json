@@ -18,6 +18,7 @@
     "@reya/auth": "workspace:*",
     "@reya/config": "workspace:*",
     "@reya/contracts": "workspace:*",
+    "@reya/core": "workspace:*",
     "@reya/db": "workspace:*",
     "@reya/line": "workspace:*",
     "@reya/tenant": "workspace:*",

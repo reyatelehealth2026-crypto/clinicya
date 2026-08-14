@@ -1,0 +1,177 @@
+{
+    "description": "addShareButtonToFlex() — carousel with 3 bubbles (bubble 0 and 2 have no footer, bubble 1 already has one with a button): PIN: the share button is appended to EVERY bubble in contents[], not just the first/last, mixing the create-footer and append-to-existing-footer branches within one call.",
+    "request": {
+        "fn": "addShareButtonToFlex",
+        "flexContent": {
+            "type": "carousel",
+            "contents": [
+                {
+                    "type": "bubble",
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "สินค้า A"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "bubble",
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "สินค้า B"
+                            }
+                        ]
+                    },
+                    "footer": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "uri",
+                                    "label": "ดูรายละเอียด",
+                                    "uri": "https://shop.example.com/b"
+                                }
+                            }
+                        ],
+                        "paddingAll": "lg"
+                    }
+                },
+                {
+                    "type": "bubble",
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "สินค้า C"
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "ruleId": 203,
+        "label": "📤 แชร์ให้เพื่อน",
+        "liffShareId": "liff-1234-share-test"
+    },
+    "response": {
+        "type": "carousel",
+        "contents": [
+            {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "สินค้า A"
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "uri",
+                                "label": "📤 แชร์ให้เพื่อน",
+                                "uri": "https://liff.line.me/liff-1234-share-test?rule=203"
+                            },
+                            "style": "secondary",
+                            "color": "#3B82F6",
+                            "height": "sm",
+                            "margin": "sm"
+                        }
+                    ],
+                    "paddingAll": "lg"
+                }
+            },
+            {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "สินค้า B"
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "uri",
+                                "label": "ดูรายละเอียด",
+                                "uri": "https://shop.example.com/b"
+                            }
+                        },
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "uri",
+                                "label": "📤 แชร์ให้เพื่อน",
+                                "uri": "https://liff.line.me/liff-1234-share-test?rule=203"
+                            },
+                            "style": "secondary",
+                            "color": "#3B82F6",
+                            "height": "sm",
+                            "margin": "sm"
+                        }
+                    ],
+                    "paddingAll": "lg"
+                }
+            },
+            {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "สินค้า C"
+                        }
+                    ]
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "uri",
+                                "label": "📤 แชร์ให้เพื่อน",
+                                "uri": "https://liff.line.me/liff-1234-share-test?rule=203"
+                            },
+                            "style": "secondary",
+                            "color": "#3B82F6",
+                            "height": "sm",
+                            "margin": "sm"
+                        }
+                    ],
+                    "paddingAll": "lg"
+                }
+            }
+        ]
+    }
+}

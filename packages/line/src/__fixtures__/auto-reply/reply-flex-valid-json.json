@@ -1,0 +1,44 @@
+{
+    "description": "buildAutoReplyReply() — reply_type=flex, well-formed JSON reply_content: message is `{type: \"flex\", altText, contents}` with contents = json_decode(reply_content, true). enable_share=0, so no share button.",
+    "request": {
+        "fn": "buildAutoReplyReply",
+        "rule": {
+            "id": 9,
+            "line_account_id": null,
+            "keyword": "",
+            "match_type": "all",
+            "reply_type": "flex",
+            "reply_content": "{\"type\":\"bubble\",\"body\":{\"type\":\"box\",\"layout\":\"vertical\",\"contents\":[{\"type\":\"text\",\"text\":\"\\u0e2a\\u0e34\\u0e19\\u0e04\\u0e49\\u0e32\\u0e41\\u0e19\\u0e30\\u0e19\\u0e33\\u0e1b\\u0e23\\u0e30\\u0e08\\u0e33\\u0e2a\\u0e31\\u0e1b\\u0e14\\u0e32\\u0e2b\\u0e4c\",\"weight\":\"bold\",\"size\":\"lg\"}]}}",
+            "alt_text": "สินค้าแนะนำ",
+            "sender_name": null,
+            "sender_icon": null,
+            "quick_reply": null,
+            "enable_share": 0,
+            "share_button_label": null,
+            "is_active": 1,
+            "priority": 0
+        },
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": {
+        "type": "flex",
+        "altText": "สินค้าแนะนำ",
+        "contents": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "สินค้าแนะนำประจำสัปดาห์",
+                        "weight": "bold",
+                        "size": "lg"
+                    }
+                ]
+            }
+        }
+    }
+}

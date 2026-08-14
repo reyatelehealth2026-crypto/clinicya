@@ -1,0 +1,33 @@
+{
+    "description": "buildAutoReplyReply() — sender_name AND sender_icon both set: message.sender = {name, iconUrl}.",
+    "request": {
+        "fn": "buildAutoReplyReply",
+        "rule": {
+            "id": 13,
+            "line_account_id": null,
+            "keyword": "",
+            "match_type": "all",
+            "reply_type": "text",
+            "reply_content": "สวัสดีค่ะ มีอะไรให้ช่วยไหมคะ",
+            "alt_text": null,
+            "sender_name": "บอทร้านยา CNY",
+            "sender_icon": "https://example.com/bot-icon.png",
+            "quick_reply": null,
+            "enable_share": 0,
+            "share_button_label": null,
+            "is_active": 1,
+            "priority": 0
+        },
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": {
+        "type": "text",
+        "text": "สวัสดีค่ะ มีอะไรให้ช่วยไหมคะ",
+        "sender": {
+            "name": "บอทร้านยา CNY",
+            "iconUrl": "https://example.com/bot-icon.png"
+        }
+    }
+}
