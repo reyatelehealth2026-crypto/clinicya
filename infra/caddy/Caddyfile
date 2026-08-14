@@ -1,0 +1,36 @@
+# infra/caddy/Caddyfile
+#
+# TLS terminator for the VPS trial stack. Only loaded by the optional overlay
+# infra/compose/docker-compose.vps-tls.yml — the base stack is HTTP-only.
+#
+# Why this exists: LINE requires an HTTPS webhook endpoint, so a trial that
+# actually receives LINE events needs a real certificate. Caddy issues one
+# automatically over ACME HTTP-01, which needs only that TRIAL_HOSTNAME's A
+# record points at this VPS and that ports 80/443 are reachable.
+#
+# HTTP-01, not DNS-01, on purpose: this covers ONE hostname and needs no DNS
+# provider plugin, so stock caddy:alpine works with no custom build. The
+# production cutover needs a *wildcard* cert for *.re-ya.com, which HTTP-01
+# cannot issue — that is DNS-01 and is a separate, later job
+# (docs/runbooks/phase0-cutover-rollback.md §6).
+#
+# Use a hostname you are not already serving from cPanel — e.g. trial.re-ya.com.
+# Pointing an in-use production hostname here moves real traffic to the trial
+# stack, which is a cutover, not a trial.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$TRIAL_HOSTNAME} {
+	encode gzip
+
+	# Everything goes to the strangler edge, which is what decides php vs next
+	# per route. Caddy terminates TLS and does nothing else — no routing logic
+	# lives here, so infra/nginx/routes.json stays the single source of truth.
+	reverse_proxy nginx-edge:80 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

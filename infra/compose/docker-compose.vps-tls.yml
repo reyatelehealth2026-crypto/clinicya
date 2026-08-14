@@ -1,0 +1,61 @@
+# infra/compose/docker-compose.vps-tls.yml
+#
+# OPTIONAL TLS overlay for the VPS trial stack. Layer it on the base file:
+#
+#   docker compose --env-file infra/compose/.env.vps \
+#     -f infra/compose/docker-compose.vps.yml \
+#     -f infra/compose/docker-compose.vps-tls.yml up -d
+#
+# Relative paths resolve against the FIRST -f file's directory (infra/compose/),
+# same as the base file — keep that argument order.
+#
+# Needed only when the trial must receive real LINE webhooks, which require
+# HTTPS. A look-only trial can stay on the base HTTP stack.
+#
+# Prerequisites:
+#   - TRIAL_HOSTNAME's A record already points at this VPS (check before
+#     starting — Caddy retries, but you will be reading failures otherwise)
+#   - ports 80 and 443 open
+#   - TRIAL_HOSTNAME is NOT a hostname cPanel currently serves
+#
+# What it changes: adds `caddy` holding 80/443, and moves `nginx-edge` off the
+# public port onto loopback so the edge is reachable only through Caddy.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: clinicya-vps-caddy
+    environment:
+      TRIAL_HOSTNAME: ${TRIAL_HOSTNAME:?}
+      ACME_EMAIL: ${ACME_EMAIL:?}
+    volumes:
+      - ../../infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persisting these matters: certificates and ACME account keys live here,
+      # and Let's Encrypt rate-limits issuance per hostname. A stack recreated
+      # without them re-requests certs and can get itself throttled.
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    depends_on:
+      - nginx-edge
+    networks: [edge]
+    restart: unless-stopped
+
+  nginx-edge:
+    # Loopback only — Caddy is the public entry point now.
+    #
+    # The `!override` tag is load-bearing. Compose MERGES sequence fields like
+    # `ports` across -f files by default, so a plain `ports:` here would ADD to
+    # the base file's "${EDGE_HTTP_PORT:-80}:80" instead of replacing it, and
+    # the edge would stay published on a public port alongside Caddy —
+    # defeating the point of this overlay. Verified: without the tag the
+    # resolved config lists both bindings.
+    ports: !override
+      - "127.0.0.1:8091:80"
+
+volumes:
+  caddy_data:
+  caddy_config:
