@@ -128,6 +128,14 @@ services:
       REDIS_SESSION_PORT: 6379
       REDIS_SESSION_DB: ${REDIS_SESSION_DB:-1}
       COMPOSER_AUTOLOAD: /var/www/html/vendor/autoload.php
+      # Shared with next-admin. internal/session-bridge.php reads this via
+      # getenv() and REFUSES EVERY REQUEST when it is unset — so omitting it
+      # here does not disable the bridge loudly, it makes @reya/auth's
+      # syncToPhpBridge() come back bridgeSynced:false on every login. The Next
+      # side still sets PHPSESSID, so PHP sees a session id whose $_SESSION was
+      # never populated: legacy pages bounce straight back to the login screen,
+      # and with a flipped route in front that becomes ERR_TOO_MANY_REDIRECTS.
+      SESSION_BRIDGE_HMAC_SECRET: ${SESSION_BRIDGE_HMAC_SECRET:?}
       TZ: Asia/Bangkok
     volumes:
       # Lift-and-shift: the repo (including host-installed vendor/) is
