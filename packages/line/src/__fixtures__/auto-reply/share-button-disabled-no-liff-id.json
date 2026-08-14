@@ -1,0 +1,43 @@
+{
+    "description": "buildAutoReplyReply() — rule.enable_share=1 but LIFF_SHARE_ID is NOT configured (config.liffShareId falsy): PHP's `defined('LIFF_SHARE_ID') && LIFF_SHARE_ID` gate is false, so no share button is appended even though the rule asks for one. Generated with the real LIFF_SHARE_ID constant genuinely undefined.",
+    "request": {
+        "fn": "buildAutoReplyReply",
+        "rule": {
+            "id": 101,
+            "line_account_id": null,
+            "keyword": "สอบถามโปร",
+            "match_type": "all",
+            "reply_type": "flex",
+            "reply_content": "{\"type\":\"bubble\",\"body\":{\"type\":\"box\",\"layout\":\"vertical\",\"contents\":[{\"type\":\"text\",\"text\":\"\\u0e42\\u0e1b\\u0e23\\u0e42\\u0e21\\u0e0a\\u0e31\\u0e48\\u0e19\\u0e1b\\u0e23\\u0e30\\u0e08\\u0e33\\u0e40\\u0e14\\u0e37\\u0e2d\\u0e19\",\"weight\":\"bold\"}]}}",
+            "alt_text": "โปรโมชั่น",
+            "sender_name": null,
+            "sender_icon": null,
+            "quick_reply": null,
+            "enable_share": 1,
+            "share_button_label": "แชร์โปรนี้",
+            "is_active": 1,
+            "priority": 0
+        },
+        "config": {
+            "liffShareId": null
+        }
+    },
+    "response": {
+        "type": "flex",
+        "altText": "โปรโมชั่น",
+        "contents": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "โปรโมชั่นประจำเดือน",
+                        "weight": "bold"
+                    }
+                ]
+            }
+        }
+    }
+}

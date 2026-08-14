@@ -1,0 +1,29 @@
+{
+    "description": "resolveAutoReply() — match_type=regex, keyword contains an UNESCAPED '/' (\"500mg/tab\"): PHP's actual call is preg_match('/' . keyword . '/i', text) — '/' is PCRE's hard delimiter, so this internal '/' closes the pattern early and the leftover text (plus PHP's own appended \"/i\") is reinterpreted as an invalid modifier string. preg_match() emits a non-fatal E_WARNING (suppressed here, same as the invalid-pattern fixture above) and returns false — even though the text literally CONTAINS the keyword substring \"500mg/tab\" verbatim. PIN: this must be a NON-MATCH (response null), proving the TS port reproduces PCRE's delimiter-closing failure mode instead of naively matching the substring.",
+    "request": {
+        "fn": "resolveAutoReply",
+        "rules": [
+            {
+                "id": 19,
+                "line_account_id": null,
+                "keyword": "500mg/tab",
+                "match_type": "regex",
+                "reply_type": "text",
+                "reply_content": "ไม่ควรถูกส่ง เพราะ / ทำให้ pattern พังเหมือน pattern ที่ unterminated",
+                "alt_text": null,
+                "sender_name": null,
+                "sender_icon": null,
+                "quick_reply": null,
+                "enable_share": 0,
+                "share_button_label": null,
+                "is_active": 1,
+                "priority": 0
+            }
+        ],
+        "text": "สินค้าตัวนี้ขนาด 500mg/tab ค่ะ",
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": null
+}

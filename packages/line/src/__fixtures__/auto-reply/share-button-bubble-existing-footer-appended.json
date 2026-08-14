@@ -1,0 +1,77 @@
+{
+    "description": "addShareButtonToFlex() — bubble WITH an existing footer (one \"สั่งซื้อ\" button already present): the share button is APPENDED as the footer's second content item, existing content untouched.",
+    "request": {
+        "fn": "addShareButtonToFlex",
+        "flexContent": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "สินค้าราคาพิเศษ"
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "uri",
+                            "label": "สั่งซื้อ",
+                            "uri": "https://shop.example.com/buy"
+                        }
+                    }
+                ],
+                "paddingAll": "lg"
+            }
+        },
+        "ruleId": 202,
+        "label": "📤 แชร์ให้เพื่อน",
+        "liffShareId": "liff-1234-share-test"
+    },
+    "response": {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "สินค้าราคาพิเศษ"
+                }
+            ]
+        },
+        "footer": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "สั่งซื้อ",
+                        "uri": "https://shop.example.com/buy"
+                    }
+                },
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "📤 แชร์ให้เพื่อน",
+                        "uri": "https://liff.line.me/liff-1234-share-test?rule=202"
+                    },
+                    "style": "secondary",
+                    "color": "#3B82F6",
+                    "height": "sm",
+                    "margin": "sm"
+                }
+            ],
+            "paddingAll": "lg"
+        }
+    }
+}

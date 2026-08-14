@@ -1,0 +1,29 @@
+{
+    "description": "resolveAutoReply() — match_type=regex, MALFORMED pattern (\"[unterminated(\"): PHP's preg_match() returns false (with a non-fatal E_WARNING, suppressed at this generator's call site only — see this script's header comment) rather than throwing. PIN: this must be a NON-MATCH (response null), not a thrown error.",
+    "request": {
+        "fn": "resolveAutoReply",
+        "rules": [
+            {
+                "id": 6,
+                "line_account_id": null,
+                "keyword": "[unterminated(",
+                "match_type": "regex",
+                "reply_type": "text",
+                "reply_content": "ข้อความนี้จะไม่มีวันถูกส่ง เพราะ pattern พัง",
+                "alt_text": null,
+                "sender_name": null,
+                "sender_icon": null,
+                "quick_reply": null,
+                "enable_share": 0,
+                "share_button_label": null,
+                "is_active": 1,
+                "priority": 0
+            }
+        ],
+        "text": "ข้อความทดสอบทั่วไป",
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": null
+}

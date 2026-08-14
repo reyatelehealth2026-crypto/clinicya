@@ -1,0 +1,141 @@
+{
+    "description": "buildAutoReplyReply() — quick_reply JSON covering all 6 action-shape branches (message/uri/postback/datetimepicker/camera+cameraRoll+location/share) plus the unrecognized-type default fallback, an imageUrl item, and 2 skipped items (uri-without-uri, item-without-label).",
+    "request": {
+        "fn": "buildAutoReplyReply",
+        "rule": {
+            "id": 15,
+            "line_account_id": null,
+            "keyword": "",
+            "match_type": "all",
+            "reply_type": "text",
+            "reply_content": "กรุณาเลือกตัวเลือกด้านล่างค่ะ",
+            "alt_text": null,
+            "sender_name": null,
+            "sender_icon": null,
+            "quick_reply": "[{\"label\":\"\\u0e17\\u0e31\\u0e01\\u0e17\\u0e32\\u0e22\",\"type\":\"message\",\"text\":\"\\u0e2a\\u0e27\\u0e31\\u0e2a\\u0e14\\u0e35\\u0e04\\u0e48\\u0e30\"},{\"label\":\"\\u0e40\\u0e21\\u0e19\\u0e39\\u0e2b\\u0e25\\u0e31\\u0e01\",\"type\":\"message\"},{\"label\":\"\\u0e40\\u0e27\\u0e47\\u0e1a\\u0e44\\u0e0b\\u0e15\\u0e4c\",\"type\":\"uri\",\"uri\":\"https:\\/\\/cnyhealthcare.com\"},{\"label\":\"\\u0e25\\u0e34\\u0e07\\u0e01\\u0e4c\\u0e40\\u0e2a\\u0e35\\u0e22\",\"type\":\"uri\"},{\"label\":\"\\u0e22\\u0e37\\u0e19\\u0e22\\u0e31\\u0e19\\u0e04\\u0e33\\u0e2a\\u0e31\\u0e48\\u0e07\\u0e0b\\u0e37\\u0e49\\u0e2d\",\"type\":\"postback\",\"data\":\"action=confirm\",\"displayText\":\"\\u0e22\\u0e37\\u0e19\\u0e22\\u0e31\\u0e19\\u0e41\\u0e25\\u0e49\\u0e27\\u0e04\\u0e48\\u0e30\"},{\"label\":\"\\u0e22\\u0e01\\u0e40\\u0e25\\u0e34\\u0e01\",\"type\":\"postback\",\"data\":\"action=cancel\"},{\"label\":\"\\u0e40\\u0e25\\u0e37\\u0e2d\\u0e01\\u0e27\\u0e31\\u0e19\\u0e19\\u0e31\\u0e14\\u0e2b\\u0e21\\u0e32\\u0e22\",\"type\":\"datetimepicker\",\"data\":\"action=pick_date\",\"mode\":\"date\",\"initial\":\"2026-08-13\",\"min\":\"2026-08-13\",\"max\":\"2026-12-31\"},{\"label\":\"\\u0e40\\u0e25\\u0e37\\u0e2d\\u0e01\\u0e40\\u0e27\\u0e25\\u0e32\",\"type\":\"datetimepicker\",\"data\":\"action=pick_time\",\"mode\":\"time\"},{\"label\":\"\\u0e16\\u0e48\\u0e32\\u0e22\\u0e23\\u0e39\\u0e1b\\u0e2a\\u0e25\\u0e34\\u0e1b\",\"type\":\"camera\"},{\"label\":\"\\u0e40\\u0e25\\u0e37\\u0e2d\\u0e01\\u0e23\\u0e39\\u0e1b\\u0e08\\u0e32\\u0e01\\u0e04\\u0e25\\u0e31\\u0e07\",\"type\":\"cameraRoll\"},{\"label\":\"\\u0e41\\u0e0a\\u0e23\\u0e4c\\u0e15\\u0e33\\u0e41\\u0e2b\\u0e19\\u0e48\\u0e07\\u0e23\\u0e49\\u0e32\\u0e19\",\"type\":\"location\"},{\"label\":\"\\u0e41\\u0e0a\\u0e23\\u0e4c\\u0e43\\u0e2b\\u0e49\\u0e40\\u0e1e\\u0e37\\u0e48\\u0e2d\\u0e19\",\"type\":\"share\",\"shareText\":\"\\u0e25\\u0e2d\\u0e07\\u0e14\\u0e39\\u0e23\\u0e49\\u0e32\\u0e19\\u0e19\\u0e35\\u0e49\\u0e2a\\u0e34!\"},{\"label\":\"\\u0e1b\\u0e38\\u0e48\\u0e21\\u0e1e\\u0e34\\u0e40\\u0e28\\u0e29\",\"type\":\"unknown_type_xyz\"},{\"label\":\"\\u0e21\\u0e35\\u0e44\\u0e2d\\u0e04\\u0e2d\\u0e19\",\"type\":\"message\",\"text\":\"\\u0e02\\u0e49\\u0e2d\\u0e04\\u0e27\\u0e32\\u0e21\\u0e21\\u0e35\\u0e44\\u0e2d\\u0e04\\u0e2d\\u0e19\",\"imageUrl\":\"https:\\/\\/example.com\\/qr-icon.png\"},{\"type\":\"message\",\"text\":\"\\u0e44\\u0e21\\u0e48\\u0e21\\u0e35 label \\u0e40\\u0e25\\u0e22\\u0e08\\u0e30\\u0e16\\u0e39\\u0e01\\u0e02\\u0e49\\u0e32\\u0e21\"}]",
+            "enable_share": 0,
+            "share_button_label": null,
+            "is_active": 1,
+            "priority": 0
+        },
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": {
+        "type": "text",
+        "text": "กรุณาเลือกตัวเลือกด้านล่างค่ะ",
+        "quickReply": {
+            "items": [
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "ทักทาย",
+                        "text": "สวัสดีค่ะ"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "เมนูหลัก",
+                        "text": "เมนูหลัก"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "uri",
+                        "label": "เว็บไซต์",
+                        "uri": "https://cnyhealthcare.com"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "postback",
+                        "label": "ยืนยันคำสั่งซื้อ",
+                        "data": "action=confirm",
+                        "displayText": "ยืนยันแล้วค่ะ"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "postback",
+                        "label": "ยกเลิก",
+                        "data": "action=cancel"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "datetimepicker",
+                        "label": "เลือกวันนัดหมาย",
+                        "data": "action=pick_date",
+                        "mode": "date",
+                        "initial": "2026-08-13",
+                        "min": "2026-08-13",
+                        "max": "2026-12-31"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "datetimepicker",
+                        "label": "เลือกเวลา",
+                        "data": "action=pick_time",
+                        "mode": "time"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "camera",
+                        "label": "ถ่ายรูปสลิป"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "cameraRoll",
+                        "label": "เลือกรูปจากคลัง"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "location",
+                        "label": "แชร์ตำแหน่งร้าน"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "uri",
+                        "label": "แชร์ให้เพื่อน",
+                        "uri": "https://line.me/R/share?text=%E0%B8%A5%E0%B8%AD%E0%B8%87%E0%B8%94%E0%B8%B9%E0%B8%A3%E0%B9%89%E0%B8%B2%E0%B8%99%E0%B8%99%E0%B8%B5%E0%B9%89%E0%B8%AA%E0%B8%B4%21"
+                    }
+                },
+                {
+                    "type": "action",
+                    "action": {
+                        "type": "message",
+                        "label": "ปุ่มพิเศษ",
+                        "text": "ปุ่มพิเศษ"
+                    }
+                },
+                {
+                    "type": "action",
+                    "imageUrl": "https://example.com/qr-icon.png",
+                    "action": {
+                        "type": "message",
+                        "label": "มีไอคอน",
+                        "text": "ข้อความมีไอคอน"
+                    }
+                }
+            ]
+        }
+    }
+}
