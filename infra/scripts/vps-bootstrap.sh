@@ -153,6 +153,21 @@ docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
 # ---------------------------------------------------------------------------
 step "8/8  Verify"
 # ---------------------------------------------------------------------------
+# Credential drift: MariaDB applies MARIADB_* only on FIRST init of an empty
+# volume. Editing .env.vps later changes the file and nothing else, and the
+# container still reports healthy because its healthcheck does not
+# authenticate — so the mismatch stays silent until an import fails.
+ROOT_AUTH="$(grep -E '^MARIADB_ROOT_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
+if docker exec clinicya-vps-mariadb mariadb -uroot -p"$ROOT_AUTH" -e "SELECT 1" >/dev/null 2>&1; then
+  c_ok "database credentials match .env.vps"
+else
+  c_err "database credentials do NOT match .env.vps — the volume was initialised"
+  c_err "with different values (usually: .env.vps was rewritten after first boot)."
+  c_err "If nothing is imported yet, re-initialise (DESTROYS THE DB VOLUME):"
+  c_err "  docker compose --env-file $ENV_FILE -f $COMPOSE_FILE down -v && \\"
+  c_err "  docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d"
+fi
+
 PORT="$(grep -E '^EDGE_HTTP_PORT=' "$ENV_FILE" | cut -d= -f2)"; PORT="${PORT:-80}"
 E="http://127.0.0.1:${PORT}"
 

@@ -85,6 +85,31 @@ dc ps --status running --services 2>/dev/null | grep -qx mariadb \
   || die "the mariadb service is not running — start the stack first"
 c_ok "local stack up, mariadb running"
 
+# Running is NOT the same as reachable. MariaDB applies MARIADB_ROOT_PASSWORD /
+# MARIADB_PASSWORD only on FIRST init of an empty data volume; editing
+# .env.vps afterwards changes the file and nothing else. The container still
+# reports healthy (its healthcheck does not authenticate), so the drift stays
+# invisible until something tries to log in — which used to be halfway through
+# this script, after it had already dumped gigabytes off production.
+docker exec clinicya-vps-mariadb mariadb -uroot -p"$ROOT_AUTH" -e "SELECT 1" >/dev/null 2>&1 || {
+  c_err "MARIADB_ROOT_PASSWORD in .env.vps does not match the running database."
+  c_err "The volume was initialised with different credentials — almost always"
+  c_err "because .env.vps was rewritten after the stack first came up."
+  c_err ""
+  c_err "If nothing has been imported yet, re-initialise (THIS DESTROYS THE DB VOLUME):"
+  c_err "  docker compose --env-file $ENV_FILE -f $COMPOSE_FILE down -v"
+  c_err "  docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d"
+  die "refusing to start an import that would fail partway through"
+}
+c_ok "root credentials verified against the running database"
+
+APP_USER_CHECK="$(read_env_value MARIADB_USER)"; APP_USER_CHECK="${APP_USER_CHECK:-zrismpsz_clinicya}"
+APP_AUTH_CHECK="$(read_env_value MARIADB_PASSWORD)"
+docker exec clinicya-vps-mariadb sh -c \
+  "MYSQL_PWD=$APP_AUTH_CHECK mariadb -u$APP_USER_CHECK -e \"SELECT 1\"" >/dev/null 2>&1 \
+  && c_ok "app user '$APP_USER_CHECK' can log in" \
+  || c_warn "app user '$APP_USER_CHECK' cannot log in — PHP pages will error until this is fixed"
+
 "${SSH[@]}" true 2>/dev/null \
   || die "cannot ssh to $REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT with $SSH_KEY"
 c_ok "ssh to cPanel OK ($REMOTE_USER@$REMOTE_HOST:$REMOTE_PORT)"
