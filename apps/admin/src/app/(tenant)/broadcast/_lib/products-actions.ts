@@ -8,6 +8,7 @@ import { requireTenantPageContext } from '../../users/_lib/session';
 import { resolveCurrentBotId } from './send-queries';
 import { getCatalogProductById } from './products-queries';
 import { executeProductBroadcastSend } from './broadcastFanout';
+import { CREATE_BROADCAST_ERRORS } from './products-errors';
 
 /**
  * products-actions.ts — Server Actions for the three POST handlers inside
@@ -26,12 +27,10 @@ function first(formData: FormData, key: string): string {
 // action=create_broadcast — products.php lines 79-133
 // ---------------------------------------------------------------------------
 
-/** Exact Thai validation error strings, products.php:85-90 — verbatim, not paraphrased. */
-export const CREATE_BROADCAST_ERRORS = {
-  emptyName: 'กรุณากรอกชื่อ Broadcast',
-  noProducts: 'กรุณาเลือกสินค้าอย่างน้อย 1 รายการ',
-  tooManyProducts: 'เลือกสินค้าได้สูงสุด 10 รายการ',
-} as const;
+// CREATE_BROADCAST_ERRORS lives in ./products-errors.ts, not here: this file
+// is "use server", and Next.js only permits async-function exports from such a
+// module (a re-export of the object would fail `next build` the same way the
+// original declaration did). Imported below for use by the action.
 
 /**
  * Port of products.php lines 79-133 (`action === 'create_broadcast'`):

@@ -23,11 +23,11 @@ jest.mock('@reya/line', () => ({
 }));
 
 import {
-  CREATE_BROADCAST_ERRORS,
   createBroadcastAction,
   deleteCampaignAction,
   sendProductBroadcastAction,
 } from './products-actions';
+import { CREATE_BROADCAST_ERRORS } from './products-errors';
 
 function fakeSession(currentBotId: number | null = 9): TenantSession {
   return {
