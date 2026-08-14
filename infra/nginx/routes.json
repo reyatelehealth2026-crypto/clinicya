@@ -148,6 +148,8 @@
     "upstream": "php_backend",
     "tenants": "all",
     "note": "Gap-fill (mig-orchestrator-directed, not a numbered phase/batch in docs/plans/2026-07-12-nextjs-full-migration-plan.md — grep-confirmed 'shop/orders' appears zero times there): companion detail route for the /shop/orders gap-fill above. The orderDetail builder's port lives at apps/admin's /shop/order-detail?id=N (same query-param URL shape as the established /user-detail?id=N precedent). Schema-valid 'not yet flipped' placeholder (php_backend is already the default, so this is a functional no-op) — see the /users entry's note for the flip mechanic and who owns it."
+  },
+  {
     "path": "/broadcast",
     "upstream": "php_backend",
     "tenants": "all",
