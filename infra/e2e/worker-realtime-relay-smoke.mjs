@@ -57,6 +57,17 @@
 // — in a finally block, even on a thrown error. `docker ps -a` / `docker
 // images` show zero leftover containers/images from this script's project
 // name / image tag afterward.
+//
+// ADDITIVE (mig-infra verification round, 2026-08-14): the SAME
+// already-running worker container proven above (no second docker build) is
+// further exercised for the typing/ping/health/status wire surface the
+// companion wsConsolidate batch adds in realtime/typing.ts +
+// realtime/socketServer.ts — new steps `typing_broadcast_received`,
+// `ping_pong_received`, `health_endpoint_ok`, `status_endpoint_ok`. See
+// docs/runbooks/websocket-consolidation.md §3 for the exact wire shapes
+// asserted and docs/runbooks/worker-realtime-relay-smoke.md for the updated
+// scope note. `infra/nginx/routes.json`'s `/ws` entry is NOT flipped by this
+// round — see that file's `/ws` note.
 
 import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
@@ -324,6 +335,7 @@ async function main() {
   let imageBuilt = false;
   let socketClient = null;
   let redisPublisher = null;
+  let typingSenderClient = null;
 
   try {
     if (!existsSync(WORKER_DOCKERFILE)) {
@@ -454,6 +466,139 @@ async function main() {
     }
     markOk('conversation_update_received', receivedConversationUpdate);
 
+    // -------------------------------------------------------------------
+    // ADDITIVE (mig-infra verification round, 2026-08-14): exercises the
+    // typing/ping/health/status wire surface wsConsolidate's
+    // apps/worker/src/realtime/typing.ts + socketServer.ts changes add on
+    // top of the frozen join_account/inbox_updates contract proven above —
+    // see docs/runbooks/websocket-consolidation.md §3 for the exact wire
+    // shapes these steps assert against, and
+    // docs/runbooks/worker-realtime-relay-smoke.md for the read-me-first
+    // scope note. SAME already-running WORKER_CONTAINER_NAME container as
+    // every step above — no second docker build/run.
+    // -------------------------------------------------------------------
+
+    // --- typing_broadcast_received ---
+    // realtime/socketServer.ts's 'typing' handler uses `socket.to(room)`
+    // (sender excluded), so a SECOND client must join account_<id> and emit
+    // 'typing' — the original `socketClient` (already joined via
+    // join_account above) is the one expected to observe the broadcast.
+    typingSenderClient = await connectSocketClient(ioClientModule.io, WORKER_REALTIME_HOST_PORT, SOCKET_CONNECT_TIMEOUT_MS).catch(
+      (err) => {
+        fail('typing_broadcast_received', `second socket.io-client (typing sender) failed to connect: ${err.message}`);
+      }
+    );
+    const typingWait = waitForSocketEvent(socketClient, 'typing', REALTIME_EVENT_TIMEOUT_MS);
+    typingSenderClient.emit('join_account', { lineAccountId: LINE_ACCOUNT_ID });
+    await sleep(JOIN_ACCOUNT_SETTLE_MS);
+
+    const sentTypingPayload = { lineAccountId: LINE_ACCOUNT_ID, user_id: 'U-e2e-typing-smoke', is_typing: true };
+    typingSenderClient.emit('typing', sentTypingPayload);
+
+    let receivedTyping;
+    try {
+      receivedTyping = await typingWait;
+    } catch (err) {
+      fail('typing_broadcast_received', err.message, { sent: sentTypingPayload, received: null });
+    }
+    const typingMismatches = [];
+    if (receivedTyping.user_id !== sentTypingPayload.user_id) {
+      typingMismatches.push(`user_id: expected ${JSON.stringify(sentTypingPayload.user_id)}, got ${JSON.stringify(receivedTyping.user_id)}`);
+    }
+    if (receivedTyping.is_typing !== true) {
+      typingMismatches.push(`is_typing: expected true, got ${JSON.stringify(receivedTyping.is_typing)}`);
+    }
+    if (!Number.isFinite(receivedTyping.timestamp)) {
+      typingMismatches.push(`timestamp: expected a finite number, got ${JSON.stringify(receivedTyping.timestamp)}`);
+    }
+    // Deliberate parity gap vs legacy — no authenticated identity exists this
+    // round (docs/runbooks/websocket-consolidation.md §1 row 5) — the relay
+    // must NOT invent admin_id/admin_username fields.
+    if (Object.prototype.hasOwnProperty.call(receivedTyping, 'admin_id') || Object.prototype.hasOwnProperty.call(receivedTyping, 'admin_username')) {
+      typingMismatches.push('unexpected admin_id/admin_username field on the typing broadcast');
+    }
+    if (typingMismatches.length > 0) {
+      fail('typing_broadcast_received', "received 'typing' payload did not match the documented wire shape", {
+        sent: sentTypingPayload,
+        received: receivedTyping,
+        mismatches: typingMismatches,
+      });
+    }
+    markOk('typing_broadcast_received', receivedTyping);
+
+    try {
+      typingSenderClient.close();
+    } catch {
+      // ignore — best-effort, same posture as this script's other socket teardowns
+    }
+    typingSenderClient = null;
+
+    // --- ping_pong_received ---
+    const pongWait = waitForSocketEvent(socketClient, 'pong', REALTIME_EVENT_TIMEOUT_MS);
+    socketClient.emit('ping');
+    let receivedPong;
+    try {
+      receivedPong = await pongWait;
+    } catch (err) {
+      fail('ping_pong_received', err.message);
+    }
+    if (!Number.isFinite(receivedPong.timestamp)) {
+      fail('ping_pong_received', "received 'pong' payload did not carry a finite numeric timestamp", { received: receivedPong });
+    }
+    markOk('ping_pong_received', receivedPong);
+
+    // --- health_endpoint_ok / status_endpoint_ok ---
+    // Both live on the SAME dedicated realtime httpServer Socket.io is
+    // attached to (WORKER_REALTIME_HOST_PORT) — a DIFFERENT endpoint from
+    // the separate Express health server on WORKER_HEALTH_HOST_PORT that
+    // the pre-existing `redis_reachable` step above already exercises. See
+    // docs/runbooks/websocket-consolidation.md §3.
+    async function checkStatusShapeEndpoint(step, urlPath) {
+      let resp;
+      try {
+        resp = await fetch(`http://127.0.0.1:${WORKER_REALTIME_HOST_PORT}${urlPath}`);
+      } catch (err) {
+        fail(step, `GET ${urlPath} on the realtime port failed: ${err.message}`);
+      }
+      if (resp.status !== 200) {
+        fail(step, `GET ${urlPath} returned HTTP ${resp.status}, expected 200`);
+      }
+      const contentType = resp.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        fail(step, `GET ${urlPath} returned Content-Type ${JSON.stringify(contentType)}, expected application/json`);
+      }
+      const body = await resp.json();
+      const shapeMismatches = [];
+      if (body.status !== 'ok') shapeMismatches.push(`status: expected 'ok', got ${JSON.stringify(body.status)}`);
+      if (!Number.isFinite(body.uptime)) shapeMismatches.push(`uptime: expected a finite number, got ${JSON.stringify(body.uptime)}`);
+      if (!Number.isFinite(body.timestamp)) shapeMismatches.push(`timestamp: expected a finite number, got ${JSON.stringify(body.timestamp)}`);
+      if (!body.connections || !Number.isFinite(body.connections.total) || !Number.isFinite(body.connections.rooms)) {
+        shapeMismatches.push(`connections: expected {total:number, rooms:number}, got ${JSON.stringify(body.connections)}`);
+      }
+      if (!Number.isFinite(body.typingIndicators)) {
+        shapeMismatches.push(`typingIndicators: expected a finite number, got ${JSON.stringify(body.typingIndicators)}`);
+      }
+      // By this point in the run the worker's own redis subscriber has
+      // already relayed the synthetic_publish above end-to-end
+      // (new_message_received/conversation_update_received both already
+      // passed), so its ioredis connection is provably 'ready' — index.ts
+      // wires that straight into getRedisStatus (see
+      // docs/runbooks/websocket-consolidation.md §3).
+      if (body.redis !== 'connected') {
+        shapeMismatches.push(`redis: expected 'connected' (the real subscriber already relayed a message this run), got ${JSON.stringify(body.redis)}`);
+      }
+      if (Object.prototype.hasOwnProperty.call(body, 'database')) {
+        shapeMismatches.push("unexpected 'database' field — no DB wiring in this module this round");
+      }
+      if (shapeMismatches.length > 0) {
+        fail(step, `GET ${urlPath} body did not match the documented shape`, { received: body, mismatches: shapeMismatches });
+      }
+      markOk(step, body);
+    }
+
+    await checkStatusShapeEndpoint('health_endpoint_ok', '/health');
+    await checkStatusShapeEndpoint('status_endpoint_ok', '/status');
+
     result = 'PASS';
   } catch (err) {
     result = 'FAIL';
@@ -466,6 +611,16 @@ async function main() {
     if (socketClient) {
       try {
         socketClient.close();
+      } catch {
+        // ignore
+      }
+    }
+    if (typingSenderClient) {
+      // Normally already closed+nulled right after typing_broadcast_received
+      // above — this only fires if that step (or something after it) threw
+      // before reaching that close() call.
+      try {
+        typingSenderClient.close();
       } catch {
         // ignore
       }

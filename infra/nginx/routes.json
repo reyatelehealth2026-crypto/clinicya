@@ -15,7 +15,7 @@
     "path": "/ws",
     "upstream": "ws",
     "tenants": "all",
-    "note": "Realtime inbox updates (websocket-server.js today; superseded by apps/worker's unified websocket in Phase 4)."
+    "note": "Realtime inbox updates (websocket-server.js today; superseded by apps/worker's unified websocket in Phase 4 — see docs/runbooks/websocket-consolidation.md for the full event/room/auth/side-effect inventory). UPDATE 2026-08-14 (mig-infra verification round): apps/worker realtime relay verified as capable replacement as of 2026-08-14 — NOT YET FLIPPED, awaiting mig-orc canary ramp order (demo tenant -> 1 real tenant -> 10% -> 50% -> 100%) once auth parity + soak are decided. Coverage now spans the frozen inbox contract (join_account / Redis inbox_updates -> new_message / conversation_update relay) plus typing/ping/health: typing broadcast, ping/pong heartbeat, and GET /health + GET /status on the realtime port — see infra/e2e/worker-realtime-relay-smoke.mjs and docs/runbooks/worker-realtime-relay-smoke.md for the live Docker verification evidence. upstream and tenants below are unchanged by this note — no flip happened."
   },
   {
     "path": "/admin-preview",

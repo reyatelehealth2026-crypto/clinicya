@@ -4,10 +4,26 @@ Source of truth: `docs/plans/2026-07-12-nextjs-full-migration-plan.md` §1.1
 (monorepo layout — `apps/worker`), §4.6 (CI/CD blue-green — Node set only).
 Owner: mig-infra (Docker/e2e wiring, this runbook) / mig-worker
 (`apps/worker/**` source — the wsInboxRelay batch that adds
-`realtime/socketServer.ts` + `realtime/inboxRelay.ts`). Cross-reference:
+`realtime/socketServer.ts` + `realtime/inboxRelay.ts`; the later
+wsConsolidate batch that adds `realtime/typing.ts` and the typing/ping/
+health/status surface this runbook's 2026-08-14 update covers). Cross-reference:
 `docs/runbooks/worker-scaffold-boot-drain.md` (the companion runbook for the
 BullMQ heartbeat scaffold this batch's harness is modeled on — **not edited
-by this batch**, this is a new, separate runbook file per that precedent).
+by this batch**, this is a new, separate runbook file per that precedent);
+`docs/runbooks/websocket-consolidation.md` (wsConsolidate-owned — the
+event/room/auth/side-effect inventory and exact wire shapes §3 of that doc
+documents for infra's smoke-test extension, **not edited by this round**).
+
+**UPDATE 2026-08-14 (mig-infra verification round):** extends this harness
+with four additive steps — `typing_broadcast_received`, `ping_pong_received`,
+`health_endpoint_ok`, `status_endpoint_ok` — exercising the wsConsolidate
+batch's `realtime/typing.ts` + `realtime/socketServer.ts` additions on the
+SAME already-running worker container the pre-existing steps prove (no
+second `docker build`/`docker run`). `infra/nginx/routes.json`'s `/ws` entry
+gets a status-only note update recording this verification; `upstream`
+stays `'ws'` — no traffic flip. See "What this proves" / "Sandbox network
+note" below for this round's detail, and §1's numbered run-through for where
+the new steps land in the sequence.
 
 ## Scope note — read first (same documented-limits pattern every other
 `infra/e2e/*.mjs` harness in this repo uses)
@@ -48,17 +64,47 @@ mocks, never a stubbed `apps/worker`):
      `unread_count`, and a finite numeric `timestamp` — the exact derivation
      `apps/worker/src/realtime/inboxRelay.ts` (and, before it,
      `websocket-server.js`'s own handler) implements.
+5. **(2026-08-14 update)** On that SAME connected client/container, the
+   wsConsolidate batch's typing/ping/health/status surface
+   (`apps/worker/src/realtime/typing.ts` + the additions to
+   `realtime/socketServer.ts` — see `docs/runbooks/websocket-consolidation.md`
+   §3 for the exact shapes):
+   - a SECOND `socket.io-client` joins the same `account_<lineAccountId>`
+     room and emits `typing` — the original client (excluded from its own
+     broadcasts by `socket.to(room)`) receives a real `typing` event with
+     `user_id`/`is_typing`/`timestamp` and, provably, **no**
+     `admin_id`/`admin_username` fields (the documented no-auth parity
+     gap — asserted, not just assumed);
+   - the original client emits `ping` (no payload) and receives a real
+     `pong` with a finite `timestamp`;
+   - `GET /health` and `GET /status` on the container's realtime port (the
+     SAME dedicated `httpServer` Socket.io is attached to — a different
+     endpoint from the separate Express `/health` on `WORKER_HEALTH_PORT`
+     step 2 above already proves) both return `200 application/json` with
+     the documented `{status, uptime, timestamp, connections:{total,rooms},
+     typingIndicators, redis}` shape, `redis` asserted to be the literal
+     string `'connected'` (provable at this point in the run because the
+     synthetic Redis publish above already round-tripped through the real
+     subscriber), and no stray `database` field.
 
 **What this batch does NOT prove** (later/other batches' job, not this
 one's):
 
 - **No authentication.** `realtime/socketServer.ts`'s `join_account` handler
   has no auth check in this round (the legacy `authenticateToken()` DB
-  lookup is explicitly out of scope for the wsInboxRelay batch) — this smoke
-  test joins the room with a bare `{ lineAccountId }`, same as the real
-  server currently accepts from anyone.
+  lookup is explicitly out of scope for the wsInboxRelay/wsConsolidate
+  batches) — this smoke test joins the room with a bare `{ lineAccountId }`,
+  and emits `typing` with a bare client-supplied `user_id`, same as the real
+  server currently accepts from anyone. The 2026-08-14 update's new steps
+  exercise MORE of the wire surface but do not change this — still no auth
+  anywhere in this harness.
 - **No `/video-call` namespace.** Only the default Socket.io namespace /
-  the `inbox_updates` relay path is exercised.
+  the `inbox_updates` relay path (plus, as of 2026-08-14, `typing`/`ping`/
+  `/health`/`/status` on that same namespace/port) is exercised.
+- **No canary ramp / traffic flip.** This harness proves the relay is
+  *capable*; it does not flip `infra/nginx/routes.json`'s `/ws` upstream and
+  never will on its own — that stays mig-orchestrator's call, gated on the
+  auth-parity + soak items in `docs/runbooks/websocket-consolidation.md` §4.
 - **No real UI client.** This is a bare `socket.io-client` instance driven
   from a Node script, not `line-mini-app`'s or the admin dashboard's actual
   Socket.io client code, and not a browser.
@@ -137,20 +183,37 @@ Single command, no flags required. It will (in order):
    derivation rules exactly (100-char truncation included), each bounded by
    a generous (15s) timeout with full diagnostic context (what was
    published vs. what was/wasn't received) on failure.
-8. Print one JSON line: `{"result": "PASS"|"FAIL", "steps": {...},
-   "failedAt": "..."|null}` — same shape every other `infra/e2e/*.mjs`
-   script here already uses. `steps` includes (at minimum) `compose_up`,
-   `redis_container_infra_healthy`, `docker_build_worker_image`,
-   `docker_run_worker`, `container_healthy`, `redis_reachable`,
-   `client_connected`, `join_account_sent`, `synthetic_publish`,
-   `new_message_received`, `conversation_update_received`.
-9. **Always tears down** — closes the test's own `socket.io-client` and
-   `ioredis` publisher connections, `docker rm -f`/`docker rmi -f` the
-   worker container/image this run built, then `docker compose down -v` for
-   `redis` — in a `finally` block, even on a thrown error. `docker ps -a` /
-   `docker images` show zero leftover containers/images from this script's
-   project name (`reya-e2e-worker-realtime-smoke`) / image tag
-   (`clinicya-worker:realtime-smoke`) afterward, pass or fail.
+8. **(2026-08-14 update)** On the SAME already-running container/client (no
+   second `docker build`/`docker run`): connect a SECOND `socket.io-client`,
+   have it `join_account` the same `{ lineAccountId: 4242 }` room and emit
+   `typing`, and assert the original client — excluded from its own
+   broadcasts by `socket.to(room)` — receives a `typing` event with
+   `user_id`/`is_typing`/`timestamp` and no `admin_id`/`admin_username`
+   (`typing_broadcast_received`); emit `ping` on the original client and
+   assert a `pong` with a finite `timestamp` (`ping_pong_received`); `GET
+   /health` and `GET /status` on the realtime port (`18201`, not the
+   `18200` Express health port step 4 already covers) and assert each
+   returns `200 application/json` with the documented
+   `{status, uptime, timestamp, connections, typingIndicators, redis}` shape,
+   `redis` asserted `'connected'`, no `database` field
+   (`health_endpoint_ok` / `status_endpoint_ok`).
+9. Print one JSON line: `{"result": "PASS"|"FAIL", "steps": {...},
+    "failedAt": "..."|null}` — same shape every other `infra/e2e/*.mjs`
+    script here already uses. `steps` includes (at minimum) `compose_up`,
+    `redis_container_infra_healthy`, `docker_build_worker_image`,
+    `docker_run_worker`, `container_healthy`, `redis_reachable`,
+    `client_connected`, `join_account_sent`, `synthetic_publish`,
+    `new_message_received`, `conversation_update_received`, and, as of the
+    2026-08-14 update, `typing_broadcast_received`, `ping_pong_received`,
+    `health_endpoint_ok`, `status_endpoint_ok`.
+10. **Always tears down** — closes the test's own `socket.io-client`s
+    (including the 2026-08-14 update's second typing-sender client) and
+    `ioredis` publisher connections, `docker rm -f`/`docker rmi -f` the
+    worker container/image this run built, then `docker compose down -v` for
+    `redis` — in a `finally` block, even on a thrown error. `docker ps -a` /
+    `docker images` show zero leftover containers/images from this script's
+    project name (`reya-e2e-worker-realtime-smoke`) / image tag
+    (`clinicya-worker:realtime-smoke`) afterward, pass or fail.
 
 ### Reading a FAIL
 
@@ -198,6 +261,56 @@ that verification; a normal CI/production Docker build (no such
 interception) is expected to run `docker build -f infra/worker/Dockerfile ...`
 exactly as this script invokes it.
 
+#### 2026-08-14 update (mig-infra verification round) — DIFFERENT failure mode this time
+
+This round's sandbox hit an **earlier** failure than the one documented
+above: `docker info` reported
+
+```
+Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+```
+
+(exit code 1) — the Docker **client** binary and CLI plugins (`buildx`,
+`compose`) are present and report their own versions fine; there is simply
+no `dockerd` process listening on the socket (`ps aux | grep docker` showed
+nothing, despite a stale `/var/run/docker.sock` file existing on disk). This
+is NOT the same failure as the prior entry above: that one reached a live
+daemon and got as far as `docker build`'s `corepack prepare` step failing on
+TLS trust; this run never got past `docker compose up`/`docker build`'s very
+first call to the daemon at all — `docker compose up -d redis` failed
+immediately with `unable to get image 'redis:7-alpine': Cannot connect to
+the Docker daemon...`.
+
+Per this round's own acceptance criteria, no attempt was made to fabricate a
+PASS or silently skip the live run. `node infra/e2e/worker-realtime-relay-smoke.mjs`
+was run once anyway (for confirmatory evidence only, not as a substitute for
+a real live pass) and — exactly as expected with no daemon — failed cleanly
+at the first docker call:
+
+```json
+{"result":"FAIL","steps":{"compose_up":{"ok":false,"message":"docker exited 1","detail":{"cmd":"docker","args":["compose","-p","reya-e2e-worker-realtime-smoke","-f","infra/e2e/docker-compose.yml","up","-d","redis"],"stdout":"","stderr":"unable to get image 'redis:7-alpine': Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\n"}}},"failedAt":"compose_up"}
+```
+
+The script's `finally` block ran `docker compose down -v` regardless (also a
+no-op against no daemon) — no containers/images were ever created, so
+`docker ps -a` / `docker images` are trivially empty (both also fail with
+the same "cannot connect" error rather than listing anything). None of the
+four new steps (`typing_broadcast_received`, `ping_pong_received`,
+`health_endpoint_ok`, `status_endpoint_ok`) executed, since they run deep
+inside `main()` after a real container is already up — the harness never
+got there. A deliberate attempt to start `dockerd` in this sandbox to work
+around the outage was blocked by this session's own permission policy
+(auto-mode classifier denial) — consistent with this being a genuine
+environment limitation to report, not a gap to route around. **This
+verification round's live-Docker requirement is therefore unmet in this
+specific sandbox** — the code changes (smoke-test steps, routes.json note,
+this runbook) are believed correct by inspection against
+`docs/runbooks/websocket-consolidation.md` §3's documented wire shapes and
+`apps/worker/tests/realtime/socketServer.test.ts`'s existing Vitest coverage
+of the same behavior, but have NOT been proven end-to-end against a real
+container in this round — that remains outstanding until a sandbox with a
+reachable Docker daemon runs this script for real.
+
 ---
 
 ## 2. Manual/local dev — `WORKER_REALTIME_PORT`
@@ -234,3 +347,30 @@ source and drives it over the network as a black box), `websocket-server.js`,
 `infra/e2e/docker-compose.yml`, `infra/e2e/lib/harness-common.mjs`,
 `infra/e2e/seed/*`, and every other existing `infra/e2e/*.mjs` script
 (`run.mjs`, `parity.mjs`, `api-parity.mjs`, `rollback-drill.mjs`).
+
+### 2026-08-14 update (mig-infra verification round) — files THIS round touches
+
+- `infra/e2e/worker-realtime-relay-smoke.mjs` — additive edit only: four new
+  steps (`typing_broadcast_received`, `ping_pong_received`,
+  `health_endpoint_ok`, `status_endpoint_ok`) inserted after
+  `conversation_update_received` and before `result = 'PASS'`, reusing the
+  existing `composeArgs`/`waitContainerHealthy`/step-tracker/`fail()`
+  conventions and the SAME already-running worker container — no second
+  `docker build`/`docker run`, no new compose service. Existing steps/logic
+  unmodified.
+- `docs/runbooks/worker-realtime-relay-smoke.md` — this file: "What this
+  proves" / "What this batch does NOT prove", the numbered run-through, and
+  the "Sandbox network note" section updated (see the dated entry above).
+- `infra/nginx/routes.json` — status-only `note` string update on the single
+  existing `/ws` entry (owned by this same round, documented in
+  `docs/runbooks/websocket-consolidation.md`, not itself part of this
+  runbook's file list historically but flagged here for completeness).
+  `upstream`/`tenants` unchanged — no flip.
+
+Still **not** touched this round: `apps/worker/**` (wsConsolidate's
+exclusive surface — read in full to write the new steps, not edited),
+`infra/nginx/generate-routes.mjs`, `infra/nginx/routes.schema.json`,
+`infra/worker/Dockerfile`, `infra/compose/**`, `infra/e2e/docker-compose.yml`,
+`infra/e2e/lib/**`, every other `infra/e2e/*.mjs` script,
+`docs/runbooks/websocket-consolidation.md` (wsConsolidate-owned),
+`websocket-server.js`, `websocket-dashboard-server.js`.
