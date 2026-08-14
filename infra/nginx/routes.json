@@ -136,5 +136,17 @@
     "upstream": "php_backend",
     "tenants": "all",
     "note": "Phase 5 (documentsVat brief — VAT documents/Thai receipts-invoices-quotations half of 'Dispense + Documents/VAT'): Next port of api/documents.php's list, get, and create actions lives at apps/admin's /api/documents (list, create) and /api/documents/[id] (get), parity-proven per docs/runbooks/phase5-documents-vat-parity.md. update/approve/cancel/convert/pdf/export_csv remain unported (out of scope this batch). Schema-valid 'not yet flipped' placeholder (php_backend is already the default, so this is a functional no-op) — see the /users entry's note for the flip mechanic and who owns it. This batch never flips traffic: per mig-orchestrator's explicit high-risk-phase constraint on Phase 5 (VAT-document correctness is revenue/compliance-sensitive), a PASS here authorizes merging code+tests only — upstream stays php_backend throughout all of Phase 5, and only mig-orchestrator, on a later round with its own explicit go-ahead, decides if/when a canary ramp for this path ever starts."
+  },
+  {
+    "path": "/shop/orders",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Gap-fill (mig-orchestrator-directed, not a numbered phase/batch in docs/plans/2026-07-12-nextjs-full-migration-plan.md — grep-confirmed 'shop/orders' appears zero times there): nav/manifest.ts's primary-nav 'orders' item (labelTh 'ออเดอร์') links to /shop/orders; the ordersList builder's port now lives at apps/admin's /shop/orders. Schema-valid 'not yet flipped' placeholder (php_backend is already the default, so this is a functional no-op) — see the /users entry's note for the flip mechanic and who owns it. nav/manifest.ts's 'orders' entry keeps servedBy: 'php' unchanged by this round — nav updates happen only at flip time per every prior batch's established precedent, never at merge time."
+  },
+  {
+    "path": "/shop/order-detail",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Gap-fill (mig-orchestrator-directed, not a numbered phase/batch in docs/plans/2026-07-12-nextjs-full-migration-plan.md — grep-confirmed 'shop/orders' appears zero times there): companion detail route for the /shop/orders gap-fill above. The orderDetail builder's port lives at apps/admin's /shop/order-detail?id=N (same query-param URL shape as the established /user-detail?id=N precedent). Schema-valid 'not yet flipped' placeholder (php_backend is already the default, so this is a functional no-op) — see the /users entry's note for the flip mechanic and who owns it."
   }
 ]

@@ -4060,6 +4060,19 @@ export interface PaymentProofs {
   transaction_id: number;
 }
 
+/**
+ * HAND-PATCHED (not from a real kysely-codegen run): `qr_payload` /
+ * `verified_at` / `verify_amount` / `verify_data` / `verify_ref` below are
+ * real production columns added ad hoc, per-tenant, by
+ * `install/migration_payment_slips_verification.php` — they were absent
+ * from this generated file and from the committed tenant template until
+ * `packages/db/migrations/tenant/migration_2026-08-14_
+ * payment_slips_verification.sql` (this batch's schema-governance
+ * reconciliation migration, columns/types/order ported verbatim from that
+ * PHP script). REPLACE this hand-patch the next time kysely-codegen is run
+ * against a tenant DB that has actually applied that migration — do not
+ * hand-edit further beyond keeping it in sync with the migration file.
+ */
 export interface PaymentSlips {
   admin_note: Generated<string | null>;
   amount: Generated<Decimal | null>;
@@ -4072,9 +4085,29 @@ export interface PaymentSlips {
   line_account_id: Generated<number>;
   line_user_id: Generated<string | null>;
   order_id: number;
+  /**
+   * Raw QR string from the slip
+   */
+  qr_payload: Generated<string | null>;
   status: Generated<"approved" | "pending" | "rejected" | null>;
   transaction_id: Generated<number | null>;
   user_id: Generated<number | null>;
+  /**
+   * When verification succeeded
+   */
+  verified_at: Generated<Date | null>;
+  /**
+   * Amount confirmed by GhostX
+   */
+  verify_amount: Generated<Decimal | null>;
+  /**
+   * Full GhostX response payload
+   */
+  verify_data: Generated<string | null>;
+  /**
+   * GhostX transactionRef (unique)
+   */
+  verify_ref: Generated<string | null>;
 }
 
 export interface PaymentVouchers {
