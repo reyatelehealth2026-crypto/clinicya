@@ -1,9 +1,18 @@
 // api.ts — TypeScript port of classes/LineAPI.php's webhook-signature verification and the
 // "smart" reply-token-first / push-fallback sender (docs/plans/2026-07-12-nextjs-full-migration-plan.md
 // Phase 6, risk #1). Scope for this pass (see the mig-line brief): validateSignature(),
-// replyMessage(), pushMessage(), and the sendMessage() dispatcher only. Rich menus, multicast/
-// narrowcast/broadcast, LIFF helpers, getMessageContent/group/room helpers, markAsRead, and
-// quota/insight endpoints are explicitly deferred to Phase 6 proper.
+// replyMessage(), pushMessage(), and the sendMessage() dispatcher only. Rich menus, LIFF
+// helpers, getMessageContent/group/room helpers, markAsRead, and quota/insight endpoints are
+// explicitly deferred to Phase 6 proper.
+//
+// multicastMessage()/broadcastMessage() (classes/LineAPI.php::multicastMessage()/
+// broadcastMessage()) were additively ported by the broadcastCompose batch (Phase 9) — the
+// (tenant)/broadcast send tab's real 'send' action and the products tab's send_broadcast
+// action cannot function without them (classes/BroadcastHelper.php::executeBroadcastSend()
+// calls both). narrowcastMessage() remains deferred to Phase 6 proper: BroadcastHelper's own
+// 'narrowcast' target-type branch has no reachable UI control in send.php/products.php's
+// forms (see (tenant)/broadcast/_lib/broadcastFanout.ts's module doc), so nothing in this
+// repo calls it yet.
 //
 // Zero @reya/* dependencies by design (matches packages/contracts' isolation pattern) — this
 // package must never gain a build-order dependency on packages/db or packages/tenant just to
@@ -366,4 +375,43 @@ export async function sendMessage(
 
   const pushResult = await pushMessage(userId, normalizedMessages, options);
   return { ...pushResult, method: 'push' };
+}
+
+// ---------------------------------------------------------------------------------------------
+// multicast / broadcast — classes/LineAPI.php:219-241 (broadcastMessage()/multicastMessage())
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Port of classes/LineAPI.php::multicastMessage() — POST /message/multicast. Sends the same
+ * message(s) to up to 500 user IDs in a single LINE API call (the 500-recipient cap is a LINE
+ * platform limit, not enforced here — batching into chunks of <=500 is the caller's
+ * responsibility, exactly as it is in PHP: every BroadcastHelper::executeBroadcastSend() branch
+ * that calls multicastMessage() does its own `array_chunk($userIds, 500)` beforehand).
+ * Normalization matches replyMessage()/pushMessage() (normalizeReplyOrPushMessages(), NOT
+ * sendMessage()'s wrap) — PHP's multicastMessage() (lines 230-241) has the exact same
+ * `if (!is_array($messages)) { wrap }` guard as pushMessage()/replyMessage(), so a lone message
+ * object is passed through unwrapped just like those two, and only a bare string gets wrapped.
+ */
+export async function multicastMessage(
+  userIds: string[],
+  messages: LineMessageInput,
+  options: LineApiOptions
+): Promise<LineApiCallResult> {
+  return sendRequest(
+    '/message/multicast',
+    { to: userIds, messages: normalizeReplyOrPushMessages(messages) },
+    options
+  );
+}
+
+/**
+ * Port of classes/LineAPI.php::broadcastMessage() — POST /message/broadcast. Sends the same
+ * message(s) to every follower of the LINE OA (no recipient list — LINE resolves the audience
+ * server-side). Same normalization as multicastMessage() above (normalizeReplyOrPushMessages()).
+ */
+export async function broadcastMessage(
+  messages: LineMessageInput,
+  options: LineApiOptions
+): Promise<LineApiCallResult> {
+  return sendRequest('/message/broadcast', { messages: normalizeReplyOrPushMessages(messages) }, options);
 }
