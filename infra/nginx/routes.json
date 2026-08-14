@@ -136,5 +136,11 @@
     "upstream": "php_backend",
     "tenants": "all",
     "note": "Phase 5 (documentsVat brief — VAT documents/Thai receipts-invoices-quotations half of 'Dispense + Documents/VAT'): Next port of api/documents.php's list, get, and create actions lives at apps/admin's /api/documents (list, create) and /api/documents/[id] (get), parity-proven per docs/runbooks/phase5-documents-vat-parity.md. update/approve/cancel/convert/pdf/export_csv remain unported (out of scope this batch). Schema-valid 'not yet flipped' placeholder (php_backend is already the default, so this is a functional no-op) — see the /users entry's note for the flip mechanic and who owns it. This batch never flips traffic: per mig-orchestrator's explicit high-risk-phase constraint on Phase 5 (VAT-document correctness is revenue/compliance-sensitive), a PASS here authorizes merging code+tests only — upstream stays php_backend throughout all of Phase 5, and only mig-orchestrator, on a later round with its own explicit go-ahead, decides if/when a canary ramp for this path ever starts."
+  },
+  {
+    "path": "/broadcast",
+    "upstream": "php_backend",
+    "tenants": "all",
+    "note": "Phase 2 broadcast batch (broadcastCompose + broadcastCatalogStats briefs): Next port of broadcast.php (114 LOC tab hub) + includes/broadcast/{send,products,catalog,stats}.php lives at apps/admin's /broadcast?tab={send,catalog,products,stats}, mirroring PHP's exact ?tab= query-param shape and its default tab ('send' — broadcast.php's own getActiveTab($tabs, 'send') call). Schema-valid 'not yet flipped' placeholder (php_backend is already the default, so this is a functional no-op). No infra/e2e/parity.mjs entry exists for this route as of this round — that is out of scope here and was not added; do not infer parity coverage from this entry alone. As with every other placeholder in this file, only mig-orchestrator decides when a canary ramp for /broadcast starts — see the /users entry's note for the flip mechanic and who owns it."
   }
 ]

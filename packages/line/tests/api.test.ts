@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  broadcastMessage,
+  multicastMessage,
   pushMessage,
   replyMessage,
   sendMessage,
@@ -621,6 +623,119 @@ describe('replyMessage / pushMessage — classes/LineAPI.php:80-108', () => {
       const payload = JSON.parse(calls[0]!.init.body) as { messages: unknown };
       expect(payload.messages).toEqual([{ type: 'text', text: 'plain string' }]);
     });
+  });
+});
+
+describe('multicastMessage / broadcastMessage — classes/LineAPI.php:219-241', () => {
+  it('multicastMessage POSTs { to, messages } to /message/multicast with a Bearer auth header', async () => {
+    const { fetchImpl, calls } = createFetchMock([{ status: 200, body: { sentMessages: [] } }]);
+    const userIds = ['U1', 'U2', 'U3'];
+    const result = await multicastMessage(userIds, 'hi everyone', { channelAccessToken: 'secret-token-value', fetchImpl });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe('https://api.line.me/v2/bot/message/multicast');
+    expect(calls[0]!.init.method).toBe('POST');
+    expect(calls[0]!.init.headers).toMatchObject({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer secret-token-value',
+    });
+    expect(JSON.parse(calls[0]!.init.body)).toEqual({
+      to: userIds,
+      messages: [{ type: 'text', text: 'hi everyone' }],
+    });
+    expect(result).toEqual({ code: 200, body: { sentMessages: [] } });
+  });
+
+  it('multicastMessage passes an array of message objects through unchanged', async () => {
+    const { fetchImpl, calls } = createFetchMock([{ status: 200, body: {} }]);
+    const messages = [
+      { type: 'text', text: 'one' },
+      { type: 'text', text: 'two' },
+    ];
+    await multicastMessage(['U1'], messages, { channelAccessToken: 'tok', fetchImpl });
+    const payload = JSON.parse(calls[0]!.init.body) as { messages: unknown };
+    expect(payload.messages).toEqual(messages);
+  });
+
+  it('multicastMessage sends a single message object unwrapped (PHP is_array() pass-through, matching pushMessage/replyMessage)', async () => {
+    const { fetchImpl, calls } = createFetchMock([{ status: 200, body: {} }]);
+    const singleMessage = { type: 'flex', altText: 'label', contents: { type: 'bubble' } };
+    await multicastMessage(['U1', 'U2'], singleMessage, { channelAccessToken: 'tok', fetchImpl });
+    const payload = JSON.parse(calls[0]!.init.body) as { messages: unknown; to: string[] };
+    expect(payload.messages).toEqual(singleMessage);
+    expect(Array.isArray(payload.messages)).toBe(false);
+    expect(payload.to).toEqual(['U1', 'U2']);
+  });
+
+  it('multicastMessage propagates a non-200 LINE response code without throwing (caller decides sentCount accounting)', async () => {
+    const { fetchImpl } = createFetchMock([{ status: 429, body: { message: 'rate limited' } }]);
+    const result = await multicastMessage(['U1'], 'hi', { channelAccessToken: 'tok', fetchImpl });
+    expect(result).toEqual({ code: 429, body: { message: 'rate limited' } });
+  });
+
+  it('broadcastMessage POSTs { messages } (no "to" field) to /message/broadcast', async () => {
+    const { fetchImpl, calls } = createFetchMock([{ status: 200, body: { sentMessages: [] } }]);
+    const result = await broadcastMessage('hello everyone', { channelAccessToken: 'secret-token-value', fetchImpl });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe('https://api.line.me/v2/bot/message/broadcast');
+    expect(calls[0]!.init.method).toBe('POST');
+    const payload = JSON.parse(calls[0]!.init.body) as Record<string, unknown>;
+    expect(payload).toEqual({ messages: [{ type: 'text', text: 'hello everyone' }] });
+    expect('to' in payload).toBe(false);
+    expect(result).toEqual({ code: 200, body: { sentMessages: [] } });
+  });
+
+  it('broadcastMessage sends a single message object unwrapped, an array of messages unchanged, and respects apiEndpoint override', async () => {
+    const { fetchImpl, calls } = createFetchMock([
+      { status: 200, body: {} },
+      { status: 200, body: {} },
+      { status: 200, body: {} },
+    ]);
+    const singleMessage = { type: 'image', originalContentUrl: 'https://x/img.jpg', previewImageUrl: 'https://x/img.jpg' };
+    await broadcastMessage(singleMessage, { channelAccessToken: 'tok', fetchImpl });
+    const arrayMessages = [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }];
+    await broadcastMessage(arrayMessages, { channelAccessToken: 'tok', fetchImpl });
+    await broadcastMessage('hi', { channelAccessToken: 'tok', apiEndpoint: 'https://example.test/bot', fetchImpl });
+
+    expect(JSON.parse(calls[0]!.init.body)).toEqual({ messages: singleMessage });
+    expect(Array.isArray((JSON.parse(calls[0]!.init.body) as { messages: unknown }).messages)).toBe(false);
+    expect(JSON.parse(calls[1]!.init.body)).toEqual({ messages: arrayMessages });
+    expect(calls[2]!.url).toBe('https://example.test/bot/message/broadcast');
+  });
+
+  it('resolves with a null body (not a throw) when the response is not valid JSON, for both multicastMessage and broadcastMessage', async () => {
+    const notJsonFetch: LineFetch = async () => ({
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected end of JSON input');
+      },
+    });
+    expect(await multicastMessage(['U1'], 'hi', { channelAccessToken: 'tok', fetchImpl: notJsonFetch })).toEqual({
+      code: 200,
+      body: null,
+    });
+    expect(await broadcastMessage('hi', { channelAccessToken: 'tok', fetchImpl: notJsonFetch })).toEqual({
+      code: 200,
+      body: null,
+    });
+  });
+
+  it('delegates to the runtime global fetch when fetchImpl is omitted for both functions (real transport, not stubbed)', async () => {
+    const globalFetchMock = vi.fn(async (_url: string, _init: unknown) => ({
+      status: 200,
+      json: async () => ({ sentMessages: [] }),
+    }));
+    vi.stubGlobal('fetch', globalFetchMock);
+    try {
+      await multicastMessage(['U1'], 'hi', { channelAccessToken: 'token-abc' });
+      await broadcastMessage('hi', { channelAccessToken: 'token-abc' });
+      expect(globalFetchMock).toHaveBeenCalledTimes(2);
+      expect(globalFetchMock.mock.calls[0]?.[0]).toBe('https://api.line.me/v2/bot/message/multicast');
+      expect(globalFetchMock.mock.calls[1]?.[0]).toBe('https://api.line.me/v2/bot/message/broadcast');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
