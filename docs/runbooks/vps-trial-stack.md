@@ -51,6 +51,29 @@ All four upstreams the edge can route to (`php_backend`, `next_admin`,
 
 ---
 
+## 0. Fast path — one command
+
+Steps 1–8 below are the manual walkthrough. If you just want the stack up, clone
+the repo onto the VPS and run:
+
+```bash
+bash infra/scripts/vps-bootstrap.sh --check   # preflight only, changes nothing
+bash infra/scripts/vps-bootstrap.sh           # full bring-up
+```
+
+It is idempotent, generates strong random secrets into `infra/compose/.env.vps`
+(mode 600, gitignored) without ever regenerating existing ones, runs `composer
+install` inside a container so the VPS needs no PHP of its own, builds, starts,
+and prints the same verification table as §8.
+
+It deliberately does **not** import a database, start `cron`, touch DNS/TLS, or
+flip any route. Read §7b before opening the admin UI.
+
+The manual steps below still matter — read them to understand what the script
+did, and for everything it leaves to you.
+
+---
+
 ## 1. VPS prerequisites
 
 - Ubuntu 22.04 or 24.04, root or sudo.
