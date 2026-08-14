@@ -43,6 +43,7 @@ webhook ไป cPanel — แต่**ขาออกส่งจริง** ก�
 | `ws` | `infra/ws/Dockerfile` | legacy `websocket-server.js` (what production runs today) |
 | `nginx-edge` | `nginx:alpine` | strangler edge, sets `X-Served-By` |
 | `cron` | `infra/php/Dockerfile` | **profile-gated, off by default** — see step 7 |
+| `caddy` | `caddy:2-alpine` | **optional overlay** — TLS for one hostname, needed only for real LINE webhooks (§11.3) |
 
 Not included: `next-miniapp`. `line-mini-app` has no Dockerfile in this repo and
 is deployed separately today, so **`/miniapp` returns 502 from this stack**.
@@ -282,11 +283,132 @@ docker compose ... down -v       # DESTROY volumes: DB, uploads, redis
 
 ---
 
+## 11. Running a real functional trial (clicking things, receiving LINE events)
+
+Sections 1–10 give you a stack you can look at. This section makes it one you can
+actually *use* — send messages, receive LINE webhooks, run the full flow — without
+any risk to real customers.
+
+### 11.1 Create a test LINE OA under a **new provider**
+
+This is the safety-critical step and the easy one to get wrong.
+
+**LINE user IDs are scoped per provider, not per channel.** A test channel created
+under your *existing* provider shares the same `Uxxxx` user IDs as production — so
+a push aimed at a real customer's stored ID would be delivered to that real person,
+test token or not. A channel under a **new provider** has a disjoint user-ID space:
+the same push fails at the API instead of reaching anyone.
+
+So in the LINE Developers Console: **create a new provider**, then a new Messaging
+API channel under it. Note its Channel ID, Channel secret, and issue a Channel
+access token.
+
+### 11.2 Sever production credentials, then plug in the test OA
+
+Right after importing the dump, per tenant database:
+
+```bash
+docker exec -i clinicya-vps-mariadb \
+  mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" <tenant_db> < database/trial-safe-mode.sql
+```
+
+That blanks LINE, Telegram, SMTP, Facebook and TikTok credentials in the copy while
+leaving all data intact. It prints a verification table at the end — every
+`token_len` should be 0.
+
+Then point one account at the test OA:
+
+```sql
+UPDATE line_accounts
+   SET channel_access_token = '<test OA access token>',
+       channel_secret       = '<test OA channel secret>',
+       channel_id           = '<test OA channel id>',
+       is_active            = 1
+ WHERE id = <the account you want to test>;
+```
+
+Leave every other row disabled. One live account is enough to exercise the flow and
+keeps the blast radius to one channel nobody real is following.
+
+### 11.3 Turn on TLS
+
+LINE only accepts an HTTPS webhook, so a trial that *receives* events needs a real
+certificate.
+
+Point a spare hostname's A record at the VPS first — `trial.re-ya.com`, or anything
+cPanel is **not** already serving. Pointing a live hostname here moves real traffic
+to the trial stack, which is a cutover, not a trial.
+
+```bash
+# infra/compose/.env.vps
+TRIAL_HOSTNAME=trial.re-ya.com
+ACME_EMAIL=you@example.com
+```
+
+```bash
+docker compose --env-file infra/compose/.env.vps \
+  -f infra/compose/docker-compose.vps.yml \
+  -f infra/compose/docker-compose.vps-tls.yml up -d
+```
+
+Caddy takes ports 80/443 and issues the certificate over ACME HTTP-01; `nginx-edge`
+moves to loopback so the edge is reachable only through Caddy. Keep the `-f`
+argument order — relative paths resolve against the first file's directory.
+
+```bash
+curl -sSI https://trial.re-ya.com/ | grep -i 'x-served-by\|^HTTP'
+docker compose ... logs caddy | grep -i 'certificate obtained'
+```
+
+HTTP-01 covers this one hostname and needs no DNS-provider plugin. The production
+cutover needs a **wildcard** cert for `*.re-ya.com`, which HTTP-01 cannot issue —
+that is DNS-01, and a separate job (`phase0-cutover-rollback.md` §6).
+
+### 11.4 Wire the test OA's webhook
+
+In the LINE console for the **test** channel:
+
+- Webhook URL: `https://trial.re-ya.com/webhook.php?account=<line_accounts.id>`
+- Use webhook: on
+- Auto-reply messages: off
+
+Do **not** touch the production channel's webhook — that is what keeps the live site
+working throughout.
+
+### 11.5 Exercise it
+
+Add the test OA as a friend from a phone, then run the real flows: send a message
+and watch it land in `inbox-v2.php`, dispense a medicine and check the Flex label
+arrives, place an order through the mini app.
+
+```bash
+# inbound events actually arriving?
+docker exec clinicya-vps-mariadb mariadb -uroot -p \
+  -e 'SELECT id, event_type, created_at FROM <tenant_db>.webhook_events ORDER BY id DESC LIMIT 10;'
+```
+
+Everything you send goes to your own test OA. cPanel keeps serving production
+untouched the whole time.
+
+### 11.6 Enabling cron for the trial
+
+Only after 11.2 — with production credentials severed, a scheduled broadcast has
+nowhere real to go:
+
+```bash
+docker compose ... --profile cron up -d cron
+```
+
+Re-read `infra/php/crontab`'s header first; its schedules are inferred, not the real
+cPanel crontab.
+
+---
+
 ## What this stack still cannot do
 
 | Gap | Impact | Where it is tracked |
 |---|---|---|
-| No TLS | HTTP only. Fine for a trial; a real cutover needs a wildcard cert via DNS-01. | `phase0-cutover-rollback.md` §6 |
+| No wildcard TLS | Base stack is HTTP-only; the optional Caddy overlay (§11.3) covers **one** hostname via HTTP-01. A real cutover needs `*.re-ya.com` via DNS-01. | `phase0-cutover-rollback.md` §6 |
 | `/miniapp` → 502 | `line-mini-app` has no Dockerfile here. | this file, §"What comes up" |
 | `TenantProvisioning` is cPanel-`uapi`-only | Cannot create a **new** tenant on this stack. Existing imported tenants work. | Codex handoff §4 / A1 |
 | `cron` schedules inferred | Left off by default. | `phase0-cutover-rollback.md` item 5 |
