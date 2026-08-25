@@ -66,8 +66,31 @@ system inside the monolith's own `api/` tree, invisible to everything above:
 
 Nothing reconciles it against `points_transactions`, and `retail_customers` has
 its own `member_tier` column written with values outside the ENUM the retail
-schema declares. Consolidating it is out of scope for Batch 1 and is not on the
-plan's roadmap at all — it should be added, most naturally to Phase 5.
+schema declares.
+
+**And it has no schema in this repository.** A sweep for
+`CREATE TABLE ... retail_customers` across `database/`, `retail-api/database/`
+and every PHP file returns nothing, while four files query it. So whether the
+table exists at all is per-deployment: on a tenant that has it, the writes land
+and nobody reconciles them; on a tenant that does not, `api/retail-payment.php`
+has been silently failing its customer-stats UPDATE.
+
+What has been done about it so far (Phase 5/6 pass):
+
+- `api/retail-payment.php` and `api/retail-cart.php` gained
+  `bootstrap/route_by_account.php`. They were missing it, so a root-domain
+  request read and wrote the **legacy fallback DB** rather than the member's own
+  tenant schema.
+- `scripts/loyalty-reconcile.php` now reports the retail store when present —
+  customer count and outstanding liability — as a clearly-labelled fourth
+  liability line, so an operator can see the exposure instead of discovering it
+  the way this audit did.
+
+What has NOT been done, and why: consolidating `retail_customers` into the ledger
+means mapping retail customers onto `users` rows, and with no committed schema
+and no reconciliation data there is no safe basis for that mapping yet. Run the
+report first; the numbers it returns decide whether this is a dead feature to
+delete or a live store to migrate.
 
 > **`loyalty_points` is a silent product failure, not just dead code.** Five live
 > features read it: the admin users-list points filter buckets every member into
@@ -209,15 +232,31 @@ redemption stack** settling against `users.points` + `points_history`. Neither
 store sees the other, so the same reward can be redeemed once through each.
 *(Not fixed — Phase 5.)*
 
-### 4.5 Client-supplied `line_user_id` is trusted as identity — CRITICAL *(not fixed — Phase 6)*
+### 4.5 Client-supplied `line_user_id` is trusted as identity — CRITICAL *(fixed in Phase 6)*
 
 `api/member.php`, `api/points.php`, `api/points-history.php`, `api/rewards.php`
-and `api/user-profile.php` take the caller's identity from a request parameter.
-No LINE ID-token or access-token verification exists anywhere in the repo.
-Changing one field in a request reads or mutates another member's balance.
+and `api/user-profile.php` took the caller's identity from a request parameter.
+Changing one field in a request read or mutated another member's balance.
 
-**This is the highest-severity finding in the audit and Batch 1 does not address
-it.** It is Phase 6 in the plan. It should arguably be pulled forward.
+> **CORRECTION.** The first draft of this audit stated that "no LINE ID-token or
+> access-token verification exists anywhere in the repo". **That was wrong.**
+> `includes/liff-auth.php` has verified bearer tokens against
+> `https://api.line.me/v2/profile` all along, with a fail-closed
+> `reya_require_liff_user()` that `hash_equals` the verified id against the
+> claimed one. It was simply only wired into two AI-chat endpoints
+> (`api/ai-chat-history.php`, `api/ai-chat-approve-order.php`); no loyalty
+> endpoint used it, and the mini app's loyalty calls sent no token for it to
+> check. The defect was real; the claim that nothing existed to fix it was not.
+> Phase 6 therefore wired up the existing helper rather than writing a new one.
+
+The mini app now attaches `liff.getAccessToken()` to every PHP call, and every
+loyalty entry point calls `reya_liff_guard()`. The rollout is staged: a **wrong**
+token is refused immediately (that is an attack, never a stale client), while a
+**missing** token is refused only once `LIFF_STRICT_AUTH` is set — because every
+already-installed mini-app build sends none, and flipping straight to fail-closed
+would lock every existing customer out of their points until the new client
+reached them. The unverified-request count in the logs is what tells an operator
+when it is safe to flip.
 
 ### 4.6 Tier semantics are inverted — HIGH *(not fixed — Phase 3)*
 

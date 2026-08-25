@@ -16,6 +16,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 // Route root-domain (Mini App / LIFF) requests to the tenant DB by line_account_id.
 require_once __DIR__ . '/../bootstrap/route_by_account.php';
+require_once __DIR__ . '/../includes/liff-auth.php';
 require_once __DIR__ . '/../classes/LoyaltyPoints.php';
 
 $db = Database::getInstance()->getConnection();
@@ -97,6 +98,9 @@ function handleRedeem($db, $data) {
     if (empty($lineUserId)) {
         jsonResponse(false, 'กรุณาเข้าสู่ระบบ');
     }
+
+    // PHASE 6: redeeming SPENDS the member's points — never on an asserted identity.
+    $lineUserId = reya_liff_guard((string) $lineUserId, 'rewards:redeem');
     
     if (empty($rewardId)) {
         jsonResponse(false, 'กรุณาเลือกของรางวัล');
@@ -156,6 +160,9 @@ function handleMyRedemptions($db) {
     if (empty($lineUserId)) {
         jsonResponse(false, 'Missing line_user_id');
     }
+
+    // PHASE 6
+    $lineUserId = reya_liff_guard((string) $lineUserId, 'rewards:my_redemptions');
     
     try {
         // Get user

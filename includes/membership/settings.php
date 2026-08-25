@@ -439,7 +439,7 @@ $settingsTab = $_GET['settings_tab'] ?? 'rules';
                 <div id="tiersList" class="space-y-4">
                     <?php foreach ($tierSettings as $index => $tier): ?>
                         <div class="tier-row bg-gray-50 rounded-lg p-4 border border-gray-200" data-index="<?= $index ?>">
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                                 <div>
                                     <label class="block text-xs font-medium text-gray-600 mb-1">ชื่อระดับ</label>
                                     <input type="text" name="tier_name[]" value="<?= htmlspecialchars($tier['name']) ?>"
@@ -459,10 +459,23 @@ $settingsTab = $_GET['settings_tab'] ?? 'rules';
                                     <label class="block text-xs font-medium text-gray-600 mb-1">ตัวคูณแต้ม</label>
                                     <div class="flex items-center gap-2">
                                         <input type="number" name="tier_multiplier[]"
-                                            value="<?= number_format(floatval($tier['multiplier']), 2) ?>"
+                                            value="<?= number_format(floatval($tier['earn_multiplier'] ?? $tier['multiplier'] ?? 1.0), 2) ?>"
                                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                                             min="1" max="10" step="0.1" placeholder="1.0" required>
                                         <span class="text-gray-500 text-sm">x</span>
+                                    </div>
+                                </div>
+                                <?php // PHASE 3: a separate field, because this used to be
+                                      // the SAME column as the multiplier above, served to
+                                      // the mini app under the name discount_percent. ?>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">ส่วนลด</label>
+                                    <div class="flex items-center gap-2">
+                                        <input type="number" name="tier_discount[]"
+                                            value="<?= number_format(floatval($tier['discount_percent'] ?? 0), 2) ?>"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                            min="0" max="100" step="0.5" placeholder="0">
+                                        <span class="text-gray-500 text-sm">%</span>
                                     </div>
                                 </div>
                                 <div>
@@ -497,6 +510,8 @@ $settingsTab = $_GET['settings_tab'] ?? 'rules';
                     <ul class="text-xs text-blue-700 space-y-1">
                         <li>• คะแนนขั้นต่ำต้องเรียงจากน้อยไปมาก (ระดับแรกควรเป็น 0)</li>
                         <li>• ตัวคูณแต้มจะใช้คำนวณแต้มที่ได้รับเพิ่มเติม (เช่น 1.5x = ได้แต้มเพิ่ม 50%)</li>
+                        <li>• ส่วนลด % เป็นคนละเรื่องกับตัวคูณแต้ม — ใช้ลดราคาสินค้าให้สมาชิกระดับนั้น</li>
+                        <li>• ระดับสมาชิกคิดจาก "แต้มสะสมตลอดชีพ" ไม่ใช่แต้มคงเหลือ ใช้แต้มแล้วระดับไม่ตก</li>
                         <li>• สมาชิกจะได้รับการอัพเกรดระดับอัตโนมัติเมื่อสะสมคะแนนถึงเกณฑ์</li>
                     </ul>
                 </div>
@@ -772,7 +787,7 @@ $settingsTab = $_GET['settings_tab'] ?? 'rules';
         const newIndex = tiersList.querySelectorAll('.tier-row').length;
         const newRow = document.createElement('div');
         newRow.className = 'tier-row bg-gray-50 rounded-lg p-4 border border-gray-200';
-        newRow.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><div><label class="block text-xs font-medium text-gray-600 mb-1">ชื่อระดับ</label><input type="text" name="tier_name[]" value="" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="เช่น VIP, Diamond" required></div><div><label class="block text-xs font-medium text-gray-600 mb-1">คะแนนขั้นต่ำ</label><div class="flex items-center gap-2"><input type="number" name="tier_points[]" value="" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" min="0" step="100" placeholder="10000" required><span class="text-gray-500 text-sm whitespace-nowrap">คะแนน</span></div></div><div><label class="block text-xs font-medium text-gray-600 mb-1">ตัวคูณแต้ม</label><div class="flex items-center gap-2"><input type="number" name="tier_multiplier[]" value="1.00" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" min="1" max="10" step="0.1" placeholder="2.5" required><span class="text-gray-500 text-sm">x</span></div></div><div class="flex items-center gap-2"><button type="button" class="delete-tier-btn px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบระดับนี้"><i class="fas fa-trash"></i></button></div></div>`;
+        newRow.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end"><div><label class="block text-xs font-medium text-gray-600 mb-1">ชื่อระดับ</label><input type="text" name="tier_name[]" value="" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="เช่น VIP, Diamond" required></div><div><label class="block text-xs font-medium text-gray-600 mb-1">คะแนนขั้นต่ำ</label><div class="flex items-center gap-2"><input type="number" name="tier_points[]" value="" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" min="0" step="100" placeholder="10000" required><span class="text-gray-500 text-sm whitespace-nowrap">คะแนน</span></div></div><div><label class="block text-xs font-medium text-gray-600 mb-1">ตัวคูณแต้ม</label><div class="flex items-center gap-2"><input type="number" name="tier_multiplier[]" value="1.00" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" min="1" max="10" step="0.1" placeholder="2.5" required><span class="text-gray-500 text-sm">x</span></div></div><div><label class="block text-xs font-medium text-gray-600 mb-1">ส่วนลด</label><div class="flex items-center gap-2"><input type="number" name="tier_discount[]" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" min="0" max="100" step="0.5" placeholder="0"><span class="text-gray-500 text-sm">%</span></div></div><div class="flex items-center gap-2"><button type="button" class="delete-tier-btn px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="ลบระดับนี้"><i class="fas fa-trash"></i></button></div></div>`;
         tiersList.appendChild(newRow);
         newRow.querySelector('.delete-tier-btn').addEventListener('click', function () { if (confirm('ต้องการลบระดับนี้หรือไม่?')) this.closest('.tier-row').remove(); });
     });

@@ -151,7 +151,7 @@ class LoyaltyLedgerService
      * @param int $userId
      * @return array{
      *     total_points:int, available_points:int, used_points:int,
-     *     ledger_balance:int, ledger_rows:int, source:string
+     *     qualifying_points:int, ledger_balance:int, ledger_rows:int, source:string
      * } `available_points` is clamped at 0 for spending decisions;
      *   `ledger_balance` is the raw signed sum, for reconciliation.
      */
@@ -169,6 +169,7 @@ class LoyaltyLedgerService
                 'total_points' => $ledger['total_points'],
                 'available_points' => max(0, $ledger['ledger_balance']),
                 'used_points' => $ledger['used_points'],
+                'qualifying_points' => $ledger['qualifying_points'],
                 'ledger_balance' => $ledger['ledger_balance'],
                 'ledger_rows' => $ledger['ledger_rows'],
                 'source' => self::SOURCE_LEDGER,
@@ -181,6 +182,7 @@ class LoyaltyLedgerService
                 'total_points' => $legacy['total_points'],
                 'available_points' => $legacy['available_points'],
                 'used_points' => $legacy['used_points'],
+                'qualifying_points' => max($legacy['total_points'], $legacy['available_points']),
                 'ledger_balance' => $legacy['available_points'],
                 'ledger_rows' => 0,
                 'source' => self::SOURCE_LEGACY_CACHE,
@@ -191,6 +193,7 @@ class LoyaltyLedgerService
             'total_points' => 0,
             'available_points' => 0,
             'used_points' => 0,
+            'qualifying_points' => 0,
             'ledger_balance' => 0,
             'ledger_rows' => 0,
             'source' => self::SOURCE_EMPTY,
@@ -556,18 +559,19 @@ class LoyaltyLedgerService
      * `ledger_rows` is the whole point of this query: it is what lets callers
      * tell "nothing recorded" apart from "recorded, and it nets to zero".
      *
-     * @return array{total_points:int, used_points:int, ledger_balance:int, ledger_rows:int}
+     * @return array{total_points:int, qualifying_points:int, used_points:int, ledger_balance:int, ledger_rows:int}
      */
     private function readLedgerTotals(int $userId): array
     {
         $stmt = $this->db->prepare(
-            'SELECT
+            "SELECT
                 COUNT(*) AS ledger_rows,
                 COALESCE(SUM(CASE WHEN points > 0 THEN points ELSE 0 END), 0) AS total_points,
+                COALESCE(SUM(CASE WHEN points > 0 AND type <> 'refund' THEN points ELSE 0 END), 0) AS qualifying_points,
                 COALESCE(SUM(points), 0) AS ledger_balance,
                 COALESCE(SUM(CASE WHEN points < 0 THEN -points ELSE 0 END), 0) AS used_points
              FROM points_transactions
-             WHERE user_id = ?'
+             WHERE user_id = ?"
         );
         $stmt->execute([$userId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -575,9 +579,41 @@ class LoyaltyLedgerService
         return [
             'ledger_rows' => (int) ($row['ledger_rows'] ?? 0),
             'total_points' => (int) ($row['total_points'] ?? 0),
+            'qualifying_points' => (int) ($row['qualifying_points'] ?? 0),
             'ledger_balance' => (int) ($row['ledger_balance'] ?? 0),
             'used_points' => (int) ($row['used_points'] ?? 0),
         ];
+    }
+
+    /**
+     * Points that determine membership STATUS, as distinct from points that can
+     * be spent.
+     *
+     * PHASE 3. The plan's §12 split: `available_points` is currency,
+     * `total_points` is lifetime earned, and this is what a tier is measured on.
+     * Mapping it to lifetime earned (per the plan's "initial implementation")
+     * means spending points can no longer demote a member — which is what
+     * happened on every redeem, POS points payment, POS void, POS return and
+     * account merge before this.
+     *
+     * Refunds are excluded: a refund returns points the member already spent, so
+     * counting it again would let a redeem-then-cancel cycle inflate a tier
+     * indefinitely. Migrated opening balances DO count — they represent real
+     * earned history carried over from a legacy store.
+     *
+     * A member with no ledger rows falls back to their legacy lifetime figure,
+     * the same transitional courtesy getBalance() extends.
+     */
+    public function getQualifyingPoints(int $userId): int
+    {
+        $totals = $this->readLedgerTotals($userId);
+        if ($totals['ledger_rows'] > 0) {
+            return $totals['qualifying_points'];
+        }
+
+        $legacy = $this->readLegacyCache($userId);
+
+        return $legacy !== null ? max(0, $legacy['total_points'], $legacy['available_points']) : 0;
     }
 
     /**
@@ -661,6 +697,7 @@ class LoyaltyLedgerService
                 'total_points' => 0,
                 'available_points' => 0,
                 'used_points' => 0,
+                'qualifying_points' => 0,
                 'ledger_balance' => 0,
                 'ledger_rows' => 0,
                 'source' => self::SOURCE_EMPTY,

@@ -183,7 +183,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
                 $redemption = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if ($redemption && $redemption['status'] !== 'delivered') {
-                    $loyalty->addPoints($redemption['user_id'], $redemption['points_used'], 'refund', $redemptionId, 'คืนแต้มจากการยกเลิก');
+                    // BATCH 2: the status guard below only rejects 'delivered', so an
+                    // already-cancelled redemption could be refunded again, without
+                    // bound. The idempotency key makes a second refund impossible at
+                    // the DB level regardless of what the guard lets through.
+                    $loyalty->addPoints($redemption['user_id'], $redemption['points_used'], 'refund', $redemptionId, 'คืนแต้มจากการยกเลิก', [
+                        'type' => LoyaltyLedgerService::TYPE_REFUND,
+                        'idempotency_key' => 'redemption:' . (int) $redemptionId . ':refund',
+                        'created_by' => 'admin:' . (int) ($adminId ?? 0),
+                    ]);
                     $stmt = $db->prepare("UPDATE rewards SET stock = stock + 1 WHERE id = ? AND stock >= 0");
                     $stmt->execute([$redemption['reward_id']]);
                     $loyalty->updateRedemptionStatus($redemptionId, 'cancelled', $adminId, $notes);
@@ -302,12 +310,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['settings_action'])) {
                 $stmt = $db->prepare("DELETE FROM tier_settings WHERE line_account_id = ?");
                 $stmt->execute([$lineAccountId]);
                 $defaultColors = ['#9CA3AF', '#F59E0B', '#6366F1', '#10B981', '#EF4444', '#8B5CF6'];
-                $stmt = $db->prepare("INSERT INTO tier_settings (line_account_id, name, min_points, multiplier, badge_color) VALUES (?, ?, ?, ?, ?)");
+                // PHASE 3: write BOTH benefit columns. `multiplier` is kept in
+                // step for rollback; `earn_multiplier` is what TierService reads,
+                // and `discount_percent` is now a genuinely separate field rather
+                // than the multiplier under an alias.
+                $tierDiscounts = $_POST['tier_discount'] ?? [];
+                $hasSplitColumns = tierSettingsHasSplitColumns($db);
+
+                $stmt = $hasSplitColumns
+                    ? $db->prepare('INSERT INTO tier_settings (line_account_id, name, min_points, multiplier, earn_multiplier, discount_percent, badge_color) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                    : $db->prepare('INSERT INTO tier_settings (line_account_id, name, min_points, multiplier, badge_color) VALUES (?, ?, ?, ?, ?)');
+
                 for ($i = 0; $i < count($tierNames); $i++) {
                     if (!empty($tierNames[$i])) {
                         // Use color from form, or fallback to default
                         $badgeColor = !empty($tierColors[$i]) ? $tierColors[$i] : $defaultColors[$i % count($defaultColors)];
-                        $stmt->execute([$lineAccountId, trim($tierNames[$i]), intval($tierPoints[$i] ?? 0), floatval($tierMultipliers[$i] ?? 1.0), $badgeColor]);
+                        $earnMultiplier = floatval($tierMultipliers[$i] ?? 1.0);
+                        $discountPercent = floatval($tierDiscounts[$i] ?? 0);
+
+                        if ($hasSplitColumns) {
+                            $stmt->execute([$lineAccountId, trim($tierNames[$i]), intval($tierPoints[$i] ?? 0), $earnMultiplier, $earnMultiplier, $discountPercent, $badgeColor]);
+                        } else {
+                            $stmt->execute([$lineAccountId, trim($tierNames[$i]), intval($tierPoints[$i] ?? 0), $earnMultiplier, $badgeColor]);
+                        }
                     }
                 }
                 // Clear tier cache
@@ -412,3 +437,27 @@ echo renderTabs($tabs, $activeTab, ['style' => 'pills']);
 </div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
+
+/**
+ * Has migration_2026-08-26_tier_semantics.sql been applied to this tenant?
+ *
+ * PHASE 3. Until it has, `tier_settings` carries only the ambiguous `multiplier`
+ * column and the settings screen must keep writing just that.
+ */
+function tierSettingsHasSplitColumns(PDO $db): bool
+{
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    try {
+        $stmt = $db->prepare('SHOW COLUMNS FROM `tier_settings` LIKE ?');
+        $stmt->execute(['earn_multiplier']);
+        $cached = $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+    } catch (Throwable $e) {
+        $cached = false;
+    }
+
+    return $cached;
+}

@@ -53,12 +53,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 require_once 'classes/LoyaltyPoints.php';
                 require_once 'classes/TierService.php';
-                $loyalty = new LoyaltyPoints($db, $currentBotId ?? 1);
+
+                // BATCH 2: this POST handler runs BEFORE includes/header.php, so
+                // $currentBotId was always undefined and every manual adjustment
+                // was stamped line_account_id = 1 regardless of which OA the
+                // customer belongs to. Read the scope off the customer instead.
+                $accountStmt = $db->prepare('SELECT line_account_id FROM users WHERE id = ?');
+                $accountStmt->execute([$userId]);
+                $ownerAccountId = (int) ($accountStmt->fetchColumn() ?: ($currentBotId ?? 1));
+
+                $loyalty = new LoyaltyPoints($db, $ownerAccountId);
+                $actor = 'admin:' . (int) ($_SESSION['admin_user']['id'] ?? $_SESSION['user_id'] ?? 0);
 
                 if ($points > 0) {
-                    $loyalty->addPoints($userId, $points, 'admin', null, $description);
+                    $loyalty->addPoints($userId, $points, 'admin', null, $description, ['created_by' => $actor]);
                 } else {
-                    $loyalty->deductPoints($userId, abs($points), 'admin_deduct', null, $description);
+                    $loyalty->deductPoints($userId, abs($points), 'admin_deduct', null, $description, ['created_by' => $actor]);
                 }
 
                 // Update user tier after points change

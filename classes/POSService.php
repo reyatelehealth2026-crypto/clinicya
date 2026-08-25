@@ -193,7 +193,13 @@ class POSService {
                         $points,
                         'pos_sale',
                         $transactionId,
-                        "แต้มจากการซื้อ #{$transaction['transaction_number']}"
+                        "แต้มจากการซื้อ #{$transaction['transaction_number']}",
+                        [
+                            // The status!=='draft' guard is read before this method
+                            // opens its transaction, so it is a TOCTOU. The key closes it.
+                            'idempotency_key' => 'pos-sale:' . (int) $transactionId . ':earn',
+                            'created_by' => 'pos:' . (int) ($transaction['cashier_id'] ?? 0),
+                        ]
                     );
                     
                     // Update transaction with points earned
@@ -260,7 +266,8 @@ class POSService {
                     $transaction['points_earned'],
                     'pos_void',
                     $transactionId,
-                    "ยกเลิกแต้มจากรายการ #{$transaction['transaction_number']}"
+                    "ยกเลิกแต้มจากรายการ #{$transaction['transaction_number']}",
+                    ['idempotency_key' => 'pos-sale:' . (int) $transactionId . ':void']
                 );
             }
             

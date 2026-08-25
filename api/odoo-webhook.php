@@ -289,29 +289,39 @@ class OdooWebhookHandler {
 
         $userId        = (int) $user['id'];
         $lineAccountId = (int) ($user['line_account_id'] ?? 3);
-        $newPoints     = (int) $user['points'] + $points;
         $displayName   = $user['display_name'] ?? 'ลูกค้า';
         $pictureUrl    = $user['picture_url'] ?? '';
 
-        // ── อัพเดทแต้ม ───────────────────────────────────────────────────────
+        // ── Commerce counters (the ledger owns every point column) ───────────
         $this->db->prepare(
             "UPDATE users SET
-                points          = points + ?,
-                available_points = available_points + ?,
-                total_points    = total_points + ?,
-                total_spent     = total_spent + ?,
-                order_count     = order_count + 1
+                total_spent = total_spent + ?,
+                order_count = order_count + 1
              WHERE id = ?"
-        )->execute([$points, $points, $points, $amountTotal, $userId]);
+        )->execute([$amountTotal, $userId]);
 
-        // ── บันทึก points_transactions ────────────────────────────────────────
+        // ── แต้ม: ผ่าน ledger เท่านั้น ────────────────────────────────────────
+        // BATCH 2. This used to increment users.points + available_points +
+        // total_points itself and hand-roll balance_after from users.points — the
+        // number the customer was then TOLD in the LINE message below, even though
+        // it already included welcome bonuses and shop awards that never reached
+        // available_points. The check-then-act dedupe above is also unindexed, so
+        // two concurrent deliveries could both pass it; the idempotency key is
+        // backed by a UNIQUE index and cannot.
         $desc = "ได้รับแต้มจากออเดอ " . ($orderName ?: $invoiceNumber)
               . " (" . number_format($amountTotal, 0, '.', ',') . " ฿ → {$points} point)";
-        $this->db->prepare(
-            "INSERT INTO points_transactions
-                (user_id, points, type, balance_after, reference_type, reference_id, description, line_account_id, created_at)
-             VALUES (?, ?, 'earn', ?, 'invoice', ?, ?, ?, NOW())"
-        )->execute([$userId, $points, $newPoints, $invoiceId, $desc, $lineAccountId]);
+
+        require_once __DIR__ . '/../classes/LoyaltyPoints.php';
+        $loyalty = new LoyaltyPoints($this->db, $lineAccountId);
+        $awarded = $loyalty->addPoints($userId, $points, 'invoice', $invoiceId, $desc, [
+            'idempotency_key' => 'invoice:' . (int) $invoiceId . ':earn',
+            'created_by'      => 'system:odoo-webhook',
+        ]);
+        if (!$awarded) {
+            error_log("[awardInvoicePoints] credit declined for invoice {$invoiceId} user {$userId}");
+            return;
+        }
+        $newPoints = (int) ($loyalty->getUserPoints($userId)['available_points'] ?? 0);
 
         // ── System message ────────────────────────────────────────────────────
         $msgContent = "🧾 ชำระเงินใบแจ้งหนี้ {$invoiceNumber} เรียบร้อย\n"

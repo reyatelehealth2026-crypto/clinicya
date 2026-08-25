@@ -16,6 +16,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 // 2026-05-27 — Route root-domain Mini App calls to correct tenant DB.
 require_once __DIR__ . '/../bootstrap/route_by_account.php';
+require_once __DIR__ . '/../includes/liff-auth.php';
 
 $db = Database::getInstance()->getConnection();
 
@@ -68,6 +69,10 @@ function handleRegister($db, $data)
  if (empty($lineUserId)) {
   jsonResponse(false, 'กรุณาเข้าสู่ระบบผ่าน LINE');
  }
+
+ // PHASE 6: prove the caller owns this LINE identity before creating a member
+ // for it. See includes/liff-auth.php for the staged-rollout semantics.
+ $lineUserId = reya_liff_guard((string) $lineUserId, 'member:register');
 
  // Validate required fields
  $firstName = trim($data['first_name'] ?? '');
@@ -158,10 +163,10 @@ function handleRegister($db, $data)
    $updates[] = "member_tier = 'bronze'";
   }
 
-  // Add points if column exists
-  if (isset($existingColumns['points'])) {
-   $updates[] = 'points = 0';
-  }
+  // NOTE(Batch 2): `points = 0` used to be set here, which WIPED any balance an
+  // existing customer had accumulated via the Odoo webhook or a shop order
+  // before they completed registration. The ledger owns the balance now, so
+  // registration must not touch the legacy column at all.
 
   // Add optional columns if they exist
   if (isset($existingColumns['email'])) {
@@ -257,27 +262,8 @@ function handleRegister($db, $data)
   flagPointsMergeOnLink($db, $lineAccountId, $userId, $phone);
  }
 
- // Add welcome bonus points if points column exists
- $welcomeBonus = 50;
- try {
-  $stmt = $db->prepare("UPDATE users SET points = ? WHERE id = ?");
-  $stmt->execute([$welcomeBonus, $userId]);
- } catch (Exception $e) {
-  // points column might not exist
-  error_log("Update points error: " . $e->getMessage());
- }
-
- // Log points
- try {
-  $stmt = $db->prepare("
-            INSERT INTO points_history (line_account_id, user_id, points, type, description, balance_after)
-            VALUES (?, ?, ?, 'bonus', 'โบนัสต้อนรับสมาชิกใหม่', ?)
-        ");
-  $stmt->execute([$lineAccountId, $userId, $welcomeBonus, $welcomeBonus]);
- } catch (Exception $e) {
-  // points_history table might not exist
-  error_log("points_history insert error: " . $e->getMessage());
- }
+ // Welcome bonus — through the canonical ledger, exactly once per member.
+ $welcomeBonus = memberAwardWelcomeBonus($db, (int) $lineAccountId, (int) $userId, 'โบนัสต้อนรับสมาชิกใหม่');
 
  jsonResponse(true, 'สมัครสมาชิกสำเร็จ!', [
   'member_id' => $memberId,
@@ -299,6 +285,9 @@ function handleCheck($db)
  if (empty($lineUserId)) {
   jsonResponse(false, 'Missing line_user_id');
  }
+
+ // PHASE 6 — this action auto-registers and awards the welcome bonus.
+ $lineUserId = reya_liff_guard((string) $lineUserId, 'member:check');
 
  // Try exact match first - use only columns that definitely exist
  $stmt = $db->prepare("
@@ -337,10 +326,15 @@ function handleCheck($db)
  // has_profile = true ถ้ามี first_name (กรอกข้อมูลแล้วจริงๆ)
  $hasProfile = !empty($user['first_name']);
 
+ // BATCH 2: read the balance the one canonical way. This action used to read
+ // `users.points` while `get_card` read the ledger — the mini app calls both in
+ // one session and was shown two different numbers for the same member.
+ $availablePoints = memberAvailablePoints($db, (int) $lineAccountId, (int) $user['id']);
+
  // Calculate actual tier using TierService
  require_once __DIR__ . '/../classes/TierService.php';
  $tierService = new TierService($db, $lineAccountId);
- $tierInfo = $tierService->calculateTier((int) ($user['points'] ?? 0));
+ $tierInfo = $tierService->getUserTier((int) $user['id']);
 
  jsonResponse(true, 'OK', [
   'exists' => true,
@@ -352,7 +346,7 @@ function handleCheck($db)
   'display_name' => $user['display_name'] ?? null,
   'tier' => $tierInfo['tier_code'],
   'tier_name' => $tierInfo['tier_name'],
-  'points' => (int) ($user['points'] ?? 0),
+  'points' => $availablePoints,
   'auto_registered' => true
  ]);
 }
@@ -383,27 +377,16 @@ function autoRegisterMember($db, $lineUserId, $lineAccountId, $displayName = '',
   $values[] = 'bronze';
  }
 
- if (isset($existingColumns['points'])) {
-  $columns[] = 'points';
-  $placeholders[] = '?';
-  $values[] = 50; // Welcome bonus
- }
+ // NOTE(Batch 2): the row is created with no balance; the ledger awards the
+ // welcome bonus below. Seeding `points = 50` here made the bonus invisible to
+ // every modern reader and re-awarded it on each auto-register retry.
 
  $sql = "INSERT INTO users (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")";
  $stmt = $db->prepare($sql);
  $stmt->execute($values);
  $userId = $db->lastInsertId();
 
- // Log welcome bonus points
- try {
-  $stmt = $db->prepare("
-   INSERT INTO points_history (line_account_id, user_id, points, type, description, balance_after)
-   VALUES (?, ?, ?, 'bonus', 'โบนัสต้อนรับสมาชิกใหม่ (Auto-Register)', ?)
-  ");
-  $stmt->execute([$lineAccountId, $userId, 50, 50]);
- } catch (Exception $e) {
-  error_log("points_history insert error: " . $e->getMessage());
- }
+ $awarded = memberAwardWelcomeBonus($db, (int) $lineAccountId, (int) $userId, 'โบนัสต้อนรับสมาชิกใหม่ (Auto-Register)');
 
  error_log("autoRegisterMember: Created new member id=$userId, member_id=$memberId");
 
@@ -414,7 +397,7 @@ function autoRegisterMember($db, $lineUserId, $lineAccountId, $displayName = '',
   'first_name' => null,
   'last_name' => null,
   'display_name' => $displayName,
-  'points' => 50
+  'points' => $awarded
  ];
 }
 
@@ -439,25 +422,16 @@ function autoUpgradeMember($db, $userId, $lineAccountId)
   $updates[] = "member_tier = 'bronze'";
  }
 
- if (isset($existingColumns['points'])) {
-  $updates[] = 'points = COALESCE(points, 0) + 50';
- }
+ // NOTE(Batch 2): `points = COALESCE(points,0) + 50` lived here, and because the
+ // only guard was is_registered, any row left unregistered collected another 50
+ // on every `action=check`. The ledger's idempotency key now caps it at one.
 
  $params[] = $userId;
  $sql = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ?";
  $stmt = $db->prepare($sql);
  $stmt->execute($params);
 
- // Log welcome bonus
- try {
-  $stmt = $db->prepare("
-   INSERT INTO points_history (line_account_id, user_id, points, type, description, balance_after)
-   VALUES (?, ?, ?, 'bonus', 'โบนัสต้อนรับสมาชิก (Auto-Upgrade)', (SELECT COALESCE(points, 50) FROM users WHERE id = ?))
-  ");
-  $stmt->execute([$lineAccountId, $userId, 50, $userId]);
- } catch (Exception $e) {
-  error_log("points_history insert error: " . $e->getMessage());
- }
+ memberAwardWelcomeBonus($db, (int) $lineAccountId, (int) $userId, 'โบนัสต้อนรับสมาชิก (Auto-Upgrade)');
 
  error_log("autoUpgradeMember: Upgraded user id=$userId to member_id=$memberId");
 
@@ -465,6 +439,75 @@ function autoUpgradeMember($db, $userId, $lineAccountId)
  $stmt = $db->prepare("SELECT id, member_id, is_registered, first_name, last_name, display_name, points FROM users WHERE id = ?");
  $stmt->execute([$userId]);
  return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Credit the 50-point welcome bonus through the canonical ledger.
+ *
+ * BATCH 2. All three registration paths (register, auto-register, auto-upgrade)
+ * used to write `users.points` + `points_history` directly. That balance was
+ * invisible to every modern reader, never updated the tier, and — because the
+ * only guard was `is_registered` — was re-awarded on every retry for any row
+ * left unregistered.
+ *
+ * The idempotency key is keyed on `users.id` alone, deliberately: under
+ * database-per-tenant a user id is already tenant-unique and implies its OA,
+ * whereas `line_account_id` arrives from the (still unauthenticated, see Phase 6)
+ * request body and could vary between calls for the same member — which would
+ * mint a second key and award the bonus twice.
+ *
+ * @return int points actually credited (0 when it had already been awarded)
+ */
+function memberAwardWelcomeBonus(PDO $db, int $lineAccountId, int $userId, string $description): int
+{
+ $welcomeBonus = 50;
+
+ if ($userId <= 0) {
+  return 0;
+ }
+
+ try {
+  require_once __DIR__ . '/../classes/LoyaltyPoints.php';
+  $loyalty = new LoyaltyPoints($db, $lineAccountId);
+  $result = $loyalty->ledger()->credit($userId, $welcomeBonus, [
+   'type' => LoyaltyLedgerService::TYPE_BONUS,
+   'reference_type' => 'welcome',
+   'description' => $description,
+   'idempotency_key' => 'member:' . $userId . ':welcome-bonus',
+   'created_by' => 'system:member-register',
+  ]);
+
+  if (!$result['success']) {
+   error_log('[member] welcome bonus declined for user ' . $userId . ': ' . ($result['reason'] ?? '?'));
+   return 0;
+  }
+
+  return $result['duplicate'] ? 0 : $welcomeBonus;
+ } catch (Throwable $e) {
+  // Never let the bonus break registration itself.
+  error_log('[member] welcome bonus failed for user ' . $userId . ': ' . $e->getMessage());
+  return 0;
+ }
+}
+
+/**
+ * The member's spendable balance, read the one canonical way.
+ *
+ * `action=check` used to read `users.points` while `action=get_card` read
+ * LoyaltyPoints — two different numbers for the same member, from two actions in
+ * this same file, both called by the mini app during one session.
+ */
+function memberAvailablePoints(PDO $db, int $lineAccountId, int $userId): int
+{
+ try {
+  require_once __DIR__ . '/../classes/LoyaltyPoints.php';
+  $loyalty = new LoyaltyPoints($db, $lineAccountId);
+
+  return (int) ($loyalty->getUserPoints($userId)['available_points'] ?? 0);
+ } catch (Throwable $e) {
+  error_log('[member] balance read failed for user ' . $userId . ': ' . $e->getMessage());
+  return 0;
+ }
 }
 
 /**
@@ -478,6 +521,9 @@ function handleGetCard($db)
  if (empty($lineUserId)) {
   jsonResponse(false, 'Missing line_user_id');
  }
+
+ // PHASE 6
+ $lineUserId = reya_liff_guard((string) $lineUserId, 'member:get_card');
 
  // Get user data - try exact match first
  $stmt = $db->prepare("
@@ -642,6 +688,9 @@ function handleUpdateProfile($db, $data)
  if (empty($lineUserId)) {
   jsonResponse(false, 'กรุณาเข้าสู่ระบบ');
  }
+
+ // PHASE 6: this action WRITES the member's profile.
+ $lineUserId = reya_liff_guard((string) $lineUserId, 'member:update_profile');
 
  $updates = [];
  $params = [];

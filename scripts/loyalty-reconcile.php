@@ -106,7 +106,7 @@ function reya_reconcile_main(array $argv): int
         'generated_at' => date('c'),
         'tenants' => [],
         'totals' => array_fill_keys(RECONCILE_BUCKETS, 0),
-        'point_liability' => ['ledger' => 0, 'cache' => 0, 'legacy_history' => 0],
+        'point_liability' => ['ledger' => 0, 'cache' => 0, 'legacy_history' => 0, 'retail' => 0],
     ];
 
     try {
@@ -156,8 +156,8 @@ function reya_reconcile_main(array $argv): int
         foreach (RECONCILE_BUCKETS as $bucket) {
             $report['totals'][$bucket] += $tenantReport['counts'][$bucket];
         }
-        foreach (['ledger', 'cache', 'legacy_history'] as $store) {
-            $report['point_liability'][$store] += $tenantReport['point_liability'][$store];
+        foreach (['ledger', 'cache', 'legacy_history', 'retail'] as $store) {
+            $report['point_liability'][$store] += $tenantReport['point_liability'][$store] ?? 0;
         }
     }
 
@@ -243,7 +243,7 @@ function reya_reconcile_tenant(PDO $db, array $options): array
 
     $counts = array_fill_keys(RECONCILE_BUCKETS, 0);
     $members = array_fill_keys(RECONCILE_BUCKETS, []);
-    $liability = ['ledger' => 0, 'cache' => 0, 'legacy_history' => 0];
+    $liability = ['ledger' => 0, 'cache' => 0, 'legacy_history' => 0, 'retail' => 0];
     $scanned = 0;
 
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -287,13 +287,56 @@ function reya_reconcile_tenant(PDO $db, array $options): array
         }
     }
 
+    // The EIGHTH point store. `retail_customers.points_balance` is credited by
+    // api/retail-payment.php and read by api/retail-cart.php — a fully parallel
+    // loyalty system that nothing reconciles against points_transactions. It has
+    // NO CREATE TABLE anywhere in the repository, so whether it exists at all is
+    // per-deployment; report it when present so an operator can see the exposure.
+    $retail = reya_reconcile_retail_store($db);
+    if ($retail !== null) {
+        $liability['retail'] = $retail['liability'];
+        $notes[] = sprintf(
+            'retail_customers is present: %d customer(s), %d point(s) of liability, reconciled against nothing',
+            $retail['customers'],
+            $retail['liability']
+        );
+    }
+
     return [
         'counts' => $counts,
         'members' => $members,
         'point_liability' => $liability,
+        'retail' => $retail,
         'scanned' => $scanned,
         'notes' => $notes,
     ];
+}
+
+/**
+ * The retail-side point store, if this deployment has one.
+ *
+ * @return array{customers:int, liability:int}|null null when the table is absent
+ */
+function reya_reconcile_retail_store(PDO $db): ?array
+{
+    if (!reya_reconcile_table_exists($db, 'retail_customers')
+        || !reya_reconcile_column_exists($db, 'retail_customers', 'points_balance')) {
+        return null;
+    }
+
+    try {
+        $row = $db->query(
+            'SELECT COUNT(*) AS customers, COALESCE(SUM(GREATEST(points_balance, 0)), 0) AS liability
+               FROM retail_customers'
+        )->fetch(PDO::FETCH_ASSOC);
+
+        return [
+            'customers' => (int) ($row['customers'] ?? 0),
+            'liability' => (int) ($row['liability'] ?? 0),
+        ];
+    } catch (Throwable $e) {
+        return null;
+    }
 }
 
 /**
@@ -515,6 +558,12 @@ function reya_reconcile_render(array $report, array $options, int $needsAttentio
     printf("  %-16s %12d\n", 'ledger', $report['point_liability']['ledger']);
     printf("  %-16s %12d\n", 'users cache', $report['point_liability']['cache']);
     printf("  %-16s %12d\n", 'legacy history', $report['point_liability']['legacy_history']);
+    printf(
+        "  %-16s %12d  %s\n",
+        'retail (8th)',
+        $report['point_liability']['retail'],
+        $report['point_liability']['retail'] > 0 ? '* parallel store, reconciled against nothing' : ''
+    );
 
     echo "\n";
     if ($needsAttention === 0) {
