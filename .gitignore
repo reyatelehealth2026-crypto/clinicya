@@ -183,6 +183,7 @@ database/*.sql
 !database/migration_2026-07-04_ai_pharmacy_settings_columns.sql
 !database/migration_2026-07-04_tenant_onboard_progress.sql
 !database/migration_2026-07-04_pdpa_data_rights.sql
+!database/migration_2026-08-26_loyalty_ledger_idempotency.sql
 !database/trial-safe-mode.sql
 !docs/adr/*.md
 !CONTEXT.md
@@ -202,6 +203,8 @@ DB_CONNECTION.md
 !docs/plans/2026-07-12-nextjs-full-migration-plan.md
 !docs/plans/2026-08-14-golive-readiness-audit.md
 !docs/plans/2026-08-14-codex-handoff.md
+!docs/plans/2026-08-26-php-first-crm-loyalty-saas-plan.md
+!docs/plans/2026-08-26-loyalty-source-of-truth-matrix.md
 !docs/agents/*.md
 !docs/admin-tutorials/*.md
 !docs/training/*.md
