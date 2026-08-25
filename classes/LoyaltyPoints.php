@@ -466,15 +466,10 @@ class LoyaltyPoints
      * Redeem a reward for a user.
      * Requirements: 23.7 - Deduct points and generate unique redemption code
      *
-     * Made atomic in Batch 1. The point debit, the stock decrement and the
-     * `reward_redemptions` insert now commit together, and the stock decrement is
-     * a guarded UPDATE whose rowCount decides the outcome rather than a
-     * check-then-act read — two customers racing for the last item can no longer
-     * both win and drive `rewards.stock` negative.
-     *
-     * This is NOT yet the full RewardRedemptionService the plan describes: the
-     * start/end validity window, max_per_user, tier restrictions and an
-     * idempotency key are still unenforced here and land in Phase 5.
+     * PHASE 5: this is now a thin adapter over RewardRedemptionService, which is
+     * the single implementation both this facade and api/points.php call. The
+     * validity window, max_per_user and tier eligibility — unenforced by every
+     * previous implementation — are checked there, so no caller can forget one.
      *
      * @param int $userId User ID
      * @param int $rewardId Reward ID
@@ -482,87 +477,23 @@ class LoyaltyPoints
      */
     public function redeemReward($userId, $rewardId)
     {
-        $reward = $this->getReward($rewardId);
-        if (!$reward) {
-            return ['success' => false, 'message' => 'ไม่พบรางวัล'];
+        require_once __DIR__ . '/RewardRedemptionService.php';
+        $service = new RewardRedemptionService($this->db, $this->lineAccountId, $this->ledger);
+
+        $result = $service->redeem((int) $userId, (int) $rewardId);
+
+        if (!$result['ok']) {
+            return ['success' => false, 'message' => $result['message']];
         }
 
-        // Check if reward is active (handle both string and boolean values)
-        if (isset($reward['is_active']) && ($reward['is_active'] === 0 || $reward['is_active'] === '0' || $reward['is_active'] === false)) {
-            return ['success' => false, 'message' => 'รางวัลนี้ไม่พร้อมให้บริการ'];
-        }
-
-        $isLimitedStock = isset($reward['stock']) && $reward['stock'] !== null && (int) $reward['stock'] !== -1;
-        if ($isLimitedStock && (int) $reward['stock'] <= 0) {
-            return ['success' => false, 'message' => 'รางวัลหมดแล้ว'];
-        }
-
-        $ownsTransaction = !$this->db->inTransaction();
-        if ($ownsTransaction) {
-            $this->db->beginTransaction();
-        }
-
-        try {
-            // Claim the stock FIRST, with the guard in the WHERE clause. If this
-            // affects no rows someone else took the last one while we were
-            // deciding, and nothing has been debited yet.
-            if ($isLimitedStock) {
-                $stmt = $this->db->prepare('UPDATE rewards SET stock = stock - 1 WHERE id = ? AND stock > 0');
-                $stmt->execute([$rewardId]);
-                if ($stmt->rowCount() === 0) {
-                    if ($ownsTransaction) {
-                        $this->db->rollBack();
-                    }
-
-                    return ['success' => false, 'message' => 'รางวัลหมดแล้ว'];
-                }
-            }
-
-            // Debit inside the same transaction — the ledger enlists rather than
-            // opening a nested one, and re-checks sufficiency under a row lock.
-            if (!$this->deductPoints($userId, $reward['points_required'], 'reward', $rewardId, "แลกรางวัล: {$reward['name']}")) {
-                if ($ownsTransaction) {
-                    $this->db->rollBack();
-                }
-
-                return ['success' => false, 'message' => 'แต้มไม่เพียงพอ'];
-            }
-
-            // Generate unique redemption code (Requirement 23.7)
-            $code = $this->generateUniqueRedemptionCode();
-
-            // Calculate expiry date if reward has validity period
-            $expiresAt = null;
-            if (!empty($reward['valid_until'])) {
-                $expiresAt = $reward['valid_until'];
-            } elseif (!empty($reward['validity_days'])) {
-                $expiresAt = date('Y-m-d H:i:s', strtotime("+{$reward['validity_days']} days"));
-            }
-
-            $stmt = $this->db->prepare('INSERT INTO reward_redemptions (user_id, reward_id, line_account_id, points_used, redemption_code, expires_at) VALUES (?, ?, ?, ?, ?, ?)');
-            $stmt->execute([$userId, $rewardId, $this->lineAccountId, $reward['points_required'], $code, $expiresAt]);
-            $redemptionId = $this->db->lastInsertId();
-
-            if ($ownsTransaction) {
-                $this->db->commit();
-            }
-
-            return [
-                'success' => true,
-                'message' => 'แลกรางวัลสำเร็จ!',
-                'redemption_code' => $code,
-                'reward' => $reward,
-                'redemption_id' => $redemptionId,
-                'expires_at' => $expiresAt,
-            ];
-        } catch (Throwable $e) {
-            if ($ownsTransaction && $this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-            error_log('LoyaltyPoints::redeemReward failed for user ' . (int) $userId . ' reward ' . (int) $rewardId . ': ' . $e->getMessage());
-
-            return ['success' => false, 'message' => 'ไม่สามารถแลกรางวัลได้'];
-        }
+        return [
+            'success' => true,
+            'message' => $result['message'],
+            'redemption_code' => $result['redemption_code'],
+            'reward' => $result['reward'],
+            'redemption_id' => $result['redemption_id'],
+            'expires_at' => $result['reward']['valid_until'] ?? null,
+        ];
     }
 
     /**

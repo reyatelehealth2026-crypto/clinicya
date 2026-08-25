@@ -25,9 +25,9 @@ class SingleWriterGuardTest extends TestCase
      * retires it. Shrinking this list is the point; growing it needs a reason.
      */
     private const KNOWN_LEGACY_WRITERS = [
-        // The second, parallel redemption stack. Settles against users.points and
-        // points_history and is invisible to the ledger. Retired in Phase 5.
-        'api/points.php' => 'Phase 5 — RewardRedemptionService consolidation',
+        // EMPTY, as of Phase 5. api/points.php was the last entry: it settled
+        // against users.points + points_history as a second, parallel redemption
+        // stack. It now calls RewardRedemptionService like everything else.
     ];
 
     /** Statements that mutate a legacy point store. */
@@ -69,6 +69,15 @@ class SingleWriterGuardTest extends TestCase
     public function testEveryExemptionIsStillNeeded(): void
     {
         $root = dirname(__DIR__, 2);
+
+        // As of Phase 5 the list is empty and should stay that way. Asserting the
+        // count keeps this test meaningful (rather than vacuous) at zero, and
+        // makes any future addition a deliberate, visible decision.
+        $this->assertLessThanOrEqual(
+            0,
+            count(self::KNOWN_LEGACY_WRITERS),
+            'every legacy point writer has been retired — adding one back needs a stated reason'
+        );
 
         foreach (self::KNOWN_LEGACY_WRITERS as $relative => $phase) {
             $path = $root . '/' . $relative;

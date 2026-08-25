@@ -185,6 +185,7 @@ database/*.sql
 !database/migration_2026-07-04_pdpa_data_rights.sql
 !database/migration_2026-08-26_loyalty_ledger_idempotency.sql
 !database/migration_2026-08-26_tier_semantics.sql
+!database/migration_2026-08-26_reward_redemption_integrity.sql
 !database/trial-safe-mode.sql
 !docs/adr/*.md
 !CONTEXT.md
