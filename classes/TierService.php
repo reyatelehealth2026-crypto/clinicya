@@ -15,12 +15,15 @@ class TierService
     private $lineAccountId;
     private static $tierCache = [];
 
+    /** @var array<string, bool> memoised column probes, shared across instances */
+    private static $columnCache = [];
+
     // Default tiers if database table is empty
     const DEFAULT_TIERS = [
-        ['tier_code' => 'bronze', 'tier_name' => 'Bronze', 'min_points' => 0, 'color' => '#CD7F32', 'icon' => '🥉', 'discount_percent' => 0],
-        ['tier_code' => 'silver', 'tier_name' => 'Silver', 'min_points' => 1000, 'color' => '#C0C0C0', 'icon' => '🥈', 'discount_percent' => 3],
-        ['tier_code' => 'gold', 'tier_name' => 'Gold', 'min_points' => 5000, 'color' => '#FFD700', 'icon' => '🥇', 'discount_percent' => 5],
-        ['tier_code' => 'platinum', 'tier_name' => 'Platinum', 'min_points' => 15000, 'color' => '#6366F1', 'icon' => '💎', 'discount_percent' => 10]
+        ['tier_code' => 'bronze', 'tier_name' => 'Bronze', 'min_points' => 0, 'color' => '#CD7F32', 'icon' => '🥉', 'discount_percent' => 0, 'earn_multiplier' => 1.0],
+        ['tier_code' => 'silver', 'tier_name' => 'Silver', 'min_points' => 1000, 'color' => '#C0C0C0', 'icon' => '🥈', 'discount_percent' => 3, 'earn_multiplier' => 1.0],
+        ['tier_code' => 'gold', 'tier_name' => 'Gold', 'min_points' => 5000, 'color' => '#FFD700', 'icon' => '🥇', 'discount_percent' => 5, 'earn_multiplier' => 1.0],
+        ['tier_code' => 'platinum', 'tier_name' => 'Platinum', 'min_points' => 15000, 'color' => '#6366F1', 'icon' => '💎', 'discount_percent' => 10, 'earn_multiplier' => 1.0],
     ];
 
     /**
@@ -53,14 +56,33 @@ class TierService
         $tiers = [];
 
         try {
-            // Try tier_settings table first (this is where settings page saves!)
-            $stmt = $this->db->prepare("
-                SELECT name as tier_name, LOWER(REPLACE(name, ' ', '_')) as tier_code, 
-                       min_points, badge_color as color, multiplier as discount_percent
-                FROM tier_settings 
-                WHERE (line_account_id = ? OR line_account_id IS NULL)
-                ORDER BY min_points ASC
-            ");
+            // PHASE 3: read the two benefits as the two separate concepts they are.
+            //
+            // This used to be `multiplier AS discount_percent`, so a Gold tier the
+            // pharmacy configured as "earn 1.5x points" (that column's own DB
+            // comment, and the admin UI's label "ตัวคูณแต้ม") was served to the
+            // mini app as "1.5% discount". `earn_multiplier` and
+            // `discount_percent` are now distinct columns; on a tenant that has
+            // not yet run migration_2026-08-26_tier_semantics.sql we fall back to
+            // reading `multiplier` as the EARN multiplier — its documented
+            // meaning — rather than as a discount.
+            $hasSplit = $this->columnExists('tier_settings', 'earn_multiplier');
+
+            $sql = $hasSplit
+                ? "SELECT name as tier_name, LOWER(REPLACE(name, ' ', '_')) as tier_code,
+                          min_points, badge_color as color,
+                          earn_multiplier, discount_percent
+                     FROM tier_settings
+                    WHERE (line_account_id = ? OR line_account_id IS NULL)
+                    ORDER BY min_points ASC"
+                : "SELECT name as tier_name, LOWER(REPLACE(name, ' ', '_')) as tier_code,
+                          min_points, badge_color as color,
+                          multiplier as earn_multiplier, 0 as discount_percent
+                     FROM tier_settings
+                    WHERE (line_account_id = ? OR line_account_id IS NULL)
+                    ORDER BY min_points ASC";
+
+            $stmt = $this->db->prepare($sql);
             $stmt->execute([$this->lineAccountId]);
             $tiers = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -68,15 +90,15 @@ class TierService
             foreach ($tiers as &$tier) {
                 $tier['icon'] = $this->getIconForTier($tier['tier_name']);
             }
-
+            unset($tier);
         } catch (Exception $e) {
             // tier_settings table might not exist - try member_tiers as fallback
             try {
                 $stmt = $this->db->prepare("
                     SELECT tier_code, tier_name, min_points, color, icon, discount_percent, benefits
-                    FROM member_tiers 
-                    WHERE (line_account_id = ? OR line_account_id IS NULL) 
-                    AND is_active = 1 
+                    FROM member_tiers
+                    WHERE (line_account_id = ? OR line_account_id IS NULL)
+                    AND is_active = 1
                     ORDER BY min_points ASC
                 ");
                 $stmt->execute([$this->lineAccountId]);
@@ -99,7 +121,12 @@ class TierService
             $tier['color'] = $tier['color'] ?? '#6B7280';
             $tier['icon'] = $tier['icon'] ?? '🏅';
             $tier['discount_percent'] = (float) ($tier['discount_percent'] ?? 0);
+            $tier['earn_multiplier'] = (float) ($tier['earn_multiplier'] ?? 1.0);
+            if ($tier['earn_multiplier'] <= 0) {
+                $tier['earn_multiplier'] = 1.0;
+            }
         }
+        unset($tier);
 
         // Cache result
         self::$tierCache[$cacheKey] = $tiers;
@@ -151,6 +178,7 @@ class TierService
             'color' => $currentTier['color'],
             'icon' => $currentTier['icon'],
             'discount_percent' => $currentTier['discount_percent'],
+            'earn_multiplier' => $currentTier['earn_multiplier'] ?? 1.0,
             'min_points' => $currentTier['min_points'],
 
             // Points info
@@ -174,27 +202,78 @@ class TierService
      */
     public function getUserTier(int $userId): array
     {
-        // Get user points - try multiple columns
-        $points = 0;
+        return $this->calculateTier($this->getQualifyingPoints($userId));
+    }
 
+    /**
+     * The metric a tier is measured on: LIFETIME EARNED points, from the ledger.
+     *
+     * PHASE 3 (plan §12). Three separate concepts were previously conflated:
+     *
+     *   available_points   spendable currency
+     *   total_points       lifetime earned
+     *   qualifying_points  what determines STATUS   <- this
+     *
+     * The old implementation read `users.total_points ?? users.points`, a cache
+     * that several writers never updated, and — worse — LoyaltyPoints called
+     * updateUserTier() with the post-movement AVAILABLE balance, so spending
+     * points demoted the member. Every redeem, POS points payment, POS void, POS
+     * return and account merge was a downgrade path.
+     *
+     * Reading lifetime earned from the ledger makes a tier monotonic: a customer
+     * who earned their way to Gold stays Gold after spending, which is what any
+     * member would expect and what the tier is supposed to reward.
+     *
+     * Note `??` in the old code was a NULL-coalesce, so a row with
+     * `total_points = 0` and `points = 4200` evaluated to 0 and showed Bronze
+     * while the same screen showed 4,200 spendable points.
+     */
+    public function getQualifyingPoints(int $userId): int
+    {
         try {
-            $stmt = $this->db->prepare("
-                SELECT points, total_points, available_points 
-                FROM users 
-                WHERE id = ?
-            ");
-            $stmt->execute([$userId]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            require_once __DIR__ . '/LoyaltyLedgerService.php';
+            $ledger = new LoyaltyLedgerService($this->db, $this->lineAccountId);
 
-            if ($user) {
-                // Use total_points if available, otherwise points
-                $points = (int) ($user['total_points'] ?? $user['points'] ?? 0);
-            }
+            return $ledger->getQualifyingPoints($userId);
         } catch (Exception $e) {
-            // Error fetching user points
+            error_log('TierService: qualifying points unavailable for user ' . $userId . ': ' . $e->getMessage());
+
+            return 0;
+        }
+    }
+
+    /**
+     * Column introspection that works on MySQL and on sqlite (tests), instead of
+     * a bare SHOW COLUMNS whose failure would be swallowed into "column missing".
+     */
+    private function columnExists(string $table, string $column): bool
+    {
+        $cacheKey = $table . '.' . $column;
+        if (array_key_exists($cacheKey, self::$columnCache)) {
+            return self::$columnCache[$cacheKey];
         }
 
-        return $this->calculateTier($points);
+        $exists = false;
+        try {
+            $driver = strtolower((string) $this->db->getAttribute(PDO::ATTR_DRIVER_NAME));
+            if ($driver === 'sqlite') {
+                $stmt = $this->db->query('PRAGMA table_info(`' . $table . '`)');
+                foreach ($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [] as $row) {
+                    if (isset($row['name']) && strcasecmp((string) $row['name'], $column) === 0) {
+                        $exists = true;
+                        break;
+                    }
+                }
+            } else {
+                $stmt = $this->db->prepare('SHOW COLUMNS FROM `' . $table . '` LIKE ?');
+                $stmt->execute([$column]);
+                $exists = $stmt->fetch(PDO::FETCH_ASSOC) !== false;
+            }
+        } catch (Exception $e) {
+            $exists = false;
+        }
+
+        return self::$columnCache[$cacheKey] = $exists;
     }
 
     /**
@@ -292,5 +371,6 @@ class TierService
     public static function clearCache(): void
     {
         self::$tierCache = [];
+        self::$columnCache = [];
     }
 }

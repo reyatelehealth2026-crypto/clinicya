@@ -181,7 +181,10 @@ class LoyaltyPoints
             'next_tier_points' => $tierInfo['next_tier_points'],
             'points_to_next' => $tierInfo['points_to_next'],
             'progress_percent' => $tierInfo['progress_percent'] ?? 0,
-            'discount_percent' => $tierInfo['discount_percent'] ?? 0
+            'discount_percent' => $tierInfo['discount_percent'] ?? 0,
+            // PHASE 3: these are two different benefits and are no longer the
+            // same column wearing two names.
+            'earn_multiplier' => $tierInfo['earn_multiplier'] ?? 1.0,
         ];
     }
 
@@ -228,11 +231,9 @@ class LoyaltyPoints
             return true;
         }
 
-        // TODO(Phase 3 — tiers): this passes the post-movement AVAILABLE balance,
-        // which is why spending points currently demotes a member. Preserved
-        // verbatim here so Batch 1 changes point accounting and nothing else;
-        // the qualification metric is fixed in Batch 3.
-        $this->updateUserTier($userId, $result['balance_after']);
+        // PHASE 3: the tier now qualifies on LIFETIME EARNED points, read from the
+        // ledger, not on the post-movement spendable balance.
+        $this->updateUserTier($userId);
 
         // Platform-owner activity feed + (throttled) Telegram (best-effort).
         if (@is_file(__DIR__ . '/TenantActivity.php')) {
@@ -282,8 +283,8 @@ class LoyaltyPoints
             return true;
         }
 
-        // TODO(Phase 3 — tiers): see the note in addPoints().
-        $this->updateUserTier($userId, $result['balance_after']);
+        // PHASE 3: spending no longer demotes — see updateUserTier().
+        $this->updateUserTier($userId);
 
         return true;
     }
@@ -347,21 +348,32 @@ class LoyaltyPoints
      * Update user tier based on points
      * Uses TierService to calculate correct tier
      */
-    private function updateUserTier($userId, $points)
+    private function updateUserTier($userId, $points = null)
     {
         try {
             require_once __DIR__ . '/TierService.php';
             $tierService = new TierService($this->db, $this->lineAccountId);
-            $tierInfo = $tierService->calculateTier($points);
+
+            // PHASE 3. $points is retained only for backward compatibility with
+            // any caller that still passes an explicit figure; when omitted — the
+            // normal path now — the tier is derived from LIFETIME EARNED points.
+            //
+            // This used to be called with the post-movement AVAILABLE balance, so
+            // a Gold member with 5,500 accumulated points who redeemed 5,000 fell
+            // back toward Bronze. Every redeem, POS points payment, POS void, POS
+            // return and account merge was a downgrade path.
+            $tierInfo = $points === null
+                ? $tierService->getUserTier((int) $userId)
+                : $tierService->calculateTier((int) $points);
 
             // Update member_tier column in users table
             // Use tier_code (lowercase) for consistency
             if (isset($tierInfo['tier_code'])) {
-                $stmt = $this->db->prepare("UPDATE users SET member_tier = ? WHERE id = ?");
+                $stmt = $this->db->prepare('UPDATE users SET member_tier = ? WHERE id = ?');
                 $stmt->execute([$tierInfo['tier_code'], $userId]);
             }
         } catch (Exception $e) {
-            error_log("Failed to update user tier: " . $e->getMessage());
+            error_log('Failed to update user tier: ' . $e->getMessage());
         }
     }
 

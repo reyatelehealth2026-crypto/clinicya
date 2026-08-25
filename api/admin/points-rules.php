@@ -383,20 +383,38 @@ function updateTierSettings($db, $lineAccountId, $data) {
     $stmt->execute([$lineAccountId]);
     
     // Insert new tiers
-    $stmt = $db->prepare("
-        INSERT INTO tier_settings (line_account_id, name, min_points, multiplier, benefits)
-        VALUES (?, ?, ?, ?, ?)
-    ");
+    // PHASE 3: earn_multiplier and discount_percent are separate benefits now.
+    $hasSplitColumns = false;
+    try {
+        $probe = $db->prepare('SHOW COLUMNS FROM `tier_settings` LIKE ?');
+        $probe->execute(['earn_multiplier']);
+        $hasSplitColumns = $probe->fetch(PDO::FETCH_ASSOC) !== false;
+    } catch (Throwable $e) {
+        $hasSplitColumns = false;
+    }
+
+    $stmt = $hasSplitColumns
+        ? $db->prepare('INSERT INTO tier_settings (line_account_id, name, min_points, multiplier, earn_multiplier, discount_percent, benefits) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        : $db->prepare('INSERT INTO tier_settings (line_account_id, name, min_points, multiplier, benefits) VALUES (?, ?, ?, ?, ?)');
     
     foreach ($tiers as $tier) {
-        $stmt->execute([
+        $earnMultiplier = floatval($tier['earn_multiplier'] ?? $tier['multiplier'] ?? 1.0);
+        $discountPercent = floatval($tier['discount_percent'] ?? 0);
+
+        $row = [
             $lineAccountId,
             trim($tier['name'] ?? 'Tier'),
             intval($tier['min_points'] ?? 0),
-            floatval($tier['multiplier'] ?? 1.0),
-            $tier['benefits'] ?? null
-        ]);
+            $earnMultiplier,
+        ];
+        if ($hasSplitColumns) {
+            $row[] = $earnMultiplier;
+            $row[] = $discountPercent;
+        }
+        $row[] = $tier['benefits'] ?? null;
+
+        $stmt->execute($row);
     }
-    
+
     return ['success' => true, 'message' => 'บันทึกระดับสมาชิกสำเร็จ'];
 }
