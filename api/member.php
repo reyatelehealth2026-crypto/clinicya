@@ -16,6 +16,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 // 2026-05-27 — Route root-domain Mini App calls to correct tenant DB.
 require_once __DIR__ . '/../bootstrap/route_by_account.php';
+require_once __DIR__ . '/../includes/liff-auth.php';
 
 $db = Database::getInstance()->getConnection();
 
@@ -68,6 +69,10 @@ function handleRegister($db, $data)
  if (empty($lineUserId)) {
   jsonResponse(false, 'กรุณาเข้าสู่ระบบผ่าน LINE');
  }
+
+ // PHASE 6: prove the caller owns this LINE identity before creating a member
+ // for it. See includes/liff-auth.php for the staged-rollout semantics.
+ $lineUserId = reya_liff_guard((string) $lineUserId, 'member:register');
 
  // Validate required fields
  $firstName = trim($data['first_name'] ?? '');
@@ -280,6 +285,9 @@ function handleCheck($db)
  if (empty($lineUserId)) {
   jsonResponse(false, 'Missing line_user_id');
  }
+
+ // PHASE 6 — this action auto-registers and awards the welcome bonus.
+ $lineUserId = reya_liff_guard((string) $lineUserId, 'member:check');
 
  // Try exact match first - use only columns that definitely exist
  $stmt = $db->prepare("
@@ -514,6 +522,9 @@ function handleGetCard($db)
   jsonResponse(false, 'Missing line_user_id');
  }
 
+ // PHASE 6
+ $lineUserId = reya_liff_guard((string) $lineUserId, 'member:get_card');
+
  // Get user data - try exact match first
  $stmt = $db->prepare("
         SELECT u.*,
@@ -677,6 +688,9 @@ function handleUpdateProfile($db, $data)
  if (empty($lineUserId)) {
   jsonResponse(false, 'กรุณาเข้าสู่ระบบ');
  }
+
+ // PHASE 6: this action WRITES the member's profile.
+ $lineUserId = reya_liff_guard((string) $lineUserId, 'member:update_profile');
 
  $updates = [];
  $params = [];

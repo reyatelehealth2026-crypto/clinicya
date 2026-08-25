@@ -42,6 +42,7 @@ require_once __DIR__ . '/../config/database.php';
 // line_account_id — otherwise it falls back to the legacy DB and the customer
 // sees a different points balance/history than the admin tenant view (split-brain).
 require_once __DIR__ . '/../bootstrap/route_by_account.php';
+require_once __DIR__ . '/../includes/liff-auth.php';
 require_once __DIR__ . '/../classes/LoyaltyPoints.php';
 
 $db = Database::getInstance()->getConnection();
@@ -56,6 +57,10 @@ if (!$lineUserId) {
     ob_end_flush();
     exit;
 }
+
+// PHASE 6: every action in this file (dashboard, history, full_history, rewards,
+// redeem) acts on the member named by the request parameter. Prove it.
+$lineUserId = reya_liff_guard((string) $lineUserId, 'points-history:' . $action);
 
 try {
     // Get user info — scope by line_account_id when provided so we pick the

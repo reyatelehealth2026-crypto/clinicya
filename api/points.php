@@ -41,6 +41,7 @@ require_once __DIR__ . '/../config/database.php';
 // root-domain (mini app / LIFF) request fell through to the legacy fallback DB
 // and read a different database than every sibling endpoint.
 require_once __DIR__ . '/../bootstrap/route_by_account.php';
+require_once __DIR__ . '/../includes/liff-auth.php';
 
 $db = Database::getInstance()->getConnection();
 
@@ -79,6 +80,9 @@ function handleHistory($db) {
     if (empty($lineUserId)) {
         jsonResponse(false, 'Missing line_user_id');
     }
+
+    // PHASE 6: the caller's identity must be proven, not asserted.
+    $lineUserId = reya_liff_guard((string) $lineUserId, 'points:history');
     
     // Get user
     $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ?");
@@ -194,6 +198,9 @@ function handleRedeem($db, $data) {
     if (empty($lineUserId)) {
         jsonResponse(false, 'กรุณาเข้าสู่ระบบ');
     }
+
+    // PHASE 6: the caller's identity must be proven, not asserted.
+    $lineUserId = reya_liff_guard((string) $lineUserId, 'points:redeem');
 
     if (empty($rewardId)) {
         jsonResponse(false, 'กรุณาเลือกของรางวัล');

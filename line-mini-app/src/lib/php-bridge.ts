@@ -1,5 +1,37 @@
 import { buildPhpRequestUrl } from '@/lib/config'
 
+/**
+ * The LIFF access token for the current session, if LIFF is available.
+ *
+ * PHASE 6. The PHP loyalty endpoints identify the caller from a `line_user_id`
+ * REQUEST PARAMETER, which anyone can change to read or mutate another member's
+ * points. `includes/liff-auth.php` can verify a bearer token against LINE and
+ * reject a mismatch — the AI-chat endpoints already use it — but the loyalty
+ * calls never sent one, so it had nothing to verify.
+ *
+ * Attaching it here starts the flow. The server verifies it whenever it is
+ * present and rejects a mismatch immediately; refusing requests that omit it
+ * entirely is a separate switch (LIFF_STRICT_AUTH) a tenant flips once this
+ * client is deployed and the logs show tokens arriving.
+ *
+ * Never throws: a browser outside LIFF, or a not-yet-initialised SDK, simply
+ * produces no header and the call behaves exactly as before.
+ */
+async function liffAuthHeader(): Promise<Record<string, string>> {
+  if (typeof window === 'undefined') return {}
+
+  try {
+    const liff = (window as unknown as { liff?: { isLoggedIn?: () => boolean; getAccessToken?: () => string | null } }).liff
+    if (!liff?.getAccessToken) return {}
+    if (typeof liff.isLoggedIn === 'function' && !liff.isLoggedIn()) return {}
+
+    const token = liff.getAccessToken()
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  } catch {
+    return {}
+  }
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   // Read as text first so we can give a useful error even when the server
   // returns JSON body with a wrong content-type header (common with PHP).
@@ -35,7 +67,8 @@ export async function phpGet<T>(
 
   const response = await fetch(url, {
     method: 'GET',
-    cache: 'no-store'
+    cache: 'no-store',
+    headers: await liffAuthHeader()
   })
 
   return parseResponse<T>(response)
@@ -48,7 +81,8 @@ export async function phpPost<T>(path: string, body: Record<string, unknown>, en
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...(await liffAuthHeader())
     },
     body: JSON.stringify(body)
   })
