@@ -66,8 +66,31 @@ system inside the monolith's own `api/` tree, invisible to everything above:
 
 Nothing reconciles it against `points_transactions`, and `retail_customers` has
 its own `member_tier` column written with values outside the ENUM the retail
-schema declares. Consolidating it is out of scope for Batch 1 and is not on the
-plan's roadmap at all — it should be added, most naturally to Phase 5.
+schema declares.
+
+**And it has no schema in this repository.** A sweep for
+`CREATE TABLE ... retail_customers` across `database/`, `retail-api/database/`
+and every PHP file returns nothing, while four files query it. So whether the
+table exists at all is per-deployment: on a tenant that has it, the writes land
+and nobody reconciles them; on a tenant that does not, `api/retail-payment.php`
+has been silently failing its customer-stats UPDATE.
+
+What has been done about it so far (Phase 5/6 pass):
+
+- `api/retail-payment.php` and `api/retail-cart.php` gained
+  `bootstrap/route_by_account.php`. They were missing it, so a root-domain
+  request read and wrote the **legacy fallback DB** rather than the member's own
+  tenant schema.
+- `scripts/loyalty-reconcile.php` now reports the retail store when present —
+  customer count and outstanding liability — as a clearly-labelled fourth
+  liability line, so an operator can see the exposure instead of discovering it
+  the way this audit did.
+
+What has NOT been done, and why: consolidating `retail_customers` into the ledger
+means mapping retail customers onto `users` rows, and with no committed schema
+and no reconciliation data there is no safe basis for that mapping yet. Run the
+report first; the numbers it returns decide whether this is a dead feature to
+delete or a live store to migrate.
 
 > **`loyalty_points` is a silent product failure, not just dead code.** Five live
 > features read it: the admin users-list points filter buckets every member into

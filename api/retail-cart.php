@@ -18,6 +18,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+// PHASE 5/6: this endpoint touches `retail_customers.points_balance` — an eighth
+// point store — and was missing tenant routing, so a root-domain request landed
+// in the legacy fallback DB rather than the member's own tenant schema.
+require_once __DIR__ . '/../bootstrap/route_by_account.php';
 
 try {
     $db = Database::getInstance()->getConnection();
