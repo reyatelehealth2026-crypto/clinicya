@@ -6,7 +6,7 @@
  * Answers the question Phase 1 of the plan cannot ship without: for every
  * member, do the loyalty stores agree, and if not, how badly?
  *
- * The Phase 0 audit found seven places a point balance can live
+ * The Phase 0 audit found eight places a point balance can live
  * (docs/plans/2026-08-26-loyalty-source-of-truth-matrix.md). This report reads
  * the four that are actually load-bearing and classifies every member into one
  * bucket, so an operator can size the migration before §34 moves anybody:

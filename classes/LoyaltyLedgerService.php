@@ -14,7 +14,7 @@
  *
  * WHY THIS CLASS EXISTS
  *   The Phase 0 audit (docs/plans/2026-08-26-loyalty-source-of-truth-matrix.md)
- *   found 26 point-writing code paths across three incompatible storage styles,
+ *   found 27 point-writing code paths across three incompatible storage styles,
  *   none of them transactional and only three of them idempotent. This service is
  *   the single writer they are being migrated onto, one caller at a time
  *   (Batch 2). It deliberately does NOT decide HOW MANY points to award — that is

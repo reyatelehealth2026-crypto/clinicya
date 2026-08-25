@@ -23,10 +23,15 @@ the highest-severity claims against the files a second time. Line numbers are as
 of commit `95cead2`.
 
 **Headline.** The plan says loyalty has "overlapping sources of truth". That is
-an understatement. A single member's point balance can be read from **seven**
-distinct stores and written by **26** distinct code paths in three mutually
-incompatible styles. Only three of those 26 writers are idempotent, and before
+an understatement. A single member's point balance can be read from **eight**
+distinct stores and written by **27** distinct code paths in three mutually
+incompatible styles. Only three of those writers are idempotent, and before
 Batch 1 not one of them kept the ledger and its cache in a single transaction.
+
+The eighth store and several other paths were found by a completeness pass run
+*after* the seven sweeps below had already reported — recorded in §4.7 rather
+than folded in silently, because the fact that a first pass this thorough still
+missed a live, unauthenticated earn path is itself the most useful finding here.
 
 ---
 
@@ -44,6 +49,25 @@ Batch 1 not one of them kept the ledger and its cache in a single transaction.
 
 Two further tables, `user_points` and `loyalty_points_history`, are provisioned
 into every tenant schema and referenced by no PHP at all.
+
+**An eighth store exists and is live.** A completeness pass over the first draft
+of this audit found `retail_customers.points_balance` — a fully parallel loyalty
+system inside the monolith's own `api/` tree, invisible to everything above:
+
+- **Written** by `api/retail-payment.php:154-165` on every payment verification:
+  `UPDATE retail_customers SET total_spent = ..., points_balance = points_balance
+  + FLOOR(? / 100) WHERE line_user_id = ?`. It *is* wrapped in a real transaction
+  (`:47`/`:178`) and guarded by `status = 'pending_payment'`, so it is better
+  behaved than most of the 26 — but it is `Access-Control-Allow-Origin: *` with
+  **no session or token check at all**, and like `api/points.php` it omits
+  `bootstrap/route_by_account.php`, so its writes can land in the legacy fallback
+  DB rather than the tenant DB.
+- **Read** by `api/retail-cart.php:101` (`SELECT member_tier, points_balance`).
+
+Nothing reconciles it against `points_transactions`, and `retail_customers` has
+its own `member_tier` column written with values outside the ENUM the retail
+schema declares. Consolidating it is out of scope for Batch 1 and is not on the
+plan's roadmap at all — it should be added, most naturally to Phase 5.
 
 > **`loyalty_points` is a silent product failure, not just dead code.** Five live
 > features read it: the admin users-list points filter buckets every member into
@@ -215,6 +239,43 @@ Six independent tier ladders exist, reading three different point columns.
 file — every write is wrapped in a `SHOW COLUMNS` guard or a swallowed
 try/catch, so on a freshly provisioned tenant every tier write silently no-ops.
 
+### 4.7 Found by the completeness pass, after the first draft
+
+A critic pass over this audit named what the seven sweeps had missed. Each was
+re-verified by hand:
+
+- **`retail_customers.points_balance`** — the eighth store, described in §1.
+  Unauthenticated and untenanted. *(Not on the plan's roadmap; suggest Phase 5.)*
+- **POS keeps its own per-transaction point counters** that no dimension of this
+  audit covered: `pos_transactions.points_earned` / `.points_redeemed`,
+  `pos_payments.points_used`, `pos_returns.points_deducted`.
+  `classes/POSReceiptService.php:122` and `:220` **print them on the customer's
+  receipt** — a customer-facing point figure written independently of both the
+  ledger and `users.*`, and reconciled against neither.
+- **`api/liff-bridge.php:381-432`** builds a *"แลกแต้มสำเร็จ … แต้มคงเหลือ N"*
+  Flex message from `$data['points']` and `$data['remainingPoints']` **taken
+  verbatim from the request body**, with `Access-Control-Allow-Origin: *` and no
+  auth, and pushes it to the customer's LINE. The balance a customer is shown
+  there never touches a database.
+- **The receipt-OCR earn path is feature-flagged per OA** — `webhook.php:5279-5284`
+  gates the whole award on `line_accounts.receipt_points_enabled`, and
+  `:5331-5342` diverts low-confidence OCR to manual review with no award. §2 row 3
+  describes this as the best-behaved earn path without noting either control.
+- **A point award reaches the platform DB and can make an outbound HTTP call.**
+  `addPoints()` ends with `TenantActivity::log(...)`, which opens a second
+  connection via `Database::platform()`, runs `CREATE TABLE IF NOT EXISTS
+  tenant_activity_log` **on every call**, inserts a row, and then may fire a
+  Telegram webhook with a 3s connect / 5s read timeout. See §6.1 for the
+  interaction with Batch 1's new row lock.
+- **A cross-tenant ledger read exists** that §3 does not list:
+  `admin/tenant-detail.php:148-157` sums `points_transactions` per tenant for the
+  platform-owner "แต้มที่แจก" tile — a figure whose meaning drifts as long as
+  refunds keep being booked as `type='earn'`.
+- Four more web-reachable `install/` scripts mutate rewards/points against live
+  data (`create_rewards_web.php`, `create_test_reward.php`,
+  `create_rewards_account3.php`, `test_reward_redeem.php`), beyond the two named
+  in §2.
+
 ---
 
 ## 5. Schema reality
@@ -291,6 +352,23 @@ anything is built on top of it.
 | Welcome bonus still writing `users.points` + `points_history` | Writer migration | 2 |
 | `loyalty_points` dead-table readers | CRM consolidation | 7 |
 | `points_settings` / `users` missing UNIQUE keys | Needs a dedupe pass first | separate migration |
+
+### 6.1a One interaction Batch 1 introduces, knowingly
+
+`LoyaltyLedgerService` takes `SELECT ... FOR UPDATE` on the member's `users` row,
+which the old code never did. When a caller owns the surrounding transaction
+(`POSService::completeTransaction`, `api/points-claim.php`), that lock is held
+until *their* commit — and `LoyaltyPoints::addPoints()` still calls
+`TenantActivity::log()` after the credit, which can make an outbound Telegram
+call with a 3s connect / 5s read timeout.
+
+So a point award can now hold one row lock for up to ~5 extra seconds. The
+exposure is small — the notifier is throttled to one send per tenant per 300s,
+swallows every failure, and the surrounding POS transaction was already held open
+across that same call before Batch 1 — but it is a real change and is recorded
+here rather than papered over. The clean fix is to take the activity ping out of
+the point-award path entirely (or make it fire-and-forget); that belongs with the
+Batch 2 writer migration, which touches these call sites anyway.
 
 ### 6.2 Why balance reads are still not OA-scoped
 
