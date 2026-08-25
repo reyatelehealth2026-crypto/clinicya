@@ -1,7 +1,25 @@
 <?php
 /**
- * Loyalty Points System
+ * Loyalty Points System — compatibility facade over LoyaltyLedgerService.
+ *
+ * As of Batch 1 (docs/plans/2026-08-26-php-first-crm-loyalty-saas-plan.md) this
+ * class no longer writes points itself. Every balance read and every point
+ * movement is delegated to classes/LoyaltyLedgerService.php, which is the
+ * canonical ledger: atomic, idempotent, and honest about whether a zero balance
+ * means "nothing recorded" or "recorded and it nets to zero".
+ *
+ * The public surface is unchanged on purpose — ~15 call sites across POS, the
+ * QR claim flow, the LINE webhook, the admin pages and BusinessBot still call
+ * addPoints()/deductPoints()/getUserPoints() and keep working untouched. They
+ * are migrated onto the ledger's richer API one at a time in Batch 2; the
+ * optional trailing $options argument on addPoints()/deductPoints() is the seam
+ * for that (it carries idempotency keys, metadata and the acting user).
+ *
+ * Everything else here — settings, rewards CRUD, redemption admin — is
+ * untouched legacy that later phases consolidate into RewardRedemptionService.
  */
+
+require_once __DIR__ . '/LoyaltyLedgerService.php';
 
 class LoyaltyPoints
 {
@@ -9,11 +27,25 @@ class LoyaltyPoints
     private $lineAccountId;
     private $settings;
 
+    /** @var LoyaltyLedgerService the canonical ledger this facade delegates to */
+    private $ledger;
+
     public function __construct($db, $lineAccountId = null)
     {
         $this->db = $db;
         $this->lineAccountId = $lineAccountId;
+        $this->ledger = new LoyaltyLedgerService($db, $lineAccountId);
         $this->loadSettings();
+    }
+
+    /**
+     * The canonical ledger behind this facade. Batch 2 callers that need
+     * idempotency keys, metadata or typed movements should use this directly
+     * rather than adding parameters here.
+     */
+    public function ledger(): LoyaltyLedgerService
+    {
+        return $this->ledger;
     }
 
     private function loadSettings()
@@ -47,52 +79,37 @@ class LoyaltyPoints
         return (int) floor($amount * $this->settings['points_per_baht']);
     }
 
+    /**
+     * The member's spendable balance.
+     *
+     * FIXED IN BATCH 1. The previous implementation fell back to the legacy
+     * `users` columns whenever the ledger SUM came out as zero — but a ledger
+     * that nets to zero because +500 and -500 cancelled is not a ledger with
+     * nothing in it. Because `users.points` is written by api/member.php,
+     * api/points.php, shop/order-detail.php and the Odoo webhook but is NEVER
+     * decremented by deductPoints(), that fallback resurrected an already-spent
+     * balance and handed it back as spendable currency: a member who earned and
+     * then spent an Odoo-awarded 300 got 300 free points back, and redeeming
+     * them drove `users.available_points` to -300 permanently.
+     *
+     * LoyaltyLedgerService::getBalance() distinguishes the two cases by counting
+     * ledger rows, and only case A (no rows at all — a member who predates the
+     * ledger) is still allowed to read the legacy columns.
+     *
+     * @return array{total_points:int, available_points:int, used_points:int}
+     */
     public function getUserPoints($userId)
     {
-        // First, try to get from points_transactions
-        $stmt = $this->db->prepare("
-            SELECT
-                COALESCE(SUM(CASE WHEN points > 0 THEN points ELSE 0 END), 0) as total_points,
-                COALESCE(SUM(points), 0) as available_points,
-                COALESCE(SUM(CASE WHEN points < 0 THEN ABS(points) ELSE 0 END), 0) as used_points
-            FROM points_transactions
-            WHERE user_id = ?
-        ");
-        $stmt->execute([$userId]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        $balance = $this->ledger->getBalance((int) $userId);
 
-        error_log("getUserPoints: Query points_transactions result: " . json_encode($result));
-
-        // If no data in points_transactions, fallback to users table
-        if (!$result || (int) $result['available_points'] === 0) {
-            error_log("getUserPoints: No data in points_transactions, checking users table");
-            $stmt = $this->db->prepare("SELECT total_points, available_points, used_points, points FROM users WHERE id = ?");
-            $stmt->execute([$userId]);
-            $userResult = $stmt->fetch(PDO::FETCH_ASSOC);
-            error_log("getUserPoints: Users table result: " . json_encode($userResult));
-
-            if ($userResult) {
-                // Use 'points' column if available_points is 0 but points has value (same logic as points-history.php)
-                if (empty($userResult['available_points']) && !empty($userResult['points'])) {
-                    $userResult['available_points'] = $userResult['points'];
-                    $userResult['total_points'] = $userResult['points'];
-                    error_log("getUserPoints: Using 'points' column as fallback: " . $userResult['points']);
-                }
-
-                if ((int) $userResult['available_points'] > 0) {
-                    return $userResult;
-                }
-            }
-        }
-
-        if (!$result) {
-            return ['total_points' => 0, 'available_points' => 0, 'used_points' => 0];
-        }
-
-        // Ensure available_points is not negative
-        $result['available_points'] = max(0, (int) $result['available_points']);
-
-        return $result;
+        // Keep the historical return shape: three int keys, nothing else.
+        // Callers across POS, BusinessBot, inbox-v2 and the mini app index into
+        // ['available_points'] / ['total_points'] directly.
+        return [
+            'total_points' => $balance['total_points'],
+            'available_points' => $balance['available_points'],
+            'used_points' => $balance['used_points'],
+        ];
     }
 
     /**
@@ -168,57 +185,106 @@ class LoyaltyPoints
         ];
     }
 
-    public function addPoints($userId, $points, $referenceType = null, $referenceId = null, $description = null)
+    /**
+     * Credit points. Delegates to the canonical ledger.
+     *
+     * Behaviour preserved: same signature, same bool return, same 'earn' row,
+     * same expiry derived from points_settings, same TenantActivity ping.
+     * What changed underneath: the ledger row, the `users` cache update and the
+     * tier refresh now happen inside ONE database transaction (enlisting in the
+     * caller's, if it opened one), and the cache is recomputed from the ledger
+     * rather than incremented, so it can no longer drift.
+     *
+     * @param array $options Batch-2 seam — 'idempotency_key' makes a replayed
+     *                       webhook or a double-clicked button a no-op;
+     *                       'metadata' stores the rule breakdown; 'created_by'
+     *                       records the actor; 'type' allows 'bonus'/'refund'.
+     * @return bool true when the movement was recorded (or was a recognised replay)
+     */
+    public function addPoints($userId, $points, $referenceType = null, $referenceId = null, $description = null, array $options = [])
     {
-        if ($points <= 0)
+        if ($points <= 0) {
             return false;
-        $current = $this->getUserPoints($userId);
-        $newBalance = $current['available_points'] + $points;
-        $expiresAt = $this->settings['points_expiry_days'] > 0 ? date('Y-m-d H:i:s', strtotime("+{$this->settings['points_expiry_days']} days")) : null;
+        }
 
-        $stmt = $this->db->prepare("UPDATE users SET total_points = total_points + ?, available_points = available_points + ? WHERE id = ?");
-        $stmt->execute([$points, $points, $userId]);
+        $expiryDays = (int) ($this->settings['points_expiry_days'] ?? 0);
+        $expiresAt = $expiryDays > 0 ? date('Y-m-d H:i:s', strtotime("+{$expiryDays} days")) : null;
 
-        // Update tier
-        $this->updateUserTier($userId, $newBalance);
+        $result = $this->ledger->credit((int) $userId, (int) $points, $options + [
+            'type' => LoyaltyLedgerService::TYPE_EARN,
+            'reference_type' => $referenceType,
+            'reference_id' => $referenceId,
+            'description' => $description ?? "Earned {$points} points",
+            'expires_at' => $expiresAt,
+            'line_account_id' => $this->lineAccountId,
+        ]);
 
-        // Keep referenceId as integer or null (don't convert to string for INT column)
-        $referenceIdValue = ($referenceId !== null && $referenceId !== '') ? (int) $referenceId : null;
+        if (!$result['success']) {
+            return false;
+        }
 
-        $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description, expires_at) VALUES (?, ?, 'earn', ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $this->lineAccountId, $points, $newBalance, $referenceType, $referenceIdValue, $description ?? "Earned {$points} points", $expiresAt]);
+        // A replay must not re-fire the tier refresh or the activity feed.
+        if ($result['duplicate']) {
+            return true;
+        }
+
+        // TODO(Phase 3 — tiers): this passes the post-movement AVAILABLE balance,
+        // which is why spending points currently demotes a member. Preserved
+        // verbatim here so Batch 1 changes point accounting and nothing else;
+        // the qualification metric is fixed in Batch 3.
+        $this->updateUserTier($userId, $result['balance_after']);
 
         // Platform-owner activity feed + (throttled) Telegram (best-effort).
         if (@is_file(__DIR__ . '/TenantActivity.php')) {
             require_once __DIR__ . '/TenantActivity.php';
             TenantActivity::log(
-                TenantActivity::currentTenantId(), 'points_award',
-                'ลูกค้า #' . (int) $userId, '+' . (int) $points . ' แต้ม', true, 300
+                TenantActivity::currentTenantId(),
+                'points_award',
+                'ลูกค้า #' . (int) $userId,
+                '+' . (int) $points . ' แต้ม',
+                true,
+                300
             );
         }
+
         return true;
     }
 
-    public function deductPoints($userId, $points, $referenceType = null, $referenceId = null, $description = null)
+    /**
+     * Spend points. Delegates to the canonical ledger.
+     *
+     * Behaviour preserved: same signature, same bool return (false when the
+     * balance is short), same 'redeem' row. What changed: the sufficiency check
+     * now runs AFTER the member row is locked, so two concurrent redemptions can
+     * no longer both pass it and drive `users.available_points` negative.
+     *
+     * @param array $options see addPoints()
+     */
+    public function deductPoints($userId, $points, $referenceType = null, $referenceId = null, $description = null, array $options = [])
     {
-        if ($points <= 0)
+        if ($points <= 0) {
             return false;
-        $current = $this->getUserPoints($userId);
-        if ($current['available_points'] < $points)
+        }
+
+        $result = $this->ledger->debit((int) $userId, (int) $points, $options + [
+            'type' => LoyaltyLedgerService::TYPE_REDEEM,
+            'reference_type' => $referenceType,
+            'reference_id' => $referenceId,
+            'description' => $description ?? "Used {$points} points",
+            'line_account_id' => $this->lineAccountId,
+        ]);
+
+        if (!$result['success']) {
             return false;
-        $newBalance = $current['available_points'] - $points;
+        }
 
-        $stmt = $this->db->prepare("UPDATE users SET available_points = available_points - ?, used_points = used_points + ? WHERE id = ?");
-        $stmt->execute([$points, $points, $userId]);
+        if ($result['duplicate']) {
+            return true;
+        }
 
-        // Update tier
-        $this->updateUserTier($userId, $newBalance);
+        // TODO(Phase 3 — tiers): see the note in addPoints().
+        $this->updateUserTier($userId, $result['balance_after']);
 
-        // Keep referenceId as integer or null (don't convert to string for INT column)
-        $referenceIdValue = ($referenceId !== null && $referenceId !== '') ? (int) $referenceId : null;
-
-        $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description) VALUES (?, ?, 'redeem', ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $this->lineAccountId, -$points, $newBalance, $referenceType, $referenceIdValue, $description ?? "Used {$points} points"]);
         return true;
     }
 
@@ -384,71 +450,107 @@ class LoyaltyPoints
      * @param int $rewardId Reward ID
      * @return array Result with success status, message, and redemption code
      */
+    /**
+     * Redeem a reward for a user.
+     * Requirements: 23.7 - Deduct points and generate unique redemption code
+     *
+     * Made atomic in Batch 1. The point debit, the stock decrement and the
+     * `reward_redemptions` insert now commit together, and the stock decrement is
+     * a guarded UPDATE whose rowCount decides the outcome rather than a
+     * check-then-act read — two customers racing for the last item can no longer
+     * both win and drive `rewards.stock` negative.
+     *
+     * This is NOT yet the full RewardRedemptionService the plan describes: the
+     * start/end validity window, max_per_user, tier restrictions and an
+     * idempotency key are still unenforced here and land in Phase 5.
+     *
+     * @param int $userId User ID
+     * @param int $rewardId Reward ID
+     * @return array Result with success status, message, and redemption code
+     */
     public function redeemReward($userId, $rewardId)
     {
         $reward = $this->getReward($rewardId);
-        if (!$reward)
+        if (!$reward) {
             return ['success' => false, 'message' => 'ไม่พบรางวัล'];
+        }
 
         // Check if reward is active (handle both string and boolean values)
         if (isset($reward['is_active']) && ($reward['is_active'] === 0 || $reward['is_active'] === '0' || $reward['is_active'] === false)) {
             return ['success' => false, 'message' => 'รางวัลนี้ไม่พร้อมให้บริการ'];
         }
 
-        // Check stock
-        if (isset($reward['stock']) && $reward['stock'] !== null && $reward['stock'] !== -1 && $reward['stock'] <= 0) {
+        $isLimitedStock = isset($reward['stock']) && $reward['stock'] !== null && (int) $reward['stock'] !== -1;
+        if ($isLimitedStock && (int) $reward['stock'] <= 0) {
             return ['success' => false, 'message' => 'รางวัลหมดแล้ว'];
         }
 
-        $userPoints = $this->getUserPoints($userId);
-
-        error_log("LoyaltyPoints: Checking points for redemption");
-        error_log("  - userId: $userId");
-        error_log("  - rewardId: $rewardId");
-        error_log("  - lineAccountId: {$this->lineAccountId}");
-        error_log("  - userPoints: " . json_encode($userPoints));
-        error_log("  - available_points: {$userPoints['available_points']}");
-        error_log("  - points_required: {$reward['points_required']}");
-        error_log("  - has enough: " . ($userPoints['available_points'] >= $reward['points_required'] ? 'YES' : 'NO'));
-
-        if ($userPoints['available_points'] < $reward['points_required']) {
-            error_log("LoyaltyPoints: Points not enough - returning error");
-            return ['success' => false, 'message' => 'แต้มไม่เพียงพอ'];
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
         }
 
-        // Deduct points (Requirement 23.7)
-        if (!$this->deductPoints($userId, $reward['points_required'], 'reward', $rewardId, "แลกรางวัล: {$reward['name']}")) {
-            return ['success' => false, 'message' => 'ไม่สามารถหักแต้มได้'];
+        try {
+            // Claim the stock FIRST, with the guard in the WHERE clause. If this
+            // affects no rows someone else took the last one while we were
+            // deciding, and nothing has been debited yet.
+            if ($isLimitedStock) {
+                $stmt = $this->db->prepare('UPDATE rewards SET stock = stock - 1 WHERE id = ? AND stock > 0');
+                $stmt->execute([$rewardId]);
+                if ($stmt->rowCount() === 0) {
+                    if ($ownsTransaction) {
+                        $this->db->rollBack();
+                    }
+
+                    return ['success' => false, 'message' => 'รางวัลหมดแล้ว'];
+                }
+            }
+
+            // Debit inside the same transaction — the ledger enlists rather than
+            // opening a nested one, and re-checks sufficiency under a row lock.
+            if (!$this->deductPoints($userId, $reward['points_required'], 'reward', $rewardId, "แลกรางวัล: {$reward['name']}")) {
+                if ($ownsTransaction) {
+                    $this->db->rollBack();
+                }
+
+                return ['success' => false, 'message' => 'แต้มไม่เพียงพอ'];
+            }
+
+            // Generate unique redemption code (Requirement 23.7)
+            $code = $this->generateUniqueRedemptionCode();
+
+            // Calculate expiry date if reward has validity period
+            $expiresAt = null;
+            if (!empty($reward['valid_until'])) {
+                $expiresAt = $reward['valid_until'];
+            } elseif (!empty($reward['validity_days'])) {
+                $expiresAt = date('Y-m-d H:i:s', strtotime("+{$reward['validity_days']} days"));
+            }
+
+            $stmt = $this->db->prepare('INSERT INTO reward_redemptions (user_id, reward_id, line_account_id, points_used, redemption_code, expires_at) VALUES (?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$userId, $rewardId, $this->lineAccountId, $reward['points_required'], $code, $expiresAt]);
+            $redemptionId = $this->db->lastInsertId();
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
+
+            return [
+                'success' => true,
+                'message' => 'แลกรางวัลสำเร็จ!',
+                'redemption_code' => $code,
+                'reward' => $reward,
+                'redemption_id' => $redemptionId,
+                'expires_at' => $expiresAt,
+            ];
+        } catch (Throwable $e) {
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('LoyaltyPoints::redeemReward failed for user ' . (int) $userId . ' reward ' . (int) $rewardId . ': ' . $e->getMessage());
+
+            return ['success' => false, 'message' => 'ไม่สามารถแลกรางวัลได้'];
         }
-
-        // Update stock if limited (check for positive stock, not -1 which means unlimited)
-        if (isset($reward['stock']) && $reward['stock'] !== null && $reward['stock'] > 0 && $reward['stock'] !== -1) {
-            $stmt = $this->db->prepare("UPDATE rewards SET stock = stock - 1 WHERE id = ? AND stock > 0");
-            $stmt->execute([$rewardId]);
-        }
-
-        // Generate unique redemption code (Requirement 23.7)
-        $code = $this->generateUniqueRedemptionCode();
-
-        // Calculate expiry date if reward has validity period
-        $expiresAt = null;
-        if (!empty($reward['valid_until'])) {
-            $expiresAt = $reward['valid_until'];
-        } elseif (!empty($reward['validity_days'])) {
-            $expiresAt = date('Y-m-d H:i:s', strtotime("+{$reward['validity_days']} days"));
-        }
-
-        $stmt = $this->db->prepare("INSERT INTO reward_redemptions (user_id, reward_id, line_account_id, points_used, redemption_code, expires_at) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $rewardId, $this->lineAccountId, $reward['points_required'], $code, $expiresAt]);
-
-        return [
-            'success' => true,
-            'message' => 'แลกรางวัลสำเร็จ!',
-            'redemption_code' => $code,
-            'reward' => $reward,
-            'redemption_id' => $this->db->lastInsertId(),
-            'expires_at' => $expiresAt
-        ];
     }
 
     /**

@@ -44,6 +44,12 @@
         <testsuite name="Branding Tests">
             <directory>tests/Branding</directory>
         </testsuite>
+        <!-- Loyalty ledger (Batch 1). A tests/<Dir> without an entry here is
+             never executed by `composer test`; tests/LiffTelepharmacy and seven
+             other directories are dead on arrival for exactly that reason. -->
+        <testsuite name="Loyalty Tests">
+            <directory>tests/Loyalty</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>
