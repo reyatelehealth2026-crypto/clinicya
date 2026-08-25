@@ -5401,7 +5401,12 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
 
     // Award points
     $desc = "สะสมแต้มจากใบเสร็จ" . ($receiptNumber ? " #{$receiptNumber}" : '') . " ยอด ฿" . number_format($totalAmount, 2);
-    $lp->addPoints($user['id'], $points, 'receipt', $claimId, $desc);
+    $lp->addPoints($user['id'], $points, 'receipt', $claimId, $desc, [
+        // receipt_point_claims.uk_claim already dedupes the CLAIM; this keys the
+        // CREDIT, so a crash between the two cannot burn the claim without paying.
+        'idempotency_key' => 'receipt-claim:' . (int) $claimId . ':earn',
+        'created_by' => 'system:receipt-ocr',
+    ]);
 
     $newBalance = (int) $lp->getUserPoints($user['id'])['available_points'];
 

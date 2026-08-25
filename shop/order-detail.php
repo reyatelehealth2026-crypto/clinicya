@@ -401,25 +401,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $earnedPoints = (int)floor($order['grand_total'] * $pointsPerBaht);
 
                     if ($earnedPoints > 0) {
-                        $newBalance = ($order['current_points'] ?? 0) + $earnedPoints;
-
-                        // Update users.points (for LIFF system)
-                        $stmt = $db->prepare("UPDATE users SET points = points + ? WHERE id = ?");
-                        $stmt->execute([$earnedPoints, $order['user_id']]);
-
-                        // Log to points_history (for LIFF system)
-                        try {
-                            $stmt = $db->prepare("INSERT INTO points_history (line_account_id, user_id, points, type, description, reference_type, reference_id, balance_after) VALUES (?, ?, ?, 'earn', ?, 'order', ?, ?)");
-                            $stmt->execute([$currentBotId, $order['user_id'], $earnedPoints, "แต้มจากออเดอร์ #{$order['order_number']}", $orderId, $newBalance]);
-                        } catch (Exception $e) {
-                            error_log('points_history insert error: ' . $e->getMessage());
-                        }
-
-                        // Also log to points_transactions (for legacy LoyaltyPoints system)
-                        try {
-                            $stmt = $db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description) VALUES (?, ?, 'earn', ?, ?, 'order', ?, ?)");
-                            $stmt->execute([$order['user_id'], $currentBotId, $earnedPoints, $newBalance, $orderId, "Points from order #{$order['order_number']}"]);
-                        } catch (Exception $e) {}
+                        // BATCH 2: one writer, one ledger row. This used to write
+                        // users.points + points_history + points_transactions as three
+                        // unwrapped statements, all stamped with a balance_after derived
+                        // from users.points — a number no reader could reconcile — and
+                        // never touched available_points, so the award was invisible to
+                        // the member card. The idempotency key also stops a resubmitted
+                        // "approve payment" from awarding the order twice.
+                        require_once __DIR__ . '/../classes/LoyaltyPoints.php';
+                        $loyalty = new LoyaltyPoints($db, $currentBotId);
+                        $loyalty->addPoints(
+                            $order['user_id'],
+                            $earnedPoints,
+                            'order',
+                            $orderId,
+                            "แต้มจากออเดอร์ #{$order['order_number']}",
+                            [
+                                'idempotency_key' => 'order:' . (int) $orderId . ':earn',
+                                'created_by' => 'admin:' . (int) ($currentUser['id'] ?? 0),
+                            ]
+                        );
 
                         // ⚠️ ไม่ส่งแจ้งเตือนแต้มแยก - จะรวมในข้อความสถานะออเดอร์ด้านบน
                     }

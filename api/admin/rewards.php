@@ -525,13 +525,20 @@ function cancelRedemption($db, $loyalty, $redemptionId, $adminId, $notes, $lineA
         return ['success' => false, 'message' => 'ไม่สามารถยกเลิกรายการที่ส่งมอบแล้ว'];
     }
     
-    // Refund points
+    // Refund points.
+    // BATCH 2: keyed so a re-submitted cancel cannot refund twice, and typed
+    // 'refund' rather than 'earn' so the ledger says what actually happened.
     $loyalty->addPoints(
-        $redemption['user_id'], 
-        $redemption['points_used'], 
-        'refund', 
-        $redemptionId, 
-        "คืนแต้มจากการยกเลิก: {$redemption['reward_name']}"
+        $redemption['user_id'],
+        $redemption['points_used'],
+        'refund',
+        $redemptionId,
+        "คืนแต้มจากการยกเลิก: {$redemption['reward_name']}",
+        [
+            'type' => LoyaltyLedgerService::TYPE_REFUND,
+            'idempotency_key' => 'redemption:' . (int) $redemptionId . ':refund',
+            'created_by' => 'admin:' . (int) ($adminId ?? 0),
+        ]
     );
     
     // Update status

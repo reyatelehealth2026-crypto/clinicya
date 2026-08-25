@@ -183,7 +183,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reward_action'])) {
                 $redemption = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if ($redemption && $redemption['status'] !== 'delivered') {
-                    $loyalty->addPoints($redemption['user_id'], $redemption['points_used'], 'refund', $redemptionId, 'คืนแต้มจากการยกเลิก');
+                    // BATCH 2: the status guard below only rejects 'delivered', so an
+                    // already-cancelled redemption could be refunded again, without
+                    // bound. The idempotency key makes a second refund impossible at
+                    // the DB level regardless of what the guard lets through.
+                    $loyalty->addPoints($redemption['user_id'], $redemption['points_used'], 'refund', $redemptionId, 'คืนแต้มจากการยกเลิก', [
+                        'type' => LoyaltyLedgerService::TYPE_REFUND,
+                        'idempotency_key' => 'redemption:' . (int) $redemptionId . ':refund',
+                        'created_by' => 'admin:' . (int) ($adminId ?? 0),
+                    ]);
                     $stmt = $db->prepare("UPDATE rewards SET stock = stock + 1 WHERE id = ? AND stock >= 0");
                     $stmt->execute([$redemption['reward_id']]);
                     $loyalty->updateRedemptionStatus($redemptionId, 'cancelled', $adminId, $notes);

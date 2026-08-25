@@ -449,7 +449,14 @@ function handleGiveDirect(PDO $db, array $data): void
             $points,
             'claim',
             $claimId,
-            'รับแต้มจากการซื้อหน้าร้าน #' . $voucherNo
+            'รับแต้มจากการซื้อหน้าร้าน #' . $voucherNo,
+            [
+                // The claim row is created immediately above, so its id is a
+                // natural once-only key: a double-clicked "ให้แต้ม" makes a new
+                // claim, but a retried request for the same claim cannot re-credit.
+                'idempotency_key' => 'claim:' . $claimId . ':earn',
+                'created_by' => 'admin:' . (int) ($_SESSION['admin_user']['id'] ?? 0),
+            ]
         );
         if (!$credited) {
             $db->rollBack();
@@ -620,7 +627,10 @@ function pcCreditCounterSale(
         ]);
         $claimId = (int) $db->lastInsertId();
 
-        $credited = $loyalty->addPoints($userId, $points, 'claim', $claimId, 'รับแต้มจากการซื้อหน้าร้าน #' . $voucherNo);
+        $credited = $loyalty->addPoints($userId, $points, 'claim', $claimId, 'รับแต้มจากการซื้อหน้าร้าน #' . $voucherNo, [
+            'idempotency_key' => 'claim:' . $claimId . ':earn',
+            'created_by' => 'admin:' . (int) ($_SESSION['admin_user']['id'] ?? 0),
+        ]);
         if (!$credited) {
             $db->rollBack();
             return ['ok' => false];
@@ -1039,22 +1049,46 @@ function handleConfirmMerge(PDO $db, array $data): void
     $loyalty = new LoyaltyPoints($db, $lineAccountId);
     $resolvedBy = (int) ($_SESSION['admin_user']['id'] ?? 0) ?: null;
 
-    // Re-read the ghost's CURRENT balance (it may have changed since flagging).
-    $gs = $db->prepare("SELECT available_points FROM users WHERE id = ? AND line_account_id = ? LIMIT 1");
-    $gs->execute([$offlineId, $lineAccountId]);
-    $move = (int) ($gs->fetchColumn() ?: 0);
+    // Re-read the ghost's CURRENT balance from the ledger (it may have changed
+    // since flagging). BATCH 2: this used to read users.available_points, which
+    // is a cache the ledger now owns; reading the ledger keeps the two halves of
+    // the transfer summing to zero.
+    $move = (int) ($loyalty->getUserPoints($offlineId)['available_points'] ?? 0);
 
+    // BATCH 2: this was the ONLY handler in this file with no transaction — a
+    // crash between the two halves left the points debited from the ghost and
+    // never credited to the LINE account (or the candidate still 'pending' with
+    // the money already moved). Both halves and the status flip now commit
+    // together, and the idempotency keys make a retried confirm a no-op.
+    $db->beginTransaction();
     try {
         if ($move > 0) {
-            $loyalty->deductPoints($offlineId, $move, 'merge', $candidateId, 'โอนแต้มไปยังบัญชี LINE (รวมร่าง)');
-            $loyalty->addPoints($lineUserId, $move, 'merge', $candidateId, 'รับแต้มจากบัญชีเบอร์เดิม (รวมร่าง)');
+            $debited = $loyalty->deductPoints($offlineId, $move, 'merge', $candidateId, 'โอนแต้มไปยังบัญชี LINE (รวมร่าง)', [
+                'idempotency_key' => 'merge:' . (int) $candidateId . ':debit',
+                'created_by' => 'admin:' . (int) ($resolvedBy ?? 0),
+            ]);
+            if (!$debited) {
+                throw new RuntimeException('ghost debit declined for candidate ' . $candidateId);
+            }
+
+            $credited = $loyalty->addPoints($lineUserId, $move, 'merge', $candidateId, 'รับแต้มจากบัญชีเบอร์เดิม (รวมร่าง)', [
+                'idempotency_key' => 'merge:' . (int) $candidateId . ':credit',
+                'created_by' => 'admin:' . (int) ($resolvedBy ?? 0),
+            ]);
+            if (!$credited) {
+                throw new RuntimeException('line credit declined for candidate ' . $candidateId);
+            }
         }
         $db->prepare(
             "UPDATE points_merge_candidates
              SET status = 'merged', offline_points = ?, resolved_at = NOW(), resolved_by = ?
              WHERE id = ?"
         )->execute([$move, $resolvedBy, $candidateId]);
+        $db->commit();
     } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
         error_log('[points-claim] confirm merge: ' . $e->getMessage());
         pcJson(false, 'ไม่สามารถรวมแต้มได้ / Merge failed');
     }
@@ -1180,7 +1214,11 @@ function handleClaim(PDO $db, array $data): void
             $points,
             'claim',
             (int) $claim['id'],
-            'รับแต้มจากการซื้อหน้าร้าน #' . $claim['voucher_no']
+            'รับแต้มจากการซื้อหน้าร้าน #' . $claim['voucher_no'],
+            [
+                'idempotency_key' => 'claim:' . (int) $claim['id'] . ':earn',
+                'created_by' => 'system:qr-claim',
+            ]
         );
         if (!$credited) {
             $db->rollBack();
