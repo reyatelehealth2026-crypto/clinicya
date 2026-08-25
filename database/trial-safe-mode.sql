@@ -27,9 +27,13 @@ SELECT @@hostname AS host, DATABASE() AS db, NOW() AS server_time;
 -- 1. LINE
 -- ============================================================================
 -- NOTE `channel_secret` is NOT NULL and carries UNIQUE KEY
--- `unique_channel_secret`, so blanking every row to '' fails with a duplicate
--- key error the moment there is more than one account. Per-row placeholder
--- values keep the constraint satisfied.
+-- `unique_channel_secret`, so blanking every row to '' fails the moment there
+-- is more than one account. Confirmed against MariaDB 10.11, not just inferred
+-- from the schema:
+--     ERROR 1062 (23000): Duplicate entry '' for key 'unique_channel_secret'
+-- exit code 1, and the UPDATE rolls back leaving every token live — the worst
+-- possible outcome for a script whose job is to disarm them. Per-row
+-- placeholder values keep the constraint satisfied.
 UPDATE `line_accounts`
    SET `channel_access_token` = '',
        `channel_secret`       = CONCAT('trial-disabled-', `id`),

@@ -27,12 +27,10 @@
 #   touch that manifest. The live cPanel site is unaffected by running this.
 #   Real cutover steps live in docs/runbooks/phase0-cutover-rollback.md.
 #
-# KNOWN GAP: the `/miniapp` route's upstream (`next-miniapp:3000`) has no
-# service here — line-mini-app has no Dockerfile in this repo and is deployed
-# separately today. /miniapp will return 502 from this stack. That is expected,
-# not a misconfiguration. nginx resolves upstreams at REQUEST time via Docker's
-# embedded DNS, so a missing service does not stop the edge from starting or
-# from serving every other route.
+# All four upstreams the edge can route to (php_backend, next_admin,
+# next_miniapp, ws) have a service here, so no route 502s. nginx resolves
+# upstreams at REQUEST time via Docker's embedded DNS, so any one of them being
+# down still lets the edge start and serve the others.
 
 name: clinicya-vps
 
@@ -130,6 +128,14 @@ services:
       REDIS_SESSION_PORT: 6379
       REDIS_SESSION_DB: ${REDIS_SESSION_DB:-1}
       COMPOSER_AUTOLOAD: /var/www/html/vendor/autoload.php
+      # Shared with next-admin. internal/session-bridge.php reads this via
+      # getenv() and REFUSES EVERY REQUEST when it is unset — so omitting it
+      # here does not disable the bridge loudly, it makes @reya/auth's
+      # syncToPhpBridge() come back bridgeSynced:false on every login. The Next
+      # side still sets PHPSESSID, so PHP sees a session id whose $_SESSION was
+      # never populated: legacy pages bounce straight back to the login screen,
+      # and with a flipped route in front that becomes ERR_TOO_MANY_REDIRECTS.
+      SESSION_BRIDGE_HMAC_SECRET: ${SESSION_BRIDGE_HMAC_SECRET:?}
       TZ: Asia/Bangkok
     volumes:
       # Lift-and-shift: the repo (including host-installed vendor/) is
@@ -211,10 +217,45 @@ services:
       # Set in infra/compose/.env.vps — see .env.vps.example.
       SESSION_BRIDGE_HMAC_SECRET: ${SESSION_BRIDGE_HMAC_SECRET:?}
       NODE_SESSION_TTL_SECONDS: ${NODE_SESSION_TTL_SECONDS:-86400}
+      # Session cookies are Secure outside development, and a browser DISCARDS
+      # a Secure cookie served over plain http — so on this HTTP-only stack
+      # login silently never sticks: the POST succeeds, the 303 fires, and the
+      # next request arrives with no session. Set SESSION_COOKIE_INSECURE=1 in
+      # .env.vps for a throwaway trial; leave it 0 and terminate TLS
+      # (docker-compose.vps-tls.yml) for anything that matters.
+      SESSION_COOKIE_INSECURE: ${SESSION_COOKIE_INSECURE:-0}
       TZ: Asia/Bangkok
     depends_on:
       mariadb: { condition: service_healthy }
       redis:   { condition: service_healthy }
+    networks: [edge]
+    restart: unless-stopped
+
+  # LINE Mini App — the deployed LIFF experience. Static export served by
+  # nginx, not a Node server: line-mini-app/next.config.js sets
+  # `output: 'export'`. See infra/miniapp/Dockerfile.
+  next-miniapp:
+    build:
+      context: ../..
+      dockerfile: infra/miniapp/Dockerfile
+      args:
+        # BUILD-time only — a static export inlines these, so compose
+        # `environment:` cannot change them afterwards. Rebuild to change one.
+        #
+        # PHP API base is deliberately left empty: config.ts's
+        # resolvePhpApiBaseUrl() returns window.location.origin for any
+        # *.re-ya.com host that isn't the bare root, which is what lets PHP's
+        # subdomain routing pin the right tenant DB. Set it only when serving
+        # from a host that is NOT a re-ya.com subdomain.
+        NEXT_PUBLIC_PHP_API_BASE_URL: ${NEXT_PUBLIC_PHP_API_BASE_URL:-}
+        NEXT_PUBLIC_REYA_BASE_DOMAIN: ${REYA_BASE_DOMAIN:-re-ya.com}
+        NEXT_PUBLIC_LINE_LIFF_ID: ${NEXT_PUBLIC_LINE_LIFF_ID:-}
+        NEXT_PUBLIC_LINE_CHANNEL_ID: ${NEXT_PUBLIC_LINE_CHANNEL_ID:-}
+        NEXT_PUBLIC_LINE_ACCOUNT_ID: ${NEXT_PUBLIC_LINE_ACCOUNT_ID:-1}
+        NEXT_PUBLIC_MINIAPP_NAME: ${NEXT_PUBLIC_MINIAPP_NAME:-Re-Ya LINE Mini App}
+    container_name: clinicya-vps-next-miniapp
+    labels:
+      clinicya.strangler.upstream: next_miniapp
     networks: [edge]
     restart: unless-stopped
 
@@ -283,6 +324,7 @@ services:
     depends_on:
       - php
       - next-admin
+      - next-miniapp
     ports:
       - "${EDGE_HTTP_PORT:-80}:80"
     networks: [edge]

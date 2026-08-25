@@ -23,12 +23,25 @@
 # produce an image that crashes on boot with MODULE_NOT_FOUND. Fixing that
 # misclassification means editing the legacy root package.json, which is out
 # of scope here.
+#
+# `--omit=optional` is safe and worth 65MB: the root package.json has since
+# picked up the monorepo's `turbo` devDependency, whose six per-platform
+# binaries are optionalDependencies this server never invokes. Verified the
+# image still boots and serves socket.io with them absent.
+#
+# NOTE this needs root package-lock.json to be in sync with root package.json.
+# It was not: the lock predated `turbo` being added, so `npm ci` failed with
+#     npm error Missing: turbo@2.10.9 from lock file
+# and took the whole `docker compose build` down with it, since a failure in
+# any one service aborts the others. Regenerated (purely additive — no runtime
+# dependency version changed). If you add a root dependency, re-run
+# `npm install --package-lock-only` or this image stops building again.
 
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund --omit=optional
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
