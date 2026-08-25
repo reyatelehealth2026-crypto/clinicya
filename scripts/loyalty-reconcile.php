@@ -558,8 +558,12 @@ function reya_reconcile_render(array $report, array $options, int $needsAttentio
     printf("  %-16s %12d\n", 'ledger', $report['point_liability']['ledger']);
     printf("  %-16s %12d\n", 'users cache', $report['point_liability']['cache']);
     printf("  %-16s %12d\n", 'legacy history', $report['point_liability']['legacy_history']);
-    printf("  %-16s %12d  %s\n", 'retail (8th)', $report['point_liability']['retail'],
-        $report['point_liability']['retail'] > 0 ? '* parallel store, reconciled against nothing' : '');
+    printf(
+        "  %-16s %12d  %s\n",
+        'retail (8th)',
+        $report['point_liability']['retail'],
+        $report['point_liability']['retail'] > 0 ? '* parallel store, reconciled against nothing' : ''
+    );
 
     echo "\n";
     if ($needsAttention === 0) {

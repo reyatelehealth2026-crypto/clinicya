@@ -151,7 +151,7 @@ class LoyaltyLedgerService
      * @param int $userId
      * @return array{
      *     total_points:int, available_points:int, used_points:int,
-     *     ledger_balance:int, ledger_rows:int, source:string
+     *     qualifying_points:int, ledger_balance:int, ledger_rows:int, source:string
      * } `available_points` is clamped at 0 for spending decisions;
      *   `ledger_balance` is the raw signed sum, for reconciliation.
      */
@@ -559,7 +559,7 @@ class LoyaltyLedgerService
      * `ledger_rows` is the whole point of this query: it is what lets callers
      * tell "nothing recorded" apart from "recorded, and it nets to zero".
      *
-     * @return array{total_points:int, used_points:int, ledger_balance:int, ledger_rows:int}
+     * @return array{total_points:int, qualifying_points:int, used_points:int, ledger_balance:int, ledger_rows:int}
      */
     private function readLedgerTotals(int $userId): array
     {

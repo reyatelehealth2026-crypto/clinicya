@@ -497,37 +497,10 @@ class LoyaltyPoints
     }
 
     /**
-     * Generate a unique redemption code
-     * Requirements: 23.7 - Generate unique redemption code
-     * @return string Unique redemption code
+     * NOTE(Phase 5): generateUniqueRedemptionCode() lived here and is gone.
+     * RewardRedemptionService owns code generation now, so keeping a second
+     * implementation would just be a second thing to drift.
      */
-    private function generateUniqueRedemptionCode()
-    {
-        $maxAttempts = 10;
-        $attempt = 0;
-
-        do {
-            // Generate code: RW + timestamp component + random component
-            $timestamp = base_convert(time(), 10, 36);
-            $random = strtoupper(substr(bin2hex(random_bytes(4)), 0, 6));
-            $code = 'RW' . strtoupper(substr($timestamp, -4)) . $random;
-
-            // Check if code already exists
-            $stmt = $this->db->prepare("SELECT COUNT(*) FROM reward_redemptions WHERE redemption_code = ?");
-            $stmt->execute([$code]);
-            $exists = $stmt->fetchColumn() > 0;
-
-            $attempt++;
-        } while ($exists && $attempt < $maxAttempts);
-
-        // Fallback to UUID-based code if still not unique
-        if ($exists) {
-            $code = 'RW' . strtoupper(substr(md5(uniqid(mt_rand(), true)), 0, 10));
-        }
-
-        return $code;
-    }
-
     public function getUserRedemptions($userId, $limit = 20)
     {
         $stmt = $this->db->prepare("SELECT rr.*, r.name as reward_name, r.image_url as reward_image FROM reward_redemptions rr JOIN rewards r ON rr.reward_id = r.id WHERE rr.user_id = ? ORDER BY rr.created_at DESC LIMIT ?");
