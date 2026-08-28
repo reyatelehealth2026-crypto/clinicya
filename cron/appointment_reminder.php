@@ -28,12 +28,18 @@ $db = Database::getInstance()->getConnection();
 // LIFF ID สำหรับ Video Call
 define('VIDEO_CALL_LIFF_ID', '2008477880-FDhymfKU');
 
+// Set while sweeping a tenant so each logged line carries its tenant id.
+// Replaces the old per-tenant "--- tenant #N ---" header, which printed even
+// when that tenant had nothing to do.
+$GLOBALS['reya_tenant_tag'] = '';
+
 function logMsg($msg, $isDebug = false) {
     global $debugMode;
+    $tag = $GLOBALS['reya_tenant_tag'] ?? '';
     if ($debugMode) {
-        echo "<pre>" . date('Y-m-d H:i:s') . " - " . htmlspecialchars($msg) . "</pre>\n";
+        echo "<pre>" . date('Y-m-d H:i:s') . " - " . htmlspecialchars($tag . $msg) . "</pre>\n";
     } else {
-        echo date('Y-m-d H:i:s') . " - $msg\n";
+        echo date('Y-m-d H:i:s') . " - {$tag}{$msg}\n";
     }
 }
 
@@ -67,7 +73,9 @@ if ($debugMode) {
     echo "<p><strong>Current Time:</strong> " . date('Y-m-d H:i:s') . "</p>";
 }
 
-logMsg("Starting appointment reminder check...");
+if ($debugMode) {
+    logMsg("Starting appointment reminder check...");
+}
 
 try {
     // ===== DEBUG: Show all upcoming appointments =====
@@ -158,7 +166,9 @@ try {
     $stmt = $db->query($sql10min);
     $appointments10min = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    logMsg("Found " . count($appointments10min) . " appointments for 10-min reminder");
+    if (count($appointments10min) > 0 || $debugMode) {
+        logMsg("Found " . count($appointments10min) . " appointments for 10-min reminder");
+    }
     
     if ($debugMode && count($appointments10min) == 0) {
         echo "<p>⚠️ No appointments found for 10-min reminder. Checking query...</p>";
@@ -236,7 +246,9 @@ try {
     $stmt = $db->query($sqlNow);
     $appointmentsNow = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    logMsg("Found " . count($appointmentsNow) . " appointments for NOW reminder");
+    if (count($appointmentsNow) > 0 || $debugMode) {
+        logMsg("Found " . count($appointmentsNow) . " appointments for NOW reminder");
+    }
     
     foreach ($appointmentsNow as $apt) {
         if (empty($apt['line_user_id']) || empty($apt['channel_access_token'])) {
@@ -290,14 +302,23 @@ if ($isCli) {
     } else {
         logMsg("Sweeping " . count($tenantIds) . " active tenant(s)...");
         foreach ($tenantIds as $tid) {
+            $GLOBALS['reya_tenant_tag'] = "[tenant #{$tid}] ";
+            $tdb = null;
             try {
                 $tdb = Database::forTenant((int) $tid)->getConnection();
-                logMsg("--- tenant #{$tid} ---");
                 reya_run_reminders($tdb, $debugMode);
             } catch (\Throwable $e) {
-                logMsg("tenant #{$tid} error: " . $e->getMessage());
+                logMsg("error: " . $e->getMessage());
+            } finally {
+                // Hand this tenant's MySQL connection back before the next
+                // iteration. Without this the pool keeps one open connection
+                // per tenant for the whole run, so a sweep of N tenants holds
+                // N+2 connections at once and trips max_user_connections.
+                $tdb = null;
+                Database::releaseTenant((int) $tid);
             }
         }
+        $GLOBALS['reya_tenant_tag'] = '';
     }
 } else {
     reya_run_reminders($db, $debugMode);
