@@ -243,7 +243,7 @@ class PharmacyIntegrationService
             $stmt = $this->db->prepare("
                 SELECT 
                     id, display_name, first_name, last_name,
-                    weight, height, birth_date, gender,
+                    weight, height, birthday AS birth_date, gender,
                     drug_allergies, chronic_diseases, current_medications, medical_conditions
                 FROM users 
                 WHERE id = ?
