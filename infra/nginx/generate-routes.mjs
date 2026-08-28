@@ -206,7 +206,16 @@ function renderLocation(route, varName) {
     `    location ${loc} {`,
     `        set $upstream_name ${assign}`,
     '        proxy_http_version 1.1;',
-    '        proxy_set_header Host $host;',
+    // $http_host, not $host: $host drops the port, so an upstream that builds
+    // an absolute redirect from the request (Next.js does, for its 303 after
+    // login) re-appends its OWN listening port and sends the browser to
+    // http://tenant-0001.re-ya.com:3000/... — unreachable from outside. Seen on
+    // the VPS trial, which runs the edge on 38080. $http_host preserves
+    // "hostname:port" exactly as the client sent it.
+    // NOTE the Tier 1 tenant-slug map deliberately keeps using $host, since it
+    // wants the hostname WITHOUT the port (matching resolve_subdomain.php,
+    // which strips the port before matching).
+    '        proxy_set_header Host $http_host;',
     '        proxy_set_header X-Real-IP $remote_addr;',
     '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
     '        proxy_set_header X-Forwarded-Proto $scheme;',
@@ -310,11 +319,27 @@ ${servedByMapLines}
     }
 
     # --- Tier 1: host -> tenant slug. Production hostnames are
-    #     tenant-XXXX.re-ya.com (subdomain routing, ADR-001); anything else
-    #     (root domain, reserved subdomains) has no tenant scope. ---
+    #     <slug>.re-ya.com (subdomain routing, ADR-001); anything else
+    #     (root domain, reserved subdomains) has no tenant scope.
+    #
+    #     The capture is the WHOLE first label, deliberately. It previously read
+    #     ~^tenant-(?<slug>[a-z0-9-]+)\\. — hardcoding and then STRIPPING a
+    #     "tenant-" prefix, so host tenant-0001.re-ya.com yielded slug "0001".
+    #     But bootstrap/resolve_subdomain.php captures the full label
+    #     ("tenant-0001") and looks that up against master.tenants.slug, which
+    #     also stores "tenant-0001". nginx and PHP therefore disagreed about
+    #     what a slug IS, and every per-tenant canary list written with the real
+    #     slug silently never matched — the route quietly fell through to
+    #     php_backend with no error anywhere. Found on the VPS trial: 16 routes
+    #     flipped, conf rendered, nginx reloaded, and every request still served
+    #     php. Keep this regex in step with resolve_subdomain.php.
+    #
+    #     Reserved subdomains (www/api/admin/...) now produce a non-empty slug
+    #     here, unlike before. Harmless: a Tier 2 map only matches slugs that
+    #     appear in some route's canary list, and reserved names never do. ---
     map $host $tenant_slug {
-        ~^tenant-(?<slug>[a-z0-9-]+)\\.re-ya\\.com$   $slug;
-        default                                       "";
+        ~^(?<slug>[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)\\.re-ya\\.com$   $slug;
+        default                                                     "";
     }
 
     # --- Tier 2: per-route tenant -> upstream maps (only emitted for routes

@@ -63,6 +63,20 @@ export const envSchema = z.object({
 
   /** @reya/auth: node_sessions row lifetime in seconds — SessionCookieDescriptor.maxAge mirrors this. */
   NODE_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
+
+  /**
+   * Escape hatch for HTTP-only deployments. Session cookies are marked
+   * `Secure` outside development, which is correct — but a browser silently
+   * DISCARDS a Secure cookie served over plain http, so login appears to do
+   * nothing at all: the POST succeeds, the 303 fires, and the next request
+   * arrives with no session. Exactly what the VPS trial stack hit, where the
+   * strangler edge listens on plain http.
+   *
+   * Set to '1' ONLY for a throwaway HTTP trial. Leaving it unset keeps the
+   * secure-by-default behaviour, and any real deployment must terminate TLS
+   * (see infra/compose/docker-compose.vps-tls.yml) rather than set this.
+   */
+  SESSION_COOKIE_INSECURE: z.enum(['0', '1']).default('0'),
 });
 
 export type Env = z.infer<typeof envSchema>;

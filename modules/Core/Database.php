@@ -179,6 +179,25 @@ class Database
         self::$platformDbExists = null;
     }
 
+    /**
+     * Drop a single tenant's pooled connection.
+     *
+     * Long-running CLI loops (the appointment-reminder cron sweeps every
+     * active tenant once a minute) otherwise hold one MySQL connection per
+     * tenant for the life of the process, which blows past the account's
+     * max_user_connections cap. resetAll() is too blunt here: it also drops
+     * the pooled platform handle the loop still needs to resolve db names.
+     */
+    public static function releaseTenant(int $tenantId): void
+    {
+        $cacheKey = "tenant:{$tenantId}";
+        $instance = self::$instances[$cacheKey] ?? null;
+        unset(self::$instances[$cacheKey]);
+        if ($instance !== null) {
+            unset(self::$instances[$instance->getDbName()]);
+        }
+    }
+
     // ---------------------------------------------------------------------
     // Preserved helper API — call sites depend on these.
     // ---------------------------------------------------------------------

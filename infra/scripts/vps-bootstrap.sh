@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+#
+# infra/scripts/vps-bootstrap.sh
+#
+# One-command bring-up of the VPS trial stack. Run this ON THE VPS, as root,
+# from inside a clone of this repository.
+#
+#   bash infra/scripts/vps-bootstrap.sh --check     # preflight only, changes nothing
+#   bash infra/scripts/vps-bootstrap.sh             # full bring-up
+#
+# It is idempotent: re-running picks up where it left off and never regenerates
+# secrets that already exist.
+#
+# WHAT IT DOES NOT DO, on purpose:
+#   - import any database (the stack comes up with an EMPTY DB — see step 6 of
+#     docs/runbooks/vps-trial-stack.md)
+#   - start the `cron` sidecar (inferred schedules; can fire real broadcasts)
+#   - touch DNS, TLS, or anything on the existing cPanel host
+#   - flip any route: every application route still points at php_backend
+#
+# READ docs/runbooks/vps-trial-stack.md alongside this. In particular §7b: once
+# you import a production dump, this stack can send real messages to real
+# customers, and `database/trial-safe-mode.sql` is how you stop that.
+
+set -euo pipefail
+
+CHECK_ONLY=0
+[[ "${1:-}" == "--check" ]] && CHECK_ONLY=1
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ENV_FILE="$REPO_ROOT/infra/compose/.env.vps"
+COMPOSE_FILE="$REPO_ROOT/infra/compose/docker-compose.vps.yml"
+
+c_ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
+c_warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
+c_err()  { printf '  \033[31m✗\033[0m %s\n' "$*" >&2; }
+step()   { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+die()    { c_err "$*"; exit 1; }
+
+# ---------------------------------------------------------------------------
+step "1/8  Preflight"
+# ---------------------------------------------------------------------------
+[[ $EUID -eq 0 ]] || die "run as root (or via sudo)"
+[[ -f "$COMPOSE_FILE" ]] || die "not inside the repo — expected $COMPOSE_FILE"
+c_ok "repo root: $REPO_ROOT"
+
+. /etc/os-release 2>/dev/null || true
+c_ok "os: ${PRETTY_NAME:-unknown}  arch: $(uname -m)"
+
+MEM_MB=$(awk '/MemTotal/{printf "%d", $2/1024}' /proc/meminfo)
+if   (( MEM_MB < 3500 )); then c_err "RAM ${MEM_MB}MB — too small; the Next build alone peaks near 2GB"; die "need >= 4GB, 8GB recommended"
+elif (( MEM_MB < 7500 )); then c_warn "RAM ${MEM_MB}MB — workable, but add swap before building (8GB recommended)"
+else c_ok "RAM ${MEM_MB}MB"; fi
+
+DISK_GB=$(df -BG --output=avail "$REPO_ROOT" | tail -1 | tr -dc '0-9')
+if (( DISK_GB < 15 )); then c_warn "disk ${DISK_GB}GB free — images alone need ~5GB, plus 3x your dump size"
+else c_ok "disk ${DISK_GB}GB free"; fi
+
+# ---------------------------------------------------------------------------
+step "2/8  Docker"
+# ---------------------------------------------------------------------------
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  c_ok "docker $(docker --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1), compose v2 present"
+else
+  if (( CHECK_ONLY )); then c_warn "docker or compose v2 missing (would install)"; else
+    step "     installing docker"
+    curl -fsSL https://get.docker.com | sh
+    docker compose version >/dev/null 2>&1 || die "compose v2 still missing after install"
+    c_ok "docker installed"
+  fi
+fi
+
+if ! (( CHECK_ONLY )); then
+  systemctl enable --now docker >/dev/null 2>&1 || true
+  docker info >/dev/null 2>&1 || die "docker daemon not running"
+  c_ok "docker daemon up"
+fi
+
+# ---------------------------------------------------------------------------
+step "3/8  PHP dependencies (vendor/)"
+# ---------------------------------------------------------------------------
+# Run composer INSIDE a container so the VPS needs no PHP or composer of its own.
+# vendor/ is bind-mounted into the php service, so it must exist on the host —
+# see infra/php/Dockerfile's header for why it is not baked into the image.
+if [[ -f "$REPO_ROOT/vendor/predis/predis/src/Client.php" ]]; then
+  c_ok "vendor/ present with predis"
+elif (( CHECK_ONLY )); then
+  c_warn "vendor/ missing predis (would run composer install)"
+else
+  docker run --rm -v "$REPO_ROOT":/app -w /app composer:2 \
+    install --no-dev --prefer-dist --no-interaction --ignore-platform-reqs
+  [[ -f "$REPO_ROOT/vendor/predis/predis/src/Client.php" ]] \
+    || die "composer install finished but predis is still missing — check composer.lock"
+  c_ok "composer install done, predis present"
+fi
+
+# ---------------------------------------------------------------------------
+step "4/8  Secrets (infra/compose/.env.vps)"
+# ---------------------------------------------------------------------------
+if [[ -f "$ENV_FILE" ]]; then
+  c_ok ".env.vps already exists — leaving it alone (delete it to regenerate)"
+elif (( CHECK_ONLY )); then
+  c_warn ".env.vps missing (would generate with random secrets)"
+else
+  command -v openssl >/dev/null 2>&1 || die "openssl not found — needed to generate secrets"
+  umask 077
+  cat > "$ENV_FILE" <<EOF
+# Generated by infra/scripts/vps-bootstrap.sh — DO NOT COMMIT.
+# .gitignore covers infra/compose/.env.vps; verify with:
+#   git check-ignore -v infra/compose/.env.vps
+MARIADB_ROOT_PASSWORD=$(openssl rand -hex 24)
+MARIADB_PASSWORD=$(openssl rand -hex 24)
+SESSION_BRIDGE_HMAC_SECRET=$(openssl rand -hex 32)
+EDGE_HTTP_PORT=80
+EOF
+  chmod 600 "$ENV_FILE"
+  c_ok "generated .env.vps with random secrets (mode 600)"
+  c_warn "config/config.php's DB_PASS must match MARIADB_PASSWORD — see step 8"
+fi
+
+# Never print secret values; only confirm the file parses.
+if [[ -f "$ENV_FILE" ]]; then
+  grep -q '^MARIADB_PASSWORD=.\+' "$ENV_FILE" || die ".env.vps has an empty MARIADB_PASSWORD"
+  git -C "$REPO_ROOT" check-ignore -q infra/compose/.env.vps \
+    && c_ok ".env.vps is gitignored" \
+    || c_err ".env.vps is NOT gitignored — do not commit it"
+fi
+
+# ---------------------------------------------------------------------------
+step "5/8  Firewall reminder"
+# ---------------------------------------------------------------------------
+c_warn "the DB is bound to 127.0.0.1 by compose; do NOT publish 3306/3307 publicly"
+c_warn "open only 22 and your EDGE_HTTP_PORT (80). Reach MariaDB via: ssh -L 3307:127.0.0.1:3307 root@<vps>"
+
+if (( CHECK_ONLY )); then
+  step "Preflight complete — nothing was changed."
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+step "6/8  Build images  (10-20 min on first run; the Next builds dominate)"
+# ---------------------------------------------------------------------------
+cd "$REPO_ROOT"
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build
+c_ok "images built"
+
+# ---------------------------------------------------------------------------
+step "7/8  Start  (cron deliberately excluded — see the header)"
+# ---------------------------------------------------------------------------
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+
+# ---------------------------------------------------------------------------
+step "8/8  Verify"
+# ---------------------------------------------------------------------------
+# Credential drift: MariaDB applies MARIADB_* only on FIRST init of an empty
+# volume. Editing .env.vps later changes the file and nothing else, and the
+# container still reports healthy because its healthcheck does not
+# authenticate — so the mismatch stays silent until an import fails.
+ROOT_AUTH="$(grep -E '^MARIADB_ROOT_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)"
+if docker exec clinicya-vps-mariadb mariadb -uroot -p"$ROOT_AUTH" -e "SELECT 1" >/dev/null 2>&1; then
+  c_ok "database credentials match .env.vps"
+else
+  c_err "database credentials do NOT match .env.vps — the volume was initialised"
+  c_err "with different values (usually: .env.vps was rewritten after first boot)."
+  c_err "If nothing is imported yet, re-initialise (DESTROYS THE DB VOLUME):"
+  c_err "  docker compose --env-file $ENV_FILE -f $COMPOSE_FILE down -v && \\"
+  c_err "  docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d"
+fi
+
+PORT="$(grep -E '^EDGE_HTTP_PORT=' "$ENV_FILE" | cut -d= -f2)"; PORT="${PORT:-80}"
+E="http://127.0.0.1:${PORT}"
+
+probe() { # label url [extra curl args...]
+  local label="$1" url="$2"; shift 2
+  local out; out="$(curl -sS -o /dev/null -m 20 -w '%{http_code}' "$@" "$url" 2>/dev/null || echo 000)"
+  printf '  %-46s %s\n' "$label" "$out"
+}
+served_by() {
+  local label="$1" url="$2"; shift 2
+  local out; out="$(curl -sSI -m 20 "$@" "$url" 2>/dev/null | grep -i '^x-served-by:' | tr -d '\r' | awk '{print $2}')"
+  printf '  %-46s %s\n' "$label" "${out:-<none>}"
+}
+
+echo "  --- status codes ---"
+probe "edge health            /__edge-health" "$E/__edge-health"
+probe "miniapp                /miniapp/"      "$E/miniapp/"
+probe "miniapp shop           /miniapp/shop/" "$E/miniapp/shop/"
+echo "  --- which stack answered ---"
+served_by "/                       (expect php)"  "$E/"
+served_by "/miniapp/               (expect next)" "$E/miniapp/"
+served_by "/admin-preview canary    (expect next)" "$E/admin-preview" -H 'Host: tenant-demo-tenant.re-ya.com'
+served_by "/admin-preview other     (expect php)"  "$E/admin-preview" -H 'Host: tenant-0001.re-ya.com'
+
+cat <<'NEXT'
+
+==> Up. Next steps
+
+  The database is EMPTY, so PHP pages will error until you import a dump.
+  That is expected at this stage.
+
+  1. Import your dump             — runbook §6
+  2. Point config/config.php's DB_PASS at MARIADB_PASSWORD from
+     infra/compose/.env.vps (or set the DB_* env vars once that file is
+     made env-aware)
+  3. BEFORE opening the admin UI: run database/trial-safe-mode.sql against
+     every imported tenant DB. An imported dump carries live LINE tokens and
+     this stack can push to real customers — runbook §7b.
+  4. For a real functional trial (test OA + HTTPS webhook) — runbook §11
+
+  Logs:  docker compose --env-file infra/compose/.env.vps \
+           -f infra/compose/docker-compose.vps.yml logs -f
+NEXT

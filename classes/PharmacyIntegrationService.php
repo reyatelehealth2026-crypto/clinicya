@@ -243,8 +243,8 @@ class PharmacyIntegrationService
             $stmt = $this->db->prepare("
                 SELECT 
                     id, display_name, first_name, last_name,
-                    weight, height, birth_date, gender,
-                    drug_allergies, chronic_diseases, current_medications, medical_conditions
+                    weight, height, birthday AS birth_date, gender,
+                    drug_allergies, current_medications, medical_conditions
                 FROM users 
                 WHERE id = ?
             ");
@@ -267,11 +267,9 @@ class PharmacyIntegrationService
             
             // Parse text fields into arrays
             $allergies = $this->parseTextToArray($user['drug_allergies']);
-            $conditions = array_merge(
-                $this->parseTextToArray($user['chronic_diseases']),
-                $this->parseTextToArray($user['medical_conditions'])
-            );
-            $conditions = array_unique($conditions);
+            // chronic_diseases is not a column on any tenant's users table, so
+            // medical_conditions is the only source of conditions here.
+            $conditions = array_unique($this->parseTextToArray($user['medical_conditions']));
             $medications = $this->parseTextToArray($user['current_medications']);
             
             // Calculate age
@@ -333,13 +331,11 @@ class PharmacyIntegrationService
                     : $data['drug_allergies'];
             }
             
-            if (isset($data['chronic_diseases'])) {
-                $updates[] = 'chronic_diseases = ?';
-                $params[] = is_array($data['chronic_diseases']) 
-                    ? implode(', ', $data['chronic_diseases']) 
-                    : $data['chronic_diseases'];
-            }
-            
+            // No chronic_diseases branch: the column exists on no tenant, so
+            // accepting the key here put `chronic_diseases = ?` into the single
+            // UPDATE and failed the whole statement — silently dropping the
+            // allergy, medication and condition edits sent alongside it.
+
             if (isset($data['current_medications'])) {
                 $updates[] = 'current_medications = ?';
                 $params[] = is_array($data['current_medications']) 

@@ -77,8 +77,10 @@ export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Windows installs pnpm/npm/npx/yarn as .cmd shims. spawnSync can't launch those directly: bare 'pnpm' ENOENTs, and 'pnpm.cmd' EINVALs since Node's CVE-2024-27980 fix — only shell:true works. Scoped to those four names so real executables (docker) keep spawning without a shell, and their Go-template args ({{.State.Running}}) never touch cmd.exe. Linux/Mac/CI unaffected. */
 export function run(cmd, args, opts = {}) {
-  return spawnSync(cmd, args, { cwd: REPO_ROOT, encoding: 'utf8', ...opts });
+  const needsShell = process.platform === 'win32' && /^(pnpm|npm|npx|yarn)$/.test(cmd);
+  return spawnSync(cmd, args, { cwd: REPO_ROOT, encoding: 'utf8', shell: needsShell, ...opts });
 }
 
 export function runOrThrow(tracker, step, cmd, args, opts = {}) {
