@@ -1,0 +1,128 @@
+/* ============================================================
+   Mor Ruj — animated sprite mascot v2
+   Draggable + resizable + click-to-open AI chat
+   Sprite: /assets/images/mor-ruj-sprite.png  (8 cols x 5 rows)
+   ============================================================ */
+.mrj-root { font-family: 'Inter','Noto Sans Thai',sans-serif; }
+
+/* Hide the legacy fa-robot AI chat widget — the mascot replaces it */
+#ai-chat-widget { display: none !important; }
+
+.mrj {
+  position: fixed;
+  width: 92px;
+  height: 92px;
+  left: 120px;
+  top: 70%;
+  z-index: 2147483000;
+  background-image: url('/assets/images/mor-ruj-sprite.png?v=5');
+  background-repeat: no-repeat;
+  background-size: 800% 500%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  transform-origin: bottom center;
+  transition: left .9s cubic-bezier(.4,0,.2,1), top .9s cubic-bezier(.4,0,.2,1);
+  cursor: grab;
+  touch-action: none;
+  filter: drop-shadow(0 6px 6px rgba(0,0,0,.18));
+}
+.mrj.mrj-notrans { transition: none !important; }
+.mrj.mrj-drag { cursor: grabbing; }
+
+/* resize handle */
+.mrj-resize {
+  position: fixed;
+  width: 20px; height: 20px;
+  z-index: 2147483003;
+  border-radius: 50%;
+  background: #fff; border: 2px solid #00B900; color: #00B900;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; cursor: nwse-resize;
+  box-shadow: 0 2px 6px rgba(0,0,0,.18);
+  touch-action: none;
+}
+.mrj-close {
+  position: fixed;
+  z-index: 2147483003;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; color: #64748b; border: 1px solid #d6e6dc;
+  font-size: 11px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.12);
+}
+.mrj-close:hover { color: #ef4444; }
+
+/* speech bubble (tour tips) */
+.mrj-bubble {
+  position: fixed; max-width: 270px; padding: 10px 14px; border-radius: 13px;
+  background: #15243b; color: #fff; font-size: 13px; line-height: 1.5; font-weight: 500;
+  box-shadow: 0 10px 28px rgba(0,0,0,.24); z-index: 2147483002;
+  opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none;
+}
+.mrj-bubble.mrj-show { opacity: 1; transform: translateY(0); }
+.mrj-bubble::after { content:""; position:absolute; bottom:-7px; left:26px; border:7px solid transparent; border-top-color:#15243b; border-bottom:0; }
+.mrj-bubble__name { font-weight:700; color:#6ee7a8; font-size:11px; display:block; margin-bottom:2px; }
+
+.mrj-hl { outline: 3px solid #00B900 !important; outline-offset: 3px; border-radius: 8px; }
+
+/* launcher */
+.mrj-launcher {
+  position: fixed; bottom: 18px; left: 18px; z-index: 2147483000;
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px 8px 10px;
+  border-radius: 999px; background: #fff; border: 1px solid #cfe6d8;
+  box-shadow: 0 6px 18px rgba(15,118,110,.16); cursor: pointer;
+  font-size: 13px; font-weight: 600; color: #0f766e;
+}
+.mrj-launcher i { color: #00B900; }
+
+/* ===== Chat panel ===== */
+.mrj-chat {
+  position: fixed; z-index: 2147483004;
+  width: 340px; max-width: calc(100vw - 24px); height: 460px; max-height: calc(100vh - 40px);
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15,23,42,.28);
+  display: none; flex-direction: column; overflow: hidden;
+}
+.mrj-chat.mrj-open { display: flex; animation: mrjpop .18s ease-out; }
+@keyframes mrjpop { from { opacity:0; transform: translateY(10px) scale(.97);} to { opacity:1; transform:none;} }
+
+.mrj-chat__head {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  background: linear-gradient(135deg,#1f8f77,#0f766e); color: #fff; flex-shrink: 0;
+}
+.mrj-chat__ava {
+  width: 40px; height: 40px; border-radius: 50%; background: #fff; flex-shrink: 0;
+  background-image: url('/assets/images/mor-ruj-sprite.png?v=5');
+  background-size: 800% 500%; background-position: 0% 0%;
+  image-rendering: pixelated; border: 2px solid rgba(255,255,255,.6);
+}
+.mrj-chat__t { flex: 1; min-width: 0; }
+.mrj-chat__name { font-weight: 700; font-size: 14px; }
+.mrj-chat__sub { font-size: 11px; opacity: .85; }
+.mrj-chat__x { width: 30px; height: 30px; border:none; background: rgba(255,255,255,.15); color:#fff; border-radius: 9px; cursor: pointer; }
+.mrj-chat__x:hover { background: rgba(255,255,255,.28); }
+
+.mrj-chat__body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #f6f9fb; }
+.mrj-msg { display: flex; gap: 8px; max-width: 90%; }
+.mrj-msg--ai { align-self: flex-start; }
+.mrj-msg--user { align-self: flex-end; flex-direction: row-reverse; }
+.mrj-msg__b { padding: 9px 12px; border-radius: 13px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+.mrj-msg--ai .mrj-msg__b { background: #fff; border: 1px solid #e8edf2; color: #243447; border-bottom-left-radius: 4px; }
+.mrj-msg--user .mrj-msg__b { background: linear-gradient(135deg,#1f8f77,#0f766e); color: #fff; border-bottom-right-radius: 4px; }
+.mrj-msg__b strong { font-weight: 700; }
+.mrj-typing { display: flex; gap: 4px; padding: 11px 13px; background:#fff; border:1px solid #e8edf2; border-radius:13px; width: fit-content; }
+.mrj-typing span { width:6px; height:6px; border-radius:50%; background:#9aa7b4; animation: mrjdot 1.3s infinite both; }
+.mrj-typing span:nth-child(1){animation-delay:-.32s;} .mrj-typing span:nth-child(2){animation-delay:-.16s;}
+@keyframes mrjdot { 0%,80%,100%{transform:scale(0);} 40%{transform:scale(1);} }
+
+.mrj-chat__foot { padding: 10px 12px; border-top: 1px solid #eef2f6; background:#fff; flex-shrink: 0; }
+.mrj-chat__chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 8px; }
+.mrj-chip { white-space: nowrap; padding: 5px 11px; border-radius: 999px; border:1px solid #d8e6dd; background:#fff; color:#0f766e; font-size:12px; font-weight:600; cursor:pointer; }
+.mrj-chip:hover { background:#00B900; color:#fff; border-color:#00B900; }
+.mrj-chat__form { display: flex; gap: 8px; align-items: center; }
+.mrj-chat__in { flex:1; padding: 9px 14px; border:1px solid #d8e0e8; border-radius:999px; font:inherit; font-size:13px; outline:none; }
+.mrj-chat__in:focus { border-color:#00B900; box-shadow:0 0 0 3px rgba(0,185,0,.12); }
+.mrj-chat__send { width:38px; height:38px; border:none; border-radius:50%; background:linear-gradient(135deg,#1f8f77,#0f766e); color:#fff; cursor:pointer; flex-shrink:0; }
+.mrj-chat__send:disabled { opacity:.5; cursor:not-allowed; }
+
+@media (prefers-reduced-motion: reduce) { .mrj { transition: none; } }

@@ -1,0 +1,6 @@
+<?php
+/** Google OAuth — copy to google_oauth.php and fill in. Never commit the real file. */
+declare(strict_types=1);
+define('GOOGLE_CLIENT_ID',     'YOUR_CLIENT_ID.apps.googleusercontent.com');
+define('GOOGLE_CLIENT_SECRET', 'YOUR_CLIENT_SECRET');
+define('GOOGLE_REDIRECT_URI',  'https://example.com/auth/google-callback.php');

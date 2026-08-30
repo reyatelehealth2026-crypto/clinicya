@@ -1,0 +1,10 @@
+# ปิดการเข้าถึงโดยเจ้าของบัญชี CNY 2026-06-26
+# เหตุผล: เว็บที่ dev เก่าวางไว้โดยไม่ได้รับอนุญาต (พนัน/ของคนอื่น) — ปิดเพื่อลดความเสี่ยงกฎหมาย
+# ไฟล์ถูกเก็บเป็นหลักฐานแล้ว (ดู EVIDENCE/CHAIN_OF_CUSTODY.txt) ห้ามลบ
+<IfModule mod_authz_core.c>
+  Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+</IfModule>

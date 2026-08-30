@@ -1,0 +1,9 @@
+<?php
+/** Notification config — copy to notify_config.php and fill in. Never commit the real file. */
+declare(strict_types=1);
+define('NOTIFY_SIGNUP_EMAIL', 'ops@example.com');
+define('NOTIFY_TELEGRAM_BOT_TOKEN', 'YOUR_TELEGRAM_BOT_TOKEN');
+define('NOTIFY_TELEGRAM_CHAT_ID', 'YOUR_TELEGRAM_CHAT_ID');
+define('REYA_OWNER_EMAILS', 'owner@example.com');
+define('NOTIFY_FROM_EMAIL', 'noreply@example.com');
+define('NOTIFY_FROM_NAME', 'REYA Platform');
