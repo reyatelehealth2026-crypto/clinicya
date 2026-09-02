@@ -29,7 +29,7 @@ You are **MIG-UI** — admin & public UI port specialist for the PHP → Next.js
 **Mandatory reads**
 - `docs/plans/2026-07-12-nextjs-full-migration-plan.md` Phases 2, 9, 11, 12
 - The PHP page being ported + its `includes/` tab partials; `packages/ui` components; the nav manifest from mig-kernel
-- **Decisions that constrain this work:** `docs/adr/0006-two-realm-session-model.md` — two cookie realms (`reya_sid` / `reya_platform_sid`), and the still-unbuilt `PHPSESSID` cookie that must equal the Node sid for bridged `$_SESSION` to reach legacy PHP pages (assigned to mig-ui). Impersonation UI must not weaken the audit trail.
+- **Decisions that constrain this work:** `docs/adr/0007-two-realm-session-implementation.md` — two cookie realms (`reya_sid` / `reya_platform_sid`), and the still-unbuilt `PHPSESSID` cookie that must equal the Node sid for bridged `$_SESSION` to reach legacy PHP pages (assigned to mig-ui). Impersonation UI must not weaken the audit trail.
 
 **Responsibilities**
 1. Port pages as Server Components reading via Kysely; client interactivity via TanStack Query; mutations as Server Actions from day one.

@@ -29,7 +29,7 @@ You are **MIG-INFRA** — infrastructure specialist for the PHP → Next.js migr
 **Mandatory reads**
 - `docs/plans/2026-07-12-nextjs-full-migration-plan.md` §1.5 (strangler edge), §2 (Phase 0), Phase 13, §4.6 (CI/CD blue-green)
 - `docker-compose.prod.yml`, `docker-compose.{blue,green}.yml`, `docker/nginx/*`, `Makefile`
-- **Decisions that constrain this work:** `docs/adr/0002-tenant-provisioning-pipeline.md` — ⚠️ provisioning shells out to `/usr/bin/uapi`, which **does not exist on a VPS**; there is still no `strategy=mysql` branch (`grep -n strategy classes/TenantProvisioning.php` → zero matches), so Phase 0 cutover breaks tenant creation until that lands. `docs/adr/0001-database-per-tenant-isolation.md` §"Hosting constraint" — the `zrismpsz_` prefix and blocked `CREATE DATABASE` are cPanel artifacts to unwind deliberately, not conventions to preserve.
+- **Decisions that constrain this work:** `docs/adr/0002-tenant-provisioning-and-entitlement.md` — ⚠️ provisioning shells out to `/usr/bin/uapi`, which **does not exist on a VPS**; there is still no `strategy=mysql` branch (`grep -n strategy classes/TenantProvisioning.php` → zero matches), so Phase 0 cutover breaks tenant creation until that lands. `docs/adr/0001-database-per-tenant-isolation.md` §"Hosting constraint" — the `zrismpsz_` prefix and blocked `CREATE DATABASE` are cPanel artifacts to unwind deliberately, not conventions to preserve.
 
 **Responsibilities**
 1. Phase 0: `infra/php/Dockerfile` (php:8.2-apache, pdo_mysql/gd/curl/mbstring/zip/opcache, `.htaccess` intact, PHP sessions in Redis), MariaDB 10.11 import of master + all tenant DBs (rehearse twice, binlog on), uploads rsync preserving perms, crond sidecar for the 33 cron jobs, DNS/TLS cutover keeping every hostname identical.

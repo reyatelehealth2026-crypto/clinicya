@@ -71,7 +71,7 @@ explicit setCurrentTenantId() > $_SESSION['active_tenant_id']
   > platform_users lookup > legacy current_bot_id > null
 ```
 
-**Super-admin ไม่ได้ tenant โดยปริยาย** — ต้องเรียก `setCurrentTenantId()` หรือ `enterPlatformContext()` เอง เป็นการกันการอ่านข้ามผู้เช่าโดยไม่ตั้งใจ (`classes/TenantContext.php:20-23`) รายละเอียด session ดู [ADR-006](0006-two-realm-session-model.md) §"Session model"
+**Super-admin ไม่ได้ tenant โดยปริยาย** — ต้องเรียก `setCurrentTenantId()` หรือ `enterPlatformContext()` เอง เป็นการกันการอ่านข้ามผู้เช่าโดยไม่ตั้งใจ (`classes/TenantContext.php:20-23`) รายละเอียด session ดู [ADR-006](0006-super-admin-audit.md) §"Session model"
 
 **LINE routing เป็นเส้นทางที่สอง** — เพราะ LINE webhook URL และ LIFF base URL อยู่บน root domain ไม่มี subdomain จึงไม่มี TenantContext ต้อง route ด้วย `master.tenant_line_account_routes` แทน โดยจับคู่ `(line_account_id, tenant_id)` เป็น composite identity (id ไม่ unique ข้าม tenant DB เพราะแต่ละชุดมี auto-increment ของตัวเอง) — `classes/TenantContext.php:261, 295`
 
@@ -259,6 +259,7 @@ Verified on 2026-09-02 from `classes/TenantContext.php`, `modules/Core/Database.
 
 ## Related
 
-- [ADR-002: Tenant Provisioning Pipeline](0002-tenant-provisioning-pipeline.md) — วิธีสร้าง tenant DB ที่ ADR นี้กำหนดโครงไว้
-- [ADR-006: Two-Realm Session Model](0006-two-realm-session-model.md) — auth ที่บังคับกฎ "super-admin ไม่มี tenant โดยปริยาย"
+- [ADR-002: Tenant Provisioning Flow + Entitlement Gating](0002-tenant-provisioning-and-entitlement.md) — วิธีสร้าง tenant DB ที่ ADR นี้กำหนดโครงไว้
+- [ADR-006: Super Admin Cross-Tenant Access + Audit](0006-super-admin-audit.md) — auth ที่บังคับกฎ "super-admin ไม่มี tenant โดยปริยาย"
+- [ADR-007: Two-Realm Session Model (implementation drift)](0007-two-realm-session-implementation.md) — สิ่งที่โค้ดทำจริง ซึ่งต่างจาก ADR-006
 - [docs/ai/adrs/0001-tenant-aware-database-routing.md](../ai/adrs/0001-tenant-aware-database-routing.md) — เอกสาร AI-inferred หัวข้อทับซ้อน ดู [README](README.md) §"ความสัมพันธ์กับ docs/ai/adrs/"

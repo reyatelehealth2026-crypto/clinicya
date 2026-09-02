@@ -39,7 +39,7 @@ What this means for generated code:
 - **CLI and cron must opt out of subdomain resolution** — `define('REYA_SKIP_SUBDOMAIN_RESOLUTION', true);` before
   `require_once 'config/database.php'`. Cron loops that iterate tenants call `TenantContext::setCurrentTenantId($id)`.
 - **Super-admins get NO implicit tenant.** They must enter one explicitly; this guards against cross-tenant reads.
-  See `docs/adr/0006-two-realm-session-model.md` §"Session model".
+  See `docs/adr/0006-super-admin-audit.md` §"Session model".
 - **Root-domain requests (LINE webhook, LIFF) have no subdomain** — resolve the tenant from `line_account_id` via
   `master.tenant_line_account_routes`, never assume tenant 1.
 

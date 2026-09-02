@@ -15,19 +15,28 @@ ADR-001, ADR-002 และ ADR-006 ถูกอ้างอิงในโค้
 | # | หัวข้อ | สถานะ | ถูกอ้างในโค้ด |
 |---|---|---|---|
 | [0001](0001-database-per-tenant-isolation.md) | Database-per-Tenant Isolation | Reconstructed, needs confirmation | ~25 จุด |
-| [0002](0002-tenant-provisioning-pipeline.md) | Tenant Provisioning Pipeline | Reconstructed, needs confirmation | 1 จุด |
-| 0003 | **สงวนไว้ — ไม่ทราบหัวข้อ** | Unknown | ไม่มี |
-| 0004 | **สงวนไว้ — ไม่ทราบหัวข้อ** | Unknown | ไม่มี |
-| 0005 | **สงวนไว้ — ไม่ทราบหัวข้อ** | Unknown | ไม่มี |
-| [0006](0006-two-realm-session-model.md) | Two-Realm Session Model and Audited Impersonation | Reconstructed, needs confirmation | 8 จุด |
+| [0002](0002-tenant-provisioning-and-entitlement.md) | Tenant Provisioning Flow + Entitlement Gating | **Accepted (2026-05-25)** | 1 จุด |
+| [0003](0003-branch-model.md) | Branch Model (Multi-Branch Within Tenant) | **Accepted (2026-05-25)** | ไม่มี |
+| [0004](0004-cron-execution-model.md) | Cron Job Execution Model (Per-Tenant Loop) | **Accepted (2026-05-25)** | ไม่มี |
+| [0005](0005-file-storage-layout.md) | File Storage Layout + Signed URL Strategy | **Accepted (2026-05-25)** | ไม่มี |
+| [0006](0006-super-admin-audit.md) | Super Admin Cross-Tenant Access + Audit | **Accepted (2026-05-25)** | 8 จุด |
+| [0007](0007-two-realm-session-implementation.md) | Two-Realm Session Model — implementation drift จาก ADR-006 | Documents current code, needs confirmation | — |
 
-### หมายเลข 0003–0005 ทำไมถึงว่าง
+### 0003–0005 ถูกพบแล้ว — ต้นฉบับอยู่บนเครื่องนักพัฒนา
 
-ชุด ADR เดิมเดินเลขถึง 006 แต่ **ไม่มีโค้ดใดอ้างถึง ADR-003, ADR-004 หรือ ADR-005 เลย** (ตรวจด้วย exhaustive grep ทุกนามสกุลไฟล์)
+ตอนกู้เอกสารรอบแรกเราสรุปว่า "ไม่มีโค้ดใดอ้าง ADR-003/004/005 จึงสงวนเลขไว้ ไม่แต่งเนื้อหา"
 
-เราจึง **ไม่เขียนเนื้อหาให้เลขเหล่านี้** เพราะจะเป็นการแต่งการตัดสินใจที่อาจไม่เคยเกิดขึ้น — ขัดกับหลัก accuracy-first ของโปรเจกต์นี้
+ภายหลังพบว่า **ต้นฉบับ 0002–0006 มีอยู่จริง** เป็นไฟล์ untracked บนเครื่องนักพัฒนา ลงวันที่ 2026-05-25 ทุกฉบับมี `Status: Accepted`, `Deciders: Platform Owner + Engineering` และหัวข้อ `Alternatives Considered` ครบ — ซึ่งคือข้อมูลที่ฉบับกู้คืนบอกว่า "กู้จากโค้ดไม่ได้"
 
-**อย่านำเลข 0003–0005 ไปใช้กับ ADR ใหม่** จนกว่าจะยืนยันได้ว่าต้นฉบับไม่มีอยู่จริง หาก ADR ต้นฉบับถูกพบในที่อื่น (Notion, Google Drive, เครื่องนักพัฒนา) ให้นำมาวางที่เลขเดิม
+สาเหตุที่ไม่เคยเข้ารีโปคือ bug ลำดับกฎใน `.gitignore` ตัวเดียวกับที่อธิบายไว้ข้างบน (`CONTEXT.md` ก็หายด้วยเหตุผลเดียวกัน)
+
+**ผลที่ตามมา:**
+
+- ADR-002 ถึง 006 ในโฟลเดอร์นี้เป็น **ต้นฉบับ** แล้ว ไม่ใช่ฉบับกู้คืน
+- ฉบับกู้คืนของ 0002 ถูกลบ เพราะต้นฉบับครอบคลุมเรื่องเดียวกันและมีหัวข้อที่โค้ดอ้าง (`§"Provisioning Pipeline"`) อยู่ครบ
+- ฉบับกู้คืนของ 0006 **ไม่ถูกลบ** แต่ย้ายไปเป็น [ADR-007](0007-two-realm-session-implementation.md) เพราะเทียบแล้วพบว่า **โค้ดจริงเดินห่างจาก ADR-006** — ต้นฉบับพูดถึง `$_SESSION['acting_tenant_id']` ส่วนโค้ดปัจจุบันใช้ two-realm cookie ซึ่งต้นฉบับไม่เอ่ยถึงเลย
+- **ADR-001 ยังไม่พบต้นฉบับ** จึงยังเป็นฉบับกู้คืนจากโค้ดอยู่
+- ADR ใหม่ยังคงเริ่มที่ **0008** เป็นต้นไป
 
 ## Convention
 
@@ -101,13 +110,13 @@ PROPOSED → ACCEPTED → (SUPERSEDED by ADR-XXX | DEPRECATED)
 |---|---|---|---|
 | 0001 | Database-per-Tenant Isolation | Tenant-Aware Database Routing | หัวข้อทับซ้อน — ฉบับ canonical ครอบคลุมกว้างกว่าและมี §"Hosting constraint" / §"Connection routing" ที่โค้ดอ้าง |
 | 0002 | Tenant Provisioning Pipeline | Shared LINE Mini App Runtime Tenant Resolution | **คนละเรื่องสิ้นเชิง** |
-| 0003 | (สงวน) | Prefer LINE Reply Then Push Fallback | คนละเรื่อง |
+| 0003 | Branch Model | Prefer LINE Reply Then Push Fallback | คนละเรื่อง |
 
-`docs/ai/adrs/0002` และ `0003` บันทึกการตัดสินใจที่ **ยังไม่มี ADR canonical ครอบคลุม** และมีคุณค่าในตัวเอง หากต้องการยกระดับเป็น canonical ให้ยืนยันเนื้อหากับผู้ตัดสินใจก่อน แล้วเขียนใหม่ที่เลข **0007 เป็นต้นไป** (ไม่ใช่ 0003–0005 ซึ่งสงวนไว้)
+`docs/ai/adrs/0002` และ `0003` บันทึกการตัดสินใจที่ **ยังไม่มี ADR canonical ครอบคลุม** และมีคุณค่าในตัวเอง หากต้องการยกระดับเป็น canonical ให้ยืนยันเนื้อหากับผู้ตัดสินใจก่อน แล้วเขียนใหม่ที่เลข **0008 เป็นต้นไป**
 
 ## การเพิ่ม ADR ใหม่
 
-1. ใช้เลขถัดไปที่ว่าง — **เริ่มที่ 0007** (0003–0005 สงวนไว้)
+1. ใช้เลขถัดไปที่ว่าง — **เริ่มที่ 0008**
 2. ตั้งชื่อไฟล์ `NNNN-kebab-case-title.md`
 3. ใช้โครงสร้างมาตรฐานข้างต้น หัวข้ออังกฤษ เนื้อหาไทย
 4. ทุกข้ออ้างต้องมี `Evidence` ชี้ไฟล์และบรรทัด

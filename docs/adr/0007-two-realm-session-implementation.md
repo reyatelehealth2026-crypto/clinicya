@@ -1,12 +1,21 @@
-# ADR-006: Two-Realm Session Model and Audited Impersonation
+# ADR-007: Two-Realm Session Model — ส่วนที่ implementation เดินห่างจาก ADR-006
 
 ## Status
 
-**Reconstructed from code, needs confirmation.**
+**Documents current implementation. Supersedes part of [ADR-006](0006-super-admin-audit.md) §"Session model" — needs confirmation.**
 
-สร้างขึ้นใหม่จาก 8 จุดในโค้ดที่อ้างถึง ADR นี้ โดย 2 จุดอ้างหัวข้อย่อยตรง ๆ ว่า §"Session model" (`admin/switch-tenant.php:5`, `includes/auth_check.php:60`) ไฟล์ต้นฉบับไม่เคยถูก commit
+เอกสารฉบับนี้เดิมถูกเขียนขึ้นใหม่จากโค้ด ตอนที่เชื่อว่า ADR-006 ต้นฉบับสูญหาย ภายหลังพบต้นฉบับ (`0006-super-admin-audit.md`, Accepted 2026-05-25) เป็นไฟล์ untracked บนเครื่องนักพัฒนา — `.gitignore` กลืนไว้ จึงไม่เคยเข้ารีโป
 
-**สิ่งที่ต้องยืนยัน:** ADR ต้นฉบับสัญญาว่าจะ audit แค่ "การสลับ tenant" หรือ "ทุก write ในบริบท tenant" — ปัจจุบันโค้ดทำได้แค่อย่างแรก แต่ UI อ้างอย่างหลัง (ดู §Consequences ข้อ 4)
+เมื่อเทียบกันแล้วพบว่า **ทั้งสองฉบับไม่ตรงกัน** และนั่นคือเหตุผลที่เอกสารนี้ยังอยู่ แทนที่จะถูกลบทิ้ง:
+
+| | ADR-006 ต้นฉบับ (สิ่งที่ตัดสินใจไว้) | เอกสารนี้ (สิ่งที่โค้ดทำจริง) |
+|---|---|---|
+| session keys | `$_SESSION['platform_user_id']`, `acting_tenant_id`, `switch_audit_id` | two-realm cookie sessions, `platform_users` vs `admin_users` |
+| คำว่า two-realm / cookie | ไม่ปรากฏเลย | ปรากฏ 23 ครั้ง |
+
+**ยังไม่ทราบว่า** implementation เปลี่ยนไปโดยตั้งใจแล้วลืมอัปเดต ADR หรือหลุดจากที่ตัดสินใจไว้โดยไม่รู้ตัว — ต้องให้ผู้ตัดสินใจเดิมยืนยัน แล้วจึงเลือกว่าจะแก้โค้ดให้กลับไปตาม ADR-006 หรือรับรองเอกสารนี้เป็นการตัดสินใจใหม่ที่แทนที่ ADR-006 §"Session model"
+
+**อีกเรื่องที่ต้องยืนยัน:** ADR-006 สัญญาว่าจะ audit แค่ "การสลับ tenant" หรือ "ทุก write ในบริบท tenant" — ปัจจุบันโค้ดทำได้แค่อย่างแรก แต่ UI อ้างอย่างหลัง (ดู §Consequences ข้อ 4)
 
 ## Date
 
@@ -261,4 +270,4 @@ Verified on 2026-09-02 from `admin/switch-tenant.php`, `admin/platform-login.php
 ## Related
 
 - [ADR-001: Database-per-Tenant Isolation](0001-database-per-tenant-isolation.md) — §"Connection routing" กำหนดว่า super-admin ไม่ได้ tenant โดยปริยาย
-- [ADR-002: Tenant Provisioning Pipeline](0002-tenant-provisioning-pipeline.md) — `provision_tenant` เป็น action หนึ่งใน `super_admin_audit`
+- [ADR-002: Tenant Provisioning Flow + Entitlement Gating](0002-tenant-provisioning-and-entitlement.md) — `provision_tenant` เป็น action หนึ่งใน `super_admin_audit`

@@ -29,9 +29,11 @@ from collections import defaultdict
 REPO = Path(__file__).resolve().parent.parent
 ADR_DIR = REPO / "docs" / "adr"
 
-# Numbers whose original ADR was never recovered. Nothing in the codebase
-# cites them, so no document was invented. Do not reuse — see docs/adr/README.md.
-RESERVED = {"ADR-003", "ADR-004", "ADR-005"}
+# Numbers held back from reuse. 0003-0005 were reserved while their originals
+# were believed lost; the originals were later found untracked on a developer
+# machine (killed by the same .gitignore bug) and are now committed, so nothing
+# is reserved today. Kept as a mechanism for the next time a number must be held.
+RESERVED: set[str] = set()
 
 SOURCE_GLOBS = ("*.php", "*.ts", "*.tsx", "*.sql", "*.md", "*.js", "*.mjs")
 SKIP_DIRS = ("/node_modules/", "/vendor/", "/.git/")
@@ -47,6 +49,15 @@ PATHREF = re.compile(
 
 failures: list[str] = []
 notes: list[str] = []
+unbuilt: list[str] = []
+
+
+def is_accepted(path: Path) -> bool:
+    """An original decision record (Status: Accepted) rather than one
+    reconstructed from code. An original may name files that were planned but
+    never built; a reconstruction cites existing code as its evidence."""
+    head = path.read_text(encoding="utf-8")[:2000]
+    return "Accepted (" in head or "**Status:** Accepted" in head
 
 
 def adr_files() -> dict[str, Path]:
@@ -154,21 +165,40 @@ def check_paths(known: dict[str, Path]) -> None:
                 continue
             checked += 1
             target = REPO / (m[1:] if m.startswith("/") else m)
-            if not target.exists():
+            # A bare sibling filename is a relative link inside docs/adr/.
+            if not target.exists() and "/" not in m:
+                target = ADR_DIR / m
+            if target.exists():
+                continue
+            # An Accepted ADR describes the design as it was decided; some files
+            # it names were never built. That is a real finding — decisions taken
+            # and never implemented — but it is not a dangling reference, so it
+            # is reported rather than failed. A reconstructed ADR cites existing
+            # code as its evidence, so a missing path there IS a broken claim.
+            if is_accepted(p):
+                unbuilt.append(f"{p.name} -> {m}")
+                print(f"    TODO {p.name} -> {m}  (decided, never built)")
+            else:
                 bad += 1
                 failures.append(f"{p.name} references `{m}` which does not exist")
                 print(f"    FAIL {p.name} -> {m}")
     if not bad:
-        print(f"    OK   {checked} distinct path(s) resolve")
+        msg = f"    OK   {checked} distinct path(s) resolve"
+        if unbuilt:
+            msg += f" ({len(unbuilt)} decided but never built)"
+        print(msg)
 
 
 def check_reserved(known: dict[str, Path]) -> None:
     print("\n[5] Reserved numbers not reused")
+    if not RESERVED:
+        print("    OK   no numbers currently reserved")
+        return
     clash = sorted(RESERVED & set(known))
     for n in clash:
         failures.append(
             f"{n} is reserved (original ADR never recovered) but {known[n].name} now uses it. "
-            f"New ADRs start at 0007 — see docs/adr/README.md.")
+            f"See docs/adr/README.md for the next free number.")
         print(f"    FAIL {n} reused by {known[n].name}")
     if not clash:
         print(f"    OK   {', '.join(sorted(RESERVED))} still reserved")
@@ -189,6 +219,11 @@ def main() -> int:
     print("\n" + "=" * 62)
     for n in notes:
         print(f"  note: {n}")
+    if unbuilt:
+        print(f"  {len(unbuilt)} file(s) an Accepted ADR names but nobody built:")
+        for u in unbuilt:
+            print(f"    - {u}")
+        print()
     if failures:
         print(f"  FAIL — {len(failures)} problem(s):\n")
         for f in failures:
