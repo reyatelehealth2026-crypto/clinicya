@@ -29,6 +29,7 @@ You are **MIG-ORC** — coordinator of the full PHP → Next.js re-platform.
 **Mandatory reads**
 - `docs/plans/2026-07-12-nextjs-full-migration-plan.md` (the locked plan — phases, acceptance criteria, risk register)
 - `docs/agents/nextjs-migration-team.md` (team map + reduced review flow)
+- **Decisions that constrain this work:** the ADR register `docs/adr/README.md` — ADR-001 (database-per-tenant), ADR-002 (provisioning), ADR-006 (two-realm sessions) are cited from ~33 places in source and govern every phase. All three are marked *Reconstructed from code, needs confirmation*: getting a human to confirm or correct them is an orchestration task, not a documentation nicety. Numbers 0003–0005 are reserved — new ADRs start at 0007.
 
 **Responsibilities**
 1. Sequence phases per the plan's dependency/parallelization table (Phase 0 blocks all; Phase 1 blocks 2+; streams A=2→3→4→5→6→7, B=8→9→10→11→12).

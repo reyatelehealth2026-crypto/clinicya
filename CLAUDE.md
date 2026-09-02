@@ -222,3 +222,5 @@ Canonical five-state vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`
 ### Domain docs
 
 Single-context — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+**ADR register: [`docs/adr/README.md`](docs/adr/README.md).** Decisions cited from source as `ADR-NNN` (and `ADR-NNN §"Section"`) live there — currently ADR-001 (database-per-tenant), ADR-002 (provisioning pipeline), ADR-006 (two-realm session model). Numbers 0003–0005 are reserved: nothing in the codebase cites them, so no document was invented for them. Do not renumber existing ADRs or rename a section that source code references by name. `docs/ai/adrs/` is a separate AI-inferred set that no code cites — not canonical.
