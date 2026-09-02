@@ -184,12 +184,16 @@ database/*.sql
 !database/migration_2026-07-04_tenant_onboard_progress.sql
 !database/migration_2026-07-04_pdpa_data_rights.sql
 !database/trial-safe-mode.sql
-!docs/adr/*.md
-!CONTEXT.md
-!CONTEXT-MAP.md
 *.png
 DB_CONNECTION.md
 *.md
+
+# Re-allow docs that the blanket `*.md` above would otherwise swallow.
+# NOTE: these MUST stay below `*.md` — a negation placed above it is dead,
+# which is why docs/adr/ and CONTEXT.md were silently never committed.
+!docs/adr/*.md
+!CONTEXT.md
+!CONTEXT-MAP.md
 !ONTOLOGY.md
 !REFLECTIONS.md
 !PROACTIVE.md
