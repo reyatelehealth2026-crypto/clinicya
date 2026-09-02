@@ -9,6 +9,7 @@
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
+require_once __DIR__ . '/../classes/NotificationGate.php';
 
 $db = Database::getInstance()->getConnection();
 
@@ -100,8 +101,18 @@ foreach ($reminders as $reminder) {
 
     // Send via LINE API
     try {
-        $line = new LineAPI($reminder['channel_access_token']);
-        $result = $line->pushMessage($reminder['line_user_id'], [$flexMessage]);
+        // ผ่าน NotificationGate เสมอ — เตือนทานยาได้รับการยกเว้นช่วงห้ามรบกวน
+        // และเพดานต่อวัน เพราะลูกค้าเป็นคนตั้งเวลานั้นเอง (NotificationGate::POLICY)
+        $gate = new NotificationGate($db);
+        $result = $gate->send([
+            'user_id' => (int) $reminder['user_id'],
+            'line_user_id' => $reminder['line_user_id'],
+            'line_account_id' => $reminder['line_account_id'] ?? null,
+            'channel_access_token' => $reminder['channel_access_token'],
+            'event_type' => 'medication_dose',
+            'dedupe_key' => 'dose:' . $reminder['id'] . ':' . $matchedTime . ':' . date('Y-m-d'),
+            'messages' => [$flexMessage],
+        ])['sent'];
 
         if ($result) {
             // Log the notification
