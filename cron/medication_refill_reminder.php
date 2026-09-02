@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
+require_once __DIR__ . '/../classes/NotificationGate.php';
 require_once __DIR__ . '/../includes/liff-helper.php'; // reya_liff_url_or_oa()
 
 $db = Database::getInstance()->getConnection();
@@ -89,8 +90,16 @@ foreach ($items as $item) {
     
     // Send via LINE API
     try {
-        $line = new LineAPI($item['channel_access_token']);
-        $result = $line->pushMessage($item['line_user_id'], [$flexMessage]);
+        $gate = new NotificationGate($db);
+        $result = $gate->send([
+            'user_id' => (int) $item['user_id'],
+            'line_user_id' => $item['line_user_id'],
+            'line_account_id' => $item['line_account_id'] ?? null,
+            'channel_access_token' => $item['channel_access_token'],
+            'event_type' => 'medication_refill',
+            'dedupe_key' => 'refill:' . $item['id'] . ':' . date('Y-m-d'),
+            'messages' => [$flexMessage],
+        ])['sent'];
         
         if ($result) {
             // Update reminder_sent_at
