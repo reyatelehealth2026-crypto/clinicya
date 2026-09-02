@@ -1,0 +1,127 @@
+{
+  "_meta": {
+    "role": "บันทึกสิ่งที่ยังยืนยันจากโค้ดไม่ได้ ทุกข้อในนี้คือสิ่งที่การไล่โค้ดหยุดลง ไม่ใช่ข้อสันนิษฐาน",
+    "scope": "รอบนี้ครอบคลุมเฉพาะเส้นเลือดหลักการค้า รวมเข้ากับคู่มือ PHP-first core ที่ทำไว้ก่อนหน้า"
+  },
+  "gaps": [
+    {
+      "id": "G1",
+      "severity": "high",
+      "where": "ledger ของระบบแต้ม",
+      "description": "มีสองตารางที่ทำหน้าที่ ledger คือ points_transactions และ points_history และมีโค้ดที่เขียนทั้งสองตารางในบล็อกเดียวกันที่ shop/order-detail.php:412 และ :420 จากโค้ดอย่างเดียวบอกไม่ได้ว่าตารางไหนคือแหล่งความจริง หรือควรจะเป็น",
+      "suggested_trace": "นับจำนวนแถวและช่วงวันที่ของทั้งสองตารางใน tenant ที่ใช้งานจริงสัก 3 ราย แล้วเทียบกับ users.points และ users.available_points ของ user เดียวกัน เพื่อดูว่าตารางไหนตรงกับยอดที่ลูกค้าเห็น"
+    },
+    {
+      "id": "G2",
+      "severity": "high",
+      "where": "คอลัมน์ users.points ในทุก tenant DB",
+      "description": "fallback ที่ classes/LoyaltyPoints.php:76 พึ่งพาคอลัมน์ users.points และ api/member.php:263 ถูกครอบด้วย try catch พร้อมคอมเมนต์ว่าคอลัมน์อาจไม่มี แปลว่าสคีมาไม่เท่ากันทุก tenant แต่ยืนยันจากโค้ดไม่ได้ว่า tenant ไหนมีหรือไม่มี",
+      "suggested_trace": "รัน SHOW COLUMNS FROM users LIKE points กับทุกสคีมา reya_tenant แล้วทำตารางว่า tenant ใดมีคอลัมน์นี้ และ tenant ใดมีค่าไม่ตรงกับ available_points"
+    },
+    {
+      "id": "G3",
+      "severity": "medium",
+      "where": "classes/TierService.php",
+      "description": "updateUserTier เรียก TierService::calculateTier ที่ classes/LoyaltyPoints.php:289 แต่ยังไม่ได้เปิดไฟล์ TierService อ่าน จึงยังไม่ทราบว่าคำนวณระดับจากยอดคงเหลือหรือยอดสะสม และ threshold มาจากตารางใด",
+      "suggested_trace": "อ่าน classes/TierService.php ทั้งไฟล์ แล้วไล่ว่า calculateTier รับ points ตัวไหน และเทียบกับตาราง member_tiers หรือ points_settings"
+    },
+    {
+      "id": "G4",
+      "severity": "medium",
+      "where": "วงจรชีวิตของ reward_redemptions หลังออกโค้ด",
+      "description": "redeemReward สร้างแถวใน reward_redemptions ที่ classes/LoyaltyPoints.php:441 และมีเมธอด updateRedemptionStatus (:569), getExpiringRedemptions (:499), markExpiryReminderSent (:523) แต่ยังไม่ได้ไล่ว่าใครเรียกเมธอดเหล่านี้ และมี cron ตัวใดรับผิดชอบการหมดอายุ",
+      "suggested_trace": "ค้น updateRedemptionStatus และ getExpiringRedemptions ทั้ง repo โดยตัด .claude/worktrees ออก แล้วดูใน cron/ ว่ามีไฟล์ใดเรียกใช้"
+    },
+    {
+      "id": "G5",
+      "severity": "medium",
+      "where": "ผู้ใช้จริงของ api/points.php",
+      "description": "api/points.php มี action redeem ที่ทำงานครบและมี transaction แต่ Mini App ปัจจุบันยิงไปที่ api/rewards.php ตาม line-mini-app/src/lib/rewards-api.ts:13 จึงยังไม่ทราบว่า client ใดยังเรียก api/points.php อยู่ หรือเป็นโค้ดตายแล้ว",
+      "suggested_trace": "ค้นสตริง points.php ใน line-mini-app, liff-app, liff, retail-api และ frontend แล้วตรวจ access log ของ production ว่ามี request เข้ามาที่ endpoint นี้หรือไม่"
+    },
+    {
+      "id": "G6",
+      "severity": "low",
+      "where": "หน้าจอ rewards ใน Mini App",
+      "description": "ไล่ถึงชั้น API client คือ line-mini-app/src/lib/rewards-api.ts แล้ว แต่ยังไม่ได้เปิด line-mini-app/src/app/rewards/page.tsx จึงยังไม่มีหลักฐานว่าหน้าจอจัดการ error และ empty state อย่างไร",
+      "suggested_trace": "อ่าน line-mini-app/src/app/rewards/page.tsx และ rewards/history/page.tsx แล้วเพิ่มเป็น step ต้นทางของกลุ่ม loyalty_points"
+    },
+    {
+      "id": "G7",
+      "severity": "low",
+      "where": "ตาราง point_rewards เทียบกับ rewards",
+      "description": "api/points.php:250 อ่านจาก point_rewards ส่วน classes/LoyaltyPoints.php:426 เขียนที่ rewards ยังไม่ทราบว่าเป็นตารางคนละยุคหรือใช้งานคู่กัน",
+      "suggested_trace": "ตรวจ database/migration ที่สร้างสองตารางนี้ แล้วนับแถวใน tenant จริงเพื่อดูว่าตารางใดยังมีข้อมูล"
+    },
+    {
+      "id": "G8",
+      "severity": "high",
+      "where": "gaps.json ของคู่มือรอบก่อน",
+      "description": "คู่มือรอบก่อนหน้า (build 2026-08-26-v2-swimlane) มี gaps.json ที่บันทึกไว้ 8 ข้อ ตามที่ totals ระบุ ไฟล์นั้นถูกเขียนทับระหว่างการทำคู่มือรอบนี้ และ docs/manual ไม่ได้อยู่ใน git จึงกู้คืนไม่ได้ เนื้อหาของช่องว่างทั้ง 8 ข้อนั้นสูญหาย",
+      "suggested_trace": "ไล่อ่าน gotchas และ cases ที่ยัง tag เป็น warn หรือ danger ใน grp_tenant-saas, grp_membership, grp_crm-sales-service, grp_crm-marketing, grp_loyalty-rewards และ grp_counter-points แล้วสร้างรายการช่องว่างของหกกลุ่มนั้นขึ้นใหม่"
+    },
+    {
+      "id": "G9",
+      "severity": "high",
+      "where": "สคีมาของ transactions ในแต่ละ tenant",
+      "description": "database/install_complete_latest.sql บรรทัด 2370 มี UNIQUE KEY บน order_number แต่ database/migration_2026-05-25_tenant_template.sql ซึ่งเป็นต้นแบบของ tenant ใหม่ มีเพียง PRIMARY KEY (id) ที่บรรทัด 1988 เท่านั้น จากโค้ดอย่างเดียวบอกไม่ได้ว่า tenant ใดถูกสร้างด้วยสคริปต์ตัวไหน จึงบอกไม่ได้ว่า tenant ใดจะได้เลขออร์เดอร์ซ้ำเงียบ ๆ และ tenant ใดจะออร์เดอร์ล้มพร้อม SQL error",
+      "suggested_trace": "รัน SHOW INDEX FROM transactions WHERE Key_name = 'order_number' กับทุกสคีมา reya_tenant แล้วทำตารางแยกสองกลุ่ม จากนั้นค่อยตัดสินใจว่าจะเติม UNIQUE ย้อนหลังหรือเปลี่ยนวิธีออกเลขก่อน"
+    },
+    {
+      "id": "G10",
+      "severity": "high",
+      "where": "ประวัติการชนกันของเลขออร์เดอร์ใน production",
+      "description": "api/checkout.php บรรทัด 1431 และ classes/BusinessBot.php บรรทัด 1926 ออกเลขด้วย mt_rand หนึ่งถึงเก้าพันเก้าร้อยเก้าสิบเก้าต่อวัน โดยไม่มี retry จากโค้ดบอกไม่ได้ว่าเคยชนจริงไปแล้วกี่ครั้ง",
+      "suggested_trace": "หาเลขซ้ำด้วย SELECT order_number, COUNT(*) FROM transactions GROUP BY order_number HAVING COUNT(*) > 1 ในทุก tenant และค้น error_log ของ production ด้วยคำว่า Duplicate entry ที่มี TXN"
+    },
+    {
+      "id": "G11",
+      "severity": "high",
+      "where": "การตรวจสอบราคาฝั่ง server ใน create_order",
+      "description": "api/checkout.php รับ cart_items พร้อมราคาที่บรรทัด 1350 และรับ subtotal shipping total จาก client ที่บรรทัด 1373 และ 1386 ยังไม่ได้ตรวจว่ามีชั้นใดนอกไฟล์นี้ เช่น WAF, nginx หรือ middleware ที่ตรวจราคาซ้ำก่อนถึง PHP",
+      "suggested_trace": "อ่าน infra/nginx และ .htaccess ทั้งหมด แล้วลองยิง create_order ด้วยราคาที่แก้แล้วบน staging เพื่อดูว่ามีชั้นไหนปฏิเสธหรือไม่ ก่อนสรุปว่าเป็นช่องโหว่ที่ใช้ได้จริง"
+    },
+    {
+      "id": "G12",
+      "severity": "medium",
+      "where": "การใช้งานจริงของ payment_method ที่ชื่อ credit ในการจ่ายยา",
+      "description": "inbox-v2.php บรรทัด 586 นับเฉพาะ cash ว่าจ่ายแล้ว แต่โมดัลที่บรรทัด 12473 ให้เลือก credit ด้วย จากโค้ดบอกไม่ได้ว่าเภสัชกรใช้ตัวเลือก credit บ่อยแค่ไหน จึงประเมินขนาดของสต๊อกที่ไม่ถูกตัดไม่ได้",
+      "suggested_trace": "SELECT payment_method, COUNT(*) FROM dispensing_records GROUP BY payment_method ในทุก tenant แล้วเทียบกับ transactions ที่ยังค้าง pending และอ้าง dispense_id"
+    },
+    {
+      "id": "G13",
+      "severity": "medium",
+      "where": "sendOrderConfirmation ที่ api/checkout.php บรรทัด 1661",
+      "description": "ฟังก์ชันนี้ถูกนิยามไว้แต่ไม่มีที่ใดเรียก ยังไม่ได้ยืนยันว่าลูกค้าได้รับข้อความยืนยันออร์เดอร์ทางช่องทางอื่นหรือไม่ เช่นจาก BusinessBot หรือจาก cron",
+      "suggested_trace": "ค้นคำว่า sendOrderConfirmation และคำว่า ยืนยันออร์เดอร์ ทั้ง repo โดยตัด .claude/worktrees ออก แล้วตรวจตาราง messages ว่ามีข้อความยืนยันออร์เดอร์ที่ sent_by เป็น system อยู่จริงหรือไม่"
+    },
+    {
+      "id": "G14",
+      "severity": "medium",
+      "where": "ระบบหลายหน่วยขาย unit_id",
+      "description": "Mini App ส่ง unit_id มาตั้งแต่หน้า product detail และมี migration database/migration_2026-05-18_cart_unit_id.sql รองรับแล้ว แต่คำว่า unit_id ไม่ปรากฏใน api/checkout.php เลย ยังไม่ได้ยืนยันว่าฟีเจอร์นี้ถูกยกเลิกโดยตั้งใจ หรือค้างอยู่ครึ่งทาง",
+      "suggested_trace": "ตรวจ git log ของ database/migration_2026-05-18_cart_unit_id.sql และของ ShopProductDetailClient.tsx เพื่อดูว่ามี PR ฝั่ง PHP ที่ยังไม่ merge หรือถูก revert หรือไม่"
+    },
+    {
+      "id": "G15",
+      "severity": "medium",
+      "where": "การสร้าง PDF ของเอกสารภาษี",
+      "description": "คอลัมน์ pdf_path มีอยู่ในสคีมาแต่ไม่เคยถูกเขียนค่า และ TCPDF กับ DOMPDF ไม่ได้อยู่ใน composer.json หน้าพิมพ์เป็น HTML ที่ผู้ใช้ต้องสั่ง Save as PDF เอง ยังไม่ได้ยืนยันว่ามีบริการภายนอกที่ทำ PDF ให้หรือไม่",
+      "suggested_trace": "ค้นคำว่า pdf_path ทั้ง repo และตรวจ composer.json กับ package.json ของทุก sub app แล้วถามผู้ดูแลว่ากระบวนการออกใบกำกับภาษีจริงใช้ช่องทางใด"
+    },
+    {
+      "id": "G16",
+      "severity": "medium",
+      "where": "การเลือก tenant จากค่าที่ client ส่งมา",
+      "description": "line-mini-app/src/lib/config.ts บรรทัด 31 กำหนด line_account_id จากฝั่ง client แล้ว api หลายตัวใช้ค่านั้นเลือก tenant DB ยังไม่ได้ยืนยันว่ามีการตรวจสอบ LIFF id token ฝั่ง server ที่ผูก line_user_id กับ line_account_id จริงหรือไม่",
+      "suggested_trace": "ค้นคำว่า verify id_token และ channel_id ใน api ทั้งหมด แล้วลองยิง api/checkout.php ด้วย line_account_id ของอีก tenant บน staging เพื่อดูว่าถูกปฏิเสธหรือไม่"
+    },
+    {
+      "id": "G17",
+      "severity": "low",
+      "where": "ความครอบคลุมของคู่มือรอบนี้",
+      "description": "รอบนี้ไล่เฉพาะเส้นเลือดหลักการค้า ยังไม่ได้ไล่ Odoo sync, WMS, POS, ระบบนัดหมาย, AIChat pipeline, ระบบ broadcast และ cron ทั้ง 33 ตัว กลุ่มเหล่านั้นยังไม่มีหลักฐานในคู่มือ",
+      "suggested_trace": "เลือกกลุ่มถัดไปตามความเสี่ยง แนะนำให้เริ่มที่ cron ที่แตะสต๊อกและแต้ม แล้วตามด้วย Odoo sync เพราะทั้งสองเขียนตารางเดียวกับเส้นเลือดหลักการค้าที่ไล่ไปแล้ว"
+    }
+  ]
+}

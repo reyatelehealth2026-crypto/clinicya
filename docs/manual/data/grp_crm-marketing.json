@@ -1,0 +1,330 @@
+{
+  "id": "crm-marketing",
+  "title": "CRM Marketing: Tags → Segments → Drip Campaign",
+  "summary": "จัดกลุ่มลูกค้าจาก tags/behavior/RFM-like fields แล้ว enroll และส่ง drip messages ผ่าน LINE ตามเวลา/เงื่อนไข.",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "CRM Admin",
+      "module": "classes/AdvancedCRM.php",
+      "method": "createTag/assignTag",
+      "file": "classes/AdvancedCRM.php",
+      "line": 22,
+      "action": "สร้าง tag แบบ tenant-scoped และ assign ให้ user",
+      "sets": [
+        {
+          "field": "user_tags",
+          "value": "tag"
+        },
+        {
+          "field": "user_tag_assignments",
+          "value": "assignment"
+        }
+      ]
+    },
+    {
+      "seq": 2,
+      "actor": "CRM Admin",
+      "module": "classes/AdvancedCRM.php",
+      "method": "createSegment",
+      "file": "classes/AdvancedCRM.php",
+      "line": 87,
+      "action": "บันทึก segment conditions JSON แล้วคำนวณสมาชิกทันที",
+      "calls": [
+        "calculateSegmentMembers"
+      ]
+    },
+    {
+      "seq": 3,
+      "actor": "Segmentation Engine",
+      "module": "classes/AdvancedCRM.php",
+      "method": "calculateSegmentMembers",
+      "file": "classes/AdvancedCRM.php",
+      "line": 105,
+      "action": "ลบ snapshot segment_members เดิม แล้ว INSERT SELECT ผู้ใช้ที่ match conditions",
+      "sets": [
+        {
+          "field": "segment_members",
+          "value": "recalculated membership"
+        },
+        {
+          "field": "customer_segments.user_count",
+          "value": "count"
+        }
+      ]
+    },
+    {
+      "seq": 4,
+      "actor": "Campaign Admin",
+      "module": "classes/CRMManager.php",
+      "method": "createCampaign/addCampaignStep",
+      "file": "classes/CRMManager.php",
+      "line": 61,
+      "action": "สร้าง drip campaign และลำดับ step พร้อม delay/message/conditions"
+    },
+    {
+      "seq": 5,
+      "actor": "Event Hook",
+      "module": "classes/CRMManager.php",
+      "method": "onUserFollow/onUserPurchase",
+      "file": "classes/CRMManager.php",
+      "line": 227,
+      "action": "auto-tag และหา active campaigns ตาม trigger จากนั้น enroll user",
+      "calls": [
+        "enrollUserInCampaign"
+      ]
+    },
+    {
+      "seq": 6,
+      "actor": "CRM Manager",
+      "module": "classes/CRMManager.php",
+      "method": "enrollUserInCampaign",
+      "file": "classes/CRMManager.php",
+      "line": 104,
+      "action": "กัน enrollment ซ้ำ, อ่าน delay step แรก และ INSERT progress",
+      "sets": [
+        {
+          "field": "drip_campaign_progress.current_step",
+          "value": "0"
+        },
+        {
+          "field": "drip_campaign_progress.next_send_at",
+          "value": "scheduled"
+        }
+      ]
+    },
+    {
+      "seq": 7,
+      "actor": "Cron",
+      "module": "classes/CRMManager.php",
+      "method": "processDripCampaigns",
+      "file": "classes/CRMManager.php",
+      "line": 128,
+      "action": "อ่าน progress ที่ถึงเวลา, ตรวจ step conditions, build LINE message และ push",
+      "calls": [
+        "LineAPI::pushMessage"
+      ]
+    },
+    {
+      "seq": 8,
+      "actor": "CRM Manager",
+      "module": "classes/CRMManager.php",
+      "method": "advanceToNextStep",
+      "file": "classes/CRMManager.php",
+      "line": 179,
+      "action": "schedule step ถัดไปหรือ mark completed",
+      "sets": [
+        {
+          "field": "drip_campaign_progress.status",
+          "value": "active/completed"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "CM1",
+      "name": "Already enrolled",
+      "condition": "มี active progress campaign+user",
+      "behavior": "ไม่ insert ซ้ำ",
+      "code_path": "enrollUserInCampaign",
+      "result": "false",
+      "tag": "info"
+    },
+    {
+      "id": "CM2",
+      "name": "No next step",
+      "condition": "หา step_order ถัดไปไม่พบ",
+      "behavior": "mark progress completed",
+      "code_path": "processDripCampaigns",
+      "result": "completed",
+      "tag": "ok"
+    },
+    {
+      "id": "CM3",
+      "name": "Condition fails",
+      "condition": "has_purchased/has_tag ไม่ผ่าน",
+      "behavior": "skip step แล้ว advance",
+      "code_path": "checkStepConditions",
+      "result": "ไม่ส่งข้อความ",
+      "tag": "warn"
+    },
+    {
+      "id": "CM4",
+      "name": "LINE push fails",
+      "condition": "pushMessage code != 200",
+      "behavior": "ไม่ advance progress ใน branch ที่อ่าน",
+      "code_path": "processDripCampaigns",
+      "result": "retry ในรอบ cron ถัดไปโดย implication ของ state",
+      "tag": "warn"
+    },
+    {
+      "id": "CM5",
+      "name": "VIP auto tag",
+      "condition": "purchase behavior count >=5",
+      "behavior": "assign VIP tag ถ้ามี",
+      "code_path": "onUserPurchase",
+      "result": "VIP assignment",
+      "tag": "info"
+    },
+    {
+      "id": "CM6",
+      "name": "Inactive users",
+      "condition": "ไม่มี behavior/message ใน N วัน",
+      "behavior": "assign Inactive + enroll inactivity campaigns",
+      "code_path": "checkInactiveUsers",
+      "result": "win-back flow",
+      "tag": "info"
+    }
+  ],
+  "modules_touched": [
+    {
+      "module": "classes/AdvancedCRM.php",
+      "role": "tags + dynamic segments",
+      "methods": [
+        "createTag",
+        "assignTag",
+        "createSegment",
+        "calculateSegmentMembers"
+      ]
+    },
+    {
+      "module": "classes/CRMManager.php",
+      "role": "drip campaigns/event hooks",
+      "methods": [
+        "createCampaign",
+        "enrollUserInCampaign",
+        "processDripCampaigns",
+        "onUserFollow",
+        "onUserPurchase",
+        "checkInactiveUsers"
+      ]
+    },
+    {
+      "module": "LINE API",
+      "role": "message delivery",
+      "methods": [
+        "pushMessage"
+      ]
+    }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "AdvancedCRM",
+      "to_module": "Marketing UI/automation",
+      "returns_what": "segment membership snapshot",
+      "why_needed": "campaign targeting ต้องรู้ user set ที่คำนวณแล้ว"
+    },
+    {
+      "from_module": "LINE API",
+      "to_module": "CRMManager",
+      "returns_what": "HTTP-like code 200",
+      "why_needed": "progress advance เฉพาะเมื่อส่งสำเร็จ"
+    }
+  ],
+  "gotchas": [
+    "AdvancedCRM segmentation JOIN loyalty_points เพื่ออ่าน tier ขณะที่ loyalty ใหม่มี users/points_transactions อีกชุด",
+    "drip progress query ใน processDripCampaigns ไม่เห็น line_account_id filter โดยตรง; tenant DB boundary จึงสำคัญ",
+    "condition language รองรับเฉพาะ cases ที่ implement จริง เช่น has_purchased/has_tag"
+  ],
+  "file_refs": [
+    "classes/AdvancedCRM.php",
+    "classes/CRMManager.php"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": [
+      "Admin",
+      "CRM Engine",
+      "Tenant DB",
+      "Cron",
+      "LINE"
+    ],
+    "rows": [
+      "Define",
+      "Target",
+      "Enroll",
+      "Send",
+      "Advance"
+    ],
+    "nodes": [
+      {
+        "id": "cm1",
+        "lane": "Admin",
+        "row": "Define",
+        "type": "start",
+        "label": "tags / segment / campaign"
+      },
+      {
+        "id": "cm2",
+        "lane": "CRM Engine",
+        "row": "Target",
+        "type": "step",
+        "label": "calculate segment",
+        "ref": "AdvancedCRM.php"
+      },
+      {
+        "id": "cm3",
+        "lane": "Tenant DB",
+        "row": "Target",
+        "type": "step",
+        "label": "segment_members snapshot"
+      },
+      {
+        "id": "cm4",
+        "lane": "CRM Engine",
+        "row": "Enroll",
+        "type": "step",
+        "label": "enroll + next_send_at",
+        "ref": "CRMManager.php"
+      },
+      {
+        "id": "cm5",
+        "lane": "Cron",
+        "row": "Send",
+        "type": "step",
+        "label": "due progress + conditions"
+      },
+      {
+        "id": "cm6",
+        "lane": "LINE",
+        "row": "Send",
+        "type": "step",
+        "label": "push message"
+      },
+      {
+        "id": "cm7",
+        "lane": "Tenant DB",
+        "row": "Advance",
+        "type": "end",
+        "label": "next step / completed"
+      }
+    ],
+    "edges": [
+      {
+        "from": "cm1",
+        "to": "cm2"
+      },
+      {
+        "from": "cm2",
+        "to": "cm3"
+      },
+      {
+        "from": "cm3",
+        "to": "cm4"
+      },
+      {
+        "from": "cm4",
+        "to": "cm5"
+      },
+      {
+        "from": "cm5",
+        "to": "cm6"
+      },
+      {
+        "from": "cm6",
+        "to": "cm7"
+      }
+    ]
+  }
+}

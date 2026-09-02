@@ -1,0 +1,967 @@
+{
+  "id": "cart_checkout",
+  "title": "ตะกร้าสินค้าและการสร้างออร์เดอร์",
+  "summary": "เส้นทางจากตะกร้าใน LINE Mini App ไปจนถึงแถวใน transactions ทางเดินจริงคือ shop-api.ts ยิงตรงไปที่ api/checkout.php โดยไม่ผ่าน php-bridge แล้วเข้า handleCreateOrder จุดสำคัญคือ create_order มี beginTransaction ครอบจริง แต่ราคาทั้งหมดเชื่อค่าที่ client ส่งมาได้ เลขออร์เดอร์เป็นเลขสุ่มสี่หลักบนคอลัมน์ที่เป็น UNIQUE และการตัดสต๊อกใช้ guard ที่ไม่มีใครตรวจผลลัพธ์",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "ลูกค้า Mini App",
+      "module": "line-mini-app",
+      "method": "CartClient()",
+      "file": "line-mini-app/src/components/miniapp/CartClient.tsx",
+      "line": 29,
+      "action": "หน้าตะกร้าเรียก fetchCart ด้วย lineUserId จาก LIFF profile แล้วแสดงรายการ ยอดสินค้า ค่าจัดส่ง และยอดรวมที่ server คำนวณมาให้",
+      "calls": [{ "module": "shop-api", "method": "fetchCart", "file": "line-mini-app/src/lib/shop-api.ts", "line": 221 }],
+      "returns": "CartResponse",
+      "notes": "line_account_id ที่แนบไปมาจาก appConfig ฝั่ง client ซึ่ง resolve จาก query string ?la= ไม่ได้มาจาก session ฝั่ง server"
+    },
+    {
+      "seq": 2,
+      "actor": "shop-api",
+      "module": "shop-api",
+      "method": "CHECKOUT_URL",
+      "file": "line-mini-app/src/lib/shop-api.ts",
+      "line": 4,
+      "action": "ทุกคำขอของตะกร้าและ checkout ประกอบ URL ด้วย apiUrl ตรง ๆ ไม่ได้ผ่าน phpGet phpPost จึงข้าม endpoint override map ที่ใช้ทำ canary ของแผน migration ไปทั้งหมด",
+      "calls": [{ "module": "config", "method": "apiUrl", "file": "line-mini-app/src/lib/config.ts", "line": 155 }],
+      "returns": "URL ของ api/checkout.php บน PHP host",
+      "notes": "addresses-api.ts ใช้ phpGet phpPost จึง override ได้ แต่ cart กับ create_order override ไม่ได้ ดูเคส C25"
+    },
+    {
+      "seq": 3,
+      "actor": "bootstrap",
+      "module": "route_by_account",
+      "method": "route_by_account.php",
+      "file": "bootstrap/route_by_account.php",
+      "line": 48,
+      "action": "อ่าน line_account_id จาก query string form หรือ JSON body แล้วปักหมุด TenantContext ให้ Database::getInstance() ชี้ไป tenant DB ที่ถูกต้อง เพราะ Mini App โหลดจาก root domain จึงไม่มี subdomain ให้ resolve",
+      "calls": [{ "module": "TenantContext", "method": "routeByLineAccount", "file": "classes/TenantContext.php", "line": 295 }],
+      "returns": "TenantContext ที่ถูกปักหมุด หรือไม่ทำอะไรเลย",
+      "state_change": "TenantContext: null → tenant_id",
+      "notes": "ถ้าหาเส้นทางไม่เจอจะเงียบแล้วตกไปใช้ legacy DB ตามบรรทัด 66 ถึง 79 ทุกขั้นต่อจากนี้จะอ่านและเขียนผิด tenant"
+    },
+    {
+      "seq": 4,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleGetCart()",
+      "file": "api/checkout.php",
+      "line": 1105,
+      "action": "หา users.id จาก line_user_id ถ้าไม่พบจะสร้าง user ใหม่ทันทีโดยผูกกับ line_account ที่ is_default",
+      "calls": [
+        { "module": "MySQL", "method": "SELECT id, line_account_id FROM users", "file": "api/checkout.php", "line": 1122 },
+        { "module": "MySQL", "method": "INSERT INTO users", "file": "api/checkout.php", "line": 1137 }
+      ],
+      "returns": "userId และ lineAccountId",
+      "state_change": "users อาจเพิ่ม 1 แถวจากการแค่เปิดหน้าตะกร้า",
+      "notes": "การอ่านตะกร้าเป็นการเขียนข้อมูลได้ ทั้งที่เป็น GET"
+    },
+    {
+      "seq": 5,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleGetCart()",
+      "file": "api/checkout.php",
+      "line": 1154,
+      "action": "ดึง cart_items แล้ว LEFT JOIN business_items กับ shop_products ตาม product_source คำนวณ subtotal ต่อบรรทัดจาก sale_price ถ้ามี ไม่งั้นใช้ price",
+      "calls": [{ "module": "MySQL", "method": "SELECT c.* LEFT JOIN business_items LEFT JOIN shop_products", "file": "api/checkout.php", "line": 1155 }],
+      "returns": "items พร้อม name price sale_price subtotal",
+      "notes": "query นี้ไม่ join product_units จึงไม่มี unit_name unit_price กลับไปเลย ทั้งที่ CartClient เรนเดอร์ฟิลด์พวกนี้อยู่ ดูเคส C17"
+    },
+    {
+      "seq": 6,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleGetCart()",
+      "file": "api/checkout.php",
+      "line": 1252,
+      "action": "อ่าน shipping_fee กับ free_shipping_min จาก shop_settings ของ line_account นั้น ถ้าไม่มีแถวจะใช้แถวแรกของทั้งตาราง แล้วยกเว้นค่าส่งเมื่อ subtotal ถึงขั้นต่ำ",
+      "calls": [{ "module": "MySQL", "method": "SELECT shipping_fee, free_shipping_min FROM shop_settings", "file": "api/checkout.php", "line": 1257 }],
+      "returns": "subtotal shipping_fee free_shipping_min total item_count",
+      "notes": "ค่า default ที่ hardcode ไว้คือ 50 กับ 500 ที่บรรทัด 1260 และ 1261"
+    },
+    {
+      "seq": 7,
+      "actor": "ลูกค้า Mini App",
+      "module": "line-mini-app",
+      "method": "addToCart()",
+      "file": "line-mini-app/src/lib/shop-api.ts",
+      "line": 174,
+      "action": "หน้ารายละเอียดสินค้าเพิ่มของลงตะกร้า ส่ง product_id quantity และ unit_id ที่ลูกค้าเลือกไปด้วย",
+      "calls": [{ "module": "line-mini-app", "method": "addMutation", "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx", "line": 150 }],
+      "returns": "cart_count และ product_name",
+      "notes": "unit_id ถูกใส่ใน body ที่บรรทัด 189 แต่ฝั่ง PHP ไม่มีคำว่า unit_id อยู่เลยทั้งไฟล์"
+    },
+    {
+      "seq": 8,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleAddToCart()",
+      "file": "api/checkout.php",
+      "line": 845,
+      "action": "ตรวจว่าสินค้ามีจริงและ stock พอ แล้ว upsert ลง cart_items ด้วย ON DUPLICATE KEY UPDATE quantity บวกเพิ่ม",
+      "calls": [
+        { "module": "MySQL", "method": "SELECT ... FROM business_items WHERE id = ? AND is_active = 1", "file": "api/checkout.php", "line": 890 },
+        { "module": "MySQL", "method": "INSERT INTO cart_items ... ON DUPLICATE KEY UPDATE", "file": "api/checkout.php", "line": 905 }
+      ],
+      "returns": "cart_count",
+      "sets": [{ "field": "cart_items.quantity", "value": "เพิ่มขึ้นเท่ากับ quantity ที่ขอ" }],
+      "state_change": "cart_items เพิ่มแถวหรือเพิ่มจำนวน",
+      "notes": "การตรวจ stock ที่บรรทัด 896 เป็นแค่ UX ไม่มีการจอง ของอาจหมดก่อนถึงตอน checkout"
+    },
+    {
+      "seq": 9,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleUpdateCart() / handleRemoveFromCart() / handleClearCart()",
+      "file": "api/checkout.php",
+      "line": 976,
+      "action": "ปรับจำนวน ลบทีละรายการ หรือล้างทั้งตะกร้า ทุกเส้นค้นแถวด้วย user_id คู่กับ product_id และ product_source",
+      "calls": [
+        { "module": "api-checkout", "method": "handleRemoveFromCart", "file": "api/checkout.php", "line": 1040 },
+        { "module": "api-checkout", "method": "handleClearCart", "file": "api/checkout.php", "line": 1081 },
+        { "module": "MySQL", "method": "ลบแถว cart_items ทั้งหมดของ user_id", "file": "api/checkout.php", "line": 1096 }
+      ],
+      "returns": "cart_count",
+      "state_change": "cart_items ลดจำนวน ลบแถว หรือถูกล้างทั้งหมด",
+      "notes": "quantity ที่ส่งมาน้อยกว่าหรือเท่ากับศูนย์แปลว่าลบ ตามบรรทัด 1001 ไม่ใช่ error"
+    },
+    {
+      "seq": 10,
+      "actor": "CheckoutClient",
+      "module": "line-mini-app",
+      "method": "fetchLastAddress()",
+      "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx",
+      "line": 63,
+      "action": "หน้าชำระเงินดึงที่อยู่ล่าสุดมาเติมฟอร์มให้อัตโนมัติ แล้ว useEffect เขียนลง state name phone address",
+      "calls": [{ "module": "api-checkout", "method": "handleGetLastAddress", "file": "api/checkout.php", "line": 2354 }],
+      "returns": "LastAddress หรือ null",
+      "notes": "เงื่อนไขเติมค่าอยู่ที่บรรทัด 70 ถึง 75 ถ้า address ว่างและฟิลด์แยกก็ว่าง จะไม่เติมอะไรเลย ดูเคส C21"
+    },
+    {
+      "seq": 11,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleGetLastAddress()",
+      "file": "api/checkout.php",
+      "line": 2373,
+      "action": "อ่าน delivery_info ของ transaction ล่าสุดของ user แล้วแตกกลับเป็นฟิลด์ที่อยู่",
+      "calls": [{ "module": "MySQL", "method": "SELECT delivery_info FROM transactions ORDER BY created_at DESC LIMIT 1", "file": "api/checkout.php", "line": 2373 }],
+      "returns": "address object",
+      "notes": "query นี้ไม่กรอง line_account_id จึงหยิบออร์เดอร์ล่าสุดของ user ข้ามบัญชี LINE ภายใน tenant เดียวกันได้"
+    },
+    {
+      "seq": 12,
+      "actor": "CheckoutClient",
+      "module": "line-mini-app",
+      "method": "validatePromo()",
+      "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx",
+      "line": 100,
+      "action": "ลูกค้ากรอกโค้ดส่วนลด ส่ง code line_user_id และ subtotal ที่ client ถืออยู่ไปให้ PHP คำนวณส่วนลด",
+      "calls": [{ "module": "api-checkout", "method": "handleValidatePromo", "file": "api/checkout.php", "line": 2202 }],
+      "returns": "discount เป็นตัวเลข",
+      "sets": [{ "field": "appliedPromo (client state)", "value": "code และ discount" }],
+      "state_change": "ส่วนลดอยู่ใน state ของเบราว์เซอร์เท่านั้น ไม่มีการจองหรือบันทึกฝั่ง server"
+    },
+    {
+      "seq": 13,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleValidatePromo()",
+      "file": "api/checkout.php",
+      "line": 2202,
+      "action": "หาโค้ดใน promotions ตรวจวันที่ ยอดขั้นต่ำ โควตารวม และโควตาต่อคน แล้วคำนวณส่วนลดจาก subtotal ที่รับมา",
+      "calls": [
+        { "module": "MySQL", "method": "SELECT * FROM promotions WHERE code AND is_active", "file": "api/checkout.php", "line": 2234 },
+        { "module": "MySQL", "method": "SELECT COUNT(*) FROM promotion_usage", "file": "api/checkout.php", "line": 2272 }
+      ],
+      "returns": "valid discount discount_type promo_id",
+      "notes": "อ่าน usage_count และ promotion_usage เพื่อกันโควตา แต่ไม่มีที่ไหนในโค้ดเบสเขียนกลับสองที่นี้เลย ดูเคส C23"
+    },
+    {
+      "seq": 14,
+      "actor": "CheckoutClient",
+      "module": "line-mini-app",
+      "method": "estimateShipping()",
+      "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx",
+      "line": 27,
+      "action": "คำนวณยอดสุทธิเองบนเครื่องลูกค้า netSubtotal เท่ากับ subtotal ลบส่วนลด แล้วเดาค่าจัดส่งใหม่ตามกติกา free_shipping_min",
+      "calls": [{ "module": "line-mini-app", "method": "netSubtotal / total", "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx", "line": 81 }],
+      "returns": "total ที่แสดงบนปุ่มยืนยัน",
+      "notes": "บรรทัด 36 คืนค่า 50 แบบ hardcode เมื่อโค้ดส่วนลดดึงยอดลงต่ำกว่าขั้นต่ำ ไม่ได้ใช้ shop_settings.shipping_fee ดูเคส C22"
+    },
+    {
+      "seq": 15,
+      "actor": "CheckoutClient",
+      "module": "line-mini-app",
+      "method": "createShopOrder()",
+      "file": "line-mini-app/src/lib/shop-api.ts",
+      "line": 360,
+      "action": "ยิง action create_order พร้อม address payment_method และส่ง subtotal ที่หักส่วนลดแล้วเฉพาะตอนที่ใช้โค้ด",
+      "calls": [{ "module": "line-mini-app", "method": "createMutation", "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx", "line": 119 }],
+      "returns": "order_id order_number total",
+      "notes": "ที่อยู่ที่ประกอบส่งไปมีแค่ name phone address ตามบรรทัด 118 ฟิลด์ subdistrict district province postcode ถูกส่งเป็นค่าว่างเสมอ"
+    },
+    {
+      "seq": 16,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleCreateOrder()",
+      "file": "api/checkout.php",
+      "line": 1288,
+      "action": "หา users.id จาก line_user_id ถ้าไม่พบก็สร้าง user ใหม่ แล้วอ่านแถว user เต็มไว้ใช้ตอนแจ้งเตือน",
+      "calls": [
+        { "module": "MySQL", "method": "SELECT id, line_account_id FROM users", "file": "api/checkout.php", "line": 1305 },
+        { "module": "MySQL", "method": "INSERT INTO users", "file": "api/checkout.php", "line": 1320 }
+      ],
+      "returns": "userId lineAccountId user",
+      "state_change": "users อาจเพิ่ม 1 แถว ก่อนเข้า transaction",
+      "notes": "การสร้าง user อยู่นอก beginTransaction ที่บรรทัด 1428 ถ้าออร์เดอร์ล้มทีหลัง user ที่เพิ่งสร้างจะค้างอยู่"
+    },
+    {
+      "seq": 17,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "loadCheckoutCartLinesFromDb()",
+      "file": "api/checkout.php",
+      "line": 1365,
+      "action": "โหลดบรรทัดตะกร้าจาก DB ด้วย query ชุดเดียวกับ handleGetCart แล้วคำนวณราคาต่อหน่วยเก็บไว้ในคีย์ _unit ถ้าไม่มีรายการเลยจะตอบ Cart is empty แล้วจบ",
+      "calls": [
+        { "module": "api-checkout", "method": "loadCheckoutCartLinesFromDb", "file": "api/checkout.php", "line": 221 },
+        { "module": "api-checkout", "method": "checkoutOrderUnitPrice", "file": "api/checkout.php", "line": 204 }
+      ],
+      "returns": "items พร้อม product_id name price sale_price quantity product_source _unit",
+      "notes": "สินค้าที่ถูกลบไปแล้วจะถูก continue ข้ามเงียบที่บรรทัด 267 และ 293 ออร์เดอร์จึงออกได้โดยขาดของบางรายการ"
+    },
+    {
+      "seq": 18,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleCreateOrder()",
+      "file": "api/checkout.php",
+      "line": 1373,
+      "action": "รวม subtotal จากราคาที่อ่านจาก DB แล้วเขียนทับด้วยค่าที่ client ส่งมาถ้ามี จากนั้นคิดค่าจัดส่งจาก shop_settings และประกอบ delivery_info เป็น JSON",
+      "calls": [
+        { "module": "MySQL", "method": "SELECT shipping_fee, free_shipping_min FROM shop_settings", "file": "api/checkout.php", "line": 1390 },
+        { "module": "api-checkout", "method": "build deliveryInfo", "file": "api/checkout.php", "line": 1409 }
+      ],
+      "returns": "subtotal shippingFee total deliveryInfo",
+      "notes": "บรรทัด 1380 1386 และ 1406 ยอมให้ client กำหนด subtotal shipping และ total ได้ทั้งหมด ดูเคส C3 ถึง C5"
+    },
+    {
+      "seq": 19,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "beginTransaction()",
+      "file": "api/checkout.php",
+      "line": 1428,
+      "action": "เปิด transaction เดียวของทั้งไฟล์ แล้วสร้างเลขออร์เดอร์แบบ TXN ต่อด้วยวันที่ ต่อด้วยเลขสุ่มสี่หลัก และตัดสินสถานะจาก payment_method โดย cod ได้ confirmed ทันที ส่วน transfer เป็น pending",
+      "calls": [
+        { "module": "api-checkout", "method": "orderNumber = TXN + date(Ymd) + mt_rand(1,9999)", "file": "api/checkout.php", "line": 1431 },
+        { "module": "api-checkout", "method": "orderStatus / paymentStatus", "file": "api/checkout.php", "line": 1435 }
+      ],
+      "returns": "orderNumber orderStatus paymentStatus",
+      "state_change": "เปิด transaction",
+      "notes": "payment_status เป็น pending ทั้งสองช่องทาง ตามคอมเมนต์บรรทัด 1436 เพราะ ENUM ไม่มีค่า cod"
+    },
+    {
+      "seq": 20,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "ALTER TABLE transactions",
+      "file": "api/checkout.php",
+      "line": 1441,
+      "action": "สั่ง DDL เพิ่มคอลัมน์ payment_status แบบ defensive migration ทันทีหลังเปิด transaction แล้วกลืน exception ทิ้ง",
+      "returns": "ไม่มี",
+      "notes": "MySQL และ MariaDB จะ implicit commit เมื่อเจอ DDL คำสั่งนี้จึงตัดขอบเขต transaction ที่เพิ่งเปิดไปที่บรรทัด 1428 ดูเคส C8 และช่องว่าง G1"
+    },
+    {
+      "seq": 21,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "INSERT INTO transactions",
+      "file": "api/checkout.php",
+      "line": 1449,
+      "action": "เขียนหัวออร์เดอร์ลง transactions ด้วยคอลัมน์ line_account_id transaction_type order_number user_id line_user_id total_amount shipping_fee grand_total delivery_info payment_method status payment_status ถ้าล้มจะไล่ลงไปเวอร์ชันคอลัมน์น้อยลงสองระดับ",
+      "calls": [
+        { "module": "api-checkout", "method": "level 2 ตัด line_user_id", "file": "api/checkout.php", "line": 1475 },
+        { "module": "api-checkout", "method": "level 3 ตัด payment_status", "file": "api/checkout.php", "line": 1500 }
+      ],
+      "returns": "orderId จาก lastInsertId ที่บรรทัด 1518",
+      "sets": [
+        { "field": "transactions.order_number", "value": "TXN + Ymd + เลขสุ่มสี่หลัก" },
+        { "field": "transactions.total_amount", "value": "subtotal หลังหักส่วนลด ไม่ใช่ราคาเต็ม" },
+        { "field": "transactions.shipping_fee", "value": "ค่าจัดส่งที่คิดจาก shop_settings" },
+        { "field": "transactions.grand_total", "value": "subtotal + shipping_fee" },
+        { "field": "transactions.delivery_info", "value": "JSON ที่อยู่จัดส่ง" },
+        { "field": "transactions.status", "value": "confirmed สำหรับ cod หรือ pending สำหรับ transfer" },
+        { "field": "transactions.payment_status", "value": "pending เสมอ" },
+        { "field": "transactions.transaction_type", "value": "purchase" }
+      ],
+      "state_change": "transactions เพิ่ม 1 แถว",
+      "notes": "ไม่มีคอลัมน์ discount_amount points_used หรือ points_discount ถูกเขียนเลย ส่วนลดจึงหายไปจากออร์เดอร์"
+    },
+    {
+      "seq": 22,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "foreach items",
+      "file": "api/checkout.php",
+      "line": 1520,
+      "action": "วนทีละบรรทัด เขียน transaction_items แล้วตัดสต๊อกด้วย UPDATE ที่มีเงื่อนไข stock มากกว่าหรือเท่ากับจำนวนที่ซื้อ",
+      "calls": [
+        { "module": "MySQL", "method": "INSERT INTO transaction_items", "file": "api/checkout.php", "line": 1525 },
+        { "module": "MySQL", "method": "UPDATE shop_products SET saleable_qty", "file": "api/checkout.php", "line": 1540 },
+        { "module": "MySQL", "method": "UPDATE business_items SET stock", "file": "api/checkout.php", "line": 1545 }
+      ],
+      "sets": [
+        { "field": "transaction_items.transaction_id / product_id / product_name / product_price / quantity / subtotal", "value": "หนึ่งแถวต่อบรรทัดตะกร้า" },
+        { "field": "business_items.stock", "value": "ลดลงเท่ากับ quantity เมื่อของพอ" },
+        { "field": "shop_products.saleable_qty", "value": "ลดลงเท่ากับ quantity เมื่อของพอ" }
+      ],
+      "state_change": "transaction_items เพิ่มหลายแถว และสต๊อกลดลง หรือไม่ลดเลยแบบเงียบ",
+      "notes": "ไม่มีการจองสต๊อกล่วงหน้า ตัดตอนสร้างออร์เดอร์เท่านั้น และไม่มีการตรวจ rowCount ดูเคส C9"
+    },
+    {
+      "seq": 23,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "INSERT INTO stock_movements",
+      "file": "api/checkout.php",
+      "line": 1555,
+      "action": "บันทึกความเคลื่อนไหวสต๊อกโดยอ่านค่า stock ปัจจุบันหลัง UPDATE แล้วย้อนคำนวณ stock_before เป็นค่าปัจจุบันบวกจำนวนที่ขาย",
+      "calls": [{ "module": "MySQL", "method": "SELECT stock FROM business_items", "file": "api/checkout.php", "line": 1551 }],
+      "sets": [
+        { "field": "stock_movements.movement_type", "value": "sale" },
+        { "field": "stock_movements.quantity", "value": "ติดลบเท่ากับจำนวนที่ขาย" },
+        { "field": "stock_movements.stock_before / stock_after", "value": "ย้อนคำนวณจากค่าหลัง UPDATE" },
+        { "field": "stock_movements.reference_type / reference_id / reference_number", "value": "order กับ orderId กับ orderNumber" }
+      ],
+      "state_change": "stock_movements เพิ่ม 1 แถวต่อสินค้า business_items",
+      "notes": "เส้น shop_products ไม่บันทึก stock_movements เลย และเมื่อ guard สต๊อกไม่ผ่านตัวเลขที่บันทึกจะผิด ดูเคส C11"
+    },
+    {
+      "seq": 24,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "ล้าง cart_items แล้ว commit",
+      "file": "api/checkout.php",
+      "line": 1579,
+      "action": "ล้างตะกร้าทั้งหมดของ user ตั้ง wms_status เป็น pending_pick เฉพาะออร์เดอร์ที่ confirmed แล้ว commit",
+      "calls": [
+        { "module": "MySQL", "method": "UPDATE transactions SET wms_status", "file": "api/checkout.php", "line": 1585 },
+        { "module": "MySQL", "method": "commit", "file": "api/checkout.php", "line": 1592 }
+      ],
+      "sets": [{ "field": "transactions.wms_status", "value": "pending_pick เมื่อ status เป็น confirmed" }],
+      "state_change": "cart_items ของ user ถูกล้างทั้งหมด และ transaction ถูก commit",
+      "notes": "คำสั่งล้างกรองด้วย user_id อย่างเดียว ไม่กรอง line_account_id ดูเคส C13"
+    },
+    {
+      "seq": 25,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "งานหลัง commit",
+      "file": "api/checkout.php",
+      "line": 1599,
+      "action": "สร้าง Account Receivable สำหรับ payment_method ที่เป็นเครดิต แจ้ง Telegram แจ้ง LINE ให้แอดมิน แล้วเขียน activity_logs ทั้งหมดนี้อยู่นอก transaction และเป็น synchronous",
+      "calls": [
+        { "module": "AccountReceivableService", "method": "createFromTransaction", "file": "classes/AccountReceivableService.php", "line": 68 },
+        { "module": "api-checkout", "method": "notifyTelegramNewOrder", "file": "api/checkout.php", "line": 1611 },
+        { "module": "NotificationService", "method": "notifyNewOrder", "file": "classes/NotificationService.php", "line": 48 },
+        { "module": "ActivityLogger", "method": "logOrder", "file": "api/checkout.php", "line": 1629 }
+      ],
+      "sets": [
+        { "field": "account_receivables", "value": "1 แถว เมื่อ payment_method อยู่ในรายการเครดิต" },
+        { "field": "activity_logs", "value": "1 แถว" }
+      ],
+      "state_change": "account_receivables และ activity_logs เพิ่มแถว หลัง commit แล้ว",
+      "notes": "ลูกค้าต้องรอ Telegram และ LINE ยิงเสร็จก่อนถึงจะเห็นหน้าสั่งซื้อสำเร็จ ดูเคส C15 และ C29"
+    },
+    {
+      "seq": 26,
+      "actor": "CheckoutClient",
+      "module": "line-mini-app",
+      "method": "onSuccess()",
+      "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx",
+      "line": 126,
+      "action": "รับ order_id มาเก็บใน state แล้วสลับไปหน้าสั่งซื้อสำเร็จ พร้อมลิงก์ไปหน้ารายละเอียดออร์เดอร์เพื่ออัปโหลดสลิป",
+      "calls": [{ "module": "api-checkout", "method": "jsonResponse order_id order_number total", "file": "api/checkout.php", "line": 1642 }],
+      "returns": "หน้าจอสั่งซื้อสำเร็จ",
+      "state_change": "cache ของ shop-cart และ my-orders ถูก invalidate ที่บรรทัด 131 และ 132",
+      "notes": "หมายเลขที่โชว์ให้ลูกค้าคือ order_id ซึ่งเป็น auto increment ไม่ใช่ order_number ที่ร้านใช้อ้างอิง"
+    }
+  ],
+  "cases": [
+    {
+      "id": "C1",
+      "name": "ตะกร้าว่างตอนสร้างออร์เดอร์",
+      "condition": "items ว่างหลังโหลดจาก request หรือจาก DB",
+      "behavior": "ตอบ Cart is empty แล้วจบก่อนเปิด transaction ไม่มีการเขียนใด",
+      "code_path": [{ "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1369 }],
+      "result": "ไม่มีการเปลี่ยนแปลงสถานะ",
+      "tag": "ok"
+    },
+    {
+      "id": "C2",
+      "name": "ไม่พบ user แล้วสร้างให้ใหม่กลางทาง checkout",
+      "condition": "SELECT users WHERE line_user_id ไม่เจอแถว",
+      "behavior": "สร้างแถว users ใหม่โดยผูกกับ line_account ที่ส่งมา หรือถ้าไม่ส่งก็หยิบ account ที่ is_default มาใช้ แล้วเดินหน้าสร้างออร์เดอร์ต่อ",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1311 },
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1315 },
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1320 }
+      ],
+      "result": "users เพิ่ม 1 แถว นอก transaction",
+      "gotcha": "ทางเข้าเดียวกันนี้มีอยู่สามที่คือ handleGetCart บรรทัด 1137 getUserIdFromLineUserId บรรทัด 836 และที่นี่ แค่เปิดหน้าตะกร้าก็สร้าง user ได้แล้ว",
+      "tag": "warn"
+    },
+    {
+      "id": "C3",
+      "name": "client ส่งรายการสินค้าและราคามาเอง",
+      "condition": "body มีคีย์ cart_items เป็น array ที่ไม่ว่าง",
+      "behavior": "ข้ามการอ่าน cart_items จาก DB ทั้งหมด แล้วเชื่อ product_id name price quantity ที่ client ส่งมาตรง ๆ โดย _unit มาจาก price ของ client",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1350 },
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1352 },
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1360 }
+      ],
+      "result": "transaction_items.product_price และ subtotal เป็นค่าที่ผู้เรียก API กำหนดเองได้ทั้งหมด",
+      "gotcha": "Mini App ปัจจุบันไม่ส่ง cart_items แต่ endpoint เปิดรับอยู่ และ endpoint นี้ตั้ง Access-Control-Allow-Origin เป็นดาวที่บรรทัด 7 โดยไม่มี auth",
+      "tag": "danger"
+    },
+    {
+      "id": "C4",
+      "name": "client ส่ง subtotal มาเขียนทับยอดที่ server คำนวณ",
+      "condition": "body มีคีย์ subtotal",
+      "behavior": "ทิ้งยอดที่เพิ่งรวมจากราคาใน DB แล้วใช้ค่าจาก client แทน ทั้งในการคิดค่าจัดส่งและใน transactions.total_amount",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1373 },
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1380 },
+        { "module": "line-mini-app", "method": "createMutation", "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx", "line": 123 }
+      ],
+      "result": "ยอดสินค้าในออร์เดอร์เป็นค่าที่ client กำหนด ส่วน transaction_items ยังเก็บราคาเต็มจาก DB สองยอดนี้จึงบวกไม่เท่ากัน",
+      "gotcha": "นี่คือกลไกที่ Mini App ใช้ส่งส่วนลดเข้ามา ระบบจึงไม่มีทางแยกได้ว่ายอดที่ต่ำลงมาจากโค้ดส่วนลดจริงหรือมาจากการแก้ payload",
+      "tag": "danger"
+    },
+    {
+      "id": "C5",
+      "name": "client ส่ง shipping หรือ total มาเอง",
+      "condition": "body มีคีย์ shipping หรือ total",
+      "behavior": "ข้ามการอ่าน shop_settings และข้ามการบวก subtotal กับ shipping ใช้ค่าจาก client เป็น grand_total ตรง ๆ",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1386 },
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1406 }
+      ],
+      "result": "grand_total เป็นเลขอะไรก็ได้ รวมถึงศูนย์",
+      "gotcha": "Mini App ไม่ส่งสองคีย์นี้ แต่ liff-app รุ่นเก่าที่ยิง endpoint เดียวกันอาจส่ง จึงลบทิ้งไม่ได้โดยไม่ตรวจผู้เรียกทั้งหมดก่อน",
+      "tag": "danger"
+    },
+    {
+      "id": "C6",
+      "name": "เลขออร์เดอร์ชนกัน",
+      "condition": "mt_rand ได้เลขสี่หลักซ้ำกับออร์เดอร์อื่นในวันเดียวกันของ tenant เดียวกัน",
+      "behavior": "INSERT ระดับ 1 โดน duplicate key แล้วถูก catch กลืนไปเป็น log ระดับ 2 ชนซ้ำอีกและถูกกลืนอีก ระดับ 3 ไม่มี try ครอบจึงโยน exception ขึ้นไป rollBack แล้ว catch ชั้นนอกตอบข้อความ error ดิบของ SQL กลับไปให้ลูกค้า",
+      "code_path": [
+        { "module": "api-checkout", "method": "orderNumber", "file": "api/checkout.php", "line": 1431 },
+        { "module": "MySQL", "method": "UNIQUE KEY order_number", "file": "database/install_complete_latest.sql", "line": 4023 },
+        { "module": "api-checkout", "method": "catch level1", "file": "api/checkout.php", "line": 1468 },
+        { "module": "api-checkout", "method": "catch level2", "file": "api/checkout.php", "line": 1493 },
+        { "module": "api-checkout", "method": "level3 ไม่มี try", "file": "api/checkout.php", "line": 1500 },
+        { "module": "api-checkout", "method": "catch ชั้นนอก", "file": "api/checkout.php", "line": 93 }
+      ],
+      "result": "ออร์เดอร์ล้มทั้งใบ ลูกค้าเห็นข้อความ SQLSTATE และไม่มีการ retry เลข",
+      "gotcha": "พื้นที่เลขมีแค่ 9999 ค่าต่อวันต่อ tenant และ order_number เป็น UNIQUE ระดับ DB ไม่ใช่ต่อ line_account โอกาสชนโตแบบ birthday paradox ประมาณ 50 เปอร์เซ็นต์ที่ราวหนึ่งร้อยกว่าออร์เดอร์ต่อวัน",
+      "tag": "danger"
+    },
+    {
+      "id": "C7",
+      "name": "INSERT transactions ตกลงไปเวอร์ชันคอลัมน์น้อยลง",
+      "condition": "INSERT ระดับ 1 หรือระดับ 2 โยน exception ด้วยเหตุใดก็ตาม",
+      "behavior": "ระดับ 2 ตัดคอลัมน์ line_user_id ออก ระดับ 3 ตัด payment_status ออกอีก โดยทั้งสองระดับแรกแค่ error_log ไม่แจ้งผู้เรียก",
+      "code_path": [
+        { "module": "api-checkout", "method": "level1", "file": "api/checkout.php", "line": 1449 },
+        { "module": "api-checkout", "method": "level2", "file": "api/checkout.php", "line": 1475 },
+        { "module": "api-checkout", "method": "level3", "file": "api/checkout.php", "line": 1500 }
+      ],
+      "result": "ออร์เดอร์ถูกสร้างสำเร็จแต่ขาด line_user_id หรือขาด payment_status โดยไม่มีสัญญาณใดขึ้นหน้าจอ",
+      "gotcha": "catch ไม่แยกแยะสาเหตุ duplicate key กับ schema เก่าจึงเดินเส้นเดียวกัน ทำให้เคส C6 มองเห็นยากขึ้นไปอีก",
+      "tag": "warn"
+    },
+    {
+      "id": "C8",
+      "name": "DDL ถูกสั่งกลางทรานแซกชัน",
+      "condition": "handleCreateOrder ทำงานบน MariaDB ซึ่งรองรับ ADD COLUMN IF NOT EXISTS",
+      "behavior": "หลัง beginTransaction หนึ่งบรรทัด ระบบสั่ง ALTER TABLE transactions ทันที ซึ่งเป็น DDL ที่ทำให้ engine implicit commit ทรานแซกชันที่เพิ่งเปิด",
+      "code_path": [
+        { "module": "api-checkout", "method": "beginTransaction", "file": "api/checkout.php", "line": 1428 },
+        { "module": "api-checkout", "method": "ALTER TABLE", "file": "api/checkout.php", "line": 1441 },
+        { "module": "api-checkout", "method": "commit", "file": "api/checkout.php", "line": 1592 }
+      ],
+      "result": "ขอบเขต transaction ที่ตั้งใจครอบตั้งแต่ INSERT transactions ถึงการล้างตะกร้า อาจไม่มีผลจริง การ rollBack ที่บรรทัด 1652 จึงอาจย้อนอะไรไม่ได้",
+      "gotcha": "บน MySQL 8 คำสั่งนี้เป็น syntax error จึงถูก catch โดยไม่ execute และ transaction รอด ผลลัพธ์จึงต่างกันตาม engine ดูช่องว่าง G1",
+      "tag": "danger"
+    },
+    {
+      "id": "C9",
+      "name": "สต๊อกไม่พอตอนสร้างออร์เดอร์ แต่ออร์เดอร์ยังออก",
+      "condition": "stock ในตอนที่ UPDATE น้อยกว่า quantity ที่สั่ง",
+      "behavior": "UPDATE มีเงื่อนไข AND stock มากกว่าหรือเท่ากับ quantity อยู่จริง จึงไม่ทำให้สต๊อกติดลบ แต่โค้ดไม่เคยตรวจ rowCount ออร์เดอร์และ transaction_items จึงถูกสร้างครบตามปกติ",
+      "code_path": [
+        { "module": "api-checkout", "method": "UPDATE business_items", "file": "api/checkout.php", "line": 1545 },
+        { "module": "api-checkout", "method": "UPDATE shop_products", "file": "api/checkout.php", "line": 1540 },
+        { "module": "api-checkout", "method": "INSERT transaction_items", "file": "api/checkout.php", "line": 1525 }
+      ],
+      "result": "ขายเกินสต๊อกแบบเงียบ ร้านมีออร์เดอร์ที่ไม่มีของส่ง และตัวเลขสต๊อกยังดูปกติ",
+      "gotcha": "การตรวจ stock ที่ handleAddToCart บรรทัด 886 กับ 896 เกิดตอนหยิบใส่ตะกร้าเท่านั้น ระหว่างนั้นถึงตอน checkout ไม่มีการจองใด ๆ",
+      "tag": "danger"
+    },
+    {
+      "id": "C10",
+      "name": "checkout พร้อมกันสองคน แย่งของชิ้นสุดท้าย",
+      "condition": "สอง request เรียก create_order พร้อมกันบนสินค้าที่เหลือชิ้นเดียว",
+      "behavior": "ต่างฝ่ายต่างเปิด transaction ของตัวเอง สร้างออร์เดอร์ของตัวเอง แล้ว UPDATE stock ทั้งคู่ คำสั่งเดียวเป็น atomic จริง ฝ่ายที่ช้ากว่าจึงไม่โดนแถวไหน แต่ไม่มีใครตรวจ",
+      "code_path": [
+        { "module": "api-checkout", "method": "beginTransaction", "file": "api/checkout.php", "line": 1428 },
+        { "module": "api-checkout", "method": "UPDATE business_items", "file": "api/checkout.php", "line": 1545 },
+        { "module": "api-checkout", "method": "commit", "file": "api/checkout.php", "line": 1592 }
+      ],
+      "result": "ออร์เดอร์สองใบ สต๊อกลดหนึ่ง ไม่มีใครได้ error",
+      "gotcha": "ค้นทั้งไฟล์ 2794 บรรทัด ไม่มี SELECT FOR UPDATE ไม่มี GET_LOCK และไม่มีการตรวจ rowCount ของ UPDATE ที่ไหนเลย การป้องกันจึงมีแค่เงื่อนไขใน WHERE ซึ่งกันสต๊อกติดลบได้อย่างเดียว ไม่ได้กันการขายเกิน",
+      "tag": "danger"
+    },
+    {
+      "id": "C11",
+      "name": "stock_movements บันทึกตัวเลขผิดเมื่อ guard สต๊อกไม่ผ่าน",
+      "condition": "UPDATE stock ไม่โดนแถวใด แต่โค้ดยังเดินต่อไปบันทึกความเคลื่อนไหว",
+      "behavior": "อ่าน stock ปัจจุบัน ซึ่งไม่ได้เปลี่ยน แล้วย้อนคำนวณ stock_before เป็นค่าปัจจุบันบวก quantity จึงบันทึกว่ามีการตัดสต๊อกทั้งที่ไม่มี",
+      "code_path": [
+        { "module": "api-checkout", "method": "SELECT stock", "file": "api/checkout.php", "line": 1551 },
+        { "module": "api-checkout", "method": "INSERT stock_movements", "file": "api/checkout.php", "line": 1555 },
+        { "module": "api-checkout", "method": "stock_before = currentStock + quantity", "file": "api/checkout.php", "line": 1564 }
+      ],
+      "result": "รายงานความเคลื่อนไหวสต๊อกกับยอดคงเหลือจริงจะไม่ตรงกัน และหาสาเหตุจาก log ไม่ได้",
+      "gotcha": "แถวที่บันทึกดูสมบูรณ์ทุกคอลัมน์ จึงไม่มีสัญญาณให้เห็นว่าการตัดสต๊อกล้มเหลว",
+      "tag": "danger"
+    },
+    {
+      "id": "C12",
+      "name": "ไม่มีตาราง stock_movements",
+      "condition": "SHOW TABLES LIKE stock_movements คืนศูนย์แถว หรือ INSERT โยน exception",
+      "behavior": "ข้ามการบันทึกความเคลื่อนไหวไปเงียบ ๆ ส่วน exception ถูก catch แล้ว error_log อย่างเดียว",
+      "code_path": [
+        { "module": "api-checkout", "method": "SHOW TABLES", "file": "api/checkout.php", "line": 1549 },
+        { "module": "api-checkout", "method": "catch", "file": "api/checkout.php", "line": 1572 }
+      ],
+      "result": "ออร์เดอร์และการตัดสต๊อกยังสำเร็จ แต่ไม่มี audit trail",
+      "gotcha": "เส้น shop_products ที่บรรทัด 1538 ไม่มีบล็อกนี้เลย ออร์เดอร์จาก Odoo catalog จึงไม่มี stock_movements ตั้งแต่ต้น",
+      "tag": "info"
+    },
+    {
+      "id": "C13",
+      "name": "ล้างตะกร้าด้วย user_id อย่างเดียว",
+      "condition": "create_order commit สำเร็จ หรือ clear_cart ถูกเรียก",
+      "behavior": "ล้าง cart_items ทุกแถวที่ user_id ตรง ไม่กรอง line_account_id และไม่จำกัดเฉพาะรายการที่เพิ่งสั่ง",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1579 },
+        { "module": "api-checkout", "method": "handleClearCart", "file": "api/checkout.php", "line": 1096 }
+      ],
+      "result": "ถ้า user แถวเดียวถูกใช้กับหลาย line_account ใน tenant เดียวกัน ตะกร้าของอีกร้านจะหายไปด้วย",
+      "gotcha": "handleAddToCart กลับ upsert ด้วย unique key ที่อิง line_user_id ไม่ใช่ user_id ขอบเขตของการเขียนกับการล้างจึงไม่ตรงกัน",
+      "tag": "warn"
+    },
+    {
+      "id": "C14",
+      "name": "COD ได้สถานะ confirmed ทันทีโดยยังไม่ได้เงิน",
+      "condition": "payment_method เท่ากับ cod",
+      "behavior": "status เป็น confirmed ตั้งแต่แรก payment_status ยังเป็น pending และ wms_status ถูกตั้งเป็น pending_pick ให้คลังหยิบของได้เลย",
+      "code_path": [
+        { "module": "api-checkout", "method": "orderStatus", "file": "api/checkout.php", "line": 1435 },
+        { "module": "api-checkout", "method": "wms_status", "file": "api/checkout.php", "line": 1583 }
+      ],
+      "result": "transactions มี status confirmed payment_status pending และ wms_status pending_pick",
+      "gotcha": "handleMyOrders ถือว่า status confirmed คือ is_paid true ที่บรรทัด 666 ลูกค้า COD จึงเห็นออร์เดอร์เป็นชำระแล้วทั้งที่ยังไม่จ่าย",
+      "tag": "warn"
+    },
+    {
+      "id": "C15",
+      "name": "สร้าง Account Receivable ล้มเหลวหลัง commit",
+      "condition": "payment_method อยู่ใน credit cod term invoice แล้ว createFromTransaction โยน exception",
+      "behavior": "catch แล้ว error_log อย่างเดียว ตอบ ar_id เป็น null กลับไป ออร์เดอร์ยังสำเร็จ",
+      "code_path": [
+        { "module": "api-checkout", "method": "creditPaymentMethods", "file": "api/checkout.php", "line": 1599 },
+        { "module": "AccountReceivableService", "method": "createFromTransaction", "file": "classes/AccountReceivableService.php", "line": 68 },
+        { "module": "api-checkout", "method": "catch", "file": "api/checkout.php", "line": 1604 }
+      ],
+      "result": "ออร์เดอร์ COD มีอยู่แต่ไม่มีลูกหนี้ในระบบบัญชี",
+      "gotcha": "โค้ดนี้อยู่หลัง commit ที่บรรทัด 1592 จึงไม่มีทางย้อนกลับได้แม้อยากทำ และตัว service เองก็โยน exception เป็นปกติเมื่อ AR มีอยู่แล้ว ตามบรรทัด 92",
+      "tag": "warn"
+    },
+    {
+      "id": "C16",
+      "name": "กดยืนยันซ้ำได้ออร์เดอร์ซ้ำ",
+      "condition": "create_order ถูกยิงสองครั้งด้วย payload เดียวกัน",
+      "behavior": "ไม่มี idempotency key ไม่มี lock ไม่มีการตรวจออร์เดอร์ซ้ำ ทั้งสอง request จะอ่าน cart_items ชุดเดียวกัน สร้างออร์เดอร์คนละใบ ตัดสต๊อกสองรอบ แล้วล้างตะกร้าคนละครั้ง",
+      "code_path": [
+        { "module": "line-mini-app", "method": "disabled ตอน createMutation.isPending", "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx", "line": 388 },
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1288 },
+        { "module": "api-checkout", "method": "ล้าง cart_items", "file": "api/checkout.php", "line": 1579 }
+      ],
+      "result": "ออร์เดอร์ซ้ำสองใบ สต๊อกถูกตัดสองรอบ แจ้งเตือนแอดมินสองครั้ง",
+      "gotcha": "การป้องกันมีแค่ปุ่มถูก disable ระหว่าง mutation ฝั่ง client เท่านั้น รีเฟรชหรือยิงซ้ำจากภายนอกผ่านหมดทันที",
+      "tag": "danger"
+    },
+    {
+      "id": "C17",
+      "name": "หน่วยขายที่ลูกค้าเลือกหายไปทั้งเส้น",
+      "condition": "ลูกค้าเลือกหน่วยที่ไม่ใช่หน่วยฐาน เช่น แผง หรือ กล่อง ในหน้ารายละเอียดสินค้า",
+      "behavior": "client ส่ง unit_id ใน body จริง แต่ api/checkout.php ไม่มีคำว่า unit_id ปรากฏเลยแม้แต่ครั้งเดียว จึงไม่ถูกเขียนลง cart_items ไม่ถูกอ่านกลับ และไม่ถูกใช้คูณ factor ตอนตัดสต๊อก",
+      "code_path": [
+        { "module": "line-mini-app", "method": "addMutation", "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx", "line": 150 },
+        { "module": "shop-api", "method": "body ของ addToCart", "file": "line-mini-app/src/lib/shop-api.ts", "line": 189 },
+        { "module": "api-checkout", "method": "handleAddToCart", "file": "api/checkout.php", "line": 905 },
+        { "module": "migration", "method": "เจตนาเดิมของ migration", "file": "database/migration_2026-05-18_cart_unit_id.sql", "line": 4 }
+      ],
+      "result": "ลูกค้าที่เลือกกล่อง ได้ราคาและจำนวนของหน่วยฐาน ส่วน CartClient ก็ไม่มี unit_name ให้แสดงเพราะ query ไม่ join product_units",
+      "gotcha": "คอมเมนต์ในไฟล์ migration บรรทัด 4 ระบุชัดว่า handleCreateOrder จะคูณ factor ของหน่วย ซึ่งไม่เคยถูกเขียนขึ้นจริง สัญญาที่ประกาศไว้กับโค้ดที่มีอยู่ไม่ตรงกัน",
+      "tag": "danger"
+    },
+    {
+      "id": "C18",
+      "name": "ON DUPLICATE KEY ไม่ทำงานหลัง migration unit_id",
+      "condition": "tenant ที่รัน migration_2026-05-18_cart_unit_id.sql แล้ว unique key กลายเป็น line_user_id product_id unit_id ขณะที่ unit_id ของแถวใหม่เป็น NULL เสมอ",
+      "behavior": "MySQL ถือว่า NULL ไม่ชนกับ NULL ในดัชนี UNIQUE ดังนั้น ON DUPLICATE KEY UPDATE จะไม่ถูกทริกเกอร์ ทุกครั้งที่กดเพิ่มลงตะกร้าจะได้แถวใหม่แทนการเพิ่มจำนวน",
+      "code_path": [
+        { "module": "migration", "method": "ADD UNIQUE KEY unique_user_product_unit", "file": "database/migration_2026-05-18_cart_unit_id.sql", "line": 34 },
+        { "module": "api-checkout", "method": "ON DUPLICATE KEY UPDATE", "file": "api/checkout.php", "line": 908 },
+        { "module": "api-checkout", "method": "handleGetCart คืนทุกแถวของ user", "file": "api/checkout.php", "line": 1176 }
+      ],
+      "result": "ตะกร้าโชว์สินค้าชิ้นเดียวกันซ้ำหลายบรรทัด และปุ่มลบซึ่งค้นด้วย user_id กับ product_id จะกวาดทุกบรรทัดพร้อมกัน",
+      "gotcha": "migration ขั้นตอนที่ 2 backfill unit_id ของแถวเก่าให้ชี้ไป base unit แถวเก่ากับแถวใหม่จึงมีพฤติกรรมต่างกันภายในตารางเดียว",
+      "tag": "danger"
+    },
+    {
+      "id": "C19",
+      "name": "add_to_cart ฝั่ง business_items ไม่กรอง line_account_id",
+      "condition": "product_source เป็น business_items ซึ่งเป็นค่า default ของร้านที่ไม่ได้ใช้ Odoo",
+      "behavior": "query หาสินค้าด้วยเงื่อนไข id ตรง และ is_active เท่ากับหนึ่ง เท่านั้น ต่างจากเส้น shop_products ที่กรอง line_account_id ด้วย",
+      "code_path": [
+        { "module": "api-checkout", "method": "business_items branch", "file": "api/checkout.php", "line": 890 },
+        { "module": "api-checkout", "method": "shop_products branch", "file": "api/checkout.php", "line": 877 },
+        { "module": "api-checkout", "method": "handleGetProducts กรองถูกต้อง", "file": "api/checkout.php", "line": 703 }
+      ],
+      "result": "ระบุ product_id ของอีกบัญชี LINE ใน tenant เดียวกันแล้วหยิบใส่ตะกร้าและสั่งซื้อได้ แม้หน้าร้านจะไม่แสดงสินค้านั้น",
+      "gotcha": "handleGetProducts กรอง line_account_id ถูกต้องอยู่แล้ว ช่องโหว่จึงเห็นได้ต่อเมื่อยิง API ตรง ไม่ใช่จากการกดในแอป",
+      "tag": "warn"
+    },
+    {
+      "id": "C20",
+      "name": "upsert ตะกร้าล้ม แล้วตกไปใช้ check then act",
+      "condition": "INSERT ON DUPLICATE KEY โยน exception เช่นตารางไม่มีคอลัมน์ product_source",
+      "behavior": "ตกลงไปชั้นสองที่ SELECT หาแถวเดิมแล้ว UPDATE quantity เอง ถ้าล้มอีกก็ตกไปชั้นสามที่ค้นด้วย user_id กับ product_id ล้วน ๆ",
+      "code_path": [
+        { "module": "api-checkout", "method": "catch ชั้นแรก", "file": "api/checkout.php", "line": 919 },
+        { "module": "api-checkout", "method": "SELECT แล้ว UPDATE", "file": "api/checkout.php", "line": 932 },
+        { "module": "api-checkout", "method": "catch ชั้นสอง", "file": "api/checkout.php", "line": 947 }
+      ],
+      "result": "การเพิ่มจำนวนกลายเป็นอ่านแล้วเขียนสองก้าวโดยไม่มี transaction ครอบ กดเพิ่มพร้อมกันสองแท็บอาจได้จำนวนเพี้ยน",
+      "gotcha": "ชั้นสามทิ้ง product_source ไปเลย จึงอาจไปบวกจำนวนให้แถวของ catalog คนละชุดที่บังเอิญ product_id ตรงกัน",
+      "tag": "warn"
+    },
+    {
+      "id": "C21",
+      "name": "ที่อยู่เดิมถูกส่งกลับเป็นค่าว่าง ลูกค้าต้องพิมพ์ใหม่ทุกครั้ง",
+      "condition": "ออร์เดอร์ก่อนหน้าเก็บที่อยู่เป็นข้อความรวมก้อนเดียว คือไม่มี subdistrict district หรือ province",
+      "behavior": "ตัวแปร hasSeperateFields เป็นเท็จ ระบบจึงคืนคีย์ address เป็นสตริงว่าง ทั้งที่ delivery_info มีข้อความที่อยู่เต็มอยู่",
+      "code_path": [
+        { "module": "api-checkout", "method": "hasSeperateFields", "file": "api/checkout.php", "line": 2388 },
+        { "module": "api-checkout", "method": "คืน address เป็นค่าว่าง", "file": "api/checkout.php", "line": 2394 },
+        { "module": "line-mini-app", "method": "useEffect เติมฟอร์ม", "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx", "line": 71 }
+      ],
+      "result": "ช่องที่อยู่ในหน้าชำระเงินว่างเปล่าทุกครั้งสำหรับลูกค้าประจำ",
+      "gotcha": "Mini App ส่งที่อยู่เป็นข้อความก้อนเดียวเสมอ ตามบรรทัด 118 ของ CheckoutClient เงื่อนไข hasSeperateFields จึงเป็นเท็จ 100 เปอร์เซ็นต์สำหรับออร์เดอร์ที่มาจาก Mini App",
+      "tag": "danger"
+    },
+    {
+      "id": "C22",
+      "name": "ค่าจัดส่งบนหน้าจอไม่ตรงกับที่ server คิดเมื่อใช้โค้ดส่วนลด",
+      "condition": "ใช้โค้ดแล้ว netSubtotal ตกต่ำกว่า free_shipping_min ขณะที่ subtotal เดิมสูงกว่า",
+      "behavior": "ฝั่ง client คืนค่า 50 แบบ hardcode ส่วนฝั่ง server คิดจาก shop_settings.shipping_fee ของร้านนั้นจริง",
+      "code_path": [
+        { "module": "line-mini-app", "method": "estimateShipping", "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx", "line": 36 },
+        { "module": "api-checkout", "method": "shippingFee จาก shop_settings", "file": "api/checkout.php", "line": 1398 }
+      ],
+      "result": "ยอดบนปุ่มยืนยันสั่งซื้อกับ grand_total ที่บันทึกจริงไม่ตรงกัน",
+      "gotcha": "กติกาค่าจัดส่งถูกเขียนซ้ำสองที่ ที่ CheckoutClient บรรทัด 27 ถึง 37 และที่ checkout.php บรรทัด 1389 ถึง 1404 แก้ที่เดียวจึงเพี้ยนทันที",
+      "tag": "warn"
+    },
+    {
+      "id": "C23",
+      "name": "โค้ดส่วนลดไม่ถูกบันทึกและโควตาไม่เคยถูกนับ",
+      "condition": "ใช้โค้ดสำเร็จแล้วสั่งซื้อ",
+      "behavior": "create_order ไม่รับ code ไม่รับ promo_id และไม่เขียนคอลัมน์ discount_amount ส่วน promotion_usage กับ promotions.usage_count ถูกอ่านเพื่อตรวจโควตาเท่านั้น ไม่มีที่ไหนในโค้ดเบสเขียนกลับ",
+      "code_path": [
+        { "module": "api-checkout", "method": "ตรวจ usage_limit", "file": "api/checkout.php", "line": 2266 },
+        { "module": "api-checkout", "method": "ตรวจ per_user_limit", "file": "api/checkout.php", "line": 2272 },
+        { "module": "shop-api", "method": "body ของ create_order", "file": "line-mini-app/src/lib/shop-api.ts", "line": 365 },
+        { "module": "api-checkout", "method": "INSERT transactions", "file": "api/checkout.php", "line": 1449 }
+      ],
+      "result": "โค้ดเดียวใช้ได้ไม่จำกัดครั้ง ต่อให้ตั้ง usage_limit หรือ per_user_limit ไว้ และรายงานยอดขายจะเห็นแค่ราคาที่ลดแล้วโดยไม่รู้ว่าลดจากโค้ดไหน",
+      "gotcha": "ส่วนลดเดินทางเข้าระบบผ่านคีย์ subtotal เท่านั้น ตามเคส C4 จึงแยกไม่ออกจากการแก้ payload",
+      "tag": "danger"
+    },
+    {
+      "id": "C24",
+      "name": "ลูกค้าไม่ได้รับข้อความยืนยันออร์เดอร์ทาง LINE",
+      "condition": "create_order สำเร็จ",
+      "behavior": "NotificationService.notifyNewOrder ส่งให้แอดมินผ่าน sendToAdmins ส่วนฟังก์ชัน sendOrderConfirmation ที่เขียนไว้สำหรับส่งหาลูกค้า ถูกประกาศไว้แต่ไม่ถูกเรียกจากที่ใดในไฟล์เลย",
+      "code_path": [
+        { "module": "api-checkout", "method": "notifyNewOrder", "file": "api/checkout.php", "line": 1617 },
+        { "module": "NotificationService", "method": "sendToAdmins", "file": "classes/NotificationService.php", "line": 55 },
+        { "module": "api-checkout", "method": "sendOrderConfirmation ที่ไม่ถูกเรียก", "file": "api/checkout.php", "line": 1661 }
+      ],
+      "result": "ลูกค้าเห็นแค่หน้าจอสั่งซื้อสำเร็จใน Mini App ไม่มีหลักฐานในแชท LINE",
+      "gotcha": "sendReceiptMessage ที่บรรทัด 1869 ถูกเรียกจริงตอนอัปโหลดสลิปที่บรรทัด 1838 คนอ่านจึงเข้าใจผิดได้ง่ายว่าฝั่งสร้างออร์เดอร์ก็ส่งเหมือนกัน",
+      "tag": "warn"
+    },
+    {
+      "id": "C25",
+      "name": "cart และ create_order ทำ canary ไม่ได้",
+      "condition": "ต้องการย้าย endpoint ทีละตัวไป Next ตามแผน migration",
+      "behavior": "shop-api.ts ประกอบ URL ด้วย apiUrl แล้ว fetch ตรง ไม่ผ่าน phpGet phpPost จึงไม่แตะ resolveEndpointTarget ที่เป็นกลไก override รายเส้น",
+      "code_path": [
+        { "module": "shop-api", "method": "CHECKOUT_URL", "file": "line-mini-app/src/lib/shop-api.ts", "line": 4 },
+        { "module": "config", "method": "apiUrl", "file": "line-mini-app/src/lib/config.ts", "line": 155 },
+        { "module": "config", "method": "resolveEndpointTarget", "file": "line-mini-app/src/lib/config.ts", "line": 247 },
+        { "module": "addresses-api", "method": "ตัวอย่างที่ทำถูก", "file": "line-mini-app/src/lib/addresses-api.ts", "line": 41 }
+      ],
+      "result": "ทุก action ของ checkout.php ต้องย้ายพร้อมกันทั้งก้อน ไม่มีทาง ramp ทีละเปอร์เซ็นต์",
+      "gotcha": "addresses-api.ts ในโฟลเดอร์เดียวกันใช้ phpGet phpPost อย่างถูกต้อง ความต่างนี้มองไม่เห็นจนกว่าจะถึงวันจะ flip",
+      "tag": "info"
+    },
+    {
+      "id": "C26",
+      "name": "tenant ปลายทางถูกเลือกโดยตัวเลขที่ client ส่งมา",
+      "condition": "body หรือ query มี line_account_id ที่มีเส้นทางอยู่ใน master.tenant_line_account_routes",
+      "behavior": "route_by_account ปักหมุด TenantContext ตามตัวเลขนั้นก่อนทุกอย่าง จากนั้น handleCreateOrder หา line_user_id ใน tenant DB นั้น ถ้าไม่พบก็สร้าง user ใหม่แล้วสั่งซื้อได้เลย ไม่มีการยืนยันว่า LINE user คนนั้นเป็นสมาชิกของ tenant นั้นจริง",
+      "code_path": [
+        { "module": "config", "method": "อ่าน la จาก query string", "file": "line-mini-app/src/lib/config.ts", "line": 31 },
+        { "module": "route_by_account", "method": "อ่าน candidate", "file": "bootstrap/route_by_account.php", "line": 48 },
+        { "module": "TenantContext", "method": "routeByLineAccount", "file": "classes/TenantContext.php", "line": 295 },
+        { "module": "api-checkout", "method": "สร้าง user อัตโนมัติ", "file": "api/checkout.php", "line": 1320 }
+      ],
+      "result": "สร้าง user และออร์เดอร์ใน tenant อื่นได้ด้วยการเปลี่ยนตัวเลขในคำขอ",
+      "gotcha": "endpoint ตั้ง Access-Control-Allow-Origin เป็นดาวที่บรรทัด 7 และไม่มี auth ใด ๆ ทั้งไฟล์ line_user_id คือข้อมูลระบุตัวตนเพียงอย่างเดียวและมันมาจาก body",
+      "tag": "danger"
+    },
+    {
+      "id": "C27",
+      "name": "สินค้าถูกลบไปแล้ว ยังค้างในตะกร้า",
+      "condition": "LEFT JOIN หา business_items หรือ shop_products ไม่เจอ ทำให้ชื่อสินค้าว่าง",
+      "behavior": "handleGetCart กรองแถวออกแล้วใส่ไว้ใน debug filtered_out ส่วน loadCheckoutCartLinesFromDb ใช้ continue ข้ามไปเงียบ ๆ",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetCart กรองออก", "file": "api/checkout.php", "line": 1230 },
+        { "module": "api-checkout", "method": "loadCheckoutCartLinesFromDb continue", "file": "api/checkout.php", "line": 267 },
+        { "module": "api-checkout", "method": "loadCheckoutCartLinesFromDb continue", "file": "api/checkout.php", "line": 293 }
+      ],
+      "result": "แถวใน cart_items ยังอยู่ตลอดไป ลูกค้ามองไม่เห็นและเอาออกเองไม่ได้ ส่วนออร์เดอร์ก็ออกโดยขาดรายการนั้นไปเงียบ ๆ",
+      "gotcha": "ไม่มีการแจ้งผู้ใช้ว่าของหายไปจากตะกร้า ยอดรวมจะลดลงเองโดยไม่มีคำอธิบาย",
+      "tag": "warn"
+    },
+    {
+      "id": "C28",
+      "name": "ที่อยู่จัดส่งไม่ถูกตรวจฝั่ง server เลย",
+      "condition": "create_order ได้รับ address ที่ว่างหรือไม่ครบ",
+      "behavior": "PHP นำค่าไปประกอบเป็น delivery_info โดยใช้ค่าว่างแทนทุกฟิลด์ที่ขาด แล้วสร้างออร์เดอร์ต่อ ไม่มีการตรวจชื่อ เบอร์ หรือที่อยู่",
+      "code_path": [
+        { "module": "line-mini-app", "method": "validationError", "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx", "line": 140 },
+        { "module": "api-checkout", "method": "build deliveryInfo", "file": "api/checkout.php", "line": 1409 }
+      ],
+      "result": "ออร์เดอร์ที่ไม่มีที่อยู่จัดส่งเข้าระบบได้ถ้ายิง API ตรง",
+      "gotcha": "การตรวจรูปแบบเบอร์โทรอยู่ที่ regex ฝั่ง client บรรทัด 21 ที่เดียว และช่องอีเมลที่เก็บมาที่บรรทัด 49 ไม่ถูกส่งไปไหนเลย",
+      "tag": "warn"
+    },
+    {
+      "id": "C29",
+      "name": "แจ้งเตือนหลัง commit เป็นแบบ synchronous",
+      "condition": "create_order commit สำเร็จ",
+      "behavior": "เรียก Telegram แล้ว NotificationService แล้ว ActivityLogger เรียงกันก่อนจะส่ง jsonResponse โดยสองตัวแรกครอบ try catch ที่ error_log อย่างเดียว",
+      "code_path": [
+        { "module": "api-checkout", "method": "notifyTelegramNewOrder", "file": "api/checkout.php", "line": 1611 },
+        { "module": "api-checkout", "method": "NotificationService", "file": "api/checkout.php", "line": 1614 },
+        { "module": "api-checkout", "method": "jsonResponse", "file": "api/checkout.php", "line": 1642 }
+      ],
+      "result": "เวลาตอบกลับของปุ่มยืนยันสั่งซื้อขึ้นกับความเร็วของ Telegram API และ LINE Messaging API",
+      "gotcha": "ActivityLogger.logOrder ที่บรรทัด 1629 ไม่มี try ครอบ ถ้ามันโยน exception จะตกไปที่ catch ชั้นนอกและตอบ success false ทั้งที่ออร์เดอร์ commit ไปแล้ว",
+      "tag": "warn"
+    },
+    {
+      "id": "C30",
+      "name": "PromptPay QR ถูกสร้างโดยส่ง payload ออกไปยังบริการภายนอก",
+      "condition": "หน้ารายละเอียดออร์เดอร์ขอ QR ด้วย action promptpay_qr",
+      "behavior": "ประกอบ EMVCo payload ฝั่ง server แล้วส่งไปเป็น query string ให้ api.qrserver.com วาดรูปให้ พร้อมตั้ง Cache-Control public max-age 3600",
+      "code_path": [
+        { "module": "shop-api", "method": "promptPayQrSrc", "file": "line-mini-app/src/lib/shop-api.ts", "line": 285 },
+        { "module": "api-checkout", "method": "handlePromptPayQR", "file": "api/checkout.php", "line": 2555 },
+        { "module": "api-checkout", "method": "เรียก api.qrserver.com", "file": "api/checkout.php", "line": 2606 },
+        { "module": "api-checkout", "method": "Cache-Control public", "file": "api/checkout.php", "line": 2610 }
+      ],
+      "result": "เลข PromptPay ของร้านและยอดเงินเดินทางออกไปยัง third party ทุกครั้งที่มีลูกค้าเปิดหน้าจ่ายเงิน และรูปถูกให้ cache สาธารณะได้หนึ่งชั่วโมง",
+      "gotcha": "ถ้าบริการภายนอกล่ม ลูกค้าจะได้ภาพข้อความ QR Generation Error แทน QR จริง ตามบรรทัด 2620 ซึ่งดูเหมือนรูปปกติในหน้าจอเล็ก",
+      "tag": "warn"
+    }
+  ],
+  "modules_touched": [
+    { "module": "line-mini-app", "role": "หน้าจอตะกร้าและชำระเงินใน LIFF ถือ state ของส่วนลดและคำนวณยอดที่แสดงเอง", "methods": ["CartClient", "CheckoutClient", "ShopProductDetailClient", "estimateShipping"] },
+    { "module": "shop-api", "role": "ชั้น API ของ Mini App ยิงตรงไปที่ api/checkout.php ทุก action ของตะกร้าและออร์เดอร์", "methods": ["fetchCart", "addToCart", "updateCartItem", "removeCartLine", "clearCart", "validatePromo", "fetchLastAddress", "createShopOrder", "promptPayQrSrc"] },
+    { "module": "config", "role": "ตัดสินใจว่า request จะไปที่ host ไหน และ line_account_id คือเลขอะไร", "methods": ["apiUrl", "buildPhpRequestUrl", "resolveEndpointTarget", "getLineAccountId"] },
+    { "module": "route_by_account", "role": "ปักหมุด tenant จาก line_account_id ที่ client ส่งมา เพราะ Mini App โหลดจาก root domain", "methods": ["route_by_account.php"] },
+    { "module": "TenantContext", "role": "แปลง line_account_id เป็น tenant_id ผ่านตารางเส้นทางใน master DB", "methods": ["routeByLineAccount", "resolveTenantByLineAccount", "setCurrentTenantId"] },
+    { "module": "api-checkout", "role": "endpoint เดียวที่ทำทั้งตะกร้า โปรโมชัน ที่อยู่ ออร์เดอร์ สลิป และ QR รวม 2794 บรรทัด", "methods": ["handleGetCart", "handleAddToCart", "handleUpdateCart", "handleRemoveFromCart", "handleClearCart", "handleValidatePromo", "handleGetLastAddress", "handleCreateOrder", "loadCheckoutCartLinesFromDb", "handlePromptPayQR", "handleMyOrders"] },
+    { "module": "AccountReceivableService", "role": "สร้างลูกหนี้ให้ออร์เดอร์แบบเครดิตและ COD หลัง commit", "methods": ["createFromTransaction", "generateArNumber"] },
+    { "module": "NotificationService", "role": "แจ้งออร์เดอร์ใหม่ทาง LINE ให้แอดมิน ไม่ใช่ให้ลูกค้า", "methods": ["notifyNewOrder", "sendToAdmins"] },
+    { "module": "ActivityLogger", "role": "บันทึก activity_logs ของการสร้างออร์เดอร์", "methods": ["logOrder"] },
+    { "module": "MySQL", "role": "tenant DB ที่เก็บ cart_items transactions transaction_items business_items shop_products stock_movements shop_settings promotions promotion_usage account_receivables activity_logs users", "methods": [] }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "api-checkout",
+      "to_module": "line-mini-app",
+      "returns_what": "free_shipping_min และ shipping_fee ใน CartResponse",
+      "why_needed": "CheckoutClient ใช้สองค่านี้ใน estimateShipping ถ้าหายไป ค่า default ที่ hardcode คือ 500 กับ 50 จะถูกใช้แทน แล้วยอดบนปุ่มจะเพี้ยนจากที่ server คิดจริงทันที"
+    },
+    {
+      "from_module": "api-checkout",
+      "to_module": "line-mini-app",
+      "returns_what": "order_id ใน response ของ create_order",
+      "why_needed": "หน้าสั่งซื้อสำเร็จใช้ค่านี้สร้างลิงก์ไป /order?id= ซึ่งเป็นทางเดียวที่ลูกค้าจะเข้าไปอัปโหลดสลิปได้ ถ้าไม่มีจะแสดงแค่ข้อความว่ารับออร์เดอร์แล้วโดยไม่มีทางไปต่อ"
+    },
+    {
+      "from_module": "api-checkout",
+      "to_module": "line-mini-app",
+      "returns_what": "discount จาก validate_promo",
+      "why_needed": "เป็นที่เดียวที่ส่วนลดมีตัวตน ถ้าค่านี้ไม่กลับมา ส่วนลดจะหายไปทั้งใบเพราะไม่มีการเก็บฝั่ง server เลย"
+    },
+    {
+      "from_module": "api-checkout",
+      "to_module": "api-checkout",
+      "returns_what": "คีย์ _unit จาก loadCheckoutCartLinesFromDb",
+      "why_needed": "handleCreateOrder ใช้ _unit เป็นราคาต่อหน่วยทั้งตอนรวม subtotal ที่บรรทัด 1375 และตอนเขียน transaction_items ที่บรรทัด 1521 ถ้าคีย์นี้หาย จะตกไปใช้ checkoutOrderUnitPrice ซึ่งใช้กติกาเลือกราคาคนละชุดกับตอนโหลด"
+    },
+    {
+      "from_module": "route_by_account",
+      "to_module": "api-checkout",
+      "returns_what": "TenantContext ที่ถูกปักหมุด",
+      "why_needed": "ถ้าไม่ปักหมุด Database::getInstance() จะคืน legacy DB ออร์เดอร์จะถูกเขียนคนละฐานกับที่แอดมินเปิดดูบน subdomain ของร้าน"
+    },
+    {
+      "from_module": "MySQL",
+      "to_module": "api-checkout",
+      "returns_what": "lastInsertId ของ transactions",
+      "why_needed": "เป็นคีย์ที่ transaction_items stock_movements wms_status และ AccountReceivableService ใช้ผูกกันทั้งหมด ถ้าค่านี้ผิดจะได้ออร์เดอร์ที่มีหัวแต่ไม่มีรายการ"
+    }
+  ],
+  "gotchas": [
+    "ทั้งไฟล์ api/checkout.php 2794 บรรทัด มี transaction แค่ชุดเดียวคือบรรทัด 1428 กับ 1592 และไม่มี SELECT FOR UPDATE ไม่มี GET_LOCK และไม่มีการตรวจ rowCount ของ UPDATE ที่ไหนเลย",
+    "เลขออร์เดอร์เป็น TXN ต่อวันที่ ต่อเลขสุ่มสี่หลักจาก mt_rand บนคอลัมน์ที่มี UNIQUE KEY การชนไม่ถูก retry แต่ทำให้ทั้งออร์เดอร์ล้มพร้อมข้อความ SQL ดิบส่งกลับให้ลูกค้า",
+    "ราคาที่บันทึกลง transactions เชื่อค่า subtotal shipping และ total ที่ client ส่งมาได้ทั้งหมด และยังรับ cart_items พร้อมราคาจาก client ได้ด้วย",
+    "ส่วนลดจากโค้ดโปรโมชันไม่มีคอลัมน์ปลายทาง มันเดินทางเข้ามาเป็น subtotal ที่ต่ำลงเท่านั้น และ promotion_usage กับ promotions.usage_count ไม่เคยถูกเขียนกลับเลยทั้งโค้ดเบส",
+    "การตัดสต๊อกใช้ UPDATE ที่มีเงื่อนไข stock พอ ซึ่งกันติดลบได้จริง แต่ไม่มีใครตรวจว่ามันโดนแถวไหนไหม ผลคือขายเกินได้แบบเงียบสนิท",
+    "unit_id ที่ Mini App ส่งมาไม่ปรากฏใน api/checkout.php แม้แต่ครั้งเดียว ระบบหลายหน่วยขายจึงตายทั้งเส้นตั้งแต่ตะกร้าไปถึงการตัดสต๊อก ทั้งที่ migration และ UI ทำไว้ครบแล้ว",
+    "ALTER TABLE ถูกสั่งหนึ่งบรรทัดหลัง beginTransaction ซึ่งเป็น DDL ที่ implicit commit บน MariaDB ขอบเขต transaction ที่ตั้งใจไว้จึงอาจไม่มีอยู่จริง",
+    "จุดสร้าง user อัตโนมัติมีสามที่คือบรรทัด 836 1137 และ 1320 การแค่เปิดหน้าตะกร้าก็เขียน users ได้ และการเลือก tenant มาจาก line_account_id ที่ client ส่งมา",
+    "sendOrderConfirmation ที่บรรทัด 1661 ไม่ถูกเรียกจากที่ใดเลย ลูกค้าจึงไม่ได้รับข้อความยืนยันออร์เดอร์ทาง LINE ส่วน notifyNewOrder ส่งให้แอดมินอย่างเดียว",
+    "cart กับ create_order ยิงผ่าน apiUrl ตรง ไม่ผ่าน php-bridge จึงข้าม endpoint override map ที่ใช้ทำ canary ของแผน migration ไปทั้งหมด"
+  ],
+  "file_refs": [
+    "line-mini-app/src/app/cart/page.tsx",
+    "line-mini-app/src/app/checkout/page.tsx",
+    "line-mini-app/src/components/miniapp/CartClient.tsx",
+    "line-mini-app/src/components/miniapp/CheckoutClient.tsx",
+    "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx",
+    "line-mini-app/src/lib/shop-api.ts",
+    "line-mini-app/src/lib/orders-api.ts",
+    "line-mini-app/src/lib/addresses-api.ts",
+    "line-mini-app/src/lib/php-bridge.ts",
+    "line-mini-app/src/lib/config.ts",
+    "api/checkout.php",
+    "bootstrap/route_by_account.php",
+    "classes/TenantContext.php",
+    "classes/AccountReceivableService.php",
+    "classes/NotificationService.php",
+    "database/install_complete_latest.sql",
+    "database/migration_2026-05-18_cart_unit_id.sql"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": ["ลูกค้า Mini App", "CheckoutClient", "api/checkout.php", "tenant DB", "ระบบภายนอก"],
+    "rows": ["ดูตะกร้า", "กรอกที่อยู่และโค้ด", "สร้างออร์เดอร์", "หลัง commit"],
+    "nodes": [
+      { "id": "n1", "lane": 0, "row": 0, "label": "เปิดหน้าตะกร้า", "type": "start", "ref": "line-mini-app/src/components/miniapp/CartClient.tsx:29" },
+      { "id": "n2", "lane": 2, "row": 0, "label": "route_by_account ปักหมุด tenant", "type": "step", "ref": "bootstrap/route_by_account.php:48" },
+      { "id": "n3", "lane": 2, "row": 0, "label": "handleGetCart หา user", "type": "decision", "ref": "api/checkout.php:1122" },
+      { "id": "n4", "lane": 3, "row": 0, "label": "สร้างแถว users อัตโนมัติ", "type": "error", "ref": "api/checkout.php:1137" },
+      { "id": "n5", "lane": 3, "row": 0, "label": "JOIN cart_items กับ catalog", "type": "data", "ref": "api/checkout.php:1155" },
+      { "id": "n6", "lane": 2, "row": 0, "label": "คิดค่าส่งจาก shop_settings", "type": "step", "ref": "api/checkout.php:1252" },
+      { "id": "n7", "lane": 1, "row": 1, "label": "เติมที่อยู่จาก last_address", "type": "step", "ref": "line-mini-app/src/components/miniapp/CheckoutClient.tsx:63" },
+      { "id": "n8", "lane": 2, "row": 1, "label": "คืน address ว่างเมื่อไม่มีฟิลด์แยก", "type": "error", "ref": "api/checkout.php:2394" },
+      { "id": "n9", "lane": 1, "row": 1, "label": "ตรวจโค้ดส่วนลด", "type": "step", "ref": "line-mini-app/src/components/miniapp/CheckoutClient.tsx:100" },
+      { "id": "n10", "lane": 2, "row": 1, "label": "handleValidatePromo คืน discount", "type": "step", "ref": "api/checkout.php:2202" },
+      { "id": "n11", "lane": 1, "row": 1, "label": "คิด netSubtotal และ total เอง", "type": "step", "ref": "line-mini-app/src/components/miniapp/CheckoutClient.tsx:81" },
+      { "id": "n12", "lane": 1, "row": 2, "label": "POST create_order พร้อม subtotal", "type": "step", "ref": "line-mini-app/src/lib/shop-api.ts:360" },
+      { "id": "n13", "lane": 2, "row": 2, "label": "โหลดบรรทัดตะกร้าจาก DB", "type": "step", "ref": "api/checkout.php:1365" },
+      { "id": "n14", "lane": 2, "row": 2, "label": "ตะกร้าว่างหรือไม่", "type": "decision", "ref": "api/checkout.php:1369" },
+      { "id": "n15", "lane": 2, "row": 2, "label": "ตอบ Cart is empty จบ", "type": "end", "ref": "api/checkout.php:1370" },
+      { "id": "n16", "lane": 2, "row": 2, "label": "client override subtotal shipping total", "type": "error", "ref": "api/checkout.php:1380" },
+      { "id": "n17", "lane": 2, "row": 2, "label": "beginTransaction", "type": "step", "ref": "api/checkout.php:1428" },
+      { "id": "n18", "lane": 2, "row": 2, "label": "เลขออร์เดอร์ mt_rand สี่หลัก", "type": "error", "ref": "api/checkout.php:1431" },
+      { "id": "n19", "lane": 3, "row": 2, "label": "ALTER TABLE กลาง transaction", "type": "error", "ref": "api/checkout.php:1441" },
+      { "id": "n20", "lane": 3, "row": 2, "label": "INSERT transactions สามระดับ", "type": "data", "ref": "api/checkout.php:1449" },
+      { "id": "n21", "lane": 3, "row": 2, "label": "INSERT transaction_items", "type": "data", "ref": "api/checkout.php:1525" },
+      { "id": "n22", "lane": 3, "row": 2, "label": "ตัดสต๊อกโดยไม่เช็ค rowCount", "type": "error", "ref": "api/checkout.php:1545" },
+      { "id": "n23", "lane": 3, "row": 2, "label": "INSERT stock_movements", "type": "data", "ref": "api/checkout.php:1555" },
+      { "id": "n24", "lane": 3, "row": 2, "label": "ล้าง cart_items ทั้ง user", "type": "data", "ref": "api/checkout.php:1579" },
+      { "id": "n25", "lane": 2, "row": 2, "label": "commit", "type": "step", "ref": "api/checkout.php:1592" },
+      { "id": "n26", "lane": 2, "row": 2, "label": "rollBack แล้วส่ง error ดิบกลับ", "type": "error", "ref": "api/checkout.php:1652" },
+      { "id": "n27", "lane": 3, "row": 3, "label": "INSERT account_receivables", "type": "data", "ref": "classes/AccountReceivableService.php:103" },
+      { "id": "n28", "lane": 4, "row": 3, "label": "แจ้ง Telegram และ LINE ให้แอดมิน", "type": "step", "ref": "api/checkout.php:1611" },
+      { "id": "n29", "lane": 3, "row": 3, "label": "INSERT activity_logs", "type": "data", "ref": "api/checkout.php:1629" },
+      { "id": "n30", "lane": 2, "row": 3, "label": "ตอบ order_id order_number total", "type": "step", "ref": "api/checkout.php:1642" },
+      { "id": "n31", "lane": 0, "row": 3, "label": "เห็นหน้าสั่งซื้อสำเร็จ", "type": "end", "ref": "line-mini-app/src/components/miniapp/CheckoutClient.tsx:188" }
+    ],
+    "edges": [
+      { "from": "n1", "to": "n2" },
+      { "from": "n2", "to": "n3" },
+      { "from": "n3", "to": "n4", "label": "ไม่พบ user", "dashed": true },
+      { "from": "n3", "to": "n5", "label": "พบ user" },
+      { "from": "n4", "to": "n5", "label": "ใช้ user ที่เพิ่งสร้าง", "dashed": true },
+      { "from": "n5", "to": "n6" },
+      { "from": "n6", "to": "n7" },
+      { "from": "n7", "to": "n8", "label": "ที่อยู่เป็นก้อนเดียว", "dashed": true },
+      { "from": "n8", "to": "n9", "label": "ฟอร์มว่าง ต้องพิมพ์ใหม่", "dashed": true },
+      { "from": "n7", "to": "n9", "label": "มีฟิลด์แยก" },
+      { "from": "n9", "to": "n10" },
+      { "from": "n10", "to": "n11" },
+      { "from": "n11", "to": "n12" },
+      { "from": "n12", "to": "n13" },
+      { "from": "n13", "to": "n14" },
+      { "from": "n14", "to": "n15", "label": "ว่าง", "dashed": true },
+      { "from": "n14", "to": "n16", "label": "มีของ" },
+      { "from": "n16", "to": "n17" },
+      { "from": "n17", "to": "n18" },
+      { "from": "n18", "to": "n19" },
+      { "from": "n19", "to": "n20" },
+      { "from": "n20", "to": "n26", "label": "เลขชนกันทั้งสามระดับ", "dashed": true },
+      { "from": "n20", "to": "n21", "label": "สำเร็จ" },
+      { "from": "n21", "to": "n22" },
+      { "from": "n22", "to": "n23" },
+      { "from": "n23", "to": "n24" },
+      { "from": "n24", "to": "n25" },
+      { "from": "n25", "to": "n27", "label": "cod หรือ credit" },
+      { "from": "n25", "to": "n28" },
+      { "from": "n27", "to": "n28", "label": "ล้มก็ข้าม", "dashed": true },
+      { "from": "n28", "to": "n29" },
+      { "from": "n29", "to": "n30" },
+      { "from": "n30", "to": "n31" }
+    ]
+  }
+}

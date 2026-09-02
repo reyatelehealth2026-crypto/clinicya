@@ -1,0 +1,332 @@
+{
+  "id": "crm-sales-service",
+  "title": "CRM 360: Dashboard → Deals → Tickets → Customer timeline",
+  "summary": "CRM dashboard API เป็น facade เหนือ CRMDashboardService สำหรับ executive overview, sales pipeline, service tickets และ customer 360.",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "Admin UI",
+      "module": "crm-dashboard-advanced.php",
+      "method": "page bootstrap",
+      "file": "crm-dashboard-advanced.php",
+      "line": 10,
+      "action": "auth, เปิด tenant DB, สร้าง CRMDashboardService ด้วย current LINE account และโหลด executive overview"
+    },
+    {
+      "seq": 2,
+      "actor": "Dashboard API",
+      "module": "api/crm-dashboard-api.php",
+      "method": "action router",
+      "file": "api/crm-dashboard-api.php",
+      "line": 69,
+      "action": "dispatch overview/pipeline/deals/tickets/customers/analytics ไป service"
+    },
+    {
+      "seq": 3,
+      "actor": "CRM Service",
+      "module": "classes/CRMDashboardService.php",
+      "method": "getExecutiveOverview",
+      "file": "classes/CRMDashboardService.php",
+      "line": 39,
+      "action": "รวม metrics + alerts + activities + revenue/pipeline charts และ cache ถ้ามี Redis",
+      "calls": [
+        "getExecutiveMetrics",
+        "getActiveAlerts",
+        "getRecentActivities",
+        "getRevenueTrend",
+        "getPipelineDistribution"
+      ]
+    },
+    {
+      "seq": 4,
+      "actor": "CRM Service",
+      "module": "classes/CRMDashboardService.php",
+      "method": "getPipelineData",
+      "file": "classes/CRMDashboardService.php",
+      "line": 147,
+      "action": "อ่าน crm_deals แยก 6 stage พร้อม customer info และคำนวณ pipeline totals"
+    },
+    {
+      "seq": 5,
+      "actor": "Admin",
+      "module": "classes/CRMDashboardService.php",
+      "method": "moveDeal",
+      "file": "classes/CRMDashboardService.php",
+      "line": 205,
+      "action": "validate stage แล้ว UPDATE crm_deals; closed stage ตั้ง closed_at และ clear cache",
+      "sets": [
+        {
+          "field": "crm_deals.stage",
+          "value": "newStage"
+        },
+        {
+          "field": "crm_deals.closed_at",
+          "value": "NOW when closed"
+        }
+      ]
+    },
+    {
+      "seq": 6,
+      "actor": "Admin",
+      "module": "classes/CRMDashboardService.php",
+      "method": "createDeal",
+      "file": "classes/CRMDashboardService.php",
+      "line": 239,
+      "action": "validate customer/title/value แล้ว INSERT deal ใหม่",
+      "sets": [
+        {
+          "field": "crm_deals.stage",
+          "value": "lead/default"
+        }
+      ]
+    },
+    {
+      "seq": 7,
+      "actor": "Service Agent",
+      "module": "classes/CRMDashboardService.php",
+      "method": "getTickets",
+      "file": "classes/CRMDashboardService.php",
+      "line": 349,
+      "action": "filter ticket ตาม status/priority/assignee และเรียง urgent → low"
+    },
+    {
+      "seq": 8,
+      "actor": "Service Agent",
+      "module": "classes/CRMDashboardService.php",
+      "method": "createTicket",
+      "file": "classes/CRMDashboardService.php",
+      "line": 449,
+      "action": "สร้าง ticket พร้อม SLA deadline ตาม priority",
+      "sets": [
+        {
+          "field": "crm_tickets.status",
+          "value": "open/default"
+        },
+        {
+          "field": "crm_tickets.sla_deadline",
+          "value": "priority SLA"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "C1",
+      "name": "Unknown API action",
+      "condition": "action ไม่อยู่ใน switch",
+      "behavior": "คงผล Unknown action",
+      "code_path": "crm-dashboard-api.php",
+      "result": "success=false",
+      "tag": "warn"
+    },
+    {
+      "id": "C2",
+      "name": "Invalid deal stage",
+      "condition": "stage ไม่ใช่ lead/qualified/proposal/negotiation/closed_*",
+      "behavior": "ไม่ UPDATE",
+      "code_path": "CRMDashboardService::moveDeal",
+      "result": "Invalid stage",
+      "tag": "danger"
+    },
+    {
+      "id": "C3",
+      "name": "Missing deal fields",
+      "condition": "customer_id/title/value ขาด",
+      "behavior": "ไม่ INSERT",
+      "code_path": "CRMDashboardService::createDeal",
+      "result": "Missing required field",
+      "tag": "danger"
+    },
+    {
+      "id": "C4",
+      "name": "Closed deal",
+      "condition": "ย้ายไป closed_won หรือ closed_lost",
+      "behavior": "ตั้ง closed_at=NOW",
+      "code_path": "moveDeal",
+      "result": "deal terminal stage",
+      "tag": "ok"
+    },
+    {
+      "id": "C5",
+      "name": "Ticket SLA",
+      "condition": "สร้าง ticket priority ต่างกัน",
+      "behavior": "คำนวณ deadline 4/8/24/72 ชั่วโมง",
+      "code_path": "createTicket",
+      "result": "SLA field persisted",
+      "tag": "info"
+    },
+    {
+      "id": "C6",
+      "name": "Redis available",
+      "condition": "RedisCache class มี",
+      "behavior": "overview/pipeline ใช้ short TTL cache",
+      "code_path": "getExecutiveOverview/getPipelineData",
+      "result": "ลด DB load",
+      "tag": "info"
+    }
+  ],
+  "modules_touched": [
+    {
+      "module": "crm-dashboard-advanced.php",
+      "role": "admin CRM UI",
+      "methods": [
+        "bootstrap"
+      ]
+    },
+    {
+      "module": "api/crm-dashboard-api.php",
+      "role": "HTTP facade",
+      "methods": [
+        "overview",
+        "pipeline",
+        "deal_*",
+        "ticket_*",
+        "customer_*"
+      ]
+    },
+    {
+      "module": "classes/CRMDashboardService.php",
+      "role": "CRM business/read model",
+      "methods": [
+        "getExecutiveOverview",
+        "getPipelineData",
+        "moveDeal",
+        "createDeal",
+        "getTickets",
+        "createTicket"
+      ]
+    }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "CRMDashboardService",
+      "to_module": "crm-dashboard-api.php",
+      "returns_what": "structured metrics/pipeline/tickets/customer data",
+      "why_needed": "dashboard renders directly from service result"
+    },
+    {
+      "from_module": "crm-dashboard-api.php",
+      "to_module": "Admin UI",
+      "returns_what": "success + data + _meta.duration_ms",
+      "why_needed": "UI actions and observability"
+    }
+  ],
+  "gotchas": [
+    "api/crm-dashboard-api.php สร้าง CRMDashboardService โดยไม่ส่ง lineAccountId ในโค้ดที่อ่าน ทำให้บาง query ที่พึ่ง scope อาจได้ null scope",
+    "บาง CRM query เช่น crm_deals/crm_tickets ไม่เห็น line_account_id filter ในช่วงที่ trace; ต้องยืนยัน tenant DB isolation เป็น boundary หลัก",
+    "crm-dashboard.php ตัวเก่าเป็น redirect stub ไป dashboard.php?tab=crm"
+  ],
+  "file_refs": [
+    "crm-dashboard-advanced.php",
+    "api/crm-dashboard-api.php",
+    "classes/CRMDashboardService.php",
+    "crm-dashboard.php"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": [
+      "Admin",
+      "CRM API",
+      "CRM Service",
+      "Tenant DB",
+      "Redis"
+    ],
+    "rows": [
+      "Overview",
+      "Pipeline",
+      "Deal",
+      "Ticket"
+    ],
+    "nodes": [
+      {
+        "id": "c1",
+        "lane": "Admin",
+        "row": "Overview",
+        "type": "start",
+        "label": "open CRM / action"
+      },
+      {
+        "id": "c2",
+        "lane": "CRM API",
+        "row": "Overview",
+        "type": "step",
+        "label": "dispatch action",
+        "ref": "crm-dashboard-api.php"
+      },
+      {
+        "id": "c3",
+        "lane": "CRM Service",
+        "row": "Overview",
+        "type": "step",
+        "label": "overview + metrics",
+        "ref": "CRMDashboardService.php"
+      },
+      {
+        "id": "c4",
+        "lane": "Redis",
+        "row": "Overview",
+        "type": "step",
+        "label": "short TTL cache"
+      },
+      {
+        "id": "c5",
+        "lane": "Tenant DB",
+        "row": "Pipeline",
+        "type": "step",
+        "label": "crm_deals by stage"
+      },
+      {
+        "id": "c6",
+        "lane": "CRM Service",
+        "row": "Deal",
+        "type": "step",
+        "label": "move/create deal"
+      },
+      {
+        "id": "c7",
+        "lane": "Tenant DB",
+        "row": "Ticket",
+        "type": "step",
+        "label": "crm_tickets + SLA"
+      },
+      {
+        "id": "c8",
+        "lane": "Admin",
+        "row": "Ticket",
+        "type": "end",
+        "label": "updated CRM view"
+      }
+    ],
+    "edges": [
+      {
+        "from": "c1",
+        "to": "c2"
+      },
+      {
+        "from": "c2",
+        "to": "c3"
+      },
+      {
+        "from": "c3",
+        "to": "c4",
+        "dashed": true
+      },
+      {
+        "from": "c3",
+        "to": "c5"
+      },
+      {
+        "from": "c5",
+        "to": "c6"
+      },
+      {
+        "from": "c6",
+        "to": "c7"
+      },
+      {
+        "from": "c7",
+        "to": "c8"
+      }
+    ]
+  }
+}

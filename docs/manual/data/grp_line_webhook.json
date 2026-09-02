@@ -1,0 +1,1870 @@
+{
+  "id": "line_webhook",
+  "title": "รับ LINE event เข้าระบบ",
+  "summary": "เส้นทางของ event จาก LINE Messaging API ตั้งแต่ URL webhook.php?account=N จนถึงการตอบกลับและ HTTP 200 ลำดับจริงคือ เลือก tenant DB ก่อน แล้วค่อยตรวจ HMAC แล้วค่อยกัน event ซ้ำ แล้วค่อยบันทึกข้อความ จุดสำคัญคือการเลือก tenant เกิดขึ้นก่อนการตรวจ signature และมันเขียน master DB ระหว่างทาง",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "set_error_handler + register_shutdown_function",
+      "file": "webhook.php",
+      "line": 8,
+      "action": "แปลง PHP warning notice ทุกตัวเป็น ErrorException และติดตั้ง shutdown handler ที่จะเขียน fatal ลงตาราง dev_logs ก่อนที่จะ require อะไรเลย",
+      "notes": "shutdown handler ประกาศ $db ไว้ในบล็อก try บรรทัด 17 แต่ใช้ $db ใน catch บรรทัด 24 ดูเคส C22"
+    },
+    {
+      "seq": 2,
+      "actor": "bootstrap",
+      "module": "tenant-routing",
+      "method": "reya_resolve_tenant_from_host()",
+      "file": "bootstrap/resolve_subdomain.php",
+      "line": 252,
+      "action": "config/database.php ดึงไฟล์นี้มาทำงานทุก request แปลง HTTP_HOST เป็น tenant slug ถ้าเป็น root domain และไม่มี ?account จะ pin เป็น tenant-0001 ทันที",
+      "calls": [
+        {
+          "module": "tenant-routing",
+          "method": "reya_has_explicit_account_signal",
+          "file": "bootstrap/resolve_subdomain.php",
+          "line": 160
+        }
+      ],
+      "returns": "tenant_id หรือ null",
+      "state_change": "TenantContext: null → tenant_id",
+      "notes": "webhook อยู่ในรายการ subdomain สงวน บรรทัด 49 ดังนั้น webhook.re-ya.com จะไม่ถูกตีความเป็นชื่อร้าน"
+    },
+    {
+      "seq": 3,
+      "actor": "bootstrap",
+      "module": "tenant-routing",
+      "method": "route_by_account.php",
+      "file": "bootstrap/route_by_account.php",
+      "line": 41,
+      "action": "ถ้า TenantContext ยังว่าง อ่าน ?account=N จาก query string แล้วส่งเข้า routeByLineAccount ทั้งหมดนี้เกิดขึ้นที่ webhook.php บรรทัด 34 คือก่อนอ่าน body ด้วยซ้ำ",
+      "calls": [
+        {
+          "module": "TenantContext",
+          "method": "routeByLineAccount",
+          "file": "bootstrap/route_by_account.php",
+          "line": 75
+        }
+      ],
+      "returns": "void ล้มเหลวเงียบเสมอ",
+      "notes": "catch บรรทัด 76 กลืน Throwable ทุกชนิดแล้วปล่อยให้ request วิ่งต่อด้วย DB เดิม"
+    },
+    {
+      "seq": 4,
+      "actor": "TenantContext",
+      "module": "TenantContext",
+      "method": "routeByLineAccount()",
+      "file": "classes/TenantContext.php",
+      "line": 295,
+      "action": "ค้น master.tenant_line_account_routes หา tenant_id ที่ is_active เป็นหนึ่ง แล้ว pin TenantContext จากนั้นเขียน last_seen_at กลับไปที่ master DB",
+      "calls": [
+        {
+          "module": "TenantContext",
+          "method": "resolveTenantByLineAccount",
+          "file": "classes/TenantContext.php",
+          "line": 261
+        },
+        {
+          "module": "master DB",
+          "method": "UPDATE tenant_line_account_routes SET last_seen_at",
+          "file": "classes/TenantContext.php",
+          "line": 310
+        }
+      ],
+      "returns": "true เมื่อ route สำเร็จ",
+      "sets": [
+        {
+          "field": "tenant_line_account_routes.last_seen_at",
+          "value": "NOW()"
+        }
+      ],
+      "state_change": "master.tenant_line_account_routes.last_seen_at → NOW()",
+      "notes": "นี่คือการเขียน DB ครั้งแรกของ request และเกิดก่อน validateSignature ครั้งแรกที่บรรทัด 81 ของ webhook.php ดูเคส C1"
+    },
+    {
+      "seq": 5,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "file_get_contents('php://input')",
+      "file": "webhook.php",
+      "line": 65,
+      "action": "อ่าน raw body และ header X-Line-Signature แล้วเปิด PDO ของ tenant ที่ถูก pin ไว้ในขั้นก่อนหน้า",
+      "calls": [
+        {
+          "module": "Database",
+          "method": "getInstance()->getConnection()",
+          "file": "webhook.php",
+          "line": 68
+        }
+      ],
+      "returns": "$body, $signature, $db"
+    },
+    {
+      "seq": 6,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "getAccountById() + validateSignature()",
+      "file": "webhook.php",
+      "line": 76,
+      "action": "เส้นทางหลัก ดึงแถว line_accounts ตาม ?account แล้วสร้าง LineAPI ด้วย channel_secret ของแถวนั้นเพื่อตรวจ HMAC-SHA256 ของ body",
+      "calls": [
+        {
+          "module": "LineAccountManager",
+          "method": "getAccountById",
+          "file": "classes/LineAccountManager.php",
+          "line": 61
+        },
+        {
+          "module": "LineAPI",
+          "method": "validateSignature",
+          "file": "classes/LineAPI.php",
+          "line": 959
+        }
+      ],
+      "returns": "$lineAccountId เมื่อ signature ผ่าน",
+      "notes": "ถ้าไม่ผ่านจะล้าง $lineAccount และ $line ทิ้งแล้วตกไปเส้นถัดไป ไม่ตอบ 400 ตรงนี้ ดูเคส C2"
+    },
+    {
+      "seq": 7,
+      "actor": "LineAccountManager",
+      "module": "LineAccountManager",
+      "method": "validateAndGetAccount()",
+      "file": "classes/LineAccountManager.php",
+      "line": 94,
+      "action": "เส้นทางสำรอง ไล่คำนวณ HMAC ของ body เทียบกับ channel_secret ของทุกบัญชีที่ is_active เป็นหนึ่งใน tenant DB ปัจจุบัน แล้วคืนบัญชีแรกที่ตรง",
+      "calls": [
+        {
+          "module": "LineAccountManager",
+          "method": "loadAccounts",
+          "file": "classes/LineAccountManager.php",
+          "line": 35
+        }
+      ],
+      "returns": "แถว line_accounts หรือ null",
+      "notes": "ขอบเขตการค้นคือ tenant ที่ถูก pin ไว้แล้วเท่านั้น ถ้า route ผิด tenant มาตั้งแต่ขั้นที่ 4 เส้นนี้จะหาไม่เจอทั้งที่ signature ถูกต้อง"
+    },
+    {
+      "seq": 8,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "new LineAPI() + exit('Invalid signature')",
+      "file": "webhook.php",
+      "line": 106,
+      "action": "ด่านสุดท้าย ถ้ายังไม่ได้บัญชีเลย สร้าง LineAPI จากค่าคงที่ LINE_CHANNEL_SECRET แล้วตรวจ signature ถ้าไม่ผ่านตอบ 400 แล้วจบ request",
+      "calls": [
+        {
+          "module": "LineAPI",
+          "method": "__construct",
+          "file": "classes/LineAPI.php",
+          "line": 12
+        }
+      ],
+      "returns": "HTTP 400 หรือวิ่งต่อโดยที่ $lineAccountId ยังเป็น null",
+      "notes": "ผ่านด่านนี้ได้แต่ $lineAccountId เป็น null ทำให้ทุกขั้นที่ gate ด้วย if ($lineAccountId) ถูกข้ามไปเงียบๆ ดูเคส C5"
+    },
+    {
+      "seq": 9,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "json_decode + devLog('Incoming webhook')",
+      "file": "webhook.php",
+      "line": 152,
+      "action": "แปลง body เป็นอาเรย์ events แล้วเขียน dev_logs หนึ่งแถวสรุปจำนวนและชนิด event ของทั้ง batch",
+      "calls": [
+        {
+          "module": "webhook",
+          "method": "devLog",
+          "file": "webhook.php",
+          "line": 277
+        }
+      ],
+      "state_change": "dev_logs เพิ่ม 1 แถว",
+      "notes": "ถ้า body ไม่ใช่ JSON ที่มีคีย์ events จะได้อาเรย์ว่างแล้วเงียบ ไม่มี error"
+    },
+    {
+      "seq": 10,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "curl api/process_scheduled_broadcasts.php",
+      "file": "webhook.php",
+      "line": 289,
+      "action": "ยิง HTTP request แบบ fire and forget กลับมาที่ตัวเองเพื่อกระตุ้น broadcast ที่ตั้งเวลาไว้ ทำทุกครั้งที่มี webhook เข้ามาไม่ว่า event ชนิดใด",
+      "calls": [
+        {
+          "module": "broadcast",
+          "method": "process_scheduled_broadcasts",
+          "file": "api/process_scheduled_broadcasts.php",
+          "line": 19
+        }
+      ],
+      "notes": "sub-request นี้ไม่ได้พก ?account ไปด้วย จึง resolve tenant คนละตัวกับ request ต้นทาง ดูเคส C24"
+    },
+    {
+      "seq": 11,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "foreach ($events as $event)",
+      "file": "webhook.php",
+      "line": 308,
+      "action": "วนทีละ event ดึง userId replyToken sourceType และ groupId ทั้งลูปห่อด้วย try catch ที่จับ Exception ราย event",
+      "returns": "ตัวแปรของ event ปัจจุบัน"
+    },
+    {
+      "seq": 12,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "handleJoinGroup / handleLeaveGroup",
+      "file": "webhook.php",
+      "line": 328,
+      "action": "event ชนิด join และ leave ถูกจัดการแล้ว continue ทันที ก่อนถึงขั้นกัน event ซ้ำ",
+      "notes": "จึงไม่มีการกันซ้ำสำหรับสอง event นี้เลย ดูเคส C10"
+    },
+    {
+      "seq": 13,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "ensureGroupExists + getOrCreateUser + saveAccountEvent",
+      "file": "webhook.php",
+      "line": 337,
+      "action": "event ที่มาจากกลุ่มหรือห้อง สร้างแถวกลุ่ม สร้างหรืออัปเดต users แล้วเขียน account_events และสถิติกลุ่ม ทั้งหมดนี้อยู่ก่อนขั้นกันซ้ำ",
+      "calls": [
+        {
+          "module": "webhook",
+          "method": "ensureGroupExists",
+          "file": "webhook.php",
+          "line": 340
+        },
+        {
+          "module": "webhook",
+          "method": "getOrCreateUser",
+          "file": "webhook.php",
+          "line": 344
+        },
+        {
+          "module": "webhook",
+          "method": "saveAccountEvent",
+          "file": "webhook.php",
+          "line": 348
+        },
+        {
+          "module": "webhook",
+          "method": "updateGroupStats",
+          "file": "webhook.php",
+          "line": 351
+        }
+      ],
+      "state_change": "line_groups, users, account_events, สถิติกลุ่ม เพิ่มหรืออัปเดต",
+      "notes": "อยู่เหนือ dedupe ที่บรรทัด 371 จึงเขียนซ้ำได้เมื่อ LINE ส่ง retry ดูเคส C11"
+    },
+    {
+      "seq": 14,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "webhook_events dedupe",
+      "file": "webhook.php",
+      "line": 371,
+      "action": "SELECT id FROM webhook_events WHERE event_id ถ้าเจอแปลว่าเคยประมวลผลแล้วให้ continue ถ้าไม่เจอ INSERT event_id ลงไปแล้วทำงานต่อ",
+      "calls": [
+        {
+          "module": "MySQL",
+          "method": "SELECT id FROM webhook_events",
+          "file": "webhook.php",
+          "line": 373
+        },
+        {
+          "module": "MySQL",
+          "method": "INSERT INTO webhook_events",
+          "file": "webhook.php",
+          "line": 382
+        }
+      ],
+      "sets": [
+        {
+          "field": "webhook_events.event_id",
+          "value": "event.webhookEventId"
+        }
+      ],
+      "state_change": "webhook_events เพิ่ม 1 แถว",
+      "notes": "เป็น check then act ไม่มี lock และทั้งบล็อกห่อ try catch ที่กลืน exception ทุกชนิดที่บรรทัด 384 ดูเคส C7 C8 C9"
+    },
+    {
+      "seq": 15,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "switch ($event['type'])",
+      "file": "webhook.php",
+      "line": 390,
+      "action": "แยกทางตามชนิด event ไปยัง follow unfollow message read postback beacon memberJoined memberLeft",
+      "notes": "ชนิดที่ไม่อยู่ในรายการจะตกท้าย switch โดยไม่มี default ไม่มีทั้ง log และการตอบกลับ"
+    },
+    {
+      "seq": 16,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "getOrCreateUser + getUserState",
+      "file": "webhook.php",
+      "line": 848,
+      "action": "หาแถว users จาก line_user_id ถ้าไม่มีสร้างใหม่พร้อมดึงโปรไฟล์จาก LINE API แล้วนับจำนวนข้อความ incoming เดิมและอ่าน state ค้างของลูกค้า",
+      "calls": [
+        {
+          "module": "webhook",
+          "method": "getOrCreateUser",
+          "file": "webhook.php",
+          "line": 3487
+        },
+        {
+          "module": "webhook",
+          "method": "getUserState",
+          "file": "webhook.php",
+          "line": 863
+        }
+      ],
+      "returns": "$user, $isFirstMessage, $userState"
+    },
+    {
+      "seq": 17,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "getMessageContent() + file_put_contents",
+      "file": "webhook.php",
+      "line": 867,
+      "action": "ข้อความชนิด image และ video ถูกดาวน์โหลดจาก LINE ทันทีแล้วเขียนลง uploads/line_images หรือ uploads/line_videos เพราะ LINE ลบ content ทิ้งหลังผ่านไประยะหนึ่ง",
+      "returns": "URL เต็มของไฟล์ที่เก็บไว้ หรือข้อความ fallback รูปแบบ [type] ID: messageId",
+      "notes": "ปลายทางเป็นโฟลเดอร์เดียวทั้งเซิร์ฟเวอร์ ไม่ได้แยกตาม tenant ต่างจาก TenantFileStorage ที่ใช้ในส่วนอื่น"
+    },
+    {
+      "seq": 18,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "INSERT INTO messages",
+      "file": "webhook.php",
+      "line": 1051,
+      "action": "บันทึกข้อความขาเข้าเสมอ โดยประกอบคอลัมน์แบบ dynamic ตามผลของ SHOW COLUMNS ทีละคอลัมน์ ก่อนตัดสินใจใดๆ ว่าจะตอบหรือไม่ตอบ",
+      "sets": [
+        {
+          "field": "messages.direction",
+          "value": "incoming"
+        }
+      ],
+      "state_change": "messages เพิ่ม 1 แถว",
+      "notes": "มี SHOW COLUMNS สูงสุดห้าครั้งต่อหนึ่งข้อความ บรรทัด 1005 1014 1023 1032 1042 ทุกครั้งที่มีคนพิมพ์"
+    },
+    {
+      "seq": 19,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "WebSocketNotifier + logAnalytics",
+      "file": "webhook.php",
+      "line": 1064,
+      "action": "แจ้ง WebSocket server ให้ inbox เห็นข้อความใหม่แบบ real time แล้วบันทึก analytics ชนิด message_received",
+      "calls": [
+        {
+          "module": "WebSocketNotifier",
+          "method": "notifyNewMessage",
+          "file": "webhook.php",
+          "line": 1069
+        }
+      ],
+      "notes": "ทั้งก้อนห่อ try catch ที่บรรทัด 1092 ถ้า WebSocket ล่ม ข้อความยังบันทึกและตอบกลับได้ตามปกติ"
+    },
+    {
+      "seq": 20,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "UPDATE users SET reply_token",
+      "file": "webhook.php",
+      "line": 1098,
+      "action": "เก็บ reply_token ของ event นี้ไว้ในแถว users พร้อมวันหมดอายุอีก 50 วินาที เพื่อให้ฝั่งแอดมินหยิบไปใช้ตอบแบบไม่กิน quota",
+      "sets": [
+        {
+          "field": "users.reply_token",
+          "value": "replyToken ของ event"
+        },
+        {
+          "field": "users.reply_token_expires",
+          "value": "now + 50 วินาที"
+        }
+      ],
+      "state_change": "users.reply_token → token ใหม่",
+      "notes": "นี่คือฐานของ reply token economy LineAPI::sendMessage บรรทัด 132 จะหยิบค่านี้มาลอง reply ก่อนเสมอ แล้วค่อย fallback ไป push"
+    },
+    {
+      "seq": 21,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "saveAccountEvent + updateAccountDailyStats + Telegram",
+      "file": "webhook.php",
+      "line": 1131,
+      "action": "เขียน account_events หนึ่งแถว บวกสถิติรายวันสองตัว อัปเดต last_interaction_at ของ follower แล้วส่งแจ้งเตือน Telegram พร้อมสื่อ",
+      "calls": [
+        {
+          "module": "webhook",
+          "method": "saveAccountEvent",
+          "file": "webhook.php",
+          "line": 3751
+        },
+        {
+          "module": "webhook",
+          "method": "updateAccountDailyStats",
+          "file": "webhook.php",
+          "line": 3789
+        },
+        {
+          "module": "webhook",
+          "method": "updateFollowerInteraction",
+          "file": "webhook.php",
+          "line": 3812
+        }
+      ],
+      "state_change": "account_events เพิ่ม 1 แถว, account_daily_stats และ account_followers อัปเดต",
+      "notes": "ทั้งบล็อก gate ด้วย if ($lineAccountId) ถ้าเข้ามาทางเส้น fallback ขั้นที่ 8 จะไม่มีสถิติใดถูกเขียนเลย"
+    },
+    {
+      "seq": 22,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "return เมื่อไม่ใช่ text",
+      "file": "webhook.php",
+      "line": 1143,
+      "action": "รูป วิดีโอ เสียง ไฟล์ สติกเกอร์ และตำแหน่ง จบที่ตรงนี้ บันทึกครบแล้วแต่ไม่มีการตอบกลับอัตโนมัติ",
+      "state_change": "ไม่มีการเปลี่ยนแปลงเพิ่ม"
+    },
+    {
+      "seq": 23,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "SELECT bot_mode, liff_id FROM line_accounts",
+      "file": "webhook.php",
+      "line": 1347,
+      "action": "อ่านโหมดของบัญชี ค่าเริ่มต้นคือ shop โหมดนี้เป็นตัวตัดสินว่าข้อความจะเดินเส้นไหนต่อ",
+      "returns": "$botMode หนึ่งใน shop general auto_reply_only",
+      "notes": "ถ้า query ล้มเหลว catch บรรทัด 1357 ทำให้ค่าเป็น shop ไม่ใช่ general การล้มเหลวจึงเปิดบอท ไม่ใช่ปิด"
+    },
+    {
+      "seq": 24,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "loyalty keyword shortcut",
+      "file": "webhook.php",
+      "line": 1384,
+      "action": "จับคำว่าแต้ม คะแนน สมาชิก ของรางวัล และรูปแบบ redeem ตัวเลข แล้วส่งให้ BusinessBot ตอบด้วย Flex ทันทีในทุกโหมด แล้ว return",
+      "calls": [
+        {
+          "module": "BusinessBot",
+          "method": "showPoints / showMemberCard / showRewards / redeemReward",
+          "file": "webhook.php",
+          "line": 1386
+        }
+      ],
+      "notes": "จงใจวางไว้ก่อนทุกด่าน เพราะโหมด shop จะ return ที่บรรทัด 1864 ก่อนถึง BusinessBot ตัวจริง"
+    },
+    {
+      "seq": 25,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "โหมด general → checkAutoReply",
+      "file": "webhook.php",
+      "line": 1414,
+      "action": "โหมด general เช็คกฎ auto_replies ถ้า match ลอง replyMessage ก่อน ถ้าไม่ได้ 200 ค่อย pushMessage แล้ว return ถ้าไม่ match ไม่ตอบอะไรเลย รอแอดมิน",
+      "calls": [
+        {
+          "module": "webhook",
+          "method": "checkAutoReply",
+          "file": "webhook.php",
+          "line": 1421
+        },
+        {
+          "module": "LineAPI",
+          "method": "replyMessage",
+          "file": "webhook.php",
+          "line": 1438
+        },
+        {
+          "module": "LineAPI",
+          "method": "pushMessage",
+          "file": "webhook.php",
+          "line": 1448
+        }
+      ],
+      "state_change": "messages เพิ่มแถว outgoing เมื่อมีการตอบ",
+      "notes": "เป็นจุดเดียวในไฟล์ที่ทำ reply ก่อน push อย่างชัดเจน เส้นอื่นเรียก replyMessage ตรงโดยไม่มี fallback"
+    },
+    {
+      "seq": 26,
+      "actor": "LiffMessageHandler",
+      "module": "LiffMessageHandler",
+      "method": "detectLiffAction + processMessage",
+      "file": "webhook.php",
+      "line": 1468,
+      "action": "ตรวจว่าข้อความเป็นคำสั่งที่ถูกยิงมาจาก LIFF หรือไม่ ถ้าใช่ตอบ Flex ที่ handler สร้างแล้ว return",
+      "calls": [
+        {
+          "module": "LineAPI",
+          "method": "replyMessage",
+          "file": "webhook.php",
+          "line": 1494
+        }
+      ],
+      "notes": "class นี้ถูก require แบบมีเงื่อนไข file_exists ที่บรรทัด 56 ถ้าไฟล์หาย เส้นนี้หายไปทั้งเส้นโดยไม่มี error"
+    },
+    {
+      "seq": 27,
+      "actor": "handleMessage",
+      "module": "webhook",
+      "method": "early return ของโหมด shop",
+      "file": "webhook.php",
+      "line": 1844,
+      "action": "ถ้าไม่ใช่คำสั่งสลิป ออเดอร์ หรือเมนู และโหมดไม่ใช่ general จะเช็ค auto_replies รอบหนึ่ง ถ้าไม่ match ก็ return โดยไม่ตอบ",
+      "calls": [
+        {
+          "module": "webhook",
+          "method": "checkAutoReply",
+          "file": "webhook.php",
+          "line": 1846
+        }
+      ],
+      "notes": "ข้อความทั่วไปในโหมด shop จบที่นี่ ไม่เคยไปถึง BusinessBot::processMessage ที่บรรทัด 1998 ดูเคส C18"
+    },
+    {
+      "seq": 28,
+      "actor": "BusinessBot",
+      "module": "BusinessBot",
+      "method": "processMessage()",
+      "file": "classes/BusinessBot.php",
+      "line": 197,
+      "action": "จัดการคำสั่ง reset คำสั่งแต้ม แล้วตรวจ state ค้างของลูกค้า ถ้ามี state ที่ยังไม่เกิน 30 นาทีจะส่งเข้า handleStatefulMessage",
+      "calls": [
+        {
+          "module": "BusinessBot",
+          "method": "loadBotMode",
+          "file": "classes/BusinessBot.php",
+          "line": 51
+        },
+        {
+          "module": "BusinessBot",
+          "method": "handleStatefulMessage",
+          "file": "classes/BusinessBot.php",
+          "line": 261
+        }
+      ],
+      "returns": "true เมื่อจัดการแล้ว null เมื่อโหมด general หรือ auto_reply_only",
+      "notes": "คืน null ทั้งสองโหมดที่บรรทัด 229 และ 235 ฝั่ง webhook เช็คด้วย if ($handled) จึงตกไปเช็ค auto_replies ต่อ"
+    },
+    {
+      "seq": 29,
+      "actor": "checkAutoReply",
+      "module": "webhook",
+      "method": "checkAutoReply()",
+      "file": "webhook.php",
+      "line": 2062,
+      "action": "ดึงกฎ auto_replies ที่ is_active เป็นหนึ่ง ทั้งของบัญชีนี้และกฎ global ที่ line_account_id เป็น NULL เรียงตาม priority แล้วจับคู่ตาม match_type ห้าแบบ กฎแรกที่ตรงชนะ",
+      "calls": [
+        {
+          "module": "MySQL",
+          "method": "UPDATE auto_replies SET use_count",
+          "file": "webhook.php",
+          "line": 2095
+        }
+      ],
+      "sets": [
+        {
+          "field": "auto_replies.use_count",
+          "value": "เพิ่ม 1"
+        }
+      ],
+      "state_change": "auto_replies.use_count เพิ่ม 1 และ last_used_at เป็น NOW()",
+      "notes": "match_type all ที่บรรทัด 2089 ตอบทุกข้อความ และ regex ที่บรรทัด 2086 ยิง preg_match ด้วย pattern ดิบจาก DB ดูเคส C19 C20"
+    },
+    {
+      "seq": 30,
+      "actor": "webhook.php",
+      "module": "webhook",
+      "method": "http_response_code(200)",
+      "file": "webhook.php",
+      "line": 495,
+      "action": "หลังวนครบทุก event ตอบ 200 ให้ LINE เสมอ ไม่ว่าจะมี event ไหนล้มเหลวไปบ้าง",
+      "state_change": "จบ request",
+      "notes": "การตอบ 200 คือคำสั่งบอก LINE ว่าไม่ต้อง retry เคสที่ล้มจึงหายไปเลย ดูเคส C21"
+    }
+  ],
+  "cases": [
+    {
+      "id": "C1",
+      "name": "master DB ถูกเขียนก่อนตรวจ signature",
+      "condition": "มี ?account=N ที่ map อยู่ใน master.tenant_line_account_routes ไม่ว่า signature จะถูกหรือผิด",
+      "behavior": "route_by_account ทำงานที่ webhook.php บรรทัด 34 ซึ่งอยู่ก่อน validateSignature ครั้งแรกที่บรรทัด 81 แล้ว routeByLineAccount ยิง UPDATE tenant_line_account_routes SET last_seen_at = NOW()",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "require route_by_account",
+          "file": "webhook.php",
+          "line": 34
+        },
+        {
+          "module": "tenant-routing",
+          "method": "routeByLineAccount",
+          "file": "bootstrap/route_by_account.php",
+          "line": 75
+        },
+        {
+          "module": "TenantContext",
+          "method": "UPDATE last_seen_at",
+          "file": "classes/TenantContext.php",
+          "line": 310
+        },
+        {
+          "module": "webhook",
+          "method": "validateSignature",
+          "file": "webhook.php",
+          "line": 80
+        }
+      ],
+      "result": "ใครก็ตามที่ยิง POST เปล่าไปที่ webhook.php?account=N ทำให้เกิดการเขียน master DB ได้ แม้จะโดนปฏิเสธด้วย 400 ที่บรรทัด 110",
+      "gotcha": "เป็นการเขียนคอลัมน์ telemetry อย่างเดียว ไม่ใช่ข้อมูลธุรกิจ แต่คำตอบของคำถามที่ว่า signature ถูกตรวจก่อนเขียน DB ทุกครั้งหรือไม่ คือไม่",
+      "tag": "danger"
+    },
+    {
+      "id": "C2",
+      "name": "?account ถูกต้องแต่ signature ไม่ผ่าน",
+      "condition": "getAccountById คืนแถว แต่ validateSignature คืน false",
+      "behavior": "ล้าง $lineAccount และ $line เป็น null แล้วปล่อยให้ไหลลงไปเส้น brute force ที่บรรทัด 91 แทนที่จะปฏิเสธทันที",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "validateSignature",
+          "file": "webhook.php",
+          "line": 80
+        },
+        {
+          "module": "webhook",
+          "method": "reset account",
+          "file": "webhook.php",
+          "line": 83
+        },
+        {
+          "module": "LineAccountManager",
+          "method": "validateAndGetAccount",
+          "file": "classes/LineAccountManager.php",
+          "line": 94
+        }
+      ],
+      "result": "request ที่ signature ผิดยังต้องเสียการคำนวณ HMAC เท่าจำนวนบัญชีทั้งหมดก่อนจะโดนปฏิเสธ",
+      "gotcha": "ผลข้างเคียงที่ตั้งใจคือ ถ้า LINE console ตั้ง ?account ผิดเลข ระบบยังกู้คืนได้เองด้วยการหาจาก signature",
+      "tag": "info"
+    },
+    {
+      "id": "C3",
+      "name": "?account ชี้ไปบัญชีที่ปิดใช้งาน",
+      "condition": "line_accounts.is_active เป็นศูนย์แต่ยังถูกอ้างด้วย ?account",
+      "behavior": "getAccountById ใช้ SELECT * FROM line_accounts WHERE id = ? โดยไม่กรอง is_active จึงยังคืนแถวและรับ webhook ต่อ ส่วน loadAccounts ที่ใช้ในเส้นสำรองกรอง is_active = 1",
+      "code_path": [
+        {
+          "module": "LineAccountManager",
+          "method": "getAccountById",
+          "file": "classes/LineAccountManager.php",
+          "line": 63
+        },
+        {
+          "module": "LineAccountManager",
+          "method": "loadAccounts",
+          "file": "classes/LineAccountManager.php",
+          "line": 37
+        }
+      ],
+      "result": "สองเส้นทางเข้ามีขอบเขตบัญชีไม่เท่ากัน ปิดบัญชีแล้วยังทำงานได้ถ้ามี ?account ตรง",
+      "gotcha": "การปิดบัญชีจึงไม่ใช่ kill switch จริง ต้องถอด webhook URL ที่ LINE console ด้วย",
+      "tag": "warn"
+    },
+    {
+      "id": "C4",
+      "name": "หา tenant ไม่เจอ แล้วเงียบไปใช้ DB เดิม",
+      "condition": "resolveTenantByLineAccount ไม่พบแถวใน tenant_line_account_routes หรือเปิด master PDO ไม่ได้",
+      "behavior": "คืน null แล้ว routeByLineAccount คืน false โดยไม่โยน exception route_by_account จึงจบเงียบ request วิ่งต่อด้วย connection legacy",
+      "code_path": [
+        {
+          "module": "TenantContext",
+          "method": "resolveTenantByLineAccount",
+          "file": "classes/TenantContext.php",
+          "line": 270
+        },
+        {
+          "module": "TenantContext",
+          "method": "catch PDOException",
+          "file": "classes/TenantContext.php",
+          "line": 282
+        },
+        {
+          "module": "TenantContext",
+          "method": "routeByLineAccount",
+          "file": "classes/TenantContext.php",
+          "line": 302
+        },
+        {
+          "module": "tenant-routing",
+          "method": "catch Throwable",
+          "file": "bootstrap/route_by_account.php",
+          "line": 76
+        }
+      ],
+      "result": "ข้อความของลูกค้าถูกเขียนลง DB ผิดร้าน โดยที่ทุกอย่างยังตอบ 200 ปกติ",
+      "gotcha": "อาการที่เห็นคือแอดมินเปิด inbox แล้วไม่เห็นแชท แต่ลูกค้าได้รับคำตอบอัตโนมัติแล้ว เพราะข้อมูลไปอยู่คนละ schema",
+      "tag": "danger"
+    },
+    {
+      "id": "C5",
+      "name": "ผ่าน signature ด้วย secret จากค่าคงที่ ทำให้ lineAccountId เป็น null",
+      "condition": "ไม่มีบัญชีใดตรง แต่ LINE_CHANNEL_SECRET ในไฟล์ config ตรงกับ signature",
+      "behavior": "สร้าง LineAPI จากค่าคงที่แล้วผ่านด่าน จากนั้น $lineAccountId ยังเป็น null ตลอด request",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "new LineAPI()",
+          "file": "webhook.php",
+          "line": 107
+        },
+        {
+          "module": "LineAPI",
+          "method": "__construct",
+          "file": "classes/LineAPI.php",
+          "line": 12
+        },
+        {
+          "module": "webhook",
+          "method": "if ($lineAccountId)",
+          "file": "webhook.php",
+          "line": 1130
+        }
+      ],
+      "result": "ข้อความยังถูกบันทึกลง messages แต่ account_events สถิติรายวัน follower interaction และ auto reply แบบผูกบัญชี ถูกข้ามทั้งหมด",
+      "gotcha": "ไม่มี log เตือนว่ากำลังวิ่งแบบไร้บัญชี ต้องดูจาก account_id ที่เป็น null ใน dev_logs บรรทัด 277",
+      "tag": "warn"
+    },
+    {
+      "id": "C6",
+      "name": "webhook มาที่ root domain โดยไม่มี ?account",
+      "condition": "HTTP_HOST เป็น re-ya.com และไม่มี account la หรือ line_account_id ใน query หรือ POST",
+      "behavior": "resolve_subdomain pin เป็น tenant-0001 ตาม reya_root_tenant_slug แล้ว route_by_account เห็นว่ามี tenant อยู่แล้วจึงคืนทันทีโดยไม่ทำอะไร",
+      "code_path": [
+        {
+          "module": "tenant-routing",
+          "method": "reya_has_explicit_account_signal",
+          "file": "bootstrap/resolve_subdomain.php",
+          "line": 125
+        },
+        {
+          "module": "tenant-routing",
+          "method": "reya_resolve_tenant_from_host",
+          "file": "bootstrap/resolve_subdomain.php",
+          "line": 160
+        },
+        {
+          "module": "tenant-routing",
+          "method": "early return",
+          "file": "bootstrap/route_by_account.php",
+          "line": 43
+        }
+      ],
+      "result": "การหาบัญชีจาก signature จะค้นเฉพาะ line_accounts ของ tenant-0001 ร้านอื่นจะหาไม่เจอแล้วตกไปด่านค่าคงที่",
+      "gotcha": "การ์ด reya_has_explicit_account_signal บรรทัด 160 คือสิ่งเดียวที่กัน webhook ของทุกร้านไม่ให้ตกไปที่ tenant-0001 ถ้าใครลบเงื่อนไขนี้ ระบบจะพังเงียบทั้งหมด",
+      "tag": "warn"
+    },
+    {
+      "id": "C7",
+      "name": "event ซ้ำถูกตรวจเจอ",
+      "condition": "SELECT id FROM webhook_events WHERE event_id เจอแถวอยู่แล้ว",
+      "behavior": "เขียน dev_logs ระดับ warning ว่า Duplicate event skipped แล้ว continue ไป event ถัดไปทันที",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "SELECT webhook_events",
+          "file": "webhook.php",
+          "line": 373
+        },
+        {
+          "module": "webhook",
+          "method": "continue",
+          "file": "webhook.php",
+          "line": 380
+        }
+      ],
+      "result": "ไม่มีการเปลี่ยนแปลงสถานะจาก event นั้น",
+      "gotcha": "เกิดหลังจากสาขากลุ่มบรรทัด 337 เขียนไปแล้ว จึงกันซ้ำได้เฉพาะแชทส่วนตัว",
+      "tag": "ok"
+    },
+    {
+      "id": "C8",
+      "name": "event ไม่มี webhookEventId จึงข้ามการกันซ้ำทั้งก้อน",
+      "condition": "$event['webhookEventId'] ไม่มีค่า",
+      "behavior": "บล็อกกันซ้ำทั้งบล็อกอยู่ใน if ($webhookEventId) จึงไม่ทำงาน แล้วไหลลง switch ตามปกติ",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "if ($webhookEventId)",
+          "file": "webhook.php",
+          "line": 371
+        },
+        {
+          "module": "webhook",
+          "method": "switch",
+          "file": "webhook.php",
+          "line": 390
+        }
+      ],
+      "result": "event นั้นถูกประมวลผลทุกครั้งที่ส่งเข้ามา ไม่มีการกันซ้ำเลย",
+      "gotcha": "ไม่มี log เตือนกรณีนี้ ต่างจากกรณี duplicate ที่มี warning",
+      "tag": "warn"
+    },
+    {
+      "id": "C9",
+      "name": "ไม่มีตาราง webhook_events ใน tenant DB แล้วกันซ้ำหายไปเงียบๆ",
+      "condition": "tenant DB ที่ provision จาก template ไม่มีตาราง webhook_events",
+      "behavior": "ทั้ง SELECT และ INSERT โยน PDOException แล้วถูกจับที่บรรทัด 384 ซึ่ง log แล้วปล่อยผ่าน โค้ดจึงไหลลง switch เหมือนไม่เคยมีการกันซ้ำ",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "SELECT webhook_events",
+          "file": "webhook.php",
+          "line": 373
+        },
+        {
+          "module": "webhook",
+          "method": "INSERT webhook_events",
+          "file": "webhook.php",
+          "line": 382
+        },
+        {
+          "module": "webhook",
+          "method": "catch Exception",
+          "file": "webhook.php",
+          "line": 384
+        },
+        {
+          "module": "schema",
+          "method": "tenant template scope",
+          "file": "database/migration_2026-05-25_tenant_template.sql",
+          "line": 13
+        }
+      ],
+      "result": "LINE retry แล้วลูกค้าได้ข้อความตอบกลับซ้ำ ออเดอร์หรือแต้มถูกทำซ้ำ โดยไม่มีสัญญาณใดบอก",
+      "gotcha": "database/migration_2026-05-25_tenant_template.sql ไม่มี CREATE TABLE webhook_events เลย มีแต่ใน install_complete_latest.sql บรรทัด 4626 ซึ่งเป็นสคีมาเดิมของ DB เดียว การกันซ้ำจึงขึ้นกับว่าใครเคยรัน migration ตามหลังหรือเปล่า",
+      "tag": "danger"
+    },
+    {
+      "id": "C10",
+      "name": "join และ leave ข้ามการกันซ้ำเสมอ",
+      "condition": "event.type เป็น join หรือ leave",
+      "behavior": "จัดการแล้ว continue ที่บรรทัด 330 และ 334 ซึ่งอยู่เหนือบล็อกกันซ้ำที่บรรทัด 371",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "handleJoinGroup",
+          "file": "webhook.php",
+          "line": 329
+        },
+        {
+          "module": "webhook",
+          "method": "handleLeaveGroup",
+          "file": "webhook.php",
+          "line": 333
+        }
+      ],
+      "result": "LINE ส่งซ้ำเมื่อไร แถวกลุ่มก็ถูกเขียนซ้ำเมื่อนั้น",
+      "gotcha": "ensureGroupExists ใช้ INSERT ... ON DUPLICATE KEY UPDATE ที่ webhook.php บรรทัด 4606 จึงไม่ทำให้แถวซ้ำ แต่ทำให้ joined_at ถูกทับ",
+      "tag": "info"
+    },
+    {
+      "id": "C11",
+      "name": "event จากกลุ่มถูกเขียนก่อนผ่านการกันซ้ำ",
+      "condition": "source.type เป็น group หรือ room และมี groupId และ lineAccountId",
+      "behavior": "ensureGroupExists getOrCreateUser saveAccountEvent และ updateGroupStats ทำงานที่บรรทัด 340 ถึง 351 ซึ่งอยู่เหนือ dedupe ที่บรรทัด 371",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "saveAccountEvent",
+          "file": "webhook.php",
+          "line": 348
+        },
+        {
+          "module": "webhook",
+          "method": "updateGroupStats",
+          "file": "webhook.php",
+          "line": 351
+        },
+        {
+          "module": "webhook",
+          "method": "dedupe",
+          "file": "webhook.php",
+          "line": 371
+        }
+      ],
+      "result": "เมื่อ LINE retry event เดิม account_events ของกลุ่มจะเพิ่มแถวซ้ำและสถิติกลุ่มจะนับเกิน แม้ dedupe จะทำงานถูกต้อง",
+      "gotcha": "account_events ไม่มี unique key บน webhook_event_id ดู INSERT ที่บรรทัด 3765 จึงไม่มีตัวกันชั้นสอง",
+      "tag": "warn"
+    },
+    {
+      "id": "C12",
+      "name": "event ไม่มี userId",
+      "condition": "$event['source']['userId'] ไม่มีค่า",
+      "behavior": "continue ที่บรรทัด 357 แต่เป็นการ continue หลังจากสาขากลุ่มด้านบนทำงานไปแล้ว",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "if (!$userId) continue",
+          "file": "webhook.php",
+          "line": 356
+        }
+      ],
+      "result": "event จากบอทในกลุ่มถูกทิ้ง แต่ ensureGroupExists ที่บรรทัด 340 ได้ทำงานไปแล้ว",
+      "tag": "info"
+    },
+    {
+      "id": "C13",
+      "name": "unfollow บล็อกผู้ใช้ข้ามทุกบัญชี",
+      "condition": "event.type เป็น unfollow",
+      "behavior": "UPDATE users SET is_blocked = 1 WHERE line_user_id = ? โดยไม่มีเงื่อนไข line_account_id",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "handleUnfollow",
+          "file": "webhook.php",
+          "line": 795
+        },
+        {
+          "module": "webhook",
+          "method": "saveAccountFollower unfollow",
+          "file": "webhook.php",
+          "line": 3734
+        }
+      ],
+      "result": "ลูกค้าที่บล็อกบัญชี A จะถูกทำเครื่องหมาย is_blocked ในบัญชี B ของ tenant เดียวกันด้วย",
+      "gotcha": "ตาราง account_followers ที่บรรทัด 3736 กรอง line_account_id ถูกต้อง ความจริงจึงต่างกันระหว่างสองตาราง",
+      "tag": "danger"
+    },
+    {
+      "id": "C14",
+      "name": "follow ซ้ำของลูกค้าเดิม",
+      "condition": "event.type เป็น follow และมีแถว users ของ line_user_id นั้นแล้ว",
+      "behavior": "INSERT ... ON DUPLICATE KEY UPDATE display_name picture_url is_blocked = 0 แล้ว lastInsertId อาจคืนศูนย์ จึงมี SELECT id สำรองตามหลัง",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "INSERT users ON DUPLICATE KEY",
+          "file": "webhook.php",
+          "line": 519
+        },
+        {
+          "module": "webhook",
+          "method": "fallback SELECT id",
+          "file": "webhook.php",
+          "line": 547
+        },
+        {
+          "module": "webhook",
+          "method": "saveAccountFollower",
+          "file": "webhook.php",
+          "line": 555
+        }
+      ],
+      "result": "ลูกค้าเดิมกลับมา follow แล้ว is_blocked ถูกปลด follow_count เพิ่ม และ welcome message ถูกส่งอีกครั้ง",
+      "gotcha": "SELECT id สำรองที่บรรทัด 548 ไม่กรอง line_account_id ถ้ามีแถวซ้ำข้ามบัญชี จะได้ id ของแถวแรกเสมอ",
+      "tag": "warn"
+    },
+    {
+      "id": "C15",
+      "name": "ส่งรูปตอนสถานะ waiting_slip แล้วสลิปไม่ผ่าน",
+      "condition": "messageType เป็น image และ state เป็น waiting_slip หรือ awaiting_slip และมี order_id แต่ handlePaymentSlipForOrder คืน false",
+      "behavior": "INSERT INTO messages ไปแล้วหนึ่งแถวที่บรรทัด 950 เมื่อไม่ handled โค้ดไม่ return จึงไหลลงไปเจอ INSERT INTO messages หลักที่บรรทัด 1051 อีกครั้ง",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "INSERT messages ในสาขาสลิป",
+          "file": "webhook.php",
+          "line": 950
+        },
+        {
+          "module": "webhook",
+          "method": "handlePaymentSlipForOrder",
+          "file": "webhook.php",
+          "line": 954
+        },
+        {
+          "module": "webhook",
+          "method": "INSERT messages หลัก",
+          "file": "webhook.php",
+          "line": 1051
+        }
+      ],
+      "result": "รูปเดียวกันปรากฏสองแถวใน inbox",
+      "gotcha": "สาขา waiting_receipt ที่บรรทัด 964 มีโครงเดียวกัน แต่ INSERT อยู่หลัง return จึงไม่ซ้ำ ความต่างนี้คือหลักฐานว่าเป็นความพลาดไม่ใช่ดีไซน์",
+      "tag": "warn"
+    },
+    {
+      "id": "C16",
+      "name": "INSERT messages แบบ dynamic ล้มเหลว แล้วถอยไปแบบย่อ",
+      "condition": "INSERT ที่ประกอบคอลัมน์เองที่บรรทัด 1051 โยน exception",
+      "behavior": "catch แล้ว INSERT ใหม่ด้วยห้าคอลัมน์พื้นฐานเท่านั้น line_account_id metadata quote_token หายไป",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "INSERT dynamic",
+          "file": "webhook.php",
+          "line": 1051
+        },
+        {
+          "module": "webhook",
+          "method": "catch + INSERT ย่อ",
+          "file": "webhook.php",
+          "line": 1056
+        }
+      ],
+      "result": "แถวข้อความยังถูกบันทึกแต่ไม่มี line_account_id ทำให้ inbox ของบัญชีนั้นมองไม่เห็น",
+      "gotcha": "ข้อความไม่หาย แต่หายจากหน้าจอ ซึ่งวินิจฉัยยากกว่าข้อความหายจริง",
+      "tag": "warn"
+    },
+    {
+      "id": "C17",
+      "name": "ข้อความที่ไม่ใช่ text จบทันทีหลังบันทึก",
+      "condition": "messageType ไม่ใช่ text",
+      "behavior": "return ที่บรรทัด 1144 หลังบันทึกข้อความ อัปเดต reply_token และแจ้ง Telegram เรียบร้อยแล้ว",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "if messageType !== text",
+          "file": "webhook.php",
+          "line": 1143
+        }
+      ],
+      "result": "ไม่มี auto reply ไม่มี BusinessBot สำหรับรูป สติกเกอร์ ตำแหน่ง",
+      "gotcha": "สลิปและใบเสร็จรอดมาได้เพราะถูกดักไว้ตั้งแต่บรรทัด 947 และ 964 ก่อนถึง return นี้",
+      "tag": "ok"
+    },
+    {
+      "id": "C18",
+      "name": "โหมด shop ทำให้ข้อความทั่วไปไม่เคยถึง BusinessBot",
+      "condition": "botMode ไม่ใช่ general และข้อความไม่ใช่คำสั่งสลิป ออเดอร์ หรือเมนู",
+      "behavior": "เช็ค auto_replies หนึ่งครั้งแล้ว return ที่บรรทัด 1864 ก่อนถึง BusinessBot::processMessage ที่บรรทัด 1998",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "early return shop mode",
+          "file": "webhook.php",
+          "line": 1844
+        },
+        {
+          "module": "webhook",
+          "method": "return waiting for admin",
+          "file": "webhook.php",
+          "line": 1864
+        },
+        {
+          "module": "webhook",
+          "method": "BusinessBot::processMessage",
+          "file": "webhook.php",
+          "line": 1998
+        }
+      ],
+      "result": "โค้ด BusinessBot ส่วนใหญ่เป็น dead path สำหรับข้อความทั่วไปในโหมด shop",
+      "gotcha": "คอมเมนต์ที่บรรทัด 1373 ยอมรับเรื่องนี้ตรงๆ และเป็นเหตุผลที่คำสั่งแต้มต้องถูกยกขึ้นไปจัดการเองที่บรรทัด 1384",
+      "tag": "warn"
+    },
+    {
+      "id": "C19",
+      "name": "กฎ auto reply แบบ all ตอบทุกข้อความ",
+      "condition": "auto_replies.match_type เป็น all และ is_active เป็นหนึ่ง",
+      "behavior": "matched ถูกตั้งเป็น true โดยไม่ดูข้อความเลย กฎนี้จึงชนะทุกข้อความที่ priority ต่ำกว่า",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "case 'all'",
+          "file": "webhook.php",
+          "line": 2089
+        },
+        {
+          "module": "webhook",
+          "method": "ORDER BY priority DESC",
+          "file": "webhook.php",
+          "line": 2066
+        }
+      ],
+      "result": "ร้านที่เผลอเปิดกฎ all ไว้จะกลบกฎอื่นทั้งหมดและกลบเส้นทาง BusinessBot ด้วย",
+      "gotcha": "กฎ global ที่ line_account_id เป็น NULL ก็ถูกดึงมาด้วยตาม query บรรทัด 2066 กฎ all ของบัญชีเดียวจึงกระทบทุกบัญชีใน tenant นั้น",
+      "tag": "warn"
+    },
+    {
+      "id": "C20",
+      "name": "กฎ regex ที่ pattern พังทำให้ handleMessage ตกทั้งฟังก์ชัน",
+      "condition": "auto_replies.match_type เป็น regex และ keyword ไม่ใช่ pattern ที่ compile ได้",
+      "behavior": "preg_match ยิง warning ซึ่ง set_error_handler ที่บรรทัด 8 แปลงเป็น ErrorException แล้วถูกจับที่ catch ใหญ่ของ handleMessage บรรทัด 2037",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "case 'regex'",
+          "file": "webhook.php",
+          "line": 2086
+        },
+        {
+          "module": "webhook",
+          "method": "set_error_handler",
+          "file": "webhook.php",
+          "line": 8
+        },
+        {
+          "module": "webhook",
+          "method": "catch ใน handleMessage",
+          "file": "webhook.php",
+          "line": 2037
+        }
+      ],
+      "result": "ลูกค้าได้ข้อความ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง ที่บรรทัด 2051 ทุกครั้งที่พิมพ์ ทั้งที่ต้นเหตุคือกฎที่แอดมินตั้งไว้",
+      "gotcha": "keyword ถูกยัดเข้า delimiter โดยตรงที่บรรทัด 2086 โดยไม่ผ่าน preg_quote และไม่มี timeout จึงเปิดช่อง ReDoS จากฝั่งแอดมิน",
+      "tag": "danger"
+    },
+    {
+      "id": "C21",
+      "name": "event ล้มเหลวแล้วยังตอบ 200",
+      "condition": "โค้ดใน foreach โยน Exception",
+      "behavior": "catch ที่บรรทัด 481 เขียน dev_logs แล้ววน event ถัดไป จากนั้น http_response_code(200) ที่บรรทัด 495 ทำงานเสมอ",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "catch ต่อ event",
+          "file": "webhook.php",
+          "line": 481
+        },
+        {
+          "module": "webhook",
+          "method": "http_response_code(200)",
+          "file": "webhook.php",
+          "line": 495
+        }
+      ],
+      "result": "LINE ถือว่าส่งสำเร็จและจะไม่ retry event ที่ล้มเหลวจึงหายถาวร",
+      "gotcha": "catch จับเฉพาะ Exception ไม่จับ Error ถ้าเกิด TypeError ทั้งลูปจะตายกลางทาง event ที่เหลือใน batch เดียวกันไม่ถูกประมวลผลและก็ยังไม่มี retry",
+      "tag": "warn"
+    },
+    {
+      "id": "C22",
+      "name": "fatal error ตอน shutdown แล้ว handler พังซ้ำ",
+      "condition": "เกิด E_ERROR หรือ E_PARSE และ Database::getInstance ในตัว handler ล้มเหลวด้วย",
+      "behavior": "$db ถูกประกาศในบล็อก try บรรทัด 17 แต่ catch บรรทัด 24 เรียก logWebhookException($db, ...) กับตัวแปรที่ยังไม่ถูกกำหนด",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "register_shutdown_function",
+          "file": "webhook.php",
+          "line": 13
+        },
+        {
+          "module": "webhook",
+          "method": "$db ใน try",
+          "file": "webhook.php",
+          "line": 17
+        },
+        {
+          "module": "webhook",
+          "method": "logWebhookException ใน catch",
+          "file": "webhook.php",
+          "line": 24
+        }
+      ],
+      "result": "เมื่อ DB ล่มพร้อมกับ fatal error จะไม่มีร่องรอยใน dev_logs เหลือแค่ error_log ของ PHP",
+      "gotcha": "เป็นกรณีที่ต้องการ log มากที่สุด แต่กลับเป็นกรณีเดียวที่ log ไม่ทำงาน",
+      "tag": "warn"
+    },
+    {
+      "id": "C23",
+      "name": "reply token หมดอายุ แล้วตกไปใช้ push ที่กิน quota",
+      "condition": "replyMessage คืน code ที่ไม่ใช่ 200 เช่น 400 เพราะ token ถูกใช้ไปแล้วหรือหมดอายุ",
+      "behavior": "sendMessageWithFallback ยิง pushMessage แทนแล้วบันทึก dev_logs ระดับ info ส่วน LineAPI::sendMessage ตรวจ reply_token_expires ก่อนแล้วเคลียร์ token ทิ้งทุกครั้งหลังใช้",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "sendMessageWithFallback",
+          "file": "webhook.php",
+          "line": 204
+        },
+        {
+          "module": "webhook",
+          "method": "pushMessage fallback",
+          "file": "webhook.php",
+          "line": 215
+        },
+        {
+          "module": "LineAPI",
+          "method": "sendMessage เลือก reply ก่อน",
+          "file": "classes/LineAPI.php",
+          "line": 132
+        },
+        {
+          "module": "LineAPI",
+          "method": "clearReplyToken",
+          "file": "classes/LineAPI.php",
+          "line": 143
+        }
+      ],
+      "result": "ข้อความยังถึงลูกค้า แต่ไปนับใน quota ของ push",
+      "gotcha": "เส้นที่ประหยัด quota จริงมีแค่ sendMessageWithFallback บรรทัด 204 กับสาขา general mode บรรทัด 1438 ที่เหลือในไฟล์นี้เรียก replyMessage ตรงๆ ถ้า token หมดอายุคือข้อความหายไปเงียบๆ ไม่ใช่เสีย quota",
+      "tag": "warn"
+    },
+    {
+      "id": "C24",
+      "name": "การกระตุ้น broadcast วิ่งไป tenant ผิด",
+      "condition": "ทุก webhook ที่เข้ามาที่ root domain",
+      "behavior": "curl ไปที่ api/process_scheduled_broadcasts.php โดยไม่ส่ง ?account ไปด้วย ปลายทางไม่ได้ include route_by_account.php จึงถูก resolve_subdomain pin เป็น tenant-0001 เสมอ",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "curl trigger",
+          "file": "webhook.php",
+          "line": 293
+        },
+        {
+          "module": "broadcast",
+          "method": "require config/database.php เท่านั้น",
+          "file": "api/process_scheduled_broadcasts.php",
+          "line": 12
+        },
+        {
+          "module": "tenant-routing",
+          "method": "pin root tenant",
+          "file": "bootstrap/resolve_subdomain.php",
+          "line": 160
+        }
+      ],
+      "result": "broadcast ที่ตั้งเวลาไว้ของร้านอื่นไม่ถูกกระตุ้นจาก webhook ของร้านตัวเอง มีแต่ของ tenant-0001 ที่ถูกประมวลผลซ้ำๆ",
+      "gotcha": "อาการคือ broadcast ตั้งเวลาแล้วไม่ยิงจนกว่า cron จะมาถึง ทั้งที่มี traffic เข้าร้านตลอดเวลา",
+      "tag": "danger"
+    },
+    {
+      "id": "C25",
+      "name": "devLog ล้มเหลวแล้วไม่วนซ้ำ",
+      "condition": "ตาราง dev_logs ไม่มีหรือคอลัมน์ไม่ตรง",
+      "behavior": "catch เขียนลง error_log ตรงๆ โดยจงใจไม่เรียก logWebhookException เพราะ logWebhookException เรียก devLog กลับมาซึ่งจะวนไม่จบ",
+      "code_path": [
+        {
+          "module": "webhook",
+          "method": "devLog catch",
+          "file": "webhook.php",
+          "line": 3278
+        },
+        {
+          "module": "webhook",
+          "method": "logWebhookException เรียก devLog",
+          "file": "webhook.php",
+          "line": 142
+        }
+      ],
+      "result": "webhook ยังทำงานต่อได้แม้ไม่มีตาราง log",
+      "gotcha": "devLog ยังบังคับให้ user_id ที่ไม่ใช่ตัวเลขไปอยู่ใน data แทนที่บรรทัด 3263 เพราะคอลัมน์เป็น INT แต่ LINE user id เป็นสตริง",
+      "tag": "ok"
+    }
+  ],
+  "modules_touched": [
+    {
+      "module": "webhook",
+      "role": "ตัวไฟล์ webhook.php 5616 บรรทัด ทำทั้งการตรวจ signature การกันซ้ำ การบันทึกข้อความ และการตัดสินใจตอบกลับ",
+      "methods": [
+        "handleFollow",
+        "handleUnfollow",
+        "handleMessage",
+        "handleBroadcastClick",
+        "checkAutoReply",
+        "getOrCreateUser",
+        "saveAccountEvent",
+        "devLog",
+        "sendMessageWithFallback",
+        "triggerReceiptFlow"
+      ]
+    },
+    {
+      "module": "tenant-routing",
+      "role": "เลือก tenant DB ก่อนทุกอย่าง จาก Host แล้วจาก ?account",
+      "methods": [
+        "reya_resolve_tenant_from_host",
+        "reya_has_explicit_account_signal",
+        "route_by_account"
+      ]
+    },
+    {
+      "module": "TenantContext",
+      "role": "ถือ tenant ปัจจุบันของ request และ map line_account_id ไปยัง tenant ผ่าน master DB",
+      "methods": [
+        "routeByLineAccount",
+        "resolveTenantByLineAccount",
+        "setCurrentTenantId",
+        "getMasterPdo"
+      ]
+    },
+    {
+      "module": "LineAccountManager",
+      "role": "โหลด line_accounts ของ tenant แล้วหาบัญชีจาก id หรือจาก signature",
+      "methods": [
+        "loadAccounts",
+        "getAccountById",
+        "validateAndGetAccount"
+      ]
+    },
+    {
+      "module": "LineAPI",
+      "role": "ตรวจ HMAC-SHA256 และส่งข้อความ โดยพยายามใช้ reply token ก่อน push",
+      "methods": [
+        "validateSignature",
+        "replyMessage",
+        "pushMessage",
+        "sendMessage",
+        "clearReplyToken",
+        "getMessageContent",
+        "getProfile"
+      ]
+    },
+    {
+      "module": "BusinessBot",
+      "role": "ตรรกะบอทฝั่งร้านค้าและแต้ม ถูกเรียกสองทาง คือทางลัดคำสั่งแต้ม และทาง processMessage เต็มรูปแบบ",
+      "methods": [
+        "processMessage",
+        "getBotMode",
+        "showPoints",
+        "showMemberCard",
+        "showRewards",
+        "redeemReward",
+        "handleStatefulMessage"
+      ]
+    },
+    {
+      "module": "LiffMessageHandler",
+      "role": "ดักข้อความที่ถูกยิงมาจาก LIFF แล้วตอบ Flex",
+      "methods": [
+        "detectLiffAction",
+        "processMessage"
+      ]
+    },
+    {
+      "module": "broadcast",
+      "role": "ตัวประมวลผล broadcast ที่ถูกกระตุ้นแบบ fire and forget ทุก webhook",
+      "methods": [
+        "processScheduled"
+      ]
+    },
+    {
+      "module": "master DB",
+      "role": "zrismpsz_reya_platform เก็บ tenants และ tenant_line_account_routes",
+      "methods": []
+    },
+    {
+      "module": "tenant DB",
+      "role": "reya_tenant_* เก็บ line_accounts users messages webhook_events account_events auto_replies dev_logs",
+      "methods": []
+    }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "TenantContext",
+      "to_module": "webhook",
+      "returns_what": "การ pin tenant ที่ถูกต้องผ่าน setCurrentTenantId",
+      "why_needed": "ทุก query หลังจากนี้ใช้ PDO ที่ถูกเลือกไว้แล้ว ถ้าขั้นนี้คืน false เงียบๆ webhook จะอ่าน line_accounts ของร้านผิดแล้วหา signature ไม่เจอ จบลงที่เส้น fallback ค่าคงที่โดยไม่มี error"
+    },
+    {
+      "from_module": "LineAccountManager",
+      "to_module": "webhook",
+      "returns_what": "แถว line_accounts ที่มี id channel_access_token channel_secret",
+      "why_needed": "id ของแถวนี้กลายเป็น $lineAccountId ซึ่งเป็น gate ของ account_events สถิติรายวัน follower interaction auto reply แบบผูกบัญชี และคอลัมน์ line_account_id ใน messages ถ้าเป็น null ทุกอย่างข้างต้นถูกข้ามโดยไม่มี log"
+    },
+    {
+      "from_module": "LineAPI",
+      "to_module": "webhook",
+      "returns_what": "ผลลัพธ์ code จาก replyMessage",
+      "why_needed": "เป็นสัญญาณเดียวที่บอกว่าต้อง fallback ไป push หรือไม่ ถ้าโค้ดเรียก replyMessage โดยไม่อ่าน code เช่นบรรทัด 1494 และ 1853 ข้อความที่ reply ไม่สำเร็จจะหายไปโดยไม่มีใครรู้"
+    },
+    {
+      "from_module": "webhook",
+      "to_module": "BusinessBot",
+      "returns_what": "$user['id'] จาก getOrCreateUser",
+      "why_needed": "BusinessBot ทุก method รับ userDbId เป็นคีย์ของ state และตะกร้า ถ้า getOrCreateUser คืนแถวผิด tenant สถานะการสั่งซื้อจะไปผูกกับลูกค้าคนอื่น"
+    },
+    {
+      "from_module": "BusinessBot",
+      "to_module": "webhook",
+      "returns_what": "true หรือ null จาก processMessage",
+      "why_needed": "webhook เช็คด้วย if ($handled) บรรทัด 2007 การคืน null ในโหมด general และ auto_reply_only จึงเป็นสัญญาณตั้งใจให้ตกไปเช็ค auto_replies ต่อ ไม่ใช่ความล้มเหลว"
+    },
+    {
+      "from_module": "webhook_events",
+      "to_module": "webhook",
+      "returns_what": "การมีอยู่ของแถว event_id",
+      "why_needed": "เป็นตัวกันซ้ำเพียงชั้นเดียวของทั้งระบบ ถ้าตารางหายไป การประมวลผลซ้ำจะเงียบสนิทเพราะ catch บรรทัด 384 กลืน exception"
+    }
+  ],
+  "gotchas": [
+    "ลำดับจริงคือ เลือก tenant ก่อน แล้วค่อยตรวจ signature ไม่ใช่ตรงกันข้าม การเลือก tenant ที่ webhook.php บรรทัด 34 เขียน master.tenant_line_account_routes.last_seen_at ที่ TenantContext.php บรรทัด 310 ก่อนที่ signature จะถูกตรวจครั้งแรกที่บรรทัด 81",
+    "การกันซ้ำมีชั้นเดียวคือตาราง webhook_events และอยู่ที่บรรทัด 371 ถึง 388 เท่านั้น สาขา join leave และสาขากลุ่มทั้งหมดอยู่เหนือมัน จึงไม่ถูกกันซ้ำเลย",
+    "database/migration_2026-05-25_tenant_template.sql ไม่ได้สร้างตาราง webhook_events tenant ที่ provision ใหม่จึงไม่มีตัวกันซ้ำ และความล้มเหลวนี้ถูกกลืนที่ catch บรรทัด 384",
+    "ข้อความขาเข้าถูกบันทึกลง messages ที่บรรทัด 1051 ก่อนการตัดสินใจทุกอย่างเสมอ ดังนั้นข้อความจะไม่หายแม้บอทจะไม่ตอบ แต่ถ้า INSERT หลักล้มแล้วตกไป fallback บรรทัด 1056 คอลัมน์ line_account_id จะหายไปและ inbox จะมองไม่เห็น",
+    "โหมด shop ทำให้ข้อความทั่วไป return ที่บรรทัด 1864 ก่อนถึง BusinessBot::processMessage บรรทัด 1998 อย่าเพิ่มฟีเจอร์แชทใหม่ลงใน BusinessBot โดยไม่ตรวจว่าเส้นทางถึงจริง",
+    "reply token ถูกเก็บลง users พร้อมอายุ 50 วินาทีที่บรรทัด 1098 แต่มีแค่ sendMessageWithFallback บรรทัด 204 กับสาขา general mode บรรทัด 1438 ที่ทำ reply ก่อน push จริง จุดเรียก replyMessage อื่นไม่มี fallback",
+    "การเรียกใช้งาน BusinessBot CRMManager AutoTagManager LiffMessageHandler WebSocketNotifier ทั้งหมด require แบบมี file_exists ที่บรรทัด 45 ถึง 62 ถ้าไฟล์หาย ฟีเจอร์นั้นหายเงียบๆ โดยไม่มี error",
+    "http_response_code(200) ที่บรรทัด 495 ทำงานเสมอ แม้ทุก event จะล้ม LINE จึงไม่ retry ให้ ความล้มเหลวของ event เท่ากับข้อมูลหายถาวร",
+    "handleUnfollow บรรทัด 795 UPDATE users SET is_blocked โดยไม่กรอง line_account_id ต่างจาก account_followers ที่กรองถูกต้อง สองตารางนี้จึงไม่ตรงกันเมื่อ tenant มีหลายบัญชี LINE",
+    "checkAutoReply ทำ UPDATE auto_replies use_count ทุกครั้งที่ match ที่บรรทัด 2098 นับเป็นการเขียน DB บนทุกข้อความที่มีกฎตรง",
+    "ตาราง webhook_events ถูกใช้ร่วมกันทุกช่องทาง facebook-webhook.php บรรทัด 394 และ tiktok-webhook.php บรรทัด 284 ใช้ INSERT IGNORE ส่วน webhook.php บรรทัด 382 ใช้ INSERT ธรรมดา ถ้า event id ชนกันข้ามช่องทาง พฤติกรรมจะต่างกันคนละแบบ"
+  ],
+  "file_refs": [
+    "webhook.php",
+    "bootstrap/resolve_subdomain.php",
+    "bootstrap/route_by_account.php",
+    "classes/TenantContext.php",
+    "classes/LineAccountManager.php",
+    "classes/LineAPI.php",
+    "classes/BusinessBot.php",
+    "api/process_scheduled_broadcasts.php",
+    "database/migration_2026-05-25_tenant_template.sql",
+    "database/install_complete_latest.sql",
+    "facebook-webhook.php",
+    "tiktok-webhook.php"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": [
+      "LINE Platform",
+      "bootstrap เลือก tenant",
+      "webhook.php",
+      "handleMessage / BusinessBot",
+      "tenant DB"
+    ],
+    "rows": [
+      "เลือก tenant",
+      "ตรวจ signature",
+      "กัน event ซ้ำ",
+      "บันทึกข้อความ",
+      "ตัดสินใจตอบ"
+    ],
+    "nodes": [
+      {
+        "id": "n1",
+        "lane": 0,
+        "row": 0,
+        "label": "POST webhook.php?account=N",
+        "type": "start",
+        "ref": "webhook.php:65"
+      },
+      {
+        "id": "n2",
+        "lane": 1,
+        "row": 0,
+        "label": "Host เป็น root และไม่มี ?account",
+        "type": "decision",
+        "ref": "bootstrap/resolve_subdomain.php:160"
+      },
+      {
+        "id": "n3",
+        "lane": 1,
+        "row": 0,
+        "label": "pin tenant-0001",
+        "type": "error",
+        "ref": "bootstrap/resolve_subdomain.php:161"
+      },
+      {
+        "id": "n4",
+        "lane": 1,
+        "row": 0,
+        "label": "routeByLineAccount(?account)",
+        "type": "step",
+        "ref": "bootstrap/route_by_account.php:75"
+      },
+      {
+        "id": "n5",
+        "lane": 4,
+        "row": 0,
+        "label": "UPDATE last_seen_at ก่อนตรวจ signature",
+        "type": "error",
+        "ref": "classes/TenantContext.php:310"
+      },
+      {
+        "id": "n6",
+        "lane": 2,
+        "row": 1,
+        "label": "getAccountById + validateSignature",
+        "type": "decision",
+        "ref": "webhook.php:81"
+      },
+      {
+        "id": "n7",
+        "lane": 2,
+        "row": 1,
+        "label": "ไล่ HMAC ทุกบัญชีที่ is_active",
+        "type": "step",
+        "ref": "classes/LineAccountManager.php:96"
+      },
+      {
+        "id": "n8",
+        "lane": 2,
+        "row": 1,
+        "label": "fallback secret จากค่าคงที่",
+        "type": "decision",
+        "ref": "webhook.php:107"
+      },
+      {
+        "id": "n9",
+        "lane": 2,
+        "row": 1,
+        "label": "400 Invalid signature",
+        "type": "end",
+        "ref": "webhook.php:110"
+      },
+      {
+        "id": "n10",
+        "lane": 2,
+        "row": 2,
+        "label": "foreach event",
+        "type": "step",
+        "ref": "webhook.php:308"
+      },
+      {
+        "id": "n11",
+        "lane": 4,
+        "row": 2,
+        "label": "เขียนกลุ่มและ account_events ก่อน dedupe",
+        "type": "error",
+        "ref": "webhook.php:348"
+      },
+      {
+        "id": "n12",
+        "lane": 2,
+        "row": 2,
+        "label": "มี webhookEventId ไหม",
+        "type": "decision",
+        "ref": "webhook.php:371"
+      },
+      {
+        "id": "n13",
+        "lane": 4,
+        "row": 2,
+        "label": "SELECT webhook_events",
+        "type": "data",
+        "ref": "webhook.php:373"
+      },
+      {
+        "id": "n14",
+        "lane": 2,
+        "row": 2,
+        "label": "ซ้ำ ข้ามไป event ถัดไป",
+        "type": "end",
+        "ref": "webhook.php:379"
+      },
+      {
+        "id": "n15",
+        "lane": 4,
+        "row": 2,
+        "label": "INSERT webhook_events",
+        "type": "data",
+        "ref": "webhook.php:382"
+      },
+      {
+        "id": "n16",
+        "lane": 2,
+        "row": 2,
+        "label": "ตารางหาย catch กลืน",
+        "type": "error",
+        "ref": "webhook.php:384"
+      },
+      {
+        "id": "n17",
+        "lane": 2,
+        "row": 3,
+        "label": "switch ตามชนิด event",
+        "type": "decision",
+        "ref": "webhook.php:390"
+      },
+      {
+        "id": "n18",
+        "lane": 3,
+        "row": 3,
+        "label": "getOrCreateUser + getUserState",
+        "type": "step",
+        "ref": "webhook.php:848"
+      },
+      {
+        "id": "n19",
+        "lane": 4,
+        "row": 3,
+        "label": "INSERT INTO messages",
+        "type": "data",
+        "ref": "webhook.php:1051"
+      },
+      {
+        "id": "n20",
+        "lane": 4,
+        "row": 3,
+        "label": "UPDATE users.reply_token อายุ 50 วิ",
+        "type": "data",
+        "ref": "webhook.php:1098"
+      },
+      {
+        "id": "n21",
+        "lane": 3,
+        "row": 4,
+        "label": "ไม่ใช่ text จบที่นี่",
+        "type": "end",
+        "ref": "webhook.php:1143"
+      },
+      {
+        "id": "n22",
+        "lane": 3,
+        "row": 4,
+        "label": "อ่าน bot_mode",
+        "type": "decision",
+        "ref": "webhook.php:1347"
+      },
+      {
+        "id": "n23",
+        "lane": 3,
+        "row": 4,
+        "label": "คำสั่งแต้ม ตอบ Flex ทุกโหมด",
+        "type": "step",
+        "ref": "webhook.php:1384"
+      },
+      {
+        "id": "n24",
+        "lane": 3,
+        "row": 4,
+        "label": "general ตอบ auto reply แล้ว push ถ้า reply พลาด",
+        "type": "step",
+        "ref": "webhook.php:1438"
+      },
+      {
+        "id": "n25",
+        "lane": 3,
+        "row": 4,
+        "label": "shop ไม่ตรงคำสั่ง return รอแอดมิน",
+        "type": "error",
+        "ref": "webhook.php:1864"
+      },
+      {
+        "id": "n26",
+        "lane": 3,
+        "row": 4,
+        "label": "BusinessBot::processMessage",
+        "type": "step",
+        "ref": "webhook.php:1998"
+      },
+      {
+        "id": "n27",
+        "lane": 4,
+        "row": 4,
+        "label": "UPDATE auto_replies.use_count",
+        "type": "data",
+        "ref": "webhook.php:2098"
+      },
+      {
+        "id": "n28",
+        "lane": 2,
+        "row": 4,
+        "label": "ตอบ 200 เสมอ",
+        "type": "end",
+        "ref": "webhook.php:495"
+      },
+      {
+        "id": "n29",
+        "lane": 0,
+        "row": 4,
+        "label": "ลูกค้าเห็นข้อความตอบกลับ",
+        "type": "end",
+        "ref": "classes/LineAPI.php:80"
+      }
+    ],
+    "edges": [
+      {
+        "from": "n1",
+        "to": "n2"
+      },
+      {
+        "from": "n2",
+        "to": "n3",
+        "label": "ไม่มี ?account",
+        "dashed": true
+      },
+      {
+        "from": "n2",
+        "to": "n4",
+        "label": "มี ?account"
+      },
+      {
+        "from": "n4",
+        "to": "n5"
+      },
+      {
+        "from": "n3",
+        "to": "n6"
+      },
+      {
+        "from": "n5",
+        "to": "n6"
+      },
+      {
+        "from": "n6",
+        "to": "n10",
+        "label": "signature ผ่าน"
+      },
+      {
+        "from": "n6",
+        "to": "n7",
+        "label": "ไม่ผ่าน",
+        "dashed": true
+      },
+      {
+        "from": "n7",
+        "to": "n10",
+        "label": "เจอบัญชีที่ตรง"
+      },
+      {
+        "from": "n7",
+        "to": "n8",
+        "label": "ไม่เจอ",
+        "dashed": true
+      },
+      {
+        "from": "n8",
+        "to": "n9",
+        "label": "ไม่ผ่าน",
+        "dashed": true
+      },
+      {
+        "from": "n8",
+        "to": "n10",
+        "label": "ผ่าน แต่ไม่มี lineAccountId"
+      },
+      {
+        "from": "n10",
+        "to": "n11",
+        "label": "event จากกลุ่ม",
+        "dashed": true
+      },
+      {
+        "from": "n10",
+        "to": "n12"
+      },
+      {
+        "from": "n11",
+        "to": "n12"
+      },
+      {
+        "from": "n12",
+        "to": "n13",
+        "label": "มี id"
+      },
+      {
+        "from": "n12",
+        "to": "n17",
+        "label": "ไม่มี id ข้าม dedupe",
+        "dashed": true
+      },
+      {
+        "from": "n13",
+        "to": "n14",
+        "label": "เจอ ซ้ำ",
+        "dashed": true
+      },
+      {
+        "from": "n13",
+        "to": "n15",
+        "label": "ไม่เจอ"
+      },
+      {
+        "from": "n13",
+        "to": "n16",
+        "label": "ตารางหาย",
+        "dashed": true
+      },
+      {
+        "from": "n15",
+        "to": "n17"
+      },
+      {
+        "from": "n16",
+        "to": "n17",
+        "dashed": true
+      },
+      {
+        "from": "n17",
+        "to": "n18",
+        "label": "message"
+      },
+      {
+        "from": "n18",
+        "to": "n19"
+      },
+      {
+        "from": "n19",
+        "to": "n20"
+      },
+      {
+        "from": "n20",
+        "to": "n21",
+        "label": "ไม่ใช่ text",
+        "dashed": true
+      },
+      {
+        "from": "n20",
+        "to": "n22",
+        "label": "เป็น text"
+      },
+      {
+        "from": "n22",
+        "to": "n23",
+        "label": "คำสั่งแต้ม"
+      },
+      {
+        "from": "n22",
+        "to": "n24",
+        "label": "general"
+      },
+      {
+        "from": "n22",
+        "to": "n25",
+        "label": "shop ไม่ตรงคำสั่ง",
+        "dashed": true
+      },
+      {
+        "from": "n22",
+        "to": "n26",
+        "label": "คำสั่งสลิป ออเดอร์ เมนู"
+      },
+      {
+        "from": "n24",
+        "to": "n27"
+      },
+      {
+        "from": "n25",
+        "to": "n27",
+        "dashed": true
+      },
+      {
+        "from": "n26",
+        "to": "n27"
+      },
+      {
+        "from": "n23",
+        "to": "n29"
+      },
+      {
+        "from": "n27",
+        "to": "n29"
+      },
+      {
+        "from": "n21",
+        "to": "n28"
+      },
+      {
+        "from": "n29",
+        "to": "n28"
+      },
+      {
+        "from": "n14",
+        "to": "n28",
+        "dashed": true
+      }
+    ]
+  }
+}

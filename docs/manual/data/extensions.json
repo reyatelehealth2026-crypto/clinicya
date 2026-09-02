@@ -1,0 +1,63 @@
+{
+  "_meta": {
+    "methodology": "Compatibility/fallback paths are recorded as behavioral overrides even when PHP inheritance is not used."
+  },
+  "targets": [
+    {
+      "target": "Member identity lookup",
+      "kind": "fallback precedence",
+      "overriders": [
+        {
+          "module": "api/member.php",
+          "member": "account-scoped lookup → unscoped fallback",
+          "calls_super": null,
+          "file": "api/member.php",
+          "line": 105,
+          "note": "legacy compatibility can bypass OA scope"
+        }
+      ]
+    },
+    {
+      "target": "Tier definitions",
+      "kind": "fallback precedence",
+      "overriders": [
+        {
+          "module": "classes/TierService.php",
+          "member": "tier_settings → member_tiers → DEFAULT_TIERS",
+          "calls_super": null,
+          "file": "classes/TierService.php",
+          "line": 42,
+          "note": "settings table is preferred source"
+        }
+      ]
+    },
+    {
+      "target": "Rewards catalog",
+      "kind": "fallback precedence",
+      "overriders": [
+        {
+          "module": "api/rewards.php",
+          "member": "current account → default account fallback",
+          "calls_super": null,
+          "file": "api/rewards.php",
+          "line": 52,
+          "note": "can surface rewards from another OA inside same tenant"
+        }
+      ]
+    },
+    {
+      "target": "Points history source",
+      "kind": "legacy fallback",
+      "overriders": [
+        {
+          "module": "api/points.php",
+          "member": "points_history → points_transactions",
+          "calls_super": null,
+          "file": "api/points.php",
+          "line": 75,
+          "note": "opposite direction exists elsewhere; confirms ledger split"
+        }
+      ]
+    }
+  ]
+}

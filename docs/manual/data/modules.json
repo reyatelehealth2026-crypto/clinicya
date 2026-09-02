@@ -1,0 +1,705 @@
+{
+  "_meta": {
+    "scope": "core SaaS/CRM/Membership/Loyalty; module edges are calls observed in traced code",
+    "edge_rule": "ลากเส้นเมื่อพบการเรียกจริงใน steps[].calls ของ group ไม่ลากจาก import อย่างเดียว"
+  },
+  "nodes": [
+    {
+      "id": "MySQL",
+      "layer": "data",
+      "role": "tenant DB ที่เก็บ cart_items transactions transaction_items business_items shop_products stock_movements shop_settings promotions promotion_usage account_receiv"
+    },
+    {
+      "id": "api-checkout",
+      "layer": "integration",
+      "role": "endpoint เดียวที่ทำทั้งตะกร้า โปรโมชัน ที่อยู่ ออร์เดอร์ สลิป และ QR รวม 2794 บรรทัด"
+    },
+    {
+      "id": "api-documents",
+      "layer": "integration",
+      "role": "endpoint เดียวรวมทุกการกระทำของเอกสาร ครอบ transaction และ scope tenant ทุก query"
+    },
+    {
+      "id": "webhook",
+      "layer": "domain",
+      "role": "ตัวไฟล์ webhook.php 5616 บรรทัด ทำทั้งการตรวจ signature การกันซ้ำ การบันทึกข้อความ และการตัดสินใจตอบกลับ"
+    },
+    {
+      "id": "TenantContext",
+      "layer": "infra",
+      "role": "request tenant identity"
+    },
+    {
+      "id": "Database",
+      "layer": "data",
+      "role": "platform/tenant PDO boundary"
+    },
+    {
+      "id": "LoyaltyPoints",
+      "layer": "domain",
+      "role": "points/rewards ledger"
+    },
+    {
+      "id": "document-helpers",
+      "layer": "domain",
+      "role": "หัวใจของกลุ่ม ออกเลขเอกสาร คิด VAT คิดยอดบรรทัด และแปลงวันที่เป็นพุทธศักราช"
+    },
+    {
+      "id": "shop-api",
+      "layer": "domain",
+      "role": "ชั้น API ของ Mini App ยิงตรงไปที่ api/checkout.php ทุก action ของตะกร้าและออร์เดอร์"
+    },
+    {
+      "id": "line-mini-app",
+      "layer": "ui",
+      "role": "หน้าจอตะกร้าและชำระเงินใน LIFF ถือ state ของส่วนลดและคำนวณยอดที่แสดงเอง"
+    },
+    {
+      "id": "LINE",
+      "layer": "integration",
+      "role": "push/LIFF"
+    },
+    {
+      "id": "LineAPI",
+      "layer": "domain",
+      "role": "ตรวจ HMAC-SHA256 และส่งข้อความ โดยพยายามใช้ reply token ก่อน push"
+    },
+    {
+      "id": "PointsClaimAPI",
+      "layer": "ui",
+      "role": "counter loyalty"
+    },
+    {
+      "id": "TierService",
+      "layer": "domain",
+      "role": "tier calculation"
+    },
+    {
+      "id": "api-rewards",
+      "layer": "integration",
+      "role": "endpoint ที่ Mini App ใช้จริงสำหรับรางวัล ห่อ LoyaltyPoints อีกที"
+    },
+    {
+      "id": "documents",
+      "layer": "domain",
+      "role": "หน้าแอดมิน documents.php เลือก slot ประเภทเอกสาร แล้ว include list.php หรือ sales-tax-register.php"
+    },
+    {
+      "id": "inbox-v2",
+      "layer": "ui",
+      "role": "ตัวจัดการ action dispense ทั้งหมดอยู่ในไฟล์หน้าจอเอง ไม่ได้แยกเป็น API"
+    },
+    {
+      "id": "miniapp-config",
+      "layer": "domain",
+      "role": "ตัดสินว่า bundle ที่ใช้ร่วมกันนี้กำลังเปิดร้านของ tenant ไหน และต้องยิง API ไปที่ origin ใด"
+    },
+    {
+      "id": "pdf-renderer",
+      "layer": "domain",
+      "role": "ประกอบหน้ากระดาษ A4 เป็น HTML ฝัง CSS พร้อมลายน้ำสำหรับใบที่ยกเลิก"
+    },
+    {
+      "id": "AccountReceivableService",
+      "layer": "domain",
+      "role": "สร้างลูกหนี้ให้ออร์เดอร์แบบเครดิตและ COD หลัง commit"
+    },
+    {
+      "id": "ActivityLogger",
+      "layer": "domain",
+      "role": "บันทึก activity_logs ของการสร้างออร์เดอร์"
+    },
+    {
+      "id": "AdvancedCRM",
+      "layer": "domain",
+      "role": "tags/segments"
+    },
+    {
+      "id": "BusinessBot",
+      "layer": "domain",
+      "role": "ตรรกะบอทฝั่งร้านค้าและแต้ม ถูกเรียกสองทาง คือทางลัดคำสั่งแต้ม และทาง processMessage เต็มรูปแบบ"
+    },
+    {
+      "id": "CRMAPI",
+      "layer": "ui",
+      "role": "CRM dashboard facade"
+    },
+    {
+      "id": "CRMDashboardService",
+      "layer": "domain",
+      "role": "deals/tickets/360"
+    },
+    {
+      "id": "CRMManager",
+      "layer": "domain",
+      "role": "drip automation"
+    },
+    {
+      "id": "LiffMessageHandler",
+      "layer": "domain",
+      "role": "ดักข้อความที่ถูกยิงมาจาก LIFF แล้วตอบ Flex"
+    },
+    {
+      "id": "LineAccountManager",
+      "layer": "domain",
+      "role": "เลือก channel token ตาม line_account_id และถอยไป config เมื่อหาไม่เจอ"
+    },
+    {
+      "id": "MemberAPI",
+      "layer": "ui",
+      "role": "member register/check"
+    },
+    {
+      "id": "NotificationService",
+      "layer": "domain",
+      "role": "แจ้งออร์เดอร์ใหม่ทาง LINE ให้แอดมิน ไม่ใช่ให้ลูกค้า"
+    },
+    {
+      "id": "TenantProvisioning",
+      "layer": "domain",
+      "role": "tenant DB lifecycle"
+    },
+    {
+      "id": "TenantResolver",
+      "layer": "infra",
+      "role": "HTTP host/account → tenant"
+    },
+    {
+      "id": "activity-log",
+      "layer": "domain",
+      "role": "บันทึกร่องรอย create update approve cancel convert export ของทุกเอกสาร"
+    },
+    {
+      "id": "api-home-content",
+      "layer": "domain",
+      "role": "แบนเนอร์และชั้นวางที่แอดมินจัดไว้ ใช้ surface shop แยกจากหน้า home"
+    },
+    {
+      "id": "broadcast",
+      "layer": "domain",
+      "role": "ตัวประมวลผล broadcast ที่ถูกกระตุ้นแบบ fire and forget ทุก webhook"
+    },
+    {
+      "id": "config",
+      "layer": "domain",
+      "role": "ตัดสินใจว่า request จะไปที่ host ไหน และ line_account_id คือเลขอะไร"
+    },
+    {
+      "id": "liff-helper",
+      "layer": "domain",
+      "role": "ตัดสินว่าปุ่มชำระเงินควรเปิด LIFF แชท OA หรือไม่แสดงเลย"
+    },
+    {
+      "id": "master DB",
+      "layer": "domain",
+      "role": "zrismpsz_reya_platform เก็บ tenants และ tenant_line_account_routes"
+    },
+    {
+      "id": "refill",
+      "layer": "domain",
+      "role": "ประเมินวันยาหมดแล้วบันทึกลง medication_refill_tracking ให้ cron เตือน"
+    },
+    {
+      "id": "route_by_account",
+      "layer": "domain",
+      "role": "tenant route for root Mini App calls"
+    },
+    {
+      "id": "sales-tax-register",
+      "layer": "domain",
+      "role": "รายงานภาษีขายรายเดือน กรองเฉพาะ doc_type TAX และไม่นับใบที่ยกเลิกในยอดรวม"
+    },
+    {
+      "id": "shop-admin",
+      "layer": "domain",
+      "role": "หน้าเภสัชกร ตรวจสลิป อนุมัติ ปฏิเสธ และคิวสลิปรอตรวจ"
+    },
+    {
+      "id": "slip-verifier",
+      "layer": "domain",
+      "role": "ตัดสินว่าสลิปจริงและยอดตรงไหม โดยคุยกับ GhostX"
+    },
+    {
+      "id": "tenant-routing",
+      "layer": "domain",
+      "role": "เลือก tenant DB ก่อนทุกอย่าง จาก Host แล้วจาก ?account"
+    },
+    {
+      "id": "ai-admin",
+      "layer": "domain",
+      "role": "ผู้ช่วย AI ฝั่งแอดมิน สั่งอนุมัติหรือปฏิเสธสลิปด้วยข้อความได้"
+    },
+    {
+      "id": "aichat-history",
+      "layer": "domain",
+      "role": "อ่าน dispensing_records.items ไปเป็น purchase_history ให้ AI"
+    },
+    {
+      "id": "ajax-handler",
+      "layer": "domain",
+      "role": "endpoint อนุมัติหรือปฏิเสธสลิปทีละใบจากหน้า user/order-detail.php"
+    },
+    {
+      "id": "api-member",
+      "layer": "integration",
+      "role": "สมัครสมาชิกและ welcome bonus เขียน users.points ตรง"
+    },
+    {
+      "id": "api-points",
+      "layer": "integration",
+      "role": "endpoint แลกรางวัลอีกชุดที่หักจาก users.points เองในทรานแซกชัน"
+    },
+    {
+      "id": "ar-service",
+      "layer": "domain",
+      "role": "สร้างลูกหนี้การค้าให้ออเดอร์เครดิตและ cod"
+    },
+    {
+      "id": "crm-dashboard-advanced",
+      "layer": "domain",
+      "role": "admin CRM UI"
+    },
+    {
+      "id": "flex",
+      "layer": "domain",
+      "role": "สร้างซองยา Flex ทั้งแบบใบเดียวและ carousel"
+    },
+    {
+      "id": "line-webhook",
+      "layer": "domain",
+      "role": "รับสลิปที่ลูกค้าส่งเข้าแชท LINE เป็นทางเข้าที่สองของ payment_slips"
+    },
+    {
+      "id": "loyalty-members",
+      "layer": "domain",
+      "role": "phone-member admin UI"
+    },
+    {
+      "id": "membership",
+      "layer": "domain",
+      "role": "admin rewards/settings lifecycle"
+    },
+    {
+      "id": "messages",
+      "layer": "ui",
+      "role": "implementation คู่ขนานที่เก่ากว่าและเพี้ยนไปแล้ว ยังถูก redirect มาใช้อัตโนมัติ"
+    },
+    {
+      "id": "next-dispense-port",
+      "layer": "domain",
+      "role": "port ของ case dispense ฝั่ง Next.js ที่อ้างเลขบรรทัด PHP ตรง ๆ ต้องแก้ตามกันทุกครั้ง"
+    },
+    {
+      "id": "notify",
+      "layer": "domain",
+      "role": "ส่ง Flex เข้า LINE และรูปสลิปเข้า Telegram"
+    },
+    {
+      "id": "shop",
+      "layer": "ui",
+      "role": "หน้า order-detail ฝั่งหน้าร้าน แจกแต้มเองและเขียน ledger ทั้งสองตาราง"
+    },
+    {
+      "id": "shop-orders",
+      "layer": "domain",
+      "role": "หน้ารายงานฝั่งแอดมินที่นับและลิสต์ dispensing_records"
+    },
+    {
+      "id": "shop-tax",
+      "layer": "domain",
+      "role": "ข้อมูลผู้ขายที่พิมพ์หัวเอกสาร เก็บในตาราง shop_tax_info หนึ่งแถวต่อ line_account"
+    },
+    {
+      "id": "tenant-onboard",
+      "layer": "domain",
+      "role": "guided setup UI"
+    },
+    {
+      "id": "LINE API",
+      "layer": "domain",
+      "role": "message delivery"
+    },
+    {
+      "id": "admin/tenant-onboard.php",
+      "layer": "domain",
+      "role": "guided setup UI"
+    },
+    {
+      "id": "api/crm-dashboard-api.php",
+      "layer": "domain",
+      "role": "HTTP facade"
+    },
+    {
+      "id": "api/member.php",
+      "layer": "domain",
+      "role": "member registration/check API"
+    },
+    {
+      "id": "api/points-claim.php",
+      "layer": "domain",
+      "role": "counter loyalty orchestration"
+    },
+    {
+      "id": "api/rewards.php",
+      "layer": "domain",
+      "role": "customer rewards API"
+    },
+    {
+      "id": "bootstrap/resolve_subdomain.php",
+      "layer": "domain",
+      "role": "HTTP host → tenant"
+    },
+    {
+      "id": "bootstrap/route_by_account.php",
+      "layer": "domain",
+      "role": "tenant route for root Mini App calls"
+    },
+    {
+      "id": "classes/AdvancedCRM.php",
+      "layer": "domain",
+      "role": "tags + dynamic segments"
+    },
+    {
+      "id": "classes/CRMDashboardService.php",
+      "layer": "domain",
+      "role": "CRM business/read model"
+    },
+    {
+      "id": "classes/CRMManager.php",
+      "layer": "domain",
+      "role": "drip campaigns/event hooks"
+    },
+    {
+      "id": "classes/LoyaltyPoints.php",
+      "layer": "domain",
+      "role": "shared ledger"
+    },
+    {
+      "id": "classes/TenantContext.php",
+      "layer": "domain",
+      "role": "request-scoped tenant identity"
+    },
+    {
+      "id": "classes/TenantOnboardingService.php",
+      "layer": "domain",
+      "role": "business orchestration"
+    },
+    {
+      "id": "classes/TenantProvisioning.php",
+      "layer": "domain",
+      "role": "database lifecycle"
+    },
+    {
+      "id": "classes/TierService.php",
+      "layer": "domain",
+      "role": "membership tiers"
+    },
+    {
+      "id": "crm-dashboard-advanced.php",
+      "layer": "domain",
+      "role": "admin CRM UI"
+    },
+    {
+      "id": "documents-page",
+      "layer": "domain",
+      "role": "หน้าแอดมิน documents.php เลือก slot ประเภทเอกสาร แล้ว include list.php หรือ sales-tax-register.php"
+    },
+    {
+      "id": "documents-ui",
+      "layer": "domain",
+      "role": "โมดัลสร้างและปุ่มลัด อนุมัติ ยกเลิก แปลง ทั้งหมดเป็น fetch ไป api/documents.php"
+    },
+    {
+      "id": "inbox-v2-ui",
+      "layer": "domain",
+      "role": "โมดัลจ่ายยาและ JS ที่ยิง FormData กลับมาที่หน้าเดียวกัน"
+    },
+    {
+      "id": "line",
+      "layer": "domain",
+      "role": "ส่งข้อความ โดยลอง reply token ก่อน push"
+    },
+    {
+      "id": "line-manager",
+      "layer": "domain",
+      "role": "เลือก channel token ตาม line_account_id และถอยไป config เมื่อหาไม่เจอ"
+    },
+    {
+      "id": "loyalty",
+      "layer": "domain",
+      "role": "business logic ของแต้มทั้งหมด แต่ไม่มี transaction ในตัว"
+    },
+    {
+      "id": "loyalty-members.php",
+      "layer": "domain",
+      "role": "phone-member admin UI"
+    },
+    {
+      "id": "membership.php",
+      "layer": "domain",
+      "role": "admin rewards/settings lifecycle"
+    },
+    {
+      "id": "schema",
+      "layer": "domain",
+      "role": "นิยามตาราง dispensing_records ฝั่ง tenant template"
+    },
+    {
+      "id": "tenant DB",
+      "layer": "data",
+      "role": "เก็บ dispensing_records cart transactions transaction_items business_items medication_refill_tracking messages"
+    },
+    {
+      "id": "tenant-db",
+      "layer": "domain",
+      "role": "MySQL ของ tenant เก็บ business_documents, business_document_items, document_sequences, shop_tax_info"
+    }
+  ],
+  "edges": [
+    {
+      "from": "TenantResolver",
+      "to": "TenantContext"
+    },
+    {
+      "from": "TenantContext",
+      "to": "Database"
+    },
+    {
+      "from": "TenantProvisioning",
+      "to": "Database"
+    },
+    {
+      "from": "MemberAPI",
+      "to": "TierService"
+    },
+    {
+      "from": "CRMAPI",
+      "to": "CRMDashboardService"
+    },
+    {
+      "from": "AdvancedCRM",
+      "to": "Database"
+    },
+    {
+      "from": "CRMManager",
+      "to": "LINE"
+    },
+    {
+      "from": "LoyaltyPoints",
+      "to": "TierService"
+    },
+    {
+      "from": "PointsClaimAPI",
+      "to": "LoyaltyPoints"
+    },
+    {
+      "from": "PointsClaimAPI",
+      "to": "LINE"
+    },
+    {
+      "from": "api-checkout",
+      "to": "AccountReceivableService"
+    },
+    {
+      "from": "api-checkout",
+      "to": "ActivityLogger"
+    },
+    {
+      "from": "api-checkout",
+      "to": "MySQL"
+    },
+    {
+      "from": "api-checkout",
+      "to": "NotificationService"
+    },
+    {
+      "from": "api-documents",
+      "to": "activity-log"
+    },
+    {
+      "from": "api-documents",
+      "to": "document-helpers"
+    },
+    {
+      "from": "api-documents",
+      "to": "pdf-renderer"
+    },
+    {
+      "from": "api-documents",
+      "to": "MySQL"
+    },
+    {
+      "from": "api-rewards",
+      "to": "MySQL"
+    },
+    {
+      "from": "api-rewards",
+      "to": "LoyaltyPoints"
+    },
+    {
+      "from": "document-helpers",
+      "to": "MySQL"
+    },
+    {
+      "from": "documents",
+      "to": "document-helpers"
+    },
+    {
+      "from": "documents",
+      "to": "api-documents"
+    },
+    {
+      "from": "inbox-v2",
+      "to": "liff-helper"
+    },
+    {
+      "from": "inbox-v2",
+      "to": "MySQL"
+    },
+    {
+      "from": "line-mini-app",
+      "to": "api-checkout"
+    },
+    {
+      "from": "line-mini-app",
+      "to": "shop-api"
+    },
+    {
+      "from": "LoyaltyPoints",
+      "to": "MySQL"
+    },
+    {
+      "from": "pdf-renderer",
+      "to": "document-helpers"
+    },
+    {
+      "from": "refill",
+      "to": "MySQL"
+    },
+    {
+      "from": "route_by_account",
+      "to": "TenantContext"
+    },
+    {
+      "from": "sales-tax-register",
+      "to": "api-documents"
+    },
+    {
+      "from": "shop-api",
+      "to": "config"
+    },
+    {
+      "from": "LiffMessageHandler",
+      "to": "LineAPI"
+    },
+    {
+      "from": "MySQL",
+      "to": "api-checkout"
+    },
+    {
+      "from": "TenantContext",
+      "to": "master DB"
+    },
+    {
+      "from": "line-mini-app",
+      "to": "miniapp-config"
+    },
+    {
+      "from": "shop-admin",
+      "to": "slip-verifier"
+    },
+    {
+      "from": "shop-api",
+      "to": "api-home-content"
+    },
+    {
+      "from": "shop-api",
+      "to": "miniapp-config"
+    },
+    {
+      "from": "tenant-routing",
+      "to": "TenantContext"
+    },
+    {
+      "from": "webhook",
+      "to": "BusinessBot"
+    },
+    {
+      "from": "webhook",
+      "to": "Database"
+    },
+    {
+      "from": "webhook",
+      "to": "LineAPI"
+    },
+    {
+      "from": "webhook",
+      "to": "LineAccountManager"
+    },
+    {
+      "from": "webhook",
+      "to": "MySQL"
+    },
+    {
+      "from": "webhook",
+      "to": "broadcast"
+    },
+    {
+      "from": "api-documents",
+      "to": "tenant-db"
+    },
+    {
+      "from": "api-rewards",
+      "to": "loyalty"
+    },
+    {
+      "from": "document-helpers",
+      "to": "tenant-db"
+    },
+    {
+      "from": "documents-page",
+      "to": "document-helpers"
+    },
+    {
+      "from": "documents-ui",
+      "to": "api-documents"
+    },
+    {
+      "from": "inbox-v2",
+      "to": "inbox-v2-ui"
+    },
+    {
+      "from": "inbox-v2",
+      "to": "tenant DB"
+    },
+    {
+      "from": "line-mini-app",
+      "to": "php-bridge"
+    },
+    {
+      "from": "loyalty",
+      "to": "MySQL"
+    },
+    {
+      "from": "loyalty",
+      "to": "TierService"
+    },
+    {
+      "from": "refill",
+      "to": "tenant DB"
+    },
+    {
+      "from": "webhook",
+      "to": "WebSocketNotifier"
+    }
+  ],
+  "load_order": [
+    "config/config.php",
+    "config/database.php",
+    "bootstrap/resolve_subdomain.php / route_by_account.php",
+    "TenantContext + Database",
+    "HTTP page/API",
+    "domain service",
+    "tenant DB / integrations"
+  ]
+}

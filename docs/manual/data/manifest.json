@@ -1,0 +1,531 @@
+{
+  "project": "clinicya",
+  "title": "Clinicya — คู่มือสถาปัตยกรรมแบบ Swimlane",
+  "subtitle": "เส้นเลือดหลักการค้า ตั้งแต่ LINE event ถึงแต้มสะสม รวมกับแกน PHP-first core เดิม",
+  "build": "2026-08-26-v3-commerce",
+  "lang": "th",
+  "code_base_url": "",
+  "theme": {
+    "accent": "#b3001b",
+    "accentDark": "#7a0012"
+  },
+  "_meta": {
+    "generated": "2026-08-26",
+    "method": "Evidence-first: อธิบายเฉพาะ source ที่อ่านจาก C:\\Users\\Administrator\\clinicya จริง; สิ่งที่ trace ไม่จบถูกย้ายไป gaps.json",
+    "render_order": "ภาพรวม → Swimlane end-to-end → เส้นทางหลัก → ราย process → ownership → gaps",
+    "warnings_th": [
+      "graphify-out เดิมอ้าง commit b2d0ba91 แต่ HEAD ที่ตรวจได้คือ 95cead2d815784071b5cd9907565e804ff192caa จึงใช้ graph เดิมเป็นเพียง navigation hint ไม่ใช้เป็นหลักฐานสุดท้าย",
+      "W connector หลุดระหว่าง trace commerce/Odoo/AI; integration เหล่านั้นถูกบันทึกเป็น gap แทนการเดา"
+    ],
+    "scope": "PHP-first core architecture สำหรับ SaaS tenant, CRM, membership/member card, points/rewards และ counter loyalty"
+  },
+  "groups": [
+    {
+      "id": "cart_checkout",
+      "title": "ตะกร้าสินค้าและการสร้างออร์เดอร์",
+      "file": "grp_cart_checkout.json",
+      "layer": "order",
+      "summary": "เส้นทางจากตะกร้าใน LINE Mini App ไปจนถึงแถวใน transactions ทางเดินจริงคือ shop-api.ts ยิงตรงไปที่ api/checkout.php โดยไม่ผ่าน php-bridge แล้วเข้า handleCreateOrder จุดสำคัญคือ create_order มี beginTransaction ครอบจริง แต่ราคาทั้งหมดเชื่อค่าที่ client ส่งมาได้ เลขออร์เดอร์เป็นเลขสุ่มสี่หลักบนคอลัมน์ที่เป็น UNIQUE และการตัดสต๊อกใช้ guard ที่ไม่มีใครตรวจผลลัพธ์",
+      "step_count": 26,
+      "case_count": 30,
+      "module_count": 10
+    },
+    {
+      "id": "counter-points",
+      "title": "แต้มหน้าร้าน: QR / Direct / Phone-member",
+      "file": "grp_counter-points.json",
+      "layer": "core",
+      "summary": "รองรับหน้าร้านที่ลูกค้าอาจไม่มี LINE: ออก one-time claim, ให้แต้มตรงกับลูกค้าใน inbox หรือสร้างสมาชิกแบบเบอร์โทรและใช้ loyalty ledger เดียวกัน.",
+      "step_count": 8,
+      "case_count": 7,
+      "module_count": 3
+    },
+    {
+      "id": "crm-marketing",
+      "title": "CRM Marketing: Tags → Segments → Drip Campaign",
+      "file": "grp_crm-marketing.json",
+      "layer": "core",
+      "summary": "จัดกลุ่มลูกค้าจาก tags/behavior/RFM-like fields แล้ว enroll และส่ง drip messages ผ่าน LINE ตามเวลา/เงื่อนไข.",
+      "step_count": 8,
+      "case_count": 6,
+      "module_count": 3
+    },
+    {
+      "id": "crm-sales-service",
+      "title": "CRM 360: Dashboard → Deals → Tickets → Customer timeline",
+      "file": "grp_crm-sales-service.json",
+      "layer": "core",
+      "summary": "CRM dashboard API เป็น facade เหนือ CRMDashboardService สำหรับ executive overview, sales pipeline, service tickets และ customer 360.",
+      "step_count": 8,
+      "case_count": 6,
+      "module_count": 3
+    },
+    {
+      "id": "dispense",
+      "title": "ระบบจ่ายยา",
+      "file": "grp_dispense.json",
+      "layer": "fulfilment",
+      "summary": "เส้นทางตั้งแต่เภสัชกรกดยืนยันในโมดัลจ่ายยาของ inbox-v2.php จนถึงซองยา Flex ที่ลูกค้าได้รับใน LINE ทางเดินจริงคือ case dispense ที่บรรทัด 469 ถึง 735 ซึ่งเขียนลงเจ็ดตารางติดกันโดยไม่มี transaction ครอบแม้แต่จุดเดียว สาขาที่ตัดสินทุกอย่างคือ payment_method โดยมีเพียง cash เท่านั้นที่นับว่าจ่ายแล้วและตัดสต๊อก ส่วน transfer later และ credit จะไปเป็นออร์เดอร์ค้างที่ไม่มีใครตัดสต๊อกให้ ยังมี implementat",
+      "step_count": 19,
+      "case_count": 32,
+      "module_count": 14
+    },
+    {
+      "id": "line_webhook",
+      "title": "รับ LINE event เข้าระบบ",
+      "file": "grp_line_webhook.json",
+      "layer": "intake",
+      "summary": "เส้นทางของ event จาก LINE Messaging API ตั้งแต่ URL webhook.php?account=N จนถึงการตอบกลับและ HTTP 200 ลำดับจริงคือ เลือก tenant DB ก่อน แล้วค่อยตรวจ HMAC แล้วค่อยกัน event ซ้ำ แล้วค่อยบันทึกข้อความ จุดสำคัญคือการเลือก tenant เกิดขึ้นก่อนการตรวจ signature และมันเขียน master DB ระหว่างทาง",
+      "step_count": 30,
+      "case_count": 25,
+      "module_count": 10
+    },
+    {
+      "id": "loyalty-rewards",
+      "title": "Loyalty: Earn/Deduct → Tier → Reward Redemption",
+      "file": "grp_loyalty-rewards.json",
+      "layer": "core",
+      "summary": "LoyaltyPoints เป็น service หลักของ ledger ใหม่: อ่าน settings, คำนวณแต้ม, update balances/tier, ledger transaction และ lifecycle การแลกรางวัล.",
+      "step_count": 8,
+      "case_count": 7,
+      "module_count": 4
+    },
+    {
+      "id": "loyalty_points",
+      "title": "แต้มสะสม ระดับสมาชิก และของรางวัล",
+      "file": "grp_loyalty_points.json",
+      "layer": "loyalty",
+      "summary": "เส้นทางแต้มของลูกค้า ตั้งแต่ได้รับแต้มจากออร์เดอร์ จนถึงแลกของรางวัลผ่าน Mini App ทางเดินที่ใช้จริงคือ rewards-api.ts ไปยัง api/rewards.php แล้วเข้า LoyaltyPoints::redeemReward จุดสำคัญคือระบบนี้เก็บยอดแต้มไว้สองชุดคอลัมน์ มี ledger สองตารางที่ไม่ตรงกัน และไม่มี transaction ครอบการเขียนหลายก้าวเลย",
+      "step_count": 13,
+      "case_count": 15,
+      "module_count": 8
+    },
+    {
+      "id": "membership",
+      "title": "สมาชิก / บัตรสมาชิก: LINE identity → member profile",
+      "file": "grp_membership.json",
+      "layer": "core",
+      "summary": "Mini App ตรวจหรือสมัครสมาชิก, สร้าง member_id, เก็บ profile/health fields และ bootstrap welcome points/tier.",
+      "step_count": 7,
+      "case_count": 6,
+      "module_count": 3
+    },
+    {
+      "id": "payment_slip",
+      "title": "การชำระเงินและการตรวจสลิป",
+      "file": "grp_payment_slip.json",
+      "layer": "payment",
+      "summary": "เส้นทางเงินของออเดอร์หน้าร้าน ตั้งแต่ลูกค้าเลือกช่องทางชำระใน Mini App จนเภสัชกรกดอนุมัติสลิปในหน้า shop/order-detail.php สถานะเงินเก็บสองที่คือ transactions.payment_status กับ payment_slips.status และไม่มีทรานแซกชันครอบทั้งเส้นอนุมัติเลย จุดที่ต้องรู้คือ Mini App ถอด QR จากสลิปแล้วส่ง qr_data ขึ้นมาจริง แต่ api/checkout.php ไม่เคยอ่านค่านั้น การตรวจ GhostX จึงเกิดได้เฉพาะตอนเภสัชกรกดปุ่มเองเท่านั",
+      "step_count": 24,
+      "case_count": 36,
+      "module_count": 12
+    },
+    {
+      "id": "shop_browse",
+      "title": "เปิดร้านและเลือกดูสินค้า",
+      "file": "grp_shop_browse.json",
+      "layer": "storefront",
+      "summary": "เส้นทางตั้งแต่ LIFF บูตขึ้นมา ระบุว่ากำลังเปิดร้านของ tenant ไหน แล้วดึงรายการสินค้าจาก api/checkout.php action products มาแสดงเป็นการ์ด จนถึงกดเข้าหน้ารายละเอียดด้วย action product_detail จุดสำคัญคือ line_account_id ที่ใช้กำหนดขอบเขตสินค้าเป็นค่าที่ client ส่งมาเองล้วน ๆ และพารามิเตอร์กรอง catalog หลายตัวที่ client ส่งไป ฝั่ง PHP ไม่ได้อ่านเลย",
+      "step_count": 23,
+      "case_count": 37,
+      "module_count": 7
+    },
+    {
+      "id": "tenant-saas",
+      "title": "SaaS Tenant: จากโดเมน → DB แยก → Onboarding",
+      "file": "grp_tenant-saas.json",
+      "layer": "core",
+      "summary": "แกน multi-tenant ของ Clinicya: resolve tenant, pin TenantContext, provision database, seed owner/LINE และตั้งค่าร้านแบบ resumable.",
+      "step_count": 10,
+      "case_count": 7,
+      "module_count": 5
+    },
+    {
+      "id": "vat_documents",
+      "title": "เอกสารภาษี ใบเสร็จ ใบกำกับ ใบเสนอราคา",
+      "file": "grp_vat_documents.json",
+      "layer": "finance",
+      "summary": "ชุดเอกสารบัญชีไทย 11 ประเภทที่ใช้ตารางเดียวกันทั้งหมด คือ business_documents กับ business_document_items เส้นทางจริงคือ documents.php เปิดโมดัล แล้ว POST ไป api/documents.php?action=create ซึ่งคิดยอดด้วย computeLineTotal และ calcVAT ก่อนออกเลขที่เอกสารด้วย genDocNumber การออกเลขปลอดภัยจริงเพราะมีครบทั้ง transaction, SELECT … FOR UPDATE และ UNIQUE KEY สองชั้น แต่สิ่งที่แยกใบเสร็จออกจากใบกำกับภาษีออ",
+      "step_count": 17,
+      "case_count": 32,
+      "module_count": 9
+    }
+  ],
+  "maps": {
+    "modules": "modules.json",
+    "extensions": "extensions.json",
+    "ownership": "ownership.json"
+  },
+  "gaps": "gaps.json",
+  "end_to_end": [
+    {
+      "step_no": 1,
+      "group_id": "tenant-saas",
+      "actor": "Platform",
+      "what": "คำขอเข้ามาที่โดเมน ระบบเลือก tenant และผูก DB ให้ถูกร้าน",
+      "hands_to_next": "tenant DB ที่ถูกต้อง และเส้นทาง LINE ของร้านนั้น"
+    },
+    {
+      "step_no": 2,
+      "group_id": "line_webhook",
+      "actor": "LINE",
+      "what": "เหตุการณ์จาก LINE เข้ามาที่ webhook แล้วถูกบันทึกและตอบกลับ",
+      "hands_to_next": "ตัวตนลูกค้า line_user_id และข้อความในตาราง messages"
+    },
+    {
+      "step_no": 3,
+      "group_id": "membership",
+      "actor": "ลูกค้า",
+      "what": "ลูกค้าสมัครเป็นสมาชิกของร้าน",
+      "hands_to_next": "users.id และรหัสสมาชิกที่ใช้อ้างอิงต่อทุกขั้น"
+    },
+    {
+      "step_no": 4,
+      "group_id": "shop_browse",
+      "actor": "ลูกค้า",
+      "what": "เปิดร้านใน Mini App เลือกดูสินค้าและราคา",
+      "hands_to_next": "รายการสินค้าที่เลือก พร้อมราคาที่หน้าจอแสดง"
+    },
+    {
+      "step_no": 5,
+      "group_id": "cart_checkout",
+      "actor": "ลูกค้า",
+      "what": "ใส่ตะกร้าแล้วยืนยันสร้างออร์เดอร์",
+      "hands_to_next": "แถวใน transactions พร้อมเลขออร์เดอร์และยอดที่ต้องชำระ"
+    },
+    {
+      "step_no": 6,
+      "group_id": "payment_slip",
+      "actor": "ลูกค้าและแอดมิน",
+      "what": "ชำระเงินและส่งสลิปให้ตรวจ",
+      "hands_to_next": "payment_status ที่บอกว่าออร์เดอร์นี้จ่ายแล้วหรือยัง"
+    },
+    {
+      "step_no": 7,
+      "group_id": "dispense",
+      "actor": "เภสัชกร",
+      "what": "จ่ายยา ตัดสต๊อก แล้วส่งซองยา Flex ให้ลูกค้า",
+      "hands_to_next": "dispensing_records สต๊อกที่ถูกตัด และซองยาในแชท"
+    },
+    {
+      "step_no": 8,
+      "group_id": "vat_documents",
+      "actor": "แอดมิน",
+      "what": "ออกใบเสร็จหรือใบกำกับภาษีของรายการนี้",
+      "hands_to_next": "business_documents พร้อมเลขที่เอกสารที่ออกแบบกันชนแล้ว"
+    },
+    {
+      "step_no": 9,
+      "group_id": "loyalty_points",
+      "actor": "ลูกค้า",
+      "what": "ได้แต้มจากยอดซื้อ แล้วนำแต้มไปแลกของรางวัล",
+      "hands_to_next": "ยอดแต้ม ระดับสมาชิก และโค้ดรับรางวัล"
+    },
+    {
+      "step_no": 10,
+      "group_id": "loyalty-rewards",
+      "actor": "ลูกค้าและพนักงาน",
+      "what": "มุมมองการสะสมและแลกรางวัลฝั่งระบบเดิม",
+      "hands_to_next": "ledger ระดับสมาชิก และรายการแลก"
+    },
+    {
+      "step_no": 11,
+      "group_id": "counter-points",
+      "actor": "เภสัชกร",
+      "what": "ให้แต้มลูกค้าที่ซื้อหน้าร้าน ไม่ได้ผ่าน Mini App",
+      "hands_to_next": "แต้มเข้าสู่ ledger เดียวกันพร้อมหลักฐานการให้"
+    },
+    {
+      "step_no": 12,
+      "group_id": "crm-sales-service",
+      "actor": "พนักงาน",
+      "what": "ดูประวัติลูกค้า ดีล และเรื่องที่ต้องติดตาม",
+      "hands_to_next": "บริบทลูกค้าที่ใช้ตัดสินใจงานขายและบริการ"
+    },
+    {
+      "step_no": 13,
+      "group_id": "crm-marketing",
+      "actor": "ระบบการตลาด",
+      "what": "จัดกลุ่มลูกค้าแล้วส่งแคมเปญตามจังหวะ",
+      "hands_to_next": "กลุ่มเป้าหมายและสถานะแคมเปญของลูกค้าแต่ละราย"
+    }
+  ],
+  "swimlane": {
+    "title": "Clinicya core SaaS/CRM/Loyalty — End-to-End Swimlane",
+    "subtitle": "คอลัมน์ = actor/system boundary · แถว = business stage",
+    "lane_kind": "ผู้กระทำ",
+    "lanes": [
+      "Platform",
+      "Tenant Router",
+      "Admin/Pharmacist",
+      "Customer",
+      "CRM/Loyalty",
+      "Tenant DB",
+      "LINE"
+    ],
+    "rows": [
+      "Tenant",
+      "Member",
+      "CRM",
+      "Marketing",
+      "Loyalty",
+      "Counter"
+    ],
+    "nodes": [
+      {
+        "id": "e1",
+        "lane": "Platform",
+        "row": "Tenant",
+        "type": "start",
+        "label": "provision / tenant status",
+        "link": "group/tenant-saas"
+      },
+      {
+        "id": "e2",
+        "lane": "Tenant Router",
+        "row": "Tenant",
+        "type": "step",
+        "label": "resolve tenant + DB",
+        "link": "group/tenant-saas"
+      },
+      {
+        "id": "e3",
+        "lane": "Customer",
+        "row": "Member",
+        "type": "step",
+        "label": "LINE login / register",
+        "link": "group/membership"
+      },
+      {
+        "id": "e4",
+        "lane": "Tenant DB",
+        "row": "Member",
+        "type": "step",
+        "label": "users + member_id"
+      },
+      {
+        "id": "e5",
+        "lane": "Admin/Pharmacist",
+        "row": "CRM",
+        "type": "step",
+        "label": "customer / deal / ticket",
+        "link": "group/crm-sales-service"
+      },
+      {
+        "id": "e6",
+        "lane": "CRM/Loyalty",
+        "row": "Marketing",
+        "type": "step",
+        "label": "tags / segments / drip",
+        "link": "group/crm-marketing"
+      },
+      {
+        "id": "e7",
+        "lane": "LINE",
+        "row": "Marketing",
+        "type": "step",
+        "label": "push campaign"
+      },
+      {
+        "id": "e8",
+        "lane": "CRM/Loyalty",
+        "row": "Loyalty",
+        "type": "step",
+        "label": "earn / tier / redeem",
+        "link": "group/loyalty-rewards"
+      },
+      {
+        "id": "e9",
+        "lane": "Tenant DB",
+        "row": "Loyalty",
+        "type": "step",
+        "label": "points ledger + redemptions"
+      },
+      {
+        "id": "e10",
+        "lane": "Admin/Pharmacist",
+        "row": "Counter",
+        "type": "step",
+        "label": "QR / direct / phone points",
+        "link": "group/counter-points"
+      },
+      {
+        "id": "e11",
+        "lane": "LINE",
+        "row": "Counter",
+        "type": "end",
+        "label": "claim / receipt"
+      }
+    ],
+    "edges": [
+      {
+        "from": "e1",
+        "to": "e2"
+      },
+      {
+        "from": "e2",
+        "to": "e3"
+      },
+      {
+        "from": "e3",
+        "to": "e4"
+      },
+      {
+        "from": "e4",
+        "to": "e5"
+      },
+      {
+        "from": "e5",
+        "to": "e6"
+      },
+      {
+        "from": "e6",
+        "to": "e7"
+      },
+      {
+        "from": "e7",
+        "to": "e8"
+      },
+      {
+        "from": "e8",
+        "to": "e9"
+      },
+      {
+        "from": "e9",
+        "to": "e10"
+      },
+      {
+        "from": "e10",
+        "to": "e11"
+      }
+    ]
+  },
+  "global_call_graph": {
+    "nodes": [
+      {
+        "id": "TenantResolver",
+        "layer": "infra",
+        "role": "HTTP host/account → tenant"
+      },
+      {
+        "id": "TenantContext",
+        "layer": "infra",
+        "role": "request tenant identity"
+      },
+      {
+        "id": "Database",
+        "layer": "data",
+        "role": "platform/tenant PDO boundary"
+      },
+      {
+        "id": "TenantProvisioning",
+        "layer": "domain",
+        "role": "tenant DB lifecycle"
+      },
+      {
+        "id": "MemberAPI",
+        "layer": "ui",
+        "role": "member register/check"
+      },
+      {
+        "id": "CRMAPI",
+        "layer": "ui",
+        "role": "CRM dashboard facade"
+      },
+      {
+        "id": "CRMDashboardService",
+        "layer": "domain",
+        "role": "deals/tickets/360"
+      },
+      {
+        "id": "AdvancedCRM",
+        "layer": "domain",
+        "role": "tags/segments"
+      },
+      {
+        "id": "CRMManager",
+        "layer": "domain",
+        "role": "drip automation"
+      },
+      {
+        "id": "LoyaltyPoints",
+        "layer": "domain",
+        "role": "points/rewards ledger"
+      },
+      {
+        "id": "TierService",
+        "layer": "domain",
+        "role": "tier calculation"
+      },
+      {
+        "id": "PointsClaimAPI",
+        "layer": "ui",
+        "role": "counter loyalty"
+      },
+      {
+        "id": "LINE",
+        "layer": "integration",
+        "role": "push/LIFF"
+      }
+    ],
+    "edges": [
+      {
+        "from": "TenantResolver",
+        "to": "TenantContext",
+        "method": "setCurrentTenantId"
+      },
+      {
+        "from": "TenantContext",
+        "to": "Database",
+        "method": "tenant selection"
+      },
+      {
+        "from": "TenantProvisioning",
+        "to": "Database",
+        "method": "platform/tenant DB"
+      },
+      {
+        "from": "MemberAPI",
+        "to": "TierService",
+        "method": "calculateTier"
+      },
+      {
+        "from": "CRMAPI",
+        "to": "CRMDashboardService",
+        "method": "action dispatch"
+      },
+      {
+        "from": "AdvancedCRM",
+        "to": "Database",
+        "method": "segments/tags"
+      },
+      {
+        "from": "CRMManager",
+        "to": "LINE",
+        "method": "pushMessage"
+      },
+      {
+        "from": "LoyaltyPoints",
+        "to": "TierService",
+        "method": "calculateTier"
+      },
+      {
+        "from": "PointsClaimAPI",
+        "to": "LoyaltyPoints",
+        "method": "calculatePoints/addPoints"
+      },
+      {
+        "from": "PointsClaimAPI",
+        "to": "LINE",
+        "method": "LIFF/Flex receipt"
+      }
+    ]
+  },
+  "totals": {
+    "groups": 13,
+    "steps": 201,
+    "cases": 246,
+    "modules": 90,
+    "gaps": 17
+  }
+}

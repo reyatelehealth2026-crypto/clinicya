@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Architecture Manual</title>
+<style>
+/* ============================================================
+   Architecture Manual — viewer stylesheet
+   Zero dependencies. Light + dark. Print friendly.
+   Every colour is a token on :root so a manual can rebrand by
+   overriding --accent / --accent-d from manifest.theme.
+   ============================================================ */
+:root{
+  --accent:#b3001b; --accent-d:#7a0012; --accent-soft:#fff0f2;
+  --brand:#b3001b; --brand-d:#7a0012;
+  --ink:#1f2329; --mut:#5c6670; --faint:#8b949e;
+  --line:#e3e7eb; --line-strong:#c9d1d9;
+  --bg:#f6f8fa; --card:#ffffff; --code:#f0f3f6;
+  --ok:#1a7f37; --info:#0969da; --warn:#bf3989; --danger:#a40000;
+  --node:#22272e; --node-ink:#ffffff;
+  --shadow:0 2px 10px rgba(0,0,0,.06);
+  --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Sarabun,"Noto Sans Thai",Tahoma,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --accent:#ff5a70; --accent-d:#ff8a99; --accent-soft:#2a1519;
+    --ink:#e6edf3; --mut:#9aa4b0; --faint:#6e7781;
+    --line:#2d333b; --line-strong:#444c56;
+    --bg:#0d1117; --card:#161b22; --code:#1c2128;
+    --ok:#3fb950; --info:#58a6ff; --warn:#f778ba; --danger:#ff7b72;
+    --node:#2d333b; --node-ink:#e6edf3;
+    --shadow:0 2px 10px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"]{
+  --accent:#ff5a70; --accent-d:#ff8a99; --accent-soft:#2a1519;
+  --ink:#e6edf3; --mut:#9aa4b0; --faint:#6e7781;
+  --line:#2d333b; --line-strong:#444c56;
+  --bg:#0d1117; --card:#161b22; --code:#1c2128;
+  --ok:#3fb950; --info:#58a6ff; --warn:#f778ba; --danger:#ff7b72;
+  --node:#2d333b; --node-ink:#e6edf3;
+  --shadow:0 2px 10px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);font-size:14.5px;line-height:1.55}
+a{color:var(--info);text-decoration:none}
+a:hover{text-decoration:underline}
+code,kbd{font-family:var(--mono);font-size:.88em;background:var(--code);padding:1px 5px;border-radius:5px}
+
+/* ---------- layout ---------- */
+#app{display:flex;height:100vh;overflow:hidden}
+#nav{width:290px;flex:0 0 290px;background:var(--card);border-right:1px solid var(--line);overflow-y:auto;overscroll-behavior:contain}
+#main{flex:1;overflow-y:auto;padding:24px 32px 96px;scroll-behavior:smooth}
+.wrap{max-width:1180px}
+
+/* ---------- sidebar ---------- */
+.brand{background:linear-gradient(135deg,var(--brand),var(--brand-d));color:#fff;padding:16px 18px;position:sticky;top:0;z-index:2}
+.brand h1{font-size:16px;margin:0 0 2px;line-height:1.3}
+.brand p{margin:0;font-size:11.5px;opacity:.85}
+.brand .build{display:inline-block;margin-top:6px;font-family:var(--mono);font-size:10.5px;background:rgba(255,255,255,.18);border-radius:5px;padding:1px 6px}
+.navsearch{padding:10px 14px 4px}
+.navsearch input{width:100%;padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:var(--bg);color:var(--ink);font-family:inherit}
+.navsearch input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.sect{padding:12px 18px 4px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);font-weight:700}
+a.item{display:block;padding:7px 18px;color:var(--ink);border-left:3px solid transparent;font-size:13.5px}
+a.item:hover{background:var(--bg);text-decoration:none}
+a.item.active{background:var(--accent-soft);border-left-color:var(--accent);color:var(--accent-d);font-weight:600}
+a.item .badge{float:right;background:var(--bg);color:var(--mut);border-radius:10px;padding:0 7px;font-size:11px;font-weight:600}
+a.item.active .badge{background:var(--card)}
+.navfoot{padding:14px 18px 28px;border-top:1px solid var(--line);margin-top:10px;font-size:11.5px;color:var(--faint);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ghost{background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:7px;padding:4px 9px;font-size:11.5px;cursor:pointer;font-family:inherit}
+.ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- headings & blocks ---------- */
+h2.view{font-size:22px;margin:0 0 4px;color:var(--accent-d);line-height:1.35}
+.sub{color:var(--mut);margin:0 0 18px;max-width:80ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin:0 0 16px}
+.card h3{margin:0 0 10px;font-size:15px}
+.kpis{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px;min-width:126px}
+.kpi .n{font-size:26px;font-weight:800;color:var(--accent);line-height:1.1}
+.kpi .l{font-size:12px;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.gcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;cursor:pointer;transition:.12s;display:flex;flex-direction:column}
+.gcard:hover{border-color:var(--accent);box-shadow:var(--shadow);transform:translateY(-1px)}
+.gcard .gt{font-weight:700;margin-bottom:6px;line-height:1.35}
+.gcard .gs{font-size:12.5px;color:var(--mut);flex:1}
+.gcard .gm{font-size:11.5px;color:var(--accent);margin-top:10px;font-weight:600}
+.muted{color:var(--mut)}
+.mono{font-family:var(--mono);font-size:12.5px}
+
+/* ---------- callouts ---------- */
+.gotcha,.ret,.note,.err{border-radius:0 6px 6px 0;padding:8px 12px;margin:6px 0;font-size:13px}
+.gotcha{background:color-mix(in srgb,#f5a623 14%,transparent);border-left:3px solid #f5a623}
+.ret{background:color-mix(in srgb,var(--info) 12%,transparent);border-left:3px solid var(--info)}
+.note{background:color-mix(in srgb,var(--ok) 12%,transparent);border-left:3px solid var(--ok)}
+.err{background:color-mix(in srgb,var(--danger) 12%,transparent);border-left:3px solid var(--danger);color:var(--danger);border-radius:8px;padding:14px}
+
+/* ---------- tags ---------- */
+.tag{display:inline-block;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap}
+.t-ok{background:var(--ok)} .t-info{background:var(--info)} .t-warn{background:var(--warn)}
+.t-gray{background:var(--faint)} .t-danger{background:var(--danger)}
+.pill{display:inline-block;background:var(--code);color:var(--mut);border-radius:6px;padding:1px 7px;font-size:11px;margin:1px 3px 1px 0;font-family:var(--mono)}
+.ref{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+
+/* ---------- tables ---------- */
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--code);font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em;position:sticky;top:0}
+tbody tr:hover{background:var(--bg)}
+.scrollx{overflow-x:auto;border-radius:var(--radius)}
+
+/* ---------- cases (accordion) ---------- */
+details.case{border:1px solid var(--line);border-radius:8px;margin:0 0 8px;background:var(--card)}
+details.case>summary{padding:10px 14px;cursor:pointer;font-weight:600;list-style:none;display:flex;gap:8px;align-items:baseline}
+details.case>summary::-webkit-details-marker{display:none}
+details.case>summary::before{content:"▸";color:var(--accent);flex:0 0 auto}
+details.case[open]>summary::before{content:"▾"}
+details.case .body{padding:0 14px 12px 30px}
+details.case .cond{font-family:var(--mono);font-size:12px;color:var(--mut)}
+
+/* ---------- spine (end-to-end vertical) ---------- */
+.spine{position:relative;margin-left:8px;padding-left:26px;border-left:3px solid var(--accent)}
+.spine .s{position:relative;margin:0 0 14px}
+.spine .s::before{content:"";position:absolute;left:-33px;top:6px;width:11px;height:11px;border-radius:50%;background:var(--accent);border:3px solid var(--bg)}
+.spine .s h4{margin:0 0 2px;font-size:14px}
+.spine .actor{font-weight:600;color:var(--accent-d)}
+
+/* ---------- steps ---------- */
+.step{border:1px solid var(--line);border-radius:8px;padding:11px 13px;margin:0 0 9px;background:var(--card)}
+.step .hd{display:flex;gap:9px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px}
+.step .no{font-family:var(--mono);font-weight:800;color:var(--accent);flex:0 0 auto}
+.step .who{font-weight:700}
+.step .meta{font-size:12px;color:var(--mut);margin-top:5px}
+
+/* ---------- swimlane ---------- */
+.swwrap{position:relative;overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--card);width:max-content;max-width:100%}
+.swcanvas{position:relative}
+.sw-band{position:absolute;top:0;z-index:0;border-right:1px solid var(--line)}
+.sw-head{position:absolute;top:0;height:34px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;z-index:4;text-align:center;padding:0 6px;line-height:1.15}
+.sw-corner{position:absolute;left:0;top:0;height:34px;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;color:#fff;background:#57606a;z-index:6}
+.sw-row{position:absolute;left:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:10.5px;font-weight:700;color:var(--ink);background:var(--code);border-right:2px solid var(--line-strong);border-bottom:1px solid var(--line);padding:3px 7px;z-index:3;line-height:1.2;word-break:break-word}
+.sw-svg{position:absolute;left:0;top:0;z-index:1;pointer-events:none}
+.sw-edge{fill:none;stroke:var(--faint);stroke-width:1.6}
+.sw-edge.dashed{stroke-dasharray:4 3}
+.sw-elabel{position:absolute;transform:translate(-50%,-50%);background:var(--card);border:1px solid var(--line);border-radius:5px;padding:0 5px;font-size:10px;color:var(--mut);z-index:2;white-space:nowrap}
+.sw-node{position:absolute;z-index:2;background:var(--node);color:var(--node-ink);border-radius:9px;padding:7px 9px;font-size:11.5px;line-height:1.25;text-align:center;display:flex;flex-direction:column;justify-content:center;box-shadow:var(--shadow);cursor:default}
+.sw-node.link{cursor:pointer}
+.sw-node.link:hover{outline:2px solid var(--accent)}
+.sw-node .r{font-family:var(--mono);font-size:9.5px;opacity:.72;margin-top:3px}
+.sw-node.decision{background:transparent;color:var(--ink);box-shadow:none;padding:0}
+.sw-node.decision .dia{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#4a2f00;color:#fff;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);font-size:10.5px;padding:0 12px;text-align:center}
+.sw-node.start{background:var(--ok)} .sw-node.end{background:var(--accent-d)}
+.sw-node.error{background:var(--danger)} .sw-node.data{background:var(--info)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin:8px 0 12px;color:var(--mut)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+
+/* ---------- graph ---------- */
+.graphwrap{position:relative;border:1px solid var(--line);border-radius:var(--radius);background:var(--card);overflow:hidden;height:640px;touch-action:none}
+.graphwrap svg{display:block;cursor:grab}
+.graphwrap svg.drag{cursor:grabbing}
+.gnode rect{stroke-width:1.4}
+.gnode text{font-size:11px;font-family:var(--font);pointer-events:none}
+.gedge{fill:none;stroke:var(--faint);stroke-width:1.3;opacity:.55}
+.gedge.hot{stroke:var(--accent);stroke-width:2.2;opacity:1}
+.gctl{position:absolute;right:10px;top:10px;display:flex;gap:6px;z-index:3}
+
+/* ---------- misc ---------- */
+.filter{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;margin:0 0 14px;font-size:14px;background:var(--card);color:var(--ink);font-family:inherit}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:20px;padding:3px 12px;font-size:12px;cursor:pointer;font-family:inherit}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.crumb{font-size:12px;color:var(--mut);margin-bottom:8px}
+.skel{color:var(--mut);padding:40px 0;text-align:center}
+#navtoggle{display:none}
+@media(max-width:900px){
+  #nav{position:fixed;inset:0 auto 0 0;z-index:50;transform:translateX(-100%);transition:.2s;box-shadow:var(--shadow)}
+  body.navopen #nav{transform:none}
+  #main{padding:18px 16px 96px}
+  #navtoggle{display:inline-flex;position:fixed;right:14px;bottom:14px;z-index:60;background:var(--accent);color:#fff;border:0;border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer;box-shadow:var(--shadow)}
+}
+@media print{
+  #nav,#navtoggle,.gctl{display:none}
+  #app{display:block;height:auto;overflow:visible}
+  #main{overflow:visible;padding:0}
+  .card,.step,details.case{break-inside:avoid}
+  details.case{border:0}
+  details.case .body{display:block!important}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <nav id="nav"><div class="skel">…</div></nav>
+  <main id="main"><div class="skel">กำลังโหลดคู่มือ…</div></main>
+</div>
+<button id="navtoggle" aria-label="menu">☰</button>
+<script>
+/* ============================================================
+   Architecture Manual — viewer runtime
+   No build step, no dependencies. Two data modes:
+     1. FETCH  — reads ./data/manifest.json + the files it names
+     2. EMBED  — a bundled single file sets window.__MANUAL__ =
+                 {manifest:{...}, files:{"grp_x.json":{...}, ...}}
+   Everything else is identical, so the same code renders both.
+   ============================================================ */
+(function(){
+"use strict";
+
+/* ---------- tiny helpers ---------- */
+var $=function(s,r){return (r||document).querySelector(s)};
+var DATA={manifest:null,files:{},all:null};
+var BASE='data/';
+
+function esc(s){
+  if(s===null||s===undefined) return '';
+  return String(s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function el(tag,cls,html){var e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e}
+function num(n){return (n==null?0:n).toLocaleString()}
+function arr(x){return Array.isArray(x)?x:[]}
+
+/* Load a data file by name. EMBED mode answers from memory. */
+function load(name){
+  if(!name) return Promise.resolve(null);
+  var key=String(name).split('/').pop();
+  if(DATA.files[key]!==undefined) return Promise.resolve(DATA.files[key]);
+  return fetch(BASE+key,{cache:'no-cache'}).then(function(r){
+    if(!r.ok) throw new Error(r.status+' '+r.statusText);
+    return r.json();
+  }).then(function(j){DATA.files[key]=j;return j});
+}
+
+/* Load every group + map file once — used by search and totals. */
+function loadAll(){
+  if(DATA.all) return DATA.all;
+  var m=DATA.manifest;
+  var names=arr(m.groups).map(function(g){return g.file});
+  DATA.all=Promise.all(names.map(function(n){
+    return load(n).catch(function(){return null});
+  })).then(function(list){
+    return list.map(function(g,i){return g?Object.assign({_g:m.groups[i]},g):null}).filter(Boolean);
+  });
+  return DATA.all;
+}
+
+/* ---------- code reference rendering ---------- */
+/* A ref is the backbone of the "code-verified" promise: every claim
+   carries file:line. If manifest.code_base_url is set we make it a link. */
+function refHtml(file,line){
+  if(!file) return '';
+  var txt=esc(file)+(line?':'+line:'');
+  var base=DATA.manifest&&DATA.manifest.code_base_url;
+  if(base){
+    var u=base.replace(/\/$/,'')+'/'+String(file).replace(/^\//,'')+(line?'#L'+line:'');
+    return '<a class="ref" href="'+esc(u)+'" target="_blank" rel="noopener">'+txt+'</a>';
+  }
+  return '<span class="ref">'+txt+'</span>';
+}
+function callList(calls){
+  return arr(calls).map(function(c){
+    return '<span class="pill">'+esc(c.module||'')+(c.method?'.'+esc(c.method):'')+'</span>'+
+           (c.file?' '+refHtml(c.file,c.line):'');
+  }).join(' ');
+}
+
+/* ---------- routing ---------- */
+function navTo(h){location.hash=h}
+function route(){
+  var h=(location.hash||'#overview').slice(1);
+  var main=$('#main');
+  main.scrollTop=0;
+  document.body.classList.remove('navopen');
+  setActive(h);
+  var parts=h.split('/');
+  var v=parts[0];
+  try{
+    if(v==='overview')        return viewOverview(main);
+    if(v==='flow')            return viewFlow(main);
+    if(v==='spine')           return viewSpine(main);
+    if(v==='graph')           return viewGraph(main);
+    if(v==='modules')         return viewModules(main);
+    if(v==='extensions')      return viewExtensions(main);
+    if(v==='ownership')       return viewOwnership(main);
+    if(v==='gaps')            return viewGaps(main);
+    if(v==='search')          return viewSearch(main,decodeURIComponent(parts.slice(1).join('/')||''));
+    if(v==='group'&&parts[1]) return viewGroup(main,parts[1]);
+  }catch(e){ return fail(main,e) }
+  viewOverview(main);
+}
+function fail(main,e){
+  main.innerHTML='<div class="err"><b>เกิดข้อผิดพลาดขณะแสดงผล</b><br>'+esc(e&&e.message||e)+'</div>';
+  if(window.console) console.error(e);
+}
+function busy(main,msg){main.innerHTML='<div class="skel">'+esc(msg||'กำลังโหลด…')+'</div>'}
+/* Routes stay reachable from bookmarks after a section is dropped, so say so
+   plainly instead of throwing on a missing file. */
+function missing(main,title,what){
+  main.innerHTML='<div class="wrap">'+head(title,'')+
+    '<div class="note">คู่มือฉบับนี้ไม่มีข้อมูลส่วน <b>'+esc(what)+'</b> — '+
+    'เพิ่มได้โดยใส่ไฟล์ที่เกี่ยวข้องใน <code>data/</code> แล้วอ้างถึงใน <code>manifest.json</code></div>'+
+    '<p><a href="#overview">← กลับหน้าภาพรวม</a></p></div>';
+  return true;
+}
+
+/* ---------- sidebar ---------- */
+function navItem(href,label,badge){
+  return '<a class="item" href="#'+href+'" data-h="'+esc(href)+'">'+esc(label)+
+         (badge?'<span class="badge">'+esc(badge)+'</span>':'')+'</a>';
+}
+function buildNav(){
+  var m=DATA.manifest,h='';
+  h+='<div class="brand"><h1>'+esc(m.title||m.project||'Architecture Manual')+'</h1>'+
+     '<p>'+esc(m.subtitle||'คู่มือสถาปัตยกรรม')+'</p>'+
+     (m.build?'<span class="build">build '+esc(m.build)+'</span>':'')+'</div>';
+  h+='<div class="navsearch"><input id="q" type="search" placeholder="ค้นหา… (กด /)" autocomplete="off"></div>';
+
+  h+='<div class="sect">ภาพรวม</div>';
+  h+=navItem('overview','ภาพรวมระบบ');
+  if(m.swimlane)              h+=navItem('flow','Swimlane end-to-end');
+  if(arr(m.end_to_end).length)h+=navItem('spine','เส้นทางหลัก (end-to-end)');
+  if(m.global_call_graph)     h+=navItem('graph','แผนผังการเรียกข้าม module');
+
+  var maps=m.maps||{};
+  if(maps.modules||maps.extensions||maps.ownership||m.gaps){
+    h+='<div class="sect">แผนที่ระบบ</div>';
+    if(maps.modules)    h+=navItem('modules','Modules & ลำดับโหลด');
+    if(maps.extensions) h+=navItem('extensions','จุดต่อขยาย / Override');
+    if(maps.ownership)  h+=navItem('ownership','เจ้าของ state / ฟิลด์');
+    if(m.gaps)          h+=navItem('gaps','ช่องโหว่ที่ยังไม่ยืนยัน');
+  }
+
+  if(arr(m.groups).length){
+    h+='<div class="sect">กระบวนการ (ทีละเคส)</div>';
+    arr(m.groups).forEach(function(g){
+      h+=navItem('group/'+g.id,g.title,g.case_count||'');
+    });
+  }
+  h+='<div class="navfoot">'+
+     '<button class="ghost" id="themebtn">◐ ธีม</button>'+
+     '<button class="ghost" id="printbtn">⎙ พิมพ์</button>'+
+     '<span>'+num((m.totals&&m.totals.cases)||0)+' เคส</span></div>';
+  $('#nav').innerHTML=h;
+
+  $('#themebtn').onclick=toggleTheme;
+  $('#printbtn').onclick=function(){window.print()};
+  var q=$('#q');
+  q.addEventListener('keydown',function(e){
+    if(e.key==='Enter'&&q.value.trim()) navTo('search/'+encodeURIComponent(q.value.trim()));
+    if(e.key==='Escape'){q.value='';q.blur()}
+  });
+}
+function setActive(h){
+  var items=document.querySelectorAll('#nav a.item');
+  for(var i=0;i<items.length;i++){
+    items[i].classList.toggle('active',items[i].getAttribute('data-h')===h);
+  }
+}
+function toggleTheme(){
+  var r=document.documentElement;
+  var cur=r.getAttribute('data-theme');
+  var next=cur==='dark'?'light':(cur==='light'?'dark':(matchMedia('(prefers-color-scheme:dark)').matches?'light':'dark'));
+  r.setAttribute('data-theme',next);
+  try{localStorage.setItem('am-theme',next)}catch(e){}
+  paintAccent();
+}
+
+/* ============================================================
+   VIEWS
+   ============================================================ */
+function head(title,sub){
+  return '<h2 class="view">'+esc(title)+'</h2>'+(sub?'<p class="sub">'+esc(sub)+'</p>':'');
+}
+function kpi(n,l){return '<div class="kpi"><div class="n">'+esc(n)+'</div><div class="l">'+esc(l)+'</div></div>'}
+
+/* ---------- overview ---------- */
+function viewOverview(main){
+  var m=DATA.manifest,t=m.totals||{},h='<div class="wrap">';
+  h+=head(m.title||m.project,m.subtitle||'');
+  h+='<div class="kpis">';
+  if(t.cases!=null)   h+=kpi(num(t.cases),'เคสทั้งหมด');
+  if(t.modules!=null) h+=kpi(num(t.modules),'โมดูลที่เกี่ยวข้อง');
+  if(t.steps!=null)   h+=kpi(num(t.steps),'ขั้นตอน (steps)');
+  if(t.groups!=null)  h+=kpi(num(t.groups),'กลุ่มกระบวนการ');
+  if(t.gaps)          h+=kpi(num(t.gaps),'ช่องโหว่ค้าง');
+  h+='</div>';
+
+  if(arr(m.groups).length){
+    h+='<div class="card"><h3>กระบวนการ (คลิกเพื่อดูรายละเอียดทีละเคส)</h3><div class="grid">';
+    arr(m.groups).forEach(function(g){
+      h+='<div class="gcard" data-go="group/'+esc(g.id)+'">'+
+         '<div class="gt">'+esc(g.title)+'</div>'+
+         '<div class="gs">'+esc(g.summary||g.summary_th||'')+'</div>'+
+         '<div class="gm">'+num(g.case_count||0)+' เคส · '+num(g.module_count||0)+' โมดูล</div></div>';
+    });
+    h+='</div></div>';
+  }
+
+  var meta=m._meta||{};
+  if(Object.keys(meta).length){
+    h+='<div class="card"><h3>วิธีอ่านคู่มือนี้</h3>';
+    if(meta.method)       h+='<div class="note"><b>วิธีสร้าง:</b> '+esc(meta.method)+'</div>';
+    if(meta.render_order) h+='<div class="ret"><b>ลำดับที่แนะนำให้อ่าน:</b> '+esc(meta.render_order)+'</div>';
+    arr(meta.warnings).concat(arr(meta.warnings_th)).forEach(function(w){
+      h+='<div class="gotcha">'+esc(w)+'</div>';
+    });
+    if(meta.generated) h+='<p class="muted mono">generated: '+esc(meta.generated)+'</p>';
+    h+='</div>';
+  }
+  h+='</div>';
+  main.innerHTML=h;
+  wireCards(main);
+}
+function wireCards(root){
+  root.querySelectorAll('[data-go]').forEach(function(n){
+    n.onclick=function(){navTo(n.getAttribute('data-go'))};
+  });
+}
+
+/* ---------- end-to-end spine ---------- */
+function viewSpine(main){
+  var m=DATA.manifest;
+  if(!arr(m.end_to_end).length) return missing(main,'เส้นทางหลัก (end-to-end)','manifest.end_to_end');
+  var h='<div class="wrap">'+head('เส้นทางหลัก (end-to-end)',
+    'ลำดับที่งานหนึ่งชิ้นเดินผ่านระบบตั้งแต่ต้นจนจบ — แต่ละหมุดคือกลุ่มกระบวนการหนึ่งกลุ่ม');
+  h+='<div class="card"><div class="spine">';
+  arr(m.end_to_end).forEach(function(s){
+    var g=arr(m.groups).filter(function(x){return x.id===s.group_id})[0];
+    h+='<div class="s"><h4>'+esc(s.step_no||'')+'. <span class="actor">'+esc(s.actor||'')+'</span> — '+
+       esc(s.what||s.what_th||'')+'</h4>';
+    if(g) h+='<div><a href="#group/'+esc(g.id)+'">'+esc(g.title)+'</a></div>';
+    var hand=s.hands_to_next||s.returns_to_next_th;
+    if(hand) h+='<div class="ret"><b>ส่งต่ออะไรให้ขั้นถัดไป:</b> '+esc(hand)+'</div>';
+    h+='</div>';
+  });
+  h+='</div></div></div>';
+  main.innerHTML=h;
+}
+
+/* ---------- one process group ---------- */
+function viewGroup(main,id){
+  var m=DATA.manifest;
+  var g=arr(m.groups).filter(function(x){return x.id===id})[0];
+  if(!g) return fail(main,new Error('ไม่พบกลุ่ม: '+id));
+  busy(main,'กำลังโหลด '+g.title+'…');
+  load(g.file).then(function(d){
+    if(!d) throw new Error('โหลดไฟล์ไม่สำเร็จ: '+g.file);
+    var h='<div class="wrap"><div class="crumb"><a href="#overview">ภาพรวม</a> › '+esc(g.title)+'</div>';
+    h+=head(d.title||g.title,d.summary||g.summary||'');
+    h+='<div class="kpis">'+
+       kpi(num(arr(d.cases).length),'เคส')+
+       kpi(num(arr(d.steps).length),'ขั้นตอน')+
+       kpi(num(arr(d.modules_touched).length),'โมดูล')+
+       kpi(num(arr(d.gotchas).length),'จุดที่พลาดบ่อย')+'</div>';
+
+    /* swimlane for this group */
+    if(d.swimlane){
+      h+='<div class="card"><h3>Swimlane ของกระบวนการนี้</h3><div id="gsw"></div></div>';
+    }
+
+    /* steps */
+    if(arr(d.steps).length){
+      h+='<div class="card"><h3>ขั้นตอนตามลำดับ (code-verified)</h3>';
+      arr(d.steps).forEach(function(s){
+        h+='<div class="step"><div class="hd">'+
+           '<span class="no">'+esc(s.seq)+'</span>'+
+           '<span class="who">'+esc(s.actor||'')+'</span>'+
+           (s.module?'<span class="pill">'+esc(s.module)+(s.method?'.'+esc(s.method):'')+'</span>':'')+
+           (s.file?refHtml(s.file,s.line):'')+'</div>';
+        h+='<div>'+esc(s.action||s.action_th||'')+'</div>';
+        var meta=[];
+        if(s.returns)      meta.push('<b>คืนค่า:</b> '+esc(s.returns));
+        if(s.state_change) meta.push('<b>state:</b> <code>'+esc(s.state_change)+'</code>');
+        if(arr(s.sets||s.sets_fields).length)
+          meta.push('<b>เขียนฟิลด์:</b> '+arr(s.sets||s.sets_fields).map(function(f){
+            return '<code>'+esc(f.field)+'='+esc(f.value)+'</code>'}).join(' '));
+        if(arr(s.calls).length) meta.push('<b>เรียกต่อ:</b> '+callList(s.calls));
+        if(s.notes) meta.push(esc(s.notes));
+        if(meta.length) h+='<div class="meta">'+meta.join('<br>')+'</div>';
+        h+='</div>';
+      });
+      h+='</div>';
+    }
+
+    /* cases */
+    if(arr(d.cases).length){
+      h+='<div class="card"><h3>เคสทั้งหมด ('+num(arr(d.cases).length)+')</h3>'+
+         '<input class="filter" id="cf" placeholder="กรองเคส… (พิมพ์เงื่อนไข ชื่อ หรือชื่อไฟล์)">'+
+         '<div id="cases">'+casesHtml(d.cases)+'</div></div>';
+    }
+
+    /* modules touched */
+    if(arr(d.modules_touched).length){
+      h+='<div class="card"><h3>โมดูลที่เกี่ยวข้อง</h3><div class="scrollx"><table><thead><tr>'+
+         '<th>โมดูล</th><th>บทบาท</th><th>เมธอด/จุดเข้า</th></tr></thead><tbody>';
+      arr(d.modules_touched).forEach(function(x){
+        h+='<tr><td class="mono">'+esc(x.module)+'</td><td>'+esc(x.role||x.role_th||'')+'</td><td>'+
+           arr(x.methods).map(function(mm){return '<span class="pill">'+esc(mm)+'</span>'}).join('')+'</td></tr>';
+      });
+      h+='</tbody></table></div></div>';
+    }
+
+    /* return dependencies */
+    if(arr(d.return_dependencies).length){
+      h+='<div class="card"><h3>สิ่งที่ต้องคืนกลับ (ถ้าขาด flow พัง)</h3>';
+      arr(d.return_dependencies).forEach(function(r){
+        h+='<div class="ret"><b>'+esc(r.from_module)+' → '+esc(r.to_module)+'</b>: '+
+           esc(r.returns_what)+'<br><span class="muted">'+esc(r.why_needed||r.why_flow_needs_it_th||'')+'</span></div>';
+      });
+      h+='</div>';
+    }
+
+    /* gotchas */
+    if(arr(d.gotchas).length){
+      h+='<div class="card"><h3>จุดที่พลาดบ่อย</h3>';
+      arr(d.gotchas).forEach(function(x){h+='<div class="gotcha">'+esc(typeof x==='string'?x:(x.text||''))+'</div>'});
+      h+='</div>';
+    }
+
+    /* mermaid passthrough (optional enhancement) */
+    h+=mermaidBlocks(d.mermaid);
+
+    /* file refs */
+    if(arr(d.file_refs).length){
+      h+='<div class="card"><h3>ไฟล์ที่อ้างอิงทั้งหมด ('+num(d.file_refs.length)+')</h3><div>'+
+         d.file_refs.map(function(f){return '<span class="pill">'+esc(f)+'</span>'}).join('')+'</div></div>';
+    }
+    h+='</div>';
+    main.innerHTML=h;
+
+    if(d.swimlane) renderSwimlane($('#gsw'),d.swimlane);
+    var cf=$('#cf');
+    if(cf) cf.oninput=function(){
+      var q=cf.value.toLowerCase().trim();
+      $('#cases').innerHTML=casesHtml(arr(d.cases).filter(function(c){
+        return !q || JSON.stringify(c).toLowerCase().indexOf(q)>=0;
+      }));
+    };
+    renderMermaid();
+  }).catch(function(e){fail(main,e)});
+}
+
+function casesHtml(cases){
+  if(!arr(cases).length) return '<p class="muted">ไม่พบเคสที่ตรงกับคำค้น</p>';
+  return arr(cases).map(function(c){
+    var t=c.tag||'';
+    var cls={ok:'t-ok',info:'t-info',warn:'t-warn',danger:'t-danger'}[t]||'t-gray';
+    var h='<details class="case"><summary>'+esc(c.name||c.name_th||c.id)+
+          (t?' <span class="tag '+cls+'">'+esc(t)+'</span>':'')+'</summary><div class="body">';
+    if(c.condition) h+='<div class="cond"><b>เงื่อนไข:</b> '+esc(c.condition)+'</div>';
+    if(c.behavior||c.behavior_th) h+='<p>'+esc(c.behavior||c.behavior_th)+'</p>';
+    if(arr(c.code_path).length) h+='<div><b>เส้นทางโค้ด:</b> '+callList(c.code_path)+'</div>';
+    if(c.result) h+='<div class="note"><b>ผลลัพธ์:</b> '+esc(c.result)+'</div>';
+    if(c.gotcha) h+='<div class="gotcha"><b>ระวัง:</b> '+esc(c.gotcha)+'</div>';
+    return h+'</div></details>';
+  }).join('');
+}
+
+/* Mermaid is optional. If the host page loaded it, render; otherwise show source. */
+function mermaidBlocks(mm){
+  if(!mm) return '';
+  var h='';
+  Object.keys(mm).forEach(function(k){
+    if(!mm[k]) return;
+    h+='<div class="card"><h3>ไดอะแกรม: '+esc(k)+'</h3>'+
+       (window.mermaid?'<pre class="mermaid">'+esc(mm[k])+'</pre>'
+                      :'<div class="scrollx"><pre class="mono">'+esc(mm[k])+'</pre></div>')+'</div>';
+  });
+  return h;
+}
+function renderMermaid(){
+  if(!window.mermaid) return;
+  try{window.mermaid.run({querySelector:'.mermaid'})}catch(e){}
+}
+
+/* ============================================================
+   SWIMLANE RENDERER  (pure DOM + SVG, no library)
+
+   Columns = lanes (who acts).  Rows = stages/screens (where it
+   happens).  A node sits at the intersection, so a reader can
+   answer "who does what, on which screen, in what order" by
+   scanning one row or one column.  Edges are drawn as bezier
+   curves on an SVG layer underneath the nodes.
+   ============================================================ */
+var LANE_COLORS=['#57606a','#0969da','#1a7f37','#bc4c00','#8250df','#9a6700','#bf3989','#1b7c83','#6e7781','#a40e26'];
+
+function renderSwimlane(host,sw){
+  if(!host||!sw) return;
+  var lanes=arr(sw.lanes), nodes=arr(sw.nodes), edges=arr(sw.edges);
+  if(!lanes.length||!nodes.length){host.innerHTML='<p class="muted">ไม่มีข้อมูล swimlane</p>';return}
+
+  var laneIx=function(v){
+    if(typeof v==='number') return v;
+    var i=lanes.indexOf(v); return i<0?0:i;
+  };
+  /* rows: explicit list, else the distinct row values in node order */
+  var rows=arr(sw.rows).slice();
+  if(!rows.length){
+    nodes.forEach(function(n){
+      var r=(n.row==null?'':String(n.row));
+      if(rows.indexOf(r)<0) rows.push(r);
+    });
+  }
+  var rowIx=function(v){
+    if(typeof v==='number') return Math.min(v,rows.length-1);
+    var i=rows.indexOf(String(v)); return i<0?0:i;
+  };
+
+  var GUT = rows.some(function(r){return r!==''}) ? 130 : 0;
+  var LANE_W=204, HEAD_H=34, PAD=14, NODE_W=LANE_W-30;
+
+  /* height of each node from its label length — keeps long Thai labels readable */
+  function nodeH(n){
+    var len=String(n.label||'').length + (n.ref?10:0);
+    var lines=Math.max(1,Math.ceil(len/22));
+    return Math.max(n.type==='decision'?54:44, lines*15+24);
+  }
+  /* Two nodes can legitimately share one lane+row cell (an action and the
+     decision that follows it, say). Stack them instead of drawing one on
+     top of the other, and grow the row to fit the tallest stack. */
+  var GAPY=10, cell={};
+  nodes.forEach(function(n){
+    var k=laneIx(n.lane)+'|'+rowIx(n.row);
+    (cell[k]=cell[k]||[]).push(n);
+  });
+  var rowH=rows.map(function(){return 56});
+  Object.keys(cell).forEach(function(k){
+    var ri=+k.split('|')[1], list=cell[k];
+    var stack=list.reduce(function(a,n){return a+nodeH(n)},0)+GAPY*(list.length-1);
+    rowH[ri]=Math.max(rowH[ri],stack+22);
+  });
+  var rowY=[],y=HEAD_H;
+  rows.forEach(function(_,i){rowY.push(y);y+=rowH[i]});
+  var totalH=y+PAD, totalW=GUT+lanes.length*LANE_W;
+
+  /* node geometry */
+  var geo={};
+  Object.keys(cell).forEach(function(k){
+    var li=+k.split('|')[0], ri=+k.split('|')[1], list=cell[k];
+    var total=list.reduce(function(a,n){return a+nodeH(n)},0)+GAPY*(list.length-1);
+    var cy=rowY[ri]+(rowH[ri]-total)/2;
+    list.forEach(function(n){
+      var h=nodeH(n);
+      geo[n.id]={x:GUT+li*LANE_W+15,y:cy,w:NODE_W,h:h,cx:GUT+li*LANE_W+LANE_W/2,ri:ri,li:li};
+      cy+=h+GAPY;
+    });
+  });
+
+  var html='<div class="legend">'+
+    '<span><span class="dot" style="background:var(--ok)"></span>เริ่ม</span>'+
+    '<span><span class="dot" style="background:var(--node)"></span>ขั้นตอน</span>'+
+    '<span><span class="dot" style="background:#4a2f00"></span>เงื่อนไข</span>'+
+    '<span><span class="dot" style="background:var(--danger)"></span>ข้อผิดพลาด</span>'+
+    '<span><span class="dot" style="background:var(--accent-d)"></span>จบ</span>'+
+    (sw.lane_kind?'<span>คอลัมน์ = '+esc(sw.lane_kind)+'</span>':'')+
+    '</div><div class="swwrap"><div class="swcanvas" style="width:'+totalW+'px;height:'+totalH+'px">';
+
+  /* lane bands + headers */
+  lanes.forEach(function(L,i){
+    var c=LANE_COLORS[i%LANE_COLORS.length];
+    html+='<div class="sw-band" style="left:'+(GUT+i*LANE_W)+'px;width:'+LANE_W+'px;height:'+totalH+'px;'+
+          'background:'+c+'12"></div>';
+    html+='<div class="sw-head" style="left:'+(GUT+i*LANE_W)+'px;width:'+LANE_W+'px;background:'+c+'">'+esc(L)+'</div>';
+  });
+  if(GUT){
+    html+='<div class="sw-corner" style="width:'+GUT+'px">ขั้น / หน้าจอ</div>';
+    rows.forEach(function(R,i){
+      html+='<div class="sw-row" style="top:'+rowY[i]+'px;width:'+GUT+'px;height:'+rowH[i]+'px">'+esc(R)+'</div>';
+    });
+  }
+
+  /* edges */
+  var paths='',labels='';
+  edges.forEach(function(e){
+    var a=geo[e.from], b=geo[e.to];
+    if(!a||!b) return;
+    var x1,y1,x2,y2,d;
+    if(a.ri===b.ri&&a.li!==b.li){                      /* same row, other lane → sideways */
+      var left=a.cx<b.cx;
+      x1=left?a.x+a.w:a.x; y1=a.y+a.h/2;
+      x2=left?b.x:b.x+b.w; y2=b.y+b.h/2;
+      var mx=(x1+x2)/2;
+      d='M'+x1+' '+y1+' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2;
+    }else{                                             /* down the page (incl. stacked in one cell) */
+      var down=a.y<=b.y;
+      x1=a.cx; y1=down?a.y+a.h:a.y;
+      x2=b.cx; y2=down?b.y:b.y+b.h;
+      var my=(y1+y2)/2;
+      d='M'+x1+' '+y1+' C'+x1+' '+my+' '+x2+' '+my+' '+x2+' '+y2;
+    }
+    paths+='<path class="sw-edge'+(e.dashed?' dashed':'')+'" d="'+d+'" marker-end="url(#swarrow)"></path>';
+    if(e.label) labels+='<div class="sw-elabel" style="left:'+((x1+x2)/2)+'px;top:'+((y1+y2)/2)+'px">'+esc(e.label)+'</div>';
+  });
+  html+='<svg class="sw-svg" width="'+totalW+'" height="'+totalH+'">'+
+        '<defs><marker id="swarrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">'+
+        '<path d="M0 0 L8 4 L0 8 z" fill="currentColor" style="color:var(--faint)"></path></marker></defs>'+
+        paths+'</svg>'+labels;
+
+  /* nodes */
+  nodes.forEach(function(n){
+    var g=geo[n.id], t=n.type||'step';
+    var st='left:'+g.x+'px;top:'+g.y+'px;width:'+g.w+'px;height:'+g.h+'px';
+    if(t==='decision'){
+      html+='<div class="sw-node decision" style="'+st+'"><div class="dia">'+esc(n.label)+'</div></div>';
+    }else{
+      html+='<div class="sw-node '+esc(t)+(n.link?' link':'')+'" style="'+st+'"'+
+            (n.link?' data-go="'+esc(n.link)+'"':'')+'>'+
+            '<div>'+esc(n.label)+'</div>'+(n.ref?'<div class="r">'+esc(n.ref)+'</div>':'')+'</div>';
+    }
+  });
+
+  html+='</div></div>';
+  host.innerHTML=html;
+  wireCards(host);
+}
+
+function viewFlow(main){
+  var m=DATA.manifest;
+  if(!m.swimlane||!arr(m.swimlane.nodes).length) return missing(main,'Swimlane end-to-end','manifest.swimlane');
+  var h='<div class="wrap">'+head(
+    (m.swimlane&&m.swimlane.title)||'ภาพรวมกระบวนการ — Swimlane (end-to-end)',
+    (m.swimlane&&m.swimlane.subtitle)||'คอลัมน์ = ผู้กระทำ · แถว = ขั้น/หน้าจอ · เลื่อนซ้ายขวาเพื่อดูจนจบ');
+  h+='<div id="sw"></div></div>';
+  main.innerHTML=h;
+  renderSwimlane($('#sw'),m.swimlane);
+}
+
+/* ============================================================
+   CALL GRAPH  (layered DAG, pure SVG, drag to pan / wheel to zoom)
+
+   Force-directed layouts look busy and never settle the same way
+   twice, which is bad for a document people cite. A layered layout
+   is deterministic: depth = longest path from a root, so "who calls
+   whom" reads left-to-right and the same manual always looks alike.
+   ============================================================ */
+function layerGraph(nodes,edges){
+  var byId={},depth={},out={},indeg={};
+  nodes.forEach(function(n){byId[n.id]=n;out[n.id]=[];indeg[n.id]=0});
+  edges.forEach(function(e){
+    if(!byId[e.from]||!byId[e.to]||e.from===e.to) return;
+    out[e.from].push(e.to); indeg[e.to]++;
+  });
+  var q=nodes.filter(function(n){return !indeg[n.id]}).map(function(n){return n.id});
+  if(!q.length) q=[nodes[0].id];                    /* fully cyclic → pick one root */
+  q.forEach(function(id){depth[id]=0});
+  var guard=0, queue=q.slice();
+  while(queue.length&&guard++<20000){
+    var id=queue.shift();
+    out[id].forEach(function(t){
+      var d=depth[id]+1;
+      if(depth[t]==null||d>depth[t]){depth[t]=d;queue.push(t)}
+    });
+  }
+  nodes.forEach(function(n){if(depth[n.id]==null)depth[n.id]=0});
+  return depth;
+}
+
+function renderGraph(host,graph,opts){
+  opts=opts||{};
+  var nodes=arr(graph.nodes), edges=arr(graph.edges);
+  if(!nodes.length){host.innerHTML='<p class="muted">ไม่มีข้อมูลกราฟ</p>';return}
+  var depth=layerGraph(nodes,edges);
+  var cols={};
+  nodes.forEach(function(n){(cols[depth[n.id]]=cols[depth[n.id]]||[]).push(n)});
+
+  var CW=230, NH=34, VG=46, PADX=40, PADY=40;
+  var pos={}, maxRow=0;
+  Object.keys(cols).forEach(function(d){
+    cols[d].forEach(function(n,i){
+      pos[n.id]={x:PADX+d*CW, y:PADY+i*VG, w:CW-56, h:NH};
+      maxRow=Math.max(maxRow,i);
+    });
+  });
+  var W=PADX*2+Object.keys(cols).length*CW, H=PADY*2+(maxRow+1)*VG;
+
+  var layers={}, palette=['#0969da','#1a7f37','#bc4c00','#8250df','#bf3989','#1b7c83','#9a6700'];
+  var li=0;
+  nodes.forEach(function(n){var k=n.layer||'default';if(layers[k]==null)layers[k]=palette[li++%palette.length]});
+
+  var e='',nn='';
+  edges.forEach(function(x){
+    var a=pos[x.from],b=pos[x.to]; if(!a||!b) return;
+    var x1=a.x+a.w, y1=a.y+a.h/2, x2=b.x, y2=b.y+b.h/2, mx=(x1+x2)/2;
+    if(x2<x1){ /* back edge — arc over the top so it stays readable */
+      e+='<path class="gedge" data-f="'+esc(x.from)+'" data-t="'+esc(x.to)+'" d="M'+x1+' '+y1+
+         ' C'+(x1+50)+' '+(y1-40)+' '+(x2-50)+' '+(y2-40)+' '+x2+' '+y2+'" marker-end="url(#garrow)"></path>';
+    }else{
+      e+='<path class="gedge" data-f="'+esc(x.from)+'" data-t="'+esc(x.to)+'" d="M'+x1+' '+y1+
+         ' C'+mx+' '+y1+' '+mx+' '+y2+' '+x2+' '+y2+'" marker-end="url(#garrow)"></path>';
+    }
+  });
+  nodes.forEach(function(n){
+    var p=pos[n.id],c=layers[n.layer||'default'];
+    nn+='<g class="gnode" data-id="'+esc(n.id)+'" transform="translate('+p.x+','+p.y+')">'+
+        '<rect width="'+p.w+'" height="'+p.h+'" rx="7" fill="var(--card)" stroke="'+c+'"></rect>'+
+        '<rect width="4" height="'+p.h+'" rx="2" fill="'+c+'"></rect>'+
+        '<text x="12" y="21" fill="var(--ink)">'+esc(String(n.id).slice(0,26))+'</text>'+
+        '<title>'+esc((n.role||n.role_th||'')+(n.layer?' · '+n.layer:''))+'</title></g>';
+  });
+
+  host.innerHTML='<div class="graphwrap"><div class="gctl">'+
+    '<button class="ghost" data-z="in">＋</button><button class="ghost" data-z="out">－</button>'+
+    '<button class="ghost" data-z="fit">⤢</button></div>'+
+    '<svg id="gsvg" width="100%" height="100%" viewBox="0 0 '+W+' '+H+'">'+
+    '<defs><marker id="garrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">'+
+    '<path d="M0 0 L8 4 L0 8 z" fill="var(--faint)"></path></marker></defs>'+
+    '<g id="gpan">'+e+nn+'</g></svg></div>'+
+    '<div class="legend">'+Object.keys(layers).map(function(k){
+      return '<span><span class="dot" style="background:'+layers[k]+'"></span>'+esc(k)+'</span>'}).join('')+'</div>';
+
+  /* pan + zoom + highlight */
+  var svg=$('#gsvg',host), g=$('#gpan',host);
+  var vb={x:0,y:0,w:W,h:H}, drag=null;
+  function apply(){svg.setAttribute('viewBox',vb.x+' '+vb.y+' '+vb.w+' '+vb.h)}
+  svg.addEventListener('wheel',function(ev){
+    ev.preventDefault();
+    var k=ev.deltaY>0?1.12:0.89;
+    vb.w*=k; vb.h*=k; apply();
+  },{passive:false});
+  svg.addEventListener('pointerdown',function(ev){
+    drag={x:ev.clientX,y:ev.clientY,vx:vb.x,vy:vb.y};
+    svg.classList.add('drag'); svg.setPointerCapture(ev.pointerId);
+  });
+  svg.addEventListener('pointermove',function(ev){
+    if(!drag) return;
+    var r=svg.getBoundingClientRect();
+    vb.x=drag.vx-(ev.clientX-drag.x)*vb.w/r.width;
+    vb.y=drag.vy-(ev.clientY-drag.y)*vb.h/r.height;
+    apply();
+  });
+  svg.addEventListener('pointerup',function(){drag=null;svg.classList.remove('drag')});
+  host.querySelectorAll('[data-z]').forEach(function(b){
+    b.onclick=function(){
+      var z=b.getAttribute('data-z');
+      if(z==='fit'){vb={x:0,y:0,w:W,h:H}}
+      else{var k=z==='in'?0.82:1.22; vb.w*=k; vb.h*=k}
+      apply();
+    };
+  });
+  g.querySelectorAll('.gnode').forEach(function(n){
+    var id=n.getAttribute('data-id');
+    n.addEventListener('mouseenter',function(){
+      g.querySelectorAll('.gedge').forEach(function(p){
+        p.classList.toggle('hot',p.getAttribute('data-f')===id||p.getAttribute('data-t')===id);
+      });
+    });
+    n.addEventListener('mouseleave',function(){
+      g.querySelectorAll('.gedge.hot').forEach(function(p){p.classList.remove('hot')});
+    });
+  });
+}
+
+function viewGraph(main){
+  var m=DATA.manifest;
+  if(!m.global_call_graph||!arr(m.global_call_graph.nodes).length)
+    return missing(main,'แผนผังการเรียกข้าม module','manifest.global_call_graph');
+  main.innerHTML='<div class="wrap">'+head('แผนผังการเรียกข้าม module',
+    'ลากเพื่อเลื่อน · เลื่อนเมาส์เพื่อซูม · ชี้ที่โมดูลเพื่อไฮไลต์เส้นที่เกี่ยวข้อง')+'<div id="gr"></div></div>';
+  renderGraph($('#gr'),m.global_call_graph||{});
+}
+
+/* ---------- maps: modules / extensions / ownership / gaps ---------- */
+function viewModules(main){
+  busy(main);
+  load((DATA.manifest.maps||{}).modules).then(function(d){
+    if(!d) return missing(main,'Modules & ลำดับโหลด','modules.json');
+    var h='<div class="wrap">'+head('Modules & ลำดับโหลด',
+      (d._meta&&(d._meta.scope||d._meta.source))||'รายการโมดูลทั้งหมดพร้อมบทบาทและลำดับที่ระบบโหลด');
+    if(arr(d.load_order).length){
+      h+='<div class="card"><h3>ลำดับโหลด</h3><div>'+
+         d.load_order.map(function(x,i){return '<span class="pill">'+(i+1)+'. '+esc(x)+'</span>'}).join('')+'</div></div>';
+    }
+    h+='<div class="card"><h3>โมดูล ('+num(arr(d.nodes).length)+')</h3>'+
+       '<input class="filter" id="mf" placeholder="กรองโมดูล…"><div class="scrollx" id="mt"></div></div>';
+    if(arr(d.edges).length){
+      h+='<div class="card"><h3>กราฟการพึ่งพา</h3><div id="mg"></div></div>';
+    }
+    h+='</div>';
+    main.innerHTML=h;
+    function table(rows){
+      return '<table><thead><tr><th>โมดูล</th><th>ชั้น</th><th>ลำดับ</th><th>บทบาท</th></tr></thead><tbody>'+
+        rows.map(function(n){return '<tr><td class="mono">'+esc(n.id)+'</td><td>'+esc(n.layer||'')+'</td><td>'+
+          esc(n.sequence!=null?n.sequence:'')+'</td><td>'+esc(n.role||n.role_th||'')+'</td></tr>'}).join('')+
+        '</tbody></table>';
+    }
+    $('#mt').innerHTML=table(arr(d.nodes));
+    $('#mf').oninput=function(){
+      var q=this.value.toLowerCase();
+      $('#mt').innerHTML=table(arr(d.nodes).filter(function(n){return JSON.stringify(n).toLowerCase().indexOf(q)>=0}));
+    };
+    if($('#mg')) renderGraph($('#mg'),{nodes:d.nodes,edges:d.edges});
+  }).catch(function(e){fail(main,e)});
+}
+
+function viewExtensions(main){
+  busy(main);
+  load((DATA.manifest.maps||{}).extensions).then(function(d){
+    if(!d) return missing(main,'จุดต่อขยาย / Override','extensions.json');
+    var h='<div class="wrap">'+head('จุดต่อขยาย / Override',
+      (d._meta&&d._meta.methodology)||'ใครขยายหรือทับพฤติกรรมของอะไร และเรียก super/ต้นทางหรือไม่');
+    arr(d.targets||d.models).forEach(function(t){
+      h+='<div class="card"><h3>'+esc(t.target||t.model)+(t.kind?' <span class="tag t-gray">'+esc(t.kind)+'</span>':'')+'</h3>'+
+         '<div class="scrollx"><table><thead><tr><th>ผู้ทับ</th><th>สมาชิก/เมธอด</th><th>เรียกต้นทาง</th><th>อ้างอิง</th><th>หมายเหตุ</th></tr></thead><tbody>';
+      arr(t.overriders).forEach(function(o){
+        var s=o.calls_super;
+        h+='<tr><td class="mono">'+esc(o.module)+'</td><td class="mono">'+esc(o.member||o.method||'')+'</td>'+
+           '<td>'+(s===true?'<span class="tag t-ok">super</span>':s===false?'<span class="tag t-warn">ไม่เรียก</span>':'<span class="muted">—</span>')+'</td>'+
+           '<td>'+refHtml(o.file,o.line)+'</td><td>'+esc(o.note||'')+'</td></tr>';
+      });
+      h+='</tbody></table></div></div>';
+    });
+    main.innerHTML=h+'</div>';
+  }).catch(function(e){fail(main,e)});
+}
+
+function viewOwnership(main){
+  busy(main);
+  load((DATA.manifest.maps||{}).ownership).then(function(d){
+    if(!d) return missing(main,'เจ้าของ state / ฟิลด์','ownership.json');
+    var h='<div class="wrap">'+head('เจ้าของ state / ฟิลด์ (single source of truth)',
+      (d._meta&&d._meta.rule)||'ฟิลด์หนึ่งควรมีเจ้าของเดียว — ตารางนี้บอกว่าใครเขียนอะไรได้บ้าง จุดที่มีผู้เขียนหลายรายคือจุดเสี่ยง');
+    arr(d.fields).forEach(function(f){
+      /* Several writers inside the owning module is normal. Writers spread
+         across modules is the finding worth flagging. */
+      var mods={}; arr(f.writers).forEach(function(w){mods[w.module]=1});
+      var n=Object.keys(mods).length;
+      h+='<div class="card"><h3><code>'+esc(f.field)+'</code>'+(f.scope?' <span class="muted">('+esc(f.scope)+')</span>':'')+
+         (n>1?' <span class="tag t-warn">'+n+' โมดูลเขียน</span>':' <span class="tag t-ok">เจ้าของเดียว</span>')+'</h3>';
+      if(f.owner||f.owner_th) h+='<p><b>เจ้าของ:</b> '+esc(f.owner||f.owner_th)+'</p>';
+      if(f.rule) h+='<div class="note">'+esc(f.rule)+'</div>';
+      h+='<div class="scrollx"><table><thead><tr><th>โมดูล</th><th>เมธอด</th><th>อ้างอิง</th><th>หมายเหตุ</th></tr></thead><tbody>'+
+        arr(f.writers).map(function(w){
+          return '<tr><td class="mono">'+esc(w.module)+'</td><td class="mono">'+esc(w.method||'')+'</td><td>'+
+            refHtml(w.file,w.line)+'</td><td>'+esc(w.note||'')+'</td></tr>'}).join('')+
+        '</tbody></table></div></div>';
+    });
+    main.innerHTML=h+'</div>';
+  }).catch(function(e){fail(main,e)});
+}
+
+function viewGaps(main){
+  busy(main);
+  load(DATA.manifest.gaps).then(function(d){
+    if(!d) return missing(main,'ช่องโหว่ที่ยังไม่ยืนยัน','gaps.json');
+    var h='<div class="wrap">'+head('ช่องโหว่ที่ยังไม่ยืนยัน',
+      'สิ่งที่คู่มือยังพิสูจน์จากโค้ดไม่ได้ — บันทึกไว้ตรง ๆ ดีกว่าเดาแล้วเขียนให้ดูครบ');
+    var sev={high:'t-danger',medium:'t-warn',low:'t-gray'};
+    arr(d.gaps).forEach(function(g){
+      h+='<div class="card"><h3>'+esc(g.id)+' <span class="tag '+(sev[g.severity]||'t-gray')+'">'+esc(g.severity||'')+'</span></h3>'+
+         '<p><b>จุดที่ขาด:</b> '+esc(g.where)+'</p><p>'+esc(g.description)+'</p>'+
+         (g.suggested_trace?'<div class="ret"><b>ตรวจต่อได้ที่:</b> '+esc(g.suggested_trace)+'</div>':'')+'</div>';
+    });
+    if(!arr(d.gaps).length) h+='<div class="note">ไม่มีช่องโหว่ค้างอยู่</div>';
+    main.innerHTML=h+'</div>';
+  }).catch(function(e){fail(main,e)});
+}
+
+/* ---------- global search ---------- */
+function viewSearch(main,q){
+  busy(main,'กำลังค้นหา "'+q+'"…');
+  loadAll().then(function(groups){
+    var ql=q.toLowerCase(), hits=[];
+    groups.forEach(function(g){
+      arr(g.cases).forEach(function(c){
+        if(JSON.stringify(c).toLowerCase().indexOf(ql)>=0) hits.push({g:g,kind:'เคส',item:c});
+      });
+      arr(g.steps).forEach(function(s){
+        if(JSON.stringify(s).toLowerCase().indexOf(ql)>=0) hits.push({g:g,kind:'ขั้นตอน',item:s});
+      });
+      arr(g.gotchas).forEach(function(x){
+        if(String(x).toLowerCase().indexOf(ql)>=0) hits.push({g:g,kind:'ข้อควรระวัง',item:{name:x}});
+      });
+    });
+    var h='<div class="wrap">'+head('ผลการค้นหา: '+q,num(hits.length)+' รายการ');
+    var by={};
+    hits.forEach(function(x){(by[x.g._g.id]=by[x.g._g.id]||[]).push(x)});
+    Object.keys(by).forEach(function(gid){
+      var list=by[gid], g=list[0].g;
+      h+='<div class="card"><h3><a href="#group/'+esc(gid)+'">'+esc(g.title||g._g.title)+'</a> '+
+         '<span class="muted">('+list.length+')</span></h3>';
+      list.slice(0,40).forEach(function(x){
+        var it=x.item;
+        h+='<div class="step"><div class="hd"><span class="tag t-gray">'+esc(x.kind)+'</span>'+
+           '<span class="who">'+esc(it.name||it.name_th||it.action||it.action_th||it.id||'')+'</span>'+
+           (it.file?refHtml(it.file,it.line):'')+'</div>'+
+           '<div class="muted">'+esc((it.behavior||it.behavior_th||it.condition||it.result||'')).slice(0,240)+'</div></div>';
+      });
+      if(list.length>40) h+='<p class="muted">… และอีก '+(list.length-40)+' รายการ</p>';
+      h+='</div>';
+    });
+    if(!hits.length) h+='<div class="note">ไม่พบผลลัพธ์ — ลองคำสั้นลง หรือค้นด้วยชื่อไฟล์/ชื่อเมธอด</div>';
+    main.innerHTML=h+'</div>';
+  }).catch(function(e){fail(main,e)});
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+function isDark(){
+  var t=document.documentElement.getAttribute('data-theme');
+  if(t) return t==='dark';
+  return window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches;
+}
+/* A brand colour picked for white paper (CNY red #b3001b, say) is almost
+   invisible on a dark page. Rather than ask every author to supply two
+   palettes, lift the same hue to a readable lightness when dark is on. */
+function hexHsl(hex){
+  var m=/^#?([\da-f]{6})$/i.exec(String(hex||'').trim()); if(!m) return null;
+  var n=parseInt(m[1],16), r=(n>>16&255)/255, g=(n>>8&255)/255, b=(n&255)/255;
+  var mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2, h=0, sa=0;
+  if(mx!==mn){
+    var d=mx-mn; sa=l>0.5?d/(2-mx-mn):d/(mx+mn);
+    h=mx===r?((g-b)/d+(g<b?6:0)):mx===g?((b-r)/d+2):((r-g)/d+4);
+    h/=6;
+  }
+  return {h:h,s:sa,l:l};
+}
+function hslHex(h,s,l){
+  function f(p,q,t){t<0&&(t+=1);t>1&&(t-=1);
+    return t<1/6?p+(q-p)*6*t:t<1/2?q:t<2/3?p+(q-p)*(2/3-t)*6:p}
+  var r,g,b;
+  if(!s){r=g=b=l}
+  else{var q=l<0.5?l*(1+s):l+s-l*s,p=2*l-q;r=f(p,q,h+1/3);g=f(p,q,h);b=f(p,q,h-1/3)}
+  return '#'+[r,g,b].map(function(v){return ('0'+Math.round(v*255).toString(16)).slice(-2)}).join('');
+}
+function lift(hex,l){
+  var c=hexHsl(hex); if(!c) return hex;
+  return hslHex(c.h,Math.min(c.s,0.85),l);
+}
+function paintAccent(){
+  var t=(DATA.manifest&&DATA.manifest.theme)||{}, st=document.documentElement.style;
+  if(t.accent){ st.setProperty('--brand',t.accent); st.setProperty('--brand-d',t.accentDark||t.accent) }
+  if(!t.accent){ st.removeProperty('--accent'); st.removeProperty('--accent-d'); st.removeProperty('--accent-soft'); return }
+  if(isDark()){
+    st.setProperty('--accent',   lift(t.accentOnDark||t.accent,0.66));
+    st.setProperty('--accent-d', lift(t.accentOnDark||t.accent,0.76));
+    st.setProperty('--accent-soft','color-mix(in srgb, var(--accent) 16%, transparent)');
+  }else{
+    st.setProperty('--accent',t.accent);
+    st.setProperty('--accent-d',t.accentDark||t.accent);
+    st.setProperty('--accent-soft',t.accentSoft||'color-mix(in srgb, var(--accent) 8%, #fff)');
+  }
+}
+function applyTheme(m){
+  try{
+    var saved=localStorage.getItem('am-theme');
+    if(saved) document.documentElement.setAttribute('data-theme',saved);
+  }catch(e){}
+  paintAccent();
+  if(window.matchMedia){
+    try{matchMedia('(prefers-color-scheme:dark)').addEventListener('change',paintAccent)}catch(e){}
+  }
+  document.title=(m&&(m.title||m.project))||'Architecture Manual';
+  if(m&&m.lang) document.documentElement.lang=m.lang;
+}
+
+/* totals are convenience only — recompute anything the author left out */
+function fillTotals(m){
+  m.totals=m.totals||{};
+  var t=m.totals;
+  if(t.groups==null) t.groups=arr(m.groups).length;
+  if(t.cases==null)  t.cases=arr(m.groups).reduce(function(a,g){return a+(g.case_count||0)},0);
+  if(t.steps==null)  t.steps=arr(m.groups).reduce(function(a,g){return a+(g.step_count||0)},0);
+  if(t.modules==null&&m.global_call_graph) t.modules=arr(m.global_call_graph.nodes).length;
+}
+
+function start(manifest){
+  DATA.manifest=manifest;
+  fillTotals(manifest);
+  applyTheme(manifest);
+  buildNav();
+  window.addEventListener('hashchange',route);
+  route();
+}
+
+function boot(){
+  /* EMBED mode: a single bundled file carries everything inline. */
+  if(window.__MANUAL__&&window.__MANUAL__.manifest){
+    DATA.files=window.__MANUAL__.files||{};
+    return start(window.__MANUAL__.manifest);
+  }
+  var inline=document.getElementById('manual-data');
+  if(inline){
+    try{
+      var b=JSON.parse(inline.textContent);
+      DATA.files=b.files||{};
+      return start(b.manifest);
+    }catch(e){}
+  }
+  /* FETCH mode */
+  fetch(BASE+'manifest.json',{cache:'no-cache'})
+    .then(function(r){if(!r.ok)throw new Error(r.status+' '+r.statusText);return r.json()})
+    .then(start)
+    .catch(function(e){
+      $('#nav').innerHTML='';
+      $('#main').innerHTML='<div class="err"><b>โหลด data/manifest.json ไม่สำเร็จ</b><br>'+esc(e.message)+
+        '<br><br>ถ้าเปิดไฟล์ตรง ๆ ด้วย <code>file://</code> เบราว์เซอร์จะบล็อกการอ่านไฟล์ข้าง ๆ '+
+        'ให้เสิร์ฟผ่าน HTTP แทน เช่น <code>python3 -m http.server</code> ในโฟลเดอร์คู่มือ '+
+        'หรือใช้ไฟล์รวมชิ้นเดียว (<code>manual.html</code>) ที่ฝังข้อมูลไว้ในตัว</div>';
+    });
+}
+
+document.addEventListener('keydown',function(e){
+  if(e.key==='/'&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){
+    e.preventDefault(); var q=$('#q'); if(q){q.focus();q.select()}
+  }
+});
+var tg=document.getElementById('navtoggle');
+if(tg) tg.onclick=function(){document.body.classList.toggle('navopen')};
+
+boot();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,936 @@
+{
+  "id": "shop_browse",
+  "title": "เปิดร้านและเลือกดูสินค้า",
+  "summary": "เส้นทางตั้งแต่ LIFF บูตขึ้นมา ระบุว่ากำลังเปิดร้านของ tenant ไหน แล้วดึงรายการสินค้าจาก api/checkout.php action products มาแสดงเป็นการ์ด จนถึงกดเข้าหน้ารายละเอียดด้วย action product_detail จุดสำคัญคือ line_account_id ที่ใช้กำหนดขอบเขตสินค้าเป็นค่าที่ client ส่งมาเองล้วน ๆ และพารามิเตอร์กรอง catalog หลายตัวที่ client ส่งไป ฝั่ง PHP ไม่ได้อ่านเลย",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "line-mini-app",
+      "module": "line-mini-app",
+      "method": "LineProvider useEffect",
+      "file": "line-mini-app/src/components/providers.tsx",
+      "line": 31,
+      "action": "ทุกหน้าใน Mini App ถูกครอบด้วย LineProvider ซึ่งเรียก bootstrapLine() ครั้งเดียวตอน mount และบล็อกไม่ให้ลูกหลาน render จนกว่า isReady จะเป็น true",
+      "calls": [{ "module": "miniapp-config", "method": "bootstrapLine", "file": "line-mini-app/src/lib/line-miniapp.ts", "line": 7 }],
+      "returns": "LineBootstrapState",
+      "notes": "ถ้า state.error ไม่ว่าง provider จะ render การ์ดข้อผิดพลาดแทนทั้งหน้า ดูเคส C1"
+    },
+    {
+      "seq": 2,
+      "actor": "config + LIFF SDK",
+      "module": "miniapp-config",
+      "method": "resolveLiffId()",
+      "file": "line-mini-app/src/lib/config.ts",
+      "line": 346,
+      "action": "หา LIFF id ของ host ปัจจุบันก่อน init เพราะ bundle เดียวถูก serve ให้ทุก tenant ลำดับคือ query liff_id แล้วยิง api/miniapp-bootstrap.php ของ origin ปัจจุบัน สูงสุด 3 รอบ แล้วค่อยตกไป build-time default",
+      "calls": [{ "module": "miniapp-config", "method": "buildMiniappBootstrapUrl", "file": "line-mini-app/src/lib/config.ts", "line": 323 }],
+      "returns": "liffId หรือสตริงว่าง",
+      "notes": "ถ้า bootstrap ตอบสำเร็จมันจะ setLineAccountId ให้ด้วยที่บรรทัด 372 บน tenant subdomain ห้าม fallback ไป build-time เด็ดขาด ดูเคส C2"
+    },
+    {
+      "seq": 3,
+      "actor": "config + LIFF SDK",
+      "module": "miniapp-config",
+      "method": "liff.init()",
+      "file": "line-mini-app/src/lib/line-miniapp.ts",
+      "line": 30,
+      "action": "init LIFF ด้วย id ที่ได้ โดยตั้ง withLoginOnExternalBrowser เป็น false แล้วเรียก resolveLineAccountId ต่อแบบ best-effort ห่อ try catch ที่กลืน error ทิ้ง",
+      "calls": [{ "module": "miniapp-config", "method": "resolveLineAccountId", "file": "line-mini-app/src/lib/config.ts", "line": 408 }],
+      "returns": "liff instance ที่ init แล้ว",
+      "state_change": "runtimeLineAccountId ถูกตั้งค่า และเขียนลง localStorage คีย์ reya.lineAccountId.{liffId}"
+    },
+    {
+      "seq": 4,
+      "actor": "config + LIFF SDK",
+      "module": "miniapp-config",
+      "method": "resolveLineAccountId()",
+      "file": "line-mini-app/src/lib/config.ts",
+      "line": 408,
+      "action": "ตัดสินว่า Mini App กำลังเปิดร้านของ line_account ไหน ลำดับคือ la ใน URL แล้ว runtime override แล้ว localStorage แล้วยิง api/resolve-line-account.php ด้วย liff_id สุดท้ายตกไปค่า build-time",
+      "calls": [{ "module": "miniapp-config", "method": "upgradeLaStorageKey", "file": "line-mini-app/src/lib/config.ts", "line": 64 }],
+      "returns": "line_account_id เป็นตัวเลข",
+      "notes": "ค่าที่ได้คือค่าเดียวที่กำหนดขอบเขตสินค้าทั้งกลุ่มนี้ ถ้าพลาดจะได้เลข 1 ตามค่า default ดูเคส C5"
+    },
+    {
+      "seq": 5,
+      "actor": "config + LIFF SDK",
+      "module": "miniapp-config",
+      "method": "liff.getProfile()",
+      "file": "line-mini-app/src/lib/line-miniapp.ts",
+      "line": 54,
+      "action": "ถ้า isLoggedIn เป็น true จึงดึงโปรไฟล์มาเป็น line_user_id ถ้าไม่ล็อกอินจะคืน state แบบ isGuest true โดยไม่ error",
+      "returns": "profile.userId ที่ทุก query ใช้เป็น lineUserId",
+      "notes": "ค่านี้ใช้แค่ wishlist กับตะกร้า ไม่ได้ใช้กำหนดขอบเขตสินค้า ดูเคส C6"
+    },
+    {
+      "seq": 6,
+      "actor": "line-mini-app",
+      "module": "line-mini-app",
+      "method": "ShopClient()",
+      "file": "line-mini-app/src/components/miniapp/ShopClient.tsx",
+      "line": 103,
+      "action": "หน้า /shop เป็น server component บาง ๆ ที่ render ShopClient ตัวเดียว state ทั้งหมดคือ search, category, brand, sort, bucket เก็บใน useState แล้วคำค้นถูก debounce 250ms ก่อนกลายเป็น searchTerm",
+      "calls": [{ "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/app/shop/page.tsx", "line": 3 }],
+      "returns": "หน้าร้านทั้งหน้า",
+      "notes": "searchTerm อยู่ใน queryKey ทุกครั้งที่พิมพ์แล้วหยุด 250ms จะยิง request ใหม่ทั้งชุด ดูเคส C25"
+    },
+    {
+      "seq": 7,
+      "actor": "line-mini-app",
+      "module": "line-mini-app",
+      "method": "useInfiniteQuery catalogQuery",
+      "file": "line-mini-app/src/components/miniapp/ShopClient.tsx",
+      "line": 138,
+      "action": "ดึงสินค้าเป็นหน้า ๆ ละ 12 รายการ โดย pageParam คือ offset และ getNextPageParam อ่าน has_more ที่ PHP ตอบกลับมาเพื่อคำนวณ offset ถัดไป",
+      "calls": [{ "module": "shop-api", "method": "fetchProducts", "file": "line-mini-app/src/lib/shop-api.ts", "line": 114 }],
+      "returns": "ProductsResponse ต่อหน้า",
+      "notes": "ส่ง includeZeroPrice, includeInactive, catalogMode, catalogBucket ไปด้วย แต่ PHP ไม่อ่านสักตัว ดูเคส C22"
+    },
+    {
+      "seq": 8,
+      "actor": "shop-api",
+      "module": "shop-api",
+      "method": "fetchProducts()",
+      "file": "line-mini-app/src/lib/shop-api.ts",
+      "line": 114,
+      "action": "ประกอบ query string action products พร้อม line_account_id ที่อ่านจาก getter appConfig.lineAccountId ทุกครั้งที่เรียก แล้ว fetch แบบ cache no-store",
+      "calls": [
+        { "module": "miniapp-config", "method": "getLineAccountId", "file": "line-mini-app/src/lib/config.ts", "line": 94 },
+        { "module": "miniapp-config", "method": "resolvePhpApiBaseUrl", "file": "line-mini-app/src/lib/config.ts", "line": 133 }
+      ],
+      "returns": "res.json() ดิบ ไม่ตรวจ res.ok และไม่ตรวจ success",
+      "notes": "appConfig.lineAccountId เป็น getter บรรทัด 118 จึงอ่านค่าล่าสุดเสมอโดยไม่ต้องแก้ไฟล์ผู้เรียก"
+    },
+    {
+      "seq": 9,
+      "actor": "shop-api",
+      "module": "miniapp-config",
+      "method": "resolvePhpApiBaseUrl()",
+      "file": "line-mini-app/src/lib/config.ts",
+      "line": 133,
+      "action": "เลือก origin ปลายทาง ถ้า hostname ลงท้าย .re-ya.com และไม่ใช่ root จะยิงกลับ origin ตัวเอง เพื่อให้ subdomain routing ฝั่ง PHP ปักที่ tenant DB ที่ถูกต้อง",
+      "returns": "base URL ของ PHP",
+      "notes": "บน root domain จะได้ https://re-ya.com ซึ่งแปลว่า tenant ถูกเลือกจาก line_account_id แทน ดูเคส C7"
+    },
+    {
+      "seq": 10,
+      "actor": "api/checkout.php",
+      "module": "tenant-routing",
+      "method": "route_by_account.php",
+      "file": "api/checkout.php",
+      "line": 18,
+      "action": "ก่อนแตะ DB ใด ๆ endpoint include bootstrap ที่มองหา line_account_id, la หรือ account จาก GET, POST, JSON body แล้วปัก TenantContext ให้ตรง tenant ถ้า TenantContext ถูกปักไว้แล้วจาก subdomain จะไม่ทำอะไรเลย",
+      "calls": [
+        { "module": "tenant-routing", "method": "routeByLineAccount", "file": "bootstrap/route_by_account.php", "line": 75 },
+        { "module": "tenant-routing", "method": "resolveTenantByLineAccount", "file": "classes/TenantContext.php", "line": 261 }
+      ],
+      "returns": "TenantContext ที่ชี้ tenant DB",
+      "state_change": "การเชื่อมต่อ Database::getInstance() ย้ายไปยัง reya_tenant_* ของ tenant นั้น",
+      "notes": "การเลือก tenant ตรงนี้อิงพารามิเตอร์จาก client ล้วน ไม่มีการยืนยันตัวตน ดูเคส C7 และ C9"
+    },
+    {
+      "seq": 11,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "switch ($action)",
+      "file": "api/checkout.php",
+      "line": 38,
+      "action": "แยกงานตาม action กลุ่มนี้ใช้สามเคสคือ products บรรทัด 39, shop_info บรรทัด 84 และ product_detail บรรทัด 87 ทั้ง switch ถูกครอบ try catch ที่ตอบ success false พร้อมข้อความ exception",
+      "returns": "JSON",
+      "notes": "ทุกคำตอบเป็น HTTP 200 เสมอ แม้แต่ตอน error ดูเคส C20"
+    },
+    {
+      "seq": 12,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleGetProducts()",
+      "file": "api/checkout.php",
+      "line": 677,
+      "action": "อ่านพารามิเตอร์ทั้งหมดจาก GET แล้ว clamp limit ให้อยู่ระหว่าง 1 ถึง 24 และ offset ไม่ติดลบ สินค้าทั้งหมดอ่านจากตาราง business_items ตารางเดียวหลังรวมตารางเมื่อ 2026-05-15",
+      "calls": [{ "module": "api-checkout", "method": "getExistingUserIdFromLineUserId", "file": "api/checkout.php", "line": 384 }],
+      "returns": "products, categories, brands, total, has_more",
+      "notes": "client ขอ limit 12 แต่ถ้าขอเกิน 24 จะถูกตัดเงียบ ๆ ดูเคส C13"
+    },
+    {
+      "seq": 13,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "สร้าง WHERE",
+      "file": "api/checkout.php",
+      "line": 699,
+      "action": "เงื่อนไขตั้งต้นคือ p.is_active = 1 แล้วต่อด้วย p.line_account_id = ? OR p.line_account_id IS NULL เมื่อ client ส่ง line_account_id มา จากนั้นค่อยต่อ category_id, search และ brand",
+      "sets": [{ "field": "whereParts", "value": "is_active + line_account scope + filters" }],
+      "notes": "นี่คือจุดเดียวที่บังคับขอบเขต line_account ของรายการสินค้า ดูเคส C10 และ C11"
+    },
+    {
+      "seq": 14,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "buildProductSortClause()",
+      "file": "api/checkout.php",
+      "line": 479,
+      "action": "แปลงพารามิเตอร์ sort เป็น ORDER BY โดยคำนวณราคาใช้จริงเป็น COALESCE ของ sale_price แล้ว price และคำนวณส่วนลดเป็นสัดส่วน 1 - sale_price/price ทุกกิ่งจบด้วย id DESC ยกเว้น name_asc",
+      "returns": "สตริง ORDER BY",
+      "notes": "ค่าที่ไม่รู้จักตกไป default id DESC เงียบ ๆ ดูเคส C14 ถึง C18"
+    },
+    {
+      "seq": 15,
+      "actor": "tenant DB",
+      "module": "MySQL",
+      "method": "SELECT business_items",
+      "file": "api/checkout.php",
+      "line": 736,
+      "action": "ยิงคิวรีหลัก LEFT JOIN business_categories เพื่อได้ category_name และ LEFT JOIN user_wishlist เพื่อได้ is_favorite แล้วยิงคิวรีนับ total ด้วย WHERE ชุดเดียวกัน ตามด้วยคิวรี categories และ brands แยกอีกสองครั้ง",
+      "calls": [
+        { "module": "api-checkout", "method": "buildBusinessItemSelectFields", "file": "api/checkout.php", "line": 425 },
+        { "module": "MySQL", "method": "SELECT COUNT(*)", "file": "api/checkout.php", "line": 762 }
+      ],
+      "returns": "แถวสินค้า, ยอดรวม, หมวด, แบรนด์",
+      "notes": "หนึ่งคำขอ = สี่คิวรี ทุกคอลัมน์ที่อาจไม่มีถูกห่อด้วย hasTableColumn ให้กลายเป็น NULL AS แทนที่จะพัง ดูเคส C19"
+    },
+    {
+      "seq": 16,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "normalizeShopProductRow()",
+      "file": "api/checkout.php",
+      "line": 416,
+      "action": "ต่อยอดทุกแถวก่อนส่งออก เรียก enrichProductRow เพื่อคำนวณ discount_percent, promotion_label และ badges แล้วรวมรูปเป็น image_gallery และ map manufacturer ไปเป็นฟิลด์ brand ที่ UI ใช้",
+      "calls": [
+        { "module": "api-checkout", "method": "enrichProductRow", "file": "api/checkout.php", "line": 364 },
+        { "module": "api-checkout", "method": "buildShopImageGallery", "file": "api/checkout.php", "line": 398 }
+      ],
+      "sets": [
+        { "field": "product.discount_percent", "value": "round((1 - sale_price/price) * 100)" },
+        { "field": "product.promotion_label", "value": "โปรโมชัน เมื่อยังว่าง" },
+        { "field": "product.badges", "value": "[{text: -N%, color: red}] เมื่อยังว่าง" }
+      ],
+      "returns": "แถวสินค้าที่พร้อมแสดงผล",
+      "notes": "ป้ายส่วนลดถูกคำนวณเมื่อ sale_price น้อยกว่า price และ price มากกว่า 0 เท่านั้น ดูเคส C23"
+    },
+    {
+      "seq": 17,
+      "actor": "line-mini-app",
+      "module": "shop-api",
+      "method": "enrichShopProduct + filterVisibleShopProducts",
+      "file": "line-mini-app/src/components/miniapp/ShopClient.tsx",
+      "line": 183,
+      "action": "ฝั่ง client ทำ enrich ซ้ำอีกรอบเผื่อ PHP รุ่นเก่าไม่ได้ใส่ badges มา แล้วกรองด้วย hideInactive, mode และ bucket ก่อนวาดการ์ด",
+      "calls": [
+        { "module": "shop-api", "method": "enrichShopProduct", "file": "line-mini-app/src/lib/shop-product-utils.ts", "line": 52 },
+        { "module": "shop-api", "method": "filterVisibleShopProducts", "file": "line-mini-app/src/lib/shop-product-utils.ts", "line": 30 }
+      ],
+      "returns": "รายการสินค้าที่จะแสดงจริง",
+      "notes": "การกรองเกิดหลังแบ่งหน้าแล้ว จึงตัดของทิ้งได้ทั้งหน้า ดูเคส C22 และ C24"
+    },
+    {
+      "seq": 18,
+      "actor": "ลูกค้าใน LIFF",
+      "module": "line-mini-app",
+      "method": "ShopProductCard",
+      "file": "line-mini-app/src/components/miniapp/ShopProductCard.tsx",
+      "line": 21,
+      "action": "การ์ดหนึ่งใบอ่านค่า 4 ทางพร้อมกัน ราคาใช้จริงจาก getEffectivePrice ป้ายลดจาก discount_percent ป้ายสินค้าหมดจาก stock ที่เท่ากับ 0 แบบเทียบชนิดเข้ม และรูปจาก image_url",
+      "calls": [{ "module": "shop-api", "method": "getEffectivePrice", "file": "line-mini-app/src/lib/shop-product-utils.ts", "line": 9 }],
+      "returns": "การ์ดสินค้าพร้อมปุ่มใส่ตะกร้า หรือปุ่มสอบถามราคา",
+      "notes": "ราคา 0 หรือ null เปลี่ยนการ์ดทั้งใบเป็นโหมดสอบถามราคา ดูเคส C26 และ C27"
+    },
+    {
+      "seq": 19,
+      "actor": "ลูกค้าใน LIFF",
+      "module": "line-mini-app",
+      "method": "ShopProductDetailClient",
+      "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx",
+      "line": 96,
+      "action": "กดการ์ดแล้วไปที่ /shop/product?id=N เพราะ output export ของ Next ไม่รองรับ path แบบไดนามิก หน้านี้อ่าน id จาก useSearchParams แล้วยิง product_detail",
+      "calls": [{ "module": "shop-api", "method": "fetchProductDetail", "file": "line-mini-app/src/lib/shop-api.ts", "line": 153 }],
+      "returns": "ProductDetailResponse",
+      "notes": "หน้านี้ห่อด้วย Suspense ใน app/shop/product/page.tsx บรรทัด 11 เพราะ useSearchParams ต้องอยู่ในนั้น"
+    },
+    {
+      "seq": 20,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleGetProductDetail()",
+      "file": "api/checkout.php",
+      "line": 531,
+      "action": "อ่านสินค้าตัวเดียวจาก business_items ด้วยเงื่อนไข p.id = ? AND p.is_active = 1 แล้วต่อขอบเขต line_account_id แบบเดียวกับหน้ารายการ จากนั้น normalize แถวเดียวก่อนตอบกลับ",
+      "calls": [{ "module": "api-checkout", "method": "normalizeShopProductRow", "file": "api/checkout.php", "line": 577 }],
+      "returns": "product หรือ Product not found",
+      "notes": "ขอบเขต line_account_id ที่บรรทัด 564 จะถูกต่อก็ต่อเมื่อ client ส่งมาเท่านั้น ดูเคส C10"
+    },
+    {
+      "seq": 21,
+      "actor": "line-mini-app",
+      "module": "line-mini-app",
+      "method": "render รายละเอียด",
+      "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx",
+      "line": 211,
+      "action": "คำนวณราคาแสดงผลจาก sale_price แล้ว price คำนวณจำนวนสูงสุดจาก stock หารด้วย factor ของหน่วยที่เลือก แล้ววาดแกลเลอรี ป้ายโปร ส่วนลด และแถบล่างที่มีปุ่มใส่ตะกร้า",
+      "calls": [{ "module": "shop-api", "method": "priceLabelFromProduct", "file": "line-mini-app/src/lib/shop-product-utils.ts", "line": 24 }],
+      "returns": "หน้ารายละเอียดสินค้า",
+      "notes": "units มาจาก payload เสมอ แต่ PHP ไม่เคยส่งฟิลด์นี้มา ดูเคส C31"
+    },
+    {
+      "seq": 22,
+      "actor": "line-mini-app",
+      "module": "shop-api",
+      "method": "getShopMerch()",
+      "file": "line-mini-app/src/lib/shop-merch-api.ts",
+      "line": 6,
+      "action": "คู่ขนานกับ catalog หน้าร้านยิงอีกคำขอไป api/miniapp-home-content.php action home_all พร้อม surface shop เพื่อเอาแบนเนอร์บนสุดและชั้นวางสินค้าที่แอดมินจัดไว้",
+      "calls": [{ "module": "api-home-content", "method": "getHomeAll", "file": "classes/MiniAppContentService.php", "line": 457 }],
+      "returns": "banners และ sections",
+      "notes": "endpoint นี้ตรวจ res.ok แล้ว throw ต่างจาก fetchProducts ที่ไม่ตรวจอะไรเลย ดูเคส C35"
+    },
+    {
+      "seq": 23,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleGetShopInfo()",
+      "file": "api/checkout.php",
+      "line": 2720,
+      "action": "หา line_account_id จาก users ตาม line_user_id ก่อน ถ้าไม่ได้ใช้ค่าที่ส่งมา ถ้ายังไม่ได้ใช้ line_accounts แถวแรกที่ active แล้วอ่าน shop_name, promptpay_number, bank_accounts จาก shop_settings",
+      "returns": "ชื่อร้านและข้อมูลรับเงิน",
+      "notes": "ค้นทั้ง repo แล้วไม่พบผู้เรียก action นี้จากฝั่ง client เลย มีแต่ตัว endpoint เอง ดูเคส C34"
+    }
+  ],
+  "cases": [
+    {
+      "id": "C1",
+      "name": "หา LIFF ID ไม่เจอ ทั้งแอปไม่ render",
+      "condition": "resolveLiffId() คืนสตริงว่าง",
+      "behavior": "bootstrapLine คืน state ที่ error เป็น LIFF ID is not configured แล้ว LineProvider render การ์ดข้อผิดพลาดแทน children ทั้งหมด",
+      "code_path": [
+        { "module": "miniapp-config", "method": "bootstrapLine", "file": "line-mini-app/src/lib/line-miniapp.ts", "line": 21 },
+        { "module": "line-mini-app", "method": "LineProvider", "file": "line-mini-app/src/components/providers.tsx", "line": 50 }
+      ],
+      "result": "หน้าร้านไม่ถูก mount เลย ไม่มีคำขอสินค้าออกไปสักคำขอ",
+      "gotcha": "ShopClient มีบรรทัด 219 ที่แสดง VerifiedOnlyNotice เมื่อ line.error ไม่ว่าง แต่โค้ดนั้นไปไม่ถึงตลอดกาล เพราะ provider คัดออกไปก่อนแล้ว",
+      "tag": "warn"
+    },
+    {
+      "id": "C2",
+      "name": "bootstrap ล้มเหลวบน tenant subdomain จงใจไม่ fallback",
+      "condition": "fetch api/miniapp-bootstrap.php ล้มเหลวครบ 3 รอบ และ isReyaTenantSubdomainHost() เป็น true",
+      "behavior": "คืนสตริงว่างแทนที่จะใช้ NEXT_PUBLIC_LINE_LIFF_ID ที่ baked มา เพราะค่านั้นเป็นของ tenant-0001 ไม่ใช่ของ host นี้",
+      "code_path": [
+        { "module": "miniapp-config", "method": "resolveLiffId", "file": "line-mini-app/src/lib/config.ts", "line": 365 },
+        { "module": "miniapp-config", "method": "resolveLiffId", "file": "line-mini-app/src/lib/config.ts", "line": 387 }
+      ],
+      "result": "ตกไปเคส C1 คือขึ้น error แทนที่จะเด้งไป login ของ tenant ผิดร้าน",
+      "gotcha": "การหน่วง 300ms คูณจำนวนรอบทำให้เคสเน็ตแย่รอได้ถึงเกือบ 2 วินาทีก่อนแสดงผลอะไรเลย",
+      "tag": "info"
+    },
+    {
+      "id": "C3",
+      "name": "root domain หรือ localhost ใช้ LIFF จาก build-time ได้",
+      "condition": "ไม่ได้อยู่บน tenant subdomain และ bootstrap ไม่คืน liff_id",
+      "behavior": "ใช้ appConfig.liffId ที่มาจาก NEXT_PUBLIC_LINE_LIFF_ID ตรง ๆ",
+      "code_path": [{ "module": "miniapp-config", "method": "resolveLiffId", "file": "line-mini-app/src/lib/config.ts", "line": 394 }],
+      "result": "แอปเปิดได้ตามปกติในโหมด dev และบน re-ya.com",
+      "tag": "ok"
+    },
+    {
+      "id": "C4",
+      "name": "la ใน URL ชนะทุกแหล่ง",
+      "condition": "มี ?la=N ใน query string",
+      "behavior": "getLineAccountId คืนค่านั้นทันทีและ pin ลง localStorage ทับค่าเดิม โดยไม่ตรวจว่าผู้ใช้มีสิทธิ์กับร้านนั้นหรือไม่",
+      "code_path": [
+        { "module": "miniapp-config", "method": "getLineAccountId", "file": "line-mini-app/src/lib/config.ts", "line": 95 },
+        { "module": "miniapp-config", "method": "resolveLineAccountId", "file": "line-mini-app/src/lib/config.ts", "line": 414 }
+      ],
+      "result": "deep link จาก includes/liff-helper.php สลับร้านได้ทันที และคนอื่นก็แก้เลขได้เหมือนกัน",
+      "gotcha": "ค่าถูก persist ลง localStorage ด้วย ครั้งถัดไปที่เปิดโดยไม่มี la จะยังติดร้านเดิมค้างอยู่",
+      "tag": "warn"
+    },
+    {
+      "id": "C5",
+      "name": "resolver ล้มเหลว ตกไปเลข 1 แล้วร้านว่าง",
+      "condition": "ไม่มี la ไม่มีค่าใน localStorage และ api/resolve-line-account.php ล้มเหลวหรือคืน success false",
+      "behavior": "คืน BUILD_TIME_LINE_ACCOUNT_ID ซึ่ง default เป็น 1 โดยกลืน error ทิ้งเงียบ ๆ",
+      "code_path": [
+        { "module": "miniapp-config", "method": "resolveLineAccountId", "file": "line-mini-app/src/lib/config.ts", "line": 443 },
+        { "module": "miniapp-config", "method": "BUILD_TIME_LINE_ACCOUNT_ID", "file": "line-mini-app/src/lib/config.ts", "line": 25 }
+      ],
+      "result": "บน tenant subdomain DB ถูกต้องแต่ WHERE line_account_id = 1 อาจไม่ตรงกับ line_accounts ของ tenant นั้น สินค้าจึงว่างทั้งที่มีของอยู่",
+      "gotcha": "อาการที่ผู้ใช้เห็นคือ ไม่พบสินค้าที่ตรงกับเงื่อนไข ซึ่งหน้าตาเหมือนร้านยังไม่ลงสินค้าเป๊ะ ๆ",
+      "tag": "danger"
+    },
+    {
+      "id": "C6",
+      "name": "ยังไม่ล็อกอิน LINE เข้าดูสินค้าได้แต่ซื้อไม่ได้",
+      "condition": "liff.isLoggedIn() เป็น false ทำให้ lineUserId เป็นสตริงว่าง",
+      "behavior": "รายการสินค้ายังโหลดปกติ แต่ cartQuery ถูกปิดด้วย enabled false ปุ่มใส่ตะกร้าและปุ่มหัวใจถูก disable และมีแถบเหลืองบอกให้เข้าสู่ระบบ",
+      "code_path": [
+        { "module": "miniapp-config", "method": "bootstrapLine", "file": "line-mini-app/src/lib/line-miniapp.ts", "line": 45 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 361 },
+        { "module": "line-mini-app", "method": "ShopProductCard", "file": "line-mini-app/src/components/miniapp/ShopProductCard.tsx", "line": 161 }
+      ],
+      "result": "โหมด guest ดูของได้ ใส่ตะกร้าไม่ได้",
+      "gotcha": "ฝั่ง PHP ก็ข้าม LEFT JOIN user_wishlist ไปเลยเมื่อไม่มี line_user_id ทำให้ is_favorite เป็น 0 ทุกชิ้น ไม่ใช่ค่าที่เคยกดไว้",
+      "tag": "info"
+    },
+    {
+      "id": "C7",
+      "name": "บน root domain client เลือก tenant ได้เองจาก line_account_id",
+      "condition": "host เป็น re-ya.com และคำขอมี line_account_id, la หรือ account ใน GET หรือ POST",
+      "behavior": "resolve_subdomain ข้ามการปักร้าน default เพราะเจอสัญญาณ account แล้ว route_by_account เอาเลขนั้นไปหา tenant_id จาก master.tenant_line_account_routes แล้วปัก TenantContext ตามนั้น",
+      "code_path": [
+        { "module": "tenant-routing", "method": "reya_has_explicit_account_signal", "file": "bootstrap/resolve_subdomain.php", "line": 125 },
+        { "module": "tenant-routing", "method": "reya_resolve_tenant_from_host", "file": "bootstrap/resolve_subdomain.php", "line": 160 },
+        { "module": "tenant-routing", "method": "route_by_account", "file": "bootstrap/route_by_account.php", "line": 48 },
+        { "module": "tenant-routing", "method": "routeByLineAccount", "file": "classes/TenantContext.php", "line": 295 }
+      ],
+      "result": "เปลี่ยนเลขใน URL แล้วอ่านสินค้าของ tenant อื่นได้ทันที ไม่มีการยืนยันตัวตนหรือผูกกับ LIFF token ใด ๆ",
+      "gotcha": "แคตตาล็อกสินค้าเป็นข้อมูลกึ่งสาธารณะอยู่แล้ว แต่กลไกเดียวกันนี้เป็นตัวเลือก DB ให้ทุก action ในไฟล์นี้ รวมถึง cart และ create_order ด้วย",
+      "tag": "danger"
+    },
+    {
+      "id": "C8",
+      "name": "บน tenant subdomain การ route ด้วย line_account_id ถูกเมิน",
+      "condition": "TenantContext::getCurrentTenantId() ไม่ใช่ null เพราะ subdomain ปักไว้แล้ว",
+      "behavior": "routeByLineAccount คืน false ทันทีโดยไม่แตะ master DB เลย line_account_id ที่ส่งมาจึงเหลือหน้าที่แค่กรองแถวใน DB นั้น",
+      "code_path": [
+        { "module": "tenant-routing", "method": "setCurrentTenantId", "file": "bootstrap/resolve_subdomain.php", "line": 262 },
+        { "module": "tenant-routing", "method": "routeByLineAccount", "file": "classes/TenantContext.php", "line": 298 }
+      ],
+      "result": "เส้นทางที่ปลอดภัยที่สุด ขอบเขต tenant มาจาก host ไม่ใช่จากพารามิเตอร์",
+      "gotcha": "นี่คือเหตุผลที่ resolvePhpApiBaseUrl บังคับให้ subdomain ยิงกลับ origin ตัวเอง ถ้ามี base URL แบบ root domain baked ไว้ ทุก tenant จะหลุดไปเส้นทาง C7 แทน",
+      "tag": "ok"
+    },
+    {
+      "id": "C9",
+      "name": "ไม่มี mapping ใน tenant_line_account_routes",
+      "condition": "resolveTenantByLineAccount หาแถว is_active ไม่เจอ หรือตารางยังไม่ถูก provision",
+      "behavior": "คืน null และ cache null ไว้ route_by_account จึง return เงียบ ๆ ปล่อยให้ Database ใช้ DB_NAME แบบ legacy",
+      "code_path": [
+        { "module": "tenant-routing", "method": "resolveTenantByLineAccount", "file": "classes/TenantContext.php", "line": 280 },
+        { "module": "tenant-routing", "method": "route_by_account", "file": "bootstrap/route_by_account.php", "line": 66 }
+      ],
+      "result": "คำขออ่านสินค้าจาก DB legacy ซึ่งมักไม่มีสินค้าของร้านนั้น หน้าร้านจึงว่าง โดยไม่มี error ให้เห็น",
+      "gotcha": "exception จาก routeByLineAccount ถูก log แล้วกลืนที่บรรทัด 76 ถึง 79 อาการเดียวกันจึงเกิดได้ทั้งจาก มองไม่เห็น mapping และ master DB ล่ม",
+      "tag": "danger"
+    },
+    {
+      "id": "C10",
+      "name": "ไม่ส่ง line_account_id เลย ขอบเขตหายทั้งก้อน",
+      "condition": "$_GET['line_account_id'] ว่างหรือไม่มี ทำให้ if ($lineAccountId) เป็น false",
+      "behavior": "ประโยค WHERE ที่จำกัด line_account ไม่ถูกต่อเข้าไปเลย เหลือแค่ p.is_active = 1 ทั้งคิวรีสินค้า คิวรีหมวด และคิวรีแบรนด์",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 702 },
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 770 },
+        { "module": "api-checkout", "method": "handleGetProductDetail", "file": "api/checkout.php", "line": 564 }
+      ],
+      "result": "คืนสินค้าของทุก line_account ที่อยู่ใน tenant DB นั้น รวมทั้งของสาขาหรือ OA อื่นที่ไม่ควรเห็น",
+      "gotcha": "client ปัจจุบันส่งค่านี้เสมอ ความเสี่ยงจึงมาจากผู้เรียกอื่นหรือการเรียกตรง ไม่ใช่จาก Mini App",
+      "tag": "warn"
+    },
+    {
+      "id": "C11",
+      "name": "แถวที่ line_account_id เป็น NULL เห็นได้ทุกร้าน",
+      "condition": "business_items.line_account_id เป็น NULL ซึ่งเป็นค่า default ของคอลัมน์",
+      "behavior": "เงื่อนไข OR p.line_account_id IS NULL ทำให้แถวนั้นผ่านตัวกรองของทุก line_account ในtenant เดียวกัน",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 703 },
+        { "module": "api-home-content", "method": "lineAccountFilter", "file": "classes/MiniAppContentService.php", "line": 617 }
+      ],
+      "result": "สินค้าที่ยังไม่ผูก OA จะโผล่ในทุกหน้าร้านของ tenant นั้น",
+      "gotcha": "รูปแบบนี้ถูกใช้ซ้ำในแบนเนอร์และ section ด้วย ของที่ import มาโดยไม่ตั้ง line_account_id จึงกระจายไปทุกหน้าพร้อมกัน",
+      "tag": "info"
+    },
+    {
+      "id": "C12",
+      "name": "ค้นหาข้ามคอลัมน์ที่ไม่มีจริง",
+      "condition": "มี search และคอลัมน์ description, sku, manufacturer หรือ generic_name ไม่มีในตาราง",
+      "behavior": "buildProductSearchWhere ต่อ LIKE เฉพาะคอลัมน์ที่ hasTableColumn ยืนยันว่ามี ส่วน name ถูกใส่เสมอ ถ้าไม่เหลือคอลัมน์เลยจะคืน null แล้วเงื่อนไขค้นหาหายไปทั้งอัน",
+      "code_path": [
+        { "module": "api-checkout", "method": "buildProductSearchWhere", "file": "api/checkout.php", "line": 466 },
+        { "module": "api-checkout", "method": "buildProductSearchWhere", "file": "api/checkout.php", "line": 472 }
+      ],
+      "result": "ผลค้นหาต่างกันตาม schema ของแต่ละ tenant โดยไม่มีสัญญาณบอก",
+      "gotcha": "ฟังก์ชันรับ alias มาแต่เช็คคอลัมน์กับตาราง business_items ตายตัว ใช้กับตารางอื่นไม่ได้",
+      "tag": "info"
+    },
+    {
+      "id": "C13",
+      "name": "กรองแบรนด์ทั้งที่ไม่มีคอลัมน์ manufacturer",
+      "condition": "brand ไม่ว่าง แต่ hasTableColumn business_items manufacturer เป็น false",
+      "behavior": "ตอบ success true พร้อม products, categories, brands เป็น array ว่าง total 0 has_more false แล้ว exit ทันที ไม่ยิงคิวรีอะไรเลย",
+      "code_path": [{ "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 719 }],
+      "result": "หน้าร้านขึ้นสถานะไม่พบสินค้า แทนที่จะขึ้น error ว่าตัวกรองนี้ใช้ไม่ได้",
+      "gotcha": "ในทางปฏิบัติเกิดยากเพราะปุ่มแบรนด์จะโผล่ก็ต่อเมื่อคิวรี brands คืนค่ามา ซึ่งต้องมีคอลัมน์นี้อยู่แล้ว",
+      "tag": "info"
+    },
+    {
+      "id": "C14",
+      "name": "sort price_asc",
+      "condition": "sort เท่ากับ price_asc",
+      "behavior": "เรียงตาม COALESCE(NULLIF(sale_price,''), NULLIF(price,''), 0) ASC แล้วตัดสินเสมอด้วย id DESC",
+      "code_path": [{ "module": "api-checkout", "method": "buildProductSortClause", "file": "api/checkout.php", "line": 484 }],
+      "result": "ของราคา 0 หรือของที่ยังไม่ตั้งราคาลอยขึ้นมาบนสุด",
+      "gotcha": "ปุ่มราคาต่ำจึงเอาของที่ต้องสอบถามราคามาไว้หน้าแรก ทั้งที่ลูกค้ากดเพราะอยากเห็นของถูก",
+      "tag": "warn"
+    },
+    {
+      "id": "C15",
+      "name": "sort price_desc",
+      "condition": "sort เท่ากับ price_desc",
+      "behavior": "เรียงราคาใช้จริงจากมากไปน้อย แล้ว id DESC",
+      "code_path": [{ "module": "api-checkout", "method": "buildProductSortClause", "file": "api/checkout.php", "line": 486 }],
+      "result": "ของแพงขึ้นก่อน",
+      "gotcha": "ไม่มีปุ่มนี้ใน sortOptions ของ ShopClient บรรทัด 26 ถึง 30 ต้องเรียก API ตรงเท่านั้น",
+      "tag": "info"
+    },
+    {
+      "id": "C16",
+      "name": "sort discount",
+      "condition": "sort เท่ากับ discount ซึ่งคือปุ่ม โปรแรง",
+      "behavior": "คำนวณ 1 - sale_price/price เป็นสัดส่วนใน CASE WHEN ที่ต้องมีทั้งสองราคาและ sale_price น้อยกว่า price ไม่เข้าเงื่อนไขได้ 0 แล้วเรียงมากไปน้อย",
+      "code_path": [{ "module": "api-checkout", "method": "buildProductSortClause", "file": "api/checkout.php", "line": 488 }],
+      "result": "ของลดเยอะขึ้นก่อน ของไม่ลดกองรวมกันท้ายสุดเรียงตาม id DESC",
+      "gotcha": "เรียงด้วยเปอร์เซ็นต์ไม่ใช่จำนวนเงินที่ลด ของถูกลด 50% จึงชนะของแพงที่ลดหลักพัน",
+      "tag": "info"
+    },
+    {
+      "id": "C17",
+      "name": "sort name_asc",
+      "condition": "sort เท่ากับ name_asc",
+      "behavior": "เรียงตามชื่อขึ้น โดยไม่มี tie breaker ต่อท้าย",
+      "code_path": [{ "module": "api-checkout", "method": "buildProductSortClause", "file": "api/checkout.php", "line": 490 }],
+      "result": "รายการเรียงตามตัวอักษร",
+      "gotcha": "ไม่มี id ต่อท้ายทำให้ลำดับของชื่อซ้ำกันไม่คงที่ระหว่างหน้า สินค้าชื่อซ้ำจึงซ้ำหรือหายตอนโหลดหน้าถัดไปได้",
+      "tag": "warn"
+    },
+    {
+      "id": "C18",
+      "name": "sort ที่ไม่รู้จักตกไป latest",
+      "condition": "sort เป็นค่าอื่นรวมถึง latest หรือไม่ส่งมา",
+      "behavior": "คืน id DESC เป็น default โดยไม่ตรวจสอบค่าที่ส่งมาและไม่แจ้ง error",
+      "code_path": [{ "module": "api-checkout", "method": "buildProductSortClause", "file": "api/checkout.php", "line": 492 }],
+      "result": "ของใหม่สุดขึ้นก่อน",
+      "tag": "ok"
+    },
+    {
+      "id": "C19",
+      "name": "wishlist join ถูกข้ามเมื่อไม่มี user หรือไม่มีตาราง",
+      "condition": "getExistingUserIdFromLineUserId คืน null หรือ tableExists user_wishlist เป็น false",
+      "behavior": "แทนที่จะ join จะ select ค่าคงที่ 0 AS is_favorite และไม่ใส่ LEFT JOIN ลงใน SQL รวมถึงไม่ผูกพารามิเตอร์ตัวแรก",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 693 },
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 697 }
+      ],
+      "result": "ปุ่มหัวใจแสดงเป็นยังไม่ถูกใจทุกชิ้น ทั้งที่ผู้ใช้เคยกดไว้",
+      "gotcha": "เงื่อนไขคือ users ต้องมีแถวของ line_user_id นี้แล้ว ลูกค้าที่เพิ่งเข้ามาครั้งแรกยังไม่มีแถวจึงไม่มีวันเห็นรายการโปรด",
+      "tag": "info"
+    },
+    {
+      "id": "C20",
+      "name": "PHP error กลายเป็นร้านว่างแทนที่จะเป็นข้อความ error",
+      "condition": "คิวรีหรือโค้ดใน handleGetProducts โยน exception",
+      "behavior": "catch ตอบ success false พร้อมข้อความ Error loading products แต่ยังเป็น HTTP 200 ส่วน fetchProducts คืน res.json() โดยไม่ดู success เลย ทำให้ products กลายเป็น undefined แล้วถูกแปลงเป็น array ว่าง",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 810 },
+        { "module": "shop-api", "method": "fetchProducts", "file": "line-mini-app/src/lib/shop-api.ts", "line": 142 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 373 }
+      ],
+      "result": "หน้าจอขึ้น ไม่พบสินค้าที่ตรงกับเงื่อนไข เหมือนกรณีร้านไม่มีของ ทั้งที่จริงคือระบบพัง",
+      "gotcha": "อาการเดียวกันเกิดได้จาก C5, C9, C20 และ C24 การดูจากหน้าจออย่างเดียวจึงแยกไม่ออกว่าเป็นเรื่องไหน",
+      "tag": "danger"
+    },
+    {
+      "id": "C21",
+      "name": "ข้อความ exception ถูกส่งกลับให้ client",
+      "condition": "เกิด exception ใน handleGetProducts, handleGetProductDetail หรือ switch หลัก",
+      "behavior": "ต่อข้อความจาก getMessage() ลงใน field message ของ JSON ตรง ๆ",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 811 },
+        { "module": "api-checkout", "method": "handleGetProductDetail", "file": "api/checkout.php", "line": 580 },
+        { "module": "api-checkout", "method": "switch", "file": "api/checkout.php", "line": 94 }
+      ],
+      "result": "ข้อความ SQL หรือชื่อคอลัมน์ภายในหลุดออกไปยัง client ที่ไม่ผ่านการยืนยันตัวตน",
+      "gotcha": "handleGetShopInfo ทำตรงข้าม คือ log ไว้ฝั่ง server แล้วตอบข้อความกลาง ๆ บรรทัด 2791 ถึง 2792 ทั้งไฟล์เดียวกันจึงมีสองมาตรฐาน",
+      "tag": "warn"
+    },
+    {
+      "id": "C22",
+      "name": "พารามิเตอร์กรอง catalog ที่ PHP ไม่เคยอ่าน",
+      "condition": "client ส่ง include_zero_price, include_inactive, catalog_mode หรือ catalog_bucket",
+      "behavior": "handleGetProducts อ่านเฉพาะ line_account_id, category_id, search, sort, brand, line_user_id, limit, offset ชื่อสี่ตัวนั้นไม่ปรากฏในไฟล์ PHP เลย การกรองจึงเกิดฝั่ง client ล้วน",
+      "code_path": [
+        { "module": "shop-api", "method": "fetchProducts", "file": "line-mini-app/src/lib/shop-api.ts", "line": 138 },
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 680 },
+        { "module": "shop-api", "method": "filterVisibleShopProducts", "file": "line-mini-app/src/lib/shop-product-utils.ts", "line": 39 }
+      ],
+      "result": "total ที่แสดงมุมขวาบนเป็นยอดก่อนกรอง จึงมากกว่าจำนวนการ์ดที่เห็นจริงได้เสมอ",
+      "gotcha": "กรองหลังแบ่งหน้าแปลว่าหน้าหนึ่งอาจถูกกรองจนเหลือศูนย์ชิ้น ทั้งที่ยังมีของอยู่ในหน้าถัดไป ปุ่มโหลดเพิ่มยังอยู่แต่หน้าจอดูเหมือนว่าง",
+      "tag": "warn"
+    },
+    {
+      "id": "C23",
+      "name": "ป้ายส่วนลดคำนวณสองที่ ฝั่ง PHP ก่อนแล้วฝั่ง client ซ้ำ",
+      "condition": "sale_price น้อยกว่า price และ price มากกว่า 0",
+      "behavior": "enrichProductRow ตั้ง discount_percent, promotion_label เป็น โปรโมชัน และ badges ให้ก่อน จากนั้น enrichShopProduct ฝั่ง client จะข้ามงานถ้าเห็นว่าครบแล้ว มิฉะนั้นคำนวณเองด้วยสูตรเดียวกัน",
+      "code_path": [
+        { "module": "api-checkout", "method": "enrichProductRow", "file": "api/checkout.php", "line": 373 },
+        { "module": "shop-api", "method": "enrichShopProduct", "file": "line-mini-app/src/lib/shop-product-utils.ts", "line": 55 },
+        { "module": "shop-api", "method": "enrichShopProduct", "file": "line-mini-app/src/lib/shop-product-utils.ts", "line": 72 }
+      ],
+      "result": "ป้ายลดกี่เปอร์เซ็นต์แสดงตรงกันไม่ว่าจะมาจาก PHP รุ่นไหน",
+      "gotcha": "สูตรถูกเขียนซ้ำสองภาษา ถ้าแก้เกณฑ์ที่ใดที่หนึ่งอีกฝั่งจะไม่ตามไปด้วย",
+      "tag": "info"
+    },
+    {
+      "id": "C24",
+      "name": "catalog_bucket ที่ business_items ไม่มี ทำให้ตัวกรองคอลเลกชันตัดของทิ้งหมด",
+      "condition": "ตั้ง NEXT_PUBLIC_SHOP_CATALOG_BUCKET ไว้ ทำให้ activeBucket ไม่เป็น null ตั้งแต่ mount",
+      "behavior": "buildBusinessItemSelectFields ไม่ได้ select คอลัมน์ catalog_bucket เลย ทุกแถวจึงมีค่า undefined แล้ว filterVisibleShopProducts เทียบสตริงว่างกับ bucket ที่ตั้งไว้ ไม่ตรงจึงคืน false ทุกชิ้น",
+      "code_path": [
+        { "module": "api-checkout", "method": "buildBusinessItemSelectFields", "file": "api/checkout.php", "line": 425 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 112 },
+        { "module": "shop-api", "method": "filterVisibleShopProducts", "file": "line-mini-app/src/lib/shop-product-utils.ts", "line": 46 }
+      ],
+      "result": "ร้านว่างสนิททั้งที่ API คืนสินค้ามาครบ แถบคอลเลกชันก็ไม่ขึ้นเพราะ allBuckets ว่างเสมอ",
+      "gotcha": "ทางออกคือปล่อย env ตัวนี้ว่างไว้ ปุ่มล้างตัวกรองก็ไม่ช่วย เพราะมันตั้ง activeBucket กลับไปเป็นค่า default เดิม ที่บรรทัด 263",
+      "tag": "danger"
+    },
+    {
+      "id": "C25",
+      "name": "พิมพ์ค้นหาแล้วยิงใหม่ทั้งชุดหลังหยุด 250ms",
+      "condition": "ผู้ใช้พิมพ์ในช่องค้นหา",
+      "behavior": "useEffect ตั้ง setTimeout 250ms แล้ว clear ทุกครั้งที่พิมพ์ต่อ เมื่อ searchTerm เปลี่ยน queryKey เปลี่ยนตาม useInfiniteQuery จึงเริ่มจาก offset 0 ใหม่",
+      "code_path": [
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 118 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 139 }
+      ],
+      "result": "หน้าที่โหลดสะสมไว้ถูกทิ้ง เริ่มนับหน้าใหม่ทุกครั้งที่เปลี่ยนคำค้นหรือตัวกรอง",
+      "tag": "ok"
+    },
+    {
+      "id": "C26",
+      "name": "ราคาเป็น 0 หรือว่าง กลายเป็นโหมดสอบถามราคา",
+      "condition": "getEffectivePrice คืน null หรือค่าน้อยกว่าเท่ากับ 0",
+      "behavior": "การ์ดซ่อนราคาแล้วขึ้นป้าย สอบถามราคา พร้อมเปลี่ยนปุ่มใส่ตะกร้าเป็นปุ่มข้อความไปหน้ารายละเอียดพร้อม inquire=1",
+      "code_path": [
+        { "module": "shop-api", "method": "getEffectivePrice", "file": "line-mini-app/src/lib/shop-product-utils.ts", "line": 9 },
+        { "module": "line-mini-app", "method": "ShopProductCard", "file": "line-mini-app/src/components/miniapp/ShopProductCard.tsx", "line": 37 },
+        { "module": "line-mini-app", "method": "ShopProductCard", "file": "line-mini-app/src/components/miniapp/ShopProductCard.tsx", "line": 149 }
+      ],
+      "result": "สินค้าที่ยังไม่ตั้งราคายังโชว์อยู่แทนที่จะถูกซ่อน ตามคอมเมนต์ที่ ShopClient บรรทัด 149 ถึง 151",
+      "gotcha": "พารามิเตอร์ inquire=1 ไม่ถูกอ่านที่ปลายทาง ปุ่มนี้จึงพาไปหน้ารายละเอียดธรรมดา ไม่มีอะไรต่างเลย",
+      "tag": "warn"
+    },
+    {
+      "id": "C27",
+      "name": "สินค้าหมดต้องเป็นเลข 0 เป๊ะ ๆ เท่านั้น",
+      "condition": "product.stock === 0 แบบเทียบทั้งค่าและชนิด",
+      "behavior": "การ์ดจางลง ขึ้นป้าย สินค้าหมด และ disable ปุ่มใส่ตะกร้า ส่วนหน้ารายละเอียดก็ disable ปุ่มบนแถบล่างด้วยเงื่อนไขเดียวกัน",
+      "code_path": [
+        { "module": "line-mini-app", "method": "ShopProductCard", "file": "line-mini-app/src/components/miniapp/ShopProductCard.tsx", "line": 34 },
+        { "module": "line-mini-app", "method": "ShopProductCard", "file": "line-mini-app/src/components/miniapp/ShopProductCard.tsx", "line": 96 },
+        { "module": "line-mini-app", "method": "ShopProductDetailClient", "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx", "line": 416 }
+      ],
+      "result": "stock int(11) ที่ PDO คืนเป็น int จริง จึงเทียบติด แต่ tenant ที่ไม่มีคอลัมน์ stock จะได้ NULL AS stock ทำให้ null ไม่เท่ากับ 0 ป้ายไม่ขึ้นและปุ่มยังกดได้",
+      "gotcha": "stock ติดลบก็ไม่เข้าเงื่อนไขนี้เช่นกัน ของที่ขายเกินสต๊อกไปแล้วยังกดใส่ตะกร้าได้จากหน้าร้าน",
+      "tag": "warn"
+    },
+    {
+      "id": "C28",
+      "name": "ไม่มีรูปสินค้า",
+      "condition": "image_url เป็นค่าว่างหลัง COALESCE ของ image_url กับ photo_path",
+      "behavior": "การ์ดวาดไอคอน Store สีเทาแทนรูป ส่วน image_gallery ที่ประกอบจาก image_gallery, image_url และ photo_path จะเป็น array ว่างในหน้ารายละเอียด",
+      "code_path": [
+        { "module": "api-checkout", "method": "buildBusinessItemSelectFields", "file": "api/checkout.php", "line": 456 },
+        { "module": "api-checkout", "method": "buildShopImageGallery", "file": "api/checkout.php", "line": 398 },
+        { "module": "line-mini-app", "method": "ShopProductCard", "file": "line-mini-app/src/components/miniapp/ShopProductCard.tsx", "line": 60 }
+      ],
+      "result": "หน้าไม่พัง แค่ไม่มีรูป",
+      "tag": "ok"
+    },
+    {
+      "id": "C29",
+      "name": "ร้านยังไม่มีสินค้า",
+      "condition": "คิวรีคืน 0 แถว total เป็น 0",
+      "behavior": "PHP ตอบ success true พร้อม array ว่างทั้งสามชุด ฝั่ง client ซ่อนแถบหมวด แถบคอลเลกชัน และแถบแบรนด์ แล้ววาดกล่องว่างพร้อมไอคอน Store",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 801 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 275 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 373 }
+      ],
+      "result": "ข้อความ ไม่พบสินค้าที่ตรงกับเงื่อนไข พร้อมคำแนะนำให้ล้างตัวกรอง",
+      "gotcha": "ข้อความชวนให้เข้าใจว่าเป็นเรื่องตัวกรอง ทั้งที่กรณีร้านใหม่ยังไม่ลงของก็เห็นข้อความเดียวกัน แบนเนอร์จาก merch ยังแสดงตามปกติเพราะมาคนละคำขอ",
+      "tag": "info"
+    },
+    {
+      "id": "C30",
+      "name": "โหลดสินค้าเพิ่มและจุดจบของรายการ",
+      "condition": "has_more เป็น true คือ offset + limit ยังน้อยกว่า total",
+      "behavior": "ปุ่ม โหลดสินค้าเพิ่ม ปรากฏ กดแล้ว fetchNextPage ยิง offset ใหม่ที่คำนวณจาก offset บวก limit ที่ PHP สะท้อนกลับมา ซึ่งเป็นค่าหลัง clamp แล้ว",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetProducts", "file": "api/checkout.php", "line": 808 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 157 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 404 }
+      ],
+      "result": "เลื่อนดูได้ครบทุกหน้าจนกว่า has_more เป็น false",
+      "gotcha": "total มาจากคิวรีนับที่ใช้ WHERE ชุดเดียวกันแต่ยิงคนละครั้ง ถ้ามีของเพิ่มระหว่างหน้า ลำดับจะเลื่อนและอาจเห็นซ้ำหรือข้าม",
+      "tag": "info"
+    },
+    {
+      "id": "C31",
+      "name": "ตัวเลือกหน่วยขายไม่เคยแสดง เพราะ PHP ไม่ส่ง units มา",
+      "condition": "หน้ารายละเอียดอ่าน visibleProduct.units",
+      "behavior": "buildBusinessItemSelectFields ไม่ได้ select อะไรเกี่ยวกับ product_units และ handleGetProductDetail ก็ไม่ join ตารางนั้น units จึงเป็น undefined เสมอ ตกไปเป็น array ว่าง",
+      "code_path": [
+        { "module": "line-mini-app", "method": "ShopProductDetailClient", "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx", "line": 213 },
+        { "module": "line-mini-app", "method": "ShopProductDetailClient", "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx", "line": 297 },
+        { "module": "api-checkout", "method": "handleGetProductDetail", "file": "api/checkout.php", "line": 558 }
+      ],
+      "result": "บล็อก หน่วยขาย ที่เขียนไว้ครบทั้งการคำนวณ factor และจำนวนสูงสุดต่อหน่วย ไม่เคยถูก render เลย unitFactor จึงเป็น 1 ตลอด",
+      "gotcha": "shop-api.ts ประกาศ type ProductUnit ไว้ และ addToCart ก็รองรับ unit_id แล้ว ฝั่ง admin มี api/product-units.php อยู่จริง ขาดแค่การ join ที่ endpoint นี้",
+      "tag": "warn"
+    },
+    {
+      "id": "C32",
+      "name": "product_id ไม่ถูกต้อง",
+      "condition": "product_id น้อยกว่าหรือเท่ากับ 0 หลังแปลงเป็น int",
+      "behavior": "ตอบ success false ข้อความ Missing product_id ทันทีก่อนแตะ DB ส่วนฝั่ง client ถ้า id ใน URL ไม่ใช่ตัวเลข จะไม่ยิงคำขอเลยเพราะ enabled เป็น false",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetProductDetail", "file": "api/checkout.php", "line": 538 },
+        { "module": "line-mini-app", "method": "ShopProductDetailClient", "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx", "line": 117 },
+        { "module": "line-mini-app", "method": "ShopProductDetailClient", "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx", "line": 181 }
+      ],
+      "result": "หน้าขึ้นข้อความ ไม่พบสินค้า โดยไม่มีปุ่มกลับ เพราะสาขานี้ return ก่อนถึงบล็อกที่มีปุ่ม",
+      "tag": "info"
+    },
+    {
+      "id": "C33",
+      "name": "สินค้าถูกปิดหรือคนละ line_account เปิดลิงก์ตรงไม่ได้",
+      "condition": "ไม่พบแถวที่ตรง p.id, is_active = 1 และเงื่อนไข line_account",
+      "behavior": "ตอบ success false ข้อความ Product not found แล้วหน้าแสดงข้อความนั้นพร้อมปุ่ม กลับไปร้านค้า",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetProductDetail", "file": "api/checkout.php", "line": 573 },
+        { "module": "line-mini-app", "method": "ShopProductDetailClient", "file": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx", "line": 198 }
+      ],
+      "result": "ลิงก์เก่าที่แชร์ไว้ใช้ไม่ได้เมื่อสินค้าถูกปิดขาย",
+      "gotcha": "เงื่อนไข success false ถูกรวมกับกรณี visibleProduct เป็น null จากตัวกรองฝั่ง client ด้วย ผู้ใช้จึงเห็นข้อความเดียวกันแม้ API จะคืนสินค้ามาแล้วก็ตาม",
+      "tag": "info"
+    },
+    {
+      "id": "C34",
+      "name": "shop_info หา shop_settings ของร้านตัวเองไม่เจอ แล้วหยิบของร้านอื่นมาแทน",
+      "condition": "ไม่มีแถว shop_settings ที่ line_account_id ตรงกับที่ resolve ได้",
+      "behavior": "ยิงคิวรีที่สองแบบไม่มีเงื่อนไข line_account เลย เอาแถวแรกที่มี promptpay_number หรือ bank_accounts ไม่ว่างมาใช้",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleGetShopInfo", "file": "api/checkout.php", "line": 2755 },
+        { "module": "api-checkout", "method": "handleGetShopInfo", "file": "api/checkout.php", "line": 2784 }
+      ],
+      "result": "ชื่อร้าน เลข PromptPay และเลขบัญชีธนาคารของ line_account อื่นใน tenant เดียวกันถูกส่งออกไปเป็นของร้านนี้",
+      "gotcha": "เป็นข้อมูลรับเงิน ไม่ใช่ข้อมูลแสดงผลเฉย ๆ ถ้ามีหน้าไหนเรียก action นี้เมื่อไร ลูกค้าจะโอนเงินเข้าบัญชีผิดร้านโดยไม่มีสัญญาณอะไรเลย",
+      "tag": "danger"
+    },
+    {
+      "id": "C35",
+      "name": "แบนเนอร์และชั้นวางล้มเหลว แต่แคตตาล็อกยังอยู่",
+      "condition": "getShopMerch เจอ res.ok เป็น false แล้ว throw",
+      "behavior": "merchQuery พังแยกจาก catalogQuery เพราะเป็นคนละ useQuery ตัว banners และ merchSections ตกไปเป็น array ว่าง แล้วบล็อกนั้นถูกซ่อน",
+      "code_path": [
+        { "module": "shop-api", "method": "getShopMerch", "file": "line-mini-app/src/lib/shop-merch-api.ts", "line": 17 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 207 },
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 221 }
+      ],
+      "result": "หน้าร้านยังใช้งานได้ แค่ไม่มีแบนเนอร์",
+      "gotcha": "getShopMerch เป็นที่เดียวในกลุ่มนี้ที่ตรวจ res.ok ส่วน fetchProducts และ fetchProductDetail ไม่ตรวจอะไรเลย ความล้มเหลวจึงหน้าตาไม่เหมือนกัน",
+      "tag": "info"
+    },
+    {
+      "id": "C36",
+      "name": "section ที่ไม่มีสินค้าอยู่ในนั้นถูกตัดทิ้งฝั่ง client",
+      "condition": "section.products.length เป็น 0",
+      "behavior": "กรองออกก่อน render ทั้งที่ PHP คืนมาแล้ว",
+      "code_path": [
+        { "module": "line-mini-app", "method": "ShopClient", "file": "line-mini-app/src/components/miniapp/ShopClient.tsx", "line": 208 },
+        { "module": "api-home-content", "method": "getActiveSections", "file": "classes/MiniAppContentService.php", "line": 203 }
+      ],
+      "result": "ไม่มีหัวข้อชั้นวางลอยเปล่า ๆ บนหน้าร้าน",
+      "tag": "ok"
+    },
+    {
+      "id": "C37",
+      "name": "ตัวเรียงลำดับฝั่ง Odoo ที่ไม่มีใครเรียก",
+      "condition": "เรียก checkoutBuildOdooProductSortClause",
+      "behavior": "ฟังก์ชันนี้รองรับ featured_order, list_price และ online_price ครบ แต่ไม่มีจุดเรียกในไฟล์เลยหลังจากรวมตารางเป็น business_items เมื่อ 2026-05-15",
+      "code_path": [
+        { "module": "api-checkout", "method": "checkoutBuildOdooProductSortClause", "file": "api/checkout.php", "line": 497 },
+        { "module": "api-checkout", "method": "หมายเหตุการรวมตาราง", "file": "api/checkout.php", "line": 522 }
+      ],
+      "result": "โค้ดตายที่หลอกให้คิดว่ายังมีเส้นทางอ่านสินค้าจาก Odoo cache อยู่",
+      "gotcha": "type ฝั่ง client ยังประกาศ product_catalog_source และ category_id_is_string ไว้ใน ProductsResponse ทั้งที่ endpoint ไม่เคยคืนสองฟิลด์นี้",
+      "tag": "info"
+    }
+  ],
+  "modules_touched": [
+    {
+      "module": "line-mini-app",
+      "role": "หน้าจอลูกค้าใน LIFF ทั้งหน้าร้าน หน้ารายละเอียด และการ์ดสินค้า",
+      "methods": ["ShopClient", "ShopProductDetailClient", "ShopProductCard", "LineProvider"]
+    },
+    {
+      "module": "miniapp-config",
+      "role": "ตัดสินว่า bundle ที่ใช้ร่วมกันนี้กำลังเปิดร้านของ tenant ไหน และต้องยิง API ไปที่ origin ใด",
+      "methods": ["bootstrapLine", "resolveLiffId", "resolveLineAccountId", "getLineAccountId", "resolvePhpApiBaseUrl", "buildPhpRequestUrl"]
+    },
+    {
+      "module": "shop-api",
+      "role": "ชั้นห่อคำขอไป PHP พร้อมการ enrich และกรองฝั่ง client",
+      "methods": ["fetchProducts", "fetchProductDetail", "getShopMerch", "enrichShopProduct", "filterVisibleShopProducts", "getEffectivePrice"]
+    },
+    {
+      "module": "api-checkout",
+      "role": "endpoint จริงของแคตตาล็อก อ่านจาก business_items แล้ว enrich ก่อนตอบ",
+      "methods": ["handleGetProducts", "handleGetProductDetail", "handleGetShopInfo", "buildProductSortClause", "buildProductSearchWhere", "normalizeShopProductRow", "enrichProductRow"]
+    },
+    {
+      "module": "tenant-routing",
+      "role": "เลือก tenant DB จาก host ก่อน ถ้าไม่ได้จึงเลือกจาก line_account_id ที่ client ส่งมา",
+      "methods": ["reya_resolve_tenant_from_host", "reya_has_explicit_account_signal", "routeByLineAccount", "resolveTenantByLineAccount"]
+    },
+    {
+      "module": "api-home-content",
+      "role": "แบนเนอร์และชั้นวางที่แอดมินจัดไว้ ใช้ surface shop แยกจากหน้า home",
+      "methods": ["getHomeAll", "getActiveBanners", "getActiveSections", "lineAccountFilter"]
+    },
+    {
+      "module": "MySQL",
+      "role": "tenant DB ที่เก็บ business_items, business_categories, user_wishlist, shop_settings, miniapp_banners, miniapp_home_sections",
+      "methods": []
+    }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "miniapp-config",
+      "to_module": "shop-api",
+      "returns_what": "line_account_id จาก getter appConfig.lineAccountId",
+      "why_needed": "เป็นค่าเดียวที่กำหนดขอบเขตสินค้า ถ้าเปลี่ยน getter นี้กลับไปเป็นค่าคงที่ ทุกไฟล์ API ที่อ่านมันจะติดร้านที่ resolve ตอน import แทนที่จะเป็นร้านปัจจุบัน"
+    },
+    {
+      "from_module": "tenant-routing",
+      "to_module": "api-checkout",
+      "returns_what": "TenantContext ที่ถูกปักก่อน Database::getInstance()",
+      "why_needed": "ถ้า require route_by_account.php หลังบรรทัดที่เรียก Database::getInstance() ไปแล้ว การเชื่อมต่อจะค้างอยู่ที่ DB legacy ทั้งคำขอ อ่านสินค้าผิด tenant ทันที"
+    },
+    {
+      "from_module": "api-checkout",
+      "to_module": "line-mini-app",
+      "returns_what": "has_more, offset, limit",
+      "why_needed": "getNextPageParam คำนวณ offset ถัดไปจากสามค่านี้ ถ้า endpoint หยุดคืน has_more ปุ่มโหลดเพิ่มจะหายไปและลูกค้าเห็นแค่ 12 ชิ้นแรกตลอดกาล"
+    },
+    {
+      "from_module": "api-checkout",
+      "to_module": "line-mini-app",
+      "returns_what": "discount_percent, promotion_label, badges จาก enrichProductRow",
+      "why_needed": "ถ้าฟิลด์เหล่านี้หายไป ป้ายโปรจะไปพึ่ง enrichShopProduct ฝั่ง client ซึ่งคำนวณจาก price กับ sale_price เท่านั้น โปรที่ตั้งเป็น promotion_label ในหลังบ้านจะหายทั้งหมด"
+    },
+    {
+      "from_module": "api-checkout",
+      "to_module": "line-mini-app",
+      "returns_what": "stock เป็นตัวเลข int",
+      "why_needed": "ตรรกะสินค้าหมดทั้งหน้าร้านและหน้ารายละเอียดใช้ stock === 0 แบบเทียบชนิดเข้ม ถ้าเปลี่ยนคอลัมน์เป็น decimal หรือ cast เป็นสตริงเมื่อไร ป้ายสินค้าหมดจะเงียบหายไปทันทีโดยไม่มี error"
+    },
+    {
+      "from_module": "MySQL",
+      "to_module": "api-checkout",
+      "returns_what": "โครงคอลัมน์จาก SHOW COLUMNS ที่ getTableColumns cache ไว้",
+      "why_needed": "select list, เงื่อนไขค้นหา และตัวกรองแบรนด์ ถูกประกอบจากผลนี้ทั้งหมด tenant ที่ schema ไม่ครบจะได้ SQL คนละหน้าตาโดยไม่มีข้อความเตือน"
+    }
+  ],
+  "gotchas": [
+    "ขอบเขตสินค้าอิง line_account_id ที่ client ส่งมาเสมอ ไม่มีการยืนยันกับ LIFF token หรือ session ใด ๆ บน root domain พารามิเตอร์นี้ยังเป็นตัวเลือก tenant DB ด้วย",
+    "หน้าจอว่างหนึ่งแบบมาจากสาเหตุอย่างน้อยสี่อย่าง คือ resolver ตกไปเลข 1, ไม่มี mapping ใน tenant_line_account_routes, PHP โยน exception และตัวกรอง bucket ฝั่ง client เวลาไล่ปัญหาให้ดู payload ดิบก่อนเสมอ",
+    "fetchProducts และ fetchProductDetail คืน res.json() โดยไม่ตรวจ res.ok และไม่ตรวจ success ทุก error ฝั่ง server จึงกลายเป็นร้านว่างแทนที่จะเป็นข้อความ error",
+    "include_zero_price, include_inactive, catalog_mode และ catalog_bucket ถูกส่งไปทุกคำขอแต่ PHP ไม่อ่านสักตัว การกรองเกิดฝั่ง client หลังแบ่งหน้าแล้ว ตัวเลข total มุมขวาบนจึงไม่ตรงกับจำนวนการ์ดที่เห็น",
+    "catalog_bucket ไม่ได้ถูก select ออกมาจาก business_items เลย ถ้าตั้ง NEXT_PUBLIC_SHOP_CATALOG_BUCKET ไว้ ตัวกรองจะตัดสินค้าทิ้งทั้งหมด",
+    "หน้ารายละเอียดเขียนรองรับหน่วยขายหลายหน่วยไว้ครบ แต่ endpoint ไม่เคย join product_units บล็อกนั้นจึงเป็นโค้ดตาย และ unitFactor เป็น 1 ตลอด",
+    "handleGetShopInfo มี fallback ที่หยิบ shop_settings แถวไหนก็ได้ที่มีข้อมูลรับเงิน ข้ามขอบเขต line_account ไปเลย ห้ามเรียก action นี้จากหน้าที่ลูกค้าเห็นก่อนแก้จุดนั้น",
+    "LineProvider บล็อกทั้ง tree เมื่อ bootstrap error ทำให้โค้ดแสดง line.error ที่เขียนไว้ใน ShopClient และ ShopProductDetailClient ไม่มีทางถูก render"
+  ],
+  "file_refs": [
+    "line-mini-app/src/app/shop/page.tsx",
+    "line-mini-app/src/app/shop/product/page.tsx",
+    "line-mini-app/src/components/providers.tsx",
+    "line-mini-app/src/components/miniapp/ShopClient.tsx",
+    "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx",
+    "line-mini-app/src/components/miniapp/ShopProductCard.tsx",
+    "line-mini-app/src/lib/config.ts",
+    "line-mini-app/src/lib/line-miniapp.ts",
+    "line-mini-app/src/lib/shop-api.ts",
+    "line-mini-app/src/lib/shop-product-utils.ts",
+    "line-mini-app/src/lib/shop-merch-api.ts",
+    "line-mini-app/src/lib/php-bridge.ts",
+    "api/checkout.php",
+    "api/miniapp-home-content.php",
+    "bootstrap/route_by_account.php",
+    "bootstrap/resolve_subdomain.php",
+    "classes/TenantContext.php",
+    "classes/MiniAppContentService.php"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": ["ลูกค้าใน LIFF", "config + LIFF SDK", "line-mini-app", "api/checkout.php", "tenant DB"],
+    "rows": ["เปิดแอป", "ระบุร้าน", "ดึงสินค้า", "แสดงการ์ด", "หน้ารายละเอียด"],
+    "nodes": [
+      { "id": "n1", "lane": 0, "row": 0, "label": "เปิด Mini App จากลิงก์ LINE", "type": "start", "ref": "line-mini-app/src/components/providers.tsx:31" },
+      { "id": "n2", "lane": 1, "row": 0, "label": "bootstrapLine()", "type": "step", "ref": "line-mini-app/src/lib/line-miniapp.ts:7" },
+      { "id": "n3", "lane": 1, "row": 1, "label": "หา LIFF id ของ host นี้ได้ไหม", "type": "decision", "ref": "line-mini-app/src/lib/config.ts:346" },
+      { "id": "n4", "lane": 1, "row": 1, "label": "ไม่มี LIFF id จบทั้งหน้า", "type": "end", "ref": "line-mini-app/src/components/providers.tsx:50" },
+      { "id": "n5", "lane": 1, "row": 1, "label": "liff.init แล้ว resolveLineAccountId", "type": "step", "ref": "line-mini-app/src/lib/line-miniapp.ts:30" },
+      { "id": "n6", "lane": 1, "row": 1, "label": "line_account_id ที่ใช้ทั้งเส้นทาง", "type": "data", "ref": "line-mini-app/src/lib/config.ts:408" },
+      { "id": "n7", "lane": 2, "row": 2, "label": "useInfiniteQuery ขอหน้าละ 12", "type": "step", "ref": "line-mini-app/src/components/miniapp/ShopClient.tsx:138" },
+      { "id": "n8", "lane": 2, "row": 2, "label": "fetchProducts ต่อ query string", "type": "step", "ref": "line-mini-app/src/lib/shop-api.ts:114" },
+      { "id": "n24", "lane": 2, "row": 2, "label": "getShopMerch ขอแบนเนอร์", "type": "step", "ref": "line-mini-app/src/lib/shop-merch-api.ts:6" },
+      { "id": "n9", "lane": 3, "row": 2, "label": "host เป็น tenant subdomain ไหม", "type": "decision", "ref": "bootstrap/resolve_subdomain.php:160" },
+      { "id": "n10", "lane": 3, "row": 2, "label": "route_by_account ปัก tenant จากพารามิเตอร์", "type": "error", "ref": "bootstrap/route_by_account.php:48" },
+      { "id": "n11", "lane": 3, "row": 2, "label": "handleGetProducts", "type": "step", "ref": "api/checkout.php:677" },
+      { "id": "n25", "lane": 3, "row": 2, "label": "home_all surface shop", "type": "step", "ref": "api/miniapp-home-content.php:44" },
+      { "id": "n12", "lane": 4, "row": 2, "label": "SELECT business_items + count + หมวด + แบรนด์", "type": "data", "ref": "api/checkout.php:736" },
+      { "id": "n13", "lane": 3, "row": 2, "label": "normalizeShopProductRow ใส่ป้ายโปร", "type": "step", "ref": "api/checkout.php:416" },
+      { "id": "n14", "lane": 2, "row": 3, "label": "enrich แล้วกรองซ้ำฝั่ง client", "type": "step", "ref": "line-mini-app/src/components/miniapp/ShopClient.tsx:183" },
+      { "id": "n15", "lane": 2, "row": 3, "label": "เหลือสินค้าไหม", "type": "decision", "ref": "line-mini-app/src/components/miniapp/ShopClient.tsx:373" },
+      { "id": "n16", "lane": 2, "row": 3, "label": "ไม่พบสินค้าที่ตรงกับเงื่อนไข", "type": "end", "ref": "line-mini-app/src/components/miniapp/ShopClient.tsx:377" },
+      { "id": "n17", "lane": 0, "row": 3, "label": "เห็นการ์ดสินค้า ราคา ป้ายลด สต๊อก", "type": "step", "ref": "line-mini-app/src/components/miniapp/ShopProductCard.tsx:21" },
+      { "id": "n18", "lane": 0, "row": 4, "label": "กดการ์ดไป /shop/product?id=", "type": "step", "ref": "line-mini-app/src/components/miniapp/ShopProductCard.tsx:48" },
+      { "id": "n19", "lane": 2, "row": 4, "label": "fetchProductDetail", "type": "step", "ref": "line-mini-app/src/lib/shop-api.ts:153" },
+      { "id": "n20", "lane": 3, "row": 4, "label": "handleGetProductDetail", "type": "step", "ref": "api/checkout.php:531" },
+      { "id": "n21", "lane": 4, "row": 4, "label": "SELECT แถวเดียว is_active = 1", "type": "data", "ref": "api/checkout.php:558" },
+      { "id": "n22", "lane": 3, "row": 4, "label": "Product not found", "type": "end", "ref": "api/checkout.php:573" },
+      { "id": "n23", "lane": 0, "row": 4, "label": "เห็นราคา สต๊อก และปุ่มใส่ตะกร้า", "type": "end", "ref": "line-mini-app/src/components/miniapp/ShopProductDetailClient.tsx:211" }
+    ],
+    "edges": [
+      { "from": "n1", "to": "n2" },
+      { "from": "n2", "to": "n3" },
+      { "from": "n3", "to": "n4", "label": "ไม่มี", "dashed": true },
+      { "from": "n3", "to": "n5", "label": "มี" },
+      { "from": "n5", "to": "n6" },
+      { "from": "n6", "to": "n7" },
+      { "from": "n6", "to": "n24" },
+      { "from": "n7", "to": "n8" },
+      { "from": "n8", "to": "n9" },
+      { "from": "n9", "to": "n10", "label": "root domain", "dashed": true },
+      { "from": "n9", "to": "n11", "label": "subdomain ปักแล้ว" },
+      { "from": "n10", "to": "n11" },
+      { "from": "n11", "to": "n12" },
+      { "from": "n12", "to": "n13" },
+      { "from": "n13", "to": "n14" },
+      { "from": "n14", "to": "n15" },
+      { "from": "n15", "to": "n16", "label": "ไม่เหลือ", "dashed": true },
+      { "from": "n15", "to": "n17", "label": "เหลือ" },
+      { "from": "n24", "to": "n25" },
+      { "from": "n25", "to": "n17", "label": "แบนเนอร์และชั้นวาง", "dashed": true },
+      { "from": "n17", "to": "n18" },
+      { "from": "n18", "to": "n19" },
+      { "from": "n19", "to": "n20" },
+      { "from": "n20", "to": "n21" },
+      { "from": "n21", "to": "n22", "label": "ไม่พบ", "dashed": true },
+      { "from": "n21", "to": "n23", "label": "พบ" }
+    ]
+  }
+}

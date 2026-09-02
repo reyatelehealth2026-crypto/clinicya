@@ -1,0 +1,363 @@
+{
+  "id": "loyalty-rewards",
+  "title": "Loyalty: Earn/Deduct → Tier → Reward Redemption",
+  "summary": "LoyaltyPoints เป็น service หลักของ ledger ใหม่: อ่าน settings, คำนวณแต้ม, update balances/tier, ledger transaction และ lifecycle การแลกรางวัล.",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "Admin",
+      "module": "membership.php",
+      "method": "settings_action:update_rules",
+      "file": "membership.php",
+      "line": 198,
+      "action": "บันทึก points_settings ผ่าน LoyaltyPoints::updateSettings",
+      "calls": [
+        "LoyaltyPoints::updateSettings"
+      ]
+    },
+    {
+      "seq": 2,
+      "actor": "Loyalty Service",
+      "module": "classes/LoyaltyPoints.php",
+      "method": "calculatePoints",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 43,
+      "action": "ถ้าระบบ active และยอดถึงขั้นต่ำ คำนวณ floor(amount * points_per_baht)",
+      "returns": "points integer"
+    },
+    {
+      "seq": 3,
+      "actor": "Loyalty Service",
+      "module": "classes/LoyaltyPoints.php",
+      "method": "addPoints",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 184,
+      "action": "อ่าน balance → UPDATE users total/available → update tier → INSERT points_transactions earn",
+      "calls": [
+        "getUserPoints",
+        "updateUserTier"
+      ],
+      "sets": [
+        {
+          "field": "users.total_points",
+          "value": "+points"
+        },
+        {
+          "field": "users.available_points",
+          "value": "+points"
+        },
+        {
+          "field": "points_transactions.type",
+          "value": "earn"
+        }
+      ]
+    },
+    {
+      "seq": 4,
+      "actor": "Tier Service",
+      "module": "classes/TierService.php",
+      "method": "calculateTier",
+      "file": "classes/TierService.php",
+      "line": 118,
+      "action": "เลือก tier สูงสุดที่ min_points <= points และคำนวณ progress/next tier",
+      "returns": "tier info"
+    },
+    {
+      "seq": 5,
+      "actor": "Customer",
+      "module": "api/rewards.php",
+      "method": "handleRedeem",
+      "file": "api/rewards.php",
+      "line": 88,
+      "action": "หา user แล้วส่ง reward_id เข้า LoyaltyPoints::redeemReward",
+      "calls": [
+        "LoyaltyPoints::redeemReward"
+      ]
+    },
+    {
+      "seq": 6,
+      "actor": "Loyalty Service",
+      "module": "classes/LoyaltyPoints.php",
+      "method": "redeemReward",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 391,
+      "action": "validate reward active/stock/points แล้ว deduct points",
+      "calls": [
+        "deductPoints"
+      ]
+    },
+    {
+      "seq": 7,
+      "actor": "Loyalty Service",
+      "module": "classes/LoyaltyPoints.php",
+      "method": "redeemReward",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 430,
+      "action": "ลด stock, สร้าง redemption code และ INSERT reward_redemptions",
+      "sets": [
+        {
+          "field": "rewards.stock",
+          "value": "-1 when limited"
+        },
+        {
+          "field": "reward_redemptions.status",
+          "value": "pending/default"
+        }
+      ]
+    },
+    {
+      "seq": 8,
+      "actor": "Admin",
+      "module": "membership.php",
+      "method": "approve/deliver/cancel redemption",
+      "file": "membership.php",
+      "line": 108,
+      "action": "approve/deliver เปลี่ยน status; cancel คืนแต้มและคืน stockถ้ายังไม่ delivered",
+      "calls": [
+        "updateRedemptionStatus",
+        "addPoints",
+        "sendRedemptionNotification"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "L1",
+      "name": "Points disabled",
+      "condition": "points_settings.is_active=false",
+      "behavior": "calculatePoints คืน 0",
+      "code_path": "calculatePoints",
+      "result": "no earn",
+      "tag": "info"
+    },
+    {
+      "id": "L2",
+      "name": "Order below minimum",
+      "condition": "amount < min_order_for_points",
+      "behavior": "calculatePoints คืน 0",
+      "code_path": "calculatePoints",
+      "result": "no earn",
+      "tag": "info"
+    },
+    {
+      "id": "L3",
+      "name": "Insufficient points",
+      "condition": "available_points < required",
+      "behavior": "หยุดก่อน deduct",
+      "code_path": "redeemReward",
+      "result": "แต้มไม่เพียงพอ",
+      "tag": "danger"
+    },
+    {
+      "id": "L4",
+      "name": "Reward inactive",
+      "condition": "is_active false",
+      "behavior": "ปฏิเสธ",
+      "code_path": "redeemReward",
+      "result": "รางวัลไม่พร้อม",
+      "tag": "warn"
+    },
+    {
+      "id": "L5",
+      "name": "Reward out of stock",
+      "condition": "limited stock <=0",
+      "behavior": "ปฏิเสธ",
+      "code_path": "redeemReward",
+      "result": "รางวัลหมด",
+      "tag": "warn"
+    },
+    {
+      "id": "L6",
+      "name": "Cancel before delivery",
+      "condition": "redemption ไม่ delivered",
+      "behavior": "คืนแต้ม + stock และ status=cancelled",
+      "code_path": "membership.php",
+      "result": "refunded",
+      "tag": "ok"
+    },
+    {
+      "id": "L7",
+      "name": "Legacy balance fallback",
+      "condition": "points_transactions ไม่มี balance แต่ users.points มี",
+      "behavior": "getUserPoints fallback users table",
+      "code_path": "getUserPoints",
+      "result": "compatibility balance",
+      "tag": "warn",
+      "gotcha": "มีหลาย source of truth"
+    }
+  ],
+  "modules_touched": [
+    {
+      "module": "classes/LoyaltyPoints.php",
+      "role": "loyalty ledger + rewards",
+      "methods": [
+        "calculatePoints",
+        "getUserPoints",
+        "addPoints",
+        "deductPoints",
+        "redeemReward"
+      ]
+    },
+    {
+      "module": "classes/TierService.php",
+      "role": "membership tiers",
+      "methods": [
+        "getTiers",
+        "calculateTier"
+      ]
+    },
+    {
+      "module": "api/rewards.php",
+      "role": "customer rewards API",
+      "methods": [
+        "handleGetRewards",
+        "handleRedeem",
+        "handleMyRedemptions"
+      ]
+    },
+    {
+      "module": "membership.php",
+      "role": "admin rewards/settings lifecycle",
+      "methods": [
+        "reward_action",
+        "settings_action"
+      ]
+    }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "LoyaltyPoints",
+      "to_module": "Rewards API",
+      "returns_what": "success, redemption_code, reward, redemption_id",
+      "why_needed": "Mini App ต้องแสดงผลการแลก"
+    },
+    {
+      "from_module": "TierService",
+      "to_module": "LoyaltyPoints/Member UI",
+      "returns_what": "tier_code + progress",
+      "why_needed": "ทุกจุดแสดง tier ควรใช้ definition เดียวกัน"
+    }
+  ],
+  "gotchas": [
+    "มี balance columns และ ledger มากกว่าหนึ่งชุด: users.points / total_points / available_points / points_history / points_transactions",
+    "api/points.php มี redemption implementation อีกรูปแบบที่เขียน users.points + points_history + point_redemptions ซึ่งซ้ำกับ LoyaltyPoints",
+    "redeemReward ใน LoyaltyPoints ทำหลาย write แต่ในช่วงที่อ่านไม่เห็น beginTransaction ครอบทั้ง flow",
+    "reward lookup บาง path fallback ไป default LINE account เมื่อ account ปัจจุบันไม่มี reward"
+  ],
+  "file_refs": [
+    "classes/LoyaltyPoints.php",
+    "classes/TierService.php",
+    "api/rewards.php",
+    "api/points.php",
+    "api/points-history.php",
+    "membership.php"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": [
+      "Admin/Order",
+      "Loyalty Service",
+      "Tier Service",
+      "Tenant DB",
+      "Customer"
+    ],
+    "rows": [
+      "Rules",
+      "Earn",
+      "Tier",
+      "Redeem",
+      "Fulfil"
+    ],
+    "nodes": [
+      {
+        "id": "l1",
+        "lane": "Admin/Order",
+        "row": "Rules",
+        "type": "start",
+        "label": "amount / rules"
+      },
+      {
+        "id": "l2",
+        "lane": "Loyalty Service",
+        "row": "Earn",
+        "type": "step",
+        "label": "calculate + addPoints",
+        "ref": "LoyaltyPoints.php"
+      },
+      {
+        "id": "l3",
+        "lane": "Tenant DB",
+        "row": "Earn",
+        "type": "step",
+        "label": "users + points_transactions"
+      },
+      {
+        "id": "l4",
+        "lane": "Tier Service",
+        "row": "Tier",
+        "type": "step",
+        "label": "calculate tier",
+        "ref": "TierService.php"
+      },
+      {
+        "id": "l5",
+        "lane": "Customer",
+        "row": "Redeem",
+        "type": "step",
+        "label": "choose reward"
+      },
+      {
+        "id": "l6",
+        "lane": "Loyalty Service",
+        "row": "Redeem",
+        "type": "decision",
+        "label": "active + stock + points?"
+      },
+      {
+        "id": "l7",
+        "lane": "Tenant DB",
+        "row": "Redeem",
+        "type": "step",
+        "label": "deduct + stock + redemption"
+      },
+      {
+        "id": "l8",
+        "lane": "Admin/Order",
+        "row": "Fulfil",
+        "type": "end",
+        "label": "approve / deliver / cancel"
+      }
+    ],
+    "edges": [
+      {
+        "from": "l1",
+        "to": "l2"
+      },
+      {
+        "from": "l2",
+        "to": "l3"
+      },
+      {
+        "from": "l3",
+        "to": "l4"
+      },
+      {
+        "from": "l4",
+        "to": "l5"
+      },
+      {
+        "from": "l5",
+        "to": "l6"
+      },
+      {
+        "from": "l6",
+        "to": "l7",
+        "label": "yes"
+      },
+      {
+        "from": "l7",
+        "to": "l8"
+      }
+    ]
+  }
+}

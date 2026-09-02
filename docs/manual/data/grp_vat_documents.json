@@ -1,0 +1,810 @@
+{
+  "id": "vat_documents",
+  "title": "เอกสารภาษี ใบเสร็จ ใบกำกับ ใบเสนอราคา",
+  "summary": "ชุดเอกสารบัญชีไทย 11 ประเภทที่ใช้ตารางเดียวกันทั้งหมด คือ business_documents กับ business_document_items เส้นทางจริงคือ documents.php เปิดโมดัล แล้ว POST ไป api/documents.php?action=create ซึ่งคิดยอดด้วย computeLineTotal และ calcVAT ก่อนออกเลขที่เอกสารด้วย genDocNumber การออกเลขปลอดภัยจริงเพราะมีครบทั้ง transaction, SELECT … FOR UPDATE และ UNIQUE KEY สองชั้น แต่สิ่งที่แยกใบเสร็จออกจากใบกำกับภาษีออกจากใบเสนอราคา มีแค่ค่า doc_type เท่านั้น ไม่มีการตรวจสอบใดต่างกันเลย",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "ผู้ดูแลร้าน",
+      "module": "documents-page",
+      "method": "documents.php",
+      "file": "documents.php",
+      "line": 29,
+      "action": "เปิดหน้าเอกสาร หน้านี้อ่าน tenant จาก $_SESSION['current_bot_id'] หรือ $_SESSION['line_account_id'] เท่านั้น ไม่มี fallback ต่อแบบฝั่ง API",
+      "returns": "$lineAccountId สำหรับทั้งหน้า",
+      "notes": "ถ้าค่านี้เป็นศูนย์ หน้าจะแสดงแบนเนอร์เตือนแทนตาราง แต่ api/documents.php ยัง fallback ต่อได้เอง ดู C21"
+    },
+    {
+      "seq": 2,
+      "actor": "documents.php",
+      "module": "documents-page",
+      "method": "slot resolver",
+      "file": "documents.php",
+      "line": 35,
+      "action": "ตรวจ doc_type ที่ส่งมาว่าอยู่ใน REYA_DOCUMENT_TYPES หรือเป็น slot พิเศษ TAX_REGISTER ถ้าไม่ใช่ตกกลับเป็น QT",
+      "calls": [{ "module": "document-helpers", "method": "REYA_DOCUMENT_TYPES", "file": "includes/document-helpers.php", "line": 27 }],
+      "returns": "$currentDocType ที่ใช้ได้แน่นอน",
+      "state_change": "doc_type ที่ไม่รู้จัก → QT"
+    },
+    {
+      "seq": 3,
+      "actor": "list.php",
+      "module": "documents-page",
+      "method": "server-render list",
+      "file": "includes/documents/list.php",
+      "line": 44,
+      "action": "ดึงเอกสาร 200 แถวแรกของ doc_type ปัจจุบัน กรองด้วย line_account_id เสมอ เรียงตาม issue_date DESC แล้ว id DESC",
+      "returns": "$rows สำหรับตารางหน้าแรก",
+      "notes": "LIMIT 200 เป็นค่าคงที่ในโค้ด ถ้าเอกสารเดือนนั้นเกิน 200 ใบต้องใช้ตัวกรองวันที่ช่วยแทน"
+    },
+    {
+      "seq": 4,
+      "actor": "create-modal",
+      "module": "documents-ui",
+      "method": "__docSubmit()",
+      "file": "includes/documents/create-modal.php",
+      "line": 359,
+      "action": "ประกอบ payload JSON จากฟอร์ม ส่ง doc_type ข้อมูลลูกค้า วันที่ vat_rate และ items แล้ว POST ไป api/documents.php?action=create",
+      "calls": [{ "module": "api-documents", "method": "POST action=create", "file": "includes/documents/create-modal.php", "line": 375 }],
+      "returns": "เอกสารเต็มใบที่เพิ่งสร้าง",
+      "notes": "payload ไม่มีคีย์ vat_inclusive เลย ฝั่ง UI จึงคิด VAT แบบแยกนอกเสมอ ดู C4 กับ C5"
+    },
+    {
+      "seq": 5,
+      "actor": "api/documents.php",
+      "module": "api-documents",
+      "method": "tenant resolve",
+      "file": "api/documents.php",
+      "line": 56,
+      "action": "หา line_account_id จาก session ก่อน ถ้าไม่ได้ลองอ่าน admin_users.line_account_id ถ้ายังไม่ได้ใช้ line_accounts ที่ active ตัวแรก ถ้าสุดท้ายยังเป็นศูนย์ตอบ 401 no_line_account",
+      "calls": [
+        { "module": "tenant-db", "method": "SELECT line_account_id FROM admin_users", "file": "api/documents.php", "line": 60 },
+        { "module": "tenant-db", "method": "SELECT id FROM line_accounts WHERE is_active = 1", "file": "api/documents.php", "line": 68 }
+      ],
+      "returns": "$lineAccountId ที่ใช้ scope ทุก query",
+      "notes": "คอมเมนต์ที่บรรทัด 52 บอกชัดว่าจงใจไม่รับ ?line_account_id จาก request อีกแล้วเพราะเคยเป็นช่อง IDOR ข้าม tenant"
+    },
+    {
+      "seq": 6,
+      "actor": "api/documents.php",
+      "module": "api-documents",
+      "method": "case 'create'",
+      "file": "api/documents.php",
+      "line": 302,
+      "action": "ตรวจ doc_type ว่ามีในตาราง REYA_DOCUMENT_TYPES แล้วอ่าน vat_rate ที่ค่าเริ่มต้น 7.00 กับ vat_inclusive ที่ค่าเริ่มต้นเป็นเท็จ ถ้า items ว่างตอบ items_required",
+      "returns": "$docType $vatRate $vatInclusive $rawItems",
+      "notes": "ค่าเริ่มต้น 7.00 เป็นเลขตายตัวในโค้ด ไม่ได้อ่านจาก shop_tax_info.default_vat_rate ดู C12"
+    },
+    {
+      "seq": 7,
+      "actor": "api/documents.php",
+      "module": "api-documents",
+      "method": "documents_norm_items()",
+      "file": "api/documents.php",
+      "line": 113,
+      "action": "วนทุกรายการ ข้ามรายการที่ชื่อว่างหรือจำนวนไม่เกินศูนย์ ตัดความยาวฟิลด์ตามขนาดคอลัมน์ แล้วสะสม subtotal จากยอดก่อนหักส่วนลด และสะสม totalDiscount จากผลต่างระหว่างยอดก่อนหักกับ line_total",
+      "calls": [{ "module": "document-helpers", "method": "computeLineTotal", "file": "api/documents.php", "line": 131 }],
+      "returns": "items, subtotal, discount_amount, vat_amount, total_amount",
+      "notes": "subtotal ที่เก็บลงฐานข้อมูลคือยอดก่อนหักส่วนลด ส่วนฐานที่ใช้คิด VAT คือ subtotal ลบ totalDiscount ที่บรรทัด 149"
+    },
+    {
+      "seq": 8,
+      "actor": "document-helpers",
+      "module": "document-helpers",
+      "method": "computeLineTotal()",
+      "file": "includes/document-helpers.php",
+      "line": 219,
+      "action": "คิดยอดบรรทัดตามสูตร qty คูณ unit_price แล้วหัก discount_percent ก่อน จึงหัก discount_amount ปิดท้ายด้วย max ไม่ให้ติดลบ แล้วปัดเศษ 2 ตำแหน่ง",
+      "returns": "line_total ที่ปัดแล้ว",
+      "notes": "ลำดับสำคัญ ส่วนลดเปอร์เซ็นต์คิดบนยอดเต็ม ส่วนลดจำนวนเงินคิดหลังจากนั้น"
+    },
+    {
+      "seq": 9,
+      "actor": "document-helpers",
+      "module": "document-helpers",
+      "method": "calcVAT()",
+      "file": "includes/document-helpers.php",
+      "line": 123,
+      "action": "คิด VAT สองโหมด โหมดแยกนอกคือ vat เท่ากับฐานคูณอัตรา แล้ว total เท่ากับฐานบวก vat โหมดรวมในคือถอด vat ออกจากยอดที่ส่งมาโดยหารด้วยหนึ่งบวกอัตรา ทั้งสามค่าปัดเศษ 2 ตำแหน่งตอนคืนค่า",
+      "returns": "base, vat, total",
+      "notes": "อัตราถูกบีบด้วย max ไม่ให้ติดลบที่บรรทัด 125 แต่ไม่มีเพดานบน ส่ง vat_rate 900 ก็คำนวณให้"
+    },
+    {
+      "seq": 10,
+      "actor": "api/documents.php",
+      "module": "api-documents",
+      "method": "beginTransaction()",
+      "file": "api/documents.php",
+      "line": 325,
+      "action": "เปิด transaction ครอบทั้งการออกเลขที่เอกสารและการ INSERT ทั้งหัวเอกสารและรายการ ถ้ามีอะไรพลาดจะ rollBack ทั้งก้อนที่บรรทัด 371",
+      "state_change": "ไม่มีเลขเอกสารค้าง เพราะการเพิ่ม last_seq อยู่ใน transaction เดียวกับ INSERT",
+      "returns": "ขอบเขต transaction ที่ genDocNumber จะใช้ต่อ"
+    },
+    {
+      "seq": 11,
+      "actor": "document-helpers",
+      "module": "document-helpers",
+      "method": "genDocNumber()",
+      "file": "includes/document-helpers.php",
+      "line": 55,
+      "action": "คิด year_month จากปี พ.ศ. สองหลักท้ายบวกเดือน แล้ว INSERT IGNORE แถวตัวนับ ตามด้วย SELECT … FOR UPDATE เพื่อล็อกแถว อ่าน last_seq บวกหนึ่ง แล้ว UPDATE กลับ ก่อนคืนค่าเป็นรูปแบบ PREFIX ขีด YYMM ขีด เลขสี่หลัก",
+      "calls": [
+        { "module": "tenant-db", "method": "INSERT IGNORE document_sequences", "file": "includes/document-helpers.php", "line": 80 },
+        { "module": "tenant-db", "method": "SELECT … FOR UPDATE", "file": "includes/document-helpers.php", "line": 87 },
+        { "module": "tenant-db", "method": "UPDATE last_seq", "file": "includes/document-helpers.php", "line": 99 }
+      ],
+      "returns": "เลขที่เอกสาร เช่น INV-6905-0042",
+      "state_change": "document_sequences.last_seq: n → n+1",
+      "notes": "$ownTx ที่บรรทัด 70 ทำให้ฟังก์ชันนี้เปิด transaction เองได้เมื่อ caller ยังไม่เปิด แต่ทั้งสอง caller ในระบบเปิดมาก่อนแล้ว"
+    },
+    {
+      "seq": 12,
+      "actor": "api/documents.php",
+      "module": "api-documents",
+      "method": "documents_insert()",
+      "file": "api/documents.php",
+      "line": 171,
+      "action": "INSERT หัวเอกสารลง business_documents พร้อม snapshot ข้อมูลลูกค้าและยอดเงินทั้งชุด สถานะเริ่มต้นเป็น pending_approval แล้ววน INSERT รายการลง business_document_items ทีละบรรทัด",
+      "calls": [{ "module": "tenant-db", "method": "INSERT business_document_items", "file": "api/documents.php", "line": 181 }],
+      "returns": "document_id",
+      "state_change": "เอกสารใหม่: (ไม่มี) → pending_approval",
+      "notes": "ข้อมูลลูกค้าเป็น snapshot ตามคอมเมนต์ในสคีมา แก้ที่ users ภายหลังไม่กระทบเอกสารที่ออกไปแล้ว"
+    },
+    {
+      "seq": 13,
+      "actor": "api/documents.php",
+      "module": "api-documents",
+      "method": "commit() + ActivityLogger",
+      "file": "api/documents.php",
+      "line": 359,
+      "action": "commit แล้วบันทึก activity log ชนิด create พร้อม doc_number และยอดรวม จากนั้นอ่านเอกสารเต็มใบกลับไปให้ฝั่งหน้าเว็บ",
+      "calls": [{ "module": "activity-log", "method": "logData", "file": "api/documents.php", "line": 361 }],
+      "returns": "เอกสารเต็มใบพร้อมรายการ",
+      "notes": "log เขียนหลัง commit ถ้า log ล้มเหลวเอกสารยังอยู่ครบ"
+    },
+    {
+      "seq": 14,
+      "actor": "api/documents.php",
+      "module": "api-documents",
+      "method": "case 'approve'",
+      "file": "api/documents.php",
+      "line": 470,
+      "action": "UPDATE สถานะเป็น approved โดยมีเงื่อนไขในตัว WHERE ว่าต้องยังเป็น pending_approval และเป็นของ tenant เดียวกัน แล้วเช็ค rowCount เพื่อรู้ว่าโดนจริงไหม",
+      "returns": "เอกสารที่อัปเดตแล้ว",
+      "state_change": "pending_approval → approved",
+      "notes": "ใช้ WHERE คุมสถานะแทนการอ่านมาเช็คก่อน จึงกันการกดอนุมัติซ้ำสองครั้งพร้อมกันได้เอง"
+    },
+    {
+      "seq": 15,
+      "actor": "api/documents.php",
+      "module": "api-documents",
+      "method": "case 'pdf'",
+      "file": "api/documents.php",
+      "line": 614,
+      "action": "อ่านเอกสารตาม id ที่ scope ด้วย line_account_id แล้วโหลดข้อมูลภาษีของร้านจากตาราง shop_tax_info ของ tenant นั้น ก่อนส่งทั้งสองก้อนให้ renderer",
+      "calls": [{ "module": "pdf-renderer", "method": "renderDocumentPrintable", "file": "api/documents.php", "line": 628 }],
+      "returns": "HTML สำหรับพิมพ์",
+      "notes": "ข้อมูลผู้ขายอยู่ในตาราง shop_tax_info ไม่ใช่ shop_settings ตามที่ CLAUDE.md เขียนไว้"
+    },
+    {
+      "seq": 16,
+      "actor": "pdf-renderer",
+      "module": "pdf-renderer",
+      "method": "renderDocumentPrintable()",
+      "file": "includes/documents/pdf-renderer.php",
+      "line": 77,
+      "action": "ประกอบหน้ากระดาษ A4 ขนาด 210 คูณ 297 มิลลิเมตร วันที่แปลงเป็นพุทธศักราชแบบเต็มเดือนด้วย formatThaiDate ที่ส่ง short เป็นเท็จ ยอดรวมพิมพ์สี่บรรทัดคือ รวมก่อนภาษี ส่วนลดรวม ภาษีมูลค่าเพิ่ม และยอดรวมสุทธิ",
+      "calls": [
+        { "module": "document-helpers", "method": "formatThaiDate", "file": "includes/document-helpers.php", "line": 148 },
+        { "module": "document-helpers", "method": "formatMoney", "file": "includes/document-helpers.php", "line": 209 }
+      ],
+      "returns": "HTML หนึ่งหน้าเต็มแบบ self-contained",
+      "notes": "ไม่ใช่ PDF จริง TCPDF และ DOMPDF ไม่ได้ติดตั้ง ผู้ใช้ต้องกดพิมพ์แล้วเลือก Save as PDF เอง"
+    },
+    {
+      "seq": 17,
+      "actor": "sales-tax-register",
+      "module": "sales-tax-register",
+      "method": "รายการภาษีขาย",
+      "file": "includes/documents/sales-tax-register.php",
+      "line": 30,
+      "action": "ดึงเฉพาะเอกสาร doc_type เท่ากับ TAX ที่ issue_date อยู่ในเดือนที่เลือก แล้วรวมยอดโดยข้ามใบที่สถานะ cancelled ก่อนแสดงตารางพร้อมลิงก์ export CSV ของช่วงเดียวกัน",
+      "calls": [{ "module": "api-documents", "method": "action=export_csv", "file": "includes/documents/sales-tax-register.php", "line": 84 }],
+      "returns": "ตารางรายเดือนพร้อมยอดรวม subtotal, vat, total",
+      "notes": "ขอบเขตเดือนคำนวณด้วย last day of this month ที่บรรทัด 24 จึงครอบเดือนกุมภาพันธ์ปีอธิกสุรทินได้ถูก"
+    }
+  ],
+  "cases": [
+    {
+      "id": "C1",
+      "name": "ออกเลขเอกสารพร้อมกันสองคำขอ ป้องกันครบทั้งสามชั้น",
+      "condition": "สองคำขอ create ของ tenant เดียวกัน doc_type เดียวกัน เดือนเดียวกัน วิ่งพร้อมกัน",
+      "behavior": "คำขอแรกล็อกแถวตัวนับด้วย SELECT … FOR UPDATE คำขอที่สองรอจนคำขอแรก commit แล้วจึงอ่าน last_seq ค่าใหม่ ได้เลขถัดไปเสมอ ไม่ซ้ำกัน",
+      "code_path": [
+        { "module": "api-documents", "method": "beginTransaction", "file": "api/documents.php", "line": 325 },
+        { "module": "document-helpers", "method": "SELECT … FOR UPDATE", "file": "includes/document-helpers.php", "line": 87 },
+        { "module": "document-helpers", "method": "UPDATE last_seq", "file": "includes/document-helpers.php", "line": 99 }
+      ],
+      "result": "ปลอดภัยจริง มีครบทั้งสามอย่าง คือ transaction ที่ api/documents.php:325 กับ SELECT … FOR UPDATE ที่ includes/document-helpers.php:87 กับ UNIQUE KEY uq_seq_tenant_type_month ที่ database/migration_2026-05-24_documents.sql:112 และยังมี UNIQUE KEY uq_doc_number_account ที่ business_documents บรรทัด 68 เป็นตาข่ายชั้นสุดท้าย",
+      "gotcha": "ความปลอดภัยนี้ผูกกับ InnoDB ถ้าตารางถูกสร้างเป็น MyISAM ที่ไหนสักแห่ง FOR UPDATE จะเงียบและไม่ล็อกอะไรเลย",
+      "tag": "ok"
+    },
+    {
+      "id": "C2",
+      "name": "เดือนในเลขเอกสารมาจากนาฬิกา ไม่ใช่ issue_date",
+      "condition": "ผู้ใช้ตั้ง issue_date ย้อนไปเดือนก่อน แล้วกดสร้าง",
+      "behavior": "genDocNumber ถูกเรียกโดยไม่ส่งพารามิเตอร์ $when จึงใช้เวลาปัจจุบันที่ Asia/Bangkok เป็นตัวกำหนด year_month เอกสารลงวันที่เดือนก่อน แต่ได้เลขที่ของเดือนปัจจุบัน",
+      "code_path": [
+        { "module": "document-helpers", "method": "genDocNumber $when default", "file": "includes/document-helpers.php", "line": 65 },
+        { "module": "api-documents", "method": "genDocNumber เรียกด้วยสามอาร์กิวเมนต์", "file": "api/documents.php", "line": 327 },
+        { "module": "api-documents", "method": "convert ก็เรียกแบบเดียวกัน", "file": "api/documents.php", "line": 551 }
+      ],
+      "result": "เอกสาร INV-6906-0001 ที่ issue_date เป็นเดือนพฤษภาคม เกิดขึ้นได้ปกติ ลำดับเลขไม่เรียงตามวันที่บนเอกสาร",
+      "gotcha": "ฟังก์ชันรองรับ $when อยู่แล้วในลายเซ็น แต่ไม่มี caller ไหนส่งเข้าไปเลย การแก้จริงคือส่ง issue_date เข้าไป ไม่ใช่แก้ในฟังก์ชัน",
+      "tag": "warn"
+    },
+    {
+      "id": "C3",
+      "name": "YYMM เป็น พ.ศ. สองหลัก ไม่ตรงกับตัวอย่างที่เขียนไว้ในคอมเมนต์",
+      "condition": "ออกเอกสารเดือนพฤษภาคม ค.ศ. 2026",
+      "behavior": "โค้ดคิด buddhistYear เป็น 2569 แล้วเอา modulo 100 ได้ 69 ผลลัพธ์จริงคือ INV-6905-0001 แต่ทั้ง docblock และคอมเมนต์คอลัมน์ในสคีมาเขียนตัวอย่างว่า INV-2605-0001",
+      "code_path": [
+        { "module": "document-helpers", "method": "buddhistYear % 100", "file": "includes/document-helpers.php", "line": 68 },
+        { "module": "document-helpers", "method": "docblock อ้างว่า 2569 ให้ 26", "file": "includes/document-helpers.php", "line": 47 },
+        { "module": "document-helpers", "method": "sprintf รูปแบบสุดท้าย", "file": "includes/document-helpers.php", "line": 112 }
+      ],
+      "result": "โค้ดถูกตามสเปกที่บอกว่าใช้ท้ายปีพุทธศักราช แต่เอกสารประกอบทุกที่ยกตัวอย่างเป็นท้ายปีคริสต์ศักราช คนที่อ่านคอมเมนต์แล้วเขียนตัว parse เลขเอกสารจะพังทันที",
+      "gotcha": "คอมเมนต์ในไฟล์ migration บรรทัด 108 ก็เขียนตัวอย่าง 2605 เหมือนกัน ผิดทั้งคู่ อย่าเชื่อคอมเมนต์ ให้เชื่อบรรทัด 68",
+      "tag": "warn"
+    },
+    {
+      "id": "C4",
+      "name": "VAT แยกนอก คือเส้นทางเดียวที่หน้าเว็บใช้",
+      "condition": "vat_inclusive ไม่ถูกส่งมา หรือส่งมาเป็นค่าเท็จ",
+      "behavior": "ฐานคือยอดหลังหักส่วนลด vat เท่ากับฐานคูณอัตราหารร้อย total เท่ากับฐานบวก vat ทั้งสามค่าปัดเศษ 2 ตำแหน่งด้วย round ของ PHP ซึ่งปัดครึ่งขึ้น",
+      "code_path": [
+        { "module": "api-documents", "method": "vatInclusive ค่าเริ่มต้นเป็นเท็จ", "file": "api/documents.php", "line": 308 },
+        { "module": "document-helpers", "method": "สาขา exclusive", "file": "includes/document-helpers.php", "line": 131 },
+        { "module": "document-helpers", "method": "round 2 ตำแหน่งตอนคืนค่า", "file": "includes/document-helpers.php", "line": 135 }
+      ],
+      "result": "ยอด 100 บาท อัตรา 7 ได้ vat 7.00 total 107.00",
+      "tag": "ok"
+    },
+    {
+      "id": "C5",
+      "name": "VAT รวมใน ทำให้ยอดบนเอกสารไม่บาลานซ์",
+      "condition": "เรียก API ตรงพร้อม vat_inclusive เป็นค่าจริง",
+      "behavior": "calcVAT ถอด VAT ออกมาได้ถูกต้อง แต่ documents_norm_items ใช้เฉพาะคีย์ vat กับ total แล้วทิ้งคีย์ base ไป ค่า subtotal ที่เก็บลงฐานข้อมูลยังเป็นยอดรวม VAT อยู่",
+      "code_path": [
+        { "module": "document-helpers", "method": "สาขา inclusive คำนวณ base", "file": "includes/document-helpers.php", "line": 126 },
+        { "module": "api-documents", "method": "หยิบเฉพาะ vat กับ total ทิ้ง base", "file": "api/documents.php", "line": 149 },
+        { "module": "api-documents", "method": "subtotal เก็บยอดก่อนหักส่วนลดตรง ๆ", "file": "api/documents.php", "line": 152 },
+        { "module": "pdf-renderer", "method": "พิมพ์ subtotal เป็นรวมก่อนภาษี", "file": "includes/documents/pdf-renderer.php", "line": 288 }
+      ],
+      "result": "ใบกำกับภาษีพิมพ์ออกมาว่า รวมก่อนภาษี 107.00 ภาษีมูลค่าเพิ่ม 7.00 ยอดรวมสุทธิ 107.00 ซึ่งบวกกันไม่ได้ เอกสารภาษีที่ยอดไม่ตรงกันคือเอกสารที่ใช้ยื่นไม่ได้",
+      "gotcha": "หน้าเว็บไม่เคยส่ง vat_inclusive จึงไม่มีใครเจอผ่าน UI แต่ integration ใดที่ยิง API ตรงจะสร้างเอกสารเสียแบบเงียบ ๆ ไม่มี error",
+      "tag": "danger"
+    },
+    {
+      "id": "C6",
+      "name": "หน้าเว็บไม่มีช่อง VAT รวมใน",
+      "condition": "ผู้ใช้ต้องการออกใบกำกับแบบราคารวม VAT ผ่านหน้าจอ",
+      "behavior": "payload ที่ __docSubmit ประกอบไม่มีคีย์ vat_inclusive เลย ทำไม่ได้จากหน้าจอ ต้องคิดฐานเองแล้วกรอกราคาที่หัก VAT ออกแล้ว",
+      "code_path": [
+        { "module": "documents-ui", "method": "payload ทั้งก้อน", "file": "includes/documents/create-modal.php", "line": 359 },
+        { "module": "documents-ui", "method": "vat_rate เป็นฟิลด์เดียวที่ส่ง", "file": "includes/documents/create-modal.php", "line": 371 }
+      ],
+      "result": "ฟีเจอร์มีอยู่ในฝั่ง server แต่เข้าถึงไม่ได้จากหน้าจอ",
+      "tag": "info"
+    },
+    {
+      "id": "C7",
+      "name": "discount_percent มีแต่ฝั่ง server ไม่มีช่องกรอก",
+      "condition": "ต้องการหักส่วนลดเป็นเปอร์เซ็นต์ต่อบรรทัด",
+      "behavior": "computeLineTotal รองรับเต็มที่และ documents_norm_items ก็อ่านคีย์นี้ แต่ตารางในโมดัลมีช่องแค่ quantity, unit, unit_price, discount_amount จึงส่งมาเป็นศูนย์เสมอ",
+      "code_path": [
+        { "module": "document-helpers", "method": "หัก percent ก่อน amount", "file": "includes/document-helpers.php", "line": 222 },
+        { "module": "api-documents", "method": "อ่าน discount_percent จาก input", "file": "api/documents.php", "line": 129 },
+        { "module": "documents-ui", "method": "แถวรายการมีแค่ discount_amount", "file": "includes/documents/create-modal.php", "line": 285 }
+      ],
+      "result": "ต้องแปลงเปอร์เซ็นต์เป็นจำนวนเงินเองก่อนกรอก",
+      "gotcha": "ถ้าเรียก API ตรงแล้วใส่ discount_percent ตัวเลขบนหน้าจอตอนเปิดดูจะไม่ตรง เพราะ recalc ฝั่ง client ที่บรรทัด 311 ไม่ได้คิด percent เลย",
+      "tag": "info"
+    },
+    {
+      "id": "C8",
+      "name": "ส่วนลดต่อบรรทัดมากกว่ายอดบรรทัด",
+      "condition": "discount_amount มากกว่า qty คูณ unit_price",
+      "behavior": "computeLineTotal ตรึงผลลัพธ์ที่ศูนย์ด้วย max จึงไม่มี line_total ติดลบ แต่ documents_norm_items ยังบวกยอดเต็มเข้า subtotal และบวกผลต่างทั้งก้อนเข้า totalDiscount",
+      "code_path": [
+        { "module": "document-helpers", "method": "max(0.0, $gross)", "file": "includes/document-helpers.php", "line": 226 },
+        { "module": "api-documents", "method": "subtotal บวกยอดก่อนหัก", "file": "api/documents.php", "line": 146 },
+        { "module": "api-documents", "method": "totalDiscount เป็นผลต่าง", "file": "api/documents.php", "line": 147 }
+      ],
+      "result": "ฐาน VAT ยังถูกเพราะเป็นผลรวมของ line_total แต่ตัวเลขส่วนลดที่พิมพ์บนเอกสารจะดูเกินจริง ไม่ตรงกับที่ผู้ใช้กรอก",
+      "tag": "warn"
+    },
+    {
+      "id": "C9",
+      "name": "ปัดเศษสองรอบ ทำให้ subtotal ลบ discount ไม่เท่าฐานที่คิด VAT",
+      "condition": "unit_price มีทศนิยมเกินสองตำแหน่ง เช่น 10.005",
+      "behavior": "line_total ปัดต่อบรรทัด ส่วน subtotal และ discount_amount ปัดตอนสรุปจากค่าที่ยังไม่ปัด ฐานที่ส่งเข้า calcVAT คือผลต่างของค่าที่ยังไม่ปัด",
+      "code_path": [
+        { "module": "document-helpers", "method": "ปัดต่อบรรทัด", "file": "includes/document-helpers.php", "line": 226 },
+        { "module": "api-documents", "method": "ฐานคิดจากค่าไม่ปัด", "file": "api/documents.php", "line": 149 },
+        { "module": "api-documents", "method": "subtotal ปัดตอนเก็บ", "file": "api/documents.php", "line": 152 },
+        { "module": "api-documents", "method": "discount_amount ปัดตอนเก็บ", "file": "api/documents.php", "line": 153 }
+      ],
+      "result": "เอกสารอาจพิมพ์ตัวเลขที่บวกลบแล้วเพี้ยนหนึ่งสตางค์ และในกรณีที่ผู้ใช้ไม่ได้ใส่ส่วนลดเลย discount_amount ที่เก็บอาจกลายเป็นค่าติดลบเล็กน้อย",
+      "gotcha": "ป้องกันได้ที่ต้นทางง่ายกว่า คือบังคับ unit_price ไม่เกินสองตำแหน่งตอนรับค่า",
+      "tag": "warn"
+    },
+    {
+      "id": "C10",
+      "name": "ไม่มีอะไรแยกใบเสร็จออกจากใบกำกับภาษีนอกจากค่า doc_type",
+      "condition": "สร้างเอกสาร RE เทียบกับ TAX เทียบกับ QT",
+      "behavior": "ทั้งสามเดินโค้ดเส้นเดียวกันทุกบรรทัด ต่างกันแค่ค่า doc_type ที่ไปกำหนดสามอย่าง คือ prefix ของเลขที่เอกสาร ป้ายภาษาไทยที่พิมพ์หัวกระดาษ และแถวตัวนับแยกกันใน document_sequences ไม่มีการตรวจสอบใดต่างกันเลย",
+      "code_path": [
+        { "module": "document-helpers", "method": "ตารางประเภทเอกสารทั้ง 11 ชนิด", "file": "includes/document-helpers.php", "line": 27 },
+        { "module": "api-documents", "method": "ตรวจแค่ว่ามีอยู่ในตาราง", "file": "api/documents.php", "line": 303 },
+        { "module": "document-helpers", "method": "prefix คือ docType เอง", "file": "includes/document-helpers.php", "line": 112 },
+        { "module": "pdf-renderer", "method": "หัวกระดาษใช้ docTypeLabel", "file": "includes/documents/pdf-renderer.php", "line": 254 }
+      ],
+      "result": "ใบกำกับภาษีออกได้โดยไม่ต้องมีเลขผู้เสียภาษีลูกค้า ใบเสนอราคาออกได้โดยไม่ต้องมี valid_until ใบแจ้งหนี้ออกได้โดยไม่ต้องมี due_date ทุกฟิลด์เป็น optional เท่ากันหมด",
+      "gotcha": "สคีมาเขียนคอมเมนต์ว่า valid_until สำหรับ QT และ due_date สำหรับ BL กับ INV แต่ไม่มีโค้ดบังคับตามนั้นสักบรรทัด",
+      "tag": "danger"
+    },
+    {
+      "id": "C11",
+      "name": "ใบกำกับภาษีพิมพ์ได้ทั้งที่ยังไม่ตั้งค่าข้อมูลผู้เสียภาษีของร้าน",
+      "condition": "shop_tax_info ยังไม่มีแถวของ tenant นี้",
+      "behavior": "query คืน array ว่าง renderer จึงพิมพ์ชื่อกิจการว่า วงเล็บ ยังไม่ได้ตั้งชื่อกิจการ และตัดบรรทัดเลขประจำตัวผู้เสียภาษีออกทั้งบรรทัดเพราะเงื่อนไข shopTax ไม่เท่ากับสตริงว่าง",
+      "code_path": [
+        { "module": "api-documents", "method": "fetch แล้ว fallback เป็น array ว่าง", "file": "api/documents.php", "line": 616 },
+        { "module": "pdf-renderer", "method": "ชื่อกิจการ fallback", "file": "includes/documents/pdf-renderer.php", "line": 248 },
+        { "module": "pdf-renderer", "method": "บรรทัดเลขผู้เสียภาษีมีเงื่อนไข", "file": "includes/documents/pdf-renderer.php", "line": 251 }
+      ],
+      "result": "ได้ใบกำกับภาษีที่ไม่มีเลขประจำตัวผู้เสียภาษีของผู้ขาย ซึ่งใช้ทางภาษีไม่ได้ แต่ระบบไม่เตือนอะไรเลย",
+      "gotcha": "ทางแก้ที่ตรงจุดคือกันตั้งแต่ create ของ doc_type TAX ไม่ใช่ไปแก้ที่ renderer",
+      "tag": "danger"
+    },
+    {
+      "id": "C12",
+      "name": "ธงร้านจดทะเบียน VAT ไม่ถูกอ่านที่ไหนเลย",
+      "condition": "ร้านตั้ง is_vat_registered เป็นศูนย์ แล้วออกใบกำกับภาษี",
+      "behavior": "ทั้ง is_vat_registered และ default_vat_rate ถูกเขียนและแสดงเฉพาะในหน้าตั้งค่ากับ api/shop-tax.php ไม่มีโค้ดในเส้นทางออกเอกสารอ่านสองค่านี้เลย",
+      "code_path": [
+        { "module": "shop-tax", "method": "บันทึกสองฟิลด์นี้", "file": "api/shop-tax.php", "line": 132 },
+        { "module": "settings-shop-tax", "method": "ช่องกรอกบนหน้าตั้งค่า", "file": "includes/settings/shop-tax.php", "line": 156 },
+        { "module": "api-documents", "method": "vat_rate ใช้ค่าตายตัว 7.00", "file": "api/documents.php", "line": 307 }
+      ],
+      "result": "ร้านที่ยังไม่จด VAT ออกใบกำกับภาษีได้ตามปกติ และอัตรา VAT ที่ร้านตั้งไว้ไม่เคยถูกใช้เป็นค่าเริ่มต้นในโมดัลซึ่งฮาร์ดโค้ดไว้ที่ 7.00",
+      "tag": "warn"
+    },
+    {
+      "id": "C13",
+      "name": "ไม่มีการตรวจสิทธิ์ระดับ role เลยทั้งกลุ่ม",
+      "condition": "ผู้ใช้ที่ล็อกอินด้วย role ระดับ staff เรียก action=approve",
+      "behavior": "api/documents.php require เฉพาะ auth_check.php ซึ่งตรวจแค่ว่ามี $_SESSION['admin_user'] หรือไม่ ไม่มีการเรียก isAdmin หรือ isSuperAdmin ที่ไหนในไฟล์นี้ ในหน้า documents.php หรือใน include ย่อยเลย",
+      "code_path": [
+        { "module": "api-documents", "method": "require auth_check เท่านั้น", "file": "api/documents.php", "line": 28 },
+        { "module": "auth", "method": "ตรวจแค่ session admin_user", "file": "includes/auth_check.php", "line": 25 },
+        { "module": "api-documents", "method": "approve ไม่มี guard เพิ่ม", "file": "api/documents.php", "line": 463 }
+      ],
+      "result": "ใครก็ตามที่ล็อกอินเข้าหลังบ้านได้ สามารถสร้าง อนุมัติ ยกเลิก และ export CSV เอกสารภาษีทั้งหมดของ tenant นั้น",
+      "gotcha": "สถานะ pending_approval ทำให้ดูเหมือนมีขั้นอนุมัติจริง แต่คนสร้างกับคนอนุมัติเป็นคนเดียวกันได้ และปุ่มบันทึกแล้วอนุมัติเลยในโมดัลก็ยิงสองคำขอต่อกันเองที่บรรทัด 387",
+      "tag": "danger"
+    },
+    {
+      "id": "C14",
+      "name": "แก้ไขได้เฉพาะตอนยังรออนุมัติ",
+      "condition": "เอกสารมีสถานะ approved หรือ cancelled แล้วส่ง action=update",
+      "behavior": "อ่านเอกสารมาก่อนแล้วเทียบสถานะ ถ้าไม่ใช่ pending_approval ตอบ 409 พร้อมข้อความไทยว่าอนุมัติหรือยกเลิกแล้ว และในคำสั่ง UPDATE ยังมีเงื่อนไข status ซ้ำอีกชั้นเป็นตาข่ายกันแข่งกัน",
+      "code_path": [
+        { "module": "api-documents", "method": "เทียบสถานะก่อน", "file": "api/documents.php", "line": 389 },
+        { "module": "api-documents", "method": "WHERE status ซ้ำในคำสั่ง UPDATE", "file": "api/documents.php", "line": 410 }
+      ],
+      "result": "เอกสารที่อนุมัติแล้วเปลี่ยนยอดไม่ได้ ตรงตามหลักเอกสารภาษี",
+      "tag": "ok"
+    },
+    {
+      "id": "C15",
+      "name": "แก้ไขเอกสารคือลบรายการทั้งหมดแล้วใส่ใหม่",
+      "condition": "action=update ของเอกสารที่ยังรออนุมัติ",
+      "behavior": "DELETE รายการเดิมทั้งชุดด้วย document_id แล้ว INSERT ชุดใหม่ทีละบรรทัด ทั้งหมดอยู่ใน transaction เดียวกับการ UPDATE หัวเอกสาร",
+      "code_path": [
+        { "module": "api-documents", "method": "beginTransaction", "file": "api/documents.php", "line": 402 },
+        { "module": "api-documents", "method": "DELETE รายการเดิม", "file": "api/documents.php", "line": 431 },
+        { "module": "api-documents", "method": "commit", "file": "api/documents.php", "line": 444 }
+      ],
+      "result": "id ของ business_document_items เปลี่ยนทุกครั้งที่แก้ไข อะไรที่อ้าง id เหล่านั้นไว้จะหลุด",
+      "gotcha": "doc_number กับ doc_type ไม่อยู่ในรายการคอลัมน์ของคำสั่ง UPDATE ที่บรรทัด 404 จึงเปลี่ยนไม่ได้ ซึ่งถูกต้องแล้ว",
+      "tag": "info"
+    },
+    {
+      "id": "C16",
+      "name": "ยกเลิกเอกสารที่อนุมัติไปแล้วได้ และเลขที่ไม่ถูกคืน",
+      "condition": "action=cancel ของเอกสารสถานะ approved",
+      "behavior": "เงื่อนไขใน WHERE คือ status ไม่เท่ากับ cancelled เท่านั้น จึงข้ามจาก approved ไป cancelled ได้ตรง ๆ ตัวนับ last_seq ไม่ถูกลดลง",
+      "code_path": [
+        { "module": "api-documents", "method": "ต้องระบุเหตุผลก่อน", "file": "api/documents.php", "line": 495 },
+        { "module": "api-documents", "method": "WHERE status ไม่เท่ากับ cancelled", "file": "api/documents.php", "line": 500 },
+        { "module": "api-documents", "method": "เช็ค rowCount", "file": "api/documents.php", "line": 503 }
+      ],
+      "result": "approved → cancelled ทำได้ และเลขที่เอกสารนั้นหายไปจากลำดับถาวร ซึ่งเป็นพฤติกรรมที่ถูกสำหรับเอกสารภาษี เพราะเลขที่ต้องไม่ถูกใช้ซ้ำ",
+      "gotcha": "ใบที่ยกเลิกยังพิมพ์ได้ปกติ มีลายน้ำคำว่า ยกเลิก ทับหน้ากระดาษที่ includes/documents/pdf-renderer.php:95",
+      "tag": "warn"
+    },
+    {
+      "id": "C17",
+      "name": "อนุมัติซ้ำหรืออนุมัติเอกสารข้าม tenant",
+      "condition": "ส่ง action=approve ด้วย id ที่อนุมัติไปแล้ว หรือ id ของ tenant อื่น",
+      "behavior": "คำสั่ง UPDATE ไม่โดนแถวใด rowCount เป็นศูนย์ ตอบ not_found_or_locked ซึ่งเป็นข้อความเดียวกันทั้งสองกรณี",
+      "code_path": [
+        { "module": "api-documents", "method": "WHERE คุมทั้ง tenant และสถานะ", "file": "api/documents.php", "line": 472 },
+        { "module": "api-documents", "method": "rowCount ศูนย์", "file": "api/documents.php", "line": 475 }
+      ],
+      "result": "ไม่รั่วข้อมูลว่าเอกสารของ tenant อื่นมีอยู่จริงหรือไม่ ซึ่งดีต่อความปลอดภัย",
+      "tag": "ok"
+    },
+    {
+      "id": "C18",
+      "name": "แปลงเอกสารคัดลอกยอดเดิมทั้งก้อน ไม่คิด VAT ใหม่",
+      "condition": "action=convert จาก QT ไป INV",
+      "behavior": "subtotal, discount_amount, vat_rate, vat_amount, total_amount ถูกคัดลอกจากเอกสารต้นทางตรง ๆ ไม่ผ่าน documents_norm_items และไม่เรียก calcVAT อีกรอบ",
+      "code_path": [
+        { "module": "api-documents", "method": "คัดลอกยอดทั้งห้าฟิลด์", "file": "api/documents.php", "line": 570 },
+        { "module": "api-documents", "method": "documents_insert ตรง ๆ", "file": "api/documents.php", "line": 582 }
+      ],
+      "result": "เอกสารปลายทางมียอดตรงกับต้นทางเป๊ะ ซึ่งเป็นสิ่งที่ต้องการ แต่ถ้าเอกสารต้นทางมียอดผิดตาม C5 ความผิดจะถูกคัดลอกต่อไปเรื่อย ๆ",
+      "gotcha": "issue_date ของเอกสารใหม่คือวันนี้เสมอ ไม่ใช่วันที่ของต้นทาง ที่ api/documents.php:552",
+      "tag": "warn"
+    },
+    {
+      "id": "C19",
+      "name": "แปลงเอกสารไม่ตรวจสถานะต้นทางและไม่ตรวจว่าคู่ประเภทสมเหตุสมผล",
+      "condition": "ส่ง source_id ของเอกสารที่ยกเลิกแล้ว หรือ target_doc_type ที่ไม่เข้ากับต้นทาง",
+      "behavior": "ตรวจแค่ว่า source_id มากกว่าศูนย์ และ target_doc_type อยู่ในตารางประเภท จากนั้นดึงต้นทางมาแล้วสร้างใหม่ทันที ไม่ดูสถานะ ไม่ดูว่า group เป็น sales หรือ purchase",
+      "code_path": [
+        { "module": "api-documents", "method": "ตรวจ input แค่สองอย่าง", "file": "api/documents.php", "line": 523 },
+        { "module": "api-documents", "method": "ดึงต้นทางโดยไม่ดูสถานะ", "file": "api/documents.php", "line": 526 }
+      ],
+      "result": "แปลงใบเสนอราคาที่ยกเลิกแล้วไปเป็นใบกำกับภาษีได้ และแปลงเอกสารขายไปเป็นใบสั่งซื้อได้",
+      "gotcha": "หน้าเว็บซ่อนความจริงนี้ไว้ ปุ่มแปลงโผล่เฉพาะเอกสาร approved ที่เป็น QT, BL, INV ที่ includes/documents/list.php:213 และ chain ฝั่ง JS จำกัดปลายทางไว้แค่ INV กับ TAX ที่ includes/documents/create-modal.php:431 แต่ API ไม่บังคับอะไรเลย",
+      "tag": "danger"
+    },
+    {
+      "id": "C20",
+      "name": "แผนผังขั้นตอนบนหน้าจอไม่ตรงกับ chain การแปลงจริง",
+      "condition": "ผู้ใช้ดูแถบขั้นตอนเอกสารขายด้านบนตาราง",
+      "behavior": "แถบนั้นวาดเป็น QT ไป BL ไป INV ไป RE ไป TAX แต่ chain ที่ปุ่มแปลงใช้จริงคือ QT ไป INV, BL ไป INV, INV ไป TAX ไม่มีเส้นทางไป RE เลย",
+      "code_path": [
+        { "module": "documents-page", "method": "flowSteps ห้าขั้น", "file": "includes/documents/list.php", "line": 58 },
+        { "module": "documents-ui", "method": "chain สามคู่", "file": "includes/documents/create-modal.php", "line": 431 }
+      ],
+      "result": "ใบเสร็จรับเงินต้องสร้างใหม่จากศูนย์เสมอ กรอกรายการซ้ำเองทั้งใบ",
+      "tag": "warn"
+    },
+    {
+      "id": "C21",
+      "name": "หน้าเว็บกับ API หา tenant คนละแบบ",
+      "condition": "session ไม่มี current_bot_id เช่น super admin ที่ยังไม่ switch tenant",
+      "behavior": "หน้า documents.php ได้ศูนย์แล้วแสดงแบนเนอร์ว่าโปรดเลือกบัญชี ส่วน api/documents.php ยังเดินต่อสองชั้น คืออ่าน admin_users.line_account_id แล้วถ้ายังไม่ได้ก็หยิบ line_accounts ที่ active ตัวแรก",
+      "code_path": [
+        { "module": "documents-page", "method": "ไม่มี fallback", "file": "documents.php", "line": 29 },
+        { "module": "documents-page", "method": "แบนเนอร์แทนตาราง", "file": "documents.php", "line": 45 },
+        { "module": "api-documents", "method": "fallback ชั้นสอง", "file": "api/documents.php", "line": 58 },
+        { "module": "api-documents", "method": "fallback ชั้นสาม หยิบ active ตัวแรก", "file": "api/documents.php", "line": 66 }
+      ],
+      "result": "เกิดสภาพที่หน้าจอบอกว่ายังเลือกบัญชีไม่ได้ แต่ถ้ายิง API ตรงยังสร้างเอกสารเข้าบัญชีแรกที่ active ได้",
+      "gotcha": "fallback ชั้นสามอันตรายที่สุด เพราะเงียบสนิท เอกสารจะไปโผล่ใต้ line_account ที่ผู้ใช้ไม่ได้ตั้งใจเลือก",
+      "tag": "warn"
+    },
+    {
+      "id": "C22",
+      "name": "api/shop-tax.php ยังรับ line_account_id จาก query string",
+      "condition": "session ไม่มี current_bot_id แล้วยิง api/shop-tax.php?action=get&line_account_id=N",
+      "behavior": "รับค่าจาก query มาใช้เป็น tenant ตรง ๆ ต่างจาก api/documents.php ที่ตัดช่องนี้ทิ้งไปแล้วพร้อมคอมเมนต์อธิบายว่าเป็น IDOR",
+      "code_path": [
+        { "module": "shop-tax", "method": "รับจาก query", "file": "api/shop-tax.php", "line": 27 },
+        { "module": "api-documents", "method": "คอมเมนต์อธิบายว่าเคยเป็น IDOR", "file": "api/documents.php", "line": 52 }
+      ],
+      "result": "อ่านและเขียนข้อมูลผู้เสียภาษีของ line_account อื่นใน tenant เดียวกันได้ ซึ่งข้อมูลนั้นจะไปพิมพ์บนใบกำกับภาษีทุกใบ",
+      "gotcha": "ช่องโหว่เดิมถูกอุดที่ documents แต่ไม่ได้อุดที่ shop-tax ทั้งที่ทั้งคู่คัดลอกโค้ด resolve tenant ก้อนเดียวกันมา",
+      "tag": "danger"
+    },
+    {
+      "id": "C23",
+      "name": "ไม่มีรายการที่ใช้ได้เลย",
+      "condition": "items ส่งมาแต่ทุกบรรทัดชื่อว่าง หรือ quantity ไม่เกินศูนย์",
+      "behavior": "documents_norm_items ข้ามทุกบรรทัดจนได้อาเรย์ว่าง แล้ว create ตอบ no_valid_items ก่อนเปิด transaction จึงไม่มีเลขที่เอกสารถูกกินทิ้ง",
+      "code_path": [
+        { "module": "api-documents", "method": "ข้ามบรรทัดชื่อว่าง", "file": "api/documents.php", "line": 121 },
+        { "module": "api-documents", "method": "ข้ามบรรทัด qty ไม่เกินศูนย์", "file": "api/documents.php", "line": 125 },
+        { "module": "api-documents", "method": "ตอบ no_valid_items", "file": "api/documents.php", "line": 315 }
+      ],
+      "result": "ไม่มีเอกสารถูกสร้าง ไม่มีเลขที่เสียเปล่า",
+      "tag": "ok"
+    },
+    {
+      "id": "C24",
+      "name": "doc_type ไม่รู้จัก ถูกกันสองชั้น",
+      "condition": "ส่ง doc_type ที่ไม่มีใน REYA_DOCUMENT_TYPES",
+      "behavior": "ชั้นแรก create ตอบ bad_doc_type ทันที ถ้าเลี่ยงชั้นแรกได้ genDocNumber ยังโยน InvalidArgumentException ซ้ำอีกชั้น",
+      "code_path": [
+        { "module": "api-documents", "method": "ชั้นแรกที่ create", "file": "api/documents.php", "line": 303 },
+        { "module": "document-helpers", "method": "ชั้นสองใน genDocNumber", "file": "includes/document-helpers.php", "line": 58 },
+        { "module": "document-helpers", "method": "กัน lineAccountId ไม่เกินศูนย์ด้วย", "file": "includes/document-helpers.php", "line": 61 }
+      ],
+      "result": "ยังมีคอลัมน์ ENUM ในฐานข้อมูลเป็นตาข่ายชั้นสามที่ database/migration_2026-05-24_documents.sql:19",
+      "tag": "ok"
+    },
+    {
+      "id": "C25",
+      "name": "INSERT IGNORE กลบ error ทุกชนิดให้เป็น warning",
+      "condition": "การ INSERT แถวตัวนับล้มเหลวด้วยเหตุอื่นที่ไม่ใช่ค่าซ้ำ",
+      "behavior": "INSERT IGNORE ถูกใช้เพื่อให้สองคำขอที่แทรกพร้อมกันไม่ระเบิด แต่มันกลบ error อื่นด้วย โค้ดจึงกันไว้ด้วยการเช็คว่า SELECT ตามหลังต้องเจอแถว ถ้าไม่เจอโยน RuntimeException",
+      "code_path": [
+        { "module": "document-helpers", "method": "INSERT IGNORE", "file": "includes/document-helpers.php", "line": 80 },
+        { "module": "document-helpers", "method": "โยนเมื่อ SELECT ไม่เจอแถว", "file": "includes/document-helpers.php", "line": 94 }
+      ],
+      "result": "ล้มเหลวแบบดัง ไม่เงียบ และ rollBack ทั้ง transaction ที่บรรทัด 106",
+      "gotcha": "คำว่า year_month เป็นคำสงวนของ MySQL ต้องใส่ backtick ทุกที่ที่อ้างถึง ตามคอมเมนต์ที่บรรทัด 78",
+      "tag": "info"
+    },
+    {
+      "id": "C26",
+      "name": "วันที่แบบพุทธศักราช สองรูปแบบ และการล้มแบบเงียบ",
+      "condition": "แปลง issue_date เป็นข้อความภาษาไทย",
+      "behavior": "formatThaiDate บวก 543 เข้าปีเสมอ แบบสั้นให้ พ.ค. แบบยาวให้ พฤษภาคม ถ้าสตริงว่างหรือเป็น 0000-00-00 คืนขีดเดียว ถ้า parse ไม่ผ่านคืนสตริงเดิมกลับไปทั้งดุ้น",
+      "code_path": [
+        { "module": "document-helpers", "method": "กันค่าว่างกับ zero date", "file": "includes/document-helpers.php", "line": 150 },
+        { "module": "document-helpers", "method": "catch แล้วคืนค่าเดิม", "file": "includes/document-helpers.php", "line": 155 },
+        { "module": "document-helpers", "method": "บวก 543", "file": "includes/document-helpers.php", "line": 170 },
+        { "module": "pdf-renderer", "method": "หน้าพิมพ์ใช้แบบยาว", "file": "includes/documents/pdf-renderer.php", "line": 77 }
+      ],
+      "result": "หน้าพิมพ์ใช้แบบยาวเพราะส่ง short เป็นเท็จ ส่วนตารางในหน้ารายการและ API list ใช้แบบสั้นซึ่งเป็นค่าเริ่มต้น",
+      "gotcha": "การคืนสตริงเดิมเมื่อ parse ไม่ผ่าน แปลว่าเอกสารอาจพิมพ์วันที่เป็น 2026-05-24 ปนกับใบอื่นที่เป็น 24 พฤษภาคม 2569 โดยไม่มีสัญญาณเตือน",
+      "tag": "info"
+    },
+    {
+      "id": "C27",
+      "name": "รายการภาษีขายไม่รวมใบที่ยกเลิกในยอดรวม แต่ยังโชว์แถว",
+      "condition": "เดือนนั้นมีใบกำกับภาษีที่ถูกยกเลิก",
+      "behavior": "loop สรุปยอด continue ข้ามแถวที่สถานะ cancelled แต่ตาราง HTML ยังวาดแถวนั้นโดยใส่คลาสจางและขีดฆ่า",
+      "code_path": [
+        { "module": "sales-tax-register", "method": "continue ตอนสรุปยอด", "file": "includes/documents/sales-tax-register.php", "line": 43 },
+        { "module": "sales-tax-register", "method": "แถวยังแสดงแบบขีดฆ่า", "file": "includes/documents/sales-tax-register.php", "line": 115 }
+      ],
+      "result": "ตรงตามหลักภาษีขาย เลขที่เอกสารต้องยังอยู่ในทะเบียนเพื่อพิสูจน์ว่าไม่ได้ข้ามเลข แต่ยอดไม่ถูกนับ",
+      "tag": "ok"
+    },
+    {
+      "id": "C28",
+      "name": "รายการภาษีขายกลืน error แล้วแสดงตารางว่าง",
+      "condition": "query ล้มเหลว เช่น ตาราง business_documents ยังไม่ถูก migrate ใน tenant นั้น",
+      "behavior": "try catch ครอบทั้งบล็อก จับ Throwable เขียน error_log แล้วปล่อยให้ $rows เป็นอาเรย์ว่าง หน้าจึงแสดงข้อความว่าไม่มีใบกำกับภาษีในเดือนนี้",
+      "code_path": [
+        { "module": "sales-tax-register", "method": "catch Throwable", "file": "includes/documents/sales-tax-register.php", "line": 49 },
+        { "module": "documents-page", "method": "list.php ก็ catch แบบเดียวกัน", "file": "includes/documents/list.php", "line": 54 }
+      ],
+      "result": "ตารางภาษีขายว่างเปล่าอ่านได้สองแบบ คือเดือนนั้นไม่มีเอกสารจริง หรือ query พัง ต้องไปดู error_log เท่านั้นถึงจะแยกออก",
+      "gotcha": "อันตรายเป็นพิเศษกับรายงานภาษี เพราะคนใช้จะสรุปว่าเดือนนี้ไม่มียอดขาย",
+      "tag": "warn"
+    },
+    {
+      "id": "C29",
+      "name": "action pdf และ export_csv ไม่ตรวจ HTTP method",
+      "condition": "ยิง POST ไปที่ action=pdf หรือ action=export_csv",
+      "behavior": "ทุก action ที่ตอบ JSON มีบรรทัดตรวจ method แต่สอง action นี้ไม่มี ทำงานได้ทั้ง GET และ POST",
+      "code_path": [
+        { "module": "api-documents", "method": "case pdf ไม่มีบรรทัดตรวจ method", "file": "api/documents.php", "line": 606 },
+        { "module": "api-documents", "method": "case export_csv ก็ไม่มี", "file": "api/documents.php", "line": 633 }
+      ],
+      "result": "ผลกระทบจำกัด เพราะทั้งคู่เป็นการอ่านอย่างเดียว แต่ pdf เขียน activity log ชนิด export ทุกครั้งที่เรียกที่บรรทัด 620 จึงปั่นจำนวน log ได้",
+      "tag": "info"
+    },
+    {
+      "id": "C30",
+      "name": "ยังไม่มี PDF จริง มีแต่ HTML สำหรับสั่งพิมพ์",
+      "condition": "กดลิงก์เลขที่เอกสารเพื่อออกเอกสาร",
+      "behavior": "ส่ง Content-Type เป็น text/html แล้วคืนหน้า A4 ที่ฝัง CSS ไว้ในตัว พร้อมปุ่มเรียก window.print ผู้ใช้ต้องเลือก Save as PDF เอง",
+      "code_path": [
+        { "module": "api-documents", "method": "header text/html", "file": "api/documents.php", "line": 627 },
+        { "module": "pdf-renderer", "method": "หมายเหตุว่า TCPDF และ DOMPDF ยังไม่ติดตั้ง", "file": "includes/documents/pdf-renderer.php", "line": 6 },
+        { "module": "pdf-renderer", "method": "return HTML", "file": "includes/documents/pdf-renderer.php", "line": 303 }
+      ],
+      "result": "คอลัมน์ pdf_path ในสคีมามีอยู่แต่ไม่มีโค้ดไหนเขียนค่าลงไปเลย",
+      "gotcha": "หน้าพิมพ์โหลดฟอนต์ Sarabun จาก Google Fonts ที่บรรทัด 238 ถ้าเครื่องออกอินเทอร์เน็ตไม่ได้ ฟอนต์ไทยจะตกไปใช้ Tahoma แล้วการวางบรรทัดเพี้ยน",
+      "tag": "info"
+    },
+    {
+      "id": "C31",
+      "name": "ฐานข้อมูลต่อไม่ได้",
+      "condition": "Database::getInstance โยน exception ตอนเริ่ม request",
+      "behavior": "จับ Throwable ตอบ 500 พร้อม database_unavailable แล้วจบทันทีก่อนแตะ session หรือ action ใด",
+      "code_path": [{ "module": "api-documents", "method": "catch ตอน bootstrap", "file": "api/documents.php", "line": 43 }],
+      "result": "ล้มเร็วและชัด ไม่มีการทำงานครึ่ง ๆ กลาง ๆ",
+      "tag": "info"
+    },
+    {
+      "id": "C32",
+      "name": "action ที่ไม่รู้จัก",
+      "condition": "เรียกโดยไม่ส่ง action หรือส่งชื่อที่ไม่มีใน switch",
+      "behavior": "ตกลง default ตอบ 400 พร้อม unknown_action",
+      "code_path": [{ "module": "api-documents", "method": "default ของ switch", "file": "api/documents.php", "line": 684 }],
+      "result": "ไม่มี action ไหนหลุดออกจาก switch โดยไม่ถูกจัดการ ทุก case จบด้วย exit",
+      "tag": "ok"
+    }
+  ],
+  "modules_touched": [
+    {
+      "module": "documents-page",
+      "role": "หน้าแอดมิน documents.php เลือก slot ประเภทเอกสาร แล้ว include list.php หรือ sales-tax-register.php",
+      "methods": ["slot resolver", "server-render list", "navLink"]
+    },
+    {
+      "module": "documents-ui",
+      "role": "โมดัลสร้างและปุ่มลัด อนุมัติ ยกเลิก แปลง ทั้งหมดเป็น fetch ไป api/documents.php",
+      "methods": ["__docSubmit", "__docApprove", "__docCancel", "__docConvert", "recalc"]
+    },
+    {
+      "module": "api-documents",
+      "role": "endpoint เดียวรวมทุกการกระทำของเอกสาร ครอบ transaction และ scope tenant ทุก query",
+      "methods": ["list", "get", "create", "update", "approve", "cancel", "convert", "pdf", "export_csv", "documents_fetch", "documents_norm_items", "documents_insert"]
+    },
+    {
+      "module": "document-helpers",
+      "role": "หัวใจของกลุ่ม ออกเลขเอกสาร คิด VAT คิดยอดบรรทัด และแปลงวันที่เป็นพุทธศักราช",
+      "methods": ["genDocNumber", "calcVAT", "computeLineTotal", "formatThaiDate", "formatMoney", "docTypeLabel", "docStatusLabel", "docStatusBadge"]
+    },
+    {
+      "module": "pdf-renderer",
+      "role": "ประกอบหน้ากระดาษ A4 เป็น HTML ฝัง CSS พร้อมลายน้ำสำหรับใบที่ยกเลิก",
+      "methods": ["renderDocumentPrintable"]
+    },
+    {
+      "module": "sales-tax-register",
+      "role": "รายงานภาษีขายรายเดือน กรองเฉพาะ doc_type TAX และไม่นับใบที่ยกเลิกในยอดรวม",
+      "methods": ["monthly rollup"]
+    },
+    {
+      "module": "shop-tax",
+      "role": "ข้อมูลผู้ขายที่พิมพ์หัวเอกสาร เก็บในตาราง shop_tax_info หนึ่งแถวต่อ line_account",
+      "methods": ["get", "save"]
+    },
+    {
+      "module": "tenant-db",
+      "role": "MySQL ของ tenant เก็บ business_documents, business_document_items, document_sequences, shop_tax_info",
+      "methods": ["SELECT … FOR UPDATE", "INSERT IGNORE", "ON DUPLICATE KEY UPDATE"]
+    },
+    {
+      "module": "activity-log",
+      "role": "บันทึกร่องรอย create update approve cancel convert export ของทุกเอกสาร",
+      "methods": ["logData"]
+    }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "document-helpers",
+      "to_module": "api-documents",
+      "returns_what": "สตริงเลขที่เอกสารจาก genDocNumber",
+      "why_needed": "ถ้าคืนค่าซ้ำกับที่มีอยู่ INSERT จะชน UNIQUE KEY uq_doc_number_account แล้ว rollBack ทั้ง transaction ผู้ใช้จะเห็นแค่ create_failed โดยไม่รู้สาเหตุ"
+    },
+    {
+      "from_module": "document-helpers",
+      "to_module": "api-documents",
+      "returns_what": "คีย์ vat และ total จาก calcVAT",
+      "why_needed": "documents_norm_items ใช้แค่สองคีย์นี้และทิ้งคีย์ base ถ้ามีคนแก้ calcVAT ให้คืนค่าแบบอื่น ยอดบนเอกสารจะเพี้ยนทันทีโดยไม่มี test ดักไว้"
+    },
+    {
+      "from_module": "document-helpers",
+      "to_module": "api-documents",
+      "returns_what": "line_total จาก computeLineTotal",
+      "why_needed": "ค่านี้ถูกใช้สองที่พร้อมกัน คือเก็บลงแถวรายการ และใช้คำนวณ totalDiscount ที่บรรทัด 147 ซึ่งย้อนกลับไปกำหนดฐาน VAT ถ้าสูตรเปลี่ยน ยอด VAT ของทั้งใบเปลี่ยนตาม"
+    },
+    {
+      "from_module": "shop-tax",
+      "to_module": "pdf-renderer",
+      "returns_what": "แถว shop_tax_info ทั้งแถว",
+      "why_needed": "renderer อ่านคีย์ business_name, tax_id, branch_code, authorized_signer, signer_position ตรง ๆ ถ้าแถวหายไปเอกสารยังพิมพ์ได้แต่ไม่มีเลขผู้เสียภาษีผู้ขาย ตาม C11"
+    },
+    {
+      "from_module": "api-documents",
+      "to_module": "documents-ui",
+      "returns_what": "คีย์ data.id ในผลลัพธ์ของ create",
+      "why_needed": "ปุ่มบันทึกแล้วอนุมัติเลยยิงคำขอที่สองด้วย id นี้ ถ้า create คืนโครงสร้างอื่น เอกสารจะถูกสร้างแล้วค้างที่ pending_approval โดยไม่มี error ให้เห็น"
+    },
+    {
+      "from_module": "api-documents",
+      "to_module": "sales-tax-register",
+      "returns_what": "CSV จาก action=export_csv",
+      "why_needed": "ปุ่ม CSV ในหน้ารายการภาษีขายส่งช่วงวันที่ของเดือนที่เลือกไปให้ ถ้าตัวกรอง from กับ to ที่ฝั่ง API เปลี่ยนความหมาย ไฟล์ที่ส่งให้บัญชีจะครอบคลุมช่วงผิด"
+    }
+  ],
+  "gotchas": [
+    "การออกเลขเอกสารปลอดภัยจริงและมีครบทั้งสามชั้น คือ transaction ที่ api/documents.php:325 กับ SELECT … FOR UPDATE ที่ includes/document-helpers.php:87 กับ UNIQUE KEY ทั้งที่ document_sequences และ business_documents ในกลุ่มนี้จึงไม่ต้องกังวลเรื่องเลขซ้ำ",
+    "แต่เดือนในเลขที่เอกสารมาจากนาฬิกาไม่ใช่ issue_date เพราะไม่มี caller ไหนส่งพารามิเตอร์ $when เข้า genDocNumber เอกสารย้อนวันที่จึงได้เลขของเดือนปัจจุบัน",
+    "รูปแบบ YYMM จริงคือปีพุทธศักราชสองหลักท้าย พฤษภาคม 2569 ได้ 6905 ไม่ใช่ 2605 ตามที่คอมเมนต์ทั้งในโค้ดและในไฟล์ migration เขียนไว้ อย่าเขียนตัว parse เลขเอกสารจากคอมเมนต์",
+    "สิ่งเดียวที่แยกใบเสร็จออกจากใบกำกับภาษีออกจากใบเสนอราคาคือค่า doc_type ไม่มีการตรวจสอบใดต่างกันเลย ใบกำกับภาษีจึงออกได้โดยไม่มีเลขผู้เสียภาษีทั้งของลูกค้าและของร้าน",
+    "โหมด VAT รวมใน ทิ้งค่า base ที่ calcVAT คำนวณไว้ ทำให้ subtotal ที่เก็บยังรวม VAT อยู่ เอกสารที่พิมพ์ออกมาจะบวกลบไม่ลงตัว หน้าเว็บไม่เคยเปิดโหมดนี้ แต่ integration ที่ยิง API ตรงเปิดได้",
+    "ทั้งกลุ่มไม่มีการตรวจ role เลยสักบรรทัด auth_check.php ตรวจแค่ว่ามี session ผู้ใช้ระดับ staff จึงอนุมัติและยกเลิกเอกสารภาษีได้",
+    "ข้อมูลผู้ขายอยู่ในตาราง shop_tax_info ไม่ใช่ shop_settings ตามที่ CLAUDE.md ระบุ และ api/shop-tax.php ยังรับ ?line_account_id จาก query อยู่ ทั้งที่ api/documents.php ตัดช่องนั้นทิ้งไปแล้วเพราะเป็น IDOR",
+    "ยังไม่มีการสร้าง PDF จริง TCPDF และ DOMPDF ไม่ได้อยู่ใน composer หน้าพิมพ์เป็น HTML ที่ต้องกด Save as PDF เอง และคอลัมน์ pdf_path ในสคีมาไม่เคยถูกเขียนค่าลงไป",
+    "ทั้ง sales-tax-register.php และ list.php จับ Throwable แล้วแสดงตารางว่างต่อ รายงานภาษีขายที่ว่างเปล่าจึงแยกไม่ออกระหว่างเดือนที่ไม่มียอดกับ query ที่พัง ต้องดู error_log เท่านั้น",
+    "ค่า is_vat_registered กับ default_vat_rate ที่หน้าตั้งค่ามีให้กรอก ไม่ถูกอ่านที่ไหนในเส้นทางออกเอกสารเลย อัตรา VAT ในโมดัลฮาร์ดโค้ดไว้ที่ 7.00"
+  ],
+  "file_refs": [
+    "documents.php",
+    "api/documents.php",
+    "api/shop-tax.php",
+    "includes/document-helpers.php",
+    "includes/documents/list.php",
+    "includes/documents/create-modal.php",
+    "includes/documents/pdf-renderer.php",
+    "includes/documents/sales-tax-register.php",
+    "includes/settings/shop-tax.php",
+    "includes/auth_check.php",
+    "database/migration_2026-05-24_documents.sql"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": ["ผู้ดูแลร้าน", "หน้าเว็บเอกสาร", "api/documents.php", "document-helpers", "tenant DB", "pdf-renderer"],
+    "rows": ["เปิดหน้าและกรอก", "คิดยอดและออกเลข", "บันทึกและอนุมัติ", "พิมพ์และรายงานภาษีขาย"],
+    "nodes": [
+      { "id": "n1", "lane": 0, "row": 0, "label": "กรอกเอกสารในโมดัล", "type": "start", "ref": "includes/documents/create-modal.php:359" },
+      { "id": "n2", "lane": 1, "row": 0, "label": "POST action=create", "type": "step", "ref": "includes/documents/create-modal.php:375" },
+      { "id": "n3", "lane": 2, "row": 0, "label": "resolve tenant จาก session", "type": "step", "ref": "api/documents.php:56" },
+      { "id": "n4", "lane": 2, "row": 0, "label": "doc_type อยู่ในตารางไหม", "type": "decision", "ref": "api/documents.php:303" },
+      { "id": "n5", "lane": 2, "row": 0, "label": "bad_doc_type จบ", "type": "error", "ref": "api/documents.php:304" },
+      { "id": "n6", "lane": 2, "row": 1, "label": "documents_norm_items()", "type": "step", "ref": "api/documents.php:113" },
+      { "id": "n7", "lane": 3, "row": 1, "label": "computeLineTotal ต่อบรรทัด", "type": "step", "ref": "includes/document-helpers.php:219" },
+      { "id": "n8", "lane": 3, "row": 1, "label": "calcVAT แยกนอกหรือรวมใน", "type": "decision", "ref": "includes/document-helpers.php:126" },
+      { "id": "n9", "lane": 3, "row": 1, "label": "รวมใน ทิ้งค่า base ยอดเพี้ยน", "type": "error", "ref": "api/documents.php:149" },
+      { "id": "n10", "lane": 2, "row": 1, "label": "beginTransaction", "type": "step", "ref": "api/documents.php:325" },
+      { "id": "n11", "lane": 3, "row": 1, "label": "genDocNumber()", "type": "step", "ref": "includes/document-helpers.php:55" },
+      { "id": "n12", "lane": 4, "row": 1, "label": "SELECT … FOR UPDATE ตัวนับ", "type": "data", "ref": "includes/document-helpers.php:87" },
+      { "id": "n13", "lane": 4, "row": 1, "label": "UPDATE last_seq บวกหนึ่ง", "type": "data", "ref": "includes/document-helpers.php:99" },
+      { "id": "n14", "lane": 4, "row": 2, "label": "INSERT business_documents", "type": "data", "ref": "api/documents.php:171" },
+      { "id": "n15", "lane": 4, "row": 2, "label": "INSERT business_document_items", "type": "data", "ref": "api/documents.php:181" },
+      { "id": "n16", "lane": 2, "row": 2, "label": "commit แล้วเขียน activity log", "type": "step", "ref": "api/documents.php:359" },
+      { "id": "n17", "lane": 1, "row": 2, "label": "กดอนุมัติเลยหรือไม่", "type": "decision", "ref": "includes/documents/create-modal.php:387" },
+      { "id": "n18", "lane": 2, "row": 2, "label": "UPDATE status=approved", "type": "step", "ref": "api/documents.php:470" },
+      { "id": "n19", "lane": 0, "row": 3, "label": "เปิดเอกสารหรือรายการภาษีขาย", "type": "step", "ref": "includes/documents/list.php:193" },
+      { "id": "n20", "lane": 2, "row": 3, "label": "case pdf โหลด shop_tax_info", "type": "step", "ref": "api/documents.php:614" },
+      { "id": "n21", "lane": 5, "row": 3, "label": "renderDocumentPrintable()", "type": "step", "ref": "includes/documents/pdf-renderer.php:29" },
+      { "id": "n22", "lane": 5, "row": 3, "label": "HTML A4 กด Save as PDF เอง", "type": "end", "ref": "includes/documents/pdf-renderer.php:303" },
+      { "id": "n23", "lane": 1, "row": 3, "label": "รายการภาษีขายรายเดือน", "type": "step", "ref": "includes/documents/sales-tax-register.php:30" },
+      { "id": "n24", "lane": 4, "row": 3, "label": "SELECT doc_type=TAX ตามเดือน", "type": "data", "ref": "includes/documents/sales-tax-register.php:35" },
+      { "id": "n25", "lane": 1, "row": 3, "label": "ยอดรวมข้ามใบที่ยกเลิก", "type": "end", "ref": "includes/documents/sales-tax-register.php:43" }
+    ],
+    "edges": [
+      { "from": "n1", "to": "n2" },
+      { "from": "n2", "to": "n3" },
+      { "from": "n3", "to": "n4" },
+      { "from": "n4", "to": "n5", "label": "ไม่รู้จัก", "dashed": true },
+      { "from": "n4", "to": "n6", "label": "รู้จัก" },
+      { "from": "n6", "to": "n7" },
+      { "from": "n7", "to": "n8" },
+      { "from": "n8", "to": "n9", "label": "รวมใน", "dashed": true },
+      { "from": "n8", "to": "n10", "label": "แยกนอก" },
+      { "from": "n9", "to": "n10" },
+      { "from": "n10", "to": "n11" },
+      { "from": "n11", "to": "n12" },
+      { "from": "n12", "to": "n13" },
+      { "from": "n13", "to": "n14" },
+      { "from": "n14", "to": "n15" },
+      { "from": "n15", "to": "n16" },
+      { "from": "n16", "to": "n17" },
+      { "from": "n17", "to": "n18", "label": "อนุมัติเลย" },
+      { "from": "n17", "to": "n19", "label": "บันทึกไว้ก่อน" },
+      { "from": "n18", "to": "n19" },
+      { "from": "n19", "to": "n20", "label": "พิมพ์เอกสาร" },
+      { "from": "n20", "to": "n21" },
+      { "from": "n21", "to": "n22" },
+      { "from": "n19", "to": "n23", "label": "ดูรายงาน" },
+      { "from": "n23", "to": "n24" },
+      { "from": "n24", "to": "n25" }
+    ]
+  }
+}

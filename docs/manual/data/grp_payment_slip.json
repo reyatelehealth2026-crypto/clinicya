@@ -1,0 +1,827 @@
+{
+  "id": "payment_slip",
+  "title": "การชำระเงินและการตรวจสลิป",
+  "summary": "เส้นทางเงินของออเดอร์หน้าร้าน ตั้งแต่ลูกค้าเลือกช่องทางชำระใน Mini App จนเภสัชกรกดอนุมัติสลิปในหน้า shop/order-detail.php สถานะเงินเก็บสองที่คือ transactions.payment_status กับ payment_slips.status และไม่มีทรานแซกชันครอบทั้งเส้นอนุมัติเลย จุดที่ต้องรู้คือ Mini App ถอด QR จากสลิปแล้วส่ง qr_data ขึ้นมาจริง แต่ api/checkout.php ไม่เคยอ่านค่านั้น การตรวจ GhostX จึงเกิดได้เฉพาะตอนเภสัชกรกดปุ่มเองเท่านั้น",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "ลูกค้า Mini App",
+      "module": "line-mini-app",
+      "method": "CheckoutClient",
+      "file": "line-mini-app/src/components/miniapp/CheckoutClient.tsx",
+      "line": 295,
+      "action": "หน้าเช็คเอาท์เปิดให้เลือกได้แค่สองทางคือ transfer กับ cod ค่าเริ่มต้นคือ transfer",
+      "returns": "payment ที่เป็น 'transfer' หรือ 'cod'",
+      "notes": "ค่า credit และ later ไม่มีในหน้านี้ ทั้งสองมาจากฝั่งจ่ายยาใน inbox-v2.php เท่านั้น"
+    },
+    {
+      "seq": 2,
+      "actor": "ลูกค้า Mini App",
+      "module": "line-mini-app",
+      "method": "createShopOrder()",
+      "file": "line-mini-app/src/lib/shop-api.ts",
+      "line": 378,
+      "action": "ส่ง POST action=create_order พร้อม payment_method ที่เลือก line_user_id และ line_account_id จาก appConfig",
+      "calls": [{ "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1288 }],
+      "returns": "order_id order_number total payment_method"
+    },
+    {
+      "seq": 3,
+      "actor": "bootstrap",
+      "module": "route_by_account",
+      "method": "route_by_account.php",
+      "file": "bootstrap/route_by_account.php",
+      "line": 48,
+      "action": "อ่าน line_account_id จาก query string POST หรือ JSON body แล้วผูก PDO เข้ากับ tenant DB ที่ถูกตัว เพราะคำขอเข้ามาที่ root domain ไม่มี subdomain ให้ resolve",
+      "returns": "PDO ที่ชี้ tenant DB",
+      "notes": "ถ้าขั้นนี้พลาด ทุกก้าวต่อจากนี้จะอ่านและเขียนผิด tenant"
+    },
+    {
+      "seq": 4,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleCreateOrder()",
+      "file": "api/checkout.php",
+      "line": 1435,
+      "action": "แปลง payment_method เป็นสถานะเริ่มต้น cod ได้ status confirmed ทันที ส่วนช่องทางอื่นได้ pending แต่ payment_status ถูกตั้งเป็น pending เสมอทุกช่องทาง",
+      "sets": [
+        { "field": "transactions.status", "value": "confirmed เมื่อ cod มิฉะนั้น pending" },
+        { "field": "transactions.payment_status", "value": "pending เสมอ" }
+      ],
+      "state_change": "transactions: (ใหม่) → confirmed สำหรับ cod, pending สำหรับ transfer",
+      "notes": "คอมเมนต์ที่บรรทัด 1436 ระบุว่า ENUM ของ payment_status มีแค่ pending paid failed refunded จึงจงใจให้ cod เป็น pending"
+    },
+    {
+      "seq": 5,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "ALTER TABLE transactions",
+      "file": "api/checkout.php",
+      "line": 1441,
+      "action": "เปิด transaction ที่บรรทัด 1428 แล้วสั่ง ALTER TABLE ทันทีในบรรทัด 1441 ซึ่ง MySQL จะ implicit commit ปิดทรานแซกชันนั้นทิ้งไปเงียบ ๆ",
+      "state_change": "transaction ที่เปิดไว้ถูกปิดโดยปริยาย ทุกคำสั่งหลังจากนี้ทำงานแบบ autocommit",
+      "notes": "commit ที่บรรทัด 1592 และ rollBack ที่ 1652 จึงไม่ครอบอะไรจริง"
+    },
+    {
+      "seq": 6,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "INSERT INTO transactions",
+      "file": "api/checkout.php",
+      "line": 1446,
+      "action": "พยายาม INSERT สามระดับ ระดับแรกใส่ครบทุกคอลัมน์ ระดับสองตัด line_user_id ระดับสามตัด payment_status ออกด้วยสำหรับ schema เก่า",
+      "returns": "orderId จาก lastInsertId ที่บรรทัด 1518",
+      "sets": [{ "field": "transactions.payment_method", "value": "ค่าที่ลูกค้าเลือก" }]
+    },
+    {
+      "seq": 7,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "commit()",
+      "file": "api/checkout.php",
+      "line": 1592,
+      "action": "เคลียร์ cart_items ที่ 1578 ตั้ง wms_status pending_pick ให้ออเดอร์ cod ที่ 1585 แล้วเรียก commit",
+      "state_change": "transactions.wms_status: NULL → pending_pick เฉพาะออเดอร์ที่ status เป็น confirmed"
+    },
+    {
+      "seq": 8,
+      "actor": "AccountReceivableService",
+      "module": "ar-service",
+      "method": "createFromTransaction()",
+      "file": "api/checkout.php",
+      "line": 1599,
+      "action": "ถ้า payment_method อยู่ในชุด credit cod term invoice จะสร้างลูกหนี้การค้าให้อัตโนมัติ โดยกำหนดวันครบกำหนด 30 วันจากวันที่ออเดอร์",
+      "calls": [{ "module": "ar-service", "method": "createFromTransaction", "file": "classes/AccountReceivableService.php", "line": 68 }],
+      "returns": "ar_id หรือ null",
+      "notes": "อยู่นอก transaction ทั้งหมด ถ้าล้มจะ log ที่บรรทัด 1606 แล้วปล่อยให้ออเดอร์สำเร็จตามปกติ"
+    },
+    {
+      "seq": 9,
+      "actor": "ลูกค้า Mini App",
+      "module": "line-mini-app",
+      "method": "fetchOrderDetail()",
+      "file": "line-mini-app/src/lib/shop-api.ts",
+      "line": 463,
+      "action": "เปิดหน้า /order?id=... แล้วยิง action=get_order เพื่อดูสถานะและสลิปล่าสุด",
+      "calls": [{ "module": "api-checkout", "method": "handleGetOrder", "file": "api/checkout.php", "line": 2041 }],
+      "returns": "order พร้อม slip_image และ slip_status"
+    },
+    {
+      "seq": 10,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleGetOrder()",
+      "file": "api/checkout.php",
+      "line": 2078,
+      "action": "แนบสลิปใบล่าสุดจาก payment_slips โดยเรียงตาม created_at DESC LIMIT 1 แล้วซ่อม URL ที่ scheme เพี้ยนด้วย reyaFixSlipUrl",
+      "returns": "slip_image และ slip_status ที่เป็น pending approved หรือ rejected",
+      "notes": "ครอบด้วย try catch เงียบที่ 2085 เพราะ schema เก่าอาจไม่มีตาราง payment_slips"
+    },
+    {
+      "seq": 11,
+      "actor": "ลูกค้า Mini App",
+      "module": "line-mini-app",
+      "method": "needsSlipUpload()",
+      "file": "line-mini-app/src/components/miniapp/OrderDetailClient.tsx",
+      "line": 21,
+      "action": "ตัดสินว่าจะโชว์ฟอร์มแนบสลิปไหม เงื่อนไขคือ payment_method ต้องเป็น transfer payment_status ยังไม่ paid และ slip_status ต้องไม่ใช่ pending หรือ approved",
+      "returns": "true หรือ false",
+      "notes": "slip_status rejected ยังคืน true เพื่อให้ลูกค้าแนบใหม่ได้"
+    },
+    {
+      "seq": 12,
+      "actor": "ลูกค้า Mini App",
+      "module": "line-mini-app",
+      "method": "uploadPaymentSlip()",
+      "file": "line-mini-app/src/lib/shop-api.ts",
+      "line": 408,
+      "action": "ถอด QR จากรูปสลิปในเบราว์เซอร์ด้วย jsQR แบบ inversionAttempts attemptBoth แล้วแนบเป็นฟิลด์ qr_data ไปกับ multipart",
+      "calls": [{ "module": "line-mini-app", "method": "decodeSlipQr", "file": "line-mini-app/src/lib/slip-qr.ts", "line": 59 }],
+      "returns": "FormData ที่มี slip order_id line_account_id และ qr_data ถ้าถอดสำเร็จ",
+      "notes": "ค่านี้ถูกส่งจริงแต่ไม่มีใครรับ ดูเคส C15"
+    },
+    {
+      "seq": 13,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "handleUploadSlip()",
+      "file": "api/checkout.php",
+      "line": 1751,
+      "action": "ตรวจว่ามีไฟล์ ตรวจ MIME จาก $_FILES['slip']['type'] และตรวจขนาดไม่เกิน 5MB แล้วดึงออเดอร์จาก tenant DB ปัจจุบันอย่างเดียวที่บรรทัด 1773",
+      "returns": "แถว transactions หรือ Order not found",
+      "notes": "คอมเมนต์ที่ 1768 บอกว่าเคยมี fallback ข้าม tenant และถอดออกแล้วเพราะเป็น IDOR"
+    },
+    {
+      "seq": 14,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "move_uploaded_file()",
+      "file": "api/checkout.php",
+      "line": 1793,
+      "action": "ย้ายไฟล์ไป uploads/slips แล้วประกอบ URL จาก HTTP_HOST ของคำขอที่รับอัปโหลด ไม่ใช่จาก BASE_URL เพราะ BASE_URL ชี้ subdomain เดียวที่ไม่มี docroot ร่วมกัน",
+      "returns": "imageUrl แบบ absolute ที่บรรทัด 1806"
+    },
+    {
+      "seq": 15,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "INSERT INTO payment_slips",
+      "file": "api/checkout.php",
+      "line": 1812,
+      "action": "บันทึกแถวสลิปด้วย status pending โดยเขียนทั้ง order_id และ transaction_id เป็นค่าเดียวกัน ถ้าล้มจะลองใหม่แบบไม่ใส่ user_id ที่บรรทัด 1820",
+      "sets": [{ "field": "payment_slips.status", "value": "pending" }],
+      "state_change": "payment_slips: (ใหม่) → pending",
+      "notes": "ไม่เขียน line_account_id และไม่เขียน amount ทั้งสองคอลัมน์มีอยู่จริงใน tenant template"
+    },
+    {
+      "seq": 16,
+      "actor": "api/checkout.php",
+      "module": "api-checkout",
+      "method": "UPDATE transactions",
+      "file": "api/checkout.php",
+      "line": 1834,
+      "action": "แตะแค่ updated_at ไม่เปลี่ยน status และไม่เปลี่ยน payment_status โดยเจตนา สถานะรอตรวจสื่อด้วยแถว payment_slips ที่ยัง pending เท่านั้น",
+      "state_change": "transactions.updated_at เปลี่ยน แต่ payment_status ยังคงเป็น pending",
+      "notes": "คอมเมนต์ 1829 อธิบายว่าเคยตั้ง paid ตรงนี้แล้วลูกค้าเห็นว่าชำระแล้วก่อนร้านยืนยัน"
+    },
+    {
+      "seq": 17,
+      "actor": "LINE และ Telegram",
+      "module": "notify",
+      "method": "sendReceiptMessage()",
+      "file": "api/checkout.php",
+      "line": 1838,
+      "action": "ยิงแจ้งเตือนสามทาง Flex ใบเสร็จเข้า LINE ของลูกค้าผ่าน push API รูปสลิปเข้า Telegram ที่ 1844 และ NotificationService notifyPayment ที่ 1850",
+      "calls": [
+        { "module": "notify", "method": "notifyTelegramPayment", "file": "api/checkout.php", "line": 2505 },
+        { "module": "notify", "method": "NotificationService::notifyPayment", "file": "api/checkout.php", "line": 1850 }
+      ],
+      "notes": "sendReceiptMessage ใช้ push อย่างเดียว ไม่เช็ค reply_token ต่างจากเส้นฝั่งแอดมินที่ใช้ sendMessage ก่อน"
+    },
+    {
+      "seq": 18,
+      "actor": "เภสัชกร",
+      "module": "shop-admin",
+      "method": "shop/order-detail.php",
+      "file": "shop/order-detail.php",
+      "line": 556,
+      "action": "โหลดสลิปทุกใบของออเดอร์เรียงใหม่สุดก่อน ซ่อม scheme ที่เพี้ยนแล้ว render การ์ดสลิปพร้อมผลตรวจ GhostX ที่เคยเก็บไว้ใน verify_data",
+      "returns": "รายการ slips สำหรับ render",
+      "notes": "รูปถูก render จาก /uploads/slips/ แบบ path ล้วนที่บรรทัด 1071 ไม่ใช่ image_url ที่เก็บไว้"
+    },
+    {
+      "seq": 19,
+      "actor": "เภสัชกร",
+      "module": "shop-admin",
+      "method": "action=verify_slip",
+      "file": "shop/order-detail.php",
+      "line": 195,
+      "action": "อ่าน qr_payload ที่เก็บไว้ ถ้าไม่มีก็รับค่าที่เบราว์เซอร์แอดมินเพิ่งถอดมาจากรูปแล้วเขียนกลับที่ 208 จากนั้นดึง grand_total เป็นยอดที่คาดหวังและรวมบัญชีร้านจาก shop_settings",
+      "calls": [{ "module": "slip-verifier", "method": "verify", "file": "classes/SlipVerifier.php", "line": 99 }],
+      "returns": "vr ที่มี verified reason ref amount data",
+      "notes": "ถ้ามี verify_data เดิมอยู่แล้วจะใช้ verifyStored ที่ 250 แทนการยิง GhostX ซ้ำ เพราะ GhostX ตอบ 409 กับ QR ที่เคยสแกนแล้ว"
+    },
+    {
+      "seq": 20,
+      "actor": "GhostX",
+      "module": "slip-verifier",
+      "method": "evaluate()",
+      "file": "classes/SlipVerifier.php",
+      "line": 136,
+      "action": "ตัดสินสามชั้น ไม่มี transactionRef คือ not_a_slip ยอดไม่ตรงถึงสตางค์คือ amount_mismatch ส่วนการเทียบบัญชีปลายทางถูกปิดไว้เพราะฝั่งเรียกส่ง requireAccountMatch เป็น false",
+      "returns": "verified true หรือ false พร้อม reason",
+      "notes": "amountMatches เทียบด้วยการปัดเป็นสตางค์จำนวนเต็ม จึงไม่มีเผื่อค่าความคลาดเคลื่อน"
+    },
+    {
+      "seq": 21,
+      "actor": "เภสัชกร",
+      "module": "shop-admin",
+      "method": "verify_slip อนุมัติ",
+      "file": "shop/order-detail.php",
+      "line": 266,
+      "action": "เมื่อ verified และไม่ซ้ำ ref จะเขียน payment_slips เป็น approved พร้อม verify_ref verify_amount verify_data verified_at แล้วเขียน transactions เป็น paid ทั้งสองคอลัมน์ที่บรรทัด 268",
+      "sets": [
+        { "field": "payment_slips.status", "value": "approved" },
+        { "field": "payment_slips.verify_ref", "value": "transactionRef จาก GhostX" },
+        { "field": "transactions.payment_status", "value": "paid" },
+        { "field": "transactions.status", "value": "paid" }
+      ],
+      "state_change": "payment_slips: pending → approved และ transactions: pending → paid, payment_status: pending → paid",
+      "notes": "สองคำสั่งนี้ไม่มี transaction ครอบ ถ้าคำสั่งที่ 268 ล้ม สลิปจะ approved ค้างขณะออเดอร์ยังไม่ paid"
+    },
+    {
+      "seq": 22,
+      "actor": "LINE",
+      "module": "notify",
+      "method": "sendOrderStatusFlex()",
+      "file": "shop/order-detail.php",
+      "line": 271,
+      "action": "ส่ง Flex สถานะ paid ให้ลูกค้า โดยลองใช้ reply_token ที่เก็บไว้ก่อนเพื่อไม่กิน quota push",
+      "calls": [{ "module": "notify", "method": "sendOrderStatusFlex", "file": "shop/order-detail.php", "line": 165 }],
+      "notes": "ครอบด้วย try catch ที่กลืน exception ที่ 272 ถ้าส่งไม่ได้ ออเดอร์ยัง paid ตามปกติแต่ลูกค้าไม่ได้รับแจ้ง"
+    },
+    {
+      "seq": 23,
+      "actor": "เภสัชกร",
+      "module": "shop-admin",
+      "method": "action=approve_payment",
+      "file": "shop/order-detail.php",
+      "line": 348,
+      "action": "ปุ่มอนุมัติแบบมือ ข้าม GhostX ทั้งหมด เขียน transactions เป็น paid ตั้ง wms_status pending_pick ที่ 353 แล้วปิดสลิป pending ทุกใบเป็น approved ที่ 359",
+      "sets": [
+        { "field": "transactions.payment_status", "value": "paid" },
+        { "field": "payment_slips.status", "value": "approved ทุกใบที่ยัง pending" }
+      ],
+      "state_change": "transactions: → paid และ payment_slips ทุกใบที่ pending → approved",
+      "notes": "หลังจากนั้นแจกแต้มให้ลูกค้าที่บรรทัด 407 โดยเขียน users.points ตรง ๆ ไม่ผ่าน LoyaltyPoints"
+    },
+    {
+      "seq": 24,
+      "actor": "เภสัชกร",
+      "module": "shop-admin",
+      "method": "action=reject_payment",
+      "file": "shop/order-detail.php",
+      "line": 451,
+      "action": "ปิดสลิป pending ทุกใบเป็น rejected แล้วส่ง Flex สลิปไม่ถูกต้องพร้อมยอดที่ต้องชำระให้ลูกค้าที่บรรทัด 499",
+      "sets": [{ "field": "payment_slips.status", "value": "rejected" }],
+      "state_change": "payment_slips: pending → rejected โดย transactions.payment_status ไม่ถูกแตะเลย",
+      "notes": "เพราะ payment_status ยังเป็น pending ฝั่ง Mini App จึงเปิดฟอร์มแนบสลิปใหม่ให้อัตโนมัติ"
+    }
+  ],
+  "cases": [
+    {
+      "id": "C1",
+      "name": "cod ข้ามขั้นรอชำระ",
+      "condition": "$paymentMethod === 'cod'",
+      "behavior": "ออเดอร์ได้ status confirmed ทันทีและได้ wms_status pending_pick ไม่ต้องแนบสลิป",
+      "code_path": [{ "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1435 }],
+      "result": "transactions.status: (ใหม่) → confirmed",
+      "tag": "info"
+    },
+    {
+      "id": "C2",
+      "name": "transfer รอสลิป",
+      "condition": "payment_method ไม่ใช่ cod ซึ่งใน Mini App แปลว่า transfer",
+      "behavior": "ออเดอร์ค้างที่ pending รอลูกค้าแนบสลิปแล้วรอเภสัชกรอนุมัติ",
+      "code_path": [{ "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1435 }],
+      "result": "transactions.status: (ใหม่) → pending",
+      "tag": "ok"
+    },
+    {
+      "id": "C3",
+      "name": "cod ไม่มีทางเป็น paid จากเส้นนี้",
+      "condition": "paymentStatus ถูกฮาร์ดโค้ดเป็น pending ทุกช่องทาง",
+      "behavior": "ออเดอร์ cod ที่ confirmed แล้วยังมี payment_status pending จนกว่าจะมีคนกดอนุมัติในหน้าแอดมิน",
+      "code_path": [{ "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1437 }],
+      "result": "transactions.payment_status ค้างที่ pending",
+      "gotcha": "รายงานยอดที่นับจาก payment_status จะไม่เห็นเงิน cod ที่เก็บได้จริง",
+      "tag": "warn"
+    },
+    {
+      "id": "C4",
+      "name": "ALTER TABLE ปิดทรานแซกชันกลางคัน",
+      "condition": "beginTransaction ที่ 1428 แล้วสั่ง ALTER TABLE ที่ 1441",
+      "behavior": "MySQL implicit commit ปิดทรานแซกชันทันที INSERT transactions และ transaction_items ทั้งหมดหลังจากนั้นทำงานแบบ autocommit ทีละคำสั่ง",
+      "code_path": [{ "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1441 }],
+      "result": "rollBack ที่ 1652 ไม่ย้อนอะไรเลย ออเดอร์ครึ่งใบค้างในตารางได้",
+      "gotcha": "อาการนี้อยู่ในเส้นสร้างออเดอร์เท่านั้น เส้นอัปสลิปและเส้นอนุมัติไม่มีทรานแซกชันตั้งแต่แรกอยู่แล้ว",
+      "tag": "danger"
+    },
+    {
+      "id": "C5",
+      "name": "INSERT ระดับ 1 ล้ม ตกไประดับ 2",
+      "condition": "INSERT ที่มี line_user_id โยน exception",
+      "behavior": "log แล้วลองใหม่โดยตัด line_user_id ออก ออเดอร์ยังถูกสร้างได้",
+      "code_path": [{ "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1472 }],
+      "result": "transactions.line_user_id เป็น NULL",
+      "tag": "info"
+    },
+    {
+      "id": "C6",
+      "name": "INSERT ระดับ 3 ไม่มี payment_status",
+      "condition": "ทั้งสองระดับแรกล้ม",
+      "behavior": "INSERT โดยไม่ระบุ payment_status ปล่อยให้ DB ใช้ค่า default",
+      "code_path": [{ "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1498 }],
+      "result": "payment_status มาจาก DEFAULT ของคอลัมน์ ไม่ใช่จากโค้ด",
+      "gotcha": "ระดับนี้ไม่มี try catch ครอบ ถ้าล้มด้วยจะโยนขึ้นไปที่ catch นอกและตอบ error กลับ",
+      "tag": "warn"
+    },
+    {
+      "id": "C7",
+      "name": "ตะกร้าว่าง",
+      "condition": "empty($items) หลังรวมรายการจาก request หรือจาก DB",
+      "behavior": "ตอบ Cart is empty ก่อนแตะทรานแซกชันหรือสถานะใด ๆ",
+      "code_path": [{ "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1370 }],
+      "result": "ไม่มีออเดอร์ถูกสร้าง",
+      "tag": "ok"
+    },
+    {
+      "id": "C8",
+      "name": "สร้างลูกหนี้การค้าไม่สำเร็จ",
+      "condition": "payment_method อยู่ใน credit cod term invoice แต่ createFromTransaction โยน exception เช่นมี AR อยู่แล้วหรือ payment_status เป็น paid",
+      "behavior": "log แล้วปล่อยผ่าน ออเดอร์ยังตอบสำเร็จโดย ar_id เป็น null",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleCreateOrder", "file": "api/checkout.php", "line": 1606 },
+        { "module": "ar-service", "method": "createFromTransaction", "file": "classes/AccountReceivableService.php", "line": 84 }
+      ],
+      "result": "ออเดอร์เครดิตไม่มีแถวลูกหนี้ ต้องสร้างย้อนหลังเอง",
+      "gotcha": "ไม่มีอะไรแจ้งเตือน ต้องไปหาใน error log อย่างเดียว",
+      "tag": "warn"
+    },
+    {
+      "id": "C9",
+      "name": "อัปโหลดโดยไม่มีไฟล์",
+      "condition": "ไม่มี $_FILES['slip'] หรือ error ไม่ใช่ UPLOAD_ERR_OK",
+      "behavior": "ตอบ No file uploaded",
+      "code_path": [{ "module": "api-checkout", "method": "handleUploadSlip", "file": "api/checkout.php", "line": 1751 }],
+      "result": "ไม่มีแถว payment_slips ถูกสร้าง",
+      "tag": "ok"
+    },
+    {
+      "id": "C10",
+      "name": "ชนิดไฟล์ไม่อยู่ในรายการที่อนุญาต",
+      "condition": "$file['type'] ไม่อยู่ใน image/jpeg png gif webp",
+      "behavior": "ตอบ Invalid file type",
+      "code_path": [{ "module": "api-checkout", "method": "handleUploadSlip", "file": "api/checkout.php", "line": 1758 }],
+      "result": "ไฟล์ถูกปฏิเสธก่อนเขียนดิสก์",
+      "gotcha": "ค่าที่ตรวจคือ MIME ที่ browser ส่งมา ไม่ได้อ่านจากเนื้อไฟล์ จึงปลอมได้",
+      "tag": "warn"
+    },
+    {
+      "id": "C11",
+      "name": "ไฟล์ใหญ่เกิน 5MB",
+      "condition": "$file['size'] > 5 * 1024 * 1024",
+      "behavior": "ตอบ File too large ฝั่ง Mini App ก็ดักซ้ำที่ OrderDetailClient บรรทัด 93",
+      "code_path": [{ "module": "api-checkout", "method": "handleUploadSlip", "file": "api/checkout.php", "line": 1765 }],
+      "result": "ไม่มีไฟล์ถูกเขียน",
+      "tag": "ok"
+    },
+    {
+      "id": "C12",
+      "name": "ออเดอร์ไม่ได้อยู่ใน tenant นี้",
+      "condition": "SELECT FROM transactions WHERE id = ? ใน tenant DB ปัจจุบันไม่เจอแถว",
+      "behavior": "ตอบ Order not found ไม่มีการสแกนข้าม tenant อีกแล้ว",
+      "code_path": [{ "module": "api-checkout", "method": "handleUploadSlip", "file": "api/checkout.php", "line": 1778 }],
+      "result": "อัปโหลดถูกปฏิเสธ",
+      "gotcha": "ถ้า line_account_id ที่ Mini App ส่งมาผิด route_by_account จะพาไปผิด tenant แล้วออเดอร์ที่มีจริงจะกลายเป็นไม่พบ",
+      "tag": "ok"
+    },
+    {
+      "id": "C13",
+      "name": "ใครก็อัปสลิปทับออเดอร์ของคนอื่นใน tenant เดียวกันได้",
+      "condition": "handleUploadSlip ไม่เทียบ $_POST['user_id'] กับ transactions.user_id เลย และ api/checkout.php ทั้งไฟล์ไม่มี auth guard",
+      "behavior": "ใครก็ตามที่เดา order_id ถูกจะแนบรูปเข้าออเดอร์นั้นได้ และรูปนั้นจะถูกส่งเข้า LINE ของเจ้าของออเดอร์ตัวจริง",
+      "code_path": [
+        { "module": "api-checkout", "method": "handleUploadSlip", "file": "api/checkout.php", "line": 1773 },
+        { "module": "notify", "method": "sendReceiptMessage", "file": "api/checkout.php", "line": 1838 }
+      ],
+      "result": "payment_slips ได้แถวใหม่ที่ผูกกับ user_id ของเจ้าของออเดอร์ ไม่ใช่ของผู้อัป",
+      "gotcha": "id เป็น AUTO_INCREMENT เดาได้ตรง ๆ handleGetOrder ที่ 2041 ก็เปิดอ่านชื่อที่อยู่ของออเดอร์ใด ๆ ใน tenant ด้วยเงื่อนไขเดียวกัน",
+      "tag": "danger"
+    },
+    {
+      "id": "C14",
+      "name": "เขียน payment_slips ไม่สำเร็จทั้งสองครั้ง",
+      "condition": "INSERT ที่ 1812 ล้ม แล้ว INSERT สำรองที่ 1820 ล้มด้วย",
+      "behavior": "log อย่างเดียวแล้วเดินหน้าต่อ ทั้งการส่ง Flex ใบเสร็จและการแจ้ง Telegram ยังทำงานตามปกติ",
+      "code_path": [{ "module": "api-checkout", "method": "handleUploadSlip", "file": "api/checkout.php", "line": 1825 }],
+      "result": "ไฟล์อยู่บนดิสก์ ลูกค้าเห็นข้อความว่าอัปสำเร็จ แต่ไม่มีแถวสลิปให้เภสัชกรตรวจ",
+      "gotcha": "ตัวแปร slipSaved ถูกตั้งค่าไว้แต่ไม่เคยถูกอ่านต่อ คำตอบจึงเป็น success เสมอ",
+      "tag": "danger"
+    },
+    {
+      "id": "C15",
+      "name": "qr_data ที่ Mini App ถอดมาถูกทิ้ง",
+      "condition": "shop-api.ts แนบฟิลด์ qr_data แต่ api/checkout.php ทั้งไฟล์ไม่มีคำว่า qr_data qr_payload หรือ SlipVerifier เลย",
+      "behavior": "payment_slips.qr_payload เป็น NULL เสมอสำหรับสลิปที่มาจาก Mini App การตรวจ GhostX อัตโนมัติตอนอัปโหลดจึงไม่เคยเกิดขึ้น",
+      "code_path": [
+        { "module": "line-mini-app", "method": "uploadPaymentSlip", "file": "line-mini-app/src/lib/shop-api.ts", "line": 409 },
+        { "module": "api-checkout", "method": "handleUploadSlip", "file": "api/checkout.php", "line": 1812 }
+      ],
+      "result": "การ์ดสลิปฝั่งแอดมินขึ้นข้อความว่ายังไม่มีข้อมูล QR และต้องกดปุ่มถอด QR จากรูปเอง",
+      "gotcha": "คอมเมนต์ใน slip-qr.ts บรรทัด 5 บอกว่าเซิร์ฟเวอร์จะเอาไปตรวจกับ GhostX ซึ่งไม่ตรงกับโค้ดจริง อ่านคอมเมนต์แล้วจะเข้าใจผิดว่าระบบตรวจอัตโนมัติ",
+      "tag": "danger"
+    },
+    {
+      "id": "C16",
+      "name": "แนบสลิปแล้วรอตรวจ ห้ามแนบซ้ำ",
+      "condition": "slip_status เป็น pending หรือ approved",
+      "behavior": "ซ่อนฟอร์มแนบสลิปแล้วขึ้นการ์ดรอยืนยันการชำระเงินพร้อมรูปที่แนบไป",
+      "code_path": [{ "module": "line-mini-app", "method": "needsSlipUpload", "file": "line-mini-app/src/components/miniapp/OrderDetailClient.tsx", "line": 28 }],
+      "result": "ไม่มีสลิปซ้ำเข้ามาระหว่างรอตรวจ",
+      "tag": "ok"
+    },
+    {
+      "id": "C17",
+      "name": "สลิปถูกปฏิเสธ เปิดให้แนบใหม่",
+      "condition": "slip_status เป็น rejected และ payment_status ยังไม่ paid",
+      "behavior": "ขึ้นการ์ดสีแดงบอกว่าสลิปไม่ผ่าน แล้วเปิดฟอร์มแนบใหม่ให้ทันที",
+      "code_path": [{ "module": "line-mini-app", "method": "needsSlipUpload", "file": "line-mini-app/src/components/miniapp/OrderDetailClient.tsx", "line": 30 }],
+      "result": "สลิปใบใหม่ถูกสร้างเป็นแถวใหม่ ใบเก่ายัง rejected ค้างไว้",
+      "gotcha": "handleGetOrder อ่านใบล่าสุดใบเดียว ประวัติใบเก่าจึงเห็นได้แค่ในหน้าแอดมิน",
+      "tag": "ok"
+    },
+    {
+      "id": "C18",
+      "name": "ช่องทางที่ไม่ใช่ transfer แนบสลิปไม่ได้เลย",
+      "condition": "payment_method ไม่เท่ากับ transfer",
+      "behavior": "ฟอร์มแนบสลิป QR พร้อมเพย์ และข้อมูลบัญชี ถูกซ่อนทั้งหมด",
+      "code_path": [{ "module": "line-mini-app", "method": "needsSlipUpload", "file": "line-mini-app/src/components/miniapp/OrderDetailClient.tsx", "line": 24 }],
+      "result": "ออเดอร์ cod credit และ later ไม่มีทางแนบสลิปผ่าน Mini App",
+      "gotcha": "ออเดอร์จ่ายยาแบบ later ที่ inbox-v2.php สร้างไว้ก็เข้าเงื่อนไขนี้ ลูกค้าต้องส่งสลิปเข้าแชท LINE แทน",
+      "tag": "info"
+    },
+    {
+      "id": "C19",
+      "name": "ข้อมูลบัญชีธนาคารไม่เคยแสดง",
+      "condition": "OrderDetailClient เรนเดอร์ TransferBankInfo เมื่อ q.data.transfer_info มีค่า แต่ handleGetOrder ตอบแค่คีย์ order",
+      "behavior": "การ์ดเลขบัญชีไม่ขึ้นเลย เหลือแค่รูป QR พร้อมเพย์ที่ยิงไป action=promptpay_qr",
+      "code_path": [
+        { "module": "line-mini-app", "method": "OrderDetailClient", "file": "line-mini-app/src/components/miniapp/OrderDetailClient.tsx", "line": 300 },
+        { "module": "api-checkout", "method": "handleGetOrder", "file": "api/checkout.php", "line": 2088 }
+      ],
+      "result": "ลูกค้าที่สแกน QR ไม่ได้จะไม่มีเลขบัญชีให้โอน",
+      "gotcha": "ข้อมูลบัญชีมีอยู่จริงหลัง action=shop_info ที่ api/checkout.php:2719 แต่ Mini App ไม่เคยเรียก ส่วน fetchPaymentInfo ที่ shop-api.ts:165 ยิง action=payment_info ซึ่งไม่มีใน switch จึงตกไป default แล้วได้ Invalid action",
+      "tag": "warn"
+    },
+    {
+      "id": "C20",
+      "name": "ไม่มี qr_payload ต้องถอด QR ในเบราว์เซอร์แอดมิน",
+      "condition": "payment_slips.qr_payload ว่าง ซึ่งเป็นกรณีปกติของสลิปจาก Mini App",
+      "behavior": "การ์ดแสดงปุ่มถอด QR จากรูปและตรวจสอบ ซึ่งใช้ BarcodeDetector ของ OS ก่อน แล้วค่อยตกไป jsQR หลายสเกล ค่าที่ถอดได้ถูกส่งเป็น qr_data แล้วเขียนกลับลง qr_payload",
+      "code_path": [
+        { "module": "shop-admin", "method": "decodeSlipAndVerify", "file": "shop/order-detail.php", "line": 1293 },
+        { "module": "shop-admin", "method": "verify_slip", "file": "shop/order-detail.php", "line": 208 }
+      ],
+      "result": "payment_slips.qr_payload ถูกเติมย้อนหลัง",
+      "gotcha": "หน้านี้โหลด jsQR จาก cdn.jsdelivr.net ที่บรรทัด 1248 ถ้าเน็ตร้านบล็อก CDN ปุ่มนี้จะถอดไม่ได้บนเบราว์เซอร์ที่ไม่มี BarcodeDetector",
+      "tag": "info"
+    },
+    {
+      "id": "C21",
+      "name": "รูปที่ไม่ใช่สลิป",
+      "condition": "GhostX ไม่คืน slipVerification.transfer.transactionRef",
+      "behavior": "evaluate ตอบ not_a_slip ทันที ไม่มีการเขียนสถานะใด ๆ แล้ว redirect กลับพร้อม verify=not_a_slip",
+      "code_path": [{ "module": "slip-verifier", "method": "evaluate", "file": "classes/SlipVerifier.php", "line": 150 }],
+      "result": "payment_slips ยัง pending",
+      "gotcha": "คอมเมนต์ที่ 146 อธิบายว่าจงใจไม่เช็ค type SLIP เพราะ GhostX จริงไม่ได้ส่งคีย์นั้นมาทุกครั้ง",
+      "tag": "warn"
+    },
+    {
+      "id": "C22",
+      "name": "ยอดในสลิปไม่ตรงกับออเดอร์",
+      "condition": "round(expected*100) ไม่เท่ากับ round(actual*100)",
+      "behavior": "ตอบ amount_mismatch ไม่อนุมัติ แต่ยังเขียน verify_amount และ verify_data เก็บไว้ที่บรรทัด 280 เพื่อให้แอดมินเห็นตัวเลขจริง",
+      "code_path": [
+        { "module": "slip-verifier", "method": "evaluate", "file": "classes/SlipVerifier.php", "line": 155 },
+        { "module": "shop-admin", "method": "verify_slip", "file": "shop/order-detail.php", "line": 280 }
+      ],
+      "result": "การ์ดขึ้นเตือนยอดไม่ตรงพร้อมปุ่มประเมินซ้ำ",
+      "gotcha": "ยอดที่คาดหวังคือ grand_total ถ้าลูกค้าโอนรวมหลายออเดอร์ในครั้งเดียวจะไม่มีทางผ่านเส้นนี้",
+      "tag": "warn"
+    },
+    {
+      "id": "C23",
+      "name": "บัญชีปลายทางไม่ตรงแต่ยังอนุมัติได้",
+      "condition": "ฝั่งเรียกส่ง requireAccountMatch เป็น false ทั้งสองทางที่บรรทัด 250 และ 252",
+      "behavior": "ข้ามการเทียบบัญชีทั้งบล็อก อนุมัติเมื่อสลิปจริงและยอดตรงเท่านั้น เลขบัญชีปลายทางถูกแสดงให้ดูด้วยตาแต่ไม่บล็อก",
+      "code_path": [
+        { "module": "shop-admin", "method": "verify_slip", "file": "shop/order-detail.php", "line": 252 },
+        { "module": "slip-verifier", "method": "evaluate", "file": "classes/SlipVerifier.php", "line": 162 }
+      ],
+      "result": "สลิปที่โอนเข้าบัญชีคนอื่นแต่ยอดตรงพอดีจะผ่านการตรวจอัตโนมัติ",
+      "gotcha": "นี่คือนโยบายที่ตั้งใจ ไม่ใช่บั๊ก แต่ต้องรู้ว่าการตรวจนี้ยืนยันแค่ว่ามีการโอนเงินยอดนี้จริง ไม่ได้ยืนยันว่าเงินเข้าร้าน",
+      "tag": "danger"
+    },
+    {
+      "id": "C24",
+      "name": "สลิปใบเดิมถูกใช้ซ้ำกับอีกออเดอร์",
+      "condition": "มีแถวอื่นใน payment_slips ที่ verify_ref ตรงกันและ id ไม่ใช่ใบนี้",
+      "behavior": "ตั้ง dup เป็น true แล้วไม่อนุมัติ redirect กลับพร้อม verify=duplicate_ref",
+      "code_path": [{ "module": "shop-admin", "method": "verify_slip", "file": "shop/order-detail.php", "line": 260 }],
+      "result": "ออเดอร์ที่สองไม่ถูกทำเป็น paid",
+      "gotcha": "ยังมี UNIQUE INDEX uniq_verify_ref เป็นด่านสุดท้ายจาก install/migration_payment_slips_verification.php บรรทัด 41 แต่ index นั้นมีเฉพาะ tenant ที่รัน migration แล้ว",
+      "tag": "ok"
+    },
+    {
+      "id": "C25",
+      "name": "GhostX ตอบ 409 เพราะ QR เคยถูกสแกนแล้ว",
+      "condition": "มี verify_data เดิมที่มี slipVerification.transfer อยู่แล้ว",
+      "behavior": "ใช้ verifyStored ประเมินจากข้อมูลที่เก็บไว้แทนการยิงซ้ำ ถ้าไม่มีข้อมูลเดิมจึงยิง verify จริง",
+      "code_path": [{ "module": "shop-admin", "method": "verify_slip", "file": "shop/order-detail.php", "line": 249 }],
+      "result": "กดปุ่มตรวจซ้ำได้โดยไม่โดน 409",
+      "gotcha": "scan ที่ SlipVerifier บรรทัด 55 ยอมรับ body ที่มีสลิปแม้ status ไม่ใช่ 200 และโค้ดที่ 278 ห้ามเขียนทับ verify_data เดิมด้วยค่าว่าง",
+      "tag": "info"
+    },
+    {
+      "id": "C26",
+      "name": "GhostX ล่มหรือ timeout",
+      "condition": "scan โยน exception ระดับ transport",
+      "behavior": "verify คืน verified false พร้อม reason scan_error และเก็บข้อความ error ไว้ใน data ไม่โยน exception ออกมา",
+      "code_path": [{ "module": "slip-verifier", "method": "verify", "file": "classes/SlipVerifier.php", "line": 106 }],
+      "result": "การ์ดขึ้นข้อความจาก GhostX แล้วรอให้เภสัชกรกดอนุมัติเอง",
+      "gotcha": "timeout ตั้งไว้ 15 วินาที ทำให้หน้า order-detail ค้างนานได้เมื่อ GhostX ช้า",
+      "tag": "info"
+    },
+    {
+      "id": "C27",
+      "name": "อนุมัติด้วยมือ ข้ามการตรวจทั้งหมด",
+      "condition": "เภสัชกรกดปุ่มอนุมัติซึ่งโพสต์ action=approve_payment",
+      "behavior": "เขียน transactions เป็น paid ทั้งสองคอลัมน์ ตั้ง wms_status pending_pick ปิดสลิป pending ทุกใบเป็น approved แล้วแจกแต้ม",
+      "code_path": [
+        { "module": "shop-admin", "method": "approve_payment", "file": "shop/order-detail.php", "line": 348 },
+        { "module": "shop-admin", "method": "approve_payment", "file": "shop/order-detail.php", "line": 359 }
+      ],
+      "result": "transactions: → paid และ payment_slips ทุกใบที่ pending → approved",
+      "gotcha": "ปุ่มนี้ไม่แตะ verify_ref จึงไม่มีด่านกันสลิปซ้ำ ต่างจากเส้น verify_slip และการ์ดปุ่มนี้โผล่เมื่อ payment_status ยังไม่ paid แม้ยังไม่มีสลิปสักใบ",
+      "tag": "warn"
+    },
+    {
+      "id": "C28",
+      "name": "ปฏิเสธสลิปแต่ไม่แตะสถานะเงิน",
+      "condition": "เภสัชกรกดปฏิเสธซึ่งโพสต์ action=reject_payment",
+      "behavior": "ปิดสลิป pending ทุกใบเป็น rejected แล้วส่ง Flex สลิปไม่ถูกต้องพร้อมยอดที่ต้องชำระ transactions ไม่ถูกแก้เลย",
+      "code_path": [{ "module": "shop-admin", "method": "reject_payment", "file": "shop/order-detail.php", "line": 451 }],
+      "result": "payment_slips: pending → rejected และ payment_status ยังคง pending",
+      "gotcha": "ทั้งบล็อกนี้ไม่มี try catch ถ้า users ไม่มีแถวคู่กันหรือ LINE ล้ม จะได้ error หน้าเปล่าแทน redirect",
+      "tag": "info"
+    },
+    {
+      "id": "C29",
+      "name": "ลูกค้าส่งสลิปเข้าแชท LINE แทน",
+      "condition": "user_states อยู่ในสถานะ waiting_slip หรือ awaiting_slip แล้วมีข้อความชนิด image เข้ามา",
+      "behavior": "webhook บันทึกรูปลง uploads/slips สร้างแถว payment_slips แล้วตั้ง transactions.status เป็น paid ทันทีที่บรรทัด 4387 โดยยังไม่มีใครตรวจ",
+      "code_path": [
+        { "module": "line-webhook", "method": "handlePaymentSlipForOrder", "file": "webhook.php", "line": 4378 },
+        { "module": "line-webhook", "method": "handlePaymentSlipForOrder", "file": "webhook.php", "line": 4387 }
+      ],
+      "result": "transactions.status: pending → paid ขณะที่ payment_slips.status ยัง pending",
+      "gotcha": "ขัดกับเจตนาที่เขียนไว้ชัดใน api/checkout.php บรรทัด 1829 ว่าห้ามตั้ง paid ก่อนตรวจ สองทางเข้าให้ผลต่างกันกับสลิปใบเดียวกัน",
+      "tag": "danger"
+    },
+    {
+      "id": "C30",
+      "name": "update_payment_method ตั้ง paid ได้โดยไม่มีการยืนยันตัวตน",
+      "condition": "POST action=update_payment_method พร้อม payment_method เป็น cod หรือ cash",
+      "behavior": "เขียน payment_status paid และ status completed ให้ออเดอร์นั้นทันที ไม่มีการตรวจว่าใครเรียกและไม่ตรวจว่าออเดอร์เป็นของใคร",
+      "code_path": [{ "module": "api-checkout", "method": "handleUpdatePaymentMethod", "file": "api/checkout.php", "line": 2188 }],
+      "result": "transactions: → completed และ payment_status: pending → paid",
+      "gotcha": "เส้นนี้มีไว้ให้หน้าจ่ายยาปิดยอดเงินสด แต่เปิดรับจากอินเทอร์เน็ตเหมือน action อื่นของ checkout.php ทั้งไฟล์ไม่มี session guard",
+      "tag": "danger"
+    },
+    {
+      "id": "C31",
+      "name": "ร้านไม่ได้ตั้งพร้อมเพย์ของ account นั้น",
+      "condition": "shop_settings ของ line_account_id ที่ขอมาไม่มี promptpay_number",
+      "behavior": "ตกไป query ที่ไม่มีเงื่อนไข line_account_id แล้วหยิบเบอร์พร้อมเพย์แถวแรกที่ไม่ว่างของ tenant มาใช้แทน",
+      "code_path": [{ "module": "api-checkout", "method": "handlePromptPayQR", "file": "api/checkout.php", "line": 2569 }],
+      "result": "ลูกค้าได้ QR ที่ชี้ไปบัญชีของอีก LINE account ในร้านเดียวกัน",
+      "gotcha": "tenant ที่มีหลาย LINE account จะเก็บเงินเข้าบัญชีผิดสาขาโดยไม่มีอะไรฟ้อง",
+      "tag": "danger"
+    },
+    {
+      "id": "C32",
+      "name": "ทั้ง tenant ไม่มีพร้อมเพย์เลย",
+      "condition": "หาไม่เจอทั้งสอง query",
+      "behavior": "สร้างรูป PNG ขนาด 200x200 ที่มีข้อความ PromptPay not configured แล้ว exit ตอบ 200 ตามปกติ",
+      "code_path": [{ "module": "api-checkout", "method": "handlePromptPayQR", "file": "api/checkout.php", "line": 2585 }],
+      "result": "หน้าออเดอร์แสดงรูปข้อความแทน QR ฝั่ง client ไม่รู้ว่าเป็น error",
+      "tag": "ok"
+    },
+    {
+      "id": "C33",
+      "name": "QR ถูกสร้างโดยบริการภายนอก",
+      "condition": "มี payload EMVCo แล้ว",
+      "behavior": "ยิง payload ที่มีเบอร์พร้อมเพย์และยอดเงินไปที่ api.qrserver.com ผ่าน file_get_contents แล้วส่งรูปที่ได้กลับพร้อม Cache-Control 1 ชั่วโมง",
+      "code_path": [{ "module": "api-checkout", "method": "handlePromptPayQR", "file": "api/checkout.php", "line": 2606 }],
+      "result": "รูป QR แสดงในหน้าออเดอร์ ถ้าดึงไม่ได้จะได้รูปข้อความ QR Generation Error แทน",
+      "gotcha": "เบอร์พร้อมเพย์ของร้านและยอดเงินของออเดอร์ถูกส่งออกไปโฮสต์ภายนอกทุกครั้งที่มีคนเปิดหน้าออเดอร์",
+      "tag": "warn"
+    },
+    {
+      "id": "C34",
+      "name": "จ่ายยาแบบเงินสด ปิดยอดทันที",
+      "condition": "dispense ส่ง payment_method เป็น cash",
+      "behavior": "สร้าง transactions ด้วย status completed และ payment_status paid แล้วตัดสต๊อกทันทีเพราะส่งของให้ลูกค้าไปแล้ว ไม่ต้องแนบสลิป",
+      "code_path": [{ "module": "inbox-v2", "method": "action=dispense", "file": "inbox-v2.php", "line": 586 }],
+      "result": "transactions: (ใหม่) → completed และ payment_status: paid",
+      "tag": "info"
+    },
+    {
+      "id": "C35",
+      "name": "จ่ายยาแบบ transfer หรือ later ค้างรอเงิน",
+      "condition": "dispense ส่ง payment_method เป็น transfer หรือ later",
+      "behavior": "ล้าง cart แล้วเติมรายการกลับเข้า cart สร้าง transactions ที่ pending และแนบปุ่มเช็คเอาท์ไปกับ Flex ฉลากยา",
+      "code_path": [
+        { "module": "inbox-v2", "method": "action=dispense", "file": "inbox-v2.php", "line": 611 },
+        { "module": "inbox-v2", "method": "action=dispense", "file": "inbox-v2.php", "line": 690 }
+      ],
+      "result": "transactions: (ใหม่) → pending และสต๊อกยังไม่ถูกตัด",
+      "gotcha": "ออเดอร์เหล่านี้มี payment_method เป็น later ซึ่ง needsSlipUpload ไม่รับ ลูกค้าจึงแนบสลิปในหน้าออเดอร์ไม่ได้ ต้องส่งเข้าแชทแทน",
+      "tag": "warn"
+    },
+    {
+      "id": "C36",
+      "name": "อนุมัติสลิปจากทางอื่นอีกสามทาง",
+      "condition": "แอดมินใช้ api/ajax_handler.php หรือคุยกับผู้ช่วย AI ที่ api/ai-admin.php",
+      "behavior": "ทั้งสามทางเขียน payment_slips เป็น approved และ transactions เป็น paid ด้วยชุดคำสั่งของตัวเอง ไม่ผ่าน SlipVerifier และไม่ส่ง Flex ชุดเดียวกัน",
+      "code_path": [
+        { "module": "ajax-handler", "method": "approve_slip", "file": "api/ajax_handler.php", "line": 386 },
+        { "module": "ai-admin", "method": "actionApproveSlip", "file": "api/ai-admin.php", "line": 1412 },
+        { "module": "ai-admin", "method": "actionConfirmOrder", "file": "api/ai-admin.php", "line": 1245 }
+      ],
+      "result": "payment_slips: pending → approved จากสี่จุดเขียนที่ต่างกัน",
+      "gotcha": "actionConfirmOrder ที่ 1239 ตั้ง status เป็น confirmed แต่ไม่แตะ payment_status ทั้งที่ปิดสลิปเป็น approved ไปแล้ว ทำให้สองสถานะเถียงกัน",
+      "tag": "danger"
+    }
+  ],
+  "modules_touched": [
+    { "module": "line-mini-app", "role": "หน้าเช็คเอาท์ เลือกช่องทางชำระ ถอด QR จากสลิป และหน้าออเดอร์ที่แสดงสถานะสลิป", "methods": ["CheckoutClient", "OrderDetailClient", "needsSlipUpload", "createShopOrder", "uploadPaymentSlip", "decodeSlipQr", "promptPayQrSrc", "fetchOrderDetail"] },
+    { "module": "route_by_account", "role": "ผูก PDO เข้ากับ tenant DB จาก line_account_id เพราะ Mini App เรียกผ่าน root domain", "methods": [] },
+    { "module": "api-checkout", "role": "endpoint เดียวที่ Mini App คุยด้วย ทั้งสร้างออเดอร์ อัปสลิป อ่านออเดอร์ เปลี่ยนช่องทางชำระ และออก QR พร้อมเพย์", "methods": ["handleCreateOrder", "handleUploadSlip", "handleGetOrder", "handleGetOrderItems", "handleUpdatePaymentMethod", "handlePromptPayQR", "sendReceiptMessage", "notifyTelegramPayment", "reyaFixSlipUrl"] },
+    { "module": "shop-admin", "role": "หน้าเภสัชกร ตรวจสลิป อนุมัติ ปฏิเสธ และคิวสลิปรอตรวจ", "methods": ["verify_slip", "approve_payment", "reject_payment", "sendOrderStatusFlex", "decodeSlipAndVerify"] },
+    { "module": "slip-verifier", "role": "ตัดสินว่าสลิปจริงและยอดตรงไหม โดยคุยกับ GhostX", "methods": ["scan", "verify", "verifyStored", "evaluate", "amountMatches", "accountMatches"] },
+    { "module": "ar-service", "role": "สร้างลูกหนี้การค้าให้ออเดอร์เครดิตและ cod", "methods": ["createFromTransaction"] },
+    { "module": "line-webhook", "role": "รับสลิปที่ลูกค้าส่งเข้าแชท LINE เป็นทางเข้าที่สองของ payment_slips", "methods": ["handlePaymentSlipForOrder", "notifyAdminNewSlip"] },
+    { "module": "ajax-handler", "role": "endpoint อนุมัติหรือปฏิเสธสลิปทีละใบจากหน้า user/order-detail.php", "methods": ["approve_slip", "reject_slip"] },
+    { "module": "ai-admin", "role": "ผู้ช่วย AI ฝั่งแอดมิน สั่งอนุมัติหรือปฏิเสธสลิปด้วยข้อความได้", "methods": ["actionApproveSlip", "actionRejectSlip", "actionConfirmOrder"] },
+    { "module": "inbox-v2", "role": "หน้าจ่ายยา ต้นทางของช่องทาง cash และ later ที่ไม่มีใน Mini App", "methods": ["action=dispense"] },
+    { "module": "notify", "role": "ส่ง Flex เข้า LINE และรูปสลิปเข้า Telegram", "methods": ["sendReceiptMessage", "sendOrderStatusFlex", "notifyTelegramPayment", "NotificationService::notifyPayment"] },
+    { "module": "MySQL", "role": "tenant DB ที่เก็บ transactions payment_slips shop_settings account_receivables", "methods": [] }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "api-checkout",
+      "to_module": "line-mini-app",
+      "returns_what": "slip_status และ slip_image ใน handleGetOrder",
+      "why_needed": "needsSlipUpload ใช้สองค่านี้ตัดสินว่าจะโชว์ฟอร์มแนบสลิปไหม ถ้าคีย์หายไปฟอร์มจะโผล่ซ้ำและลูกค้าจะแนบสลิปทับกันเรื่อย ๆ"
+    },
+    {
+      "from_module": "slip-verifier",
+      "to_module": "shop-admin",
+      "returns_what": "verified reason ref และ amount",
+      "why_needed": "ถ้า verified ไม่เป็น true จะไม่มีคำสั่งเขียน paid เกิดขึ้นเลย ทั้งสลิปและออเดอร์ค้างที่เดิม"
+    },
+    {
+      "from_module": "GhostX",
+      "to_module": "slip-verifier",
+      "returns_what": "slipVerification.transfer.transactionRef",
+      "why_needed": "normalize ใช้คีย์นี้เป็นตัวชี้ว่าเป็นสลิปจริง ถ้าโครงสร้างคำตอบเปลี่ยน ทุกสลิปจะกลายเป็น not_a_slip พร้อมกันทั้งระบบ"
+    },
+    {
+      "from_module": "route_by_account",
+      "to_module": "api-checkout",
+      "returns_what": "PDO ที่ผูกกับ tenant DB ที่ถูกต้อง",
+      "why_needed": "ทุก query ในกลุ่มนี้ค้นด้วย id ล้วนโดยไม่มีเงื่อนไข tenant ถ้าผูกผิดฐาน จะอัปสลิปทับออเดอร์คนละร้าน"
+    },
+    {
+      "from_module": "api-checkout",
+      "to_module": "shop-admin",
+      "returns_what": "image_url ที่ประกอบจาก HTTP_HOST ของคำขอ",
+      "why_needed": "ถ้าเปลี่ยนกลับไปใช้ BASE_URL รูปสลิปจะ 404 ทั้งในแอปและในหน้าแอดมิน เพราะ BASE_URL ชี้ subdomain ที่ไม่มี docroot ร่วมกัน"
+    },
+    {
+      "from_module": "line-mini-app",
+      "to_module": "api-checkout",
+      "returns_what": "line_account_id จาก appConfig",
+      "why_needed": "เป็นค่าเดียวที่ route_by_account ใช้เลือก tenant ถ้าค่านี้ผิดหรือหาย ออเดอร์ที่มีอยู่จริงจะกลายเป็น Order not found"
+    }
+  ],
+  "gotchas": [
+    "Mini App ถอด QR จากสลิปแล้วส่ง qr_data ขึ้นมาจริงที่ shop-api.ts:409 แต่ api/checkout.php ทั้งไฟล์ไม่มีคำว่า qr_data เลย การตรวจอัตโนมัติตอนอัปโหลดจึงไม่เคยเกิด ทุกการตรวจต้องให้เภสัชกรกดเอง",
+    "ไม่มี beginTransaction แม้แต่ครั้งเดียวใน shop/order-detail.php api/ajax_handler.php api/ai-admin.php และ webhook.php การอนุมัติหนึ่งครั้งคือคำสั่ง UPDATE สองถึงสามคำสั่งแยกกัน",
+    "มีสี่จุดที่เขียน payment_slips.status เป็น approved และสามจุดที่เขียน transactions เป็น paid แต่ละจุดมีผลข้างเคียงไม่เหมือนกัน บางจุดแจกแต้ม บางจุดตั้ง wms_status บางจุดไม่ส่ง Flex",
+    "webhook.php:4387 ตั้ง transactions.status เป็น paid ทันทีที่รับรูปจากแชท ขณะที่ api/checkout.php:1829 อธิบายไว้ชัดว่าห้ามทำแบบนั้น สลิปใบเดียวกันจึงให้สถานะต่างกันตามทางเข้า",
+    "คอลัมน์ verify_ref verify_amount verify_data verified_at และ qr_payload มาจาก install/migration_payment_slips_verification.php ไม่ได้อยู่ใน tenant template ที่ database/migration_2026-05-25_tenant_template.sql:1840 tenant ที่ยังไม่รัน migration จะตกไปเส้น catch เงียบทุกครั้ง",
+    "ไม่มี INSERT ไหนเขียน payment_slips.line_account_id เลย ทุกแถวจึงได้ค่า default 1 การกรองสลิปตาม LINE account ต้อง join กลับไปที่ transactions เสมอ อย่างที่ includes/header.php:221 ทำ",
+    "ไม่มี INSERT ไหนจากเส้น Mini App เขียน payment_slips.amount การ์ดสลิปที่ shop/order-detail.php:1090 จึงไม่แสดงยอด ยอดที่เห็นมาจาก verify_data ของ GhostX อย่างเดียว",
+    "api/checkout.php ไม่มีการยืนยันตัวตนใด ๆ ทุก action ทำงานด้วย order_id ล้วน ผลคือ get_order upload_slip และ update_payment_method เข้าถึงออเดอร์ใดก็ได้ใน tenant นั้น",
+    "โหมดตรวจสลิปเป็นแบบ amount-only โดยเจตนา บัญชีปลายทางถูกแสดงให้ดูแต่ไม่บล็อกการอนุมัติ ดังนั้นการตรวจนี้ยืนยันว่ามีการโอนยอดนี้จริง ไม่ได้ยืนยันว่าเงินเข้าบัญชีร้าน",
+    "api/customer-slips.php api/slips-list.php และ api/slip-match-orders.php ไม่ได้อยู่ในเส้นนี้เลย ทั้งสามอ่านเขียนตาราง odoo_slip_uploads ของสาย Odoo BDO ซึ่งเป็นระบบสลิปคนละชุดกับ payment_slips",
+    "transactions.status เป็น varchar(50) ไม่ใช่ enum ค่าที่ใช้จริงจึงกระจายอยู่ตามโค้ด ทั้ง pending confirmed paid completed ส่วน payment_status เป็น enum ที่รับได้แค่ pending paid failed refunded"
+  ],
+  "file_refs": [
+    "line-mini-app/src/components/miniapp/CheckoutClient.tsx",
+    "line-mini-app/src/components/miniapp/OrderDetailClient.tsx",
+    "line-mini-app/src/lib/shop-api.ts",
+    "line-mini-app/src/lib/slip-qr.ts",
+    "line-mini-app/src/lib/order-status.ts",
+    "line-mini-app/src/app/order/page.tsx",
+    "bootstrap/route_by_account.php",
+    "api/checkout.php",
+    "api/ajax_handler.php",
+    "api/ai-admin.php",
+    "shop/order-detail.php",
+    "shop/orders.php",
+    "classes/SlipVerifier.php",
+    "classes/AccountReceivableService.php",
+    "classes/UnifiedShop.php",
+    "webhook.php",
+    "inbox-v2.php",
+    "includes/header.php",
+    "install/migration_payment_slips_verification.php",
+    "database/migration_2026-05-25_tenant_template.sql"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": ["ลูกค้า Mini App", "api/checkout.php", "tenant DB", "เภสัชกร", "GhostX", "LINE และ Telegram"],
+    "rows": ["สร้างออเดอร์", "แนบสลิป", "ตรวจสลิป", "ปิดยอด"],
+    "nodes": [
+      { "id": "n1", "lane": 0, "row": 0, "label": "เลือก transfer หรือ cod", "type": "start", "ref": "line-mini-app/src/components/miniapp/CheckoutClient.tsx:295" },
+      { "id": "n2", "lane": 1, "row": 0, "label": "handleCreateOrder", "type": "step", "ref": "api/checkout.php:1288" },
+      { "id": "n3", "lane": 1, "row": 0, "label": "ALTER TABLE ปิด transaction กลางคัน", "type": "error", "ref": "api/checkout.php:1441" },
+      { "id": "n4", "lane": 1, "row": 0, "label": "payment_method เป็น cod ไหม", "type": "decision", "ref": "api/checkout.php:1435" },
+      { "id": "n5", "lane": 2, "row": 0, "label": "INSERT transactions status=confirmed", "type": "data", "ref": "api/checkout.php:1446" },
+      { "id": "n6", "lane": 2, "row": 0, "label": "INSERT transactions status=pending", "type": "data", "ref": "api/checkout.php:1446" },
+      { "id": "n7", "lane": 0, "row": 1, "label": "ถอด QR ด้วย jsQR แนบ qr_data", "type": "step", "ref": "line-mini-app/src/lib/shop-api.ts:408" },
+      { "id": "n8", "lane": 1, "row": 1, "label": "handleUploadSlip ทิ้ง qr_data", "type": "error", "ref": "api/checkout.php:1733" },
+      { "id": "n9", "lane": 2, "row": 1, "label": "INSERT payment_slips status=pending", "type": "data", "ref": "api/checkout.php:1812" },
+      { "id": "n10", "lane": 2, "row": 1, "label": "UPDATE transactions แค่ updated_at", "type": "data", "ref": "api/checkout.php:1834" },
+      { "id": "n11", "lane": 5, "row": 1, "label": "Flex ใบเสร็จ + รูปสลิปเข้า Telegram", "type": "step", "ref": "api/checkout.php:1838" },
+      { "id": "n12", "lane": 3, "row": 2, "label": "เปิดการ์ดสลิปในหน้าออเดอร์", "type": "step", "ref": "shop/order-detail.php:556" },
+      { "id": "n13", "lane": 3, "row": 2, "label": "มี qr_payload ไหม", "type": "decision", "ref": "shop/order-detail.php:205" },
+      { "id": "n14", "lane": 3, "row": 2, "label": "ถอด QR ในเบราว์เซอร์แอดมิน", "type": "step", "ref": "shop/order-detail.php:1293" },
+      { "id": "n15", "lane": 4, "row": 2, "label": "SlipVerifier ยิง qrData ไป GhostX", "type": "step", "ref": "classes/SlipVerifier.php:43" },
+      { "id": "n16", "lane": 4, "row": 2, "label": "ยอดตรง grand_total ไหม", "type": "decision", "ref": "classes/SlipVerifier.php:155" },
+      { "id": "n17", "lane": 3, "row": 2, "label": "ยอดไม่ตรง ไม่อนุมัติ", "type": "error", "ref": "shop/order-detail.php:274" },
+      { "id": "n18", "lane": 3, "row": 3, "label": "verify_slip อนุมัติ", "type": "step", "ref": "shop/order-detail.php:266" },
+      { "id": "n19", "lane": 3, "row": 3, "label": "approve_payment กดมือ ข้าม GhostX", "type": "step", "ref": "shop/order-detail.php:348" },
+      { "id": "n20", "lane": 3, "row": 3, "label": "reject_payment", "type": "step", "ref": "shop/order-detail.php:451" },
+      { "id": "n21", "lane": 2, "row": 3, "label": "payment_slips: pending → approved", "type": "data", "ref": "shop/order-detail.php:266" },
+      { "id": "n22", "lane": 2, "row": 3, "label": "transactions: → paid, payment_status=paid", "type": "data", "ref": "shop/order-detail.php:268" },
+      { "id": "n23", "lane": 2, "row": 3, "label": "payment_slips: pending → rejected", "type": "data", "ref": "shop/order-detail.php:451" },
+      { "id": "n24", "lane": 5, "row": 3, "label": "Flex แจ้งลูกค้า paid หรือ สลิปไม่ถูกต้อง", "type": "step", "ref": "shop/order-detail.php:271" },
+      { "id": "n25", "lane": 0, "row": 3, "label": "หน้าออเดอร์ขึ้นชำระเงินแล้ว", "type": "end", "ref": "line-mini-app/src/components/miniapp/OrderDetailClient.tsx:273" }
+    ],
+    "edges": [
+      { "from": "n1", "to": "n2" },
+      { "from": "n2", "to": "n3" },
+      { "from": "n3", "to": "n4" },
+      { "from": "n4", "to": "n5", "label": "cod" },
+      { "from": "n4", "to": "n6", "label": "transfer" },
+      { "from": "n5", "to": "n19", "label": "ไม่มีสลิป รอกดอนุมัติมือ", "dashed": true },
+      { "from": "n6", "to": "n7" },
+      { "from": "n7", "to": "n8" },
+      { "from": "n8", "to": "n9" },
+      { "from": "n9", "to": "n10" },
+      { "from": "n10", "to": "n11" },
+      { "from": "n11", "to": "n12" },
+      { "from": "n12", "to": "n13" },
+      { "from": "n13", "to": "n15", "label": "มี" },
+      { "from": "n13", "to": "n14", "label": "ไม่มี" },
+      { "from": "n14", "to": "n15" },
+      { "from": "n15", "to": "n16" },
+      { "from": "n16", "to": "n18", "label": "ตรง" },
+      { "from": "n16", "to": "n17", "label": "ไม่ตรง", "dashed": true },
+      { "from": "n17", "to": "n19", "label": "ตัดสินใจเอง", "dashed": true },
+      { "from": "n12", "to": "n20", "label": "สลิปไม่ถูกต้อง", "dashed": true },
+      { "from": "n18", "to": "n21" },
+      { "from": "n19", "to": "n21" },
+      { "from": "n21", "to": "n22" },
+      { "from": "n20", "to": "n23" },
+      { "from": "n22", "to": "n24" },
+      { "from": "n23", "to": "n24", "dashed": true },
+      { "from": "n24", "to": "n25" }
+    ]
+  }
+}

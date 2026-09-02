@@ -1,0 +1,395 @@
+{
+  "id": "tenant-saas",
+  "title": "SaaS Tenant: จากโดเมน → DB แยก → Onboarding",
+  "summary": "แกน multi-tenant ของ Clinicya: resolve tenant, pin TenantContext, provision database, seed owner/LINE และตั้งค่าร้านแบบ resumable.",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "HTTP Request",
+      "module": "bootstrap/resolve_subdomain.php",
+      "method": "reya_extract_subdomain",
+      "file": "bootstrap/resolve_subdomain.php",
+      "line": 64,
+      "action": "แยก tenant slug จาก HTTP_HOST และตัด reserved subdomain ออก",
+      "returns": "slug หรือ null"
+    },
+    {
+      "seq": 2,
+      "actor": "Tenant Router",
+      "module": "bootstrap/resolve_subdomain.php",
+      "method": "reya_resolve_tenant_from_host",
+      "file": "bootstrap/resolve_subdomain.php",
+      "line": 153,
+      "action": "ค้น tenant ใน platform DB; root domain ใช้ root tenant เฉพาะเมื่อไม่มี account routing signal",
+      "calls": [
+        "Database::platform()->getConnection()"
+      ],
+      "returns": "tenant_id หรือ null"
+    },
+    {
+      "seq": 3,
+      "actor": "Tenant Context",
+      "module": "classes/TenantContext.php",
+      "method": "getCurrentTenantId",
+      "file": "classes/TenantContext.php",
+      "line": 62,
+      "action": "resolve tenant ตามลำดับ explicit override → session active_tenant_id → platform user → legacy LINE binding",
+      "returns": "tenant_id หรือ null"
+    },
+    {
+      "seq": 4,
+      "actor": "LINE / Mini App Router",
+      "module": "classes/TenantContext.php",
+      "method": "routeByLineAccount",
+      "file": "classes/TenantContext.php",
+      "line": 282,
+      "action": "เมื่อ request มาจาก root domain ใช้ line_account_id หา tenant_line_account_routes แล้ว pin tenant",
+      "calls": [
+        "resolveTenantByLineAccount"
+      ],
+      "sets": [
+        {
+          "field": "TenantContext.currentTenantId",
+          "value": "tenant_id"
+        }
+      ],
+      "state_change": "root request ถูกตรึงไป tenant DB ที่ถูกต้อง"
+    },
+    {
+      "seq": 5,
+      "actor": "Platform Admin",
+      "module": "classes/TenantOnboardingService.php",
+      "method": "provisionFromOwner",
+      "file": "classes/TenantOnboardingService.php",
+      "line": 68,
+      "action": "validate slug/owner/plan, ตรวจ slug ซ้ำ และจัดสรร tenant id",
+      "calls": [
+        "TenantProvisioning::fullProvision"
+      ],
+      "returns": "tenant metadata"
+    },
+    {
+      "seq": 6,
+      "actor": "Provisioner",
+      "module": "classes/TenantProvisioning.php",
+      "method": "create",
+      "file": "classes/TenantProvisioning.php",
+      "line": 137,
+      "action": "สร้างฐานข้อมูล tenant ผ่าน cPanel uapi ตามชื่อ zrismpsz_reya_t_NNNN",
+      "sets": [
+        {
+          "field": "tenant_provisioning_log.status",
+          "value": "started/succeeded/failed"
+        }
+      ],
+      "state_change": "tenant database created"
+    },
+    {
+      "seq": 7,
+      "actor": "Provisioner",
+      "module": "classes/TenantProvisioning.php",
+      "method": "applySchema",
+      "file": "classes/TenantProvisioning.php",
+      "line": 201,
+      "action": "apply tenant template ผ่าน mysql client และ ensure ตาราง admin_users",
+      "calls": [
+        "ensureAdminUsersTable"
+      ],
+      "state_change": "tenant schema ready"
+    },
+    {
+      "seq": 8,
+      "actor": "Onboarding Service",
+      "module": "classes/TenantOnboardingService.php",
+      "method": "provisionFromOwner",
+      "file": "classes/TenantOnboardingService.php",
+      "line": 161,
+      "action": "สร้าง admin คนแรกใน tenant DB, seed landing defaults และ trial subscription",
+      "sets": [
+        {
+          "field": "admin_users.role",
+          "value": "admin"
+        },
+        {
+          "field": "tenant_subscriptions.trial_ends_at",
+          "value": "trial end"
+        }
+      ]
+    },
+    {
+      "seq": 9,
+      "actor": "Platform Admin UI",
+      "module": "admin/tenant-onboard.php",
+      "method": "POST onboarding step",
+      "file": "admin/tenant-onboard.php",
+      "line": 117,
+      "action": "wizard บันทึก shop → LINE OA → AI ลง tenant DB และ progress ลง platform DB",
+      "calls": [
+        "LineAccountManager::createAccount/updateAccount",
+        "OnboardingWizard::markCompleted"
+      ],
+      "state_change": "tenant onboarding progress advances"
+    },
+    {
+      "seq": 10,
+      "actor": "Tenant Resolver",
+      "module": "bootstrap/resolve_subdomain.php",
+      "method": "reya_resolve_tenant_from_host",
+      "file": "bootstrap/resolve_subdomain.php",
+      "line": 210,
+      "action": "pending_setup เข้า DEMO mode; suspended/terminated ตอบ 503; active ใช้งานปกติ",
+      "returns": "active/demo/error surface"
+    }
+  ],
+  "cases": [
+    {
+      "id": "T1",
+      "name": "Reserved subdomain",
+      "condition": "subdomain อยู่ในรายการ reserved",
+      "behavior": "ไม่ resolve เป็น tenant",
+      "code_path": "reya_extract_subdomain → null",
+      "result": "ตกกลับ public/legacy routing",
+      "tag": "info"
+    },
+    {
+      "id": "T2",
+      "name": "Unknown tenant slug",
+      "condition": "slug รูปแบบถูกแต่ไม่พบใน platform.tenants",
+      "behavior": "ตอบ 404 เพื่อไม่ serve root content ใต้ slug แปลก",
+      "code_path": "reya_resolve_tenant_from_host",
+      "result": "404",
+      "tag": "warn"
+    },
+    {
+      "id": "T3",
+      "name": "Root domain + account signal",
+      "condition": "มี ?account / ?la / ?line_account_id",
+      "behavior": "ไม่ pin root tenant; ปล่อย route_by_account เป็นผู้ตัดสิน",
+      "code_path": "reya_has_explicit_account_signal",
+      "result": "tenant ตาม LINE account",
+      "tag": "ok"
+    },
+    {
+      "id": "T4",
+      "name": "Pending setup",
+      "condition": "tenant.status=pending_setup",
+      "behavior": "เปิด tenant แบบ DEMO และตั้ง REYA_DEMO_MODE",
+      "code_path": "reya_resolve_tenant_from_host",
+      "result": "full access + demo watermark",
+      "tag": "info"
+    },
+    {
+      "id": "T5",
+      "name": "Suspended/terminated",
+      "condition": "tenant.status suspended หรือ terminated",
+      "behavior": "tenant subdomain ตอบ 503; root domain fail-open",
+      "code_path": "reya_resolve_tenant_from_host",
+      "result": "503 หรือ legacy fallback",
+      "tag": "danger"
+    },
+    {
+      "id": "T6",
+      "name": "Provision failure",
+      "condition": "uapi/mysql/schema step โยน exception",
+      "behavior": "log failed และ caller ทำ compensating action",
+      "code_path": "TenantProvisioning create/applySchema",
+      "result": "provision aborted",
+      "tag": "danger"
+    },
+    {
+      "id": "T7",
+      "name": "Missing onboarding migration",
+      "condition": "tenant_onboarding_progress ยังไม่มี",
+      "behavior": "wizard fail-open เป็น progress ว่าง",
+      "code_path": "reya_onboard_load_progress",
+      "result": "ยัง onboarding ต่อได้",
+      "tag": "warn"
+    }
+  ],
+  "modules_touched": [
+    {
+      "module": "bootstrap/resolve_subdomain.php",
+      "role": "HTTP host → tenant",
+      "methods": [
+        "reya_extract_subdomain",
+        "reya_resolve_tenant_from_host"
+      ]
+    },
+    {
+      "module": "classes/TenantContext.php",
+      "role": "request-scoped tenant identity",
+      "methods": [
+        "getCurrentTenantId",
+        "routeByLineAccount"
+      ]
+    },
+    {
+      "module": "classes/TenantProvisioning.php",
+      "role": "database lifecycle",
+      "methods": [
+        "create",
+        "grant",
+        "applySchema"
+      ]
+    },
+    {
+      "module": "classes/TenantOnboardingService.php",
+      "role": "business orchestration",
+      "methods": [
+        "provisionFromOwner"
+      ]
+    },
+    {
+      "module": "admin/tenant-onboard.php",
+      "role": "guided setup UI",
+      "methods": [
+        "shop",
+        "line",
+        "ai",
+        "done"
+      ]
+    }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "bootstrap/resolve_subdomain.php",
+      "to_module": "TenantContext",
+      "returns_what": "tenant_id",
+      "why_needed": "ทุก Database::getInstance() หลังจากนั้นต้องรู้ tenant ที่ถูกต้อง"
+    },
+    {
+      "from_module": "TenantProvisioning",
+      "to_module": "TenantOnboardingService",
+      "returns_what": "db_name",
+      "why_needed": "ใช้เปิด tenant PDO และ seed admin"
+    },
+    {
+      "from_module": "LineAccountManager",
+      "to_module": "Mini App / LINE APIs",
+      "returns_what": "LINE account credentials",
+      "why_needed": "feature ฝั่ง LINE ต้อง scope ด้วย line_account_id"
+    }
+  ],
+  "gotchas": [
+    "root domain ต้องไม่ pin tenant-0001 เมื่อ request มี account routing signal",
+    "pending_setup ไม่ได้ lock ระบบทั้งหมด แต่เข้า DEMO mode",
+    "tenant template เคยขาด admin_users จึงมี ensureAdminUsersTable เป็น safety net",
+    "super-admin ไม่มี implicit tenant; ต้อง setCurrentTenantId หรือ enterPlatformContext"
+  ],
+  "file_refs": [
+    "bootstrap/resolve_subdomain.php",
+    "classes/TenantContext.php",
+    "classes/TenantProvisioning.php",
+    "classes/TenantOnboardingService.php",
+    "admin/tenant-onboard.php"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": [
+      "Request",
+      "Tenant Router",
+      "Platform DB",
+      "Provisioner",
+      "Tenant DB",
+      "Admin"
+    ],
+    "rows": [
+      "Resolve",
+      "Provision",
+      "Seed",
+      "Onboard",
+      "Serve"
+    ],
+    "nodes": [
+      {
+        "id": "ts1",
+        "lane": "Request",
+        "row": "Resolve",
+        "type": "start",
+        "label": "HTTP_HOST / line_account_id",
+        "ref": "resolve_subdomain.php"
+      },
+      {
+        "id": "ts2",
+        "lane": "Tenant Router",
+        "row": "Resolve",
+        "type": "decision",
+        "label": "หา tenant ได้?"
+      },
+      {
+        "id": "ts3",
+        "lane": "Platform DB",
+        "row": "Resolve",
+        "type": "step",
+        "label": "SELECT tenants / routes",
+        "ref": "TenantContext.php"
+      },
+      {
+        "id": "ts4",
+        "lane": "Provisioner",
+        "row": "Provision",
+        "type": "step",
+        "label": "create DB + grant + schema",
+        "ref": "TenantProvisioning.php"
+      },
+      {
+        "id": "ts5",
+        "lane": "Tenant DB",
+        "row": "Seed",
+        "type": "step",
+        "label": "admin + defaults + LINE",
+        "ref": "TenantOnboardingService.php"
+      },
+      {
+        "id": "ts6",
+        "lane": "Admin",
+        "row": "Onboard",
+        "type": "step",
+        "label": "shop → LINE → AI",
+        "ref": "tenant-onboard.php"
+      },
+      {
+        "id": "ts7",
+        "lane": "Tenant Router",
+        "row": "Serve",
+        "type": "end",
+        "label": "active / DEMO / 404 / 503",
+        "ref": "resolve_subdomain.php"
+      }
+    ],
+    "edges": [
+      {
+        "from": "ts1",
+        "to": "ts2"
+      },
+      {
+        "from": "ts2",
+        "to": "ts3",
+        "label": "lookup"
+      },
+      {
+        "from": "ts3",
+        "to": "ts4",
+        "label": "new tenant"
+      },
+      {
+        "from": "ts4",
+        "to": "ts5"
+      },
+      {
+        "from": "ts5",
+        "to": "ts6"
+      },
+      {
+        "from": "ts6",
+        "to": "ts7"
+      },
+      {
+        "from": "ts3",
+        "to": "ts7",
+        "label": "existing tenant",
+        "dashed": true
+      }
+    ]
+  }
+}

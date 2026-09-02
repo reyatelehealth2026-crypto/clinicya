@@ -1,0 +1,317 @@
+{
+  "id": "counter-points",
+  "title": "แต้มหน้าร้าน: QR / Direct / Phone-member",
+  "summary": "รองรับหน้าร้านที่ลูกค้าอาจไม่มี LINE: ออก one-time claim, ให้แต้มตรงกับลูกค้าใน inbox หรือสร้างสมาชิกแบบเบอร์โทรและใช้ loyalty ledger เดียวกัน.",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "Admin UI",
+      "module": "loyalty-members.php",
+      "method": "member list",
+      "file": "loyalty-members.php",
+      "line": 33,
+      "action": "อ่าน users ที่ line_user_id LIKE 'offline:%' แบบ scope line_account_id และแสดง available_points"
+    },
+    {
+      "seq": 2,
+      "actor": "Pharmacist",
+      "module": "loyalty-members.php",
+      "method": "lmSubmitAdd",
+      "file": "loyalty-members.php",
+      "line": 220,
+      "action": "ส่ง give_by_phone ไป api/points-claim.php พร้อม phone/user/amount/points"
+    },
+    {
+      "seq": 3,
+      "actor": "Points Claim API",
+      "module": "api/points-claim.php",
+      "method": "action router",
+      "file": "api/points-claim.php",
+      "line": 52,
+      "action": "dispatch create/give_direct/phone/merge/claim/status หลัง route tenant"
+    },
+    {
+      "seq": 4,
+      "actor": "Points Claim API",
+      "module": "api/points-claim.php",
+      "method": "ensurePointsClaimsTable",
+      "file": "api/points-claim.php",
+      "line": 112,
+      "action": "defensive CREATE TABLE points_claims ถ้ายังไม่มี migration",
+      "sets": [
+        {
+          "field": "points_claims",
+          "value": "table may be created at request time"
+        }
+      ]
+    },
+    {
+      "seq": 5,
+      "actor": "Pharmacist",
+      "module": "api/points-claim.php",
+      "method": "handleCreateClaim",
+      "file": "api/points-claim.php",
+      "line": 293,
+      "action": "validate admin, amount/points, LIFF; สร้าง token 30 นาที + voucher + QR URL",
+      "calls": [
+        "LoyaltyPoints::calculatePoints",
+        "pcResolveLiffId"
+      ],
+      "sets": [
+        {
+          "field": "points_claims.status",
+          "value": "pending"
+        }
+      ]
+    },
+    {
+      "seq": 6,
+      "actor": "Pharmacist",
+      "module": "api/points-claim.php",
+      "method": "handleGiveDirect",
+      "file": "api/points-claim.php",
+      "line": 377,
+      "action": "validate customer belongs to OA, เปิด transaction, INSERT claimed audit row แล้ว addPoints",
+      "calls": [
+        "LoyaltyPoints::addPoints"
+      ],
+      "sets": [
+        {
+          "field": "points_claims.status",
+          "value": "claimed"
+        },
+        {
+          "field": "points_transactions.type",
+          "value": "earn"
+        }
+      ]
+    },
+    {
+      "seq": 7,
+      "actor": "Points Claim API",
+      "module": "api/points-claim.php",
+      "method": "handleGiveDirect",
+      "file": "api/points-claim.php",
+      "line": 450,
+      "action": "ผูก points_transaction_id กลับ claim, commit แล้ว push Flex receipt แบบ best-effort"
+    },
+    {
+      "seq": 8,
+      "actor": "Admin UI",
+      "module": "loyalty-members.php",
+      "method": "lmOpenDetail",
+      "file": "loyalty-members.php",
+      "line": 270,
+      "action": "เรียก member_detail เพื่อดู available_points + transaction history"
+    }
+  ],
+  "cases": [
+    {
+      "id": "P1",
+      "name": "Admin not logged in",
+      "condition": "$_SESSION.admin_user ว่าง",
+      "behavior": "create/give_direct ตอบ 401",
+      "code_path": "points-claim.php",
+      "result": "Unauthorized",
+      "tag": "danger"
+    },
+    {
+      "id": "P2",
+      "name": "No amount/points",
+      "condition": "ทั้ง amount และ explicit points <=0",
+      "behavior": "ปฏิเสธ",
+      "code_path": "handleCreateClaim/handleGiveDirect",
+      "result": "validation error",
+      "tag": "warn"
+    },
+    {
+      "id": "P3",
+      "name": "LIFF missing",
+      "condition": "หา liff id จริงไม่ได้หรือเป็น PENDING",
+      "behavior": "ไม่ mint QR ที่เปิดไม่ได้",
+      "code_path": "handleCreateClaim",
+      "result": "liff_missing=true",
+      "tag": "warn"
+    },
+    {
+      "id": "P4",
+      "name": "Wrong shop customer",
+      "condition": "user_id ไม่ match line_account_id",
+      "behavior": "ปฏิเสธ direct credit",
+      "code_path": "handleGiveDirect",
+      "result": "customer not found in shop",
+      "tag": "danger"
+    },
+    {
+      "id": "P5",
+      "name": "Ledger credit fails",
+      "condition": "LoyaltyPoints::addPoints false",
+      "behavior": "rollback transaction",
+      "code_path": "handleGiveDirect",
+      "result": "no audit/credit commit",
+      "tag": "danger"
+    },
+    {
+      "id": "P6",
+      "name": "Receipt push fails",
+      "condition": "LINE push มีปัญหา",
+      "behavior": "ไม่ rollback แต้มที่ commit แล้ว",
+      "code_path": "handleGiveDirect",
+      "result": "credit remains successful",
+      "tag": "info"
+    },
+    {
+      "id": "P7",
+      "name": "Fresh tenant migration missing",
+      "condition": "points_claims table ไม่มี",
+      "behavior": "request path สร้างตารางเอง",
+      "code_path": "ensurePointsClaimsTable",
+      "result": "flow ยังทำงาน",
+      "tag": "warn",
+      "gotcha": "ขัด convention ใหม่ที่ควรใช้ migration แทน page-load table creation"
+    }
+  ],
+  "modules_touched": [
+    {
+      "module": "loyalty-members.php",
+      "role": "phone-member admin UI",
+      "methods": [
+        "lmSubmitAdd",
+        "lmOpenDetail"
+      ]
+    },
+    {
+      "module": "api/points-claim.php",
+      "role": "counter loyalty orchestration",
+      "methods": [
+        "handleCreateClaim",
+        "handleGiveDirect",
+        "phone actions",
+        "claim/status"
+      ]
+    },
+    {
+      "module": "classes/LoyaltyPoints.php",
+      "role": "shared ledger",
+      "methods": [
+        "calculatePoints",
+        "addPoints",
+        "getUserPoints"
+      ]
+    }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "pcResolveLiffId",
+      "to_module": "handleCreateClaim",
+      "returns_what": "real LIFF id",
+      "why_needed": "QR ต้องเปิด Mini App claim route ได้"
+    },
+    {
+      "from_module": "LoyaltyPoints::addPoints",
+      "to_module": "points-claim.php",
+      "returns_what": "boolean credit result",
+      "why_needed": "commit/rollback audit transaction"
+    },
+    {
+      "from_module": "points_transactions",
+      "to_module": "loyalty-members.php",
+      "returns_what": "balance/history",
+      "why_needed": "staff ตรวจสอบแต้มหลังให้ได้"
+    }
+  ],
+  "gotchas": [
+    "ensurePointsClaimsTable สร้าง table ระหว่าง request ซึ่งสวนกับ AGENTS.md ที่กำหนด schema ใหม่ให้ใช้ migration",
+    "phone-member และ LINE-member ต้องมี merge confirmation; ไม่ควร auto-merge จากเบอร์โทร",
+    "QR claim action หลังส่วนที่อ่านได้ยังต้อง re-trace เมื่อ W กลับมา จึงบันทึกเป็น gap แทนการเดา"
+  ],
+  "file_refs": [
+    "loyalty-members.php",
+    "api/points-claim.php",
+    "classes/LoyaltyPoints.php"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": [
+      "Pharmacist",
+      "Admin UI",
+      "Points API",
+      "Loyalty Ledger",
+      "Customer/LINE"
+    ],
+    "rows": [
+      "Identify",
+      "Mint/Credit",
+      "Ledger",
+      "Receipt"
+    ],
+    "nodes": [
+      {
+        "id": "p1",
+        "lane": "Pharmacist",
+        "row": "Identify",
+        "type": "start",
+        "label": "phone / user / sale amount"
+      },
+      {
+        "id": "p2",
+        "lane": "Admin UI",
+        "row": "Identify",
+        "type": "step",
+        "label": "give_by_phone / direct / QR"
+      },
+      {
+        "id": "p3",
+        "lane": "Points API",
+        "row": "Mint/Credit",
+        "type": "decision",
+        "label": "QR or direct?"
+      },
+      {
+        "id": "p4",
+        "lane": "Points API",
+        "row": "Mint/Credit",
+        "type": "step",
+        "label": "points_claims audit/token",
+        "ref": "points-claim.php"
+      },
+      {
+        "id": "p5",
+        "lane": "Loyalty Ledger",
+        "row": "Ledger",
+        "type": "step",
+        "label": "addPoints → points_transactions",
+        "ref": "LoyaltyPoints.php"
+      },
+      {
+        "id": "p6",
+        "lane": "Customer/LINE",
+        "row": "Receipt",
+        "type": "end",
+        "label": "Flex receipt / claim UI"
+      }
+    ],
+    "edges": [
+      {
+        "from": "p1",
+        "to": "p2"
+      },
+      {
+        "from": "p2",
+        "to": "p3"
+      },
+      {
+        "from": "p3",
+        "to": "p4"
+      },
+      {
+        "from": "p4",
+        "to": "p5"
+      },
+      {
+        "from": "p5",
+        "to": "p6"
+      }
+    ]
+  }
+}

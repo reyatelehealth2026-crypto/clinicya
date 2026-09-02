@@ -1,0 +1,828 @@
+{
+  "id": "dispense",
+  "title": "ระบบจ่ายยา",
+  "summary": "เส้นทางตั้งแต่เภสัชกรกดยืนยันในโมดัลจ่ายยาของ inbox-v2.php จนถึงซองยา Flex ที่ลูกค้าได้รับใน LINE ทางเดินจริงคือ case dispense ที่บรรทัด 469 ถึง 735 ซึ่งเขียนลงเจ็ดตารางติดกันโดยไม่มี transaction ครอบแม้แต่จุดเดียว สาขาที่ตัดสินทุกอย่างคือ payment_method โดยมีเพียง cash เท่านั้นที่นับว่าจ่ายแล้วและตัดสต๊อก ส่วน transfer later และ credit จะไปเป็นออร์เดอร์ค้างที่ไม่มีใครตัดสต๊อกให้ ยังมี implementation คู่ขนานอยู่ใน messages.php ที่เพี้ยนไปแล้ว และมี port ฝั่ง Next.js อีกชุดที่อ้างอิงเลขบรรทัดของ PHP ตรง ๆ",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "เภสัชกร",
+      "module": "inbox-v2-ui",
+      "method": "dispenseSubmit()",
+      "file": "inbox-v2.php",
+      "line": 13053,
+      "action": "เภสัชกรกดยืนยันในโมดัลจ่ายยา JS เตือนเรื่องข้อบ่งใช้ที่ยังว่าง แล้วขอ confirm อีกครั้งก่อนยิง FormData",
+      "calls": [{ "module": "inbox-v2-ui", "method": "fetch POST window.location.pathname", "file": "inbox-v2.php", "line": 13073 }],
+      "returns": "FormData ที่มี action items total_amount payment_method shop_name pharmacist_name",
+      "notes": "ส่งเพียง 6 ฟิลด์ ไม่มี notes ทั้งที่ฝั่ง PHP อ่าน POST notes อยู่ ดูเคส C30"
+    },
+    {
+      "seq": 2,
+      "actor": "inbox-v2.php",
+      "module": "inbox-v2",
+      "method": "same-page AJAX gate",
+      "file": "inbox-v2.php",
+      "line": 229,
+      "action": "รับเฉพาะ POST ที่มี header X-Requested-With แล้วสวมหมวก JSON ก่อนเข้า switch action ทุกเคสอยู่ในไฟล์เดียวกับหน้าจอ ไม่ได้แยกเป็น API",
+      "calls": [{ "module": "inbox-v2", "method": "switch ($action)", "file": "inbox-v2.php", "line": 234 }],
+      "returns": "เข้า case dispense ที่บรรทัด 469",
+      "notes": "ไม่มีการตรวจ role ของผู้ใช้ในเคสนี้ อาศัยแค่ auth ระดับหน้าจากที่ header.php ทำไว้"
+    },
+    {
+      "seq": 3,
+      "actor": "inbox-v2.php",
+      "module": "inbox-v2",
+      "method": "case 'dispense'",
+      "file": "inbox-v2.php",
+      "line": 473,
+      "action": "ตรวจ user_id และ decode items ถ้าอย่างใดอย่างหนึ่งว่างจะ throw ก่อนแตะข้อมูลใด ๆ พร้อมออกเลขที่ DIS จากเวลาบวกเลขสุ่ม",
+      "calls": [{ "module": "inbox-v2", "method": "json_decode items", "file": "inbox-v2.php", "line": 488 }],
+      "returns": "itemsArr และ orderNumber รูปแบบ DIS + ymdHis + rand",
+      "notes": "orderNumber ที่บรรทัด 485 ไม่ได้ตรวจซ้ำกับของเดิม จึงไม่ใช่ idempotency key ดูเคส C31"
+    },
+    {
+      "seq": 4,
+      "actor": "inbox-v2.php",
+      "module": "inbox-v2",
+      "method": "hydrate items",
+      "file": "inbox-v2.php",
+      "line": 496,
+      "action": "เติม indication usage_text image generic_name strength manufacturer ให้แต่ละรายการจาก business_items เพื่อให้ซองยามีสรรพคุณและวิธีใช้แม้เภสัชกรไม่ได้พิมพ์เอง",
+      "calls": [{ "module": "tenant DB", "method": "SELECT ... FROM business_items WHERE id", "file": "inbox-v2.php", "line": 500 }],
+      "returns": "itemsArr ที่เติมข้อมูลแล้ว",
+      "notes": "try catch อยู่ในลูปต่อรายการ ล้มรายการเดียวไม่ล้มทั้งชุด และค่าที่เติมนี้ไม่ได้ถูกบันทึกลง dispensing_records ดูเคส C9"
+    },
+    {
+      "seq": 5,
+      "actor": "inbox-v2.php",
+      "module": "inbox-v2",
+      "method": "SELECT users",
+      "file": "inbox-v2.php",
+      "line": 534,
+      "action": "อ่าน line_user_id line_account_id display_name reply_token reply_token_expires ของลูกค้า ถ้าไม่พบแถวจะ throw",
+      "returns": "แถว users ที่ใช้ต่อทั้งสาย",
+      "notes": "query นี้ไม่มีเงื่อนไข line_account_id จึงไม่มี guard ว่าลูกค้าอยู่บัญชี LINE เดียวกับที่เภสัชกรกำลังเปิด ดูเคส C26"
+    },
+    {
+      "seq": 6,
+      "actor": "inbox-v2.php",
+      "module": "inbox-v2",
+      "method": "build shopInfo",
+      "file": "inbox-v2.php",
+      "line": 543,
+      "action": "ประกอบหัวซองยาจาก shop_settings ด้วยคอลัมน์ shop_name shop_address contact_phone shop_logo pharmacist_name แปลง logo เป็น absolute URL แล้วถอยไป line_accounts.name ถ้ายังว่าง",
+      "calls": [
+        { "module": "tenant DB", "method": "SELECT FROM shop_settings", "file": "inbox-v2.php", "line": 545 },
+        { "module": "tenant DB", "method": "SELECT name FROM line_accounts", "file": "inbox-v2.php", "line": 569 }
+      ],
+      "returns": "shopInfo ที่มี name address phone logo open_hours pharmacist",
+      "notes": "ชื่อที่เภสัชกรพิมพ์เองชนะทุกอย่างที่บรรทัด 575 และ messages.php ยังอ่านคอลัมน์ชุดเก่าอยู่ ดูเคส C32"
+    },
+    {
+      "seq": 7,
+      "actor": "tenant DB",
+      "module": "inbox-v2",
+      "method": "INSERT dispensing_records",
+      "file": "inbox-v2.php",
+      "line": 580,
+      "action": "บันทึกการจ่ายยาเป็นแถวแรกของทั้งกระบวนการ โดยเก็บ items เป็นสตริง JSON ดิบจาก POST ไม่ใช่ชุดที่เพิ่ง hydrate",
+      "sets": [
+        { "field": "dispensing_records.line_account_id", "value": "currentBotId จาก session" },
+        { "field": "dispensing_records.items", "value": "สตริง JSON ดิบจาก POST items" },
+        { "field": "dispensing_records.order_number", "value": "DIS + ymdHis + rand" }
+      ],
+      "state_change": "dispensing_records เพิ่ม 1 แถว",
+      "returns": "dispenseId จาก lastInsertId",
+      "notes": "INSERT นี้ระบุแค่ 8 คอลัมน์ ไม่มี payment_status จึงตกไปใช้ค่า default paid เสมอ ดูเคส C8"
+    },
+    {
+      "seq": 8,
+      "actor": "inbox-v2.php",
+      "module": "inbox-v2",
+      "method": "derive payment state",
+      "file": "inbox-v2.php",
+      "line": 586,
+      "action": "ตัดสินสถานะทั้งหมดจากเงื่อนไขเดียวคือ paymentMethod เท่ากับ cash ถ้าใช่จะเป็น paid กับ completed ถ้าไม่ใช่จะเป็น pending ทั้งคู่",
+      "returns": "isPaid paymentStatus txnStatus",
+      "state_change": "ไม่มีการเขียน แต่กำหนดทางเดินของทุกขั้นถัดไป",
+      "notes": "credit ที่โมดัลมีให้เลือกจะตกฝั่งไม่ใช่ cash ดูเคส C7"
+    },
+    {
+      "seq": 9,
+      "actor": "tenant DB",
+      "module": "inbox-v2",
+      "method": "reseed cart",
+      "file": "inbox-v2.php",
+      "line": 595,
+      "action": "เฉพาะกรณีไม่ใช่ cash ล้างตะกร้าเดิมของลูกค้าทั้งใบแล้วใส่รายการที่จ่ายลงไปแทน เพื่อให้ลูกค้าเข้ามาเช็คเอาท์เองภายหลัง",
+      "calls": [{ "module": "tenant DB", "method": "INSERT INTO cart", "file": "inbox-v2.php", "line": 601 }],
+      "sets": [{ "field": "cart", "value": "ถูกแทนที่ด้วยรายการที่จ่ายยา" }],
+      "state_change": "cart ของลูกค้าถูกล้างแล้วเขียนใหม่ทั้งใบ",
+      "notes": "การล้างตะกร้าเป็นการทำลายของเดิมที่ลูกค้าเลือกไว้เอง และอยู่นอก transaction ใด ๆ ดูเคส C27"
+    },
+    {
+      "seq": 10,
+      "actor": "tenant DB",
+      "module": "inbox-v2",
+      "method": "INSERT transactions",
+      "file": "inbox-v2.php",
+      "line": 611,
+      "action": "สร้างออร์เดอร์ให้ลูกค้าทุกครั้งที่จ่ายยา โดยผูกกลับไปหาการจ่ายยาผ่าน delivery_info ที่เก็บ dispense_id ไว้เป็น JSON",
+      "sets": [
+        { "field": "transactions.transaction_type", "value": "purchase แบบ hardcode" },
+        { "field": "transactions.status", "value": "completed เมื่อ cash มิฉะนั้น pending" },
+        { "field": "transactions.payment_status", "value": "paid เมื่อ cash มิฉะนั้น pending" },
+        { "field": "transactions.delivery_info", "value": "JSON ที่มี type pickup และ dispense_id" }
+      ],
+      "state_change": "transactions เพิ่ม 1 แถว สถานะขึ้นกับ payment_method",
+      "returns": "transactionId",
+      "notes": "transaction_type เขียน purchase แต่ api/checkout.php บรรทัด 2164 เช็คคำว่า dispense ดูเคส C28"
+    },
+    {
+      "seq": 11,
+      "actor": "tenant DB",
+      "module": "inbox-v2",
+      "method": "INSERT transaction_items",
+      "file": "inbox-v2.php",
+      "line": 616,
+      "action": "บันทึกรายการย่อยของออร์เดอร์ทีละแถว พร้อมคำนวณ subtotal จาก price คูณ qty ในโค้ด ไม่ใช่ใน SQL",
+      "sets": [{ "field": "transaction_items", "value": "หนึ่งแถวต่อหนึ่งรายการยา" }],
+      "state_change": "transaction_items เพิ่มเท่าจำนวนรายการ",
+      "notes": "ทั้งบล็อกตั้งแต่ 591 ถึง 622 อยู่ใน try เดียว ล้มตรงไหนก็หลุดออกมาโดยที่ dispensing_records เขียนไปแล้ว ดูเคส C12"
+    },
+    {
+      "seq": 12,
+      "actor": "tenant DB",
+      "module": "inbox-v2",
+      "method": "UPDATE business_items",
+      "file": "inbox-v2.php",
+      "line": 628,
+      "action": "ตัดสต๊อกเฉพาะเมื่อจ่ายเป็นเงินสด โดยใส่เงื่อนไข AND stock มากกว่าหรือเท่ากับจำนวนที่จ่าย ทำให้คำสั่งเดียวปลอดภัยจากสต๊อกติดลบ",
+      "sets": [{ "field": "business_items.stock", "value": "ลดลงเท่ากับ qty เมื่อสต๊อกพอ" }],
+      "state_change": "business_items.stock ลดลง เฉพาะเส้น cash",
+      "notes": "ไม่มีการอ่าน rowCount กลับมา สต๊อกไม่พอจึงเงียบสนิท ดูเคส C10 และเส้น transfer later credit ไม่มีใครตัดสต๊อกเลย ดูเคส C11"
+    },
+    {
+      "seq": 13,
+      "actor": "RefillTrackingHelper",
+      "module": "refill",
+      "method": "trackFromDispense()",
+      "file": "classes/RefillTrackingHelper.php",
+      "line": 59,
+      "action": "แปลง qty กับ pack_size ในวงเล็บของหน่วยเป็นจำนวนโดสจริง แล้วหารด้วยขนาดยาต่อวันเพื่อประเมินวันที่ยาจะหมด สำหรับส่งเตือนเติมยาล่วงหน้า",
+      "calls": [
+        { "module": "refill", "method": "ensureTable", "file": "classes/RefillTrackingHelper.php", "line": 61 },
+        { "module": "refill", "method": "parsePackSize", "file": "classes/RefillTrackingHelper.php", "line": 85 },
+        { "module": "tenant DB", "method": "INSERT INTO medication_refill_tracking", "file": "classes/RefillTrackingHelper.php", "line": 116 }
+      ],
+      "sets": [
+        { "field": "medication_refill_tracking.estimated_end_date", "value": "วันนี้บวกจำนวนวันที่ยาพอ" },
+        { "field": "medication_refill_tracking.source_ref_id", "value": "dispenseId" }
+      ],
+      "state_change": "medication_refill_tracking เพิ่มแถวใหม่ หรือถูกต่ออายุถ้ามีของเดิมที่ยัง active",
+      "notes": "ทำเฉพาะรายการที่ isMedicine เป็นจริงและมี product_id กับ qty มากกว่าศูนย์ ดูเคส C15"
+    },
+    {
+      "seq": 14,
+      "actor": "inbox-v2.php",
+      "module": "inbox-v2",
+      "method": "build checkoutUrl",
+      "file": "inbox-v2.php",
+      "line": 658,
+      "action": "หา URL ปุ่มชำระเงินตามลำดับ liff_apps ที่ตั้งไว้เฉพาะ แล้วค่อยถอยไป line_accounts.liff_id แล้วถอยไปแชท OA และสุดท้ายเป็นสตริงว่าง",
+      "calls": [
+        { "module": "tenant DB", "method": "SELECT liff_id FROM liff_apps", "file": "inbox-v2.php", "line": 662 },
+        { "module": "liff-helper", "method": "reya_liff_url_or_oa", "file": "includes/liff-helper.php", "line": 81 }
+      ],
+      "returns": "checkoutUrl หรือสตริงว่าง",
+      "notes": "deepLink ชี้ไป /order?id= ก็ต่อเมื่อ transactionId ไม่ว่าง ถ้าขั้นที่ 10 ล้มจะกลายเป็น /orders รวม ๆ แทน"
+    },
+    {
+      "seq": 15,
+      "actor": "FlexTemplates",
+      "module": "flex",
+      "method": "medicineLabel() / medicineLabelsCarousel()",
+      "file": "classes/FlexTemplates.php",
+      "line": 1499,
+      "action": "สร้างซองยาเป็น Flex bubble พร้อมช่องติ๊กเช้า กลางวัน เย็น ก่อนนอน และก่อนหรือหลังอาหาร ถ้ามีมากกว่าหนึ่งรายการจะกลายเป็น carousel และเติม bubble สรุปยอดท้ายสุด",
+      "calls": [
+        { "module": "flex", "method": "medicineLabelsCarousel", "file": "classes/FlexTemplates.php", "line": 1871 },
+        { "module": "flex", "method": "toMessage", "file": "classes/FlexTemplates.php", "line": 117 }
+      ],
+      "returns": "flexMessage ที่มี altText รายการจ่ายยา พร้อม orderNumber",
+      "notes": "ปุ่มชำระเงินจะถูกส่งเข้าไปก็ต่อเมื่อ payment_method เป็น later หรือ transfer ที่บรรทัด 690 ของ inbox-v2.php"
+    },
+    {
+      "seq": 16,
+      "actor": "LINE API",
+      "module": "line",
+      "method": "sendMessage()",
+      "file": "classes/LineAPI.php",
+      "line": 121,
+      "action": "ลองใช้ reply_token ที่ยังไม่หมดอายุก่อนเพราะไม่กินโควตา แล้วเคลียร์ token ทิ้งทันทีเพราะใช้ได้ครั้งเดียว ถ้า reply ไม่สำเร็จจึงถอยไป pushMessage",
+      "calls": [
+        { "module": "line", "method": "replyMessage", "file": "classes/LineAPI.php", "line": 140 },
+        { "module": "line", "method": "clearReplyToken", "file": "classes/LineAPI.php", "line": 166 },
+        { "module": "line", "method": "pushMessage", "file": "classes/LineAPI.php", "line": 158 }
+      ],
+      "returns": "array ที่มี code body และ method เป็น reply หรือ push",
+      "state_change": "users.reply_token และ reply_token_expires ถูกล้างเป็น NULL",
+      "notes": "ฝั่ง dispense ไม่ได้รับค่าที่คืนมาไปใช้เลย ต่างจาก case send_image ที่เช็ค code เท่ากับ 200 ที่บรรทัด 793 ดูเคส C22"
+    },
+    {
+      "seq": 17,
+      "actor": "tenant DB",
+      "module": "inbox-v2",
+      "method": "INSERT messages",
+      "file": "inbox-v2.php",
+      "line": 712,
+      "action": "บันทึกซองยาที่ส่งลงประวัติแชทเป็น message_type flex ทิศทาง outgoing และติดป้าย sent_by เป็น system:dispense เพื่อแยกจากข้อความที่แอดมินพิมพ์เอง",
+      "sets": [
+        { "field": "messages.sent_by", "value": "system:dispense" },
+        { "field": "messages.line_account_id", "value": "user.line_account_id ไม่ใช่ currentBotId" },
+        { "field": "messages.is_read", "value": "1" }
+      ],
+      "state_change": "messages เพิ่ม 1 แถว",
+      "notes": "เขียนคนละ line_account_id กับ dispensing_records ที่ใช้ currentBotId ดูเคส C26"
+    },
+    {
+      "seq": 18,
+      "actor": "inbox-v2.php",
+      "module": "inbox-v2",
+      "method": "ActivityLogger::logData",
+      "file": "inbox-v2.php",
+      "line": 725,
+      "action": "บันทึก audit ว่ามีการจ่ายยาเลขที่ใด ยอดเท่าไร กี่รายการ ผูก entity_type เป็น dispense",
+      "state_change": "ตาราง activity log เพิ่ม 1 แถว",
+      "notes": "ครอบด้วย try catch ที่กลืน exception ที่บรรทัด 731 และ messages.php ไม่มีขั้นนี้เลย"
+    },
+    {
+      "seq": 19,
+      "actor": "เภสัชกร",
+      "module": "inbox-v2",
+      "method": "echo json_encode",
+      "file": "inbox-v2.php",
+      "line": 734,
+      "action": "ตอบ success พร้อม order_number และ dispense_id แล้ว JS เด้ง alert จ่ายยาสำเร็จ ปิดโมดัล และล้างรายการในหน้าจอ",
+      "calls": [{ "module": "inbox-v2-ui", "method": "alert + closeDispenseModal", "file": "inbox-v2.php", "line": 13083 }],
+      "returns": "success order_number dispense_id",
+      "notes": "success ตัวนี้ยืนยันแค่ว่า dispensing_records เขียนผ่าน ไม่ได้ยืนยันว่าออร์เดอร์ สต๊อก หรือซองยาสำเร็จ ดูเคส C12 และ C22"
+    }
+  ],
+  "cases": [
+    {
+      "id": "C1",
+      "name": "ไม่ส่ง user_id มา",
+      "condition": "intval ของ POST user_id เป็นศูนย์",
+      "behavior": "throw ทันทีก่อนแตะข้อมูลใด แล้วตัวจับที่ท้าย switch ตอบ HTTP 400 พร้อมข้อความ",
+      "code_path": [
+        { "module": "inbox-v2", "method": "case dispense", "file": "inbox-v2.php", "line": 474 },
+        { "module": "inbox-v2", "method": "catch", "file": "inbox-v2.php", "line": 982 }
+      ],
+      "result": "ไม่มีการเปลี่ยนแปลงสถานะ",
+      "tag": "ok"
+    },
+    {
+      "id": "C2",
+      "name": "รายการยาว่างหรือ decode ไม่ได้",
+      "condition": "json_decode ของ items ไม่ใช่ array หรือมีศูนย์รายการ",
+      "behavior": "throw No items to dispense ก่อนถึงการเขียนใด ๆ",
+      "code_path": [{ "module": "inbox-v2", "method": "case dispense", "file": "inbox-v2.php", "line": 489 }],
+      "result": "ไม่มีการเปลี่ยนแปลงสถานะ",
+      "gotcha": "ตรวจแค่ว่าเป็น array ที่ไม่ว่าง ไม่ได้ตรวจว่ามี product_id หรือ qty จริงหรือไม่",
+      "tag": "ok"
+    },
+    {
+      "id": "C3",
+      "name": "หาลูกค้าไม่เจอ",
+      "condition": "SELECT users WHERE id ไม่คืนแถว",
+      "behavior": "throw User not found ก่อน INSERT dispensing_records",
+      "code_path": [{ "module": "inbox-v2", "method": "case dispense", "file": "inbox-v2.php", "line": 537 }],
+      "result": "ไม่มีการเปลี่ยนแปลงสถานะ",
+      "tag": "ok"
+    },
+    {
+      "id": "C4",
+      "name": "ดึงข้อมูลยาจาก business_items ไม่ได้",
+      "condition": "query hydrate โยน exception หรือหาแถวไม่เจอ",
+      "behavior": "continue ต่อรายการนั้นแบบเงียบ ๆ เก็บ item ดิบไว้แล้วเดินต่อ",
+      "code_path": [
+        { "module": "inbox-v2", "method": "hydrate items", "file": "inbox-v2.php", "line": 507 },
+        { "module": "inbox-v2", "method": "hydrate items", "file": "inbox-v2.php", "line": 527 }
+      ],
+      "result": "ซองยาที่ลูกค้าได้รับไม่มีสรรพคุณ วิธีใช้ หรือรูปยา แต่ยังส่งออกไปตามปกติ",
+      "gotcha": "เป็นความล้มเหลวที่เห็นได้เฉพาะบนซองยาของลูกค้า ไม่มี log ไม่มี error",
+      "tag": "warn"
+    },
+    {
+      "id": "C5",
+      "name": "จ่ายเป็นเงินสด",
+      "condition": "payment_method เท่ากับ cash",
+      "behavior": "ออร์เดอร์เป็น completed และ paid ตัดสต๊อกทันที ไม่แตะ cart และไม่ส่งปุ่มชำระเงินไปกับซองยา",
+      "code_path": [
+        { "module": "inbox-v2", "method": "derive payment state", "file": "inbox-v2.php", "line": 586 },
+        { "module": "inbox-v2", "method": "UPDATE business_items", "file": "inbox-v2.php", "line": 628 },
+        { "module": "inbox-v2", "method": "needCheckout", "file": "inbox-v2.php", "line": 690 }
+      ],
+      "result": "business_items.stock ลดลง และ transactions เป็น completed",
+      "tag": "ok"
+    },
+    {
+      "id": "C6",
+      "name": "โอนเงินหรือจ่ายทีหลัง",
+      "condition": "payment_method เท่ากับ transfer หรือ later",
+      "behavior": "ล้าง cart แล้ว seed ใหม่ ออร์เดอร์เป็น pending ไม่ตัดสต๊อก และซองยาจะมีปุ่มชำระเงินไปด้วย",
+      "code_path": [
+        { "module": "inbox-v2", "method": "reseed cart", "file": "inbox-v2.php", "line": 593 },
+        { "module": "inbox-v2", "method": "INSERT transactions", "file": "inbox-v2.php", "line": 611 },
+        { "module": "inbox-v2", "method": "needCheckout", "file": "inbox-v2.php", "line": 690 }
+      ],
+      "result": "cart ถูกเขียนทับ transactions เป็น pending สต๊อกยังไม่ขยับ",
+      "gotcha": "ตะกร้าเดิมที่ลูกค้าเลือกเองถูกลบทิ้งทั้งใบที่บรรทัด 595 โดยไม่ถามและไม่แจ้ง",
+      "tag": "info"
+    },
+    {
+      "id": "C7",
+      "name": "จ่ายด้วยบัตรเครดิตแล้วสต๊อกไม่ลด",
+      "condition": "payment_method เท่ากับ credit ซึ่งเป็นตัวเลือกที่โมดัลมีให้จริง",
+      "behavior": "เงื่อนไขที่บรรทัด 586 เทียบกับ cash อย่างเดียว credit จึงตกฝั่งยังไม่จ่าย ระบบจะล้าง cart สร้างออร์เดอร์ pending และข้ามการตัดสต๊อกทั้งที่ของออกจากร้านไปแล้ว",
+      "code_path": [
+        { "module": "inbox-v2-ui", "method": "select dispensePaymentMethod", "file": "inbox-v2.php", "line": 12473 },
+        { "module": "inbox-v2", "method": "derive payment state", "file": "inbox-v2.php", "line": 586 },
+        { "module": "inbox-v2", "method": "UPDATE business_items", "file": "inbox-v2.php", "line": 625 }
+      ],
+      "result": "สต๊อกในระบบสูงกว่าของจริงตามจำนวนที่จ่ายด้วยบัตร และออร์เดอร์ค้าง pending ทั้งที่เก็บเงินแล้ว",
+      "gotcha": "ซองยาที่ส่งให้ลูกค้าก็ไม่มีปุ่มชำระเงินด้วย เพราะ needCheckout ที่บรรทัด 690 เทียบเฉพาะ later กับ transfer ลูกค้าจึงไม่มีทางปิดออร์เดอร์นี้เอง",
+      "tag": "danger"
+    },
+    {
+      "id": "C8",
+      "name": "dispensing_records บอกว่าจ่ายเงินแล้วเสมอ",
+      "condition": "การจ่ายยาทุกครั้งไม่ว่าวิธีชำระใด",
+      "behavior": "INSERT ที่บรรทัด 580 ระบุแค่ 8 คอลัมน์และไม่มี payment_status ค่าจึงตกไปใช้ default ของสคีมาซึ่งคือ paid",
+      "code_path": [
+        { "module": "inbox-v2", "method": "INSERT dispensing_records", "file": "inbox-v2.php", "line": 580 },
+        { "module": "inbox-v2", "method": "auto-create DDL", "file": "inbox-v2.php", "line": 188 },
+        { "module": "schema", "method": "tenant template", "file": "database/migration_2026-05-25_tenant_template.sql", "line": 2269 }
+      ],
+      "result": "รายงานจ่ายยาบอกว่าเก็บเงินครบ ขณะที่ transactions ของงานเดียวกันเป็น pending",
+      "gotcha": "สองตารางเล่าเรื่องเดียวกันคนละแบบ และ payment_method ในแถวเดียวกันบอกว่า transfer อยู่ชัด ๆ",
+      "tag": "danger"
+    },
+    {
+      "id": "C9",
+      "name": "items ที่บันทึกไม่ใช่ items ที่พิมพ์บนซองยา",
+      "condition": "การจ่ายยาที่ผ่านการ hydrate จาก business_items",
+      "behavior": "บรรทัด 581 ส่งตัวแปร items ซึ่งเป็นสตริงดิบจาก POST ลงฐานข้อมูล ส่วน itemsArr ที่ถูกเติมสรรพคุณและวิธีใช้ถูกใช้เฉพาะกับซองยาและ refill tracking",
+      "code_path": [
+        { "module": "inbox-v2", "method": "read POST items", "file": "inbox-v2.php", "line": 478 },
+        { "module": "inbox-v2", "method": "hydrate items", "file": "inbox-v2.php", "line": 509 },
+        { "module": "inbox-v2", "method": "INSERT dispensing_records", "file": "inbox-v2.php", "line": 581 }
+      ],
+      "result": "ประวัติการจ่ายยาย้อนหลังไม่มีสรรพคุณและวิธีใช้ที่ลูกค้าเห็นจริงบนซอง",
+      "gotcha": "modules/AIChat/Models/ConversationHistory.php บรรทัด 84 อ่าน items ชุดดิบนี้ไปสร้าง purchase_history ให้ AI ข้อมูลที่ AI เห็นจึงบางกว่าที่ลูกค้าได้รับ",
+      "tag": "warn"
+    },
+    {
+      "id": "C10",
+      "name": "สต๊อกไม่พอแล้วเงียบ",
+      "condition": "business_items.stock น้อยกว่า qty ที่จ่าย ในเส้นเงินสด",
+      "behavior": "เงื่อนไข AND stock มากกว่าหรือเท่ากับ qty ทำให้ UPDATE ไม่กระทบแถวใด แต่โค้ดไม่อ่าน rowCount กลับมาเลย",
+      "code_path": [
+        { "module": "inbox-v2", "method": "UPDATE business_items", "file": "inbox-v2.php", "line": 628 },
+        { "module": "inbox-v2", "method": "UPDATE business_items", "file": "inbox-v2.php", "line": 629 }
+      ],
+      "result": "ยาออกจากร้านจริงแต่สต๊อกไม่ลด ออร์เดอร์ยังเป็น completed และ paid ลูกค้ายังได้รับซองยา",
+      "gotcha": "คำสั่งเดียวกันนี้ปรากฏใน api/checkout.php บรรทัด 1545 และ messages.php บรรทัด 377 โดยไม่มีที่ไหนเช็ค rowCount เลย เป็นแพตเทิร์นทั้งระบบไม่ใช่จุดเดียว",
+      "tag": "danger"
+    },
+    {
+      "id": "C11",
+      "name": "ออร์เดอร์ค้างจากการจ่ายยาไม่มีใครตัดสต๊อกให้",
+      "condition": "payment_method เป็น transfer later หรือ credit",
+      "behavior": "ขั้นตัดสต๊อกถูกข้ามที่บรรทัด 625 และเส้นทางปิดออร์เดอร์ที่มีอยู่คือ handleUpdatePaymentMethod ซึ่งอัปเดตแค่ payment_method payment_status และ status ไม่แตะ business_items เลย",
+      "code_path": [
+        { "module": "inbox-v2", "method": "UPDATE business_items", "file": "inbox-v2.php", "line": 625 },
+        { "module": "api-checkout", "method": "handleUpdatePaymentMethod", "file": "api/checkout.php", "line": 2183 },
+        { "module": "api-checkout", "method": "handleUpdatePaymentMethod", "file": "api/checkout.php", "line": 2188 }
+      ],
+      "result": "สต๊อกในระบบสูงกว่าของจริงจนกว่าจะมีคนไปนับสต๊อกด้วยมือ",
+      "gotcha": "ถ้าลูกค้าไปเช็คเอาท์ผ่านตะกร้าที่ถูก seed ไว้แทน api/checkout.php บรรทัด 1545 จะตัดสต๊อกให้พร้อมสร้าง transactions แถวใหม่ ทำให้มีสองออร์เดอร์สำหรับการจ่ายยาครั้งเดียว",
+      "tag": "danger"
+    },
+    {
+      "id": "C12",
+      "name": "สร้างออร์เดอร์ล้มทั้งบล็อกแต่ยังตอบสำเร็จ",
+      "condition": "คำสั่งใดคำสั่งหนึ่งระหว่างบรรทัด 591 ถึง 622 โยน exception",
+      "behavior": "catch ตัวเดียวครอบทั้งบล็อก แค่ error_log แล้วปล่อยให้ flow เดินต่อ transactionId ค้างเป็น null",
+      "code_path": [
+        { "module": "inbox-v2", "method": "try", "file": "inbox-v2.php", "line": 591 },
+        { "module": "inbox-v2", "method": "catch", "file": "inbox-v2.php", "line": 620 },
+        { "module": "inbox-v2", "method": "deepLink fallback", "file": "inbox-v2.php", "line": 658 }
+      ],
+      "result": "มีแถว dispensing_records แต่ไม่มีออร์เดอร์ ปุ่มชำระเงินบนซองยาชี้ไป /orders รวม ๆ แทน /order?id= และ API ตอบ success",
+      "gotcha": "ถ้า cart ถูกล้างสำเร็จแล้วค่อยล้มตอน INSERT transactions ลูกค้าจะเสียตะกร้าเดิมโดยไม่ได้อะไรกลับมาเลย",
+      "tag": "danger"
+    },
+    {
+      "id": "C13",
+      "name": "ใส่ตะกร้าไม่สำเร็จบางรายการ",
+      "condition": "INSERT INTO cart โยน exception เฉพาะบางรายการ",
+      "behavior": "catch ต่อรายการ เขียน error_log แล้วไปรายการถัดไป",
+      "code_path": [{ "module": "inbox-v2", "method": "reseed cart", "file": "inbox-v2.php", "line": 603 }],
+      "result": "ตะกร้าที่ลูกค้าเห็นมีของไม่ครบตามที่จ่าย ขณะที่ transaction_items ครบ",
+      "gotcha": "ยอดในตะกร้าจะน้อยกว่ายอดใน transactions ทำให้เช็คเอาท์แล้วได้ยอดคนละตัว",
+      "tag": "warn"
+    },
+    {
+      "id": "C14",
+      "name": "ระบบเตือนเติมยาล้ม",
+      "condition": "trackFromDispense โยน exception หรือคิวรีข้างในล้ม",
+      "behavior": "มี catch สองชั้น ชั้นนอกที่บรรทัด 643 ของ inbox-v2.php และชั้นในต่อรายการที่บรรทัด 134 ของ RefillTrackingHelper ทั้งคู่แค่ error_log",
+      "code_path": [
+        { "module": "inbox-v2", "method": "catch", "file": "inbox-v2.php", "line": 643 },
+        { "module": "refill", "method": "catch", "file": "classes/RefillTrackingHelper.php", "line": 134 }
+      ],
+      "result": "ลูกค้าไม่ได้รับการเตือนเติมยา โดยไม่มีใครรู้",
+      "tag": "warn"
+    },
+    {
+      "id": "C15",
+      "name": "รายการที่ไม่ใช่ยาไม่ถูกติดตาม",
+      "condition": "isMedicine ไม่เป็นจริง หรือ product_id หรือ qty เป็นศูนย์",
+      "behavior": "ข้ามรายการนั้นใน trackFromDispense",
+      "code_path": [
+        { "module": "refill", "method": "trackFromDispense", "file": "classes/RefillTrackingHelper.php", "line": 72 },
+        { "module": "refill", "method": "trackFromDispense", "file": "classes/RefillTrackingHelper.php", "line": 79 }
+      ],
+      "result": "เวชภัณฑ์และสินค้าทั่วไปไม่เข้าระบบเตือนเติม ซึ่งเป็นพฤติกรรมที่ตั้งใจ",
+      "tag": "info"
+    },
+    {
+      "id": "C16",
+      "name": "จ่ายยาตัวเดิมซ้ำก่อนยาเดิมหมด",
+      "condition": "มีแถว medication_refill_tracking ของคู่ user กับ product ที่ estimated_end_date ยังไม่ถึงวันนี้",
+      "behavior": "ต่ออายุแถวเดิมโดยบวกจำนวนวันจากของใหม่ต่อท้ายวันหมดเดิม บวกจำนวนโดส และรีเซ็ต reminder_sent_at เป็น NULL",
+      "code_path": [
+        { "module": "refill", "method": "trackFromDispense", "file": "classes/RefillTrackingHelper.php", "line": 100 },
+        { "module": "refill", "method": "trackFromDispense", "file": "classes/RefillTrackingHelper.php", "line": 108 }
+      ],
+      "result": "ไม่เกิดแถวซ้ำ และการเตือนถูกเลื่อนออกไปตามยาที่เพิ่งได้",
+      "gotcha": "การรีเซ็ต reminder_sent_at ทำให้ลูกค้าอาจได้รับการเตือนซ้ำรอบใหม่สำหรับยาตัวเดิม",
+      "tag": "info"
+    },
+    {
+      "id": "C17",
+      "name": "ลูกค้าไม่มี line_user_id",
+      "condition": "users.line_user_id ว่าง เช่นลูกค้าที่สร้างจากหน้าร้านหรือมาจากแพลตฟอร์มอื่น",
+      "behavior": "ข้ามทั้งบล็อกส่งซองยาและบันทึกลง messages แต่ยังตอบ success ตามปกติ",
+      "code_path": [
+        { "module": "inbox-v2", "method": "guard line_user_id", "file": "inbox-v2.php", "line": 648 },
+        { "module": "inbox-v2", "method": "echo success", "file": "inbox-v2.php", "line": 734 }
+      ],
+      "result": "จ่ายยาสำเร็จในระบบ แต่ลูกค้าไม่ได้รับซองยาและในแชทไม่มีร่องรอย",
+      "gotcha": "ไม่มีการเตือนบนหน้าจอเภสัชกร ต้องไปเปิดดู messages เองถึงจะรู้ว่าไม่ได้ส่ง",
+      "tag": "warn"
+    },
+    {
+      "id": "C18",
+      "name": "ร้านไม่มี LIFF ของตัวเอง",
+      "condition": "liff_apps ไม่มีแถว หรือ liff_id ขึ้นต้นด้วย PENDING",
+      "behavior": "ถอยไป reya_liff_url_or_oa ซึ่งจะใช้ line_accounts.liff_id ถ้าเป็นของจริง มิฉะนั้นใช้ลิงก์แชท OA จาก basic_id และถ้าไม่มีอีกจะคืนสตริงว่าง",
+      "code_path": [
+        { "module": "inbox-v2", "method": "liff_apps lookup", "file": "inbox-v2.php", "line": 665 },
+        { "module": "liff-helper", "method": "reya_is_real_liff_id", "file": "includes/liff-helper.php", "line": 33 },
+        { "module": "liff-helper", "method": "reya_liff_url_or_oa", "file": "includes/liff-helper.php", "line": 101 }
+      ],
+      "result": "ลูกค้าของร้านที่ยังไม่ตั้ง LIFF จะถูกพาไปแชท OA แทนที่จะถูกโยนเข้า Mini App ที่ไม่มี context",
+      "tag": "info"
+    },
+    {
+      "id": "C19",
+      "name": "checkoutUrl ว่างแล้วท้ายซองหายทั้งแถบ",
+      "condition": "reya_liff_url_or_oa คืนสตริงว่างเพราะไม่มีทั้ง liff_id และ basic_id",
+      "behavior": "เงื่อนไข if checkoutUrl ที่บรรทัด 1842 เป็นเท็จ footer ทั้งก้อนจึงไม่ถูกสร้าง",
+      "code_path": [
+        { "module": "flex", "method": "medicineLabel", "file": "classes/FlexTemplates.php", "line": 1842 },
+        { "module": "flex", "method": "medicineLabel", "file": "classes/FlexTemplates.php", "line": 1848 }
+      ],
+      "result": "ซองยาหายทั้งปุ่มชำระเงินและบรรทัดเวลาเปิดทำการ เพราะทั้งสองอย่างอยู่ใน footer เดียวกัน",
+      "gotcha": "เวลาเปิดทำการไม่ควรผูกกับปุ่มชำระเงิน แต่โครง footer ทำให้เป็นทั้งหมดหรือไม่มีเลย",
+      "tag": "warn"
+    },
+    {
+      "id": "C20",
+      "name": "จ่ายหลายรายการพร้อมกัน",
+      "condition": "count ของ itemsArr มากกว่า 1",
+      "behavior": "ใช้ medicineLabelsCarousel ซึ่งสร้าง bubble ซองยาทีละรายการแล้วต่อท้ายด้วย bubble สรุปยอดเมื่อมี checkoutUrl",
+      "code_path": [
+        { "module": "inbox-v2", "method": "carousel branch", "file": "inbox-v2.php", "line": 691 },
+        { "module": "flex", "method": "medicineLabelsCarousel", "file": "classes/FlexTemplates.php", "line": 1875 },
+        { "module": "flex", "method": "summary bubble", "file": "classes/FlexTemplates.php", "line": 1879 }
+      ],
+      "result": "ลูกค้าได้รับซองยาครบทุกตัวในข้อความเดียว พร้อมยอดรวม",
+      "gotcha": "ปุ่มชำระเงินอยู่บน bubble สรุปใบสุดท้ายเท่านั้น เพราะ bubble ซองยาถูกสร้างด้วย checkoutUrl เป็น null ที่บรรทัด 1875",
+      "tag": "ok"
+    },
+    {
+      "id": "C21",
+      "name": "จำนวน bubble ใน carousel ไม่ถูกจำกัด",
+      "condition": "จ่ายยาจำนวนมากในครั้งเดียว",
+      "behavior": "ลูปสร้าง bubble ตามจำนวนรายการทั้งหมดแล้วบวกอีกหนึ่งใบ ไม่มีการตัดหรือแบ่งข้อความ",
+      "code_path": [
+        { "module": "flex", "method": "medicineLabelsCarousel", "file": "classes/FlexTemplates.php", "line": 1873 },
+        { "module": "flex", "method": "medicineLabelsCarousel", "file": "classes/FlexTemplates.php", "line": 1933 }
+      ],
+      "result": "เมื่อเกินเพดานของ LINE ทั้งข้อความจะถูกปฏิเสธ และเพราะไม่มีการเช็คผลส่งตามเคส C22 จะไม่มีใครรู้",
+      "gotcha": "ยังไม่ได้ทดสอบว่ากี่รายการถึงพัง ดูรายการ gap",
+      "tag": "warn"
+    },
+    {
+      "id": "C22",
+      "name": "LINE ปฏิเสธข้อความแต่แชทบอกว่าส่งแล้ว",
+      "condition": "sendMessage หรือ pushMessage คืน code ที่ไม่ใช่ 200",
+      "behavior": "ค่าที่คืนมาถูกทิ้งโดยไม่รับใส่ตัวแปรด้วยซ้ำ แล้วเดินไป INSERT messages พร้อม sent_by system:dispense ทันที",
+      "code_path": [
+        { "module": "inbox-v2", "method": "send flex", "file": "inbox-v2.php", "line": 698 },
+        { "module": "inbox-v2", "method": "INSERT messages", "file": "inbox-v2.php", "line": 712 },
+        { "module": "inbox-v2", "method": "case send_image", "file": "inbox-v2.php", "line": 793 }
+      ],
+      "result": "ประวัติแชทแสดงซองยาที่ลูกค้าไม่เคยได้รับ เภสัชกรจึงเชื่อว่าส่งแล้ว",
+      "gotcha": "case send_image ในไฟล์เดียวกันเช็ค code เท่ากับ 200 ก่อนบันทึก แปลว่าผู้เขียนรู้วิธีที่ถูก แต่ dispense ไม่ได้ทำ",
+      "tag": "danger"
+    },
+    {
+      "id": "C23",
+      "name": "ตาราง messages ยังไม่มีคอลัมน์ sent_by",
+      "condition": "SHOW COLUMNS FROM messages LIKE sent_by ไม่คืนแถว",
+      "behavior": "INSERT อีกชุดที่ไม่มีคอลัมน์ sent_by",
+      "code_path": [
+        { "module": "inbox-v2", "method": "column probe", "file": "inbox-v2.php", "line": 707 },
+        { "module": "inbox-v2", "method": "INSERT messages", "file": "inbox-v2.php", "line": 715 }
+      ],
+      "result": "ซองยาปรากฏในแชทแต่ระบุที่มาไม่ได้ แยกไม่ออกจากข้อความที่แอดมินพิมพ์เอง",
+      "gotcha": "การ probe คอลัมน์เกิดขึ้นทุกครั้งที่จ่ายยา ไม่ได้แคชไว้",
+      "tag": "warn"
+    },
+    {
+      "id": "C24",
+      "name": "หาแถว line_accounts ไม่เจอแล้วส่งจากช่องผิด",
+      "condition": "getAccountById คืนค่าว่างสำหรับ user.line_account_id",
+      "behavior": "getLineAPI ถอยไปสร้าง LineAPI จากค่าคงที่ใน config แทนที่จะล้ม",
+      "code_path": [
+        { "module": "line-manager", "method": "getLineAPI", "file": "classes/LineAccountManager.php", "line": 301 },
+        { "module": "line-manager", "method": "getLineAPI", "file": "classes/LineAccountManager.php", "line": 303 }
+      ],
+      "result": "ซองยาถูกส่งจาก LINE OA ตัวที่ตั้งไว้ใน config ซึ่งอาจไม่ใช่ร้านที่จ่ายยา หรือส่งไม่ออกเลย",
+      "gotcha": "การถอยแบบนี้เงียบสนิท และรวมกับเคส C22 ที่ไม่เช็คผลส่ง จึงไม่มีสัญญาณใดออกมาเลย",
+      "tag": "danger"
+    },
+    {
+      "id": "C25",
+      "name": "ใช้ reply token ก่อนแล้วค่อย push",
+      "condition": "users.reply_token ไม่ว่างและ reply_token_expires ยังไม่ถึงเวลา",
+      "behavior": "ส่งผ่าน replyMessage ซึ่งไม่กินโควตา แล้วล้าง token ทิ้งทันทีไม่ว่าจะสำเร็จหรือไม่ ถ้า reply ล้มจึงถอยไป pushMessage",
+      "code_path": [
+        { "module": "line", "method": "sendMessage", "file": "classes/LineAPI.php", "line": 132 },
+        { "module": "line", "method": "clearReplyToken", "file": "classes/LineAPI.php", "line": 143 },
+        { "module": "line", "method": "sendMessage", "file": "classes/LineAPI.php", "line": 158 }
+      ],
+      "result": "users.reply_token กลายเป็น NULL หลังจ่ายยาทุกครั้งที่มี token",
+      "gotcha": "เภสัชกรมักจ่ายยาหลังลูกค้าทักมานานเกิน 30 วินาที token จึงหมดอายุและตกไป push เกือบทุกครั้ง เส้น reply เป็นทางที่ไม่ค่อยได้ใช้จริง",
+      "tag": "info"
+    },
+    {
+      "id": "C26",
+      "name": "จ่ายข้ามบัญชี LINE แล้วข้อมูลแตกเป็นสองฝั่ง",
+      "condition": "users.line_account_id ไม่ตรงกับ SESSION current_bot_id",
+      "behavior": "dispensing_records cart transactions และ refill tracking ใช้ currentBotId ส่วน messages และ LINE API ใช้ user.line_account_id โดยไม่มี guard ตรวจว่าลูกค้าอยู่บัญชีเดียวกัน",
+      "code_path": [
+        { "module": "inbox-v2", "method": "SELECT users", "file": "inbox-v2.php", "line": 534 },
+        { "module": "inbox-v2", "method": "INSERT dispensing_records", "file": "inbox-v2.php", "line": 581 },
+        { "module": "inbox-v2", "method": "INSERT transactions", "file": "inbox-v2.php", "line": 612 },
+        { "module": "inbox-v2", "method": "getLineAPI", "file": "inbox-v2.php", "line": 651 },
+        { "module": "inbox-v2", "method": "INSERT messages", "file": "inbox-v2.php", "line": 713 }
+      ],
+      "result": "ออร์เดอร์อยู่บัญชีหนึ่ง ข้อความอยู่อีกบัญชีหนึ่ง รายงานสองหน้าจอไม่มีทางตรงกัน",
+      "gotcha": "shop/orders.php บรรทัด 440 นับ dispensing_records ตาม line_account_id จึงนับรายการนี้เข้าบัญชีที่ไม่ได้ส่งข้อความ",
+      "tag": "danger"
+    },
+    {
+      "id": "C27",
+      "name": "เขียนเจ็ดตารางติดกันโดยไม่มี transaction",
+      "condition": "การจ่ายยาทุกครั้ง",
+      "behavior": "ลำดับ dispensing_records แล้ว cart แล้ว transactions แล้ว transaction_items แล้ว business_items แล้ว medication_refill_tracking แล้ว messages ทั้งหมดเป็นคนละ statement ค้นทั้ง inbox-v2.php และ messages.php ไม่พบ beginTransaction commit หรือ rollBack แม้แต่ครั้งเดียว",
+      "code_path": [
+        { "module": "inbox-v2", "method": "INSERT dispensing_records", "file": "inbox-v2.php", "line": 580 },
+        { "module": "inbox-v2", "method": "reseed cart", "file": "inbox-v2.php", "line": 595 },
+        { "module": "inbox-v2", "method": "INSERT transactions", "file": "inbox-v2.php", "line": 611 },
+        { "module": "inbox-v2", "method": "UPDATE business_items", "file": "inbox-v2.php", "line": 628 },
+        { "module": "refill", "method": "INSERT medication_refill_tracking", "file": "classes/RefillTrackingHelper.php", "line": 116 },
+        { "module": "inbox-v2", "method": "INSERT messages", "file": "inbox-v2.php", "line": 712 }
+      ],
+      "result": "ล้มตรงไหนก็ค้างครึ่งทาง และไม่มีทางย้อนกลับได้ ต้องตามแก้ด้วยมือทีละตาราง",
+      "gotcha": "โครงสร้าง try catch ที่กระจายเป็นบล็อกย่อยเป็นการออกแบบให้ทนความล้มเหลว ไม่ใช่ให้ถูกต้อง เป็นการเลือกที่จะเดินต่อแบบข้อมูลไม่ครบ",
+      "tag": "danger"
+    },
+    {
+      "id": "C28",
+      "name": "ออร์เดอร์จากการจ่ายยาไม่เคยถูกมองว่าเป็นการจ่ายยา",
+      "condition": "หน้ารายละเอียดออร์เดอร์ฝั่งลูกค้าเรียกดูออร์เดอร์ที่เกิดจาก dispense",
+      "behavior": "INSERT ที่บรรทัด 611 กำหนด transaction_type เป็น purchase แบบตายตัว ขณะที่ api/checkout.php บรรทัด 2164 คำนวณ is_dispense จากการเทียบกับคำว่า dispense",
+      "code_path": [
+        { "module": "inbox-v2", "method": "INSERT transactions", "file": "inbox-v2.php", "line": 611 },
+        { "module": "api-checkout", "method": "order detail response", "file": "api/checkout.php", "line": 2164 }
+      ],
+      "result": "is_dispense เป็นเท็จเสมอ UI ฝั่งลูกค้าที่ตั้งใจแยกออร์เดอร์รับยาจึงไม่เคยทำงาน",
+      "gotcha": "ค้นทั้ง repo ฝั่ง PHP ไม่มีที่ใดเขียน transaction_type เป็น dispense เลย ธงนี้ตายมาตั้งแต่ต้น",
+      "tag": "danger"
+    },
+    {
+      "id": "C29",
+      "name": "ตาราง dispensing_records ถูกสร้างตอนเปิดหน้า",
+      "condition": "SHOW TABLES LIKE dispensing_records ไม่คืนแถวตอนโหลด inbox-v2.php",
+      "behavior": "รัน CREATE TABLE IF NOT EXISTS ทันทีในคำขอที่เปิดหน้าจอ โดยครอบด้วย catch เปล่าที่กลืนทุก error",
+      "code_path": [
+        { "module": "inbox-v2", "method": "auto-create", "file": "inbox-v2.php", "line": 177 },
+        { "module": "inbox-v2", "method": "auto-create", "file": "inbox-v2.php", "line": 191 },
+        { "module": "schema", "method": "tenant template", "file": "database/migration_2026-05-25_tenant_template.sql", "line": 2272 }
+      ],
+      "result": "มีสองนิยามของตารางเดียวกัน ตัว auto-create มี KEY user_id และ KEY order_number ส่วน tenant template มีแค่ PRIMARY KEY",
+      "gotcha": "tenant ที่ได้ตารางจาก template จะไม่มี index รองเลย ทำให้หน้ารายงานที่ค้นด้วย user_id หรือ order_number สแกนทั้งตาราง และ messages.php บรรทัด 56 ก็มี auto-create ชุดเดียวกันซ้ำอีกที่",
+      "tag": "warn"
+    },
+    {
+      "id": "C30",
+      "name": "ช่องบันทึกของ dispensing_records ว่างเสมอ",
+      "condition": "จ่ายยาผ่านโมดัลของ inbox-v2.php",
+      "behavior": "PHP อ่าน POST notes ที่บรรทัด 481 แต่ FormData ฝั่ง JS ส่งแค่หกฟิลด์และไม่มี notes",
+      "code_path": [
+        { "module": "inbox-v2", "method": "read POST notes", "file": "inbox-v2.php", "line": 481 },
+        { "module": "inbox-v2-ui", "method": "dispenseSubmit FormData", "file": "inbox-v2.php", "line": 13064 }
+      ],
+      "result": "dispensing_records.notes เป็นสตริงว่างทุกแถว",
+      "gotcha": "คำแนะนำที่เภสัชกรพิมพ์อยู่ในคีย์ notes ของแต่ละรายการใน items แทน ไม่ใช่ฟิลด์ระดับใบจ่ายยา",
+      "tag": "warn"
+    },
+    {
+      "id": "C31",
+      "name": "กดจ่ายซ้ำได้สองใบ",
+      "condition": "เภสัชกรกดยืนยันสองครั้ง หรือคำขอถูกส่งซ้ำ",
+      "behavior": "มีเพียง confirm ของเบราว์เซอร์กั้นไว้ ปุ่มไม่ถูกปิดระหว่างรอ และฝั่งเซิร์ฟเวอร์ออก order_number ใหม่จากเวลาบวกเลขสุ่มทุกครั้งโดยไม่ตรวจซ้ำ",
+      "code_path": [
+        { "module": "inbox-v2-ui", "method": "confirm", "file": "inbox-v2.php", "line": 13060 },
+        { "module": "inbox-v2", "method": "orderNumber", "file": "inbox-v2.php", "line": 485 }
+      ],
+      "result": "ได้ dispensing_records สองแถว transactions สองแถว และตัดสต๊อกสองรอบ",
+      "gotcha": "ไม่มี idempotency key ใด ๆ ให้ตรวจซ้ำได้เลย แม้แต่ dispense_id ที่ตอบกลับก็ไม่ได้ถูกใช้กันซ้ำ",
+      "tag": "warn"
+    },
+    {
+      "id": "C32",
+      "name": "messages.php ยังรับ action dispense อยู่และเพี้ยนไปแล้ว",
+      "condition": "เข้าใช้ผ่าน messages.php ซึ่ง inbox-v2.php จะ redirect ไปเองเมื่อ V2 ถูกปิดหรือ service ล้ม",
+      "behavior": "โครงหลักเหมือนกันแทบทุกบรรทัด แต่ไม่มีการ hydrate ข้อมูลยาจาก business_items เลย อ่านชื่อร้านจาก line_accounts.display_name และอ่าน shop_settings ด้วยคอลัมน์ address กับ phone ซึ่งสคีมาปัจจุบันใช้ชื่อ shop_address กับ contact_phone อีกทั้ง currentBotId ตกเป็น null และ pharmacistId อ่านแค่ SESSION admin_id",
+      "code_path": [
+        { "module": "messages", "method": "elseif action dispense", "file": "messages.php", "line": 271 },
+        { "module": "messages", "method": "currentBotId", "file": "messages.php", "line": 286 },
+        { "module": "messages", "method": "pharmacistId", "file": "messages.php", "line": 287 },
+        { "module": "messages", "method": "shopInfo", "file": "messages.php", "line": 312 },
+        { "module": "messages", "method": "shopInfo", "file": "messages.php", "line": 320 },
+        { "module": "inbox-v2", "method": "auto-switch redirect", "file": "inbox-v2.php", "line": 126 }
+      ],
+      "result": "ซองยาที่ออกจาก messages.php ไม่มีสรรพคุณ วิธีใช้ ที่อยู่ เบอร์ร้าน และโลโก้ ส่วน dispensing_records ได้ line_account_id เป็น null กับ pharmacist_id เป็น null",
+      "gotcha": "ผู้ใช้ไม่ได้เลือกเส้นนี้เอง inbox-v2.php จะเด้งมาที่นี่อัตโนมัติที่บรรทัด 126 เมื่อ V2 service init ล้ม เภสัชกรจึงได้ผลลัพธ์คนละแบบโดยไม่รู้ตัว",
+      "tag": "danger"
+    }
+  ],
+  "modules_touched": [
+    { "module": "inbox-v2-ui", "role": "โมดัลจ่ายยาและ JS ที่ยิง FormData กลับมาที่หน้าเดียวกัน", "methods": ["dispenseSubmit", "renderDispenseUI", "openMedicineDetail"] },
+    { "module": "inbox-v2", "role": "ตัวจัดการ action dispense ทั้งหมดอยู่ในไฟล์หน้าจอเอง ไม่ได้แยกเป็น API", "methods": ["case dispense", "auto-create dispensing_records"] },
+    { "module": "messages", "role": "implementation คู่ขนานที่เก่ากว่าและเพี้ยนไปแล้ว ยังถูก redirect มาใช้อัตโนมัติ", "methods": ["elseif action dispense"] },
+    { "module": "flex", "role": "สร้างซองยา Flex ทั้งแบบใบเดียวและ carousel", "methods": ["medicineLabel", "medicineLabelsCarousel", "toMessage"] },
+    { "module": "line", "role": "ส่งข้อความ โดยลอง reply token ก่อน push", "methods": ["sendMessage", "replyMessage", "pushMessage", "clearReplyToken"] },
+    { "module": "line-manager", "role": "เลือก channel token ตาม line_account_id และถอยไป config เมื่อหาไม่เจอ", "methods": ["getLineAPI", "getAccountById"] },
+    { "module": "refill", "role": "ประเมินวันยาหมดแล้วบันทึกลง medication_refill_tracking ให้ cron เตือน", "methods": ["trackFromDispense", "ensureTable", "parsePackSize"] },
+    { "module": "liff-helper", "role": "ตัดสินว่าปุ่มชำระเงินควรเปิด LIFF แชท OA หรือไม่แสดงเลย", "methods": ["reya_liff_url_or_oa", "reya_is_real_liff_id", "reya_oa_chat_url"] },
+    { "module": "api-checkout", "role": "ปลายทางของออร์เดอร์ค้าง ทั้งหน้ารายละเอียดและการเปลี่ยนวิธีชำระ", "methods": ["handleUpdatePaymentMethod", "order detail response"] },
+    { "module": "shop-orders", "role": "หน้ารายงานฝั่งแอดมินที่นับและลิสต์ dispensing_records", "methods": ["dispense tab"] },
+    { "module": "aichat-history", "role": "อ่าน dispensing_records.items ไปเป็น purchase_history ให้ AI", "methods": ["purchase_history"] },
+    { "module": "schema", "role": "นิยามตาราง dispensing_records ฝั่ง tenant template", "methods": [] },
+    { "module": "next-dispense-port", "role": "port ของ case dispense ฝั่ง Next.js ที่อ้างเลขบรรทัด PHP ตรง ๆ ต้องแก้ตามกันทุกครั้ง", "methods": ["dispense.ts", "refillTracking.ts", "flexSend.ts"] },
+    { "module": "tenant DB", "role": "เก็บ dispensing_records cart transactions transaction_items business_items medication_refill_tracking messages", "methods": [] }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "tenant DB",
+      "to_module": "inbox-v2",
+      "returns_what": "dispenseId จาก lastInsertId หลัง INSERT dispensing_records",
+      "why_needed": "ใช้เป็น dispense_id ใน delivery_info ของ transactions และเป็น source_ref_id ของ medication_refill_tracking ถ้า INSERT นี้ล้ม exception จะทะลุถึง catch นอกสุดและตอบ 400 ก่อนอย่างอื่นเกิดขึ้น ซึ่งเป็นพฤติกรรมที่ปลอดภัยที่สุดในทั้งกระบวนการ"
+    },
+    {
+      "from_module": "tenant DB",
+      "to_module": "inbox-v2",
+      "returns_what": "transactionId จาก INSERT transactions",
+      "why_needed": "เป็นตัวกำหนด deepLink ของปุ่มชำระเงิน ถ้าบล็อกออร์เดอร์ล้มค่านี้จะค้างเป็น null แล้ว deepLink จะกลายเป็น /orders รวม ๆ ลูกค้าจะหาออร์เดอร์ที่ต้องจ่ายไม่เจอ"
+    },
+    {
+      "from_module": "tenant DB",
+      "to_module": "inbox-v2",
+      "returns_what": "users.line_account_id",
+      "why_needed": "ใช้เลือก channel token และเป็นค่าที่เขียนลง messages ถ้าค่านี้ว่างหรือชี้ไปบัญชีที่ถูกลบ getLineAPI จะถอยไปใช้ค่าคงที่ใน config แล้วส่งซองยาออกจาก OA ผิดร้านโดยไม่มีสัญญาณเตือน"
+    },
+    {
+      "from_module": "tenant DB",
+      "to_module": "flex",
+      "returns_what": "description usage_instructions image_url จาก business_items",
+      "why_needed": "เป็นแหล่งเดียวของสรรพคุณและวิธีใช้บนซองยาเมื่อเภสัชกรไม่ได้พิมพ์เอง ถ้าคอลัมน์เหล่านี้ถูกเปลี่ยนชื่อ ซองยาจะว่างลงเงียบ ๆ เพราะการ hydrate อยู่ใน try catch ต่อรายการ"
+    },
+    {
+      "from_module": "liff-helper",
+      "to_module": "flex",
+      "returns_what": "checkoutUrl หรือสตริงว่าง",
+      "why_needed": "medicineLabel ใช้ค่านี้เป็นเงื่อนไขสร้าง footer ทั้งก้อน ถ้าเป็นสตริงว่างจะหายทั้งปุ่มชำระเงินและเวลาเปิดทำการ"
+    },
+    {
+      "from_module": "inbox-v2",
+      "to_module": "aichat-history",
+      "returns_what": "dispensing_records.items ที่ต้องมีคีย์ name product_name หรือ drug_name",
+      "why_needed": "ConversationHistory อ่านสามคีย์นี้ไปสร้าง purchase_history ให้ AI ถ้าโครง JSON ของ items เปลี่ยน AI จะสูญเสียประวัติการรับยาโดยไม่มี error ใด ๆ"
+    },
+    {
+      "from_module": "inbox-v2",
+      "to_module": "api-checkout",
+      "returns_what": "transactions.transaction_type",
+      "why_needed": "หน้ารายละเอียดออร์เดอร์คำนวณ is_dispense จากค่านี้ แต่ฝั่งจ่ายยาเขียน purchase ตายตัว ธงนี้จึงเป็นเท็จตลอด และไม่มี consumer ฝั่ง PHP รายใดอ่าน delivery_info.dispense_id กลับไปใช้เลย"
+    }
+  ],
+  "gotchas": [
+    "การจ่ายยาหนึ่งครั้งเขียนเจ็ดตารางโดยไม่มี transaction ครอบเลย ค้นคำว่า beginTransaction commit และ rollBack ทั้ง inbox-v2.php และ messages.php ไม่พบแม้แต่ครั้งเดียว",
+    "มีเพียง cash เท่านั้นที่ถือว่าจ่ายแล้ว ที่ inbox-v2.php บรรทัด 586 ทั้งที่โมดัลบรรทัด 12473 ให้เลือก credit ด้วย ยาที่จ่ายด้วยบัตรเครดิตจึงไม่ถูกตัดสต๊อกและออร์เดอร์ค้าง pending ตลอดไป",
+    "dispensing_records.payment_status ไม่เคยถูกเขียน INSERT ที่บรรทัด 580 ไม่มีคอลัมน์นี้ ค่าจึงเป็น paid ตาม default เสมอ แม้แถวเดียวกันจะบอกว่า payment_method เป็น transfer",
+    "ผลลัพธ์ของการส่ง LINE ถูกทิ้งที่บรรทัด 698 แต่แถวใน messages ถูกเขียนที่บรรทัด 712 อยู่ดี แชทจึงแสดงซองยาที่ลูกค้าอาจไม่เคยได้รับ ทั้งที่ case send_image ในไฟล์เดียวกันเช็ค code เท่ากับ 200 อยู่",
+    "UPDATE business_items ที่บรรทัด 628 ปลอดภัยจากสต๊อกติดลบเพราะมี AND stock มากกว่าหรือเท่ากับ qty แต่ไม่มีใครอ่าน rowCount การจ่ายยาเกินสต๊อกจึงเงียบสนิท",
+    "dispensing_records เก็บ items เป็นสตริงดิบจาก POST ไม่ใช่ชุดที่ hydrate แล้ว ประวัติย้อนหลังและข้อมูลที่ AI เห็นจึงบางกว่าซองยาที่ลูกค้าถืออยู่",
+    "ตารางนี้ถูก auto-create ตอนเปิดหน้าจอที่บรรทัด 177 ไม่ใช่ผ่าน migration และนิยามนั้นมี index ต่างจาก database/migration_2026-05-25_tenant_template.sql บรรทัด 2259",
+    "dispensing_records cart transactions ใช้ SESSION current_bot_id ส่วน messages และ LINE API ใช้ users.line_account_id โดยไม่มี guard ว่าลูกค้าอยู่บัญชีเดียวกัน",
+    "messages.php ยังรับ action dispense อยู่และ inbox-v2.php จะ redirect มาที่นี่เองที่บรรทัด 126 เมื่อ V2 service init ล้ม เส้นนั้นไม่มี hydration และอ่านคอลัมน์ shop_settings ชุดเก่า",
+    "มี implementation ที่สามคือ apps/admin/src/app/api/inbox/actions/dispense/_lib/dispense.ts ซึ่งอ้างเลขบรรทัดของ inbox-v2.php ช่วง 469 ถึง 736 ไว้ในคอมเมนต์ตรง ๆ แก้ PHP โดยไม่แก้ที่นั่นคือทำให้สองฝั่งเพี้ยนกันทันที"
+  ],
+  "file_refs": [
+    "inbox-v2.php",
+    "messages.php",
+    "classes/FlexTemplates.php",
+    "classes/LineAPI.php",
+    "classes/LineAccountManager.php",
+    "classes/RefillTrackingHelper.php",
+    "includes/liff-helper.php",
+    "api/checkout.php",
+    "shop/orders.php",
+    "modules/AIChat/Models/ConversationHistory.php",
+    "database/migration_2026-05-25_tenant_template.sql",
+    "apps/admin/src/app/api/inbox/actions/dispense/_lib/dispense.ts"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": ["เภสัชกร", "inbox-v2.php", "tenant DB", "LINE API", "ลูกค้า"],
+    "rows": ["เปิดโมดัลจ่ายยา", "บันทึกการจ่าย", "สต๊อกและออร์เดอร์", "ส่งซองยา"],
+    "nodes": [
+      { "id": "n1", "lane": 0, "row": 0, "label": "กดยืนยันการจ่ายสินค้า", "type": "start", "ref": "inbox-v2.php:13053" },
+      { "id": "n2", "lane": 1, "row": 0, "label": "POST action=dispense", "type": "step", "ref": "inbox-v2.php:229" },
+      { "id": "n3", "lane": 1, "row": 0, "label": "มี user_id และ items ไหม", "type": "decision", "ref": "inbox-v2.php:474" },
+      { "id": "n4", "lane": 1, "row": 0, "label": "throw แล้วตอบ HTTP 400", "type": "error", "ref": "inbox-v2.php:983" },
+      { "id": "n5", "lane": 1, "row": 1, "label": "เติมข้อมูลยาจาก business_items", "type": "step", "ref": "inbox-v2.php:496" },
+      { "id": "n6", "lane": 2, "row": 1, "label": "INSERT dispensing_records", "type": "data", "ref": "inbox-v2.php:580" },
+      { "id": "n7", "lane": 1, "row": 1, "label": "payment_method เป็น cash ไหม", "type": "decision", "ref": "inbox-v2.php:586" },
+      { "id": "n8", "lane": 2, "row": 2, "label": "ล้าง cart แล้ว seed ใหม่", "type": "data", "ref": "inbox-v2.php:595" },
+      { "id": "n9", "lane": 2, "row": 2, "label": "UPDATE stock โดยไม่เช็ค rowCount", "type": "error", "ref": "inbox-v2.php:628" },
+      { "id": "n10", "lane": 2, "row": 2, "label": "INSERT transactions + items", "type": "data", "ref": "inbox-v2.php:611" },
+      { "id": "n11", "lane": 2, "row": 2, "label": "INSERT medication_refill_tracking", "type": "data", "ref": "classes/RefillTrackingHelper.php:116" },
+      { "id": "n12", "lane": 1, "row": 3, "label": "สร้าง checkoutUrl LIFF หรือ OA", "type": "step", "ref": "inbox-v2.php:658" },
+      { "id": "n13", "lane": 1, "row": 3, "label": "สร้างซองยา Flex", "type": "step", "ref": "classes/FlexTemplates.php:1499" },
+      { "id": "n14", "lane": 3, "row": 3, "label": "sendMessage reply ก่อน push", "type": "step", "ref": "classes/LineAPI.php:121" },
+      { "id": "n15", "lane": 2, "row": 3, "label": "INSERT messages sent_by system:dispense", "type": "error", "ref": "inbox-v2.php:712" },
+      { "id": "n16", "lane": 1, "row": 3, "label": "ตอบ success พร้อม order_number", "type": "step", "ref": "inbox-v2.php:734" },
+      { "id": "n17", "lane": 4, "row": 3, "label": "ได้รับซองยาใน LINE", "type": "end", "ref": "classes/FlexTemplates.php:1842" },
+      { "id": "n18", "lane": 0, "row": 3, "label": "เห็น alert จ่ายยาสำเร็จ", "type": "end", "ref": "inbox-v2.php:13083" }
+    ],
+    "edges": [
+      { "from": "n1", "to": "n2" },
+      { "from": "n2", "to": "n3" },
+      { "from": "n3", "to": "n4", "label": "ขาดข้อมูล", "dashed": true },
+      { "from": "n3", "to": "n5", "label": "ครบ" },
+      { "from": "n5", "to": "n6" },
+      { "from": "n6", "to": "n7" },
+      { "from": "n7", "to": "n9", "label": "cash" },
+      { "from": "n7", "to": "n8", "label": "transfer later credit" },
+      { "from": "n8", "to": "n10" },
+      { "from": "n9", "to": "n10" },
+      { "from": "n10", "to": "n11" },
+      { "from": "n11", "to": "n12" },
+      { "from": "n12", "to": "n13" },
+      { "from": "n13", "to": "n14" },
+      { "from": "n14", "to": "n17" },
+      { "from": "n14", "to": "n15", "label": "ไม่เช็คผลส่ง", "dashed": true },
+      { "from": "n15", "to": "n16" },
+      { "from": "n16", "to": "n18" }
+    ]
+  }
+}

@@ -1,0 +1,426 @@
+{
+  "_meta": {
+    "rule": "หนึ่งฟิลด์ควรมีผู้เขียนหลักรายเดียว ฟิลด์ที่มีผู้เขียนกระจายข้ามโมดูลคือสิ่งที่ต้องแก้",
+    "method": "ผู้เขียนแต่ละรายมาจากการ grep ทั้ง repo แล้วเปิดอ่านบรรทัดจริงเพื่อยืนยัน ตัด .claude/worktrees และ vendor ออกจากการนับ",
+    "note": "รอบนี้ตรวจซ้ำและแก้เลขบรรทัดของกลุ่ม loyalty จากคู่มือรอบก่อน ซึ่งคลาดเคลื่อน 5 ถึง 9 บรรทัด และเพิ่มผู้เขียนที่ตกหล่นอีกหลายราย ฟิลด์ที่ไม่ได้ตรวจซ้ำรอบนี้ถูกคงไว้ตามเดิม"
+  },
+  "fields": [
+    {
+      "field": "users.points",
+      "scope": "ตาราง users ใน tenant DB",
+      "owner": "ไม่มีเจ้าของ เป็นคอลัมน์ยุคเก่าที่ยังมีคนเขียนอยู่สามที่",
+      "rule": "ไม่ควรใช้เป็นยอดจริงอีกต่อไป แต่ยังถูกอ่านผ่าน fallback ที่ LoyaltyPoints.php:76 จึงลบทิ้งเฉย ๆ ไม่ได้",
+      "writers": [
+        {
+          "module": "api-member",
+          "method": "handleRegister welcome bonus",
+          "file": "api/member.php",
+          "line": 263,
+          "note": "กำหนดค่าเป็น 50 ตรง ไม่ใช่บวกเพิ่ม จึงทับยอดเดิมทั้งก้อน"
+        },
+        {
+          "module": "api-points",
+          "method": "redeem",
+          "file": "api/points.php",
+          "line": 281,
+          "note": "หักแต้มจากคอลัมน์นี้ อยู่ในทรานแซกชันที่เปิดที่บรรทัด 276"
+        },
+        {
+          "module": "shop",
+          "method": "order-detail แจกแต้มจากออร์เดอร์",
+          "file": "shop/order-detail.php",
+          "line": 407,
+          "note": "บวกเพิ่มแบบ atomic แต่คนละคอลัมน์กับ LoyaltyPoints"
+        }
+      ]
+    },
+    {
+      "field": "users.available_points",
+      "scope": "ตาราง users ใน tenant DB",
+      "owner": "LoyaltyPoints (classes/LoyaltyPoints.php)",
+      "rule": "เขียนผ่าน addPoints และ deductPoints เท่านั้น",
+      "writers": [
+        {
+          "module": "loyalty",
+          "method": "addPoints",
+          "file": "classes/LoyaltyPoints.php",
+          "line": 179,
+          "note": "เจ้าของ บวกแบบ atomic พร้อม total_points"
+        },
+        {
+          "module": "loyalty",
+          "method": "deductPoints",
+          "file": "classes/LoyaltyPoints.php",
+          "line": 211,
+          "note": "เจ้าของ ลบแบบ atomic พร้อม used_points แต่ไม่มีเงื่อนไขกันติดลบใน SQL"
+        }
+      ]
+    },
+    {
+      "field": "points_transactions",
+      "scope": "ledger ชุดที่หนึ่ง",
+      "owner": "LoyaltyPoints",
+      "rule": "ควรเป็น ledger เดียวของระบบ แต่ปัจจุบันมีผู้เขียนนอกคลาสอีกสามที่",
+      "writers": [
+        {
+          "module": "loyalty",
+          "method": "addPoints",
+          "file": "classes/LoyaltyPoints.php",
+          "line": 188,
+          "note": "เจ้าของ type earn"
+        },
+        {
+          "module": "loyalty",
+          "method": "deductPoints",
+          "file": "classes/LoyaltyPoints.php",
+          "line": 220,
+          "note": "เจ้าของ type redeem"
+        },
+        {
+          "module": "odoo-webhook",
+          "method": "webhook handler",
+          "file": "api/odoo-webhook.php",
+          "line": 311,
+          "note": "เขียนตรงไม่ผ่าน LoyaltyPoints"
+        },
+        {
+          "module": "OdooWebhookHandler",
+          "method": "handler",
+          "file": "classes/OdooWebhookHandler.php",
+          "line": 2609,
+          "note": "เขียนตรงไม่ผ่าน LoyaltyPoints"
+        },
+        {
+          "module": "shop",
+          "method": "order-detail",
+          "file": "shop/order-detail.php",
+          "line": 420,
+          "note": "เขียนตรง และเขียน points_history ที่บรรทัด 412 ด้วยในบล็อกเดียวกัน"
+        }
+      ]
+    },
+    {
+      "field": "points_history",
+      "scope": "ledger ชุดที่สอง",
+      "owner": "ไม่มีเจ้าของ เป็น ledger คู่ขนานของยุคเก่า",
+      "rule": "ต้องตัดสินใจว่าจะ freeze แล้ว migrate หรือคงไว้ ตอนนี้ยังมีคนเขียนอยู่ห้าที่",
+      "writers": [
+        {
+          "module": "api-member",
+          "method": "welcome bonus",
+          "file": "api/member.php",
+          "line": 273,
+          "note": ""
+        },
+        {
+          "module": "api-member",
+          "method": "points log",
+          "file": "api/member.php",
+          "line": 400,
+          "note": ""
+        },
+        {
+          "module": "api-member",
+          "method": "points log",
+          "file": "api/member.php",
+          "line": 454,
+          "note": ""
+        },
+        {
+          "module": "api-points",
+          "method": "redeem log",
+          "file": "api/points.php",
+          "line": 302,
+          "note": ""
+        },
+        {
+          "module": "shop",
+          "method": "order-detail",
+          "file": "shop/order-detail.php",
+          "line": 412,
+          "note": "เขียนคู่กับ points_transactions ที่บรรทัด 420"
+        }
+      ]
+    },
+    {
+      "field": "users.member_tier",
+      "scope": "ตาราง users ใน tenant DB",
+      "owner": "LoyaltyPoints::updateUserTier ซึ่งคำนวณผ่าน TierService",
+      "rule": "ค่า tier ต้องมาจาก TierService::calculateTier เท่านั้น",
+      "writers": [
+        {
+          "module": "loyalty",
+          "method": "updateUserTier",
+          "file": "classes/LoyaltyPoints.php",
+          "line": 294,
+          "note": "เจ้าของ ครอบด้วย try catch ที่กลืน exception ที่บรรทัด 300"
+        },
+        {
+          "module": "membership",
+          "method": "members.php",
+          "file": "includes/membership/members.php",
+          "line": 24,
+          "note": "เขียนตรงจากหน้าแอดมิน ไม่ผ่าน TierService"
+        }
+      ]
+    },
+    {
+      "field": "business_items.stock",
+      "scope": "ตาราง business_items ใน tenant DB",
+      "owner": "ตั้งใจให้เป็น InventoryService แต่ในทางปฏิบัติไม่มีเจ้าของจริง มีผู้เขียน 13 จุดใน 10 ไฟล์",
+      "rule": "ควรเขียนแบบ atomic เท่านั้น คือลดด้วย stock = stock - ? พร้อมเงื่อนไข stock >= ? และห้ามคำนวณยอดใหม่ใน PHP แล้วเขียนทับ",
+      "writers": [
+        {
+          "module": "InventoryService",
+          "method": "updateStock",
+          "file": "classes/InventoryService.php",
+          "line": 51,
+          "note": "อันตรายที่สุด อ่านยอดที่บรรทัด 43 คำนวณใน PHP ที่ 44 แล้วเขียนทับด้วยค่าคงที่ เป็น read modify write ที่ทำให้การขายพร้อมกันหายไปหนึ่งรายการ เงื่อนไขกันติดลบที่บรรทัด 46 อยู่ฝั่ง PHP จึงกันไม่ได้จริง"
+        },
+        {
+          "module": "InventoryService",
+          "method": "ปรับสต๊อก",
+          "file": "classes/InventoryService.php",
+          "line": 466,
+          "note": "เขียนทับด้วยค่าคงที่เช่นกัน"
+        },
+        {
+          "module": "POSService",
+          "method": "ตัดสต๊อกขาย branch สำรอง",
+          "file": "classes/POSService.php",
+          "line": 819,
+          "note": "ลดสต๊อกโดยไม่มีเงื่อนไข stock >= ? จึงติดลบได้ ใช้เมื่อไม่มี InventoryService"
+        },
+        {
+          "module": "POSService",
+          "method": "คืนสต๊อกตอน void",
+          "file": "classes/POSService.php",
+          "line": 860,
+          "note": "คืนแบบ atomic"
+        },
+        {
+          "module": "POSReturnService",
+          "method": "รับคืนสินค้า",
+          "file": "classes/POSReturnService.php",
+          "line": 452,
+          "note": "คืนแบบ atomic"
+        },
+        {
+          "module": "api-checkout",
+          "method": "create_order",
+          "file": "api/checkout.php",
+          "line": 1545,
+          "note": "ถูกต้อง ลดแบบ atomic พร้อมเงื่อนไข stock >= ?"
+        },
+        {
+          "module": "inbox-v2",
+          "method": "dispense",
+          "file": "inbox-v2.php",
+          "line": 628,
+          "note": "ถูกต้อง ลดแบบ atomic พร้อมเงื่อนไข"
+        },
+        {
+          "module": "messages",
+          "method": "dispense ฉบับเก่า",
+          "file": "messages.php",
+          "line": 377,
+          "note": "ถูกต้อง ตรรกะซ้ำกับ inbox-v2.php บรรทัด 628"
+        },
+        {
+          "module": "api-ai-admin",
+          "method": "คืนสต๊อกตอนยกเลิก",
+          "file": "api/ai-admin.php",
+          "line": 1296,
+          "note": "บวกคืนแบบ atomic"
+        },
+        {
+          "module": "api-ajax",
+          "method": "คืนสต๊อก",
+          "file": "api/ajax_handler.php",
+          "line": 306,
+          "note": "บวกคืนแบบ atomic"
+        },
+        {
+          "module": "api-ajax",
+          "method": "แก้ไขสินค้า",
+          "file": "api/ajax_handler.php",
+          "line": 456,
+          "note": "เขียนทับด้วยค่าจากฟอร์ม ทับการตัดสต๊อกที่เกิดพร้อมกันได้"
+        },
+        {
+          "module": "api-products",
+          "method": "ปรับสต๊อก",
+          "file": "api/products.php",
+          "line": 337,
+          "note": "เขียนทับด้วยค่าคงที่"
+        },
+        {
+          "module": "api-products",
+          "method": "ปรับสต๊อก",
+          "file": "api/products.php",
+          "line": 407,
+          "note": "เขียนทับด้วยค่าคงที่"
+        }
+      ]
+    },
+    {
+      "field": "transactions สถานะสี่คอลัมน์",
+      "scope": "status, payment_status, wms_status, fulfillment_status ในตาราง transactions",
+      "owner": "ไม่มีเจ้าของ ออร์เดอร์หนึ่งใบมีสถานะสี่ชุดที่ต่างคนต่างเขียน",
+      "rule": "ควรมี state machine เดียวที่ทุกฝ่ายเรียกใช้ ไม่ใช่ UPDATE ตรงจากแต่ละหน้า",
+      "writers": [
+        {
+          "module": "api-checkout",
+          "method": "create_order ตั้งค่าเริ่มต้น",
+          "file": "api/checkout.php",
+          "line": 1441,
+          "note": "สั่ง ALTER TABLE เพิ่มคอลัมน์ payment_status ภายในทรานแซกชันที่เปิดไว้ที่บรรทัด 1428 เกิด implicit commit ทรานแซกชันนั้นจึงจบไปเงียบ ๆ"
+        },
+        {
+          "module": "api-checkout",
+          "method": "ยืนยันการชำระ",
+          "file": "api/checkout.php",
+          "line": 2188,
+          "note": "ตั้ง payment_status paid และ status completed พร้อมกัน"
+        },
+        {
+          "module": "api-checkout",
+          "method": "ส่งเข้า WMS",
+          "file": "api/checkout.php",
+          "line": 1585,
+          "note": "ตั้ง wms_status pending_pick"
+        },
+        {
+          "module": "api-ai-admin",
+          "method": "ยืนยันออร์เดอร์",
+          "file": "api/ai-admin.php",
+          "line": 1239,
+          "note": "ตั้ง status confirmed"
+        },
+        {
+          "module": "api-ai-admin",
+          "method": "ยกเลิกออร์เดอร์",
+          "file": "api/ai-admin.php",
+          "line": 1326,
+          "note": "ตั้ง status cancelled"
+        },
+        {
+          "module": "api-ai-admin",
+          "method": "บันทึกชำระเงิน",
+          "file": "api/ai-admin.php",
+          "line": 1420,
+          "note": "ตั้ง status paid และ payment_status paid"
+        },
+        {
+          "module": "api-ajax",
+          "method": "อัปเดตสถานะจัดส่ง",
+          "file": "api/ajax_handler.php",
+          "line": 336,
+          "note": "ตั้ง status พร้อม shipping_tracking"
+        },
+        {
+          "module": "api-ajax",
+          "method": "บันทึกชำระเงิน",
+          "file": "api/ajax_handler.php",
+          "line": 388,
+          "note": "ตั้ง payment_status paid และ status paid"
+        },
+        {
+          "module": "BusinessBot",
+          "method": "ส่งเข้า WMS",
+          "file": "classes/BusinessBot.php",
+          "line": 2017,
+          "note": "ตั้ง wms_status pending_pick"
+        },
+        {
+          "module": "BusinessBot",
+          "method": "อัปเดต fulfillment",
+          "file": "classes/BusinessBot.php",
+          "line": 2902,
+          "note": "ตั้ง fulfillment_status และ fulfilled_at"
+        },
+        {
+          "module": "WMSService",
+          "method": "พร้อมส่ง",
+          "file": "classes/WMSService.php",
+          "line": 1063,
+          "note": "ตั้ง status ready_to_ship"
+        }
+      ]
+    },
+    {
+      "field": "active tenant_id",
+      "scope": "request",
+      "owner": "TenantContext",
+      "rule": "resolve once then Database follows tenant context",
+      "writers": [
+        {
+          "module": "classes/TenantContext.php",
+          "method": "setCurrentTenantId/routeByLineAccount",
+          "file": "classes/TenantContext.php",
+          "line": 48,
+          "note": "canonical request state"
+        },
+        {
+          "module": "bootstrap/resolve_subdomain.php",
+          "method": "boot resolution",
+          "file": "bootstrap/resolve_subdomain.php",
+          "line": 249,
+          "note": "host-based bootstrap feeds TenantContext"
+        }
+      ]
+    },
+    {
+      "field": "reward_redemptions.status",
+      "scope": "tenant DB",
+      "owner": "LoyaltyPoints + Membership admin",
+      "rule": "lifecycle pending → approved → delivered/cancelled/expired",
+      "writers": [
+        {
+          "module": "classes/LoyaltyPoints.php",
+          "method": "redeemReward/updateRedemptionStatus",
+          "file": "classes/LoyaltyPoints.php",
+          "line": 391,
+          "note": "create + state update"
+        },
+        {
+          "module": "membership.php",
+          "method": "approve/deliver/cancel actions",
+          "file": "membership.php",
+          "line": 108,
+          "note": "admin orchestration"
+        }
+      ]
+    },
+    {
+      "field": "drip_campaign_progress.status/current_step/next_send_at",
+      "scope": "tenant DB",
+      "owner": "CRMManager",
+      "rule": "only CRMManager automation should advance campaign state",
+      "writers": [
+        {
+          "module": "classes/CRMManager.php",
+          "method": "enrollUserInCampaign/advanceToNextStep",
+          "file": "classes/CRMManager.php",
+          "line": 104,
+          "note": "active scheduling and completion"
+        }
+      ]
+    },
+    {
+      "field": "crm_deals.stage",
+      "scope": "tenant DB",
+      "owner": "CRMDashboardService",
+      "rule": "validate against fixed stage list before mutation",
+      "writers": [
+        {
+          "module": "classes/CRMDashboardService.php",
+          "method": "moveDeal/createDeal/updateDeal",
+          "file": "classes/CRMDashboardService.php",
+          "line": 205,
+          "note": "pipeline owner"
+        }
+      ]
+    }
+  ]
+}

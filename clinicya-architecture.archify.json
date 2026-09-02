@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Clinicya Repository Architecture",
+    "quality_profile": "showcase",
+    "viewBox": [1300, 760],
+    "repository": {
+      "url": "https://github.com/reyatelehealth2026-crypto/clinicya.git",
+      "revision": "95cead2d815784071b5cd9907565e804ff192caa"
+    },
+    "views": [
+      {
+        "id": "request-path",
+        "label": "เส้นทาง request หลัก",
+        "focus": ["access", "edge", "php", "tenant-db"],
+        "note": "request เข้าผ่าน strangler edge ก่อนถึง PHP runtime และฐานข้อมูลของ Tenant"
+      },
+      {
+        "id": "next-migration",
+        "label": "Next.js migration",
+        "focus": ["edge", "admin-next", "miniapp", "php"],
+        "note": "Next.js surfaces แยกออกจาก PHP แต่ยังใช้ session bridge และ legacy APIs ระหว่างการย้าย"
+      },
+      {
+        "id": "realtime-async",
+        "label": "Realtime และงานเบื้องหลัง",
+        "focus": ["php", "realtime-async", "tenant-db"],
+        "note": "Socket.IO, Redis, BullMQ scaffolding และ cron jobs รองรับ event กับงานเบื้องหลัง"
+      },
+      {
+        "id": "integrations",
+        "label": "External integrations",
+        "focus": ["php", "integrations"],
+        "note": "LINE OA, Odoo และ Gemini เชื่อมผ่านบริการที่มี tenant และ channel scope"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "access",
+      "type": "external",
+      "label": "ช่องทางเข้าใช้งาน",
+      "sublabel": "Staff browser · LINE OA · LIFF",
+      "pos": [20, 325],
+      "size": [160, 80]
+    },
+    {
+      "id": "edge",
+      "type": "cloud",
+      "label": "Nginx Strangler Edge",
+      "sublabel": "host × path routing",
+      "tag": "X-Served-By",
+      "pos": [280, 315],
+      "size": [190, 100],
+      "sources": [
+        { "path": "infra/compose/docker-compose.vps.yml", "label": "VPS runtime" },
+        { "path": "infra/compose/docker-compose.strangler.yml", "label": "Strangler routing" }
+      ]
+    },
+    {
+      "id": "php",
+      "type": "backend",
+      "label": "PHP Monolith + REST",
+      "sublabel": "*.php · api/ · modules/",
+      "tag": "TenantContext",
+      "pos": [620, 315],
+      "size": [200, 100],
+      "sources": [
+        { "path": "webhook.php", "label": "LINE webhook" },
+        { "path": "classes/TenantContext.php", "label": "Tenant scope" },
+        { "path": "modules/AIChat/Adapters/GeminiChatAdapter.php", "label": "AI consultation" }
+      ]
+    },
+    {
+      "id": "tenant-db",
+      "type": "database",
+      "label": "MariaDB Tenant Data",
+      "sublabel": "database-per-Tenant",
+      "tag": "Master + tenant DBs",
+      "pos": [1040, 315],
+      "size": [200, 100],
+      "sources": [
+        { "path": "config/database.php", "label": "PHP database" },
+        { "path": "packages/db/package.json", "label": "TypeScript database" },
+        { "path": "classes/TenantContext.php", "label": "Isolation context" }
+      ]
+    },
+    {
+      "id": "admin-next",
+      "type": "frontend",
+      "label": "Next.js Admin",
+      "sublabel": "apps/admin + frontend",
+      "tag": "App Router",
+      "pos": [625, 75],
+      "size": [190, 85],
+      "sources": [
+        { "path": "apps/admin/package.json", "label": "Migration shell" },
+        { "path": "frontend/package.json", "label": "Admin dashboard" }
+      ]
+    },
+    {
+      "id": "miniapp",
+      "type": "frontend",
+      "label": "LINE Mini App",
+      "sublabel": "line-mini-app · static export",
+      "tag": "/miniapp",
+      "pos": [625, 570],
+      "size": [190, 85],
+      "sources": [
+        { "path": "line-mini-app/package.json", "label": "Active Mini App" },
+        { "path": "line-mini-app/next.config.js", "label": "Static export" }
+      ]
+    },
+    {
+      "id": "integrations",
+      "type": "external",
+      "label": "External Integrations",
+      "sublabel": "LINE OA · Odoo · Gemini",
+      "pos": [1000, 75],
+      "size": [210, 85],
+      "sources": [
+        { "path": "classes/LineAPI.php", "label": "LINE Messaging API" },
+        { "path": "classes/OdooAPIClient.php", "label": "Odoo JSON-RPC" },
+        { "path": "classes/GeminiAI.php", "label": "Gemini provider" }
+      ]
+    },
+    {
+      "id": "realtime-async",
+      "type": "messagebus",
+      "label": "Realtime + Async Layer",
+      "sublabel": "Socket.IO · Redis · BullMQ · cron",
+      "pos": [980, 570],
+      "size": [230, 85],
+      "sources": [
+        { "path": "websocket-server.js", "label": "Socket.IO server" },
+        { "path": "apps/worker/package.json", "label": "Node worker" },
+        { "path": "cron/ai_session_summarizer.php", "label": "PHP cron" }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Clinicya application runtime",
+      "wraps": ["edge", "php", "tenant-db", "admin-next", "miniapp", "realtime-async"],
+      "pad": 24
+    },
+    {
+      "kind": "security-group",
+      "label": "Tenant isolation boundary",
+      "wraps": ["php", "tenant-db"],
+      "pad": 14
+    }
+  ],
+  "connections": [
+    { "id": "access-edge", "from": "access", "to": "edge", "label": "HTTPS + webhook", "variant": "emphasis" },
+    { "id": "edge-php", "from": "edge", "to": "php", "label": "legacy + REST + webhook", "variant": "emphasis" },
+    { "id": "php-db", "from": "php", "to": "tenant-db", "label": "tenant-scoped SQL", "variant": "security" },
+    { "id": "edge-admin", "from": "edge", "to": "admin-next", "label": "admin routes", "fromSide": "top", "toSide": "left" },
+    { "id": "admin-php", "from": "admin-next", "to": "php", "label": "session bridge + APIs", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelDy": 24 },
+    { "id": "edge-miniapp", "from": "edge", "to": "miniapp", "label": "/miniapp", "fromSide": "bottom", "toSide": "left" },
+    { "id": "miniapp-php", "from": "miniapp", "to": "php", "label": "/api/miniapp/**", "fromSide": "top", "toSide": "bottom" },
+    { "id": "php-integrations", "from": "php", "to": "integrations", "label": "LINE replies · sync · AI", "fromSide": "top", "toSide": "bottom" },
+    { "id": "php-realtime", "from": "php", "to": "realtime-async", "label": "events + jobs", "variant": "dashed", "fromSide": "bottom", "toSide": "left" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Strangler migration",
+      "items": [
+        "Nginx แยก host และ path ไปยัง PHP, Next.js, Mini App และ WebSocket upstream",
+        "Next.js surfaces ยังใช้ session bridge และ legacy APIs ระหว่างการย้าย"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Tenant boundary",
+      "items": [
+        "TenantContext กำหนด scope ก่อนเข้าถึงข้อมูล",
+        "MariaDB แยกฐานข้อมูลต่อ Tenant บน shared instance"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Channels และ integrations",
+      "items": [
+        "LINE OA ผูก feature ด้วย line_account_id ตาม channel scope",
+        "Odoo dashboard ใช้ cache tables; AI model routing อ่านจาก DB settings"
+      ]
+    }
+  ]
+}

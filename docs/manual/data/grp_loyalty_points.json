@@ -1,0 +1,477 @@
+{
+  "id": "loyalty_points",
+  "title": "แต้มสะสม ระดับสมาชิก และของรางวัล",
+  "summary": "เส้นทางแต้มของลูกค้า ตั้งแต่ได้รับแต้มจากออร์เดอร์ จนถึงแลกของรางวัลผ่าน Mini App ทางเดินที่ใช้จริงคือ rewards-api.ts ไปยัง api/rewards.php แล้วเข้า LoyaltyPoints::redeemReward จุดสำคัญคือระบบนี้เก็บยอดแต้มไว้สองชุดคอลัมน์ มี ledger สองตารางที่ไม่ตรงกัน และไม่มี transaction ครอบการเขียนหลายก้าวเลย",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "ลูกค้า Mini App",
+      "module": "line-mini-app",
+      "method": "redeemReward()",
+      "file": "line-mini-app/src/lib/rewards-api.ts",
+      "line": 13,
+      "action": "ลูกค้ากดแลกรางวัล ส่ง POST ไปที่ api/rewards.php พร้อม action redeem, line_user_id, line_account_id, reward_id",
+      "calls": [{ "module": "php-bridge", "method": "phpPost", "file": "line-mini-app/src/lib/rewards-api.ts", "line": 14 }],
+      "returns": "RedeemRewardResponse",
+      "notes": "line_account_id มาจาก appConfig ฝั่ง client ไม่ได้มาจาก session ฝั่ง server"
+    },
+    {
+      "seq": 2,
+      "actor": "api/rewards.php",
+      "module": "api-rewards",
+      "method": "route_by_account.php",
+      "file": "api/rewards.php",
+      "line": 18,
+      "action": "เลือก tenant DB จาก line_account_id ก่อนทุกอย่าง เพราะคำขอเข้ามาที่ root domain ไม่มี subdomain ให้ resolve",
+      "returns": "PDO ที่ชี้ไปยัง tenant DB ที่ถูกต้อง",
+      "notes": "ถ้า route ผิด ทุกขั้นต่อจากนี้จะอ่านและเขียนผิด tenant"
+    },
+    {
+      "seq": 3,
+      "actor": "api/rewards.php",
+      "module": "api-rewards",
+      "method": "handleRedeem()",
+      "file": "api/rewards.php",
+      "line": 91,
+      "action": "ตรวจ input แล้วหา users.id จาก line_user_id",
+      "calls": [{ "module": "MySQL", "method": "SELECT id FROM users WHERE line_user_id", "file": "api/rewards.php", "line": 107 }],
+      "returns": "users.id ของลูกค้า"
+    },
+    {
+      "seq": 4,
+      "actor": "LoyaltyPoints",
+      "module": "loyalty",
+      "method": "redeemReward()",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 387,
+      "action": "ตรวจว่ารางวัลมีจริง ยัง active และยังมี stock เหลือ",
+      "calls": [{ "module": "loyalty", "method": "getReward", "file": "classes/LoyaltyPoints.php", "line": 312 }],
+      "returns": "ข้อมูลรางวัล หรือ error"
+    },
+    {
+      "seq": 5,
+      "actor": "LoyaltyPoints",
+      "module": "loyalty",
+      "method": "getUserPoints()",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 403,
+      "action": "อ่านยอดแต้มคงเหลือมาเทียบกับ points_required",
+      "calls": [{ "module": "MySQL", "method": "SUM points FROM points_transactions", "file": "classes/LoyaltyPoints.php", "line": 58 }],
+      "returns": "available_points",
+      "notes": "ค่านี้อาจไม่ได้มาจาก ledger จริง ดูเคส C1"
+    },
+    {
+      "seq": 6,
+      "actor": "LoyaltyPoints",
+      "module": "loyalty",
+      "method": "deductPoints()",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 420,
+      "action": "หักแต้ม โดยอ่านยอดซ้ำอีกรอบแล้วลดคอลัมน์ available_points",
+      "calls": [{ "module": "MySQL", "method": "UPDATE users SET available_points, used_points", "file": "classes/LoyaltyPoints.php", "line": 211 }],
+      "returns": "true หรือ false",
+      "sets": [
+        { "field": "users.available_points", "value": "ลดลงเท่ากับ points_required" },
+        { "field": "users.used_points", "value": "เพิ่มขึ้นเท่ากับ points_required" }
+      ],
+      "state_change": "users.available_points ลดลงเท่ากับ points_required",
+      "notes": "เขียนคนละคอลัมน์กับ api/points.php และ shop/order-detail.php ที่เขียน users.points ดูเคส C2"
+    },
+    {
+      "seq": 7,
+      "actor": "LoyaltyPoints",
+      "module": "loyalty",
+      "method": "updateUserTier()",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 215,
+      "action": "คำนวณ tier ใหม่จากยอดคงเหลือแล้วเขียน users.member_tier",
+      "calls": [{ "module": "TierService", "method": "calculateTier", "file": "classes/LoyaltyPoints.php", "line": 289 }],
+      "sets": [{ "field": "users.member_tier", "value": "tier_code" }],
+      "state_change": "users.member_tier อาจเปลี่ยนระดับ",
+      "notes": "ครอบด้วย try catch ที่กลืน exception ที่บรรทัด 300 ถ้า TierService พัง แต้มจะหักไปแล้วแต่ tier ไม่ขยับ"
+    },
+    {
+      "seq": 8,
+      "actor": "LoyaltyPoints",
+      "module": "loyalty",
+      "method": "INSERT points_transactions",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 220,
+      "action": "บันทึกรายการลง ledger ด้วย type redeem และ balance_after ที่คำนวณไว้ก่อนหน้า",
+      "sets": [{ "field": "points_transactions.balance_after", "value": "ยอดคงเหลือที่คำนวณจากขั้นที่ 5" }],
+      "state_change": "points_transactions เพิ่ม 1 แถว",
+      "notes": "balance_after มาจากค่าที่อ่านในขั้นที่ 5 ซึ่งอาจเป็นค่าจาก fallback ไม่ใช่ยอด ledger จริง"
+    },
+    {
+      "seq": 9,
+      "actor": "LoyaltyPoints",
+      "module": "loyalty",
+      "method": "UPDATE rewards SET stock",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 426,
+      "action": "ตัด stock ของรางวัลแบบมีเงื่อนไข AND stock มากกว่าศูนย์",
+      "sets": [{ "field": "rewards.stock", "value": "ลดลง 1" }],
+      "state_change": "rewards.stock ลดลง 1",
+      "notes": "คำสั่งนี้ atomic แต่ผลลัพธ์ไม่ถูกตรวจ ดูเคส C4"
+    },
+    {
+      "seq": 10,
+      "actor": "LoyaltyPoints",
+      "module": "loyalty",
+      "method": "INSERT reward_redemptions",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 441,
+      "action": "ออกโค้ดรับรางวัลและบันทึกการแลกพร้อมวันหมดอายุ",
+      "calls": [{ "module": "loyalty", "method": "generateUniqueRedemptionCode", "file": "classes/LoyaltyPoints.php", "line": 459 }],
+      "returns": "redemption_code และ redemption_id",
+      "state_change": "reward_redemptions เพิ่ม 1 แถว"
+    },
+    {
+      "seq": 11,
+      "actor": "api/rewards.php",
+      "module": "api-rewards",
+      "method": "getMemberByUserId()",
+      "file": "api/rewards.php",
+      "line": 121,
+      "action": "อ่านยอดใหม่กลับมาส่งให้ Mini App เป็น new_balance",
+      "calls": [{ "module": "loyalty", "method": "getMemberByUserId", "file": "classes/LoyaltyPoints.php", "line": 103 }],
+      "returns": "new_balance จาก available_points",
+      "notes": "อ่านตรงจาก users ไม่ผ่าน getUserPoints จึงเห็นคนละค่ากับตอนตรวจสิทธิ์ได้"
+    },
+    {
+      "seq": 12,
+      "actor": "LoyaltyPoints",
+      "module": "loyalty",
+      "method": "awardPointsForOrder()",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 225,
+      "action": "ฝั่งได้แต้ม แปลงยอดเงินเป็นแต้มด้วย calculatePoints แล้วเรียก addPoints",
+      "calls": [{ "module": "loyalty", "method": "addPoints", "file": "classes/LoyaltyPoints.php", "line": 171 }],
+      "returns": "true หรือ false"
+    },
+    {
+      "seq": 13,
+      "actor": "LoyaltyPoints",
+      "module": "loyalty",
+      "method": "addPoints()",
+      "file": "classes/LoyaltyPoints.php",
+      "line": 171,
+      "action": "เพิ่มแต้ม เขียน users ก่อน แล้วอัปเดต tier แล้วค่อย INSERT ledger รวมสามการเขียนติดกัน",
+      "calls": [
+        { "module": "MySQL", "method": "UPDATE users SET total_points, available_points", "file": "classes/LoyaltyPoints.php", "line": 179 },
+        { "module": "loyalty", "method": "updateUserTier", "file": "classes/LoyaltyPoints.php", "line": 183 },
+        { "module": "MySQL", "method": "INSERT INTO points_transactions", "file": "classes/LoyaltyPoints.php", "line": 188 }
+      ],
+      "sets": [
+        { "field": "users.total_points", "value": "เพิ่มตามแต้มที่ได้" },
+        { "field": "users.available_points", "value": "เพิ่มตามแต้มที่ได้" }
+      ],
+      "state_change": "users.available_points เพิ่ม และ points_transactions เพิ่ม 1 แถว",
+      "notes": "สามการเขียนนี้ไม่มี transaction ครอบ ดูเคส C3"
+    }
+  ],
+  "cases": [
+    {
+      "id": "C1",
+      "name": "Zero-balance fallback ยอดศูนย์ใน ledger ทำให้ไปอ่านคอลัมน์ users แทน",
+      "condition": "getUserPoints ได้ available_points เป็นศูนย์จาก points_transactions",
+      "behavior": "แทนที่จะคืนศูนย์ กลับไปอ่านตาราง users แล้วถ้า available_points ว่างแต่ users.points มีค่า จะเอา users.points มาใช้เป็นยอดคงเหลือแทน",
+      "code_path": [
+        { "module": "loyalty", "method": "getUserPoints", "file": "classes/LoyaltyPoints.php", "line": 67 },
+        { "module": "loyalty", "method": "getUserPoints", "file": "classes/LoyaltyPoints.php", "line": 69 },
+        { "module": "loyalty", "method": "getUserPoints", "file": "classes/LoyaltyPoints.php", "line": 76 },
+        { "module": "loyalty", "method": "getUserPoints", "file": "classes/LoyaltyPoints.php", "line": 83 }
+      ],
+      "result": "ลูกค้าที่ ledger เป็นศูนย์จริง แต่มีค่าค้างใน users.points จะแลกของได้ทั้งที่ไม่ควรได้",
+      "gotcha": "เงื่อนไขคือเท่ากับศูนย์ ไม่ใช่ไม่พบแถว ลูกค้าที่ใช้แต้มหมดพอดีจึงตกเข้า fallback ทุกครั้ง ไม่ใช่แค่ลูกค้าที่ยังไม่เคยมีรายการ",
+      "tag": "danger"
+    },
+    {
+      "id": "C2",
+      "name": "Split-brain ยอดแต้มถูกเก็บสองชุดคอลัมน์ที่ไม่ sync กัน",
+      "condition": "เรียกใช้ระบบแต้มผ่านคนละทางเข้า",
+      "behavior": "LoyaltyPoints เขียน users.available_points total_points used_points ส่วน api/member.php api/points.php และ shop/order-detail.php เขียน users.points ซึ่งเป็นคนละคอลัมน์",
+      "code_path": [
+        { "module": "loyalty", "method": "addPoints", "file": "classes/LoyaltyPoints.php", "line": 179 },
+        { "module": "loyalty", "method": "deductPoints", "file": "classes/LoyaltyPoints.php", "line": 211 },
+        { "module": "api-member", "method": "handleRegister", "file": "api/member.php", "line": 263 },
+        { "module": "api-points", "method": "redeem", "file": "api/points.php", "line": 281 },
+        { "module": "shop", "method": "order-detail", "file": "shop/order-detail.php", "line": 407 }
+      ],
+      "result": "ยอดที่ลูกค้าเห็นขึ้นกับว่าโค้ดเส้นไหนอ่าน ไม่มีคอลัมน์ไหนเป็นความจริงเดียว",
+      "gotcha": "C1 คือสะพานที่ทำให้สองโลกนี้ปนกัน เพราะ fallback ดึง users.points เข้ามาเป็นยอดของฝั่ง available_points",
+      "tag": "danger"
+    },
+    {
+      "id": "C3",
+      "name": "เขียนหลายก้าวโดยไม่มี transaction",
+      "condition": "addPoints หรือ deductPoints ทำงาน",
+      "behavior": "UPDATE users แล้ว updateUserTier ซึ่ง UPDATE users อีกครั้ง แล้ว INSERT points_transactions ทั้งสามก้าวเป็นคนละ statement ไม่มี beginTransaction commit หรือ rollBack อยู่เลยทั้งไฟล์ 667 บรรทัด",
+      "code_path": [
+        { "module": "loyalty", "method": "addPoints", "file": "classes/LoyaltyPoints.php", "line": 179 },
+        { "module": "loyalty", "method": "updateUserTier", "file": "classes/LoyaltyPoints.php", "line": 294 },
+        { "module": "loyalty", "method": "addPoints", "file": "classes/LoyaltyPoints.php", "line": 188 }
+      ],
+      "result": "ถ้าล้มกลางทาง ยอดใน users จะขยับแต่ ledger ไม่มีแถว หรือกลับกัน แล้วจะกระทบ C1 ต่อทันที",
+      "gotcha": "api/points.php บรรทัด 276 ใช้ beginTransaction แต่ LoyaltyPoints ไม่ใช้ ทั้งที่เป็นงานเดียวกัน",
+      "tag": "danger"
+    },
+    {
+      "id": "C4",
+      "name": "แลกรางวัลชนกัน check then act ไม่มี lock",
+      "condition": "ลูกค้าคนเดียวกดแลกสองครั้งพร้อมกัน หรือรางวัลชิ้นสุดท้ายถูกแย่ง",
+      "behavior": "ตรวจ stock ที่บรรทัด 399 และตรวจแต้มที่ 414 แล้วค่อยหักแต้มที่ 420 โดยไม่มี SELECT FOR UPDATE คั่น ส่วน UPDATE rewards SET stock ที่ 426 atomic จริงแต่ไม่มีการตรวจ rowCount",
+      "code_path": [
+        { "module": "loyalty", "method": "redeemReward", "file": "classes/LoyaltyPoints.php", "line": 399 },
+        { "module": "loyalty", "method": "redeemReward", "file": "classes/LoyaltyPoints.php", "line": 414 },
+        { "module": "loyalty", "method": "redeemReward", "file": "classes/LoyaltyPoints.php", "line": 420 },
+        { "module": "loyalty", "method": "redeemReward", "file": "classes/LoyaltyPoints.php", "line": 426 },
+        { "module": "loyalty", "method": "redeemReward", "file": "classes/LoyaltyPoints.php", "line": 441 }
+      ],
+      "result": "stock หมดระหว่างทาง แต้มถูกหักไปแล้ว และ reward_redemptions ยังถูกสร้างอยู่ดี ลูกค้าได้โค้ดของรางวัลที่ไม่มีของ",
+      "gotcha": "จุดที่ควรแก้คือบรรทัด 426 ต้องเช็ค rowCount แล้วยกเลิกถ้าเป็นศูนย์ แต่ยกเลิกไม่ได้จริงเพราะไม่มี transaction ตาม C3",
+      "tag": "danger"
+    },
+    {
+      "id": "C5",
+      "name": "สมัครสมาชิกเขียนทับยอดแต้มเดิมทั้งก้อน",
+      "condition": "handleRegister ทำงานกับ user ที่มีแต้มอยู่แล้ว",
+      "behavior": "ให้ welcome bonus ด้วย UPDATE users SET points เท่ากับค่าคงที่ 50 คือกำหนดค่าตรง ไม่ใช่บวกเพิ่ม",
+      "code_path": [
+        { "module": "api-member", "method": "handleRegister", "file": "api/member.php", "line": 63 },
+        { "module": "api-member", "method": "handleRegister", "file": "api/member.php", "line": 261 },
+        { "module": "api-member", "method": "handleRegister", "file": "api/member.php", "line": 263 }
+      ],
+      "result": "ยอด users.points ที่มีอยู่เดิมถูกทับเป็น 50",
+      "gotcha": "บรรทัด 257 เพิ่งเรียก flagPointsMergeOnLink เพื่อจับคู่บัญชีหน้าร้านกับเบอร์โทร แปลว่าเคสที่มีแต้มเดิมคือเคสที่ตั้งใจรองรับ แล้วอีกหกบรรทัดถัดมาก็ทับทิ้ง",
+      "tag": "danger"
+    },
+    {
+      "id": "C6",
+      "name": "มี ledger สองตาราง ไม่ใช่ตารางเดียว",
+      "condition": "อ่านประวัติแต้ม",
+      "behavior": "points_transactions ถูกเขียนโดย LoyaltyPoints, api/odoo-webhook.php, classes/OdooWebhookHandler.php และ shop/order-detail.php ส่วน points_history ถูกเขียนโดย api/member.php, api/points.php และ shop/order-detail.php",
+      "code_path": [
+        { "module": "loyalty", "method": "addPoints", "file": "classes/LoyaltyPoints.php", "line": 188 },
+        { "module": "api-member", "method": "handleRegister", "file": "api/member.php", "line": 273 },
+        { "module": "api-points", "method": "redeem", "file": "api/points.php", "line": 302 },
+        { "module": "shop", "method": "order-detail", "file": "shop/order-detail.php", "line": 412 },
+        { "module": "shop", "method": "order-detail", "file": "shop/order-detail.php", "line": 420 }
+      ],
+      "result": "ประวัติที่ลูกค้าเห็นขึ้นกับว่า endpoint ไหนอ่าน ledger ตัวไหน",
+      "gotcha": "shop/order-detail.php เขียนทั้งสองตารางในบล็อกเดียวกัน คือบรรทัด 412 และ 420 เป็นหลักฐานว่าไม่มีใครรู้ว่าตารางไหนคือของจริง",
+      "tag": "danger"
+    },
+    {
+      "id": "C7",
+      "name": "มีทางแลกรางวัลสองทางที่ใช้ตารางคนละชุด",
+      "condition": "เรียก api/rewards.php action redeem เทียบกับ api/points.php action redeem",
+      "behavior": "rewards.php ส่งต่อให้ LoyaltyPoints redeemReward ซึ่งใช้ users.available_points กับตาราง rewards ส่วน points.php หักจาก users.points เองในทรานแซกชัน และรองรับทั้งตาราง rewards และ point_rewards",
+      "code_path": [
+        { "module": "api-rewards", "method": "handleRedeem", "file": "api/rewards.php", "line": 117 },
+        { "module": "api-points", "method": "redeem", "file": "api/points.php", "line": 250 },
+        { "module": "api-points", "method": "redeem", "file": "api/points.php", "line": 276 },
+        { "module": "api-points", "method": "redeem", "file": "api/points.php", "line": 281 }
+      ],
+      "result": "แลกรางวัลชิ้นเดียวกันผ่านคนละ endpoint ได้ผลคนละแบบ",
+      "gotcha": "Mini App ยิงไปที่ rewards.php ตาม rewards-api.ts บรรทัด 13 ซึ่งเป็นเส้นที่ไม่มี transaction ส่วนเส้นที่มี transaction กลับไม่ถูกใช้",
+      "tag": "warn"
+    },
+    {
+      "id": "C8",
+      "name": "ไม่มีรางวัลของ tenant นี้ แล้วเด้งไปใช้ของบัญชี default",
+      "condition": "getActiveRewards คืน array ว่าง",
+      "behavior": "หา line_accounts ที่ is_default เป็นหนึ่ง แล้วสร้าง LoyaltyPoints ใหม่ด้วย account นั้นเพื่อดึงรางวัลมาแสดง",
+      "code_path": [
+        { "module": "api-rewards", "method": "handleGetRewards", "file": "api/rewards.php", "line": 67 },
+        { "module": "api-rewards", "method": "handleGetRewards", "file": "api/rewards.php", "line": 69 },
+        { "module": "api-rewards", "method": "handleGetRewards", "file": "api/rewards.php", "line": 76 }
+      ],
+      "result": "ลูกค้าเห็นรางวัลของอีกบัญชีหนึ่งในหน้าร้านตัวเอง",
+      "gotcha": "fallback นี้อยู่แค่ตอนแสดงผล ตอน redeem ไม่มี fallback แบบเดียวกัน ลูกค้าจึงกดแลกรางวัลที่เห็นแล้วได้ error",
+      "tag": "warn"
+    },
+    {
+      "id": "C9",
+      "name": "ยอด new_balance ที่ตอบกลับมาจากคนละแหล่งกับตอนตรวจสิทธิ์",
+      "condition": "แลกรางวัลสำเร็จ",
+      "behavior": "ตอนตรวจสิทธิ์ใช้ getUserPoints ซึ่งมี fallback แต่ตอนตอบกลับใช้ getMemberByUserId ที่ SELECT users ตรง",
+      "code_path": [
+        { "module": "loyalty", "method": "redeemReward", "file": "classes/LoyaltyPoints.php", "line": 403 },
+        { "module": "loyalty", "method": "getMemberByUserId", "file": "classes/LoyaltyPoints.php", "line": 103 },
+        { "module": "api-rewards", "method": "handleRedeem", "file": "api/rewards.php", "line": 128 }
+      ],
+      "result": "ยอดที่เด้งขึ้นหน้าจอหลังแลกอาจไม่ตรงกับยอดที่ใช้ตัดสินใจอนุมัติการแลก",
+      "gotcha": "ทำให้เคส C1 มองไม่เห็นจากหน้าจอ เพราะสองค่านี้มาคนละทาง",
+      "tag": "warn"
+    },
+    {
+      "id": "C10",
+      "name": "ตั้งค่าแต้มโหลดไม่ได้ แล้วเงียบไปใช้ค่า default",
+      "condition": "query points_settings โยน exception",
+      "behavior": "catch แล้วตั้ง settings เป็น points_per_baht 0.001 points_expiry_days 365 และ is_active หนึ่ง",
+      "code_path": [
+        { "module": "loyalty", "method": "loadSettings", "file": "classes/LoyaltyPoints.php", "line": 19 },
+        { "module": "loyalty", "method": "loadSettings", "file": "classes/LoyaltyPoints.php", "line": 25 }
+      ],
+      "result": "ร้านที่ตั้งใจปิดระบบแต้มไว้ จะกลับมาแจกแต้มเองที่อัตรา default",
+      "gotcha": "ค่า default คือ is_active เป็นหนึ่ง ไม่ใช่ศูนย์ การล้มเหลวจึงเปิดระบบ ไม่ใช่ปิด",
+      "tag": "warn"
+    },
+    {
+      "id": "C11",
+      "name": "ปรับ tier ล้มเหลวแบบเงียบ",
+      "condition": "TierService โยน exception",
+      "behavior": "catch แล้ว error_log อย่างเดียว ไม่คืนสถานะให้ผู้เรียก",
+      "code_path": [
+        { "module": "loyalty", "method": "updateUserTier", "file": "classes/LoyaltyPoints.php", "line": 284 },
+        { "module": "loyalty", "method": "updateUserTier", "file": "classes/LoyaltyPoints.php", "line": 300 }
+      ],
+      "result": "แต้มขยับแต่ระดับสมาชิกไม่ขยับ และ addPoints ยังคืน true",
+      "gotcha": "อยู่ระหว่าง UPDATE users กับ INSERT ledger พอดี เป็นจุดที่ C3 เจ็บที่สุด",
+      "tag": "warn"
+    },
+    {
+      "id": "C12",
+      "name": "แต้มติดลบถูกกลบตอนอ่าน",
+      "condition": "SUM points จาก ledger ออกมาติดลบ",
+      "behavior": "บังคับเป็นศูนย์ด้วย max ก่อนคืนค่า",
+      "code_path": [{ "module": "loyalty", "method": "getUserPoints", "file": "classes/LoyaltyPoints.php", "line": 93 }],
+      "result": "ยอดติดลบซึ่งเป็นสัญญาณว่า ledger เพี้ยน จะถูกซ่อนไม่ให้เห็น",
+      "gotcha": "ยอดที่ถูกกลบเป็นศูนย์จะไปเข้าเงื่อนไข fallback ของ C1 ต่อทันที",
+      "tag": "warn"
+    },
+    {
+      "id": "C13",
+      "name": "แต้มไม่พอ",
+      "condition": "available_points น้อยกว่า points_required",
+      "behavior": "คืน success เป็น false พร้อมข้อความแต้มไม่เพียงพอ โดยยังไม่แตะข้อมูลใด",
+      "code_path": [{ "module": "loyalty", "method": "redeemReward", "file": "classes/LoyaltyPoints.php", "line": 414 }],
+      "result": "ไม่มีการเปลี่ยนแปลงสถานะ",
+      "tag": "ok"
+    },
+    {
+      "id": "C14",
+      "name": "รางวัลหมด หรือถูกปิดใช้งาน",
+      "condition": "is_active เป็นเท็จ หรือ stock น้อยกว่าหรือเท่ากับศูนย์ และไม่ใช่ลบหนึ่ง",
+      "behavior": "คืน error ก่อนถึงขั้นหักแต้ม",
+      "code_path": [
+        { "module": "loyalty", "method": "redeemReward", "file": "classes/LoyaltyPoints.php", "line": 394 },
+        { "module": "loyalty", "method": "redeemReward", "file": "classes/LoyaltyPoints.php", "line": 399 }
+      ],
+      "result": "ไม่มีการเปลี่ยนแปลงสถานะ",
+      "gotcha": "stock เท่ากับลบหนึ่งหมายถึงไม่จำกัด ต้องระวังเวลาเขียน query รายงาน",
+      "tag": "ok"
+    },
+    {
+      "id": "C15",
+      "name": "แต้มที่ให้ต้องเป็นบวก และออร์เดอร์ต้องถึงขั้นต่ำ",
+      "condition": "points น้อยกว่าหรือเท่ากับศูนย์ หรือ amount น้อยกว่า min_order_for_points หรือ is_active เป็นศูนย์",
+      "behavior": "addPoints คืน false ทันที ส่วน calculatePoints คืนศูนย์",
+      "code_path": [
+        { "module": "loyalty", "method": "addPoints", "file": "classes/LoyaltyPoints.php", "line": 173 },
+        { "module": "loyalty", "method": "calculatePoints", "file": "classes/LoyaltyPoints.php", "line": 41 }
+      ],
+      "result": "ไม่มีการเขียนใด",
+      "tag": "ok"
+    }
+  ],
+  "modules_touched": [
+    { "module": "line-mini-app", "role": "หน้าจอลูกค้าใน LIFF เรียก PHP ผ่าน php-bridge", "methods": ["redeemReward", "getRewards", "getMyRedemptions", "getPointsHistory"] },
+    { "module": "api-rewards", "role": "endpoint ที่ Mini App ใช้จริงสำหรับรางวัล ห่อ LoyaltyPoints อีกที", "methods": ["handleGetRewards", "handleRedeem", "handleMyRedemptions"] },
+    { "module": "api-points", "role": "endpoint แลกรางวัลอีกชุดที่หักจาก users.points เองในทรานแซกชัน", "methods": ["redeem", "history", "rewards"] },
+    { "module": "api-member", "role": "สมัครสมาชิกและ welcome bonus เขียน users.points ตรง", "methods": ["handleRegister", "flagPointsMergeOnLink"] },
+    { "module": "loyalty", "role": "business logic ของแต้มทั้งหมด แต่ไม่มี transaction ในตัว", "methods": ["getUserPoints", "addPoints", "deductPoints", "redeemReward", "updateUserTier", "awardPointsForOrder", "calculatePoints"] },
+    { "module": "TierService", "role": "คำนวณระดับสมาชิกจากยอดแต้ม", "methods": ["calculateTier"] },
+    { "module": "shop", "role": "หน้า order-detail ฝั่งหน้าร้าน แจกแต้มเองและเขียน ledger ทั้งสองตาราง", "methods": ["order-detail"] },
+    { "module": "MySQL", "role": "tenant DB ที่เก็บ users points_transactions points_history rewards point_rewards reward_redemptions points_settings", "methods": [] }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "loyalty",
+      "to_module": "api-rewards",
+      "returns_what": "ผลลัพธ์ success และ redemption_code",
+      "why_needed": "ถ้า redeemReward คืน false handleRedeem จะตอบ error ทันที แต่ถ้ามันคืน true ทั้งที่หักแต้มไปแล้วบางส่วน ฝั่ง API ไม่มีทางรู้เพราะไม่มี transaction"
+    },
+    {
+      "from_module": "loyalty",
+      "to_module": "loyalty",
+      "returns_what": "available_points จาก getUserPoints",
+      "why_needed": "เป็นค่าที่ทั้ง redeemReward deductPoints และ balance_after ใช้ร่วมกัน ถ้าค่านี้มาจาก fallback ตาม C1 ยอดใน ledger จะเพี้ยนตามไปทั้งสาย"
+    },
+    {
+      "from_module": "TierService",
+      "to_module": "loyalty",
+      "returns_what": "tier_code",
+      "why_needed": "ถ้าไม่มีคีย์นี้ users.member_tier จะไม่ถูกเขียนเลย โดย addPoints ยังคืน true ตามปกติ"
+    },
+    {
+      "from_module": "route_by_account",
+      "to_module": "api-rewards",
+      "returns_what": "การผูก PDO ไปยัง tenant DB ที่ถูกต้อง",
+      "why_needed": "คำขอเข้ามาที่ root domain ไม่มี subdomain ให้ resolve ถ้าขั้นนี้พลาด แต้มจะถูกอ่านและเขียนผิด tenant"
+    }
+  ],
+  "gotchas": [
+    "ยอดแต้มไม่มีแหล่งความจริงเดียว users.points users.available_points และ ledger สองตารางคือ points_transactions กับ points_history ต่างก็อ้างว่าเป็นยอดจริง",
+    "getUserPoints ตกเข้า fallback เมื่อยอดเป็นศูนย์พอดี ไม่ใช่แค่เมื่อไม่มีข้อมูล ลูกค้าที่ใช้แต้มหมดพอดีจึงตกเข้าเส้นนี้ทุกครั้ง",
+    "classes/LoyaltyPoints.php ทั้งไฟล์ 667 บรรทัด ไม่มีคำว่า beginTransaction commit หรือ rollBack แม้แต่ครั้งเดียว",
+    "api/points.php บรรทัด 276 ใช้ transaction แต่เป็นเส้นที่ Mini App ไม่ได้เรียก เส้นที่เรียกจริงคือ api/rewards.php ซึ่งไม่มี",
+    "api/member.php บรรทัด 263 กำหนดค่า points ตรง ไม่ใช่บวกเพิ่ม จึงทับยอดเดิมทิ้งทั้งก้อน",
+    "การล้มเหลวของ loadSettings ทำให้ระบบแต้มเปิดด้วยค่า default ไม่ใช่ปิด",
+    "มีสำเนาโค้ดชุดเดียวกันอยู่ใน .claude/worktrees หลายชุด อย่านับเป็นผู้เขียนจริงตอนทำ census"
+  ],
+  "file_refs": [
+    "line-mini-app/src/lib/rewards-api.ts",
+    "api/rewards.php",
+    "api/points.php",
+    "api/member.php",
+    "classes/LoyaltyPoints.php",
+    "shop/order-detail.php"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": ["ลูกค้า Mini App", "api/rewards.php", "LoyaltyPoints", "tenant DB"],
+    "rows": ["เลือกรางวัล", "ตรวจสิทธิ์", "หักแต้ม", "ออกโค้ด"],
+    "nodes": [
+      { "id": "n1", "lane": 0, "row": 0, "label": "กดแลกรางวัล", "type": "start", "ref": "line-mini-app/src/lib/rewards-api.ts:13" },
+      { "id": "n2", "lane": 1, "row": 0, "label": "action redeem", "type": "step", "ref": "api/rewards.php:35" },
+      { "id": "n3", "lane": 1, "row": 0, "label": "route_by_account เลือก tenant DB", "type": "step", "ref": "api/rewards.php:18" },
+      { "id": "n4", "lane": 1, "row": 1, "label": "หา users.id จาก line_user_id", "type": "step", "ref": "api/rewards.php:107" },
+      { "id": "n5", "lane": 2, "row": 1, "label": "redeemReward()", "type": "step", "ref": "classes/LoyaltyPoints.php:387" },
+      { "id": "n6", "lane": 2, "row": 1, "label": "stock เหลือไหม", "type": "decision", "ref": "classes/LoyaltyPoints.php:399" },
+      { "id": "n7", "lane": 3, "row": 1, "label": "รวมยอดจาก points_transactions", "type": "data", "ref": "classes/LoyaltyPoints.php:58" },
+      { "id": "n8", "lane": 2, "row": 1, "label": "ยอดเป็นศูนย์ จึง fallback ไป users.points", "type": "error", "ref": "classes/LoyaltyPoints.php:67" },
+      { "id": "n9", "lane": 2, "row": 1, "label": "แต้มพอไหม", "type": "decision", "ref": "classes/LoyaltyPoints.php:414" },
+      { "id": "n18", "lane": 2, "row": 1, "label": "แต้มไม่พอ จบ", "type": "end", "ref": "classes/LoyaltyPoints.php:414" },
+      { "id": "n10", "lane": 2, "row": 2, "label": "deductPoints()", "type": "step", "ref": "classes/LoyaltyPoints.php:420" },
+      { "id": "n11", "lane": 3, "row": 2, "label": "UPDATE users.available_points", "type": "data", "ref": "classes/LoyaltyPoints.php:211" },
+      { "id": "n12", "lane": 3, "row": 2, "label": "UPDATE users.member_tier", "type": "data", "ref": "classes/LoyaltyPoints.php:294" },
+      { "id": "n13", "lane": 3, "row": 2, "label": "INSERT points_transactions", "type": "data", "ref": "classes/LoyaltyPoints.php:220" },
+      { "id": "n14", "lane": 3, "row": 3, "label": "UPDATE rewards.stock โดยไม่เช็คผล", "type": "error", "ref": "classes/LoyaltyPoints.php:426" },
+      { "id": "n15", "lane": 3, "row": 3, "label": "INSERT reward_redemptions", "type": "data", "ref": "classes/LoyaltyPoints.php:441" },
+      { "id": "n16", "lane": 1, "row": 3, "label": "ตอบ new_balance จาก getMemberByUserId", "type": "step", "ref": "api/rewards.php:128" },
+      { "id": "n17", "lane": 0, "row": 3, "label": "เห็นโค้ดรับรางวัล", "type": "end", "ref": "line-mini-app/src/lib/rewards-api.ts:13" }
+    ],
+    "edges": [
+      { "from": "n1", "to": "n2" },
+      { "from": "n2", "to": "n3" },
+      { "from": "n3", "to": "n4" },
+      { "from": "n4", "to": "n5" },
+      { "from": "n5", "to": "n6" },
+      { "from": "n6", "to": "n7", "label": "ยังเหลือ" },
+      { "from": "n7", "to": "n8", "label": "ยอดเป็นศูนย์", "dashed": true },
+      { "from": "n7", "to": "n9", "label": "ยอดมากกว่าศูนย์" },
+      { "from": "n8", "to": "n9", "label": "ใช้ users.points แทน", "dashed": true },
+      { "from": "n9", "to": "n18", "label": "ไม่พอ", "dashed": true },
+      { "from": "n9", "to": "n10", "label": "พอ" },
+      { "from": "n10", "to": "n11" },
+      { "from": "n11", "to": "n12" },
+      { "from": "n12", "to": "n13" },
+      { "from": "n13", "to": "n14" },
+      { "from": "n14", "to": "n15", "label": "ไม่เช็ค rowCount", "dashed": true },
+      { "from": "n15", "to": "n16" },
+      { "from": "n16", "to": "n17" }
+    ]
+  }
+}

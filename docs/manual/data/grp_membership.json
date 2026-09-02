@@ -1,0 +1,307 @@
+{
+  "id": "membership",
+  "title": "สมาชิก / บัตรสมาชิก: LINE identity → member profile",
+  "summary": "Mini App ตรวจหรือสมัครสมาชิก, สร้าง member_id, เก็บ profile/health fields และ bootstrap welcome points/tier.",
+  "steps": [
+    {
+      "seq": 1,
+      "actor": "Mini App",
+      "module": "api/member.php",
+      "method": "action router",
+      "file": "api/member.php",
+      "line": 35,
+      "action": "รับ register/check/get_card/get_tiers/update_profile หลัง route request ไป tenant DB",
+      "calls": [
+        "bootstrap/route_by_account.php"
+      ]
+    },
+    {
+      "seq": 2,
+      "actor": "Customer",
+      "module": "api/member.php",
+      "method": "handleRegister",
+      "file": "api/member.php",
+      "line": 61,
+      "action": "validate LINE identity + first_name + birthday + gender และอ่าน optional health/contact fields"
+    },
+    {
+      "seq": 3,
+      "actor": "Member API",
+      "module": "api/member.php",
+      "method": "handleRegister",
+      "file": "api/member.php",
+      "line": 105,
+      "action": "ค้น user แบบ line_user_id + line_account_id ก่อน แล้ว fallback legacy แบบไม่ scope account",
+      "returns": "existing user หรือ null"
+    },
+    {
+      "seq": 4,
+      "actor": "Member API",
+      "module": "api/member.php",
+      "method": "handleRegister",
+      "file": "api/member.php",
+      "line": 143,
+      "action": "ถ้ามี user เดิม UPDATE; ถ้าไม่มีก็ INSERT users แบบ dynamic ตามคอลัมน์ที่มี",
+      "sets": [
+        {
+          "field": "users.member_id",
+          "value": "generated"
+        },
+        {
+          "field": "users.is_registered",
+          "value": "1"
+        },
+        {
+          "field": "users.member_tier",
+          "value": "bronze"
+        },
+        {
+          "field": "users.profile fields",
+          "value": "submitted values"
+        }
+      ],
+      "state_change": "LINE user becomes registered member"
+    },
+    {
+      "seq": 5,
+      "actor": "Member API",
+      "module": "api/member.php",
+      "method": "handleRegister",
+      "file": "api/member.php",
+      "line": 258,
+      "action": "ให้ welcome bonus 50 แต้มผ่าน users.points และพยายาม log points_history",
+      "sets": [
+        {
+          "field": "users.points",
+          "value": "50"
+        },
+        {
+          "field": "points_history.type",
+          "value": "bonus"
+        }
+      ]
+    },
+    {
+      "seq": 6,
+      "actor": "Mini App",
+      "module": "api/member.php",
+      "method": "handleCheck",
+      "file": "api/member.php",
+      "line": 286,
+      "action": "ตรวจสถานะ; ถ้าไม่พบ auto-register, ถ้าพบแต่ยังไม่ registered auto-upgrade",
+      "calls": [
+        "autoRegisterMember",
+        "autoUpgradeMember"
+      ]
+    },
+    {
+      "seq": 7,
+      "actor": "Tier Service",
+      "module": "classes/TierService.php",
+      "method": "calculateTier",
+      "file": "classes/TierService.php",
+      "line": 118,
+      "action": "คำนวณ tier จากแต้มด้วย tier_settings → member_tiers → defaults",
+      "returns": "tier + next tier + progress"
+    }
+  ],
+  "cases": [
+    {
+      "id": "M1",
+      "name": "ไม่มี LINE identity",
+      "condition": "line_user_id ว่าง",
+      "behavior": "ปฏิเสธ register/check",
+      "code_path": "handleRegister/handleCheck",
+      "result": "JSON error",
+      "tag": "danger"
+    },
+    {
+      "id": "M2",
+      "name": "สมาชิกอยู่แล้ว",
+      "condition": "พบ user และ is_registered=true",
+      "behavior": "ไม่สร้างซ้ำ; คืน member_id",
+      "code_path": "handleRegister",
+      "result": "already member",
+      "tag": "info"
+    },
+    {
+      "id": "M3",
+      "name": "Legacy user row",
+      "condition": "หาแบบ account-scoped ไม่เจอ",
+      "behavior": "fallback หา line_user_id ไม่ scope OA",
+      "code_path": "handleRegister / handleCheck",
+      "result": "reuse legacy row",
+      "tag": "warn",
+      "gotcha": "อาจจับ row ผิด OA ถ้ามี LINE user เดียวกันหลายบัญชี"
+    },
+    {
+      "id": "M4",
+      "name": "Auto register",
+      "condition": "check แล้วไม่พบ user",
+      "behavior": "สร้าง member_id + users row + welcome 50 points",
+      "code_path": "handleCheck → autoRegisterMember",
+      "result": "สมาชิกเกิดทันที",
+      "tag": "ok"
+    },
+    {
+      "id": "M5",
+      "name": "Schema ต่างเวอร์ชัน",
+      "condition": "users บางคอลัมน์ไม่มี",
+      "behavior": "SHOW COLUMNS แล้วสร้าง dynamic UPDATE/INSERT",
+      "code_path": "handleRegister",
+      "result": "feature degrade แบบไม่ fatal",
+      "tag": "warn"
+    },
+    {
+      "id": "M6",
+      "name": "Tier table ว่าง/ไม่มี",
+      "condition": "tier_settings/member_tiers ใช้ไม่ได้",
+      "behavior": "ใช้ DEFAULT_TIERS",
+      "code_path": "TierService::getTiers",
+      "result": "tier ยังแสดงได้",
+      "tag": "info"
+    }
+  ],
+  "modules_touched": [
+    {
+      "module": "api/member.php",
+      "role": "member registration/check API",
+      "methods": [
+        "handleRegister",
+        "handleCheck",
+        "autoRegisterMember"
+      ]
+    },
+    {
+      "module": "classes/TierService.php",
+      "role": "tier source of truth",
+      "methods": [
+        "getTiers",
+        "calculateTier",
+        "getUserTier"
+      ]
+    },
+    {
+      "module": "bootstrap/route_by_account.php",
+      "role": "tenant route for root Mini App calls",
+      "methods": [
+        "request bootstrap"
+      ]
+    }
+  ],
+  "return_dependencies": [
+    {
+      "from_module": "api/member.php",
+      "to_module": "Mini App member card",
+      "returns_what": "member_id, tier, points, has_profile",
+      "why_needed": "หน้าบัตรและ profile ใช้ตัดสินสถานะ UI"
+    },
+    {
+      "from_module": "TierService",
+      "to_module": "Member API",
+      "returns_what": "tier_code/name/progress",
+      "why_needed": "tier ต้องคำนวณแบบเดียวกันทุกหน้าจอ"
+    }
+  ],
+  "gotchas": [
+    "welcome bonus เขียน users.points + points_history แต่ loyalty service หลักใช้ users.available_points + points_transactions ด้วย",
+    "fallback หา user แบบไม่ scope line_account_id เป็น compatibility path ที่เสี่ยง cross-OA",
+    "TierService ใช้ total_points เป็นหลัก แต่ Member API check ส่ง users.points เข้า calculateTier"
+  ],
+  "file_refs": [
+    "api/member.php",
+    "classes/TierService.php",
+    "bootstrap/route_by_account.php"
+  ],
+  "swimlane": {
+    "lane_kind": "ผู้กระทำ",
+    "lanes": [
+      "Customer",
+      "Mini App/API",
+      "Tenant DB",
+      "Tier Service"
+    ],
+    "rows": [
+      "Identity",
+      "Register",
+      "Points",
+      "Card"
+    ],
+    "nodes": [
+      {
+        "id": "m1",
+        "lane": "Customer",
+        "row": "Identity",
+        "type": "start",
+        "label": "LINE login"
+      },
+      {
+        "id": "m2",
+        "lane": "Mini App/API",
+        "row": "Identity",
+        "type": "decision",
+        "label": "member exists?"
+      },
+      {
+        "id": "m3",
+        "lane": "Tenant DB",
+        "row": "Register",
+        "type": "step",
+        "label": "UPDATE/INSERT users",
+        "ref": "api/member.php"
+      },
+      {
+        "id": "m4",
+        "lane": "Tenant DB",
+        "row": "Points",
+        "type": "step",
+        "label": "welcome 50 points",
+        "ref": "api/member.php"
+      },
+      {
+        "id": "m5",
+        "lane": "Tier Service",
+        "row": "Card",
+        "type": "step",
+        "label": "calculate tier",
+        "ref": "TierService.php"
+      },
+      {
+        "id": "m6",
+        "lane": "Mini App/API",
+        "row": "Card",
+        "type": "end",
+        "label": "member_id + tier + points"
+      }
+    ],
+    "edges": [
+      {
+        "from": "m1",
+        "to": "m2"
+      },
+      {
+        "from": "m2",
+        "to": "m3",
+        "label": "new/unregistered"
+      },
+      {
+        "from": "m3",
+        "to": "m4"
+      },
+      {
+        "from": "m4",
+        "to": "m5"
+      },
+      {
+        "from": "m5",
+        "to": "m6"
+      },
+      {
+        "from": "m2",
+        "to": "m5",
+        "label": "existing",
+        "dashed": true
+      }
+    ]
+  }
+}
