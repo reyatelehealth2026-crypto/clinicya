@@ -110,6 +110,14 @@ const InboxRealtime = (function () {
         poll();
     }
 
+    // กลับมาที่แท็บเมื่อไหร่ ให้ดึงข้อความใหม่ทันที ไม่ต้องรอรอบถัดไป
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && state.isRunning) {
+            if (state.pollTimer) clearTimeout(state.pollTimer);
+            poll();
+        }
+    });
+
     /**
      * Stop polling
      */
@@ -134,6 +142,14 @@ const InboxRealtime = (function () {
      */
     async function poll() {
         if (!state.isRunning) return;
+
+        // แท็บที่ซ่อนอยู่ไม่ต้องยิง request: บนโฮสต์นี้ทุก request กิน PHP entry
+        // process ~1 วินาที (วัดแล้ว: ไฟล์ PHP เปล่า TTFB 1.04s) การ poll ของแท็บที่
+        // เปิดค้างไว้จึงกินโควตาจนหน้าอื่นและ webhook ช้าตาม
+        if (document.hidden) {
+            state.pollTimer = setTimeout(poll, config.pollInterval);
+            return;
+        }
 
         try {
             // Save lastCheck before updating (for loading new messages)

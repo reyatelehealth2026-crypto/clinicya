@@ -1247,13 +1247,13 @@ function formatThaiDateTime($datetime)
 ?>
 
 <!-- FAB & HUD Mode Switcher CSS -->
-<link rel="stylesheet" href="assets/css/inbox-v2-fab.css?v=<?= time() ?>">
+<link rel="stylesheet" href="assets/css/inbox-v2-fab.css?v=<?= @filemtime(__DIR__ . '/assets/css/inbox-v2-fab.css') ?>">
 
 <!-- Inbox V2 Performance Upgrade - Animation Styles -->
-<link rel="stylesheet" href="assets/css/inbox-v2-animations.css?v=<?= time() ?>">
+<link rel="stylesheet" href="assets/css/inbox-v2-animations.css?v=<?= @filemtime(__DIR__ . '/assets/css/inbox-v2-animations.css') ?>">
 
 <!-- Batch Message Composer Styles -->
-<link rel="stylesheet" href="assets/css/batch-message-composer.css?v=<?= time() ?>">
+<link rel="stylesheet" href="assets/css/batch-message-composer.css?v=<?= @filemtime(__DIR__ . '/assets/css/batch-message-composer.css') ?>">
 
 
 <!-- Critical CSS - Complete Layout Styles (NO Tailwind CDN) -->
@@ -4632,9 +4632,9 @@ function formatThaiDateTime($datetime)
         </script>
 
         <!-- Real-time Updates Script -->
-        <script src="assets/js/inbox-realtime.js?v=<?= time() ?>"></script>
+        <script src="assets/js/inbox-realtime.js?v=<?= @filemtime(__DIR__ . '/assets/js/inbox-realtime.js') ?>"></script>
         <!-- FAB & HUD Mode Switcher -->
-        <script src="assets/js/inbox-v2-fab.js?v=<?= time() ?>"></script>
+        <script src="assets/js/inbox-v2-fab.js?v=<?= @filemtime(__DIR__ . '/assets/js/inbox-v2-fab.js') ?>"></script>
         <script>
             /**
              * Real-time Inbox Updates - Auto-refresh conversations and messages
@@ -11497,6 +11497,9 @@ function formatThaiDateTime($datetime)
      * Check for new messages via API (polling fallback)
      */
     async function checkForNewMessages() {
+        // แท็บที่ซ่อนอยู่ไม่ต้องยิง — ทุก PHP request กิน entry process ~1 วินาที
+        if (document.hidden) return;
+
         try {
             const response = await fetch('/api/inbox-realtime.php?action=check_updates&last_check=' + Date.now());
             const data = await response.json();
@@ -12405,15 +12408,15 @@ function formatThaiDateTime($datetime)
 </script>
 
 <!-- Load JavaScript Managers (Phase 1-4) -->
-<script src="assets/js/lru-cache.js?v=<?= time() ?>"></script>
-<script src="assets/js/conversation-list-manager.js?v=<?= time() ?>"></script>
-<script src="assets/js/chat-panel-manager.js?v=<?= time() ?>"></script>
-<script src="assets/js/realtime-manager.js?v=<?= time() ?>"></script>
-<script src="assets/js/offline-manager.js?v=<?= time() ?>"></script>
+<script src="assets/js/lru-cache.js?v=<?= @filemtime(__DIR__ . '/assets/js/lru-cache.js') ?>"></script>
+<script src="assets/js/conversation-list-manager.js?v=<?= @filemtime(__DIR__ . '/assets/js/conversation-list-manager.js') ?>"></script>
+<script src="assets/js/chat-panel-manager.js?v=<?= @filemtime(__DIR__ . '/assets/js/chat-panel-manager.js') ?>"></script>
+<script src="assets/js/realtime-manager.js?v=<?= @filemtime(__DIR__ . '/assets/js/realtime-manager.js') ?>"></script>
+<script src="assets/js/offline-manager.js?v=<?= @filemtime(__DIR__ . '/assets/js/offline-manager.js') ?>"></script>
 
 <!-- Performance Tracker (Phase 6 - Task 21.2) -->
 <!-- Requirements: 12.1, 12.2, 12.3, 12.4, 12.5 -->
-<script src="assets/js/performance-tracker.js?v=<?= time() ?>"></script>
+<script src="assets/js/performance-tracker.js?v=<?= @filemtime(__DIR__ . '/assets/js/performance-tracker.js') ?>"></script>
 
 </script>
 

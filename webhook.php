@@ -183,9 +183,11 @@ function showLoadingAnimation($line, $chatId, $seconds = 10)
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        return $httpCode === 200;
+        // API ตอบ 202 Accepted ไม่ใช่ 200 — เทียบกับ 200 จึงคืน false เสมอ
+        return $httpCode === 202;
     } catch (Exception $e) {
-        logWebhookException($db, 'webhook.php', $e);
+        // $db ไม่อยู่ใน scope ของฟังก์ชันนี้ เรียก logWebhookException() ที่นี่
+        // จะพังซ้อนความพังเดิม บันทึกลง error_log อย่างเดียวก็พอ
         error_log("showLoadingAnimation error: " . $e->getMessage());
         return false;
     }
@@ -323,6 +325,20 @@ foreach ($events as $event) {
             $debugInfo .= "Full event JSON: " . json_encode($event) . "\n";
             $debugInfo .= "======================";
             error_log($debugInfo);
+        }
+
+        // วงหมุน "กำลังพิมพ์" ทันทีที่รับ event ที่ลูกค้าเป็นคนเริ่ม เพื่อให้เห็นว่า
+        // ระบบรับไปแล้ว ระหว่างที่ยังคิวรี/เรียก AI/สร้าง Flex อยู่ ทำที่นี่ที่เดียว
+        // จึงครอบทุกเส้นทางตอบกลับ (loyalty, member, AI, auto-reply, dispense)
+        //
+        // เงื่อนไขของ API: แชทเดี่ยวเท่านั้น (group/room ตอบ 400) และ chatId ต้องเป็น
+        // user ID — showLoadingAnimation() กลืน error เองอยู่แล้ว
+        if (
+            in_array($event['type'] ?? '', ['message', 'postback'], true)
+            && $sourceType === 'user'
+            && is_string($userId) && strncmp($userId, 'U', 1) === 0
+        ) {
+            showLoadingAnimation($line, $userId, 5);
         }
 
         // Handle join/leave events (ไม่ต้องมี userId)
@@ -1419,6 +1435,49 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                 return;
             } catch (Exception $e) {
                 logWebhookException($db, 'webhook.php', $e);
+            }
+        }
+
+        // หน้าจอฝั่งสมาชิก (เมนูรวม / ยาของฉัน / นัดหมาย / ประวัติแต้ม /
+        // ตั้งค่าแจ้งเตือน) — เหตุผลเดียวกับบล็อก loyalty ด้านบนทุกประการ:
+        // ในโหมด shop webhook จะ return ที่ "No matching command" ก่อนถึง
+        // BusinessBot คีย์เวิร์ดชุดเดียวกันที่อยู่ใน BusinessBot จึงไม่เคยทำงาน
+        // เลย ต้องดักตรงนี้ MemberPostbackRouter คืน false ถ้าไม่ใช่ของมัน
+        $memberScreenKeywords = [
+            'member_menu' => ['เมนูสมาชิก', 'ศูนย์สมาชิก', 'เมนูรวม', 'สมาชิกของฉัน'],
+            'member_medications' => ['ยาของฉัน', 'ยาที่ทาน', 'รายการยา', 'my meds', 'mymeds'],
+            'member_appointments' => ['นัดหมาย', 'นัดของฉัน', 'ดูนัด', 'appointment', 'appointments'],
+            'member_points_history' => ['ประวัติแต้ม', 'ประวัติคะแนน', 'points history'],
+            'member_notif_prefs' => ['ตั้งค่าแจ้งเตือน', 'ปิดแจ้งเตือน', 'เปิดแจ้งเตือน', 'การแจ้งเตือน'],
+        ];
+        $memberScreenText = preg_replace('/^[\/@]+/u', '', $textLower);
+        if (class_exists('MemberPostbackRouter')) {
+            foreach ($memberScreenKeywords as $memberScreenAction => $memberScreenWords) {
+                if (!in_array($memberScreenText, $memberScreenWords, true)) {
+                    continue;
+                }
+                try {
+                    $memberScreenHandled = MemberPostbackRouter::handle($db, $line, [
+                        'data' => 'action=' . $memberScreenAction,
+                        'reply_token' => $replyToken,
+                        'user_id' => $user['id'],
+                        'line_user_id' => $userId,
+                        'line_account_id' => $lineAccountId,
+                    ]);
+                    devLog($db, 'info', 'webhook', 'Member screen command (chat)', [
+                        'user_id' => $userId,
+                        'command' => $memberScreenText,
+                        'action' => $memberScreenAction,
+                        'handled' => $memberScreenHandled ? true : false,
+                        'bot_mode' => $botMode,
+                    ], $userId);
+                    if ($memberScreenHandled) {
+                        return;
+                    }
+                } catch (Exception $e) {
+                    logWebhookException($db, 'webhook.php', $e);
+                }
+                break;
             }
         }
 
@@ -5256,6 +5315,17 @@ function recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imag
     $imageHash = hash('sha256', $imageData);
     $claimKey = 'pending:u' . $user['id'] . ':' . $imageHash;
 
+    // OCR ลากเลขพร้อมเพย์/เลขบัญชีมาปนกับยอดเงินได้ (สลิปยอด 149.72 เคยอ่านออกมา
+    // เป็น 4999245520712.72 จากเลขบัญชี 004999245520522) ocr_amount เป็น
+    // decimal(10,2) รับได้แค่ 99,999,999.99 ค่าที่เกินทำให้ INSERT throw ทั้งก้อน
+    // จนลูกค้าไม่ได้รับข้อความตอบกลับเลย — ค่าเพี้ยนเก็บเป็น NULL แล้วให้เภสัชกร
+    // อ่านยอดจากรูปเองตอนรีวิว
+    if ($readAmount !== null && (!is_numeric($readAmount) || abs((float) $readAmount) > 99999999.99)) {
+        error_log('recordPendingReceiptPointClaim: implausible OCR amount ' . var_export($readAmount, true) . ' -> stored as NULL');
+        $readAmount = null;
+    }
+
+    // บันทึกเข้าคิวรีวิว: ล้มได้ แต่ต้องไม่ลากการตอบลูกค้าล้มไปด้วย
     try {
         ensureReceiptPointClaimsTable($db);
 
@@ -5274,12 +5344,27 @@ function recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imag
             $upd->execute([$imagePath, $lineAccountId, $claimKey]);
         }
 
-        $pendingMessage = [
-            'type' => 'text',
-            'text' => "รับใบเสร็จแล้วค่ะ ระบบจะส่งให้ทีมงานตรวจและเพิ่มแต้มให้ภายหลัง",
-        ];
+    } catch (Exception $e) {
+        error_log('recordPendingReceiptPointClaim persist error: ' . $e->getMessage());
+    }
 
+    // ตอบลูกค้าเสมอ ไม่ผูกกับผลการบันทึก เก็บไม่ลงก็ยังต้องไม่ปล่อยให้ค้าง loading
+    $pendingMessage = [
+        'type' => 'text',
+        'text' => "รับใบเสร็จแล้วค่ะ ระบบจะส่งให้ทีมงานตรวจและเพิ่มแต้มให้ภายหลัง",
+    ];
+
+    $replied = false;
+    try {
         sendMessageWithFallback($line, $replyToken, $user['id'], [$pendingMessage], $db);
+        $replied = true;
+    } catch (Exception $e) {
+        error_log('recordPendingReceiptPointClaim reply error: ' . $e->getMessage());
+    }
+
+    // บันทึกฝั่ง inbox + การ์ด "รอตรวจ" ของแอดมิน — ล้มแล้วต้องไม่ย้อนไปบอกว่าจัดการ
+    // ไม่สำเร็จ เพราะ false จะไปกระตุ้นให้ระบบขอใบเสร็จซ้ำอีกรอบ
+    try {
         saveOutgoingMessage($db, $user['id'], json_encode($pendingMessage, JSON_UNESCAPED_UNICODE), 'system:receipt-pending', 'text');
 
         // Admin-only "Manual Review" badge card next to the customer's receipt,
@@ -5291,12 +5376,11 @@ function recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imag
             buildReceiptPendingAdminCard($readAmount),
             'system:receipt-review'
         );
-
-        return true;
     } catch (Exception $e) {
-        error_log('recordPendingReceiptPointClaim error: ' . $e->getMessage());
-        return false;
+        error_log('recordPendingReceiptPointClaim log error: ' . $e->getMessage());
     }
+
+    return $replied;
 }
 
 function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken)
@@ -5335,7 +5419,9 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
         $receipt = $gemini->analyzeReceiptImage($imageData, $mimeType);
     } catch (Exception $e) {
         error_log('Receipt OCR failed: ' . $e->getMessage());
-        return false;
+        // ลูกค้าอยู่ใน waiting_receipt state อยู่แล้ว (เราเป็นคนเรียกให้ส่งเอง) —
+        // OCR ล่มไม่ควรทำให้เงียบใส่ ต้องรับรู้แล้วส่งต่อให้แอดมินตรวจมือ
+        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, null, 'none', 'ocr_exception');
     }
 
     if (!$receipt) {
@@ -5343,7 +5429,9 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
     }
 
     if (empty($receipt['is_receipt'])) {
-        return false; // Not a receipt — let normal bot flow handle
+        // Gemini ไม่มั่นใจว่าเป็นใบเสร็จ (มักเกิดพร้อม total_amount=0 ตอนภาพเบลอ/แสงไม่พอ)
+        // แต่ลูกค้าอยู่ใน state นี้เพราะเราขอให้ส่งเอง จึงส่งต่อให้แอดมินตรวจแทนที่จะทิ้งเงียบ
+        return recordPendingReceiptPointClaim($db, $line, $user, $lineAccountId, $imageData, $replyToken, ($receipt['total_amount'] ?? null), ($receipt['confidence'] ?? 'unverified'), 'not_recognized_as_receipt');
     }
 
     $receiptNumber = $receipt['receipt_number'] ?? null;

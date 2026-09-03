@@ -68,6 +68,13 @@ class FlexTemplates
         
         if (empty($items)) return null;
 
+        // ผลลัพธ์ที่ build แล้วถูกส่งกลับเข้ามาอีกรอบ — เช่นผู้เรียกที่ build เอง
+        // แล้วส่งต่อให้ textMessage() ซึ่งเรียกเมธอดนี้ซ้ำ ถ้าไม่กันไว้จะวนบน
+        // ['items' => ...] ที่ไม่มีคีย์ label แล้ว throw หลังงานจริงสำเร็จไปแล้ว
+        if (isset($items['items']) && is_array($items['items'])) {
+            return $items;
+        }
+
         $quickReplyItems = [];
         foreach ($items as $item) {
             if (isset($item['type']) && $item['type'] === 'camera') {
@@ -1975,9 +1982,12 @@ class FlexTemplates
                         'type' => 'box',
                         'layout' => 'vertical',
                         'margin' => 'md',
+                        'flex' => 1,
                         'contents' => [
-                            ['type' => 'text', 'text' => $title, 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'lg', 'wrap' => true],
-                            ['type' => 'text', 'text' => $subtitle, 'color' => '#FFFFFF', 'size' => 'xs', 'margin' => 'xs', 'wrap' => true],
+                            // shrink-to-fit ย่อขนาดอักษรให้พอดีบรรทัดเดียว แทนที่จะตัดท้าย
+                            // ด้วย "..." อย่างที่ wrap ทำไม่ได้ในหัวการ์ดความสูงคงที่
+                            ['type' => 'text', 'text' => $title, 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'lg', 'adjustMode' => 'shrink-to-fit'],
+                            ['type' => 'text', 'text' => $subtitle, 'color' => '#FFFFFF', 'size' => 'xs', 'margin' => 'xs', 'adjustMode' => 'shrink-to-fit'],
                         ],
                     ],
                 ],
@@ -2093,6 +2103,68 @@ class FlexTemplates
         $months = ['', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
             'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
         return date('j', $ts) . ' ' . $months[(int) date('n', $ts)] . ' ' . (date('Y', $ts) + 543);
+    }
+
+    /**
+     * เมนูรวมฝั่งสมาชิก — ประตูเดียวที่เห็นทั้งระบบได้ในแชท ไม่ต้องเข้า mini app
+     *
+     * ตัวเลขทุกช่องมาจากฐานจริง ลูกค้าจึงเห็นว่าระบบรู้จักเขาอยู่ก่อนจะกดเข้าไป
+     * หน้าไหน ปุ่มวางเป็นแนวตั้งเพื่อให้แต่ละปุ่มได้ความกว้างเต็มใบ ตัวอักษร
+     * จึงไม่ถูกตัดท้ายเหมือนตอนวางคู่กันแนวนอน
+     *
+     * @param array $stats ['meds' => int, 'doses_today' => int,
+     *                      'appointments' => int, 'points' => int]
+     */
+    public static function memberMenu(array $stats = [])
+    {
+        $meds = (int) ($stats['meds'] ?? 0);
+        $doses = (int) ($stats['doses_today'] ?? 0);
+        $appts = (int) ($stats['appointments'] ?? 0);
+        $points = (int) ($stats['points'] ?? 0);
+
+        $bubble = [
+            'type' => 'bubble',
+            'size' => 'mega',
+            'header' => self::memberHeader(
+                '🩺',
+                'ศูนย์สมาชิก',
+                'ดูยา นัดหมาย และแต้มได้ในแชทนี้',
+                self::MEMBER_COLOR_MED
+            ),
+            'body' => [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'paddingAll' => '15px',
+                'contents' => [
+                    self::memberRow('ยาที่กำลังทาน', $meds ? $meds . ' รายการ' : 'ยังไม่มี'),
+                    self::memberRow(
+                        'ทานแล้ววันนี้',
+                        $doses ? $doses . ' ครั้ง' : 'ยังไม่ได้บันทึก',
+                        $doses ? '#10B981' : '#111111'
+                    ),
+                    self::memberRow('นัดหมายที่จะถึง', $appts ? $appts . ' นัด' : 'ไม่มีนัด'),
+                    self::memberRow(
+                        'แต้มสะสม',
+                        number_format($points) . ' แต้ม',
+                        self::MEMBER_COLOR_POINTS
+                    ),
+                ],
+            ],
+            'footer' => [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'spacing' => 'sm',
+                'paddingAll' => '15px',
+                'contents' => [
+                    self::memberButton('💊 ยาของฉัน', 'action=member_medications', 'primary', self::MEMBER_COLOR_MED),
+                    self::memberButton('📅 นัดหมายของฉัน', 'action=member_appointments', 'primary', self::MEMBER_COLOR_APPT),
+                    self::memberButton('⭐ ประวัติแต้ม', 'action=member_points_history', 'primary', self::MEMBER_COLOR_POINTS),
+                    self::memberButton('🔔 ตั้งค่าแจ้งเตือน', 'action=member_notif_prefs'),
+                ],
+            ],
+        ];
+
+        return self::toMessage($bubble, 'ศูนย์สมาชิก');
     }
 
     /**

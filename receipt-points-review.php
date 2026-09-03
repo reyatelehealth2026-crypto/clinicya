@@ -84,6 +84,8 @@ $failReasonLabels = [
     'no_ocr_result' => 'ระบบอ่านใบเสร็จไม่ออกเลย',
     'zero_amount' => 'อ่านได้แต่จำนวนเงินเป็น 0',
     'low_confidence' => 'จำนวนเงินไม่ตรงกับยอดรวม (มั่นใจต่ำ)',
+    'ocr_exception' => 'ระบบอ่านใบเสร็จขัดข้อง (error)',
+    'not_recognized_as_receipt' => 'AI ไม่แน่ใจว่าเป็นใบเสร็จ (ภาพอาจเบลอ/แสงไม่พอ)',
 ];
 $confidenceLabels = [
     'high' => ['label' => 'สูง', 'class' => 'bg-green-100 text-green-700'],
