@@ -199,7 +199,11 @@ try {
             echo "<p>To: {$apt['line_user_id']}</p>";
         }
         
-        $result = sendLineMessage($apt['channel_access_token'], $apt['line_user_id'], $flexMessage);
+        $result = sendLineMessage($apt['channel_access_token'], $apt['line_user_id'], $flexMessage, $db, [
+            'user_id' => (int) $apt['user_id'],
+            'line_account_id' => $apt['line_account_id'] ?? null,
+            'dedupe_key' => 'appt_10min:' . $apt['id'],
+        ]);
         
         if ($result['success']) {
             $db->prepare("UPDATE appointments SET reminder_10min_sent = 1 WHERE id = ?")->execute([$apt['id']]);
@@ -251,7 +255,11 @@ try {
             echo "<p>To: {$apt['line_user_id']}</p>";
         }
         
-        $result = sendLineMessage($apt['channel_access_token'], $apt['line_user_id'], $flexMessage);
+        $result = sendLineMessage($apt['channel_access_token'], $apt['line_user_id'], $flexMessage, $db, [
+            'user_id' => (int) $apt['user_id'],
+            'line_account_id' => $apt['line_account_id'] ?? null,
+            'dedupe_key' => 'appt_now:' . $apt['id'],
+        ]);
         
         if ($result['success']) {
             $db->prepare("UPDATE appointments SET reminder_now_sent = 1 WHERE id = ?")->execute([$apt['id']]);
@@ -337,7 +345,10 @@ if ($debugMode) {
         if ($testApt) {
             echo "<p>Found appointment. Sending test reminder...</p>";
             $flexMessage = buildReminderNowFlex($testApt);
-            $result = sendLineMessage($testApt['channel_access_token'], $testApt['line_user_id'], $flexMessage);
+            $result = sendLineMessage($testApt['channel_access_token'], $testApt['line_user_id'], $flexMessage, $db, [
+                'user_id' => (int) $testApt['user_id'],
+                'line_account_id' => $testApt['line_account_id'] ?? null,
+            ]);
             
             if ($result['success']) {
                 echo "<p style='color:green'>✅ Test message sent successfully!</p>";
@@ -643,20 +654,32 @@ function buildReminderNowFlex($apt) {
 }
 
 /**
- * ส่งข้อความ LINE
+ * ส่งข้อความ LINE ผ่าน NotificationGate
+ *
+ * เดิมฟังก์ชันนี้ยิง curl เข้า /message/push ตรง ๆ จึงข้ามทั้งสวิตช์แจ้งเตือน
+ * ของลูกค้าและการบันทึกหลักฐาน ตอนนี้เดินผ่านประตูเดียวกับ cron ตัวอื่น
+ *
+ * การเตือนนัดหมายถูกยกเว้นช่วงห้ามรบกวนและเพดานต่อวัน (NotificationGate::POLICY)
+ * เพราะผูกกับเวลานัดจริง — นัด 08:00 ต้องเตือน 07:50 ซึ่งอยู่ในช่วงห้ามรบกวน
+ * แต่ยังเคารพสวิตช์ appointment_reminders ที่ลูกค้ากดปิดเองอยู่
+ *
+ * @param array $ctx ต้องมี user_id; ไม่บังคับ line_account_id, dedupe_key
  */
-function sendLineMessage($token, $userId, $message) {
-    $ch = curl_init('https://api.line.me/v2/bot/message/push');
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $token],
-        CURLOPT_POSTFIELDS => json_encode(['to' => $userId, 'messages' => [$message]])
+function sendLineMessage($token, $lineUserId, $message, $db, array $ctx = []) {
+    require_once __DIR__ . '/../classes/NotificationGate.php';
+
+    $gate = new NotificationGate($db);
+    $result = $gate->send([
+        'user_id' => (int) ($ctx['user_id'] ?? 0),
+        'line_user_id' => $lineUserId,
+        'line_account_id' => $ctx['line_account_id'] ?? null,
+        'channel_access_token' => $token,
+        'event_type' => 'appointment',
+        'dedupe_key' => $ctx['dedupe_key'] ?? null,
+        'messages' => [$message],
     ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    return $httpCode === 200 ? ['success' => true] : ['success' => false, 'error' => "HTTP $httpCode: $response"];
+
+    return $result['sent']
+        ? ['success' => true]
+        : ['success' => false, 'error' => 'NotificationGate: ' . $result['reason']];
 }

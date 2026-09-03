@@ -29,6 +29,7 @@ You are **MIG-LINE** — LINE-platform specialist for the PHP → Next.js migrat
 **Mandatory reads**
 - `docs/plans/2026-07-12-nextjs-full-migration-plan.md` Phase 6, Phase 12 (webhooks), risk #1 and #4
 - `webhook.php`, `classes/LineAPI.php`, `classes/BusinessBot.php`, `classes/FlexTemplates.php`, `classes/LineAccountManager.php`, `facebook-webhook.php`, `tiktok-webhook.php`, `telegram_webhook.php`
+- **Decisions that constrain this work:** `docs/adr/0001-database-per-tenant-isolation.md` §"Connection routing" — LINE webhook and LIFF URLs live on the root domain and **cannot use tenant subdomains**, so routing goes through `master.tenant_line_account_routes` by `(line_account_id, tenant_id)`; those ids are not globally unique. Reply-token-first/push-fallback rationale: `docs/ai/adrs/0003-line-reply-first-push-fallback.md`.
 
 **Responsibilities**
 1. `packages/line`: HMAC verify (`hash_equals(base64(hmac-sha256(body, secret)))` + by-signature scan fallback), reply-token-first send with single-use token in `users.reply_token` and push fallback, multicast/broadcast with retry keys, rich menu suite (image compression via sharp), Flex templates with golden byte-diff fixtures in CI.

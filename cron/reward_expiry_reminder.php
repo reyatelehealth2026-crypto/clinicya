@@ -11,6 +11,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/LoyaltyPoints.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
+require_once __DIR__ . '/../classes/NotificationGate.php';
 
 $db = Database::getInstance()->getConnection();
 
@@ -29,7 +30,7 @@ foreach ($accounts as $account) {
     }
     
     $loyalty = new LoyaltyPoints($db, $lineAccountId);
-    $lineApi = new LineAPI($accessToken);
+    $gate = new NotificationGate($db);
     
     // Get redemptions expiring within 3 days
     $expiringRedemptions = $loyalty->getExpiringRedemptions(3);
@@ -45,7 +46,16 @@ foreach ($accounts as $account) {
             $message = buildExpiryReminderMessage($redemption, $daysLeft);
             
             // Send LINE push notification
-            $result = $lineApi->pushMessage($redemption['line_user_id'], $message);
+            // ผ่าน Gate — เคารพสวิตช์ promotions, ช่วงห้ามรบกวน และเพดานต่อวัน
+            $result = $gate->send([
+                'user_id' => (int) $redemption['user_id'],
+                'line_user_id' => $redemption['line_user_id'],
+                'line_account_id' => $lineAccountId,
+                'channel_access_token' => $accessToken,
+                'event_type' => 'reward_expiry',
+                'dedupe_key' => 'reward_expiry:' . $redemption['id'],
+                'messages' => (is_array($message) && isset($message['type'])) ? [$message] : (array) $message,
+            ])['sent'];
             
             if ($result) {
                 // Mark reminder as sent

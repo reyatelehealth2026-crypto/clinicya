@@ -42,6 +42,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/TenantContext.php';
 require_once __DIR__ . '/../classes/AdherenceReminder.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
+require_once __DIR__ . '/../classes/NotificationGate.php';
 require_once __DIR__ . '/../classes/FlexTemplates.php';
 
 /** How many days before the computed runout date to start reminding. */
@@ -179,8 +180,16 @@ function reya_process_tenant_adherence_reminders(PDO $db, int $tenantId, string 
         $flex = reya_build_adherence_reminder_flex($row['display_name'], $row['product_name'], $runout);
 
         try {
-            $line = new LineAPI($row['channel_access_token']);
-            $sent = $line->pushMessage($row['line_user_id'], [$flex]);
+            $gate = new NotificationGate($db);
+            $sent = $gate->send([
+                'user_id' => (int) $row['user_id'],
+                'line_user_id' => $row['line_user_id'],
+                'line_account_id' => $row['line_account_id'] ?? null,
+                'channel_access_token' => $row['channel_access_token'],
+                'event_type' => 'medication_refill',
+                'dedupe_key' => 'adherence:' . $row['user_id'] . ':' . $row['product_id'] . ':' . $runout['runout_date'],
+                'messages' => [$flex],
+            ])['sent'];
 
             if ($sent) {
                 reya_record_reminder_sent($db, (int) $row['user_id'], (int) $row['product_id'], $runout['runout_date']);
