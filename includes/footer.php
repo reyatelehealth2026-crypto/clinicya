@@ -6,7 +6,8 @@
     <script src="<?= $baseUrl ?? '' ?>assets/js/lazy-load.js"></script>
     
     <!-- Dashboard Notification (real-time message alerts) -->
-    <script src="<?= $baseUrl ?? '' ?>assets/js/dashboard-notification.js"></script>
+    <?php // .htaccess แคช js ไว้ 1 เดือน ถ้าไม่ติด version เบราว์เซอร์จะยังใช้ไฟล์เก่าหลังแก้ ?>
+    <script src="<?= $baseUrl ?? '' ?>assets/js/dashboard-notification.js?v=<?= @filemtime(__DIR__ . '/../assets/js/dashboard-notification.js') ?>"></script>
     
     <script>
     // Toast notification
