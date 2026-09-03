@@ -1,0 +1,756 @@
+-- infra/e2e/seed/70-phase4-batch1-inbox-fixture.sql.tmpl
+--
+-- Phase 4 batch 1 (mig-infra) — data-point + cursor-pagination parity
+-- fixture for the read-only /inbox surface (conversationList's
+-- /api/inbox/conversations + /api/inbox/messages Route Handlers, messageThread's
+-- /inbox + /inbox/[userId] pages). Applied AFTER 30-/40-/60-phase2-*.sql.tmpl
+-- (already piped into the SAME app/tenant DB by parity.mjs's seedDatabase())
+-- — additive only, same pattern those files already established. Does not
+-- touch any table an earlier batch already seeds rows into.
+--
+-- No USE statement of its own — same convention as every fixture before it:
+-- the caller (parity.mjs's seedDatabase()) prepends `USE \`<app-db>\`;`.
+--
+-- DETERMINISM: every timestamp is a MySQL relative-date expression
+-- (NOW()/DATE_SUB(NOW(), INTERVAL n MINUTE|SECOND)), never a wall-clock
+-- literal — same reasoning as every earlier fixture's own header comment.
+-- Within ONE multi-row INSERT statement MySQL evaluates NOW() exactly once
+-- and reuses that same instant for every row, so the relative MINUTE/SECOND
+-- offsets below are self-consistent regardless of how long the statement
+-- itself takes to execute.
+--
+-- LINE_ACCOUNT_ID = 1 ON PURPOSE (unlike every earlier fixture's users rows,
+-- which are all line_account_id IS NULL — see 30-phase2-batch1-fixture's own
+-- "CURRENT-BOT-ID NOTE"): api/inbox/conversations/_lib/query.ts's
+-- accountConditionExpr() scopes the LINE-platform list with
+-- `u.line_account_id = accountId` where accountId = session.currentBotId ??
+-- 1 — an EQUALITY test, not the NULL-tolerant `(line_account_id = ? OR
+-- line_account_id IS NULL)` pattern users.php/groups.php/etc. use. Since
+-- this harness's Next tenant session currentBotId is ALWAYS null (no
+-- line_accounts rows are ever seeded here — see that same note), accountId
+-- always resolves to the literal 1 on the NEXT side, and every earlier
+-- batch's users row (line_account_id IS NULL) therefore does NOT match `= 1`
+-- and is correctly excluded from the LINE inbox list there. Setting
+-- line_account_id = 1 on every conversation user below is what makes them
+-- show up on the NEXT side, and — just as importantly — makes the TOTAL
+-- conversation count returned by the conversations-cursor-walk EXACTLY the
+-- number of users this file seeds (no earlier batch's users can leak into
+-- the count).
+--
+-- PHP-SIDE ASYMMETRY (confirmed by this batch's own harness run — see
+-- infra/e2e/parity.mjs's runInboxSidebarChecks() and
+-- docs/runbooks/phase4-batch1-inbox-reads-parity.md for the full trace):
+-- inbox-v2.php's OWN `$currentBotId = $_SESSION['current_bot_id'] ?? 1`
+-- (line 81) gets UNCONDITIONALLY CLOBBERED to `NULL` by
+-- `includes/header.php` (line 174, `$currentBotId = $currentBot['id'] ??
+-- null`) before the conversation-list query ever runs, because both files
+-- share one top-level-include PHP scope and there are no accessible
+-- `line_accounts` rows for header.php to resolve a bot from. `u.line_account_id
+-- = NULL` matches zero rows on the PHP side, regardless of what this file
+-- seeds — a real, pre-existing PHP defect (any freshly-provisioned tenant
+-- with no LINE OA connected yet would see a permanently empty inbox
+-- sidebar), not something this fixture can or should work around. This is
+-- exactly why `/inbox`'s harness entries are two single-side assertions,
+-- not a PHP-vs-Next diff, for the sidebar specifically — the thread page
+-- (`?user=N` / `/inbox/N`, section 3 below) is UNAFFECTED (its queries never
+-- filter by `line_account_id` at all) and IS diffed normally.
+--
+-- CONVERSATION LAYOUT (215 total conversations = users with >=1 messages row):
+--   7001              — HERO: the messageThread golden dataset. 130 messages
+--                    spanning every message type/form this batch's brief
+--                    lists (see section 3 below for the full inventory).
+--                    Most recent conversation (last message at NOW(), i.e.
+--                    0 SECOND ago) — always first in the DESC-sorted list on
+--                    both stacks. Zero unread (deliberately — inbox-v2.php's
+--                    `?user=N` page load has a mark-as-read side effect this
+--                    port's /inbox/[userId] deliberately does NOT reproduce
+--                    yet (see that page's own module doc); giving HERO
+--                    unread messages would make a PHP-side page-pair fetch
+--                    mutate is_read out from under a later JSON assertion on
+--                    the very same conversation. See the runbook's "why
+--                    HERO has zero unread" note.
+--   7002              — badge satellite: tagged with user_tags.id=1 ('VIP',
+--                    seeded by 30-phase2-batch1-fixture.sql.tmpl — tag
+--                    lookups have no line_account_id filter at all, see
+--                    api/inbox/conversations/_lib/query.ts's
+--                    getUserTagsBatch(), so reusing that tag is safe).
+--                    Exercises ConversationRow.tags + the sidebar's
+--                    `data-tags="1"` attribute.
+--   7003              — badge satellite: one `conversation_assignments` row
+--                    (assigned_to=1, status='active'). Exercises
+--                    ConversationRow.assigned_to/assignment_status — NOT
+--                    rendered as visible sidebar markup (inbox-v2.php's
+--                    per-row template never reads `conversation_assignments`
+--                    directly, only `conversation_multi_assignees` — see
+--                    7004 below), so this is a JSON-API-only assertion.
+--   7004              — badge satellite: one `conversation_multi_assignees` row
+--                    (admin_id=1, status='active'). Exercises
+--                    ConversationRow.assignees + the sidebar's
+--                    `data-assigned="1"` attribute + the "มอบหมายแล้ว" badge.
+--   7005              — badge satellite: users.chat_status = 'pending'. Exercises
+--                    ConversationRow.chat_status + the sidebar's
+--                    `data-chat-status="pending"` attribute + the 🔴 badge.
+--   7006              — badge satellite: 2 unread incoming + 1 read outgoing
+--                    message (unread_count = 2). Exercises
+--                    ConversationRow.unread_count + the sidebar's
+--                    `unread-badge` element. NEVER visited via a PHP
+--                    `?user=` page-pair fetch by this harness (see HERO's
+--                    own note above for why that would be a mutation
+--                    hazard) — only read via the JSON conversations-cursor
+--                    walk, which never mutates anything.
+--   7007-7215 — 209 filler conversations, one plain incoming text
+--                    message each, is_read=1, no tags/assignment. Pure
+--                    volume for the cursor-pagination walk (this batch's
+--                    brief requires >=210 total conversations; 215
+--                    comfortably clears that with margin). Spaced 1 MINUTE
+--                    apart (offsets 6..214 minutes ago) so every
+--                    conversation in this file has a strictly distinct
+--                    last_message_at — required for a deterministic
+--                    ORDER BY last_time DESC on both stacks (ties would make
+--                    cursor-boundary assertions flaky). HERO + the 5 badge
+--                    satellites use SECOND/MINUTE offsets 0..5 minutes ago,
+--                    so the full ordering is unambiguous:
+--                    7001 (0s) > 7002 (1m) > 7003 (2m) > 7004 (3m) > 7005 (4m) > 7006 (5m) > 7007..7215 (6m..214m).
+--                    With the SSR sidebar capped at 200 rows on both stacks
+--                    (see api/inbox/conversations/_lib/query.ts's own
+--                    "ARCHITECTURE NOTE"), the oldest 15 of these
+--                    fillers never appear in the /inbox / /inbox-v2.php
+--                    page-pair fetch at all — by design, the same way real
+--                    production behaves once a tenant has more than 200
+--                    active conversations. They are still reachable, and
+--                    still counted, via the conversations-cursor-walk
+--                    (which pages all the way to has_more=false).
+
+-- ===========================================================================
+-- 1) users (215) — line_account_id = 1 throughout (see header note above).
+--    chat_status only set on 7005 (badge satellite); every other row
+--    leaves it NULL (the column default), matching a real never-tagged
+--    conversation.
+-- ===========================================================================
+INSERT INTO `users`
+  (`id`, `line_account_id`, `platform`, `line_user_id`, `display_name`, `chat_status`, `is_blocked`, `created_at`, `updated_at`)
+VALUES
+
+  (7001, 1, 'line', 'Uphase4b1c007001', 'INBOXB1 Hero ผู้ใช้ทดสอบสายแชท', NULL, 0, NOW(), NOW()),
+  (7002, 1, 'line', 'Uphase4b1c007002', 'INBOXB1 ลูกค้าติดแท็ก VIP', NULL, 0, NOW(), NOW()),
+  (7003, 1, 'line', 'Uphase4b1c007003', 'INBOXB1 ลูกค้ามอบหมายเดี่ยว', NULL, 0, NOW(), NOW()),
+  (7004, 1, 'line', 'Uphase4b1c007004', 'INBOXB1 ลูกค้ามอบหมายหลายคน', NULL, 0, NOW(), NOW()),
+  (7005, 1, 'line', 'Uphase4b1c007005', 'INBOXB1 ลูกค้าสถานะรอดำเนินการ', 'pending', 0, NOW(), NOW()),
+  (7006, 1, 'line', 'Uphase4b1c007006', 'INBOXB1 ลูกค้ายังไม่อ่าน', NULL, 0, NOW(), NOW()),
+  (7007, 1, 'line', 'Uphase4b1c007007', 'INBOXB1 ลูกค้าทั่วไป #1', NULL, 0, NOW(), NOW()),
+  (7008, 1, 'line', 'Uphase4b1c007008', 'INBOXB1 ลูกค้าทั่วไป #2', NULL, 0, NOW(), NOW()),
+  (7009, 1, 'line', 'Uphase4b1c007009', 'INBOXB1 ลูกค้าทั่วไป #3', NULL, 0, NOW(), NOW()),
+  (7010, 1, 'line', 'Uphase4b1c007010', 'INBOXB1 ลูกค้าทั่วไป #4', NULL, 0, NOW(), NOW()),
+  (7011, 1, 'line', 'Uphase4b1c007011', 'INBOXB1 ลูกค้าทั่วไป #5', NULL, 0, NOW(), NOW()),
+  (7012, 1, 'line', 'Uphase4b1c007012', 'INBOXB1 ลูกค้าทั่วไป #6', NULL, 0, NOW(), NOW()),
+  (7013, 1, 'line', 'Uphase4b1c007013', 'INBOXB1 ลูกค้าทั่วไป #7', NULL, 0, NOW(), NOW()),
+  (7014, 1, 'line', 'Uphase4b1c007014', 'INBOXB1 ลูกค้าทั่วไป #8', NULL, 0, NOW(), NOW()),
+  (7015, 1, 'line', 'Uphase4b1c007015', 'INBOXB1 ลูกค้าทั่วไป #9', NULL, 0, NOW(), NOW()),
+  (7016, 1, 'line', 'Uphase4b1c007016', 'INBOXB1 ลูกค้าทั่วไป #10', NULL, 0, NOW(), NOW()),
+  (7017, 1, 'line', 'Uphase4b1c007017', 'INBOXB1 ลูกค้าทั่วไป #11', NULL, 0, NOW(), NOW()),
+  (7018, 1, 'line', 'Uphase4b1c007018', 'INBOXB1 ลูกค้าทั่วไป #12', NULL, 0, NOW(), NOW()),
+  (7019, 1, 'line', 'Uphase4b1c007019', 'INBOXB1 ลูกค้าทั่วไป #13', NULL, 0, NOW(), NOW()),
+  (7020, 1, 'line', 'Uphase4b1c007020', 'INBOXB1 ลูกค้าทั่วไป #14', NULL, 0, NOW(), NOW()),
+  (7021, 1, 'line', 'Uphase4b1c007021', 'INBOXB1 ลูกค้าทั่วไป #15', NULL, 0, NOW(), NOW()),
+  (7022, 1, 'line', 'Uphase4b1c007022', 'INBOXB1 ลูกค้าทั่วไป #16', NULL, 0, NOW(), NOW()),
+  (7023, 1, 'line', 'Uphase4b1c007023', 'INBOXB1 ลูกค้าทั่วไป #17', NULL, 0, NOW(), NOW()),
+  (7024, 1, 'line', 'Uphase4b1c007024', 'INBOXB1 ลูกค้าทั่วไป #18', NULL, 0, NOW(), NOW()),
+  (7025, 1, 'line', 'Uphase4b1c007025', 'INBOXB1 ลูกค้าทั่วไป #19', NULL, 0, NOW(), NOW()),
+  (7026, 1, 'line', 'Uphase4b1c007026', 'INBOXB1 ลูกค้าทั่วไป #20', NULL, 0, NOW(), NOW()),
+  (7027, 1, 'line', 'Uphase4b1c007027', 'INBOXB1 ลูกค้าทั่วไป #21', NULL, 0, NOW(), NOW()),
+  (7028, 1, 'line', 'Uphase4b1c007028', 'INBOXB1 ลูกค้าทั่วไป #22', NULL, 0, NOW(), NOW()),
+  (7029, 1, 'line', 'Uphase4b1c007029', 'INBOXB1 ลูกค้าทั่วไป #23', NULL, 0, NOW(), NOW()),
+  (7030, 1, 'line', 'Uphase4b1c007030', 'INBOXB1 ลูกค้าทั่วไป #24', NULL, 0, NOW(), NOW()),
+  (7031, 1, 'line', 'Uphase4b1c007031', 'INBOXB1 ลูกค้าทั่วไป #25', NULL, 0, NOW(), NOW()),
+  (7032, 1, 'line', 'Uphase4b1c007032', 'INBOXB1 ลูกค้าทั่วไป #26', NULL, 0, NOW(), NOW()),
+  (7033, 1, 'line', 'Uphase4b1c007033', 'INBOXB1 ลูกค้าทั่วไป #27', NULL, 0, NOW(), NOW()),
+  (7034, 1, 'line', 'Uphase4b1c007034', 'INBOXB1 ลูกค้าทั่วไป #28', NULL, 0, NOW(), NOW()),
+  (7035, 1, 'line', 'Uphase4b1c007035', 'INBOXB1 ลูกค้าทั่วไป #29', NULL, 0, NOW(), NOW()),
+  (7036, 1, 'line', 'Uphase4b1c007036', 'INBOXB1 ลูกค้าทั่วไป #30', NULL, 0, NOW(), NOW()),
+  (7037, 1, 'line', 'Uphase4b1c007037', 'INBOXB1 ลูกค้าทั่วไป #31', NULL, 0, NOW(), NOW()),
+  (7038, 1, 'line', 'Uphase4b1c007038', 'INBOXB1 ลูกค้าทั่วไป #32', NULL, 0, NOW(), NOW()),
+  (7039, 1, 'line', 'Uphase4b1c007039', 'INBOXB1 ลูกค้าทั่วไป #33', NULL, 0, NOW(), NOW()),
+  (7040, 1, 'line', 'Uphase4b1c007040', 'INBOXB1 ลูกค้าทั่วไป #34', NULL, 0, NOW(), NOW()),
+  (7041, 1, 'line', 'Uphase4b1c007041', 'INBOXB1 ลูกค้าทั่วไป #35', NULL, 0, NOW(), NOW()),
+  (7042, 1, 'line', 'Uphase4b1c007042', 'INBOXB1 ลูกค้าทั่วไป #36', NULL, 0, NOW(), NOW()),
+  (7043, 1, 'line', 'Uphase4b1c007043', 'INBOXB1 ลูกค้าทั่วไป #37', NULL, 0, NOW(), NOW()),
+  (7044, 1, 'line', 'Uphase4b1c007044', 'INBOXB1 ลูกค้าทั่วไป #38', NULL, 0, NOW(), NOW()),
+  (7045, 1, 'line', 'Uphase4b1c007045', 'INBOXB1 ลูกค้าทั่วไป #39', NULL, 0, NOW(), NOW()),
+  (7046, 1, 'line', 'Uphase4b1c007046', 'INBOXB1 ลูกค้าทั่วไป #40', NULL, 0, NOW(), NOW()),
+  (7047, 1, 'line', 'Uphase4b1c007047', 'INBOXB1 ลูกค้าทั่วไป #41', NULL, 0, NOW(), NOW()),
+  (7048, 1, 'line', 'Uphase4b1c007048', 'INBOXB1 ลูกค้าทั่วไป #42', NULL, 0, NOW(), NOW()),
+  (7049, 1, 'line', 'Uphase4b1c007049', 'INBOXB1 ลูกค้าทั่วไป #43', NULL, 0, NOW(), NOW()),
+  (7050, 1, 'line', 'Uphase4b1c007050', 'INBOXB1 ลูกค้าทั่วไป #44', NULL, 0, NOW(), NOW()),
+  (7051, 1, 'line', 'Uphase4b1c007051', 'INBOXB1 ลูกค้าทั่วไป #45', NULL, 0, NOW(), NOW()),
+  (7052, 1, 'line', 'Uphase4b1c007052', 'INBOXB1 ลูกค้าทั่วไป #46', NULL, 0, NOW(), NOW()),
+  (7053, 1, 'line', 'Uphase4b1c007053', 'INBOXB1 ลูกค้าทั่วไป #47', NULL, 0, NOW(), NOW()),
+  (7054, 1, 'line', 'Uphase4b1c007054', 'INBOXB1 ลูกค้าทั่วไป #48', NULL, 0, NOW(), NOW()),
+  (7055, 1, 'line', 'Uphase4b1c007055', 'INBOXB1 ลูกค้าทั่วไป #49', NULL, 0, NOW(), NOW()),
+  (7056, 1, 'line', 'Uphase4b1c007056', 'INBOXB1 ลูกค้าทั่วไป #50', NULL, 0, NOW(), NOW()),
+  (7057, 1, 'line', 'Uphase4b1c007057', 'INBOXB1 ลูกค้าทั่วไป #51', NULL, 0, NOW(), NOW()),
+  (7058, 1, 'line', 'Uphase4b1c007058', 'INBOXB1 ลูกค้าทั่วไป #52', NULL, 0, NOW(), NOW()),
+  (7059, 1, 'line', 'Uphase4b1c007059', 'INBOXB1 ลูกค้าทั่วไป #53', NULL, 0, NOW(), NOW()),
+  (7060, 1, 'line', 'Uphase4b1c007060', 'INBOXB1 ลูกค้าทั่วไป #54', NULL, 0, NOW(), NOW()),
+  (7061, 1, 'line', 'Uphase4b1c007061', 'INBOXB1 ลูกค้าทั่วไป #55', NULL, 0, NOW(), NOW()),
+  (7062, 1, 'line', 'Uphase4b1c007062', 'INBOXB1 ลูกค้าทั่วไป #56', NULL, 0, NOW(), NOW()),
+  (7063, 1, 'line', 'Uphase4b1c007063', 'INBOXB1 ลูกค้าทั่วไป #57', NULL, 0, NOW(), NOW()),
+  (7064, 1, 'line', 'Uphase4b1c007064', 'INBOXB1 ลูกค้าทั่วไป #58', NULL, 0, NOW(), NOW()),
+  (7065, 1, 'line', 'Uphase4b1c007065', 'INBOXB1 ลูกค้าทั่วไป #59', NULL, 0, NOW(), NOW()),
+  (7066, 1, 'line', 'Uphase4b1c007066', 'INBOXB1 ลูกค้าทั่วไป #60', NULL, 0, NOW(), NOW()),
+  (7067, 1, 'line', 'Uphase4b1c007067', 'INBOXB1 ลูกค้าทั่วไป #61', NULL, 0, NOW(), NOW()),
+  (7068, 1, 'line', 'Uphase4b1c007068', 'INBOXB1 ลูกค้าทั่วไป #62', NULL, 0, NOW(), NOW()),
+  (7069, 1, 'line', 'Uphase4b1c007069', 'INBOXB1 ลูกค้าทั่วไป #63', NULL, 0, NOW(), NOW()),
+  (7070, 1, 'line', 'Uphase4b1c007070', 'INBOXB1 ลูกค้าทั่วไป #64', NULL, 0, NOW(), NOW()),
+  (7071, 1, 'line', 'Uphase4b1c007071', 'INBOXB1 ลูกค้าทั่วไป #65', NULL, 0, NOW(), NOW()),
+  (7072, 1, 'line', 'Uphase4b1c007072', 'INBOXB1 ลูกค้าทั่วไป #66', NULL, 0, NOW(), NOW()),
+  (7073, 1, 'line', 'Uphase4b1c007073', 'INBOXB1 ลูกค้าทั่วไป #67', NULL, 0, NOW(), NOW()),
+  (7074, 1, 'line', 'Uphase4b1c007074', 'INBOXB1 ลูกค้าทั่วไป #68', NULL, 0, NOW(), NOW()),
+  (7075, 1, 'line', 'Uphase4b1c007075', 'INBOXB1 ลูกค้าทั่วไป #69', NULL, 0, NOW(), NOW()),
+  (7076, 1, 'line', 'Uphase4b1c007076', 'INBOXB1 ลูกค้าทั่วไป #70', NULL, 0, NOW(), NOW()),
+  (7077, 1, 'line', 'Uphase4b1c007077', 'INBOXB1 ลูกค้าทั่วไป #71', NULL, 0, NOW(), NOW()),
+  (7078, 1, 'line', 'Uphase4b1c007078', 'INBOXB1 ลูกค้าทั่วไป #72', NULL, 0, NOW(), NOW()),
+  (7079, 1, 'line', 'Uphase4b1c007079', 'INBOXB1 ลูกค้าทั่วไป #73', NULL, 0, NOW(), NOW()),
+  (7080, 1, 'line', 'Uphase4b1c007080', 'INBOXB1 ลูกค้าทั่วไป #74', NULL, 0, NOW(), NOW()),
+  (7081, 1, 'line', 'Uphase4b1c007081', 'INBOXB1 ลูกค้าทั่วไป #75', NULL, 0, NOW(), NOW()),
+  (7082, 1, 'line', 'Uphase4b1c007082', 'INBOXB1 ลูกค้าทั่วไป #76', NULL, 0, NOW(), NOW()),
+  (7083, 1, 'line', 'Uphase4b1c007083', 'INBOXB1 ลูกค้าทั่วไป #77', NULL, 0, NOW(), NOW()),
+  (7084, 1, 'line', 'Uphase4b1c007084', 'INBOXB1 ลูกค้าทั่วไป #78', NULL, 0, NOW(), NOW()),
+  (7085, 1, 'line', 'Uphase4b1c007085', 'INBOXB1 ลูกค้าทั่วไป #79', NULL, 0, NOW(), NOW()),
+  (7086, 1, 'line', 'Uphase4b1c007086', 'INBOXB1 ลูกค้าทั่วไป #80', NULL, 0, NOW(), NOW()),
+  (7087, 1, 'line', 'Uphase4b1c007087', 'INBOXB1 ลูกค้าทั่วไป #81', NULL, 0, NOW(), NOW()),
+  (7088, 1, 'line', 'Uphase4b1c007088', 'INBOXB1 ลูกค้าทั่วไป #82', NULL, 0, NOW(), NOW()),
+  (7089, 1, 'line', 'Uphase4b1c007089', 'INBOXB1 ลูกค้าทั่วไป #83', NULL, 0, NOW(), NOW()),
+  (7090, 1, 'line', 'Uphase4b1c007090', 'INBOXB1 ลูกค้าทั่วไป #84', NULL, 0, NOW(), NOW()),
+  (7091, 1, 'line', 'Uphase4b1c007091', 'INBOXB1 ลูกค้าทั่วไป #85', NULL, 0, NOW(), NOW()),
+  (7092, 1, 'line', 'Uphase4b1c007092', 'INBOXB1 ลูกค้าทั่วไป #86', NULL, 0, NOW(), NOW()),
+  (7093, 1, 'line', 'Uphase4b1c007093', 'INBOXB1 ลูกค้าทั่วไป #87', NULL, 0, NOW(), NOW()),
+  (7094, 1, 'line', 'Uphase4b1c007094', 'INBOXB1 ลูกค้าทั่วไป #88', NULL, 0, NOW(), NOW()),
+  (7095, 1, 'line', 'Uphase4b1c007095', 'INBOXB1 ลูกค้าทั่วไป #89', NULL, 0, NOW(), NOW()),
+  (7096, 1, 'line', 'Uphase4b1c007096', 'INBOXB1 ลูกค้าทั่วไป #90', NULL, 0, NOW(), NOW()),
+  (7097, 1, 'line', 'Uphase4b1c007097', 'INBOXB1 ลูกค้าทั่วไป #91', NULL, 0, NOW(), NOW()),
+  (7098, 1, 'line', 'Uphase4b1c007098', 'INBOXB1 ลูกค้าทั่วไป #92', NULL, 0, NOW(), NOW()),
+  (7099, 1, 'line', 'Uphase4b1c007099', 'INBOXB1 ลูกค้าทั่วไป #93', NULL, 0, NOW(), NOW()),
+  (7100, 1, 'line', 'Uphase4b1c007100', 'INBOXB1 ลูกค้าทั่วไป #94', NULL, 0, NOW(), NOW()),
+  (7101, 1, 'line', 'Uphase4b1c007101', 'INBOXB1 ลูกค้าทั่วไป #95', NULL, 0, NOW(), NOW()),
+  (7102, 1, 'line', 'Uphase4b1c007102', 'INBOXB1 ลูกค้าทั่วไป #96', NULL, 0, NOW(), NOW()),
+  (7103, 1, 'line', 'Uphase4b1c007103', 'INBOXB1 ลูกค้าทั่วไป #97', NULL, 0, NOW(), NOW()),
+  (7104, 1, 'line', 'Uphase4b1c007104', 'INBOXB1 ลูกค้าทั่วไป #98', NULL, 0, NOW(), NOW()),
+  (7105, 1, 'line', 'Uphase4b1c007105', 'INBOXB1 ลูกค้าทั่วไป #99', NULL, 0, NOW(), NOW()),
+  (7106, 1, 'line', 'Uphase4b1c007106', 'INBOXB1 ลูกค้าทั่วไป #100', NULL, 0, NOW(), NOW()),
+  (7107, 1, 'line', 'Uphase4b1c007107', 'INBOXB1 ลูกค้าทั่วไป #101', NULL, 0, NOW(), NOW()),
+  (7108, 1, 'line', 'Uphase4b1c007108', 'INBOXB1 ลูกค้าทั่วไป #102', NULL, 0, NOW(), NOW()),
+  (7109, 1, 'line', 'Uphase4b1c007109', 'INBOXB1 ลูกค้าทั่วไป #103', NULL, 0, NOW(), NOW()),
+  (7110, 1, 'line', 'Uphase4b1c007110', 'INBOXB1 ลูกค้าทั่วไป #104', NULL, 0, NOW(), NOW()),
+  (7111, 1, 'line', 'Uphase4b1c007111', 'INBOXB1 ลูกค้าทั่วไป #105', NULL, 0, NOW(), NOW()),
+  (7112, 1, 'line', 'Uphase4b1c007112', 'INBOXB1 ลูกค้าทั่วไป #106', NULL, 0, NOW(), NOW()),
+  (7113, 1, 'line', 'Uphase4b1c007113', 'INBOXB1 ลูกค้าทั่วไป #107', NULL, 0, NOW(), NOW()),
+  (7114, 1, 'line', 'Uphase4b1c007114', 'INBOXB1 ลูกค้าทั่วไป #108', NULL, 0, NOW(), NOW()),
+  (7115, 1, 'line', 'Uphase4b1c007115', 'INBOXB1 ลูกค้าทั่วไป #109', NULL, 0, NOW(), NOW()),
+  (7116, 1, 'line', 'Uphase4b1c007116', 'INBOXB1 ลูกค้าทั่วไป #110', NULL, 0, NOW(), NOW()),
+  (7117, 1, 'line', 'Uphase4b1c007117', 'INBOXB1 ลูกค้าทั่วไป #111', NULL, 0, NOW(), NOW()),
+  (7118, 1, 'line', 'Uphase4b1c007118', 'INBOXB1 ลูกค้าทั่วไป #112', NULL, 0, NOW(), NOW()),
+  (7119, 1, 'line', 'Uphase4b1c007119', 'INBOXB1 ลูกค้าทั่วไป #113', NULL, 0, NOW(), NOW()),
+  (7120, 1, 'line', 'Uphase4b1c007120', 'INBOXB1 ลูกค้าทั่วไป #114', NULL, 0, NOW(), NOW()),
+  (7121, 1, 'line', 'Uphase4b1c007121', 'INBOXB1 ลูกค้าทั่วไป #115', NULL, 0, NOW(), NOW()),
+  (7122, 1, 'line', 'Uphase4b1c007122', 'INBOXB1 ลูกค้าทั่วไป #116', NULL, 0, NOW(), NOW()),
+  (7123, 1, 'line', 'Uphase4b1c007123', 'INBOXB1 ลูกค้าทั่วไป #117', NULL, 0, NOW(), NOW()),
+  (7124, 1, 'line', 'Uphase4b1c007124', 'INBOXB1 ลูกค้าทั่วไป #118', NULL, 0, NOW(), NOW()),
+  (7125, 1, 'line', 'Uphase4b1c007125', 'INBOXB1 ลูกค้าทั่วไป #119', NULL, 0, NOW(), NOW()),
+  (7126, 1, 'line', 'Uphase4b1c007126', 'INBOXB1 ลูกค้าทั่วไป #120', NULL, 0, NOW(), NOW()),
+  (7127, 1, 'line', 'Uphase4b1c007127', 'INBOXB1 ลูกค้าทั่วไป #121', NULL, 0, NOW(), NOW()),
+  (7128, 1, 'line', 'Uphase4b1c007128', 'INBOXB1 ลูกค้าทั่วไป #122', NULL, 0, NOW(), NOW()),
+  (7129, 1, 'line', 'Uphase4b1c007129', 'INBOXB1 ลูกค้าทั่วไป #123', NULL, 0, NOW(), NOW()),
+  (7130, 1, 'line', 'Uphase4b1c007130', 'INBOXB1 ลูกค้าทั่วไป #124', NULL, 0, NOW(), NOW()),
+  (7131, 1, 'line', 'Uphase4b1c007131', 'INBOXB1 ลูกค้าทั่วไป #125', NULL, 0, NOW(), NOW()),
+  (7132, 1, 'line', 'Uphase4b1c007132', 'INBOXB1 ลูกค้าทั่วไป #126', NULL, 0, NOW(), NOW()),
+  (7133, 1, 'line', 'Uphase4b1c007133', 'INBOXB1 ลูกค้าทั่วไป #127', NULL, 0, NOW(), NOW()),
+  (7134, 1, 'line', 'Uphase4b1c007134', 'INBOXB1 ลูกค้าทั่วไป #128', NULL, 0, NOW(), NOW()),
+  (7135, 1, 'line', 'Uphase4b1c007135', 'INBOXB1 ลูกค้าทั่วไป #129', NULL, 0, NOW(), NOW()),
+  (7136, 1, 'line', 'Uphase4b1c007136', 'INBOXB1 ลูกค้าทั่วไป #130', NULL, 0, NOW(), NOW()),
+  (7137, 1, 'line', 'Uphase4b1c007137', 'INBOXB1 ลูกค้าทั่วไป #131', NULL, 0, NOW(), NOW()),
+  (7138, 1, 'line', 'Uphase4b1c007138', 'INBOXB1 ลูกค้าทั่วไป #132', NULL, 0, NOW(), NOW()),
+  (7139, 1, 'line', 'Uphase4b1c007139', 'INBOXB1 ลูกค้าทั่วไป #133', NULL, 0, NOW(), NOW()),
+  (7140, 1, 'line', 'Uphase4b1c007140', 'INBOXB1 ลูกค้าทั่วไป #134', NULL, 0, NOW(), NOW()),
+  (7141, 1, 'line', 'Uphase4b1c007141', 'INBOXB1 ลูกค้าทั่วไป #135', NULL, 0, NOW(), NOW()),
+  (7142, 1, 'line', 'Uphase4b1c007142', 'INBOXB1 ลูกค้าทั่วไป #136', NULL, 0, NOW(), NOW()),
+  (7143, 1, 'line', 'Uphase4b1c007143', 'INBOXB1 ลูกค้าทั่วไป #137', NULL, 0, NOW(), NOW()),
+  (7144, 1, 'line', 'Uphase4b1c007144', 'INBOXB1 ลูกค้าทั่วไป #138', NULL, 0, NOW(), NOW()),
+  (7145, 1, 'line', 'Uphase4b1c007145', 'INBOXB1 ลูกค้าทั่วไป #139', NULL, 0, NOW(), NOW()),
+  (7146, 1, 'line', 'Uphase4b1c007146', 'INBOXB1 ลูกค้าทั่วไป #140', NULL, 0, NOW(), NOW()),
+  (7147, 1, 'line', 'Uphase4b1c007147', 'INBOXB1 ลูกค้าทั่วไป #141', NULL, 0, NOW(), NOW()),
+  (7148, 1, 'line', 'Uphase4b1c007148', 'INBOXB1 ลูกค้าทั่วไป #142', NULL, 0, NOW(), NOW()),
+  (7149, 1, 'line', 'Uphase4b1c007149', 'INBOXB1 ลูกค้าทั่วไป #143', NULL, 0, NOW(), NOW()),
+  (7150, 1, 'line', 'Uphase4b1c007150', 'INBOXB1 ลูกค้าทั่วไป #144', NULL, 0, NOW(), NOW()),
+  (7151, 1, 'line', 'Uphase4b1c007151', 'INBOXB1 ลูกค้าทั่วไป #145', NULL, 0, NOW(), NOW()),
+  (7152, 1, 'line', 'Uphase4b1c007152', 'INBOXB1 ลูกค้าทั่วไป #146', NULL, 0, NOW(), NOW()),
+  (7153, 1, 'line', 'Uphase4b1c007153', 'INBOXB1 ลูกค้าทั่วไป #147', NULL, 0, NOW(), NOW()),
+  (7154, 1, 'line', 'Uphase4b1c007154', 'INBOXB1 ลูกค้าทั่วไป #148', NULL, 0, NOW(), NOW()),
+  (7155, 1, 'line', 'Uphase4b1c007155', 'INBOXB1 ลูกค้าทั่วไป #149', NULL, 0, NOW(), NOW()),
+  (7156, 1, 'line', 'Uphase4b1c007156', 'INBOXB1 ลูกค้าทั่วไป #150', NULL, 0, NOW(), NOW()),
+  (7157, 1, 'line', 'Uphase4b1c007157', 'INBOXB1 ลูกค้าทั่วไป #151', NULL, 0, NOW(), NOW()),
+  (7158, 1, 'line', 'Uphase4b1c007158', 'INBOXB1 ลูกค้าทั่วไป #152', NULL, 0, NOW(), NOW()),
+  (7159, 1, 'line', 'Uphase4b1c007159', 'INBOXB1 ลูกค้าทั่วไป #153', NULL, 0, NOW(), NOW()),
+  (7160, 1, 'line', 'Uphase4b1c007160', 'INBOXB1 ลูกค้าทั่วไป #154', NULL, 0, NOW(), NOW()),
+  (7161, 1, 'line', 'Uphase4b1c007161', 'INBOXB1 ลูกค้าทั่วไป #155', NULL, 0, NOW(), NOW()),
+  (7162, 1, 'line', 'Uphase4b1c007162', 'INBOXB1 ลูกค้าทั่วไป #156', NULL, 0, NOW(), NOW()),
+  (7163, 1, 'line', 'Uphase4b1c007163', 'INBOXB1 ลูกค้าทั่วไป #157', NULL, 0, NOW(), NOW()),
+  (7164, 1, 'line', 'Uphase4b1c007164', 'INBOXB1 ลูกค้าทั่วไป #158', NULL, 0, NOW(), NOW()),
+  (7165, 1, 'line', 'Uphase4b1c007165', 'INBOXB1 ลูกค้าทั่วไป #159', NULL, 0, NOW(), NOW()),
+  (7166, 1, 'line', 'Uphase4b1c007166', 'INBOXB1 ลูกค้าทั่วไป #160', NULL, 0, NOW(), NOW()),
+  (7167, 1, 'line', 'Uphase4b1c007167', 'INBOXB1 ลูกค้าทั่วไป #161', NULL, 0, NOW(), NOW()),
+  (7168, 1, 'line', 'Uphase4b1c007168', 'INBOXB1 ลูกค้าทั่วไป #162', NULL, 0, NOW(), NOW()),
+  (7169, 1, 'line', 'Uphase4b1c007169', 'INBOXB1 ลูกค้าทั่วไป #163', NULL, 0, NOW(), NOW()),
+  (7170, 1, 'line', 'Uphase4b1c007170', 'INBOXB1 ลูกค้าทั่วไป #164', NULL, 0, NOW(), NOW()),
+  (7171, 1, 'line', 'Uphase4b1c007171', 'INBOXB1 ลูกค้าทั่วไป #165', NULL, 0, NOW(), NOW()),
+  (7172, 1, 'line', 'Uphase4b1c007172', 'INBOXB1 ลูกค้าทั่วไป #166', NULL, 0, NOW(), NOW()),
+  (7173, 1, 'line', 'Uphase4b1c007173', 'INBOXB1 ลูกค้าทั่วไป #167', NULL, 0, NOW(), NOW()),
+  (7174, 1, 'line', 'Uphase4b1c007174', 'INBOXB1 ลูกค้าทั่วไป #168', NULL, 0, NOW(), NOW()),
+  (7175, 1, 'line', 'Uphase4b1c007175', 'INBOXB1 ลูกค้าทั่วไป #169', NULL, 0, NOW(), NOW()),
+  (7176, 1, 'line', 'Uphase4b1c007176', 'INBOXB1 ลูกค้าทั่วไป #170', NULL, 0, NOW(), NOW()),
+  (7177, 1, 'line', 'Uphase4b1c007177', 'INBOXB1 ลูกค้าทั่วไป #171', NULL, 0, NOW(), NOW()),
+  (7178, 1, 'line', 'Uphase4b1c007178', 'INBOXB1 ลูกค้าทั่วไป #172', NULL, 0, NOW(), NOW()),
+  (7179, 1, 'line', 'Uphase4b1c007179', 'INBOXB1 ลูกค้าทั่วไป #173', NULL, 0, NOW(), NOW()),
+  (7180, 1, 'line', 'Uphase4b1c007180', 'INBOXB1 ลูกค้าทั่วไป #174', NULL, 0, NOW(), NOW()),
+  (7181, 1, 'line', 'Uphase4b1c007181', 'INBOXB1 ลูกค้าทั่วไป #175', NULL, 0, NOW(), NOW()),
+  (7182, 1, 'line', 'Uphase4b1c007182', 'INBOXB1 ลูกค้าทั่วไป #176', NULL, 0, NOW(), NOW()),
+  (7183, 1, 'line', 'Uphase4b1c007183', 'INBOXB1 ลูกค้าทั่วไป #177', NULL, 0, NOW(), NOW()),
+  (7184, 1, 'line', 'Uphase4b1c007184', 'INBOXB1 ลูกค้าทั่วไป #178', NULL, 0, NOW(), NOW()),
+  (7185, 1, 'line', 'Uphase4b1c007185', 'INBOXB1 ลูกค้าทั่วไป #179', NULL, 0, NOW(), NOW()),
+  (7186, 1, 'line', 'Uphase4b1c007186', 'INBOXB1 ลูกค้าทั่วไป #180', NULL, 0, NOW(), NOW()),
+  (7187, 1, 'line', 'Uphase4b1c007187', 'INBOXB1 ลูกค้าทั่วไป #181', NULL, 0, NOW(), NOW()),
+  (7188, 1, 'line', 'Uphase4b1c007188', 'INBOXB1 ลูกค้าทั่วไป #182', NULL, 0, NOW(), NOW()),
+  (7189, 1, 'line', 'Uphase4b1c007189', 'INBOXB1 ลูกค้าทั่วไป #183', NULL, 0, NOW(), NOW()),
+  (7190, 1, 'line', 'Uphase4b1c007190', 'INBOXB1 ลูกค้าทั่วไป #184', NULL, 0, NOW(), NOW()),
+  (7191, 1, 'line', 'Uphase4b1c007191', 'INBOXB1 ลูกค้าทั่วไป #185', NULL, 0, NOW(), NOW()),
+  (7192, 1, 'line', 'Uphase4b1c007192', 'INBOXB1 ลูกค้าทั่วไป #186', NULL, 0, NOW(), NOW()),
+  (7193, 1, 'line', 'Uphase4b1c007193', 'INBOXB1 ลูกค้าทั่วไป #187', NULL, 0, NOW(), NOW()),
+  (7194, 1, 'line', 'Uphase4b1c007194', 'INBOXB1 ลูกค้าทั่วไป #188', NULL, 0, NOW(), NOW()),
+  (7195, 1, 'line', 'Uphase4b1c007195', 'INBOXB1 ลูกค้าทั่วไป #189', NULL, 0, NOW(), NOW()),
+  (7196, 1, 'line', 'Uphase4b1c007196', 'INBOXB1 ลูกค้าทั่วไป #190', NULL, 0, NOW(), NOW()),
+  (7197, 1, 'line', 'Uphase4b1c007197', 'INBOXB1 ลูกค้าทั่วไป #191', NULL, 0, NOW(), NOW()),
+  (7198, 1, 'line', 'Uphase4b1c007198', 'INBOXB1 ลูกค้าทั่วไป #192', NULL, 0, NOW(), NOW()),
+  (7199, 1, 'line', 'Uphase4b1c007199', 'INBOXB1 ลูกค้าทั่วไป #193', NULL, 0, NOW(), NOW()),
+  (7200, 1, 'line', 'Uphase4b1c007200', 'INBOXB1 ลูกค้าทั่วไป #194', NULL, 0, NOW(), NOW()),
+  (7201, 1, 'line', 'Uphase4b1c007201', 'INBOXB1 ลูกค้าทั่วไป #195', NULL, 0, NOW(), NOW()),
+  (7202, 1, 'line', 'Uphase4b1c007202', 'INBOXB1 ลูกค้าทั่วไป #196', NULL, 0, NOW(), NOW()),
+  (7203, 1, 'line', 'Uphase4b1c007203', 'INBOXB1 ลูกค้าทั่วไป #197', NULL, 0, NOW(), NOW()),
+  (7204, 1, 'line', 'Uphase4b1c007204', 'INBOXB1 ลูกค้าทั่วไป #198', NULL, 0, NOW(), NOW()),
+  (7205, 1, 'line', 'Uphase4b1c007205', 'INBOXB1 ลูกค้าทั่วไป #199', NULL, 0, NOW(), NOW()),
+  (7206, 1, 'line', 'Uphase4b1c007206', 'INBOXB1 ลูกค้าทั่วไป #200', NULL, 0, NOW(), NOW()),
+  (7207, 1, 'line', 'Uphase4b1c007207', 'INBOXB1 ลูกค้าทั่วไป #201', NULL, 0, NOW(), NOW()),
+  (7208, 1, 'line', 'Uphase4b1c007208', 'INBOXB1 ลูกค้าทั่วไป #202', NULL, 0, NOW(), NOW()),
+  (7209, 1, 'line', 'Uphase4b1c007209', 'INBOXB1 ลูกค้าทั่วไป #203', NULL, 0, NOW(), NOW()),
+  (7210, 1, 'line', 'Uphase4b1c007210', 'INBOXB1 ลูกค้าทั่วไป #204', NULL, 0, NOW(), NOW()),
+  (7211, 1, 'line', 'Uphase4b1c007211', 'INBOXB1 ลูกค้าทั่วไป #205', NULL, 0, NOW(), NOW()),
+  (7212, 1, 'line', 'Uphase4b1c007212', 'INBOXB1 ลูกค้าทั่วไป #206', NULL, 0, NOW(), NOW()),
+  (7213, 1, 'line', 'Uphase4b1c007213', 'INBOXB1 ลูกค้าทั่วไป #207', NULL, 0, NOW(), NOW()),
+  (7214, 1, 'line', 'Uphase4b1c007214', 'INBOXB1 ลูกค้าทั่วไป #208', NULL, 0, NOW(), NOW()),
+  (7215, 1, 'line', 'Uphase4b1c007215', 'INBOXB1 ลูกค้าทั่วไป #209', NULL, 0, NOW(), NOW());
+
+-- ===========================================================================
+-- 2) Badge-satellite tag/assignment rows.
+-- ===========================================================================
+INSERT INTO `user_tag_assignments` (`line_account_id`, `user_id`, `tag_id`, `assigned_by`, `created_at`) VALUES
+  (1, 7002, 1, 'manual', NOW());
+
+INSERT INTO `conversation_assignments` (`user_id`, `line_account_id`, `assigned_to`, `assigned_by`, `assigned_at`, `status`) VALUES
+  (7003, 1, 1, 1, NOW(), 'active');
+
+INSERT INTO `conversation_multi_assignees` (`line_account_id`, `user_id`, `admin_id`, `assigned_by`, `assigned_at`, `status`) VALUES
+  (1, 7004, 1, 1, NOW(), 'active');
+
+-- ===========================================================================
+-- 3) messages
+-- ===========================================================================
+
+-- 3a) HERO (7001) — 130 messages, oldest-first (so AUTO_INCREMENT id
+--     ASC tracks created_at ASC, matching every earlier fixture's own
+--     messages-block convention). Offsets count DOWN from NOW() in SECONDS
+--     (row 1 = 129s ago ... last row = 0s ago = NOW()), guaranteeing
+--     this conversation's MAX(created_at) is the single most recent value in
+--     the whole fixture (every other conversation's own timestamp is >=1
+--     MINUTE = 60 SECONDS ago — see the header note's ordering list).
+--     Marker message types/forms (see docs/runbooks/phase4-batch1-inbox-reads-parity.md
+--     for the full inventory + which extractor/assertion reads each one):
+--     plain text; text-with-embedded-quickReply-JSON; text-that-is-a-video-URL;
+--     image (ID:N form + absolute-URL form); sticker (JSON stickerId form +
+--     legacy 'Sticker: N' text form); flex bubble; flex carousel (2 bubbles,
+--     button/separator/spacer/image/text leaf components); file; video;
+--     audio; location. Interleaved among plain filler messages (not bunched
+--     at either end) so a small `limit=` cursor walk crosses page
+--     boundaries both before and after encountering them.
+-- ===========================================================================
+INSERT INTO `messages` (`line_account_id`, `user_id`, `direction`, `message_type`, `content`, `is_read`, `sent_by`, `created_at`) VALUES
+
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-1 ข้อความทดสอบลำดับที่ 1 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 129 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-PLAINTEXT-001 สวัสดีค่ะ ต้องการสอบถามเรื่องยาแก้ปวดหัวค่ะ', 1, NULL, DATE_SUB(NOW(), INTERVAL 128 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-2 ข้อความทดสอบลำดับที่ 2 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 127 SECOND)),
+  (1, 7001, 'incoming', 'text', '{"type":"text","text":"INBOXB1-QRTEXT-002 เลือกบริการที่ต้องการค่ะ","quickReply":{"items":[{"type":"action","action":{"type":"message","label":"INBOXB1-QRLABEL-ดูสินค้า","text":"ดูสินค้า"}},{"type":"action","action":{"type":"uri","label":"INBOXB1-QRLABEL-ติดต่อเรา","uri":"https://example.invalid/contact"}}]}}', 1, NULL, DATE_SUB(NOW(), INTERVAL 126 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-3 ข้อความทดสอบลำดับที่ 3 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 125 SECOND)),
+  (1, 7001, 'incoming', 'text', '/uploads/line_videos/inboxb1-demo-clip.mp4', 1, NULL, DATE_SUB(NOW(), INTERVAL 124 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-4 ข้อความทดสอบลำดับที่ 4 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 123 SECOND)),
+  (1, 7001, 'incoming', 'image', 'ID:778899', 1, NULL, DATE_SUB(NOW(), INTERVAL 122 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-5 ข้อความทดสอบลำดับที่ 5 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 121 SECOND)),
+  (1, 7001, 'outgoing', 'image', 'https://picsum.photos/seed/inboxb1demo/400/300', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 120 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-6 ข้อความทดสอบลำดับที่ 6 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 119 SECOND)),
+  (1, 7001, 'incoming', 'sticker', '{"type":"sticker","packageId":"11537","stickerId":"52002734"}', 1, NULL, DATE_SUB(NOW(), INTERVAL 118 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-7 ข้อความทดสอบลำดับที่ 7 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 117 SECOND)),
+  (1, 7001, 'incoming', 'sticker', 'Sticker: 183892', 1, NULL, DATE_SUB(NOW(), INTERVAL 116 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-8 ข้อความทดสอบลำดับที่ 8 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 115 SECOND)),
+  (1, 7001, 'outgoing', 'flex', '{"type":"bubble","body":{"type":"box","layout":"vertical","contents":[{"type":"text","text":"INBOXB1-FLEXBUBBLE-สินค้าแนะนำวันนี้","weight":"bold","size":"lg"}]}}', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 114 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-9 ข้อความทดสอบลำดับที่ 9 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 113 SECOND)),
+  (1, 7001, 'outgoing', 'flex', '{"type":"carousel","contents":[{"type":"bubble","body":{"type":"box","layout":"vertical","contents":[{"type":"text","text":"INBOXB1-CAROUSEL-BUBBLE1-พาราเซตามอล","weight":"bold"},{"type":"image","url":"https://picsum.photos/seed/inboxb1carousel1/300/200"},{"type":"separator"},{"type":"button","style":"primary","action":{"type":"uri","label":"INBOXB1-CAROUSEL-BTN1-สั่งซื้อ","uri":"https://example.invalid/order/1"}}]}},{"type":"bubble","body":{"type":"box","layout":"vertical","contents":[{"type":"text","text":"INBOXB1-CAROUSEL-BUBBLE2-วิตามินซี","weight":"bold"},{"type":"spacer","size":"md"},{"type":"button","style":"secondary","action":{"type":"message","label":"INBOXB1-CAROUSEL-BTN2-เพิ่มลงตะกร้า","text":"เพิ่มลงตะกร้า"}}]}}]}', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 112 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-10 ข้อความทดสอบลำดับที่ 10 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 111 SECOND)),
+  (1, 7001, 'incoming', 'file', '{"name":"INBOXB1-FILE-ใบรับรองยา.pdf","url":"https://example.invalid/files/inboxb1-cert.pdf"}', 1, NULL, DATE_SUB(NOW(), INTERVAL 110 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-11 ข้อความทดสอบลำดับที่ 11 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 109 SECOND)),
+  (1, 7001, 'incoming', 'video', 'https://example-media.invalid/videos/inboxb1-clip2.mp4', 1, NULL, DATE_SUB(NOW(), INTERVAL 108 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-12 ข้อความทดสอบลำดับที่ 12 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 107 SECOND)),
+  (1, 7001, 'incoming', 'audio', 'ID:990011', 1, NULL, DATE_SUB(NOW(), INTERVAL 106 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-13 ข้อความทดสอบลำดับที่ 13 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 105 SECOND)),
+  (1, 7001, 'incoming', 'location', '[location] INBOXB1-LOCATION-ร้านขายยาทดสอบ กรุงเทพฯ (13.7563,100.5018)', 1, NULL, DATE_SUB(NOW(), INTERVAL 104 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-14 ข้อความทดสอบลำดับที่ 14 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 103 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-15 ข้อความทดสอบลำดับที่ 15 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 102 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-16 ข้อความทดสอบลำดับที่ 16 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 101 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-17 ข้อความทดสอบลำดับที่ 17 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 100 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-18 ข้อความทดสอบลำดับที่ 18 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 99 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-19 ข้อความทดสอบลำดับที่ 19 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 98 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-20 ข้อความทดสอบลำดับที่ 20 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 97 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-21 ข้อความทดสอบลำดับที่ 21 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 96 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-22 ข้อความทดสอบลำดับที่ 22 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 95 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-23 ข้อความทดสอบลำดับที่ 23 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 94 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-24 ข้อความทดสอบลำดับที่ 24 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 93 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-25 ข้อความทดสอบลำดับที่ 25 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 92 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-26 ข้อความทดสอบลำดับที่ 26 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 91 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-27 ข้อความทดสอบลำดับที่ 27 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 90 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-28 ข้อความทดสอบลำดับที่ 28 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 89 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-29 ข้อความทดสอบลำดับที่ 29 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 88 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-30 ข้อความทดสอบลำดับที่ 30 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 87 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-31 ข้อความทดสอบลำดับที่ 31 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 86 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-32 ข้อความทดสอบลำดับที่ 32 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 85 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-33 ข้อความทดสอบลำดับที่ 33 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 84 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-34 ข้อความทดสอบลำดับที่ 34 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 83 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-35 ข้อความทดสอบลำดับที่ 35 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 82 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-36 ข้อความทดสอบลำดับที่ 36 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 81 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-37 ข้อความทดสอบลำดับที่ 37 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 80 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-38 ข้อความทดสอบลำดับที่ 38 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 79 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-39 ข้อความทดสอบลำดับที่ 39 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 78 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-40 ข้อความทดสอบลำดับที่ 40 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 77 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-41 ข้อความทดสอบลำดับที่ 41 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 76 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-42 ข้อความทดสอบลำดับที่ 42 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 75 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-43 ข้อความทดสอบลำดับที่ 43 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 74 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-44 ข้อความทดสอบลำดับที่ 44 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 73 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-45 ข้อความทดสอบลำดับที่ 45 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 72 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-46 ข้อความทดสอบลำดับที่ 46 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 71 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-47 ข้อความทดสอบลำดับที่ 47 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 70 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-48 ข้อความทดสอบลำดับที่ 48 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 69 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-49 ข้อความทดสอบลำดับที่ 49 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 68 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-50 ข้อความทดสอบลำดับที่ 50 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 67 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-51 ข้อความทดสอบลำดับที่ 51 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 66 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-52 ข้อความทดสอบลำดับที่ 52 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 65 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-53 ข้อความทดสอบลำดับที่ 53 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 64 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-54 ข้อความทดสอบลำดับที่ 54 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 63 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-55 ข้อความทดสอบลำดับที่ 55 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 62 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-56 ข้อความทดสอบลำดับที่ 56 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 61 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-57 ข้อความทดสอบลำดับที่ 57 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 60 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-58 ข้อความทดสอบลำดับที่ 58 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 59 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-59 ข้อความทดสอบลำดับที่ 59 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 58 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-60 ข้อความทดสอบลำดับที่ 60 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 57 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-61 ข้อความทดสอบลำดับที่ 61 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 56 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-62 ข้อความทดสอบลำดับที่ 62 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 55 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-63 ข้อความทดสอบลำดับที่ 63 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 54 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-64 ข้อความทดสอบลำดับที่ 64 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 53 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-65 ข้อความทดสอบลำดับที่ 65 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 52 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-66 ข้อความทดสอบลำดับที่ 66 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 51 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-67 ข้อความทดสอบลำดับที่ 67 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 50 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-68 ข้อความทดสอบลำดับที่ 68 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 49 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-69 ข้อความทดสอบลำดับที่ 69 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 48 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-70 ข้อความทดสอบลำดับที่ 70 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 47 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-71 ข้อความทดสอบลำดับที่ 71 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 46 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-72 ข้อความทดสอบลำดับที่ 72 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 45 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-73 ข้อความทดสอบลำดับที่ 73 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 44 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-74 ข้อความทดสอบลำดับที่ 74 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 43 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-75 ข้อความทดสอบลำดับที่ 75 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 42 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-76 ข้อความทดสอบลำดับที่ 76 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 41 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-77 ข้อความทดสอบลำดับที่ 77 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 40 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-78 ข้อความทดสอบลำดับที่ 78 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 39 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-79 ข้อความทดสอบลำดับที่ 79 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 38 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-80 ข้อความทดสอบลำดับที่ 80 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 37 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-81 ข้อความทดสอบลำดับที่ 81 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 36 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-82 ข้อความทดสอบลำดับที่ 82 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 35 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-83 ข้อความทดสอบลำดับที่ 83 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 34 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-84 ข้อความทดสอบลำดับที่ 84 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 33 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-85 ข้อความทดสอบลำดับที่ 85 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 32 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-86 ข้อความทดสอบลำดับที่ 86 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 31 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-87 ข้อความทดสอบลำดับที่ 87 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 30 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-88 ข้อความทดสอบลำดับที่ 88 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 29 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-89 ข้อความทดสอบลำดับที่ 89 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 28 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-90 ข้อความทดสอบลำดับที่ 90 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 27 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-91 ข้อความทดสอบลำดับที่ 91 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 26 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-92 ข้อความทดสอบลำดับที่ 92 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 25 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-93 ข้อความทดสอบลำดับที่ 93 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 24 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-94 ข้อความทดสอบลำดับที่ 94 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 23 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-95 ข้อความทดสอบลำดับที่ 95 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 22 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-96 ข้อความทดสอบลำดับที่ 96 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 21 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-97 ข้อความทดสอบลำดับที่ 97 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 20 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-98 ข้อความทดสอบลำดับที่ 98 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 19 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-99 ข้อความทดสอบลำดับที่ 99 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 18 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-100 ข้อความทดสอบลำดับที่ 100 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 17 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-101 ข้อความทดสอบลำดับที่ 101 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 16 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-102 ข้อความทดสอบลำดับที่ 102 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 15 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-103 ข้อความทดสอบลำดับที่ 103 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 14 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-104 ข้อความทดสอบลำดับที่ 104 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 13 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-105 ข้อความทดสอบลำดับที่ 105 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 12 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-106 ข้อความทดสอบลำดับที่ 106 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 11 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-107 ข้อความทดสอบลำดับที่ 107 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 10 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-108 ข้อความทดสอบลำดับที่ 108 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 9 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-109 ข้อความทดสอบลำดับที่ 109 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 8 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-110 ข้อความทดสอบลำดับที่ 110 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 7 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-111 ข้อความทดสอบลำดับที่ 111 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 6 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-112 ข้อความทดสอบลำดับที่ 112 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 5 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-113 ข้อความทดสอบลำดับที่ 113 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 4 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-114 ข้อความทดสอบลำดับที่ 114 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 3 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-115 ข้อความทดสอบลำดับที่ 115 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 2 SECOND)),
+  (1, 7001, 'outgoing', 'text', 'INBOXB1-FILLER-116 ข้อความทดสอบลำดับที่ 116 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 1 SECOND)),
+  (1, 7001, 'incoming', 'text', 'INBOXB1-FILLER-117 ข้อความทดสอบลำดับที่ 117 สำหรับทดสอบ cursor pagination ของ /api/inbox/messages', 1, NULL, DATE_SUB(NOW(), INTERVAL 0 SECOND));
+
+-- 3b) Badge-satellite messages — each conversation's SINGLE (or, for
+--     7006, THREE) message row(s) also fix that conversation's
+--     last_message_at per the header note's ordering list (1..5 minutes ago).
+INSERT INTO `messages` (`line_account_id`, `user_id`, `direction`, `message_type`, `content`, `is_read`, `sent_by`, `created_at`) VALUES
+  (1, 7002, 'incoming', 'text', 'INBOXB1-TAGGED ทักทายจากลูกค้าติดแท็ก VIP', 1, NULL, DATE_SUB(NOW(), INTERVAL 1 MINUTE)),
+  (1, 7003, 'incoming', 'text', 'INBOXB1-ASSIGNED ทักทายจากลูกค้าที่มอบหมายเดี่ยว', 1, NULL, DATE_SUB(NOW(), INTERVAL 2 MINUTE)),
+  (1, 7004, 'incoming', 'text', 'INBOXB1-MULTIASSIGNEE ทักทายจากลูกค้าที่มอบหมายหลายคน', 1, NULL, DATE_SUB(NOW(), INTERVAL 3 MINUTE)),
+  (1, 7005, 'incoming', 'text', 'INBOXB1-PENDING ทักทายจากลูกค้าสถานะรอดำเนินการ', 1, NULL, DATE_SUB(NOW(), INTERVAL 4 MINUTE)),
+  (1, 7006, 'incoming', 'text', 'INBOXB1-UNREAD-1 ข้อความที่ยังไม่ได้อ่าน หนึ่ง', 0, NULL, DATE_SUB(NOW(), INTERVAL 5 MINUTE)),
+  (1, 7006, 'outgoing', 'text', 'INBOXB1-UNREAD-REPLY ตอบกลับแล้วหนึ่งข้อความ', 1, 'admin:pharmacist1', DATE_SUB(NOW(), INTERVAL 5 MINUTE) + INTERVAL 10 SECOND),
+  (1, 7006, 'incoming', 'text', 'INBOXB1-UNREAD-2 ข้อความที่ยังไม่ได้อ่าน สอง', 0, NULL, DATE_SUB(NOW(), INTERVAL 5 MINUTE) + INTERVAL 20 SECOND);
+
+-- 3c) Filler conversations (7007-7215) — one plain incoming text
+--     message each, is_read=1. Pure volume for the conversations-cursor-walk
+--     (see header note). Generated as one multi-row INSERT for the whole
+--     range; MySQL evaluates this statement's NOW() once, so the MINUTE
+--     offsets below stay internally consistent.
+INSERT INTO `messages` (`line_account_id`, `user_id`, `direction`, `message_type`, `content`, `is_read`, `sent_by`, `created_at`) VALUES
+
+  (1, 7007, 'incoming', 'text', 'INBOXB1-FILLERCONV-7007 ข้อความจากลูกค้าทั่วไปหมายเลข 7007', 1, NULL, DATE_SUB(NOW(), INTERVAL 6 MINUTE)),
+  (1, 7008, 'incoming', 'text', 'INBOXB1-FILLERCONV-7008 ข้อความจากลูกค้าทั่วไปหมายเลข 7008', 1, NULL, DATE_SUB(NOW(), INTERVAL 7 MINUTE)),
+  (1, 7009, 'incoming', 'text', 'INBOXB1-FILLERCONV-7009 ข้อความจากลูกค้าทั่วไปหมายเลข 7009', 1, NULL, DATE_SUB(NOW(), INTERVAL 8 MINUTE)),
+  (1, 7010, 'incoming', 'text', 'INBOXB1-FILLERCONV-7010 ข้อความจากลูกค้าทั่วไปหมายเลข 7010', 1, NULL, DATE_SUB(NOW(), INTERVAL 9 MINUTE)),
+  (1, 7011, 'incoming', 'text', 'INBOXB1-FILLERCONV-7011 ข้อความจากลูกค้าทั่วไปหมายเลข 7011', 1, NULL, DATE_SUB(NOW(), INTERVAL 10 MINUTE)),
+  (1, 7012, 'incoming', 'text', 'INBOXB1-FILLERCONV-7012 ข้อความจากลูกค้าทั่วไปหมายเลข 7012', 1, NULL, DATE_SUB(NOW(), INTERVAL 11 MINUTE)),
+  (1, 7013, 'incoming', 'text', 'INBOXB1-FILLERCONV-7013 ข้อความจากลูกค้าทั่วไปหมายเลข 7013', 1, NULL, DATE_SUB(NOW(), INTERVAL 12 MINUTE)),
+  (1, 7014, 'incoming', 'text', 'INBOXB1-FILLERCONV-7014 ข้อความจากลูกค้าทั่วไปหมายเลข 7014', 1, NULL, DATE_SUB(NOW(), INTERVAL 13 MINUTE)),
+  (1, 7015, 'incoming', 'text', 'INBOXB1-FILLERCONV-7015 ข้อความจากลูกค้าทั่วไปหมายเลข 7015', 1, NULL, DATE_SUB(NOW(), INTERVAL 14 MINUTE)),
+  (1, 7016, 'incoming', 'text', 'INBOXB1-FILLERCONV-7016 ข้อความจากลูกค้าทั่วไปหมายเลข 7016', 1, NULL, DATE_SUB(NOW(), INTERVAL 15 MINUTE)),
+  (1, 7017, 'incoming', 'text', 'INBOXB1-FILLERCONV-7017 ข้อความจากลูกค้าทั่วไปหมายเลข 7017', 1, NULL, DATE_SUB(NOW(), INTERVAL 16 MINUTE)),
+  (1, 7018, 'incoming', 'text', 'INBOXB1-FILLERCONV-7018 ข้อความจากลูกค้าทั่วไปหมายเลข 7018', 1, NULL, DATE_SUB(NOW(), INTERVAL 17 MINUTE)),
+  (1, 7019, 'incoming', 'text', 'INBOXB1-FILLERCONV-7019 ข้อความจากลูกค้าทั่วไปหมายเลข 7019', 1, NULL, DATE_SUB(NOW(), INTERVAL 18 MINUTE)),
+  (1, 7020, 'incoming', 'text', 'INBOXB1-FILLERCONV-7020 ข้อความจากลูกค้าทั่วไปหมายเลข 7020', 1, NULL, DATE_SUB(NOW(), INTERVAL 19 MINUTE)),
+  (1, 7021, 'incoming', 'text', 'INBOXB1-FILLERCONV-7021 ข้อความจากลูกค้าทั่วไปหมายเลข 7021', 1, NULL, DATE_SUB(NOW(), INTERVAL 20 MINUTE)),
+  (1, 7022, 'incoming', 'text', 'INBOXB1-FILLERCONV-7022 ข้อความจากลูกค้าทั่วไปหมายเลข 7022', 1, NULL, DATE_SUB(NOW(), INTERVAL 21 MINUTE)),
+  (1, 7023, 'incoming', 'text', 'INBOXB1-FILLERCONV-7023 ข้อความจากลูกค้าทั่วไปหมายเลข 7023', 1, NULL, DATE_SUB(NOW(), INTERVAL 22 MINUTE)),
+  (1, 7024, 'incoming', 'text', 'INBOXB1-FILLERCONV-7024 ข้อความจากลูกค้าทั่วไปหมายเลข 7024', 1, NULL, DATE_SUB(NOW(), INTERVAL 23 MINUTE)),
+  (1, 7025, 'incoming', 'text', 'INBOXB1-FILLERCONV-7025 ข้อความจากลูกค้าทั่วไปหมายเลข 7025', 1, NULL, DATE_SUB(NOW(), INTERVAL 24 MINUTE)),
+  (1, 7026, 'incoming', 'text', 'INBOXB1-FILLERCONV-7026 ข้อความจากลูกค้าทั่วไปหมายเลข 7026', 1, NULL, DATE_SUB(NOW(), INTERVAL 25 MINUTE)),
+  (1, 7027, 'incoming', 'text', 'INBOXB1-FILLERCONV-7027 ข้อความจากลูกค้าทั่วไปหมายเลข 7027', 1, NULL, DATE_SUB(NOW(), INTERVAL 26 MINUTE)),
+  (1, 7028, 'incoming', 'text', 'INBOXB1-FILLERCONV-7028 ข้อความจากลูกค้าทั่วไปหมายเลข 7028', 1, NULL, DATE_SUB(NOW(), INTERVAL 27 MINUTE)),
+  (1, 7029, 'incoming', 'text', 'INBOXB1-FILLERCONV-7029 ข้อความจากลูกค้าทั่วไปหมายเลข 7029', 1, NULL, DATE_SUB(NOW(), INTERVAL 28 MINUTE)),
+  (1, 7030, 'incoming', 'text', 'INBOXB1-FILLERCONV-7030 ข้อความจากลูกค้าทั่วไปหมายเลข 7030', 1, NULL, DATE_SUB(NOW(), INTERVAL 29 MINUTE)),
+  (1, 7031, 'incoming', 'text', 'INBOXB1-FILLERCONV-7031 ข้อความจากลูกค้าทั่วไปหมายเลข 7031', 1, NULL, DATE_SUB(NOW(), INTERVAL 30 MINUTE)),
+  (1, 7032, 'incoming', 'text', 'INBOXB1-FILLERCONV-7032 ข้อความจากลูกค้าทั่วไปหมายเลข 7032', 1, NULL, DATE_SUB(NOW(), INTERVAL 31 MINUTE)),
+  (1, 7033, 'incoming', 'text', 'INBOXB1-FILLERCONV-7033 ข้อความจากลูกค้าทั่วไปหมายเลข 7033', 1, NULL, DATE_SUB(NOW(), INTERVAL 32 MINUTE)),
+  (1, 7034, 'incoming', 'text', 'INBOXB1-FILLERCONV-7034 ข้อความจากลูกค้าทั่วไปหมายเลข 7034', 1, NULL, DATE_SUB(NOW(), INTERVAL 33 MINUTE)),
+  (1, 7035, 'incoming', 'text', 'INBOXB1-FILLERCONV-7035 ข้อความจากลูกค้าทั่วไปหมายเลข 7035', 1, NULL, DATE_SUB(NOW(), INTERVAL 34 MINUTE)),
+  (1, 7036, 'incoming', 'text', 'INBOXB1-FILLERCONV-7036 ข้อความจากลูกค้าทั่วไปหมายเลข 7036', 1, NULL, DATE_SUB(NOW(), INTERVAL 35 MINUTE)),
+  (1, 7037, 'incoming', 'text', 'INBOXB1-FILLERCONV-7037 ข้อความจากลูกค้าทั่วไปหมายเลข 7037', 1, NULL, DATE_SUB(NOW(), INTERVAL 36 MINUTE)),
+  (1, 7038, 'incoming', 'text', 'INBOXB1-FILLERCONV-7038 ข้อความจากลูกค้าทั่วไปหมายเลข 7038', 1, NULL, DATE_SUB(NOW(), INTERVAL 37 MINUTE)),
+  (1, 7039, 'incoming', 'text', 'INBOXB1-FILLERCONV-7039 ข้อความจากลูกค้าทั่วไปหมายเลข 7039', 1, NULL, DATE_SUB(NOW(), INTERVAL 38 MINUTE)),
+  (1, 7040, 'incoming', 'text', 'INBOXB1-FILLERCONV-7040 ข้อความจากลูกค้าทั่วไปหมายเลข 7040', 1, NULL, DATE_SUB(NOW(), INTERVAL 39 MINUTE)),
+  (1, 7041, 'incoming', 'text', 'INBOXB1-FILLERCONV-7041 ข้อความจากลูกค้าทั่วไปหมายเลข 7041', 1, NULL, DATE_SUB(NOW(), INTERVAL 40 MINUTE)),
+  (1, 7042, 'incoming', 'text', 'INBOXB1-FILLERCONV-7042 ข้อความจากลูกค้าทั่วไปหมายเลข 7042', 1, NULL, DATE_SUB(NOW(), INTERVAL 41 MINUTE)),
+  (1, 7043, 'incoming', 'text', 'INBOXB1-FILLERCONV-7043 ข้อความจากลูกค้าทั่วไปหมายเลข 7043', 1, NULL, DATE_SUB(NOW(), INTERVAL 42 MINUTE)),
+  (1, 7044, 'incoming', 'text', 'INBOXB1-FILLERCONV-7044 ข้อความจากลูกค้าทั่วไปหมายเลข 7044', 1, NULL, DATE_SUB(NOW(), INTERVAL 43 MINUTE)),
+  (1, 7045, 'incoming', 'text', 'INBOXB1-FILLERCONV-7045 ข้อความจากลูกค้าทั่วไปหมายเลข 7045', 1, NULL, DATE_SUB(NOW(), INTERVAL 44 MINUTE)),
+  (1, 7046, 'incoming', 'text', 'INBOXB1-FILLERCONV-7046 ข้อความจากลูกค้าทั่วไปหมายเลข 7046', 1, NULL, DATE_SUB(NOW(), INTERVAL 45 MINUTE)),
+  (1, 7047, 'incoming', 'text', 'INBOXB1-FILLERCONV-7047 ข้อความจากลูกค้าทั่วไปหมายเลข 7047', 1, NULL, DATE_SUB(NOW(), INTERVAL 46 MINUTE)),
+  (1, 7048, 'incoming', 'text', 'INBOXB1-FILLERCONV-7048 ข้อความจากลูกค้าทั่วไปหมายเลข 7048', 1, NULL, DATE_SUB(NOW(), INTERVAL 47 MINUTE)),
+  (1, 7049, 'incoming', 'text', 'INBOXB1-FILLERCONV-7049 ข้อความจากลูกค้าทั่วไปหมายเลข 7049', 1, NULL, DATE_SUB(NOW(), INTERVAL 48 MINUTE)),
+  (1, 7050, 'incoming', 'text', 'INBOXB1-FILLERCONV-7050 ข้อความจากลูกค้าทั่วไปหมายเลข 7050', 1, NULL, DATE_SUB(NOW(), INTERVAL 49 MINUTE)),
+  (1, 7051, 'incoming', 'text', 'INBOXB1-FILLERCONV-7051 ข้อความจากลูกค้าทั่วไปหมายเลข 7051', 1, NULL, DATE_SUB(NOW(), INTERVAL 50 MINUTE)),
+  (1, 7052, 'incoming', 'text', 'INBOXB1-FILLERCONV-7052 ข้อความจากลูกค้าทั่วไปหมายเลข 7052', 1, NULL, DATE_SUB(NOW(), INTERVAL 51 MINUTE)),
+  (1, 7053, 'incoming', 'text', 'INBOXB1-FILLERCONV-7053 ข้อความจากลูกค้าทั่วไปหมายเลข 7053', 1, NULL, DATE_SUB(NOW(), INTERVAL 52 MINUTE)),
+  (1, 7054, 'incoming', 'text', 'INBOXB1-FILLERCONV-7054 ข้อความจากลูกค้าทั่วไปหมายเลข 7054', 1, NULL, DATE_SUB(NOW(), INTERVAL 53 MINUTE)),
+  (1, 7055, 'incoming', 'text', 'INBOXB1-FILLERCONV-7055 ข้อความจากลูกค้าทั่วไปหมายเลข 7055', 1, NULL, DATE_SUB(NOW(), INTERVAL 54 MINUTE)),
+  (1, 7056, 'incoming', 'text', 'INBOXB1-FILLERCONV-7056 ข้อความจากลูกค้าทั่วไปหมายเลข 7056', 1, NULL, DATE_SUB(NOW(), INTERVAL 55 MINUTE)),
+  (1, 7057, 'incoming', 'text', 'INBOXB1-FILLERCONV-7057 ข้อความจากลูกค้าทั่วไปหมายเลข 7057', 1, NULL, DATE_SUB(NOW(), INTERVAL 56 MINUTE)),
+  (1, 7058, 'incoming', 'text', 'INBOXB1-FILLERCONV-7058 ข้อความจากลูกค้าทั่วไปหมายเลข 7058', 1, NULL, DATE_SUB(NOW(), INTERVAL 57 MINUTE)),
+  (1, 7059, 'incoming', 'text', 'INBOXB1-FILLERCONV-7059 ข้อความจากลูกค้าทั่วไปหมายเลข 7059', 1, NULL, DATE_SUB(NOW(), INTERVAL 58 MINUTE)),
+  (1, 7060, 'incoming', 'text', 'INBOXB1-FILLERCONV-7060 ข้อความจากลูกค้าทั่วไปหมายเลข 7060', 1, NULL, DATE_SUB(NOW(), INTERVAL 59 MINUTE)),
+  (1, 7061, 'incoming', 'text', 'INBOXB1-FILLERCONV-7061 ข้อความจากลูกค้าทั่วไปหมายเลข 7061', 1, NULL, DATE_SUB(NOW(), INTERVAL 60 MINUTE)),
+  (1, 7062, 'incoming', 'text', 'INBOXB1-FILLERCONV-7062 ข้อความจากลูกค้าทั่วไปหมายเลข 7062', 1, NULL, DATE_SUB(NOW(), INTERVAL 61 MINUTE)),
+  (1, 7063, 'incoming', 'text', 'INBOXB1-FILLERCONV-7063 ข้อความจากลูกค้าทั่วไปหมายเลข 7063', 1, NULL, DATE_SUB(NOW(), INTERVAL 62 MINUTE)),
+  (1, 7064, 'incoming', 'text', 'INBOXB1-FILLERCONV-7064 ข้อความจากลูกค้าทั่วไปหมายเลข 7064', 1, NULL, DATE_SUB(NOW(), INTERVAL 63 MINUTE)),
+  (1, 7065, 'incoming', 'text', 'INBOXB1-FILLERCONV-7065 ข้อความจากลูกค้าทั่วไปหมายเลข 7065', 1, NULL, DATE_SUB(NOW(), INTERVAL 64 MINUTE)),
+  (1, 7066, 'incoming', 'text', 'INBOXB1-FILLERCONV-7066 ข้อความจากลูกค้าทั่วไปหมายเลข 7066', 1, NULL, DATE_SUB(NOW(), INTERVAL 65 MINUTE)),
+  (1, 7067, 'incoming', 'text', 'INBOXB1-FILLERCONV-7067 ข้อความจากลูกค้าทั่วไปหมายเลข 7067', 1, NULL, DATE_SUB(NOW(), INTERVAL 66 MINUTE)),
+  (1, 7068, 'incoming', 'text', 'INBOXB1-FILLERCONV-7068 ข้อความจากลูกค้าทั่วไปหมายเลข 7068', 1, NULL, DATE_SUB(NOW(), INTERVAL 67 MINUTE)),
+  (1, 7069, 'incoming', 'text', 'INBOXB1-FILLERCONV-7069 ข้อความจากลูกค้าทั่วไปหมายเลข 7069', 1, NULL, DATE_SUB(NOW(), INTERVAL 68 MINUTE)),
+  (1, 7070, 'incoming', 'text', 'INBOXB1-FILLERCONV-7070 ข้อความจากลูกค้าทั่วไปหมายเลข 7070', 1, NULL, DATE_SUB(NOW(), INTERVAL 69 MINUTE)),
+  (1, 7071, 'incoming', 'text', 'INBOXB1-FILLERCONV-7071 ข้อความจากลูกค้าทั่วไปหมายเลข 7071', 1, NULL, DATE_SUB(NOW(), INTERVAL 70 MINUTE)),
+  (1, 7072, 'incoming', 'text', 'INBOXB1-FILLERCONV-7072 ข้อความจากลูกค้าทั่วไปหมายเลข 7072', 1, NULL, DATE_SUB(NOW(), INTERVAL 71 MINUTE)),
+  (1, 7073, 'incoming', 'text', 'INBOXB1-FILLERCONV-7073 ข้อความจากลูกค้าทั่วไปหมายเลข 7073', 1, NULL, DATE_SUB(NOW(), INTERVAL 72 MINUTE)),
+  (1, 7074, 'incoming', 'text', 'INBOXB1-FILLERCONV-7074 ข้อความจากลูกค้าทั่วไปหมายเลข 7074', 1, NULL, DATE_SUB(NOW(), INTERVAL 73 MINUTE)),
+  (1, 7075, 'incoming', 'text', 'INBOXB1-FILLERCONV-7075 ข้อความจากลูกค้าทั่วไปหมายเลข 7075', 1, NULL, DATE_SUB(NOW(), INTERVAL 74 MINUTE)),
+  (1, 7076, 'incoming', 'text', 'INBOXB1-FILLERCONV-7076 ข้อความจากลูกค้าทั่วไปหมายเลข 7076', 1, NULL, DATE_SUB(NOW(), INTERVAL 75 MINUTE)),
+  (1, 7077, 'incoming', 'text', 'INBOXB1-FILLERCONV-7077 ข้อความจากลูกค้าทั่วไปหมายเลข 7077', 1, NULL, DATE_SUB(NOW(), INTERVAL 76 MINUTE)),
+  (1, 7078, 'incoming', 'text', 'INBOXB1-FILLERCONV-7078 ข้อความจากลูกค้าทั่วไปหมายเลข 7078', 1, NULL, DATE_SUB(NOW(), INTERVAL 77 MINUTE)),
+  (1, 7079, 'incoming', 'text', 'INBOXB1-FILLERCONV-7079 ข้อความจากลูกค้าทั่วไปหมายเลข 7079', 1, NULL, DATE_SUB(NOW(), INTERVAL 78 MINUTE)),
+  (1, 7080, 'incoming', 'text', 'INBOXB1-FILLERCONV-7080 ข้อความจากลูกค้าทั่วไปหมายเลข 7080', 1, NULL, DATE_SUB(NOW(), INTERVAL 79 MINUTE)),
+  (1, 7081, 'incoming', 'text', 'INBOXB1-FILLERCONV-7081 ข้อความจากลูกค้าทั่วไปหมายเลข 7081', 1, NULL, DATE_SUB(NOW(), INTERVAL 80 MINUTE)),
+  (1, 7082, 'incoming', 'text', 'INBOXB1-FILLERCONV-7082 ข้อความจากลูกค้าทั่วไปหมายเลข 7082', 1, NULL, DATE_SUB(NOW(), INTERVAL 81 MINUTE)),
+  (1, 7083, 'incoming', 'text', 'INBOXB1-FILLERCONV-7083 ข้อความจากลูกค้าทั่วไปหมายเลข 7083', 1, NULL, DATE_SUB(NOW(), INTERVAL 82 MINUTE)),
+  (1, 7084, 'incoming', 'text', 'INBOXB1-FILLERCONV-7084 ข้อความจากลูกค้าทั่วไปหมายเลข 7084', 1, NULL, DATE_SUB(NOW(), INTERVAL 83 MINUTE)),
+  (1, 7085, 'incoming', 'text', 'INBOXB1-FILLERCONV-7085 ข้อความจากลูกค้าทั่วไปหมายเลข 7085', 1, NULL, DATE_SUB(NOW(), INTERVAL 84 MINUTE)),
+  (1, 7086, 'incoming', 'text', 'INBOXB1-FILLERCONV-7086 ข้อความจากลูกค้าทั่วไปหมายเลข 7086', 1, NULL, DATE_SUB(NOW(), INTERVAL 85 MINUTE)),
+  (1, 7087, 'incoming', 'text', 'INBOXB1-FILLERCONV-7087 ข้อความจากลูกค้าทั่วไปหมายเลข 7087', 1, NULL, DATE_SUB(NOW(), INTERVAL 86 MINUTE)),
+  (1, 7088, 'incoming', 'text', 'INBOXB1-FILLERCONV-7088 ข้อความจากลูกค้าทั่วไปหมายเลข 7088', 1, NULL, DATE_SUB(NOW(), INTERVAL 87 MINUTE)),
+  (1, 7089, 'incoming', 'text', 'INBOXB1-FILLERCONV-7089 ข้อความจากลูกค้าทั่วไปหมายเลข 7089', 1, NULL, DATE_SUB(NOW(), INTERVAL 88 MINUTE)),
+  (1, 7090, 'incoming', 'text', 'INBOXB1-FILLERCONV-7090 ข้อความจากลูกค้าทั่วไปหมายเลข 7090', 1, NULL, DATE_SUB(NOW(), INTERVAL 89 MINUTE)),
+  (1, 7091, 'incoming', 'text', 'INBOXB1-FILLERCONV-7091 ข้อความจากลูกค้าทั่วไปหมายเลข 7091', 1, NULL, DATE_SUB(NOW(), INTERVAL 90 MINUTE)),
+  (1, 7092, 'incoming', 'text', 'INBOXB1-FILLERCONV-7092 ข้อความจากลูกค้าทั่วไปหมายเลข 7092', 1, NULL, DATE_SUB(NOW(), INTERVAL 91 MINUTE)),
+  (1, 7093, 'incoming', 'text', 'INBOXB1-FILLERCONV-7093 ข้อความจากลูกค้าทั่วไปหมายเลข 7093', 1, NULL, DATE_SUB(NOW(), INTERVAL 92 MINUTE)),
+  (1, 7094, 'incoming', 'text', 'INBOXB1-FILLERCONV-7094 ข้อความจากลูกค้าทั่วไปหมายเลข 7094', 1, NULL, DATE_SUB(NOW(), INTERVAL 93 MINUTE)),
+  (1, 7095, 'incoming', 'text', 'INBOXB1-FILLERCONV-7095 ข้อความจากลูกค้าทั่วไปหมายเลข 7095', 1, NULL, DATE_SUB(NOW(), INTERVAL 94 MINUTE)),
+  (1, 7096, 'incoming', 'text', 'INBOXB1-FILLERCONV-7096 ข้อความจากลูกค้าทั่วไปหมายเลข 7096', 1, NULL, DATE_SUB(NOW(), INTERVAL 95 MINUTE)),
+  (1, 7097, 'incoming', 'text', 'INBOXB1-FILLERCONV-7097 ข้อความจากลูกค้าทั่วไปหมายเลข 7097', 1, NULL, DATE_SUB(NOW(), INTERVAL 96 MINUTE)),
+  (1, 7098, 'incoming', 'text', 'INBOXB1-FILLERCONV-7098 ข้อความจากลูกค้าทั่วไปหมายเลข 7098', 1, NULL, DATE_SUB(NOW(), INTERVAL 97 MINUTE)),
+  (1, 7099, 'incoming', 'text', 'INBOXB1-FILLERCONV-7099 ข้อความจากลูกค้าทั่วไปหมายเลข 7099', 1, NULL, DATE_SUB(NOW(), INTERVAL 98 MINUTE)),
+  (1, 7100, 'incoming', 'text', 'INBOXB1-FILLERCONV-7100 ข้อความจากลูกค้าทั่วไปหมายเลข 7100', 1, NULL, DATE_SUB(NOW(), INTERVAL 99 MINUTE)),
+  (1, 7101, 'incoming', 'text', 'INBOXB1-FILLERCONV-7101 ข้อความจากลูกค้าทั่วไปหมายเลข 7101', 1, NULL, DATE_SUB(NOW(), INTERVAL 100 MINUTE)),
+  (1, 7102, 'incoming', 'text', 'INBOXB1-FILLERCONV-7102 ข้อความจากลูกค้าทั่วไปหมายเลข 7102', 1, NULL, DATE_SUB(NOW(), INTERVAL 101 MINUTE)),
+  (1, 7103, 'incoming', 'text', 'INBOXB1-FILLERCONV-7103 ข้อความจากลูกค้าทั่วไปหมายเลข 7103', 1, NULL, DATE_SUB(NOW(), INTERVAL 102 MINUTE)),
+  (1, 7104, 'incoming', 'text', 'INBOXB1-FILLERCONV-7104 ข้อความจากลูกค้าทั่วไปหมายเลข 7104', 1, NULL, DATE_SUB(NOW(), INTERVAL 103 MINUTE)),
+  (1, 7105, 'incoming', 'text', 'INBOXB1-FILLERCONV-7105 ข้อความจากลูกค้าทั่วไปหมายเลข 7105', 1, NULL, DATE_SUB(NOW(), INTERVAL 104 MINUTE)),
+  (1, 7106, 'incoming', 'text', 'INBOXB1-FILLERCONV-7106 ข้อความจากลูกค้าทั่วไปหมายเลข 7106', 1, NULL, DATE_SUB(NOW(), INTERVAL 105 MINUTE)),
+  (1, 7107, 'incoming', 'text', 'INBOXB1-FILLERCONV-7107 ข้อความจากลูกค้าทั่วไปหมายเลข 7107', 1, NULL, DATE_SUB(NOW(), INTERVAL 106 MINUTE)),
+  (1, 7108, 'incoming', 'text', 'INBOXB1-FILLERCONV-7108 ข้อความจากลูกค้าทั่วไปหมายเลข 7108', 1, NULL, DATE_SUB(NOW(), INTERVAL 107 MINUTE)),
+  (1, 7109, 'incoming', 'text', 'INBOXB1-FILLERCONV-7109 ข้อความจากลูกค้าทั่วไปหมายเลข 7109', 1, NULL, DATE_SUB(NOW(), INTERVAL 108 MINUTE)),
+  (1, 7110, 'incoming', 'text', 'INBOXB1-FILLERCONV-7110 ข้อความจากลูกค้าทั่วไปหมายเลข 7110', 1, NULL, DATE_SUB(NOW(), INTERVAL 109 MINUTE)),
+  (1, 7111, 'incoming', 'text', 'INBOXB1-FILLERCONV-7111 ข้อความจากลูกค้าทั่วไปหมายเลข 7111', 1, NULL, DATE_SUB(NOW(), INTERVAL 110 MINUTE)),
+  (1, 7112, 'incoming', 'text', 'INBOXB1-FILLERCONV-7112 ข้อความจากลูกค้าทั่วไปหมายเลข 7112', 1, NULL, DATE_SUB(NOW(), INTERVAL 111 MINUTE)),
+  (1, 7113, 'incoming', 'text', 'INBOXB1-FILLERCONV-7113 ข้อความจากลูกค้าทั่วไปหมายเลข 7113', 1, NULL, DATE_SUB(NOW(), INTERVAL 112 MINUTE)),
+  (1, 7114, 'incoming', 'text', 'INBOXB1-FILLERCONV-7114 ข้อความจากลูกค้าทั่วไปหมายเลข 7114', 1, NULL, DATE_SUB(NOW(), INTERVAL 113 MINUTE)),
+  (1, 7115, 'incoming', 'text', 'INBOXB1-FILLERCONV-7115 ข้อความจากลูกค้าทั่วไปหมายเลข 7115', 1, NULL, DATE_SUB(NOW(), INTERVAL 114 MINUTE)),
+  (1, 7116, 'incoming', 'text', 'INBOXB1-FILLERCONV-7116 ข้อความจากลูกค้าทั่วไปหมายเลข 7116', 1, NULL, DATE_SUB(NOW(), INTERVAL 115 MINUTE)),
+  (1, 7117, 'incoming', 'text', 'INBOXB1-FILLERCONV-7117 ข้อความจากลูกค้าทั่วไปหมายเลข 7117', 1, NULL, DATE_SUB(NOW(), INTERVAL 116 MINUTE)),
+  (1, 7118, 'incoming', 'text', 'INBOXB1-FILLERCONV-7118 ข้อความจากลูกค้าทั่วไปหมายเลข 7118', 1, NULL, DATE_SUB(NOW(), INTERVAL 117 MINUTE)),
+  (1, 7119, 'incoming', 'text', 'INBOXB1-FILLERCONV-7119 ข้อความจากลูกค้าทั่วไปหมายเลข 7119', 1, NULL, DATE_SUB(NOW(), INTERVAL 118 MINUTE)),
+  (1, 7120, 'incoming', 'text', 'INBOXB1-FILLERCONV-7120 ข้อความจากลูกค้าทั่วไปหมายเลข 7120', 1, NULL, DATE_SUB(NOW(), INTERVAL 119 MINUTE)),
+  (1, 7121, 'incoming', 'text', 'INBOXB1-FILLERCONV-7121 ข้อความจากลูกค้าทั่วไปหมายเลข 7121', 1, NULL, DATE_SUB(NOW(), INTERVAL 120 MINUTE)),
+  (1, 7122, 'incoming', 'text', 'INBOXB1-FILLERCONV-7122 ข้อความจากลูกค้าทั่วไปหมายเลข 7122', 1, NULL, DATE_SUB(NOW(), INTERVAL 121 MINUTE)),
+  (1, 7123, 'incoming', 'text', 'INBOXB1-FILLERCONV-7123 ข้อความจากลูกค้าทั่วไปหมายเลข 7123', 1, NULL, DATE_SUB(NOW(), INTERVAL 122 MINUTE)),
+  (1, 7124, 'incoming', 'text', 'INBOXB1-FILLERCONV-7124 ข้อความจากลูกค้าทั่วไปหมายเลข 7124', 1, NULL, DATE_SUB(NOW(), INTERVAL 123 MINUTE)),
+  (1, 7125, 'incoming', 'text', 'INBOXB1-FILLERCONV-7125 ข้อความจากลูกค้าทั่วไปหมายเลข 7125', 1, NULL, DATE_SUB(NOW(), INTERVAL 124 MINUTE)),
+  (1, 7126, 'incoming', 'text', 'INBOXB1-FILLERCONV-7126 ข้อความจากลูกค้าทั่วไปหมายเลข 7126', 1, NULL, DATE_SUB(NOW(), INTERVAL 125 MINUTE)),
+  (1, 7127, 'incoming', 'text', 'INBOXB1-FILLERCONV-7127 ข้อความจากลูกค้าทั่วไปหมายเลข 7127', 1, NULL, DATE_SUB(NOW(), INTERVAL 126 MINUTE)),
+  (1, 7128, 'incoming', 'text', 'INBOXB1-FILLERCONV-7128 ข้อความจากลูกค้าทั่วไปหมายเลข 7128', 1, NULL, DATE_SUB(NOW(), INTERVAL 127 MINUTE)),
+  (1, 7129, 'incoming', 'text', 'INBOXB1-FILLERCONV-7129 ข้อความจากลูกค้าทั่วไปหมายเลข 7129', 1, NULL, DATE_SUB(NOW(), INTERVAL 128 MINUTE)),
+  (1, 7130, 'incoming', 'text', 'INBOXB1-FILLERCONV-7130 ข้อความจากลูกค้าทั่วไปหมายเลข 7130', 1, NULL, DATE_SUB(NOW(), INTERVAL 129 MINUTE)),
+  (1, 7131, 'incoming', 'text', 'INBOXB1-FILLERCONV-7131 ข้อความจากลูกค้าทั่วไปหมายเลข 7131', 1, NULL, DATE_SUB(NOW(), INTERVAL 130 MINUTE)),
+  (1, 7132, 'incoming', 'text', 'INBOXB1-FILLERCONV-7132 ข้อความจากลูกค้าทั่วไปหมายเลข 7132', 1, NULL, DATE_SUB(NOW(), INTERVAL 131 MINUTE)),
+  (1, 7133, 'incoming', 'text', 'INBOXB1-FILLERCONV-7133 ข้อความจากลูกค้าทั่วไปหมายเลข 7133', 1, NULL, DATE_SUB(NOW(), INTERVAL 132 MINUTE)),
+  (1, 7134, 'incoming', 'text', 'INBOXB1-FILLERCONV-7134 ข้อความจากลูกค้าทั่วไปหมายเลข 7134', 1, NULL, DATE_SUB(NOW(), INTERVAL 133 MINUTE)),
+  (1, 7135, 'incoming', 'text', 'INBOXB1-FILLERCONV-7135 ข้อความจากลูกค้าทั่วไปหมายเลข 7135', 1, NULL, DATE_SUB(NOW(), INTERVAL 134 MINUTE)),
+  (1, 7136, 'incoming', 'text', 'INBOXB1-FILLERCONV-7136 ข้อความจากลูกค้าทั่วไปหมายเลข 7136', 1, NULL, DATE_SUB(NOW(), INTERVAL 135 MINUTE)),
+  (1, 7137, 'incoming', 'text', 'INBOXB1-FILLERCONV-7137 ข้อความจากลูกค้าทั่วไปหมายเลข 7137', 1, NULL, DATE_SUB(NOW(), INTERVAL 136 MINUTE)),
+  (1, 7138, 'incoming', 'text', 'INBOXB1-FILLERCONV-7138 ข้อความจากลูกค้าทั่วไปหมายเลข 7138', 1, NULL, DATE_SUB(NOW(), INTERVAL 137 MINUTE)),
+  (1, 7139, 'incoming', 'text', 'INBOXB1-FILLERCONV-7139 ข้อความจากลูกค้าทั่วไปหมายเลข 7139', 1, NULL, DATE_SUB(NOW(), INTERVAL 138 MINUTE)),
+  (1, 7140, 'incoming', 'text', 'INBOXB1-FILLERCONV-7140 ข้อความจากลูกค้าทั่วไปหมายเลข 7140', 1, NULL, DATE_SUB(NOW(), INTERVAL 139 MINUTE)),
+  (1, 7141, 'incoming', 'text', 'INBOXB1-FILLERCONV-7141 ข้อความจากลูกค้าทั่วไปหมายเลข 7141', 1, NULL, DATE_SUB(NOW(), INTERVAL 140 MINUTE)),
+  (1, 7142, 'incoming', 'text', 'INBOXB1-FILLERCONV-7142 ข้อความจากลูกค้าทั่วไปหมายเลข 7142', 1, NULL, DATE_SUB(NOW(), INTERVAL 141 MINUTE)),
+  (1, 7143, 'incoming', 'text', 'INBOXB1-FILLERCONV-7143 ข้อความจากลูกค้าทั่วไปหมายเลข 7143', 1, NULL, DATE_SUB(NOW(), INTERVAL 142 MINUTE)),
+  (1, 7144, 'incoming', 'text', 'INBOXB1-FILLERCONV-7144 ข้อความจากลูกค้าทั่วไปหมายเลข 7144', 1, NULL, DATE_SUB(NOW(), INTERVAL 143 MINUTE)),
+  (1, 7145, 'incoming', 'text', 'INBOXB1-FILLERCONV-7145 ข้อความจากลูกค้าทั่วไปหมายเลข 7145', 1, NULL, DATE_SUB(NOW(), INTERVAL 144 MINUTE)),
+  (1, 7146, 'incoming', 'text', 'INBOXB1-FILLERCONV-7146 ข้อความจากลูกค้าทั่วไปหมายเลข 7146', 1, NULL, DATE_SUB(NOW(), INTERVAL 145 MINUTE)),
+  (1, 7147, 'incoming', 'text', 'INBOXB1-FILLERCONV-7147 ข้อความจากลูกค้าทั่วไปหมายเลข 7147', 1, NULL, DATE_SUB(NOW(), INTERVAL 146 MINUTE)),
+  (1, 7148, 'incoming', 'text', 'INBOXB1-FILLERCONV-7148 ข้อความจากลูกค้าทั่วไปหมายเลข 7148', 1, NULL, DATE_SUB(NOW(), INTERVAL 147 MINUTE)),
+  (1, 7149, 'incoming', 'text', 'INBOXB1-FILLERCONV-7149 ข้อความจากลูกค้าทั่วไปหมายเลข 7149', 1, NULL, DATE_SUB(NOW(), INTERVAL 148 MINUTE)),
+  (1, 7150, 'incoming', 'text', 'INBOXB1-FILLERCONV-7150 ข้อความจากลูกค้าทั่วไปหมายเลข 7150', 1, NULL, DATE_SUB(NOW(), INTERVAL 149 MINUTE)),
+  (1, 7151, 'incoming', 'text', 'INBOXB1-FILLERCONV-7151 ข้อความจากลูกค้าทั่วไปหมายเลข 7151', 1, NULL, DATE_SUB(NOW(), INTERVAL 150 MINUTE)),
+  (1, 7152, 'incoming', 'text', 'INBOXB1-FILLERCONV-7152 ข้อความจากลูกค้าทั่วไปหมายเลข 7152', 1, NULL, DATE_SUB(NOW(), INTERVAL 151 MINUTE)),
+  (1, 7153, 'incoming', 'text', 'INBOXB1-FILLERCONV-7153 ข้อความจากลูกค้าทั่วไปหมายเลข 7153', 1, NULL, DATE_SUB(NOW(), INTERVAL 152 MINUTE)),
+  (1, 7154, 'incoming', 'text', 'INBOXB1-FILLERCONV-7154 ข้อความจากลูกค้าทั่วไปหมายเลข 7154', 1, NULL, DATE_SUB(NOW(), INTERVAL 153 MINUTE)),
+  (1, 7155, 'incoming', 'text', 'INBOXB1-FILLERCONV-7155 ข้อความจากลูกค้าทั่วไปหมายเลข 7155', 1, NULL, DATE_SUB(NOW(), INTERVAL 154 MINUTE)),
+  (1, 7156, 'incoming', 'text', 'INBOXB1-FILLERCONV-7156 ข้อความจากลูกค้าทั่วไปหมายเลข 7156', 1, NULL, DATE_SUB(NOW(), INTERVAL 155 MINUTE)),
+  (1, 7157, 'incoming', 'text', 'INBOXB1-FILLERCONV-7157 ข้อความจากลูกค้าทั่วไปหมายเลข 7157', 1, NULL, DATE_SUB(NOW(), INTERVAL 156 MINUTE)),
+  (1, 7158, 'incoming', 'text', 'INBOXB1-FILLERCONV-7158 ข้อความจากลูกค้าทั่วไปหมายเลข 7158', 1, NULL, DATE_SUB(NOW(), INTERVAL 157 MINUTE)),
+  (1, 7159, 'incoming', 'text', 'INBOXB1-FILLERCONV-7159 ข้อความจากลูกค้าทั่วไปหมายเลข 7159', 1, NULL, DATE_SUB(NOW(), INTERVAL 158 MINUTE)),
+  (1, 7160, 'incoming', 'text', 'INBOXB1-FILLERCONV-7160 ข้อความจากลูกค้าทั่วไปหมายเลข 7160', 1, NULL, DATE_SUB(NOW(), INTERVAL 159 MINUTE)),
+  (1, 7161, 'incoming', 'text', 'INBOXB1-FILLERCONV-7161 ข้อความจากลูกค้าทั่วไปหมายเลข 7161', 1, NULL, DATE_SUB(NOW(), INTERVAL 160 MINUTE)),
+  (1, 7162, 'incoming', 'text', 'INBOXB1-FILLERCONV-7162 ข้อความจากลูกค้าทั่วไปหมายเลข 7162', 1, NULL, DATE_SUB(NOW(), INTERVAL 161 MINUTE)),
+  (1, 7163, 'incoming', 'text', 'INBOXB1-FILLERCONV-7163 ข้อความจากลูกค้าทั่วไปหมายเลข 7163', 1, NULL, DATE_SUB(NOW(), INTERVAL 162 MINUTE)),
+  (1, 7164, 'incoming', 'text', 'INBOXB1-FILLERCONV-7164 ข้อความจากลูกค้าทั่วไปหมายเลข 7164', 1, NULL, DATE_SUB(NOW(), INTERVAL 163 MINUTE)),
+  (1, 7165, 'incoming', 'text', 'INBOXB1-FILLERCONV-7165 ข้อความจากลูกค้าทั่วไปหมายเลข 7165', 1, NULL, DATE_SUB(NOW(), INTERVAL 164 MINUTE)),
+  (1, 7166, 'incoming', 'text', 'INBOXB1-FILLERCONV-7166 ข้อความจากลูกค้าทั่วไปหมายเลข 7166', 1, NULL, DATE_SUB(NOW(), INTERVAL 165 MINUTE)),
+  (1, 7167, 'incoming', 'text', 'INBOXB1-FILLERCONV-7167 ข้อความจากลูกค้าทั่วไปหมายเลข 7167', 1, NULL, DATE_SUB(NOW(), INTERVAL 166 MINUTE)),
+  (1, 7168, 'incoming', 'text', 'INBOXB1-FILLERCONV-7168 ข้อความจากลูกค้าทั่วไปหมายเลข 7168', 1, NULL, DATE_SUB(NOW(), INTERVAL 167 MINUTE)),
+  (1, 7169, 'incoming', 'text', 'INBOXB1-FILLERCONV-7169 ข้อความจากลูกค้าทั่วไปหมายเลข 7169', 1, NULL, DATE_SUB(NOW(), INTERVAL 168 MINUTE)),
+  (1, 7170, 'incoming', 'text', 'INBOXB1-FILLERCONV-7170 ข้อความจากลูกค้าทั่วไปหมายเลข 7170', 1, NULL, DATE_SUB(NOW(), INTERVAL 169 MINUTE)),
+  (1, 7171, 'incoming', 'text', 'INBOXB1-FILLERCONV-7171 ข้อความจากลูกค้าทั่วไปหมายเลข 7171', 1, NULL, DATE_SUB(NOW(), INTERVAL 170 MINUTE)),
+  (1, 7172, 'incoming', 'text', 'INBOXB1-FILLERCONV-7172 ข้อความจากลูกค้าทั่วไปหมายเลข 7172', 1, NULL, DATE_SUB(NOW(), INTERVAL 171 MINUTE)),
+  (1, 7173, 'incoming', 'text', 'INBOXB1-FILLERCONV-7173 ข้อความจากลูกค้าทั่วไปหมายเลข 7173', 1, NULL, DATE_SUB(NOW(), INTERVAL 172 MINUTE)),
+  (1, 7174, 'incoming', 'text', 'INBOXB1-FILLERCONV-7174 ข้อความจากลูกค้าทั่วไปหมายเลข 7174', 1, NULL, DATE_SUB(NOW(), INTERVAL 173 MINUTE)),
+  (1, 7175, 'incoming', 'text', 'INBOXB1-FILLERCONV-7175 ข้อความจากลูกค้าทั่วไปหมายเลข 7175', 1, NULL, DATE_SUB(NOW(), INTERVAL 174 MINUTE)),
+  (1, 7176, 'incoming', 'text', 'INBOXB1-FILLERCONV-7176 ข้อความจากลูกค้าทั่วไปหมายเลข 7176', 1, NULL, DATE_SUB(NOW(), INTERVAL 175 MINUTE)),
+  (1, 7177, 'incoming', 'text', 'INBOXB1-FILLERCONV-7177 ข้อความจากลูกค้าทั่วไปหมายเลข 7177', 1, NULL, DATE_SUB(NOW(), INTERVAL 176 MINUTE)),
+  (1, 7178, 'incoming', 'text', 'INBOXB1-FILLERCONV-7178 ข้อความจากลูกค้าทั่วไปหมายเลข 7178', 1, NULL, DATE_SUB(NOW(), INTERVAL 177 MINUTE)),
+  (1, 7179, 'incoming', 'text', 'INBOXB1-FILLERCONV-7179 ข้อความจากลูกค้าทั่วไปหมายเลข 7179', 1, NULL, DATE_SUB(NOW(), INTERVAL 178 MINUTE)),
+  (1, 7180, 'incoming', 'text', 'INBOXB1-FILLERCONV-7180 ข้อความจากลูกค้าทั่วไปหมายเลข 7180', 1, NULL, DATE_SUB(NOW(), INTERVAL 179 MINUTE)),
+  (1, 7181, 'incoming', 'text', 'INBOXB1-FILLERCONV-7181 ข้อความจากลูกค้าทั่วไปหมายเลข 7181', 1, NULL, DATE_SUB(NOW(), INTERVAL 180 MINUTE)),
+  (1, 7182, 'incoming', 'text', 'INBOXB1-FILLERCONV-7182 ข้อความจากลูกค้าทั่วไปหมายเลข 7182', 1, NULL, DATE_SUB(NOW(), INTERVAL 181 MINUTE)),
+  (1, 7183, 'incoming', 'text', 'INBOXB1-FILLERCONV-7183 ข้อความจากลูกค้าทั่วไปหมายเลข 7183', 1, NULL, DATE_SUB(NOW(), INTERVAL 182 MINUTE)),
+  (1, 7184, 'incoming', 'text', 'INBOXB1-FILLERCONV-7184 ข้อความจากลูกค้าทั่วไปหมายเลข 7184', 1, NULL, DATE_SUB(NOW(), INTERVAL 183 MINUTE)),
+  (1, 7185, 'incoming', 'text', 'INBOXB1-FILLERCONV-7185 ข้อความจากลูกค้าทั่วไปหมายเลข 7185', 1, NULL, DATE_SUB(NOW(), INTERVAL 184 MINUTE)),
+  (1, 7186, 'incoming', 'text', 'INBOXB1-FILLERCONV-7186 ข้อความจากลูกค้าทั่วไปหมายเลข 7186', 1, NULL, DATE_SUB(NOW(), INTERVAL 185 MINUTE)),
+  (1, 7187, 'incoming', 'text', 'INBOXB1-FILLERCONV-7187 ข้อความจากลูกค้าทั่วไปหมายเลข 7187', 1, NULL, DATE_SUB(NOW(), INTERVAL 186 MINUTE)),
+  (1, 7188, 'incoming', 'text', 'INBOXB1-FILLERCONV-7188 ข้อความจากลูกค้าทั่วไปหมายเลข 7188', 1, NULL, DATE_SUB(NOW(), INTERVAL 187 MINUTE)),
+  (1, 7189, 'incoming', 'text', 'INBOXB1-FILLERCONV-7189 ข้อความจากลูกค้าทั่วไปหมายเลข 7189', 1, NULL, DATE_SUB(NOW(), INTERVAL 188 MINUTE)),
+  (1, 7190, 'incoming', 'text', 'INBOXB1-FILLERCONV-7190 ข้อความจากลูกค้าทั่วไปหมายเลข 7190', 1, NULL, DATE_SUB(NOW(), INTERVAL 189 MINUTE)),
+  (1, 7191, 'incoming', 'text', 'INBOXB1-FILLERCONV-7191 ข้อความจากลูกค้าทั่วไปหมายเลข 7191', 1, NULL, DATE_SUB(NOW(), INTERVAL 190 MINUTE)),
+  (1, 7192, 'incoming', 'text', 'INBOXB1-FILLERCONV-7192 ข้อความจากลูกค้าทั่วไปหมายเลข 7192', 1, NULL, DATE_SUB(NOW(), INTERVAL 191 MINUTE)),
+  (1, 7193, 'incoming', 'text', 'INBOXB1-FILLERCONV-7193 ข้อความจากลูกค้าทั่วไปหมายเลข 7193', 1, NULL, DATE_SUB(NOW(), INTERVAL 192 MINUTE)),
+  (1, 7194, 'incoming', 'text', 'INBOXB1-FILLERCONV-7194 ข้อความจากลูกค้าทั่วไปหมายเลข 7194', 1, NULL, DATE_SUB(NOW(), INTERVAL 193 MINUTE)),
+  (1, 7195, 'incoming', 'text', 'INBOXB1-FILLERCONV-7195 ข้อความจากลูกค้าทั่วไปหมายเลข 7195', 1, NULL, DATE_SUB(NOW(), INTERVAL 194 MINUTE)),
+  (1, 7196, 'incoming', 'text', 'INBOXB1-FILLERCONV-7196 ข้อความจากลูกค้าทั่วไปหมายเลข 7196', 1, NULL, DATE_SUB(NOW(), INTERVAL 195 MINUTE)),
+  (1, 7197, 'incoming', 'text', 'INBOXB1-FILLERCONV-7197 ข้อความจากลูกค้าทั่วไปหมายเลข 7197', 1, NULL, DATE_SUB(NOW(), INTERVAL 196 MINUTE)),
+  (1, 7198, 'incoming', 'text', 'INBOXB1-FILLERCONV-7198 ข้อความจากลูกค้าทั่วไปหมายเลข 7198', 1, NULL, DATE_SUB(NOW(), INTERVAL 197 MINUTE)),
+  (1, 7199, 'incoming', 'text', 'INBOXB1-FILLERCONV-7199 ข้อความจากลูกค้าทั่วไปหมายเลข 7199', 1, NULL, DATE_SUB(NOW(), INTERVAL 198 MINUTE)),
+  (1, 7200, 'incoming', 'text', 'INBOXB1-FILLERCONV-7200 ข้อความจากลูกค้าทั่วไปหมายเลข 7200', 1, NULL, DATE_SUB(NOW(), INTERVAL 199 MINUTE)),
+  (1, 7201, 'incoming', 'text', 'INBOXB1-FILLERCONV-7201 ข้อความจากลูกค้าทั่วไปหมายเลข 7201', 1, NULL, DATE_SUB(NOW(), INTERVAL 200 MINUTE)),
+  (1, 7202, 'incoming', 'text', 'INBOXB1-FILLERCONV-7202 ข้อความจากลูกค้าทั่วไปหมายเลข 7202', 1, NULL, DATE_SUB(NOW(), INTERVAL 201 MINUTE)),
+  (1, 7203, 'incoming', 'text', 'INBOXB1-FILLERCONV-7203 ข้อความจากลูกค้าทั่วไปหมายเลข 7203', 1, NULL, DATE_SUB(NOW(), INTERVAL 202 MINUTE)),
+  (1, 7204, 'incoming', 'text', 'INBOXB1-FILLERCONV-7204 ข้อความจากลูกค้าทั่วไปหมายเลข 7204', 1, NULL, DATE_SUB(NOW(), INTERVAL 203 MINUTE)),
+  (1, 7205, 'incoming', 'text', 'INBOXB1-FILLERCONV-7205 ข้อความจากลูกค้าทั่วไปหมายเลข 7205', 1, NULL, DATE_SUB(NOW(), INTERVAL 204 MINUTE)),
+  (1, 7206, 'incoming', 'text', 'INBOXB1-FILLERCONV-7206 ข้อความจากลูกค้าทั่วไปหมายเลข 7206', 1, NULL, DATE_SUB(NOW(), INTERVAL 205 MINUTE)),
+  (1, 7207, 'incoming', 'text', 'INBOXB1-FILLERCONV-7207 ข้อความจากลูกค้าทั่วไปหมายเลข 7207', 1, NULL, DATE_SUB(NOW(), INTERVAL 206 MINUTE)),
+  (1, 7208, 'incoming', 'text', 'INBOXB1-FILLERCONV-7208 ข้อความจากลูกค้าทั่วไปหมายเลข 7208', 1, NULL, DATE_SUB(NOW(), INTERVAL 207 MINUTE)),
+  (1, 7209, 'incoming', 'text', 'INBOXB1-FILLERCONV-7209 ข้อความจากลูกค้าทั่วไปหมายเลข 7209', 1, NULL, DATE_SUB(NOW(), INTERVAL 208 MINUTE)),
+  (1, 7210, 'incoming', 'text', 'INBOXB1-FILLERCONV-7210 ข้อความจากลูกค้าทั่วไปหมายเลข 7210', 1, NULL, DATE_SUB(NOW(), INTERVAL 209 MINUTE)),
+  (1, 7211, 'incoming', 'text', 'INBOXB1-FILLERCONV-7211 ข้อความจากลูกค้าทั่วไปหมายเลข 7211', 1, NULL, DATE_SUB(NOW(), INTERVAL 210 MINUTE)),
+  (1, 7212, 'incoming', 'text', 'INBOXB1-FILLERCONV-7212 ข้อความจากลูกค้าทั่วไปหมายเลข 7212', 1, NULL, DATE_SUB(NOW(), INTERVAL 211 MINUTE)),
+  (1, 7213, 'incoming', 'text', 'INBOXB1-FILLERCONV-7213 ข้อความจากลูกค้าทั่วไปหมายเลข 7213', 1, NULL, DATE_SUB(NOW(), INTERVAL 212 MINUTE)),
+  (1, 7214, 'incoming', 'text', 'INBOXB1-FILLERCONV-7214 ข้อความจากลูกค้าทั่วไปหมายเลข 7214', 1, NULL, DATE_SUB(NOW(), INTERVAL 213 MINUTE)),
+  (1, 7215, 'incoming', 'text', 'INBOXB1-FILLERCONV-7215 ข้อความจากลูกค้าทั่วไปหมายเลข 7215', 1, NULL, DATE_SUB(NOW(), INTERVAL 214 MINUTE));
+
+-- ===========================================================================
+-- GOLDEN DATASET CONSTANTS (mirrored in infra/e2e/parity.mjs — keep both in
+-- sync if this file's shape ever changes):
+--   TOTAL_CONVERSATIONS = 215
+--   HERO_USER_ID = 7001, HERO_TOTAL_MESSAGES = 130
+--   TAGGED_USER_ID = 7002 (tag_id=1 'VIP')
+--   ASSIGNED_STATUS_USER_ID = 7003 (conversation_assignments)
+--   MULTI_ASSIGNEE_USER_ID = 7004 (conversation_multi_assignees, admin_id=1)
+--   PENDING_STATUS_USER_ID = 7005 (chat_status='pending')
+--   UNREAD_USER_ID = 7006 (unread_count=2)
+--   FILLER_ID_RANGE = [7007, 7215]
+-- ===========================================================================

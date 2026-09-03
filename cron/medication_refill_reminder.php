@@ -14,6 +14,7 @@
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
+require_once __DIR__ . '/../classes/NotificationGate.php';
 require_once __DIR__ . '/../includes/liff-helper.php'; // reya_liff_url_or_oa()
 
 $db = Database::getInstance()->getConnection();
@@ -89,8 +90,21 @@ foreach ($items as $item) {
     
     // Send via LINE API
     try {
-        $line = new LineAPI($item['channel_access_token']);
-        $result = $line->pushMessage($item['line_user_id'], [$flexMessage]);
+        $gate = new NotificationGate($db);
+        $result = $gate->send([
+            'user_id' => (int) $item['user_id'],
+            'line_user_id' => $item['line_user_id'],
+            'line_account_id' => $item['line_account_id'] ?? null,
+            'channel_access_token' => $item['channel_access_token'],
+            'event_type' => 'medication_refill',
+            // ตั้งใจใช้ namespace เดียวกับ cron/adherence_reminder.php — สอง cron
+            // ทำนายวันยาหมดคนละวิธี (estimated_end_date คงที่ vs days-supply ต่อ
+            // การจ่ายยา) และกันซ้ำกันเองคนละกลไก จึงไม่เคยกันซ้ำข้ามกัน
+            // NotificationGate เป็นจุดร่วมจุดเดียวที่ทำได้ ลูกค้าต้องไม่ได้
+            // ข้อความ "ยาใกล้หมด" ของยาตัวเดียวกันสองรอบในวันเดียว
+            'dedupe_key' => 'refill:' . (int) $item['user_id'] . ':' . (int) $item['product_id'] . ':' . date('Y-m-d'),
+            'messages' => [$flexMessage],
+        ])['sent'];
         
         if ($result) {
             // Update reminder_sent_at

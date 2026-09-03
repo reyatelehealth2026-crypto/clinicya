@@ -1,0 +1,5 @@
+{
+  "description": "POST action=validate_promo — code doesn't match any of validateHardcodedPromo()'s 4 fixed codes (WELCOME10/SAVE50/FREESHIP/NEWUSER) -> discount stays 0 -> generic invalid/expired message.",
+  "request": { "action": "validate_promo", "code": "BADCODE", "subtotal": 100 },
+  "response": { "success": false, "message": "โค้ดไม่ถูกต้องหรือหมดอายุ", "valid": false }
+}

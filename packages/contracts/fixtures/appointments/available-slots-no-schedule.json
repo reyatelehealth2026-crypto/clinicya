@@ -1,0 +1,10 @@
+{
+  "description": "GET action=available_slots — SUBTLE TRAP fixture, second branch: Sunday, no pharmacist_schedules row and the hardcoded default schedule for day_of_week=0 is null ('closed'). handleAvailableSlots() calls `jsonResponse(true, 'OK', ['slots'=>[], 'message'=>'ไม่มีตารางในวันนี้'])` — same array-spread override as the holiday branch (see available-slots-holiday.json's description). message is 'ไม่มีตารางในวันนี้', never 'OK'.",
+  "request": { "action": "available_slots", "pharmacist_id": 2, "date": "2026-07-19" },
+  "response": {
+    "success": true,
+    "message": "ไม่มีตารางในวันนี้",
+    "slots": []
+  },
+  "status": 200
+}

@@ -1,0 +1,38 @@
+{
+  "name": "@reya/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Document/VAT domain logic — TypeScript port of includes/document-helpers.php (genDocNumber atomic Buddhist-era numbering, calcVAT, formatThaiDate, docTypeLabel/docStatusLabel/docStatusBadge, computeLineTotal, formatMoney, REYA_DOCUMENT_TYPES).",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:live": "tsx tests-live/genDocNumber.concurrency.ts",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@reya/db": "workspace:*",
+    "kysely": "^0.29.3",
+    "mysql2": "^3.22.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

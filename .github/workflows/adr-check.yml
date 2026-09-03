@@ -1,0 +1,45 @@
+# Keeps ADR references honest.
+#
+# ADR-001/002/006 are cited from ~33 places across production PHP and the new
+# TypeScript packages. Those citations were dead links for months: the ADR
+# files existed as intent, but a .gitignore ordering bug (`!docs/adr/*.md`
+# placed ABOVE the blanket `*.md`) meant git silently refused to track them,
+# so they were never committed and nobody noticed.
+#
+# This job fails the build on any regression of that class — a dangling
+# ADR-NNN, a renamed §section that source cites by name, or an ADR file that
+# .gitignore has quietly swallowed again.
+name: ADR check
+
+on:
+  pull_request:
+    paths:
+      - 'docs/adr/**'
+      - '.gitignore'
+      - 'scripts/verify-adrs.py'
+      - '.github/workflows/adr-check.yml'
+      # Source files that cite ADRs by number
+      - '**.php'
+      - '**.ts'
+      - '**.tsx'
+      - '**.sql'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify ADR references resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check-ignore needs the real .gitignore, and the citation scan
+          # walks the whole tree — a shallow single-commit checkout is fine.
+          fetch-depth: 1
+
+      - name: Verify ADR references
+        run: python3 scripts/verify-adrs.py

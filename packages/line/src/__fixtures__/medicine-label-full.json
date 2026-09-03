@@ -1,0 +1,462 @@
+{
+    "description": "medicineLabel() — every field populated (internal medicine, checkout URL, full shop info).",
+    "request": {
+        "fn": "medicineLabel",
+        "item": {
+            "isMedicine": true,
+            "usageType": "internal",
+            "image": "https://example.com/paracetamol.jpg",
+            "timeOfDay": [
+                "morning",
+                "evening"
+            ],
+            "mealTiming": "after",
+            "specialInstructions": [
+                "drowsiness"
+            ],
+            "notes": "แจ้งเภสัชกรหากมีอาการผิดปกติ",
+            "generic_name": "Paracetamol",
+            "strength": "500 mg",
+            "name": "พาราเซตามอล 500 มก.",
+            "manufacturer": "บริษัท ยาไทย จำกัด",
+            "indication": "บรรเทาอาการปวด ลดไข้",
+            "usage_text": "รับประทานครั้งละ 1-2 เม็ด ทุก 4-6 ชั่วโมง เมื่อมีอาการ",
+            "dosage": 2,
+            "dosageUnit": "เม็ด",
+            "qty": 20,
+            "unit": "เม็ด",
+            "price": 3.5
+        },
+        "shopInfo": {
+            "name": "ร้านยาสุขภาพดี",
+            "address": "123 ถนนสุขุมวิท กรุงเทพฯ",
+            "phone": "02-123-4567",
+            "logo": "https://example.com/logo.png",
+            "open_hours": "08:00-22:00 น.",
+            "pharmacist": "ภญ. สมหญิง ใจดี"
+        },
+        "patientName": "คุณสมชาย ใจดี",
+        "checkoutUrl": "https://shop.example.com/checkout/abc123"
+    },
+    "response": {
+        "type": "bubble",
+        "size": "mega",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "ร้านยาสุขภาพดี",
+                    "weight": "bold",
+                    "size": "xl",
+                    "color": "#FFFFFF",
+                    "align": "center",
+                    "wrap": true
+                },
+                {
+                    "type": "text",
+                    "text": "Pharmacist: ภญ. สมหญิง ใจดี",
+                    "size": "xs",
+                    "color": "#FFFFFF",
+                    "align": "center",
+                    "margin": "xs"
+                },
+                {
+                    "type": "text",
+                    "text": "☎ 02-123-4567",
+                    "size": "sm",
+                    "color": "#FFFFFF",
+                    "align": "center",
+                    "margin": "sm"
+                }
+            ],
+            "backgroundColor": "#006400",
+            "paddingAll": "lg"
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "⚠️ ตั้งครรภ์ แพ้ยา มีโรคประจำตัว กรุณาแจ้งเภสัชกร",
+                            "size": "xxs",
+                            "color": "#FFFFFF",
+                            "wrap": true,
+                            "align": "center",
+                            "weight": "bold"
+                        }
+                    ],
+                    "backgroundColor": "#B91C1C",
+                    "paddingAll": "sm",
+                    "cornerRadius": "md"
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "℞ ฉลากยา",
+                            "size": "md",
+                            "weight": "bold",
+                            "color": "#006400",
+                            "flex": 1
+                        },
+                        {
+                            "type": "text",
+                            "text": "MEDICINE LABEL",
+                            "size": "xs",
+                            "color": "#666666",
+                            "align": "end",
+                            "gravity": "center",
+                            "flex": 1
+                        }
+                    ],
+                    "margin": "md"
+                },
+                {
+                    "type": "separator",
+                    "color": "#E5E7EB",
+                    "margin": "sm"
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "ผู้ป่วย",
+                                    "size": "xxs",
+                                    "color": "#666666"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "คุณสมชาย ใจดี",
+                                    "size": "md",
+                                    "weight": "bold",
+                                    "color": "#000000",
+                                    "wrap": true,
+                                    "margin": "xs"
+                                }
+                            ],
+                            "flex": 2
+                        },
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "วันที่จ่ายยา",
+                                    "size": "xxs",
+                                    "color": "#666666",
+                                    "align": "end"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "14/07/2026",
+                                    "size": "sm",
+                                    "color": "#000000",
+                                    "align": "end",
+                                    "margin": "xs"
+                                }
+                            ],
+                            "flex": 1
+                        }
+                    ],
+                    "margin": "md",
+                    "paddingAll": "md",
+                    "backgroundColor": "#F9FAFB",
+                    "cornerRadius": "md",
+                    "borderWidth": "1px",
+                    "borderColor": "#E5E7EB"
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "image",
+                                    "url": "https://example.com/paracetamol.jpg",
+                                    "size": "full",
+                                    "aspectMode": "cover",
+                                    "aspectRatio": "1:1"
+                                }
+                            ],
+                            "width": "64px",
+                            "height": "64px",
+                            "cornerRadius": "md",
+                            "flex": 0
+                        },
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "ชื่อสินค้า",
+                                    "size": "xxs",
+                                    "color": "#666666"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "พาราเซตามอล 500 มก.",
+                                    "size": "md",
+                                    "weight": "bold",
+                                    "wrap": true,
+                                    "color": "#000000"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Paracetamol · 500 mg",
+                                    "size": "xxs",
+                                    "color": "#666666",
+                                    "wrap": true,
+                                    "margin": "xs"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "ผลิตโดย บริษัท ยาไทย จำกัด",
+                                    "size": "xxs",
+                                    "color": "#666666",
+                                    "wrap": true
+                                }
+                            ],
+                            "flex": 1,
+                            "margin": "md"
+                        }
+                    ],
+                    "margin": "md",
+                    "paddingAll": "md",
+                    "backgroundColor": "#E8F5E9",
+                    "cornerRadius": "md",
+                    "borderWidth": "1px",
+                    "borderColor": "#006400"
+                },
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "💊 สรรพคุณ / ข้อบ่งใช้",
+                            "size": "xs",
+                            "weight": "bold",
+                            "color": "#006400"
+                        },
+                        {
+                            "type": "text",
+                            "text": "บรรเทาอาการปวด ลดไข้",
+                            "size": "sm",
+                            "wrap": true,
+                            "color": "#000000",
+                            "margin": "sm"
+                        }
+                    ],
+                    "margin": "md",
+                    "paddingAll": "md",
+                    "backgroundColor": "#F0F9F4",
+                    "cornerRadius": "md"
+                },
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "📖 วิธีใช้",
+                            "size": "xs",
+                            "weight": "bold",
+                            "color": "#B45309"
+                        },
+                        {
+                            "type": "text",
+                            "text": "รับประทานครั้งละ 1-2 เม็ด ทุก 4-6 ชั่วโมง เมื่อมีอาการ",
+                            "size": "sm",
+                            "wrap": true,
+                            "color": "#000000",
+                            "margin": "sm"
+                        }
+                    ],
+                    "margin": "md",
+                    "paddingAll": "md",
+                    "backgroundColor": "#FFFBEB",
+                    "cornerRadius": "md",
+                    "borderWidth": "1px",
+                    "borderColor": "#FCD34D"
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "จำนวน:",
+                            "size": "sm",
+                            "color": "#666666"
+                        },
+                        {
+                            "type": "text",
+                            "text": "20 เม็ด",
+                            "size": "sm",
+                            "weight": "bold",
+                            "align": "end",
+                            "color": "#000000"
+                        }
+                    ],
+                    "margin": "lg"
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "ราคา:",
+                            "size": "sm",
+                            "color": "#666666"
+                        },
+                        {
+                            "type": "text",
+                            "text": "฿70.00",
+                            "size": "lg",
+                            "weight": "bold",
+                            "color": "#006400",
+                            "align": "end"
+                        }
+                    ],
+                    "margin": "sm"
+                },
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "หมายเหตุ:",
+                            "size": "sm",
+                            "color": "#666666",
+                            "flex": 0
+                        },
+                        {
+                            "type": "text",
+                            "text": "แจ้งเภสัชกรหากมีอาการผิดปกติ",
+                            "size": "sm",
+                            "color": "#000000",
+                            "flex": 1,
+                            "margin": "sm",
+                            "wrap": true
+                        }
+                    ],
+                    "margin": "md"
+                },
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "⚠️ คำเตือน",
+                            "size": "xs",
+                            "weight": "bold",
+                            "color": "#B91C1C"
+                        },
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "⚠️",
+                                    "size": "sm",
+                                    "flex": 0
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "ยานี้อาจทำให้ง่วงซึม",
+                                    "size": "sm",
+                                    "color": "#B91C1C",
+                                    "weight": "bold",
+                                    "margin": "sm",
+                                    "wrap": true,
+                                    "flex": 1
+                                }
+                            ],
+                            "margin": "sm"
+                        },
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "📝",
+                                    "size": "sm",
+                                    "flex": 0
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "แจ้งเภสัชกรหากมีอาการผิดปกติ",
+                                    "size": "xs",
+                                    "color": "#666666",
+                                    "margin": "sm",
+                                    "wrap": true,
+                                    "flex": 1
+                                }
+                            ],
+                            "margin": "sm"
+                        }
+                    ],
+                    "margin": "md",
+                    "paddingAll": "md",
+                    "backgroundColor": "#FEF2F2",
+                    "cornerRadius": "md",
+                    "borderWidth": "1px",
+                    "borderColor": "#FCA5A5"
+                }
+            ],
+            "paddingAll": "lg",
+            "backgroundColor": "#FFFFFF"
+        },
+        "footer": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "💳 ชำระเงิน",
+                        "uri": "https://shop.example.com/checkout/abc123"
+                    },
+                    "style": "primary",
+                    "color": "#006400"
+                },
+                {
+                    "type": "text",
+                    "text": "เปิดทำการทุกวัน เวลา 08:00-22:00 น.",
+                    "size": "xxs",
+                    "color": "#666666",
+                    "align": "center",
+                    "margin": "md"
+                }
+            ],
+            "paddingAll": "lg",
+            "backgroundColor": "#E8F5E9"
+        }
+    }
+}

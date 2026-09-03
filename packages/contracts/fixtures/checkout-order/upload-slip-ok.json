@@ -1,0 +1,20 @@
+{
+  "description": "POST action=upload_slip — request is multipart/form-data (NOT JSON — represented below as its field names/values for documentation purposes only; packages/contracts/src/checkout-order.ts deliberately has no request-body zod schema for this action, see its module doc). Fields: action='upload_slip', order_id (an existing transactions.id in this tenant), line_account_id (tenant-routing signal), slip (the image file), and two accepted-and-ignored fields the real client also sends: user_id (PHP only logs it, never uses it) and qr_data (client-side QR-decoded text — grep-verified zero occurrences of 'qr_data' in api/checkout.php, no slip auto-verification exists). image_url is built from the INCOMING request's own scheme+host (here https://tenant-1234.re-ya.com), never a hardcoded BASE_URL. DB-STATE ASSERTION (for mig-infra's future dbCheck wiring, not expressible in this response-only JSON shape): a `payment_slips` row MUST exist with order_id/transaction_id=900, user_id=42, image_url as below, status='pending'; `transactions.status`/`payment_status` for id=900 MUST be UNCHANGED (only updated_at touched) — upload_slip never marks an order 'paid'/'completed'.",
+  "request": {
+    "action": "upload_slip",
+    "order_id": 900,
+    "line_account_id": 1,
+    "user_id": 42,
+    "qr_data": "00020101021129370016A000000677010111011300668123456785802TH...",
+    "slip": {
+      "filename": "slip.jpg",
+      "contentType": "image/jpeg",
+      "sizeBytes": 184320
+    }
+  },
+  "response": {
+    "success": true,
+    "message": "Slip uploaded",
+    "image_url": "https://tenant-1234.re-ya.com/uploads/slips/slip_TXN202607140001_1752480000.jpg"
+  }
+}

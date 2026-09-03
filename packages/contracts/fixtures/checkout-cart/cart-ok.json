@@ -1,0 +1,44 @@
+{
+  "description": "GET action=cart — existing user, one business_items line. Note the response's item carries BOTH the raw joined bi_*/o_* alias columns and the derived name/price/sale_price/image_url/is_active/product_source/subtotal overrides (handleGetCart() never unsets the raw columns) — price/bi_price are raw DECIMAL passthrough strings (business_items branch never (float)-casts). shipping_fee/free_shipping_min come from a tenant-scoped shop_settings row; subtotal (40) is below free_shipping_min (500) so shipping_fee is NOT waived.",
+  "request": { "action": "cart", "line_user_id": "U1111111111111111111111111111aa" },
+  "response": {
+    "success": true,
+    "message": "",
+    "items": [
+      {
+        "id": 901,
+        "line_account_id": 1,
+        "line_user_id": "U1111111111111111111111111111aa",
+        "product_id": 501,
+        "quantity": 2,
+        "unit_id": null,
+        "created_at": "2026-07-10 09:00:00",
+        "updated_at": "2026-07-10 09:00:00",
+        "user_id": 42,
+        "bi_name": "พาราเซตามอล 500mg",
+        "bi_price": "20.00",
+        "bi_sale_price": null,
+        "bi_image_url": "https://cdn.example.com/para.jpg",
+        "bi_is_active": 1,
+        "o_name": null,
+        "o_list": null,
+        "o_online": null,
+        "o_pc": null,
+        "o_sku": null,
+        "o_is_active": null,
+        "name": "พาราเซตามอล 500mg",
+        "price": "20.00",
+        "sale_price": null,
+        "image_url": "https://cdn.example.com/para.jpg",
+        "is_active": 1,
+        "product_source": "business_items",
+        "subtotal": 40
+      }
+    ],
+    "subtotal": 40,
+    "shipping_fee": 40,
+    "free_shipping_min": 500,
+    "total": 80,
+    "item_count": 1
+  }
+}

@@ -29,6 +29,7 @@ You are **SA-BE** — backend (PHP) specialist for the odoo CRM/e-commerce APIs 
 **Mandatory reads**
 - `docs/plans/2026-04-13-line-mini-app-100pct-subagent-orchestration.md`
 - `api/checkout.php`, `api/member.php` (and related classes), `classes/Database.php` usage patterns
+- **Decisions that constrain this work:** `docs/adr/0001-database-per-tenant-isolation.md` — tenant isolation is the database boundary; mini-app calls arrive on the root domain with no subdomain, so the tenant is resolved from `line_account_id` via `master.tenant_line_account_routes`, never assumed.
 
 **Responsibilities**
 1. Implement or extend API actions and responses for assigned gaps (G1, G3, G5, plus BE support for G2 if `handleGetProducts` needs fixes).

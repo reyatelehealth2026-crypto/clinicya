@@ -1,0 +1,5 @@
+{
+  "description": "GET action=cart — neither line_user_id nor a raw user_id override was supplied, so handleGetCart() never resolves a userId and fails fast before touching cart_items.",
+  "request": { "action": "cart" },
+  "response": { "success": false, "message": "User not found" }
+}

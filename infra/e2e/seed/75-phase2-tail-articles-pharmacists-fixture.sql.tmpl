@@ -1,0 +1,267 @@
+-- infra/e2e/seed/75-phase2-tail-articles-pharmacists-fixture.sql.tmpl
+--
+-- Phase 2 tail (mig-infra) — data-point parity fixture for the two new
+-- page-pairs this round covers: /articles (list) + /articles/[slug]
+-- (detail) — articlesCms's port of articles.php/article.php — and
+-- /pharmacists — pharmacistsDirectory's port of the LIVE
+-- includes/pharmacy/pharmacists.php tab partial. Applied AFTER
+-- 30-/40-/60-phase2-*.sql.tmpl and 70-phase4-batch1-inbox-fixture.sql.tmpl
+-- (already piped into the SAME app/tenant DB by parity.mjs's
+-- seedDatabase()) — additive only, same pattern every earlier fixture in
+-- this directory already established. Does not touch any table an earlier
+-- batch already seeds rows into: this file only INSERTs into
+-- health_article_categories, health_articles, pharmacists,
+-- pharmacist_schedules, pharmacist_holidays, and appointments (`appointments`
+-- has no rows from any earlier fixture — grepped every other
+-- infra/e2e/seed/*.sql.tmpl file this harness's own FIXTURE_FILES list
+-- applies; 55-phase3-batch2-miniapp-fixture.sql.tmpl also inserts into
+-- `pharmacists`/`appointments`, but that file belongs to the SEPARATE
+-- api-parity.mjs harness — a different docker-compose project, a different
+-- freshly-created tenant DB — so there is no id collision risk despite the
+-- shared table names).
+--
+-- No USE statement of its own — same convention as every fixture before it:
+-- the caller (parity.mjs's seedDatabase()) prepends `USE \`<app-db>\`;`.
+--
+-- DETERMINISM: every timestamp is a MySQL relative-date expression
+-- (NOW()/CURDATE() +/- INTERVAL n DAY), never a wall-clock literal — same
+-- reasoning as every earlier fixture's own header comment. Within ONE
+-- multi-row INSERT statement MySQL evaluates NOW()/CURDATE() exactly once
+-- and reuses that same instant for every row, so the relative offsets below
+-- are self-consistent regardless of how long the statement itself takes to
+-- execute, and stay correct forever (time only moves forward) no matter how
+-- long after this file is written the harness actually runs.
+--
+-- ID RANGES: 7501-7503 (health_article_categories), 7601-7605
+-- (health_articles), 7701-7703 (pharmacists), 7711-7713
+-- (pharmacist_schedules), 7721 (pharmacist_holidays), 7731-7735
+-- (appointments) — a batch-specific range that does not overlap any id an
+-- earlier infra/e2e/seed/*.sql.tmpl file already uses in these same tables
+-- (none do, per the note above) or reuses in tables this file also touches
+-- (`users` — this file references EXISTING batch-1 user id 1 for every
+-- `appointments.user_id` below, it does not insert any new `users` row).
+--
+-- WHY NO `line_accounts` ROWS (same invariant every Phase 2 batch since
+-- batch 2 has established and reasoned through in full — see
+-- 40-phase2-batch2-fixture.sql.tmpl's own header comment for the complete
+-- mechanical trace): neither surface this file seeds data for needs one.
+--   - articles.php / article.php (and their Next port's queries.ts) resolve
+--     `$lineAccountId` via `resolveDefaultLineAccountId()` — SELECT
+--     `line_accounts` `is_default=1` else `ORDER BY id ASC LIMIT 1`, and
+--     BOTH stacks fall back to the literal `1` when no row is found at all
+--     (PHP: `$lineAccount['id'] ?? 1`; Next: `row?.id ?? 1` — read both
+--     sources, confirmed identical fallback). Every `health_articles` row
+--     below sets `line_account_id = NULL` (not `= 1`) specifically so the
+--     query's own `(a.line_account_id = ? OR a.line_account_id IS NULL)`
+--     clause matches it regardless of which literal id either stack's
+--     fallback actually resolves to — this fixture does not depend on that
+--     fallback value at all, by construction.
+--   - includes/pharmacy/pharmacists.php's own "Get pharmacists" query (and
+--     its Next port, queries.ts::getPharmacistsData()) has NO
+--     line_account_id filter whatsoever — grepped the full PHP source and
+--     the full port, zero references — so this page has no
+--     $currentBotId-hazard to reason about at all, same conclusion batch
+--     3's own fixture reached for templates.php.
+-- Net: this file, like every fixture since batch 2, seeds ZERO
+-- `line_accounts` rows — safe to append onto the SAME shared `phpSid`
+-- session every earlier batch's entries already run under, per the
+-- acceptance criterion "all NN existing entries still pass, not just the
+-- new ones."
+--
+-- ===========================================================================
+-- 1) health_article_categories (3 rows: 2 active, 1 INACTIVE) — exercises
+--    the category-filter chip bar (>=2 active chips) and the
+--    `WHERE is_active = 1` filter (the third, inactive, category must NEVER
+--    appear in the chip bar on either stack — no health_articles row below
+--    references it either, so it is a pure "does the inactive-category
+--    filter hold" probe, not a filter target for anything else).
+-- ===========================================================================
+INSERT INTO `health_article_categories`
+  (`id`, `line_account_id`, `name`, `slug`, `sort_order`, `is_active`, `created_at`)
+VALUES
+  (7501, NULL, 'โรคทั่วไปและการดูแลสุขภาพ', 'general-health', 1, 1, DATE_SUB(NOW(), INTERVAL 40 DAY)),
+  (7502, NULL, 'วิตามินและอาหารเสริม', 'vitamins-supplements', 2, 1, DATE_SUB(NOW(), INTERVAL 39 DAY)),
+  (7503, NULL, 'หมวดหมู่ปิดใช้งาน (ทดสอบ)', 'disabled-category-test', 3, 0, DATE_SUB(NOW(), INTERVAL 38 DAY));
+
+-- ===========================================================================
+-- 2) health_articles (5 rows: 1 featured+published, 2 non-featured+
+--    published in category 7501, 1 non-featured+published in category 7502,
+--    1 non-featured+published with NO category, 1 UNPUBLISHED — proves the
+--    `is_published = 1` filter). All `line_account_id = NULL` — see the
+--    "WHY NO line_accounts ROWS" section above.
+--
+--    Row-by-row purpose (cross-referenced by infra/e2e/parity.mjs's
+--    ARTICLE_* consts and docs/runbooks/phase2-batch1-users-dashboard-
+--    parity.md's "Phase 2 tail" section — keep both in sync if this file's
+--    shape ever changes):
+--      - 7601 'phase2-tail-featured-article' — is_featured=1, published
+--        2 days ago, category 7501. THE article-detail:slug=... target.
+--        Always ranks first on `articles:baseline`/`articles:category=7501`
+--        (is_featured DESC beats every published_at). Has tags (proves
+--        JSON tags round-trip) and >=1 same-category sibling (7602) so its
+--        related-articles panel is non-empty.
+--      - 7602 'phase2-tail-second-article' — category 7501, published
+--        5 days ago, carries the literal marker 'PHASE2TAILSEARCHMARK' in
+--        its excerpt (the ONLY row any fixture in this file embeds that
+--        marker into) — THE `articles:search=PHASE2TAILSEARCHMARK` target,
+--        and 7601's only related-article match.
+--      - 7603 'phase2-tail-vitamin-article' — category 7502, published
+--        1 day ago (the MOST RECENT of every published row here) — proves
+--        `articles:category=7502` returns exactly this one row, and ranks
+--        first among baseline's non-featured rows (published_at DESC).
+--      - 7604 'phase2-tail-old-article' — category_id NULL (no category —
+--        proves the LEFT JOIN's null-category path renders without error
+--        on either stack), published 10 days ago (oldest) — ranks LAST on
+--        `articles:baseline`.
+--      - 7605 'phase2-tail-unpublished-draft' — is_published=0 AND
+--        is_featured=1 (featured status alone must not leak an unpublished
+--        draft past the is_published filter either) AND category_id=7501
+--        (would otherwise be 7601's nearest related-article rival, and
+--        would rank ABOVE 7601 on `articles:category=7501` if the
+--        is_published filter broke, since both are_featured=1 — a
+--        deliberately adversarial placement, not an arbitrary one). Must be
+--        ABSENT from `articles:baseline`, `articles:category=7501`, EVERY
+--        search, and 7601's own related-articles panel, on both stacks.
+-- ===========================================================================
+INSERT INTO `health_articles`
+  (`id`, `line_account_id`, `category_id`, `title`, `slug`, `excerpt`, `content`,
+   `featured_image`, `author_name`, `author_title`, `author_image`, `tags`,
+   `meta_title`, `meta_description`, `meta_keywords`, `view_count`,
+   `is_featured`, `is_published`, `published_at`, `created_at`)
+VALUES
+  (7601, NULL, 7501,
+   '10 วิธีดูแลสุขภาพเบื้องต้นที่ควรรู้', 'phase2-tail-featured-article',
+   'คำแนะนำเบื้องต้นสำหรับการดูแลสุขภาพในชีวิตประจำวัน',
+   '<p>เนื้อหาบทความทดสอบสำหรับฮาร์เนส Phase 2 tail ของ Reya</p><p>ย่อหน้าที่สองสำหรับทดสอบการแสดงผลเนื้อหา HTML ของบทความ</p>',
+   NULL, 'ภญ. ทดสอบ ระบบ', 'เภสัชกรคลินิก', NULL, '["สุขภาพ","การดูแลตัวเอง"]',
+   NULL, NULL, NULL, 10, 1, 1, DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY)),
+  (7602, NULL, 7501,
+   'อาการเบื้องต้นที่ควรพบเภสัชกร', 'phase2-tail-second-article',
+   'บทความทดสอบ PHASE2TAILSEARCHMARK สำหรับฟีเจอร์ค้นหา',
+   '<p>เนื้อหาบทความทดสอบลำดับที่สองสำหรับฮาร์เนส Phase 2 tail</p>',
+   NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, 3, 0, 1, DATE_SUB(NOW(), INTERVAL 5 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY)),
+  (7603, NULL, 7502,
+   'วิตามินซีสำคัญอย่างไรต่อร่างกาย', 'phase2-tail-vitamin-article',
+   'สรุปประโยชน์ของวิตามินซีที่หลายคนอาจไม่รู้',
+   '<p>เนื้อหาบทความทดสอบเกี่ยวกับวิตามินซีสำหรับฮาร์เนส Phase 2 tail</p>',
+   NULL, NULL, NULL, NULL, '["วิตามิน"]',
+   NULL, NULL, NULL, 7, 0, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY)),
+  (7604, NULL, NULL,
+   'เก็บยาอย่างไรให้ปลอดภัยในบ้าน', 'phase2-tail-old-article',
+   'คำแนะนำการจัดเก็บยาในครัวเรือน',
+   '<p>เนื้อหาบทความทดสอบไม่มีหมวดหมู่สำหรับฮาร์เนส Phase 2 tail</p>',
+   NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, 1, 0, 1, DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY)),
+  (7605, NULL, 7501,
+   'ฉบับร่างที่ยังไม่เผยแพร่ (ห้ามแสดง)', 'phase2-tail-unpublished-draft',
+   'ถ้าเห็นบทความนี้แสดงว่า is_published filter พัง',
+   '<p>เนื้อหาฉบับร่างที่ต้องไม่ถูกแสดงบนหน้ารายการหรือหน้ารายละเอียด</p>',
+   NULL, NULL, NULL, NULL, NULL,
+   NULL, NULL, NULL, 0, 1, 0, NULL, DATE_SUB(NOW(), INTERVAL 1 DAY));
+
+-- ===========================================================================
+-- 3) pharmacists (3 rows) — exercises /pharmacists' card grid + the
+--    upcoming/completed correlated-subquery counts + the delete-guard's
+--    exact condition (`status IN ('pending','confirmed') AND
+--    appointment_date >= CURDATE()`). ALL THREE rows set `image_url = NULL`
+--    on purpose — see PHARMACIST_CARD_MARKER's own doc comment in
+--    infra/e2e/lib/extract.mjs for why every card needs the dicebear-avatar
+--    fallback to fire for this harness's per-card delimiter to work.
+--
+--      - 7701 'สมชาย ใจดี' — is_active=1, is_available=1, fee=150 (not
+--        free), duration=20. ONE 'pending' appointment 3 days in the future
+--        (7731) -> upcomingCount=1 -> DELETE-GUARD BLOCKED (mirrors
+--        pharmacists.php's/pharmacists/actions.ts's own guard query
+--        exactly). TWO 'completed' appointments in the past (7732/7733) ->
+--        completedCount=2.
+--      - 7702 'สมหญิง รักยา' — specialty='' (empty, NOT NULL — exercises
+--        the `?: 'เภสัชกรทั่วไป'` / `|| 'เภสัชกรทั่วไป'` fallback on both
+--        stacks), is_active=1, is_available=0 (no green "available" dot),
+--        fee=0 (the "ฟรี" free-label branch). ONE 'completed' appointment
+--        in the past (7734) -> completedCount=1. ONE 'cancelled'
+--        appointment 5 days in the FUTURE (7735) — deliberately adversarial:
+--        proves upcomingCount's `status IN ('pending','confirmed')` clause
+--        excludes a future-but-cancelled row, not just a past one -> still
+--        upcomingCount=0 -> DELETE-GUARD CLEAR despite having a
+--        future-dated appointments row at all.
+--      - 7703 'วิชัย ตรวจโรค' — is_active=0 (the `opacity-60` card-dimming
+--        branch), is_available=0. Zero appointments rows at all ->
+--        upcomingCount=0, completedCount=0 -> trivially DELETE-GUARD CLEAR.
+-- ===========================================================================
+INSERT INTO `pharmacists`
+  (`id`, `line_account_id`, `name`, `title`, `specialty`, `hospital`, `license_no`, `bio`,
+   `image_url`, `rating`, `review_count`, `consultation_fee`, `consultation_duration`,
+   `is_available`, `is_active`, `created_at`)
+VALUES
+  (7701, NULL, 'สมชาย ใจดี', 'ภก.', 'เภสัชกรคลินิก', 'ร้านขายยาทดสอบ Phase2Tail', 'PH-TEST-1001',
+   'เภสัชกรทดสอบสำหรับฮาร์เนส parity', NULL, 4.5, 12, 150.00, 20, 1, 1, DATE_SUB(NOW(), INTERVAL 60 DAY)),
+  (7702, NULL, 'สมหญิง รักยา', 'ภญ.', '', NULL, NULL,
+   NULL, NULL, 0.0, 0, 0.00, 15, 0, 1, DATE_SUB(NOW(), INTERVAL 55 DAY)),
+  (7703, NULL, 'วิชัย ตรวจโรค', 'ดร.', 'เภสัชกรโรคเรื้อรัง', 'คลินิกทดสอบ C', 'PH-TEST-1003',
+   NULL, NULL, 3.8, 3, 300.00, 30, 0, 0, DATE_SUB(NOW(), INTERVAL 50 DAY));
+
+-- ===========================================================================
+-- 4) pharmacist_schedules (3 rows: 2 for pharmacist 7701, 1 for 7703) —
+--    pharmacist 7702 deliberately gets NO schedule rows at all (exercises
+--    the "no active day" all-gray-badges branch on the card this fixture
+--    doesn't itself assert on, but leaves available for the
+--    pharmacistsDirectory builder's own manual QA / future harness
+--    extension). `line_account_id` omitted -> column DEFAULT 1, unread by
+--    either stack's query (both SELECT/DELETE by `pharmacist_id` only —
+--    grepped the full PHP source and the full port).
+-- ===========================================================================
+INSERT INTO `pharmacist_schedules`
+  (`id`, `pharmacist_id`, `day_of_week`, `start_time`, `end_time`, `is_available`)
+VALUES
+  (7711, 7701, 1, '09:00:00', '17:00:00', 1),
+  (7712, 7701, 3, '09:00:00', '17:00:00', 1),
+  (7713, 7703, 0, '10:00:00', '14:00:00', 1);
+
+-- ===========================================================================
+-- 5) pharmacist_holidays (1 row, pharmacist 7701, upcoming) — `line_account_id`
+--    omitted -> column DEFAULT 1, same "unread by either query" reasoning
+--    as pharmacist_schedules above.
+-- ===========================================================================
+INSERT INTO `pharmacist_holidays`
+  (`id`, `pharmacist_id`, `holiday_date`, `reason`)
+VALUES
+  (7721, 7701, DATE_ADD(CURDATE(), INTERVAL 10 DAY), 'ทดสอบวันหยุดพักร้อน');
+
+-- ===========================================================================
+-- 6) appointments (5 rows) — `user_id` reuses EXISTING batch-1 user id 1
+--    (30-phase2-batch1-fixture.sql.tmpl) rather than inserting a new `users`
+--    row: neither pharmacists.php's own query nor its Next port ever reads
+--    anything off the `users` row these appointments reference (both only
+--    COUNT(*) the appointments themselves), and `appointments.user_id` has
+--    no enforced FOREIGN KEY in database/migration_2026-05-25_tenant_template.sql
+--    (verified directly) — same "reuse an existing row, no FK risk" pattern
+--    60-phase2-batch3-fixture.sql.tmpl's own groups/user_groups section
+--    already established. `line_account_id = NULL` throughout (appointments'
+--    own column is nullable with no default; neither query filters on it).
+-- ===========================================================================
+INSERT INTO `appointments`
+  (`id`, `line_account_id`, `user_id`, `pharmacist_id`, `appointment_type`, `appointment_date`, `appointment_time`, `status`, `created_at`)
+VALUES
+  (7731, NULL, 1, 7701, 'consultation', DATE_ADD(CURDATE(), INTERVAL 3 DAY), '10:00:00', 'pending',   DATE_SUB(NOW(), INTERVAL 1 DAY)),
+  (7732, NULL, 1, 7701, 'consultation', DATE_SUB(CURDATE(), INTERVAL 10 DAY), '10:00:00', 'completed', DATE_SUB(NOW(), INTERVAL 11 DAY)),
+  (7733, NULL, 1, 7701, 'consultation', DATE_SUB(CURDATE(), INTERVAL 5 DAY),  '11:00:00', 'completed', DATE_SUB(NOW(), INTERVAL 6 DAY)),
+  (7734, NULL, 1, 7702, 'consultation', DATE_SUB(CURDATE(), INTERVAL 7 DAY),  '09:00:00', 'completed', DATE_SUB(NOW(), INTERVAL 8 DAY)),
+  (7735, NULL, 1, 7702, 'consultation', DATE_ADD(CURDATE(), INTERVAL 5 DAY), '09:00:00', 'cancelled', DATE_SUB(NOW(), INTERVAL 2 DAY));
+
+-- ===========================================================================
+-- GOLDEN DATASET CONSTANTS (kept in sync BY HAND with
+-- infra/e2e/parity.mjs's own Phase 2 tail consts — same "footer constants
+-- block" precedent 70-phase4-batch1-inbox-fixture.sql.tmpl's own file
+-- established):
+--
+--   ARTICLE_CATEGORY_ID           = 7501  (general-health; 2 published rows)
+--   ARTICLE_CATEGORY_ID_VITAMINS  = 7502  (vitamins; 1 published row)
+--   ARTICLE_SEARCH_TERM           = 'PHASE2TAILSEARCHMARK'
+--   ARTICLE_DETAIL_SLUG           = 'phase2-tail-featured-article' (id 7601)
+--   ARTICLE_BASELINE_SLUGS        = [7601, 7603, 7602, 7604] (is_featured DESC, published_at DESC)
+--   ARTICLE_CATEGORY_SLUGS        = [7601, 7602]             (category_id=7501, same order rule)
+--   ARTICLE_SEARCH_SLUGS          = [7602]                   (published_at DESC only, no is_featured precedence)
+--   ARTICLE_DETAIL_RELATED_SLUGS  = ['phase2-tail-second-article'] (7602 only)
+--   PHARMACISTS_CARD_COUNT        = 3
+-- ===========================================================================

@@ -1,0 +1,5 @@
+{
+  "description": "GET action=list — no rows for this (line_user_id, line_account_id) yet.",
+  "request": { "action": "list", "line_user_id": "Ubrandnewuser000000000000000000", "line_account_id": 1 },
+  "response": { "success": true, "message": "", "addresses": [] }
+}

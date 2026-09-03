@@ -1,0 +1,23 @@
+{
+  "description": "POST action=book — success. appointment_id is a generated 'APT'+15-digit string that is NEVER persisted on the committed template (appointments table has no appointment_id column — see appointments.ts's DYNAMIC-COLUMN VERIFICATION doc comment); `type`/`symptoms` sent in the request are silently discarded server-side, not reflected anywhere in the response or DB.",
+  "request": {
+    "action": "book",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "pharmacist_id": 2,
+    "date": "2026-07-14",
+    "time": "09:20",
+    "type": "scheduled",
+    "symptoms": "ประเภท: ปรึกษายาและสุขภาพ"
+  },
+  "response": {
+    "success": true,
+    "message": "จองนัดหมายสำเร็จ!",
+    "appointment_id": "APT260714092000123",
+    "id": 55,
+    "date": "2026-07-14",
+    "time": "09:20",
+    "duration": 20
+  },
+  "status": 200
+}

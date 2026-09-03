@@ -1,0 +1,48 @@
+{
+    "description": "resolveAutoReply() — rules pre-sorted [tenantScopedRule (line_account_id=7), globalRule (line_account_id=null)] per the real ORDER BY line_account_id DESC semantics, both matching the same text via contains: PIN: the tenant-scoped rule's reply wins (matchAutoReplyRule finds it first in array order).",
+    "request": {
+        "fn": "resolveAutoReply",
+        "rules": [
+            {
+                "id": 17,
+                "line_account_id": 7,
+                "keyword": "เวลาเปิด",
+                "match_type": "contains",
+                "reply_type": "text",
+                "reply_content": "สาขานี้เปิดทุกวัน 08:00-22:00 น. ค่ะ",
+                "alt_text": null,
+                "sender_name": null,
+                "sender_icon": null,
+                "quick_reply": null,
+                "enable_share": 0,
+                "share_button_label": null,
+                "is_active": 1,
+                "priority": 5
+            },
+            {
+                "id": 18,
+                "line_account_id": null,
+                "keyword": "เวลาเปิด",
+                "match_type": "contains",
+                "reply_type": "text",
+                "reply_content": "ร้านเปิดทุกวัน 08:00-20:00 น. ค่ะ (เวลาโดยทั่วไป)",
+                "alt_text": null,
+                "sender_name": null,
+                "sender_icon": null,
+                "quick_reply": null,
+                "enable_share": 0,
+                "share_button_label": null,
+                "is_active": 1,
+                "priority": 5
+            }
+        ],
+        "text": "ร้านเวลาเปิดกี่โมงคะ",
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": {
+        "type": "text",
+        "text": "สาขานี้เปิดทุกวัน 08:00-22:00 น. ค่ะ"
+    }
+}

@@ -1,0 +1,5 @@
+{
+  "description": "POST action=remove_from_cart — deletes the matching (user_id, product_id, product_source) line and returns the recomputed cart_count.",
+  "request": { "action": "remove_from_cart", "line_user_id": "U6666666666666666666666666666ff", "product_id": 501 },
+  "response": { "success": true, "message": "Item removed", "cart_count": 0 }
+}

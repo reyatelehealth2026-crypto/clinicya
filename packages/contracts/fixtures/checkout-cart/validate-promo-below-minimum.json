@@ -1,0 +1,5 @@
+{
+  "description": "POST action=validate_promo — SAVE50 is a real hardcoded code but requires a 300 minimum order; subtotal 100 is below it. On the hardcoded-fallback branch (the only one reachable on the committed template) validateHardcodedPromo() just returns 0 for a below-minimum subtotal, so the response is the SAME generic invalid/expired message as an unknown code — NOT the 'ยอดสั่งซื้อขั้นต่ำ ฿...' message (that specific message only exists on the `promotions`-table-driven branch, handleValidatePromo() L2260-2263, which is unreachable here).",
+  "request": { "action": "validate_promo", "code": "SAVE50", "subtotal": 100 },
+  "response": { "success": false, "message": "โค้ดไม่ถูกต้องหรือหมดอายุ", "valid": false }
+}

@@ -300,3 +300,96 @@ export function httpRequest({ url, method = 'GET', headers = {}, body = null }) 
     req.end();
   });
 }
+
+// ---------------------------------------------------------------------------
+// PHASE 3 BATCH 3 (mig-infra) — multipart/form-data support. NEW plumbing,
+// not a copy of httpRequest()'s JSON-body path above: `upload_slip`
+// (infra/e2e/api-parity.mjs's `checkout-order:upload_slip` case) is the
+// FIRST file-upload endpoint ported anywhere in this migration effort, and
+// every prior ENDPOINT_CASES entry (batch 1/2) sends either a query string
+// (GET) or a single `JSON.stringify(...)` body (POST) — neither shape can
+// carry a binary file part or a `multipart/form-data; boundary=...`
+// Content-Type. This is hand-rolled (no `form-data`/`undici` FormData
+// dependency pulled into infra/e2e/, which has its own package.json
+// separate from the workspace — see api-extract.mjs's own module doc on why
+// infra/e2e/ resolves packages differently from apps/*/packages/*) — RFC
+// 7578's wire format is simple enough that a ~20-line encoder is more
+// auditable than a new dependency for a single call site.
+// ---------------------------------------------------------------------------
+
+const MULTIPART_BOUNDARY_PREFIX = 'ReyaE2eMultipartBoundary';
+
+/**
+ * Encodes `fields` (plain string form fields) + an optional `file` part
+ * (`{name, filename, contentType, data: Buffer}`) as a single
+ * `multipart/form-data` body, RFC 7578-shaped (CRLF line endings, each part
+ * preceded by `--boundary`, the whole body closed by `--boundary--`). Field
+ * order is insertion order (`Object.entries`) — PHP's `$_POST`/`$_FILES`
+ * parsing does not care about part order, so this is not a compatibility
+ * concern, just deterministic output for a stable request body across runs.
+ * Returns `{ boundary, body }` — `body` is a single concatenated `Buffer`
+ * (binary-safe for the file part; `httpRequest()`'s `req.write(body)`
+ * already accepts a `Buffer` with no changes needed there).
+ */
+export function buildMultipartBody(fields, file) {
+  const boundary = `${MULTIPART_BOUNDARY_PREFIX}${randomBytes(16).toString('hex')}`;
+  const parts = [];
+
+  for (const [key, value] of Object.entries(fields ?? {})) {
+    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`, 'utf8'));
+  }
+
+  if (file) {
+    parts.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${file.name}"; filename="${file.filename}"\r\n` +
+          `Content-Type: ${file.contentType}\r\n\r\n`,
+        'utf8'
+      )
+    );
+    parts.push(file.data);
+    parts.push(Buffer.from('\r\n', 'utf8'));
+  }
+
+  parts.push(Buffer.from(`--${boundary}--\r\n`, 'utf8'));
+  return { boundary, body: Buffer.concat(parts) };
+}
+
+/**
+ * Convenience wrapper over `httpRequest()` for a multipart POST: builds the
+ * body via `buildMultipartBody()`, sets `Content-Type: multipart/form-data;
+ * boundary=...` and an explicit `Content-Length` (avoids chunked
+ * transfer-encoding — `php:8.2-apache`'s multipart parser and Next's
+ * `request.formData()` both handle chunked bodies fine, but a known
+ * `Content-Length` is the more representative shape for a real
+ * browser/LIFF-webview `fetch(url, {body: new FormData()})` call, which
+ * always sends one).
+ */
+export function httpRequestMultipart({ url, method = 'POST', headers = {}, fields = {}, file = null }) {
+  const { boundary, body } = buildMultipartBody(fields, file);
+  return httpRequest({
+    url,
+    method,
+    headers: {
+      ...headers,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      'Content-Length': String(body.length),
+    },
+    body,
+  });
+}
+
+/**
+ * The smallest valid PNG that exists (a 1x1 transparent pixel, 68 bytes) —
+ * the well-known public-domain "tiny PNG" test fixture, not a real image
+ * asset. Used as `upload_slip`'s uploaded file: `handleUploadSlip()`
+ * (api/checkout.php) only validates `$_FILES['slip']['type']` (must be one
+ * of image/jpeg|png|gif|webp) and `['size']` (<=5MB) before saving it —
+ * there is no image-content/dimension validation on either stack, so a
+ * minimal PNG exercises the real code path with no need for a larger fixture
+ * asset committed to the repo.
+ */
+export const TINY_PNG_FIXTURE = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64'
+);

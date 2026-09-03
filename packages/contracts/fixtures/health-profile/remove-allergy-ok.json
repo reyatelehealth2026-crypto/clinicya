@@ -1,0 +1,10 @@
+{
+  "description": "POST action=remove_allergy — success. SUBTLE TRAP: the DELETE has no line_account_id predicate at all (`WHERE id = ? AND line_user_id = ?`), preserved verbatim in the port — see health-profile.ts's doc comment. Response is always {success:true} regardless of whether a row actually matched (no rowCount check).",
+  "request": {
+    "action": "remove_allergy",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "allergy_id": 12
+  },
+  "response": { "success": true, "message": "ลบข้อมูลการแพ้ยาแล้ว" },
+  "status": 200
+}

@@ -64,36 +64,15 @@ function field(jsonBody: Record<string, unknown> | null, query: Record<string, s
   return query[key];
 }
 
-/**
- * Best-effort `CREATE TABLE IF NOT EXISTS user_wishlist (...)` on every request — an INHERITED quirk
- * from api/wishlist.php (CLAUDE.md discourages this pattern for NEW admin features; kept here only for
- * byte-fidelity of an EXISTING endpoint). `user_wishlist` already exists on the canonical tenant
- * template (packages/db's generated types confirm the columns below), so this is a no-op in practice
- * except on drifted tenant DBs created before that table existed.
+/*
+ * NOTE — no `ensureWishlistTable()` here. api/wishlist.php self-creates
+ * `user_wishlist` on every request; that DDL is deliberately NOT ported. Per
+ * CLAUDE.md ("new code must never auto-create schema") the table is owned by
+ * the canonical tenant template
+ * (database/migration_2026-05-25_tenant_template.sql), which packages/db's
+ * generated types are derived from — so the runtime CREATE was already a
+ * no-op on every non-drifted tenant DB.
  */
-async function ensureWishlistTable(db: Kysely<TenantDB>): Promise<void> {
-  try {
-    await sql`
-      CREATE TABLE IF NOT EXISTS user_wishlist (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        line_user_id VARCHAR(50),
-        product_id INT NOT NULL,
-        line_account_id INT,
-        price_when_added DECIMAL(10,2) DEFAULT 0,
-        notify_on_sale TINYINT(1) DEFAULT 1,
-        notify_on_restock TINYINT(1) DEFAULT 0,
-        notified_at TIMESTAMP NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_user_product (user_id, product_id),
-        INDEX idx_line_user (line_user_id),
-        INDEX idx_product (product_id)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `.execute(db);
-  } catch {
-    // best-effort, matches PHP's catch (Exception $e) {}.
-  }
-}
 
 async function resolveUserId(db: Kysely<TenantDB>, lineUserId: string): Promise<number | null> {
   if (!lineUserId) return null;
@@ -217,8 +196,6 @@ async function dispatch(
   jsonBody: Record<string, unknown> | null,
   query: Record<string, string>
 ): Promise<ActionResult> {
-  await ensureWishlistTable(db);
-
   const action = String(field(jsonBody, query, 'action') ?? '');
   const lineUserId = String(field(jsonBody, query, 'line_user_id') ?? '');
   const productIdRaw = field(jsonBody, query, 'product_id');

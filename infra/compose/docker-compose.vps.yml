@@ -1,0 +1,305 @@
+# infra/compose/docker-compose.vps.yml
+#
+# STANDALONE full-stack compose for a VPS trial run — PHP monolith AND the
+# Next.js stack, side by side behind the strangler edge.
+#
+# Unlike infra/compose/docker-compose.strangler.yml (a local DEV OVERLAY that
+# must be layered on docker-compose.dev.yml and drags in the legacy
+# backend/frontend/websocket/mysql:8.0 services), this file is self-contained:
+#
+#   docker compose --env-file infra/compose/.env.vps \
+#     -f infra/compose/docker-compose.vps.yml up -d --build
+#
+# Relative paths are resolved against the PROJECT DIRECTORY — the directory of
+# the first `-f` file. With the invocation above that is infra/compose/, so
+# every path below is written relative to infra/compose/ (`../..` = repo root).
+#
+# READ docs/runbooks/vps-trial-stack.md BEFORE RUNNING. In particular:
+#   - `composer install` must run on the host first (vendor/ is bind-mounted,
+#     not baked into the PHP image — a deliberate Phase 0 lift-and-shift
+#     decision, see infra/php/Dockerfile's header).
+#   - The DB starts EMPTY. Import a dump before expecting anything to work.
+#
+# SCOPE — what this is and is not:
+#   This stands up a parallel stack for testing. It performs NO DNS change, NO
+#   TLS issuance, and NO traffic flip: every application route in
+#   infra/nginx/routes.json still points at php_backend, and this file does not
+#   touch that manifest. The live cPanel site is unaffected by running this.
+#   Real cutover steps live in docs/runbooks/phase0-cutover-rollback.md.
+#
+# KNOWN GAP: the `/miniapp` route's upstream (`next-miniapp:3000`) has no
+# service here — line-mini-app has no Dockerfile in this repo and is deployed
+# separately today. /miniapp will return 502 from this stack. That is expected,
+# not a misconfiguration. nginx resolves upstreams at REQUEST time via Docker's
+# embedded DNS, so a missing service does not stop the edge from starting or
+# from serving every other route.
+
+name: clinicya-vps
+
+services:
+  # ==========================================================================
+  # Data layer
+  # ==========================================================================
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: clinicya-vps-mariadb
+    environment:
+      # Bare `:?` guards below (no message text): compose still fails with a
+      # clear "required variable X is missing a value" naming the variable, and
+      # an inline message here reads as an assigned password to secret scanners
+      # (GitGuardian flagged exactly that). Set these in infra/compose/.env.vps.
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-zrismpsz_clinicya}
+      MARIADB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?}
+      MARIADB_CHARSET: utf8mb4
+      MARIADB_COLLATION: utf8mb4_unicode_ci
+      TZ: Asia/Bangkok
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+07:00
+      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --binlog-expire-logs-seconds=604800
+      --server-id=1
+      --max-allowed-packet=256M
+    ports:
+      # Bound to loopback ONLY. A VPS has a public IP; publishing 3306 as
+      # "3307:3306" would expose the database to the internet. Reach it from
+      # your laptop with an SSH tunnel instead:
+      #   ssh -L 3307:127.0.0.1:3307 user@vps
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      # Shared unix-socket dir: config/config.php hardcodes DB_HOST='localhost',
+      # which PDO's mysql driver treats as "connect via unix socket", not TCP.
+      # infra/php/php.ini points pdo_mysql.default_socket at /run/mysqld/mysqld.sock,
+      # so this shared volume is what lets the unmodified PHP reach this
+      # container. This is why the DB_HOST fix is not a blocker for a trial run.
+      - mariadb_socket:/run/mysqld
+      # Drop .sql / .sql.gz files here to have them imported on FIRST boot only
+      # (mariadb entrypoint behaviour — ignored once mariadb_data is populated).
+      - ../../database/vps-seed:/docker-entrypoint-initdb.d:ro
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: clinicya-vps-redis
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # PHP monolith (unchanged code — Phase 0 lift-and-shift)
+  # ==========================================================================
+
+  php:
+    build:
+      context: ../..
+      dockerfile: infra/php/Dockerfile
+    container_name: clinicya-vps-php
+    labels:
+      clinicya.strangler.upstream: php_backend
+    environment:
+      # Inert today (config/config.php uses literal define()s, reached via the
+      # socket bridge above) but forward-compatible for when Track A task A3
+      # makes config.php env-aware.
+      DB_HOST: ${DB_HOST:-mariadb}
+      DB_PORT: 3306
+      DB_NAME: ${MARIADB_DATABASE:-zrismpsz_clinicya}
+      DB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      DB_PASSWORD: ${MARIADB_PASSWORD:?}
+      REDIS_SESSION_HOST: redis
+      REDIS_SESSION_PORT: 6379
+      REDIS_SESSION_DB: ${REDIS_SESSION_DB:-1}
+      COMPOSER_AUTOLOAD: /var/www/html/vendor/autoload.php
+      TZ: Asia/Bangkok
+    volumes:
+      # Lift-and-shift: the repo (including host-installed vendor/) is
+      # bind-mounted rather than COPYed into the image.
+      - ../..:/var/www/html
+      - php_uploads:/var/www/html/uploads
+      - mariadb_socket:/run/mysqld
+    depends_on:
+      mariadb: { condition: service_healthy }
+      redis:   { condition: service_healthy }
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/", "-o", "/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  cron:
+    build:
+      context: ../..
+      dockerfile: infra/php/Dockerfile
+    container_name: clinicya-vps-cron
+    command: ["cron", "-f", "-l", "8"]
+    # Opt-in only. infra/php/crontab's schedules are INFERRED, not the real
+    # cPanel crontab — starting this against a freshly imported production
+    # dump can fire real broadcasts and reminders at real customers. Enable
+    # with `--profile cron` only after reconciling the schedules
+    # (docs/runbooks/phase0-cutover-rollback.md item 5).
+    profiles: ["cron"]
+    environment:
+      DB_HOST: ${DB_HOST:-mariadb}
+      DB_PORT: 3306
+      DB_NAME: ${MARIADB_DATABASE:-zrismpsz_clinicya}
+      DB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      DB_PASSWORD: ${MARIADB_PASSWORD:?}
+      REDIS_SESSION_HOST: redis
+      REDIS_SESSION_PORT: 6379
+      REDIS_SESSION_DB: ${REDIS_SESSION_DB:-1}
+      COMPOSER_AUTOLOAD: /var/www/html/vendor/autoload.php
+      TZ: Asia/Bangkok
+    volumes:
+      - ../..:/var/www/html
+      - php_uploads:/var/www/html/uploads
+      - mariadb_socket:/run/mysqld
+    depends_on:
+      mariadb: { condition: service_healthy }
+      redis:   { condition: service_healthy }
+    networks: [edge]
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Next.js stack
+  # ==========================================================================
+
+  next-admin:
+    build:
+      context: ../..
+      dockerfile: infra/admin/Dockerfile
+      args:
+        # Inlined into the client bundle at BUILD time — changing it later
+        # requires a rebuild, not just a restart.
+        NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-}
+    container_name: clinicya-vps-next-admin
+    labels:
+      clinicya.strangler.upstream: next_admin
+    environment:
+      NODE_ENV: production
+      # Unlike PHP, the Next stack talks to MariaDB over TCP — @reya/db uses
+      # mysql2 with a host/port, not a socket. Hence `mariadb`, not `localhost`.
+      DB_HOST: mariadb
+      DB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      DB_PASS: ${MARIADB_PASSWORD:?}
+      REDIS_URL: redis://redis:6379
+      REYA_BASE_DOMAIN: ${REYA_BASE_DOMAIN:-re-ya.com}
+      REYA_ROOT_TENANT_SLUG: ${REYA_ROOT_TENANT_SLUG:-}
+      SESSION_BRIDGE_URL: http://php/internal/session-bridge.php
+      # Set in infra/compose/.env.vps — see .env.vps.example.
+      SESSION_BRIDGE_HMAC_SECRET: ${SESSION_BRIDGE_HMAC_SECRET:?}
+      NODE_SESSION_TTL_SECONDS: ${NODE_SESSION_TTL_SECONDS:-86400}
+      TZ: Asia/Bangkok
+    depends_on:
+      mariadb: { condition: service_healthy }
+      redis:   { condition: service_healthy }
+    networks: [edge]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/worker/Dockerfile
+    container_name: clinicya-vps-worker
+    environment:
+      NODE_ENV: production
+      DB_HOST: mariadb
+      DB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      DB_PASS: ${MARIADB_PASSWORD:?}
+      REDIS_URL: redis://redis:6379
+      REYA_BASE_DOMAIN: ${REYA_BASE_DOMAIN:-re-ya.com}
+      WORKER_HEALTH_PORT: 8099
+      WORKER_REALTIME_PORT: 8100
+      TZ: Asia/Bangkok
+    depends_on:
+      mariadb: { condition: service_healthy }
+      redis:   { condition: service_healthy }
+    networks: [edge]
+    restart: unless-stopped
+
+  # Legacy realtime server — see infra/ws/Dockerfile's header for why this,
+  # and not apps/worker, backs the `ws` upstream.
+  ws:
+    build:
+      context: ../..
+      dockerfile: infra/ws/Dockerfile
+    container_name: clinicya-vps-ws
+    labels:
+      clinicya.strangler.upstream: ws
+    environment:
+      WEBSOCKET_PORT: 3001
+      WEBSOCKET_HOST: 0.0.0.0
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DB_HOST: mariadb
+      DB_USER: ${MARIADB_USER:-zrismpsz_clinicya}
+      DB_PASSWORD: ${MARIADB_PASSWORD:?}
+      DB_NAME: ${MARIADB_DATABASE:-zrismpsz_clinicya}
+      TZ: Asia/Bangkok
+    depends_on:
+      mariadb: { condition: service_healthy }
+      redis:   { condition: service_healthy }
+    networks: [edge]
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Strangler edge
+  # ==========================================================================
+
+  nginx-edge:
+    image: nginx:alpine
+    container_name: clinicya-vps-nginx-edge
+    labels:
+      clinicya.strangler.upstreams: "php_backend,next_admin,next_miniapp,ws"
+    volumes:
+      # Consumes the ALREADY-RENDERED config. Regenerate on the host after
+      # editing routes.json:
+      #   node infra/nginx/generate-routes.mjs
+      #   docker compose ... exec nginx-edge nginx -s reload
+      - ../../infra/nginx/generated:/etc/clinicya-edge:ro
+    command: ["nginx", "-g", "daemon off;", "-c", "/etc/clinicya-edge/strangler-edge.conf"]
+    depends_on:
+      - php
+      - next-admin
+    ports:
+      - "${EDGE_HTTP_PORT:-80}:80"
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/__edge-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  mariadb_data:
+  mariadb_socket:
+  redis_data:
+  php_uploads:
+
+networks:
+  edge:
+    driver: bridge

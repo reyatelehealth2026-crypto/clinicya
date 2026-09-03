@@ -376,10 +376,13 @@ async function findUserForRegister(db: Kysely<TenantDB>, lineUserId: string, lin
 }
 
 /**
- * Port of api/member.php::flagPointsMergeOnLink() — best-effort, never throws into the caller. The
- * `CREATE TABLE IF NOT EXISTS` here is an INHERITED quirk from the PHP original (mirrors an
- * auto-create-table pattern CLAUDE.md discourages for NEW admin features) — kept for byte-fidelity of
- * an EXISTING endpoint's side effects, not a template for new Next.js features.
+ * Port of api/member.php::flagPointsMergeOnLink() — best-effort, never throws into the caller.
+ *
+ * The PHP original self-creates `points_merge_candidates` on every call; that DDL is deliberately
+ * NOT ported. Per CLAUDE.md ("new code must never auto-create schema") the table is owned by the
+ * committed, whitelisted migration database/migration_2026-06-20_points_phone_members.sql, whose
+ * DDL is byte-equivalent to what the PHP emitted — so dropping the runtime CREATE changes no
+ * schema, only who owns it.
  */
 export async function flagPointsMergeOnLink(
   db: Kysely<TenantDB>,
@@ -405,25 +408,6 @@ export async function flagPointsMergeOnLink(
     if (!ghost) return;
     const offlineId = Number(ghost.id);
     if (offlineId === lineUserDbId) return;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS \`points_merge_candidates\` (
-        \`id\` INT NOT NULL AUTO_INCREMENT,
-        \`line_account_id\` INT NOT NULL,
-        \`phone\` VARCHAR(20) NOT NULL,
-        \`offline_user_id\` INT NOT NULL,
-        \`line_user_id\` INT NOT NULL,
-        \`offline_points\` INT NOT NULL DEFAULT 0,
-        \`status\` ENUM('pending','merged','dismissed') NOT NULL DEFAULT 'pending',
-        \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        \`resolved_at\` TIMESTAMP NULL DEFAULT NULL,
-        \`resolved_by\` INT NULL,
-        PRIMARY KEY (\`id\`),
-        UNIQUE KEY \`uniq_pair\` (\`line_account_id\`, \`offline_user_id\`, \`line_user_id\`),
-        KEY \`idx_account_status\` (\`line_account_id\`, \`status\`),
-        KEY \`idx_phone\` (\`line_account_id\`, \`phone\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `.execute(db);
 
     await sql`
       INSERT INTO points_merge_candidates (line_account_id, phone, offline_user_id, line_user_id, offline_points, status)

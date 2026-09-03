@@ -1,0 +1,32 @@
+{
+    "description": "buildAutoReplyReply() — sender_name set, sender_icon null: message.sender = {name} ONLY. PIN: no \"iconUrl\" key at all (icon only applies when name is ALSO present AND icon itself is truthy).",
+    "request": {
+        "fn": "buildAutoReplyReply",
+        "rule": {
+            "id": 14,
+            "line_account_id": null,
+            "keyword": "",
+            "match_type": "all",
+            "reply_type": "text",
+            "reply_content": "สวัสดีค่ะ มีอะไรให้ช่วยไหมคะ",
+            "alt_text": null,
+            "sender_name": "บอทร้านยา CNY",
+            "sender_icon": null,
+            "quick_reply": null,
+            "enable_share": 0,
+            "share_button_label": null,
+            "is_active": 1,
+            "priority": 0
+        },
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": {
+        "type": "text",
+        "text": "สวัสดีค่ะ มีอะไรให้ช่วยไหมคะ",
+        "sender": {
+            "name": "บอทร้านยา CNY"
+        }
+    }
+}

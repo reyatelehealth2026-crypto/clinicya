@@ -64,61 +64,17 @@ export function pcNormalizePayment(raw: string): 'cash' | 'transfer' | 'card' | 
   return (['cash', 'transfer', 'card', 'qr'] as const).includes(s as 'cash') ? (s as 'cash' | 'transfer' | 'card' | 'qr') : null;
 }
 
-async function ensurePointsClaimsTable(db: Kysely<TenantDB>): Promise<void> {
-  try {
-    await sql`
-      CREATE TABLE IF NOT EXISTS \`points_claims\` (
-        \`id\` INT NOT NULL AUTO_INCREMENT,
-        \`line_account_id\` INT NOT NULL,
-        \`token\` VARCHAR(64) NOT NULL,
-        \`voucher_no\` VARCHAR(30) NOT NULL,
-        \`points\` INT NOT NULL DEFAULT 0,
-        \`amount\` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-        \`payment_method\` VARCHAR(20) DEFAULT NULL,
-        \`status\` ENUM('pending','claimed','expired','cancelled') NOT NULL DEFAULT 'pending',
-        \`claimed_by_user_id\` INT NULL,
-        \`claimed_line_user_id\` VARCHAR(64) NULL,
-        \`points_transaction_id\` INT NULL,
-        \`claimed_at\` TIMESTAMP NULL DEFAULT NULL,
-        \`expires_at\` TIMESTAMP NOT NULL,
-        \`created_by\` INT NULL,
-        \`created_at\` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (\`id\`),
-        UNIQUE KEY \`uniq_token\` (\`token\`),
-        KEY \`idx_account_status\` (\`line_account_id\`, \`status\`),
-        KEY \`idx_expires\` (\`expires_at\`),
-        KEY \`idx_claimed_user\` (\`claimed_by_user_id\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `.execute(db);
-  } catch {
-    // best-effort self-create, matches points-claim.php's ensurePointsClaimsTable().
-  }
-}
-
-async function ensurePointsMergeTable(db: Kysely<TenantDB>): Promise<void> {
-  try {
-    await sql`
-      CREATE TABLE IF NOT EXISTS \`points_merge_candidates\` (
-        \`id\` INT NOT NULL AUTO_INCREMENT,
-        \`line_account_id\` INT NOT NULL,
-        \`phone\` VARCHAR(20) NOT NULL,
-        \`offline_user_id\` INT NOT NULL,
-        \`line_user_id\` INT NOT NULL,
-        \`offline_points\` INT NOT NULL DEFAULT 0,
-        \`status\` ENUM('pending','merged','dismissed') NOT NULL DEFAULT 'pending',
-        \`created_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        \`resolved_at\` TIMESTAMP NULL DEFAULT NULL,
-        \`resolved_by\` INT NULL,
-        PRIMARY KEY (\`id\`),
-        UNIQUE KEY \`uniq_pair\` (\`line_account_id\`, \`offline_user_id\`, \`line_user_id\`),
-        KEY \`idx_account_status\` (\`line_account_id\`, \`status\`),
-        KEY \`idx_phone\` (\`line_account_id\`, \`phone\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `.execute(db);
-  } catch {
-    // best-effort self-create, matches points-claim.php's ensurePointsMergeTable().
-  }
-}
+/*
+ * NOTE — no `ensurePointsClaimsTable()` / `ensurePointsMergeTable()` here.
+ * points-claim.php self-creates both tables on every request; that DDL is
+ * deliberately NOT ported. Per CLAUDE.md ("new code must never auto-create
+ * schema" / "prefer a versioned database/migration_*.sql file, not page-load
+ * auto-create") the schema is owned by the committed, whitelisted migrations:
+ *   - `points_claims`            -> database/migration_2026-06-02_points_claims.sql
+ *   - `points_merge_candidates`  -> database/migration_2026-06-20_points_phone_members.sql
+ * Both are byte-equivalent to the DDL the PHP emitted, so dropping the
+ * runtime CREATE changes no schema — only who owns it.
+ */
 
 /** Ported from pcGenerateVoucherNo(). */
 async function pcGenerateVoucherNo(db: Kysely<TenantDB>, lineAccountId: number): Promise<string> {
@@ -179,8 +135,6 @@ const MATCH_COLUMNS = sql`id, line_user_id, display_name, real_name, first_name,
 
 /** Ported from handleGiveByPhone(), points-claim.php lines 787-921 (minus the LINE push — see this file's module doc). */
 export async function giveByPhone(db: Kysely<TenantDB>, input: GiveByPhoneInput): Promise<GiveByPhoneResult> {
-  await ensurePointsClaimsTable(db);
-
   const phone = pcNormalizePhone(input.phone);
   if (phone.length < 8) {
     return { success: false, message: 'กรุณากรอกเบอร์ให้ถูกต้อง / Enter a valid phone' };
@@ -347,7 +301,6 @@ async function flagMergeForPhone(
   lineUserId: number
 ): Promise<{ offlineUserId: number; offlinePoints: number } | null> {
   try {
-    await ensurePointsMergeTable(db);
     const result = await sql<{ id: number; available_points: number | null }>`
       SELECT id, available_points FROM users
       WHERE line_account_id = ${lineAccountId} AND phone = ${phone} AND line_user_id LIKE 'offline:%' AND available_points > 0

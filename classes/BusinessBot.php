@@ -224,6 +224,33 @@ class BusinessBot
             return true;
         }
 
+        // คีย์เวิร์ดฝั่งสมาชิกที่เหลือ — ส่งต่อให้ MemberPostbackRouter วาด
+        // จะได้มีที่เดียวที่รู้วิธีวาดหน้าจอเหล่านี้ ทั้งทางปุ่มและทางพิมพ์
+        $memberKeywords = [
+            'member_medications' => ['ยาของฉัน', 'ยาที่ทาน', 'รายการยา', 'my meds', 'mymeds'],
+            'member_appointments' => ['นัดหมาย', 'นัดของฉัน', 'ดูนัด', 'appointment', 'appointments'],
+            'member_points_history' => ['ประวัติแต้ม', 'ประวัติคะแนน', 'points history'],
+            'member_notif_prefs' => ['ตั้งค่าแจ้งเตือน', 'ปิดแจ้งเตือน', 'เปิดแจ้งเตือน', 'การแจ้งเตือน'],
+        ];
+        foreach ($memberKeywords as $action => $words) {
+            if (!in_array($text, $words, true)) {
+                continue;
+            }
+            if (!class_exists('MemberPostbackRouter')) {
+                require_once __DIR__ . '/MemberPostbackRouter.php';
+            }
+            $handled = \MemberPostbackRouter::handle($this->db, $this->line, [
+                'data' => 'action=' . $action,
+                'reply_token' => $replyToken,
+                'user_id' => $userDbId,
+                'line_user_id' => $userId,
+                'line_account_id' => $this->lineAccountId,
+            ]);
+            if ($handled) {
+                return true;
+            }
+        }
+
         // ถ้าเป็นโหมด auto_reply_only ให้ return null เพื่อให้ AutoReply handler จัดการ
         if ($this->botMode === self::MODE_AUTO_REPLY_ONLY) {
             $this->logDebug('processMessage', 'Auto reply only mode - skipping BusinessBot');
@@ -2577,8 +2604,37 @@ class BusinessBot
     /**
      * Get member tier based on total points
      */
+    /**
+     * ระดับสมาชิกสำหรับบัตรใน LINE
+     *
+     * เดิมฮาร์ดโค้ดเกณฑ์ไว้ในเมธอดนี้ ทำให้ระดับบนบัตร LINE ไม่ตรงกับที่แอดมิน
+     * ตั้งไว้ในหน้า membership (บันทึกลง tier_settings) และไม่ตรงกับ mini App
+     * ที่อ่าน TierService อยู่แล้ว — ตอนนี้ทั้งสองฝั่งอ่านแหล่งเดียวกัน
+     *
+     * TierService มี fallback ครบในตัว (tier_settings → member_tiers →
+     * DEFAULT_TIERS) ส่วนบันไดฮาร์ดโค้ดชุดเดิมเก็บไว้เป็นด่านสุดท้ายเผื่อโหลด
+     * คลาสไม่ได้ จะได้ไม่ทำให้บัตรสมาชิกพังทั้งใบ
+     */
     private function getMemberTier($totalPoints)
     {
+        try {
+            if (!class_exists('TierService')) {
+                require_once __DIR__ . '/TierService.php';
+            }
+            $tierService = new \TierService($this->db, $this->lineAccountId);
+            $tier = $tierService->calculateTier((int) $totalPoints);
+
+            if (!empty($tier['name'])) {
+                return [
+                    'name' => $tier['name'],
+                    'icon' => !empty($tier['icon']) ? $tier['icon'] : '🏅',
+                    'color' => !empty($tier['color']) ? $tier['color'] : '#6B7280',
+                ];
+            }
+        } catch (\Throwable $e) {
+            error_log('BusinessBot::getMemberTier fell back to hardcoded ladder: ' . $e->getMessage());
+        }
+
         if ($totalPoints >= 10000) {
             return ['name' => 'Diamond', 'icon' => '💎', 'color' => '#00CED1'];
         } elseif ($totalPoints >= 5000) {

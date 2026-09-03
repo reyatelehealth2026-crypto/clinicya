@@ -1,0 +1,15 @@
+{
+  "description": "POST action=create_order — line_user_id resolves to an existing user (so the 'User not found' branch is NOT hit), but cart_items is an empty array so the server falls through to loadCheckoutCartLinesFromDb() (L1364-1367), which also returns no rows for this user's cart_items — handleCreateOrder() fails fast with 'Cart is empty' (L1369-1371) before ever opening the DB transaction (no transactions/transaction_items rows are written).",
+  "request": {
+    "action": "create_order",
+    "line_user_id": "U3333333333333333333333333333cc",
+    "line_account_id": 1,
+    "payment_method": "transfer",
+    "address": { "name": "A" },
+    "cart_items": []
+  },
+  "response": {
+    "success": false,
+    "message": "Cart is empty"
+  }
+}

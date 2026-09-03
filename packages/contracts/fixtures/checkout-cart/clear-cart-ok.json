@@ -1,0 +1,5 @@
+{
+  "description": "POST action=clear_cart — deletes every cart_items row for the user; cart_count is hardcoded 0 in the PHP response, not re-queried.",
+  "request": { "action": "clear_cart", "line_user_id": "U7777777777777777777777777777aa" },
+  "response": { "success": true, "message": "Cart cleared", "cart_count": 0 }
+}

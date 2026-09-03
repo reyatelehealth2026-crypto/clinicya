@@ -1,0 +1,9 @@
+{
+  "description": "POST action=save — brand-new LINE user, `users` row auto-created using the tenant's default-or-first-active line_account.",
+  "request": {
+    "action": "save",
+    "line_user_id": "Ubrandnewuser000000000000000000",
+    "consents": { "privacy_policy": true, "terms_of_service": true, "health_data": false }
+  },
+  "response": { "success": true, "message": "Consent saved", "user_id": 99 }
+}

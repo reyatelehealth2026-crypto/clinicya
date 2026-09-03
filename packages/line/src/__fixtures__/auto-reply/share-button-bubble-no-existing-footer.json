@@ -1,0 +1,54 @@
+{
+    "description": "addShareButtonToFlex() — bubble with NO existing footer: a fresh footer box is created (type=box, layout=vertical, paddingAll=lg) and the share button is its only content.",
+    "request": {
+        "fn": "addShareButtonToFlex",
+        "flexContent": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "สินค้าราคาพิเศษ"
+                    }
+                ]
+            }
+        },
+        "ruleId": 201,
+        "label": "📤 แชร์ให้เพื่อน",
+        "liffShareId": "liff-1234-share-test"
+    },
+    "response": {
+        "type": "bubble",
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "สินค้าราคาพิเศษ"
+                }
+            ]
+        },
+        "footer": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "button",
+                    "action": {
+                        "type": "uri",
+                        "label": "📤 แชร์ให้เพื่อน",
+                        "uri": "https://liff.line.me/liff-1234-share-test?rule=201"
+                    },
+                    "style": "secondary",
+                    "color": "#3B82F6",
+                    "height": "sm",
+                    "margin": "sm"
+                }
+            ],
+            "paddingAll": "lg"
+        }
+    }
+}

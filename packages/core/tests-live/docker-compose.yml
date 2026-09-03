@@ -1,0 +1,63 @@
+# packages/core/tests-live/docker-compose.yml
+#
+# Minimal, throwaway MariaDB 10.11 service for the genDocNumber() LIVE
+# concurrency gate (docs/runbooks/phase5-documents-vat-parity.md). Image
+# choice mirrors infra/e2e/docker-compose.yml (MariaDB-specific idioms
+# elsewhere in this repo's schema). This is intentionally NOT a clone of
+# that harness — no PHP service, no session bridge, no 280-table tenant
+# template. genDocNumber.concurrency.ts (the sole entry point — do not
+# `docker compose up` this file by hand) creates the ONE table this gate
+# needs (`document_sequences`, exact DDL copied from
+# database/migration_2026-05-25_tenant_template.sql lines 2085-2095, see
+# ./document_sequences.ddl.sql) after the container reports healthy, then
+# tears the whole stack down (`down -v`) in a `finally` block on every exit
+# path (pass, fail, or thrown error) — mirrors infra/e2e/run.mjs's pattern.
+#
+# Every ${VAR:?} below has no default and is generated at runtime by
+# genDocNumber.concurrency.ts (a throwaway random value, never written to
+# any tracked file) — same secrets-discipline convention
+# infra/compose/docker-compose.strangler.yml and infra/e2e/docker-compose.yml
+# already use. A bare `docker compose up` against this file without those
+# env vars set will fail — that's intentional.
+#
+# Container/network naming uses a `docvat-core-live-` prefix (this stream's
+# id) so it never collides with infra/e2e's `e2e-*` harness or any sibling
+# migration stream's own scratch containers running concurrently in a
+# different worktree.
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: docvat-core-live-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DOCVAT_LIVE_ROOT_PASSWORD:?}
+      MARIADB_DATABASE: ${DOCVAT_LIVE_DB_NAME:?}
+      MARIADB_CHARSET: utf8mb4
+      MARIADB_COLLATION: utf8mb4_unicode_ci
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+07:00
+      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+    ports:
+      # Host-mapped to a high, distinct port (not the bare 3306
+      # infra/e2e/docker-compose.yml claims, and not mig-kernel's codegen
+      # scratch port either) so this harness never collides with a sibling
+      # stream's own concurrently-running scratch DB. Overridable — see
+      # genDocNumber.concurrency.ts.
+      - '${DOCVAT_LIVE_DB_PORT:-33073}:3306'
+    tmpfs:
+      # Throwaway data dir — no named volume to leak between runs; `down -v`
+      # in the runner's finally block is a secondary belt-and-suspenders
+      # cleanup, this is the primary one.
+      - /var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+networks:
+  default:
+    name: docvat-core-live-net

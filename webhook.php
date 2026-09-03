@@ -39,6 +39,7 @@ require_once 'classes/LineAccountManager.php';
 require_once 'classes/OpenAI.php';
 require_once 'classes/TelegramAPI.php';
 require_once 'classes/FlexTemplates.php';
+require_once 'classes/MemberPostbackRouter.php'; // เลน reply ฝั่งสมาชิก (ปุ่มบน Flex)
 require_once __DIR__ . '/includes/liff-helper.php'; // reya_liff_url_or_oa(): LIFF-or-OA fallback
 
 // V2.5: Load BusinessBot if available, fallback to ShopBot
@@ -434,6 +435,19 @@ foreach ($events as $event) {
                         triggerReceiptFlow($db, $line, $replyToken, $dbUserId, $userId);
                         break;
                     }
+                }
+
+                // ปุ่มฝั่งสมาชิกทั้งหมด (ทานแล้ว / เลื่อน / ยาของฉัน / นัดหมาย /
+                // ประวัติแต้ม / ตั้งค่าแจ้งเตือน) — router คืน false ถ้าไม่ใช่ของมัน
+                // แล้วปล่อยให้ if-chain เดิมด้านล่างทำงานต่อตามปกติ
+                if ($dbUserId && MemberPostbackRouter::handle($db, $line, [
+                    'data' => $postbackData,
+                    'reply_token' => $replyToken,
+                    'user_id' => $dbUserId,
+                    'line_user_id' => $userId,
+                    'line_account_id' => $lineAccountId,
+                ])) {
+                    break;
                 }
 
                 // รองรับทั้ง 2 รูปแบบ: broadcast_click_{id}_{id} หรือ JSON {"action":"broadcast_click",...}

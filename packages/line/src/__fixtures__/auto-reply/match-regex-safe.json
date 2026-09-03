@@ -1,0 +1,32 @@
+{
+    "description": "resolveAutoReply() — match_type=regex, well-formed pattern: `preg_match('/' . keyword . '/i', text)` matches a price-looking substring (\"150 บาท\").",
+    "request": {
+        "fn": "resolveAutoReply",
+        "rules": [
+            {
+                "id": 5,
+                "line_account_id": null,
+                "keyword": "[0-9]+\\s*บาท",
+                "match_type": "regex",
+                "reply_type": "text",
+                "reply_content": "สอบถามราคาสินค้าติดต่อแอดมินได้เลยค่ะ",
+                "alt_text": null,
+                "sender_name": null,
+                "sender_icon": null,
+                "quick_reply": null,
+                "enable_share": 0,
+                "share_button_label": null,
+                "is_active": 1,
+                "priority": 0
+            }
+        ],
+        "text": "ราคาเท่าไหร่คะ ประมาณ 150 บาท ใช่ไหม",
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": {
+        "type": "text",
+        "text": "สอบถามราคาสินค้าติดต่อแอดมินได้เลยค่ะ"
+    }
+}

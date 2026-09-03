@@ -1,0 +1,45 @@
+{
+    "description": "resolveAutoReply() — the exact-once-match short-circuit landmine: rules[0] (higher priority) matches first via contains, but its reply_content fails json_decode() -> buildAutoReplyReply() returns null. rules[1] (lower priority) would ALSO have matched the same text and has valid text content, but is never tried. PIN: overall response must be null, with no fallback to rules[1].",
+    "request": {
+        "fn": "resolveAutoReply",
+        "rules": [
+            {
+                "id": 10,
+                "line_account_id": null,
+                "keyword": "โปร",
+                "match_type": "contains",
+                "reply_type": "flex",
+                "reply_content": "{this is not valid json,,,",
+                "alt_text": null,
+                "sender_name": null,
+                "sender_icon": null,
+                "quick_reply": null,
+                "enable_share": 0,
+                "share_button_label": null,
+                "is_active": 1,
+                "priority": 10
+            },
+            {
+                "id": 11,
+                "line_account_id": null,
+                "keyword": "โปร",
+                "match_type": "contains",
+                "reply_type": "text",
+                "reply_content": "นี่คือข้อความสำรอง (ไม่ควรถูกใช้)",
+                "alt_text": null,
+                "sender_name": null,
+                "sender_icon": null,
+                "quick_reply": null,
+                "enable_share": 0,
+                "share_button_label": null,
+                "is_active": 1,
+                "priority": 1
+            }
+        ],
+        "text": "วันนี้มีโปรอะไรบ้างคะ",
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": null
+}

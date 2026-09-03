@@ -1,0 +1,29 @@
+{
+    "description": "resolveAutoReply() — match_type=exact: text is the keyword PLUS a trailing space (\"ลาก่อน \"). PIN: PHP's exact-match comparison (mb_strtolower($text) === mb_strtolower($rule['keyword'])) never trims — this must NOT match, proving no trim() is applied. Expected response is null.",
+    "request": {
+        "fn": "resolveAutoReply",
+        "rules": [
+            {
+                "id": 2,
+                "line_account_id": null,
+                "keyword": "ลาก่อน",
+                "match_type": "exact",
+                "reply_type": "text",
+                "reply_content": "แล้วพบกันใหม่ค่ะ",
+                "alt_text": null,
+                "sender_name": null,
+                "sender_icon": null,
+                "quick_reply": null,
+                "enable_share": 0,
+                "share_button_label": null,
+                "is_active": 1,
+                "priority": 0
+            }
+        ],
+        "text": "ลาก่อน ",
+        "config": {
+            "liffShareId": "liff-1234-share-test"
+        }
+    },
+    "response": null
+}

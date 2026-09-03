@@ -40,6 +40,7 @@ require_once __DIR__ . '/../classes/TenantContext.php';
 require_once __DIR__ . '/../classes/ReorderCycle.php';
 require_once __DIR__ . '/../classes/ReorderFlexBuilder.php';
 require_once __DIR__ . '/../classes/LineAPI.php';
+require_once __DIR__ . '/../classes/NotificationGate.php';
 require_once __DIR__ . '/../classes/FlexTemplates.php';
 
 /** How many of a customer's previously-bought products to offer in the reorder carousel. */
@@ -184,8 +185,16 @@ function reya_process_tenant_reorder_reminders(PDO $db, int $tenantId, string $t
             ?? reya_build_reorder_reminder_flex($info['display_name'], $prediction);
 
         try {
-            $line = new LineAPI($info['channel_access_token']);
-            $sent = $line->pushMessage($info['line_user_id'], [$flex]);
+            $gate = new NotificationGate($db);
+            $sent = $gate->send([
+                'user_id' => $userId,
+                'line_user_id' => $info['line_user_id'],
+                'line_account_id' => $info['line_account_id'] ?? null,
+                'channel_access_token' => $info['channel_access_token'],
+                'event_type' => 'reorder',
+                'dedupe_key' => 'reorder:' . $userId . ':' . $prediction['next_due_date'],
+                'messages' => [$flex],
+            ])['sent'];
 
             if ($sent) {
                 reya_record_reminder_sent($db, $userId, $prediction['next_due_date'], $prediction['average_interval_days']);

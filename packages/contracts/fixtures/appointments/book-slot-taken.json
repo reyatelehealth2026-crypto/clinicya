@@ -1,0 +1,16 @@
+{
+  "description": "POST action=book — the slot was booked by someone else between the client reading available_slots and submitting book.",
+  "request": {
+    "action": "book",
+    "line_user_id": "U1234567890abcdef1234567890abcdef",
+    "line_account_id": 1,
+    "pharmacist_id": 2,
+    "date": "2026-07-14",
+    "time": "09:40"
+  },
+  "response": {
+    "success": false,
+    "message": "ช่วงเวลานี้ถูกจองแล้ว กรุณาเลือกเวลาอื่น"
+  },
+  "status": 200
+}

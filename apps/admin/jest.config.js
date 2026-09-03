@@ -17,6 +17,7 @@ const customJestConfig = {
     '^@reya/config$': '<rootDir>/../../packages/config/src/index.ts',
     '^@reya/tenant$': '<rootDir>/../../packages/tenant/src/index.ts',
     '^@reya/db$': '<rootDir>/../../packages/db/src/index.ts',
+    '^@reya/core$': '<rootDir>/../../packages/core/src/index.ts',
     '^@reya/auth$': '<rootDir>/../../packages/auth/src/index.ts',
     '^@reya/contracts$': '<rootDir>/../../packages/contracts/src/index.ts',
   },

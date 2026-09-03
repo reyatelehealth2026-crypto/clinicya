@@ -1,0 +1,5 @@
+{
+  "description": "POST action=save — missing line_user_id, immediate flat failure.",
+  "request": { "action": "save", "line_user_id": "", "consents": { "health_data": true } },
+  "response": { "success": false, "message": "LINE User ID required" }
+}
