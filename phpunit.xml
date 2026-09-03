@@ -47,6 +47,9 @@
         <testsuite name="NotificationGate Tests">
             <directory>tests/NotificationGate</directory>
         </testsuite>
+        <testsuite name="MemberFlow Tests">
+            <directory>tests/MemberFlow</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>

@@ -187,7 +187,10 @@ function reya_process_tenant_adherence_reminders(PDO $db, int $tenantId, string 
                 'line_account_id' => $row['line_account_id'] ?? null,
                 'channel_access_token' => $row['channel_access_token'],
                 'event_type' => 'medication_refill',
-                'dedupe_key' => 'adherence:' . $row['user_id'] . ':' . $row['product_id'] . ':' . $runout['runout_date'],
+                // namespace เดียวกับ cron/medication_refill_reminder.php โดยตั้งใจ
+                // (ดูคอมเมนต์ที่นั่น) — กันลูกค้าได้ข้อความ "ยาใกล้หมด" ของยา
+                // ตัวเดียวกันซ้ำในวันเดียวจากสอง cron ที่ทำนายคนละวิธี
+                'dedupe_key' => 'refill:' . (int) $row['user_id'] . ':' . (int) $row['product_id'] . ':' . date('Y-m-d'),
                 'messages' => [$flex],
             ])['sent'];
 

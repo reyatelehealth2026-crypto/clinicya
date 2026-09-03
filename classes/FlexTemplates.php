@@ -1938,4 +1938,416 @@ class FlexTemplates
             'contents' => $bubbles
         ];
     }
+
+    // ==================================================================
+    // หน้าจอฝั่งสมาชิก — Flex คือ surface หลัก ลูกค้าต้องจบงานได้ในแชท
+    //
+    // ทุกปุ่มยิง postback ที่ MemberPostbackRouter รับ ใช้รูปแบบ query-string
+    // เดียวกับปุ่ม medication_taken / medication_snooze ที่ cron ส่งอยู่แล้ว
+    // LINE จำกัด postback.data 300 ตัวอักษร จึงส่งได้แค่ id ห้ามยัด payload
+    // ==================================================================
+
+    /** สีประจำโซนสมาชิก — ใช้ร่วมกันทุกใบเพื่อให้รู้ทันทีว่าอยู่เรื่องไหน */
+    const MEMBER_COLOR_MED = '#11B0A6';
+    const MEMBER_COLOR_POINTS = '#F59E0B';
+    const MEMBER_COLOR_APPT = '#6366F1';
+    const MEMBER_COLOR_PREFS = '#64748B';
+
+    /** carousel ของ LINE รับได้ 12 ใบ กันไว้ 1 ใบให้การ์ด "ดูทั้งหมด" */
+    const MEMBER_CAROUSEL_LIMIT = 10;
+
+    /**
+     * หัวการ์ดสมาชิก — แถบสีเดียวกันทั้งโซน
+     */
+    private static function memberHeader($icon, $title, $subtitle, $color)
+    {
+        return [
+            'type' => 'box',
+            'layout' => 'vertical',
+            'backgroundColor' => $color,
+            'paddingAll' => '15px',
+            'contents' => [[
+                'type' => 'box',
+                'layout' => 'horizontal',
+                'contents' => [
+                    ['type' => 'text', 'text' => $icon, 'size' => 'xxl', 'flex' => 0],
+                    [
+                        'type' => 'box',
+                        'layout' => 'vertical',
+                        'margin' => 'md',
+                        'contents' => [
+                            ['type' => 'text', 'text' => $title, 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'lg', 'wrap' => true],
+                            ['type' => 'text', 'text' => $subtitle, 'color' => '#FFFFFF', 'size' => 'xs', 'margin' => 'xs', 'wrap' => true],
+                        ],
+                    ],
+                ],
+            ]],
+        ];
+    }
+
+    /** แถวข้อมูล label ซ้าย / value ขวา */
+    private static function memberRow($label, $value, $valueColor = '#111111')
+    {
+        return [
+            'type' => 'box',
+            'layout' => 'horizontal',
+            'margin' => 'sm',
+            'contents' => [
+                ['type' => 'text', 'text' => $label, 'size' => 'sm', 'color' => '#888888', 'flex' => 2],
+                ['type' => 'text', 'text' => ($value === '' || $value === null) ? '-' : $value, 'size' => 'sm', 'weight' => 'bold', 'color' => $valueColor, 'align' => 'end', 'flex' => 3, 'wrap' => true],
+            ],
+        ];
+    }
+
+    /** ปุ่ม postback มาตรฐานของหน้าจอสมาชิก */
+    private static function memberButton($label, $data, $style = 'secondary', $color = null)
+    {
+        $btn = [
+            'type' => 'button',
+            'height' => 'sm',
+            'style' => $style,
+            'action' => ['type' => 'postback', 'label' => $label, 'data' => $data, 'displayText' => $label],
+        ];
+        if ($color !== null) {
+            $btn['color'] = $color;
+        }
+        return $btn;
+    }
+
+    /** ใบปิดท้าย carousel เมื่อรายการยาวเกินขีดจำกัดของ LINE */
+    private static function memberMoreBubble($message, $uri = null)
+    {
+        $bubble = [
+            'type' => 'bubble',
+            'size' => 'kilo',
+            'body' => [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'justifyContent' => 'center',
+                'paddingAll' => '20px',
+                'contents' => [
+                    ['type' => 'text', 'text' => '···', 'size' => 'xxl', 'align' => 'center', 'color' => '#CBD5E1'],
+                    ['type' => 'text', 'text' => $message, 'size' => 'sm', 'color' => '#64748B', 'align' => 'center', 'wrap' => true, 'margin' => 'md'],
+                ],
+            ],
+        ];
+        if ($uri) {
+            $bubble['footer'] = [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'paddingAll' => '15px',
+                'contents' => [[
+                    'type' => 'button',
+                    'height' => 'sm',
+                    'style' => 'primary',
+                    'color' => '#111111',
+                    'action' => ['type' => 'uri', 'label' => 'เปิดดูทั้งหมด', 'uri' => $uri],
+                ]],
+            ];
+        }
+        return $bubble;
+    }
+
+    /** แปลงรหัสความถี่เป็นภาษาคน — ชุดเดียวกับ cron/medication_reminder.php */
+    public static function frequencyLabel($frequency)
+    {
+        $map = [
+            'once' => 'ครั้งเดียว',
+            'daily' => 'ทุกวัน',
+            'twice_daily' => 'วันละ 2 ครั้ง',
+            'three_times_daily' => 'วันละ 3 ครั้ง',
+            'weekly' => 'สัปดาห์ละครั้ง',
+            'as_needed' => 'เมื่อจำเป็น',
+        ];
+        $frequency = (string) $frequency;
+        if (isset($map[$frequency])) {
+            return $map[$frequency];
+        }
+        return $frequency === '' ? '-' : $frequency;
+    }
+
+    /** วันที่แบบสั้นภาษาไทย เช่น 3 ก.ย. 14:20 */
+    public static function thaiShortDate($datetime)
+    {
+        if (!$datetime) {
+            return '';
+        }
+        $ts = strtotime((string) $datetime);
+        if (!$ts) {
+            return (string) $datetime;
+        }
+        $months = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+        return date('j', $ts) . ' ' . $months[(int) date('n', $ts)] . ' ' . date('H:i', $ts);
+    }
+
+    /** วันที่เต็มภาษาไทย พ.ศ. เช่น 3 กันยายน 2569 */
+    public static function thaiFullDate($date)
+    {
+        if (!$date) {
+            return '';
+        }
+        $ts = strtotime((string) $date);
+        if (!$ts) {
+            return (string) $date;
+        }
+        $months = ['', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+            'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+        return date('j', $ts) . ' ' . $months[(int) date('n', $ts)] . ' ' . (date('Y', $ts) + 543);
+    }
+
+    /**
+     * ยาของฉัน — carousel ยาที่กำลังทาน พร้อมปุ่มสั่งซ้ำ / หยุดเตือน
+     *
+     * @param array $meds แถวจาก medication_reminders
+     *                    (id, medication_name, dosage, frequency, reminder_times)
+     */
+    public static function medicationList($meds, $moreUri = null)
+    {
+        if (empty($meds)) {
+            return self::emptyState(
+                '💊 ยังไม่มียาที่ตั้งเตือน',
+                'เมื่อรับยาจากร้าน ระบบจะตั้งเตือนให้อัตโนมัติ'
+            );
+        }
+
+        $bubbles = [];
+        foreach (array_slice($meds, 0, self::MEMBER_CAROUSEL_LIMIT) as $med) {
+            $times = json_decode((string) ($med['reminder_times'] ?? '[]'), true);
+            $timeText = (is_array($times) && $times) ? implode(' · ', $times) . ' น.' : 'ยังไม่ตั้งเวลา';
+
+            $bubbles[] = [
+                'type' => 'bubble',
+                'size' => 'kilo',
+                'header' => self::memberHeader('💊', mb_substr((string) $med['medication_name'], 0, 40), $timeText, self::MEMBER_COLOR_MED),
+                'body' => [
+                    'type' => 'box',
+                    'layout' => 'vertical',
+                    'paddingAll' => '15px',
+                    'contents' => [
+                        self::memberRow('ขนาดยา', (string) ($med['dosage'] ?? '')),
+                        self::memberRow('ความถี่', self::frequencyLabel($med['frequency'] ?? '')),
+                        self::memberRow('เวลาเตือน', $timeText),
+                    ],
+                ],
+                'footer' => [
+                    'type' => 'box',
+                    'layout' => 'vertical',
+                    'spacing' => 'sm',
+                    'paddingAll' => '15px',
+                    'contents' => [
+                        self::memberButton('🔁 สั่งซ้ำ', 'action=member_med_refill&id=' . (int) $med['id'], 'primary', self::MEMBER_COLOR_MED),
+                        self::memberButton('🔕 หยุดเตือน', 'action=member_med_stop&id=' . (int) $med['id']),
+                    ],
+                ],
+            ];
+        }
+
+        if (count($meds) > self::MEMBER_CAROUSEL_LIMIT) {
+            $bubbles[] = self::memberMoreBubble(
+                'ยังมียาอีก ' . (count($meds) - self::MEMBER_CAROUSEL_LIMIT) . ' รายการ',
+                $moreUri
+            );
+        }
+
+        return ['type' => 'carousel', 'contents' => $bubbles];
+    }
+
+    /**
+     * ประวัติแต้ม — 10 รายการล่าสุด บวกเขียว ลบแดง
+     *
+     * @param array $rows แถวจาก points_transactions (created_at, description, points)
+     */
+    public static function pointsHistory($rows, $balance = 0, $moreUri = null)
+    {
+        if (empty($rows)) {
+            return self::emptyState('📋 ยังไม่มีประวัติแต้ม', 'เมื่อซื้อสินค้าหรือส่งสลิป แต้มจะขึ้นที่นี่');
+        }
+
+        $items = [];
+        foreach (array_slice($rows, 0, 10) as $row) {
+            $pts = (int) ($row['points'] ?? 0);
+            $items[] = [
+                'type' => 'box',
+                'layout' => 'horizontal',
+                'margin' => 'md',
+                'contents' => [
+                    [
+                        'type' => 'box',
+                        'layout' => 'vertical',
+                        'flex' => 3,
+                        'contents' => [
+                            ['type' => 'text', 'text' => mb_substr((string) ($row['description'] ?? 'รายการแต้ม'), 0, 40), 'size' => 'sm', 'wrap' => true],
+                            ['type' => 'text', 'text' => self::thaiShortDate($row['created_at'] ?? ''), 'size' => 'xxs', 'color' => '#9CA3AF', 'margin' => 'xs'],
+                        ],
+                    ],
+                    [
+                        'type' => 'text',
+                        'text' => ($pts >= 0 ? '+' : '') . number_format($pts),
+                        'size' => 'sm',
+                        'weight' => 'bold',
+                        'align' => 'end',
+                        'flex' => 1,
+                        'color' => $pts >= 0 ? '#10B981' : '#EF4444',
+                    ],
+                ],
+            ];
+        }
+
+        $footer = [self::memberButton('💳 กลับไปบัตรสมาชิก', 'action=member_card')];
+        if ($moreUri) {
+            $footer[] = [
+                'type' => 'button',
+                'height' => 'sm',
+                'style' => 'link',
+                'action' => ['type' => 'uri', 'label' => 'ดูย้อนหลังทั้งหมด', 'uri' => $moreUri],
+            ];
+        }
+
+        return [
+            'type' => 'bubble',
+            'size' => 'mega',
+            'header' => self::memberHeader('📋', 'ประวัติแต้ม', 'คงเหลือ ' . number_format((int) $balance) . ' แต้ม', self::MEMBER_COLOR_POINTS),
+            'body' => ['type' => 'box', 'layout' => 'vertical', 'paddingAll' => '15px', 'contents' => $items],
+            'footer' => ['type' => 'box', 'layout' => 'vertical', 'spacing' => 'sm', 'paddingAll' => '15px', 'contents' => $footer],
+        ];
+    }
+
+    /**
+     * นัดหมายของฉัน — carousel นัดที่ยังไม่ผ่าน พร้อมปุ่มยืนยัน / ขอยกเลิก
+     *
+     * @param array $appts แถวจาก appointments
+     */
+    public static function appointmentList($appts)
+    {
+        if (empty($appts)) {
+            return self::emptyState('📅 ยังไม่มีนัดหมาย', 'พิมพ์ "จองนัด" เพื่อนัดปรึกษาเภสัชกรได้เลยค่ะ');
+        }
+
+        $typeLabels = [
+            'consultation' => 'ปรึกษาเภสัชกร',
+            'video_call' => 'วิดีโอคอล',
+            'pickup' => 'รับยาที่ร้าน',
+            'delivery' => 'จัดส่งถึงบ้าน',
+        ];
+        $statusLabels = [
+            'pending' => ['รอยืนยัน', '#F59E0B'],
+            'confirmed' => ['ยืนยันแล้ว', '#10B981'],
+            'in_progress' => ['กำลังให้บริการ', '#3B82F6'],
+            'completed' => ['เสร็จสิ้น', '#6B7280'],
+            'cancelled' => ['ยกเลิกแล้ว', '#EF4444'],
+            'no_show' => ['ไม่มาตามนัด', '#EF4444'],
+        ];
+
+        $bubbles = [];
+        foreach (array_slice($appts, 0, self::MEMBER_CAROUSEL_LIMIT) as $appt) {
+            $status = (string) ($appt['status'] ?? 'pending');
+            $label = isset($statusLabels[$status]) ? $statusLabels[$status] : ['-', '#6B7280'];
+
+            $footer = [];
+            if ($status === 'pending') {
+                $footer[] = self::memberButton('✅ ยืนยันนัด', 'action=member_appt_confirm&id=' . (int) $appt['id'], 'primary', '#10B981');
+            }
+            if ($status === 'pending' || $status === 'confirmed') {
+                $footer[] = self::memberButton('✖️ ขอยกเลิก', 'action=member_appt_cancel&id=' . (int) $appt['id']);
+            }
+            if (!$footer) {
+                $footer[] = self::memberButton('💳 กลับไปบัตรสมาชิก', 'action=member_card');
+            }
+
+            $typeKey = (string) ($appt['appointment_type'] ?? '');
+            $bubbles[] = [
+                'type' => 'bubble',
+                'size' => 'kilo',
+                'header' => self::memberHeader(
+                    '📅',
+                    isset($typeLabels[$typeKey]) ? $typeLabels[$typeKey] : 'นัดหมาย',
+                    self::thaiFullDate($appt['appointment_date'] ?? ''),
+                    self::MEMBER_COLOR_APPT
+                ),
+                'body' => [
+                    'type' => 'box',
+                    'layout' => 'vertical',
+                    'paddingAll' => '15px',
+                    'contents' => [
+                        self::memberRow('เวลา', substr((string) ($appt['appointment_time'] ?? ''), 0, 5) . ' น.'),
+                        self::memberRow('สถานะ', $label[0], $label[1]),
+                        self::memberRow('หมายเหตุ', mb_substr((string) ($appt['notes'] ?? ''), 0, 60)),
+                    ],
+                ],
+                'footer' => ['type' => 'box', 'layout' => 'vertical', 'spacing' => 'sm', 'paddingAll' => '15px', 'contents' => $footer],
+            ];
+        }
+
+        return ['type' => 'carousel', 'contents' => $bubbles];
+    }
+
+    /**
+     * ตั้งค่าแจ้งเตือน — เปิดปิดรายประเภทจากในแชท ไม่ต้องเข้า mini App
+     *
+     * @param array $prefs แถวจาก user_notification_preferences
+     */
+    public static function notificationPrefs($prefs)
+    {
+        $types = [
+            'drug_reminders' => ['💊', 'เตือนทานยา / เติมยา'],
+            'appointment_reminders' => ['📅', 'เตือนนัดหมาย'],
+            'order_updates' => ['📦', 'สถานะคำสั่งซื้อ'],
+            'promotions' => ['🎁', 'โปรโมชันและของรางวัล'],
+            'restock_alerts' => ['🔔', 'สินค้าเข้าสต็อก'],
+        ];
+
+        $rows = [];
+        foreach ($types as $key => $meta) {
+            $on = !isset($prefs[$key]) || (int) $prefs[$key] === 1;
+            $rows[] = [
+                'type' => 'box',
+                'layout' => 'horizontal',
+                'margin' => 'md',
+                'alignItems' => 'center',
+                'contents' => [
+                    ['type' => 'text', 'text' => $meta[0] . ' ' . $meta[1], 'size' => 'sm', 'flex' => 3, 'wrap' => true],
+                    [
+                        'type' => 'button',
+                        'flex' => 2,
+                        'height' => 'sm',
+                        'style' => $on ? 'primary' : 'secondary',
+                        'color' => $on ? '#10B981' : '#E2E8F0',
+                        'action' => [
+                            'type' => 'postback',
+                            'label' => $on ? 'เปิดอยู่' : 'ปิดอยู่',
+                            'data' => 'action=member_notif_toggle&key=' . $key,
+                            'displayText' => ($on ? 'ปิด' : 'เปิด') . 'การแจ้งเตือน: ' . $meta[1],
+                        ],
+                    ],
+                ],
+            ];
+        }
+
+        $rows[] = ['type' => 'separator', 'margin' => 'lg'];
+        $rows[] = [
+            'type' => 'box',
+            'layout' => 'vertical',
+            'margin' => 'lg',
+            'paddingAll' => 'md',
+            'backgroundColor' => '#FFF7ED',
+            'cornerRadius' => 'md',
+            'contents' => [
+                ['type' => 'text', 'text' => '🌙 ช่วงห้ามรบกวน 21:00–08:00 น.', 'size' => 'xs', 'color' => '#92400E', 'weight' => 'bold'],
+                ['type' => 'text', 'text' => 'ข้อความที่ร้านเป็นคนเริ่มจะถูกเลื่อนไปเช้า ยกเว้นเตือนทานยาและนัดหมายที่คุณตั้งเวลาไว้เอง', 'size' => 'xxs', 'color' => '#92400E', 'wrap' => true, 'margin' => 'sm'],
+            ],
+        ];
+
+        return [
+            'type' => 'bubble',
+            'size' => 'mega',
+            'header' => self::memberHeader('⚙️', 'ตั้งค่าแจ้งเตือน', 'กดปุ่มเพื่อเปิดหรือปิดได้ทันที', self::MEMBER_COLOR_PREFS),
+            'body' => ['type' => 'box', 'layout' => 'vertical', 'paddingAll' => '15px', 'contents' => $rows],
+            'footer' => [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'paddingAll' => '15px',
+                'contents' => [self::memberButton('💳 กลับไปบัตรสมาชิก', 'action=member_card')],
+            ],
+        ];
+    }
 }
