@@ -94,6 +94,45 @@ export async function shareTextOnMiniApp(text: string) {
   return shareMessagesOnMiniApp([{ type: 'text', text }], text)
 }
 
+/**
+ * ส่งข้อความกลับเข้าห้องแชท OA ในนามผู้ใช้ — ขาย้อนกลับของ hybrid gateway
+ * (Flex ในแชท -> เปิดหน้าใน Mini App -> ส่งคำสั่งกลับให้บอทตอบต่อในแชท)
+ *
+ * ต่างจาก shareMessagesOnMiniApp ตรงที่ไม่เปิด target picker: ยิงเข้าห้องที่
+ * เปิด Mini App มาเท่านั้น จึงใช้ได้เฉพาะตอนอยู่ใน LINE จริง
+ * คืน false เมื่อทำไม่ได้ ให้ผู้เรียกเลือก fallback เอง แทนที่จะโยน error
+ */
+export async function sendMessagesToChat(
+  messages: Array<Record<string, unknown>>
+): Promise<boolean> {
+  const sdk = getLineSdk() as unknown as {
+    isInClient?: () => boolean
+    isApiAvailable?: (apiName: string) => boolean
+    sendMessages?: (messages: Array<Record<string, unknown>>) => Promise<void>
+  }
+
+  if (!sdk.isInClient?.() || !sdk.isApiAvailable?.('sendMessages') || !sdk.sendMessages) {
+    return false
+  }
+
+  try {
+    await sdk.sendMessages(messages)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function sendTextToChat(text: string): Promise<boolean> {
+  return sendMessagesToChat([{ type: 'text', text }])
+}
+
+/** ปิดหน้าต่าง Mini App เพื่อให้ผู้ใช้เห็นคำตอบของบอทในแชททันที */
+export function closeMiniApp(): void {
+  const sdk = getLineSdk() as unknown as { closeWindow?: () => void }
+  sdk.closeWindow?.()
+}
+
 export async function shareMessagesOnMiniApp(
   messages: Array<Record<string, unknown>>,
   fallbackText?: string

@@ -50,6 +50,9 @@
         <testsuite name="MemberFlow Tests">
             <directory>tests/MemberFlow</directory>
         </testsuite>
+        <testsuite name="PatientSelfService Tests">
+            <directory>tests/PatientSelfService</directory>
+        </testsuite>
     </testsuites>
     <coverage>
         <include>

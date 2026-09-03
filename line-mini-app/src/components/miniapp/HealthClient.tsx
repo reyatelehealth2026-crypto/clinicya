@@ -6,6 +6,7 @@ import { Activity, AlertTriangle, ChevronDown, ChevronUp, Pill, Plus, Trash2, Us
 import { useLineContext } from '@/components/providers'
 import { useToast } from '@/lib/toast'
 import { AppShell } from '@/components/miniapp/AppShell'
+import { closeMiniApp, sendTextToChat } from '@/lib/line-miniapp'
 import {
   MEDICAL_CONDITIONS,
   addAllergy,
@@ -478,6 +479,22 @@ export function HealthClient() {
                   ⚠️ พบปฏิกิริยาระหว่างยา กรุณาปรึกษาเภสัชกร
                 </div>
               )}
+              {/* ขาย้อนกลับของ hybrid gateway — ส่งคำสั่งเข้าแชทแล้วปิดหน้าต่าง
+                  ให้บอทตอบด้วยการ์ด "ขอรับยาเดิม" ที่มีปุ่มสั่งซ้ำรายตัว */}
+              <button
+                type="button"
+                onClick={async () => {
+                  const sent = await sendTextToChat('ขอรับยาเดิม')
+                  if (sent) {
+                    closeMiniApp()
+                    return
+                  }
+                  toast.error('เปิดจากแชท LINE เพื่อใช้ปุ่มนี้')
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-line-soft py-2 text-sm font-semibold text-line transition-all hover:opacity-90"
+              >
+                <Pill size={16} /> ขอรับยาเดิมในแชท
+              </button>
             </div>
           </SectionCard>
         </>

@@ -2350,4 +2350,276 @@ class FlexTemplates
             ],
         ];
     }
+
+    // ==================================================================
+    // Patient self-service — โทนคลินิก ไม่มีอีโมจิตกแต่ง
+    //
+    // ใช้พาเลตต์ dark-teal ชุดเดียวกับบัตรสมาชิก (BusinessBot::BRAND_*)
+    // เจตนา: ไม่สร้างภาษาภาพชุดที่สองในบอทตัวเดียว
+    // ==================================================================
+
+    private const CLINIC_MAIN = '#0B5F50';
+    private const CLINIC_DEEP = '#082D28';
+    private const CLINIC_ON_DARK = '#C7E4DC';
+    private const CLINIC_INK = '#0F172A';
+    private const CLINIC_MUTED = '#64748B';
+    private const CLINIC_HAIRLINE = '#E2E8F0';
+    private const CLINIC_ALERT = '#B91C1C';
+
+    /** หัวการ์ดคลินิก — ไล่เฉดเดียวกับบัตรสมาชิก ไม่มีไอคอน */
+    private static function clinicHeader($title, $subtitle)
+    {
+        return [
+            'type' => 'box',
+            'layout' => 'vertical',
+            'paddingAll' => '18px',
+            'backgroundColor' => self::CLINIC_MAIN,
+            'background' => [
+                'type' => 'linearGradient',
+                'angle' => '160deg',
+                'startColor' => self::CLINIC_MAIN,
+                'endColor' => self::CLINIC_DEEP,
+            ],
+            'contents' => [
+                ['type' => 'text', 'text' => $title, 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'lg', 'wrap' => true],
+                ['type' => 'text', 'text' => $subtitle, 'color' => self::CLINIC_ON_DARK, 'size' => 'xs', 'margin' => 'sm', 'wrap' => true],
+            ],
+        ];
+    }
+
+    /** แถวเมนูที่กดได้ทั้งแถว — หัวข้อหนา + คำอธิบายหนึ่งบรรทัด */
+    private static function clinicMenuRow($label, $hint, array $action)
+    {
+        return [
+            'type' => 'box',
+            'layout' => 'vertical',
+            'paddingTop' => 'md',
+            'paddingBottom' => 'md',
+            'action' => $action,
+            'contents' => [
+                ['type' => 'text', 'text' => $label, 'size' => 'sm', 'weight' => 'bold', 'color' => self::CLINIC_INK],
+                ['type' => 'text', 'text' => $hint, 'size' => 'xxs', 'color' => self::CLINIC_MUTED, 'margin' => 'xs', 'wrap' => true],
+            ],
+        ];
+    }
+
+    /** ปุ่มเปิด URI มาตรฐานของการ์ดคลินิก */
+    private static function clinicUriButton($label, $uri, $style = 'secondary', $color = null)
+    {
+        $btn = [
+            'type' => 'button',
+            'height' => 'sm',
+            'style' => $style,
+            'action' => ['type' => 'uri', 'label' => $label, 'uri' => $uri],
+        ];
+        if ($color !== null) {
+            $btn['color'] = $color;
+        }
+        return $btn;
+    }
+
+    /**
+     * เมนูหลักผู้ป่วย — ทางเข้าเดียวของ self-service ทั้งหมด
+     *
+     * @param array $shopInfo ['shop_name', 'is_open']
+     * @param array $liffUrls ['home', 'health'] — deep link เข้า Mini App (ไม่มีก็ซ่อนปุ่ม)
+     */
+    public static function patientMainMenu(array $shopInfo = [], array $liffUrls = [])
+    {
+        $shopName = trim((string) ($shopInfo['shop_name'] ?? '')) ?: 'ร้านยา';
+        $isOpen = !empty($shopInfo['is_open']);
+
+        $entries = [
+            ['เวลาทำการและเภสัชกร', 'สถานะร้านและผู้มีหน้าที่ปฏิบัติการ', ['type' => 'message', 'label' => 'เวลาทำการ', 'text' => 'เวลาทำการ']],
+            ['ปรึกษาเภสัชกร', 'ประเมินอาการเบื้องต้นก่อนส่งต่อเภสัชกร', ['type' => 'message', 'label' => 'ปรึกษาเภสัช', 'text' => 'ปรึกษาเภสัช']],
+            ['ขอรับยาเดิม', 'สั่งซ้ำจากรายการยาที่เคยได้รับ', ['type' => 'message', 'label' => 'ขอรับยาเดิม', 'text' => 'ขอรับยาเดิม']],
+            ['แต้มสะสมและสิทธิ์สมาชิก', 'ยอดแต้มคงเหลือและระดับสมาชิก', ['type' => 'message', 'label' => 'แต้ม', 'text' => 'แต้ม']],
+            ['สถานะคำสั่งซื้อ', 'ติดตามรายการที่สั่งไว้', ['type' => 'message', 'label' => 'สถานะออเดอร์', 'text' => 'สถานะออเดอร์']],
+            ['แจ้งชำระเงิน', 'ส่งสลิปโอนเงินให้เจ้าหน้าที่ตรวจสอบ', ['type' => 'message', 'label' => 'ส่งสลิป', 'text' => 'ส่งสลิป']],
+        ];
+
+        if (!empty($liffUrls['health'])) {
+            $entries[] = ['ประวัติยาและสุขภาพ', 'เปิดดูรายละเอียดในแอปผู้ป่วย', ['type' => 'uri', 'label' => 'ประวัติยา', 'uri' => $liffUrls['health']]];
+        }
+
+        $rows = [];
+        foreach ($entries as $i => $entry) {
+            if ($i > 0) {
+                $rows[] = ['type' => 'separator', 'color' => self::CLINIC_HAIRLINE];
+            }
+            $rows[] = self::clinicMenuRow($entry[0], $entry[1], $entry[2]);
+        }
+
+        $bubble = [
+            'type' => 'bubble',
+            'size' => 'mega',
+            'header' => self::clinicHeader($shopName, $isOpen ? 'เปิดให้บริการ' : 'ปิดให้บริการชั่วคราว'),
+            'body' => ['type' => 'box', 'layout' => 'vertical', 'paddingAll' => '15px', 'contents' => $rows],
+        ];
+
+        if (!empty($liffUrls['home'])) {
+            $bubble['footer'] = [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'paddingAll' => '15px',
+                'contents' => [self::clinicUriButton('เปิดแอปผู้ป่วย', $liffUrls['home'], 'primary', self::CLINIC_MAIN)],
+            ];
+        }
+
+        return $bubble;
+    }
+
+    /**
+     * เวลาทำการและเภสัชกรผู้ปฏิบัติการ
+     *
+     * shop_settings เก็บสถานะเป็น is_open (เปิด/ปิด) ไม่ได้เก็บช่วงเวลา
+     * การ์ดจึงรายงานสถานะขณะนี้ ไม่ใช่ตารางเวลา
+     *
+     * @param bool   $isOpen
+     * @param string $pharmacistName
+     * @param array  $contact ['phone', 'address', 'pharmacist_license', 'pharmacy_license']
+     */
+    public static function pharmacyHoursCard($isOpen, $pharmacistName = '', array $contact = [])
+    {
+        $isOpen = (bool) $isOpen;
+
+        $rows = [
+            self::memberRow('สถานะขณะนี้', $isOpen ? 'เปิดให้บริการ' : 'ปิดให้บริการชั่วคราว', $isOpen ? self::CLINIC_MAIN : self::CLINIC_ALERT),
+            self::memberRow('เภสัชกรผู้ปฏิบัติการ', trim((string) $pharmacistName)),
+        ];
+
+        $optional = [
+            'pharmacist_license' => 'เลขที่ใบประกอบวิชาชีพ',
+            'pharmacy_license' => 'เลขที่ใบอนุญาตร้านยา',
+            'phone' => 'โทรศัพท์',
+            'address' => 'ที่อยู่',
+        ];
+        foreach ($optional as $key => $label) {
+            $value = trim((string) ($contact[$key] ?? ''));
+            if ($value !== '') {
+                $rows[] = self::memberRow($label, $value);
+            }
+        }
+
+        $footer = [];
+        $phone = preg_replace('/[^0-9+]/', '', (string) ($contact['phone'] ?? ''));
+        if ($phone !== '') {
+            $footer[] = self::clinicUriButton('โทรหาร้าน', 'tel:' . $phone, 'primary', self::CLINIC_MAIN);
+        }
+        $footer[] = [
+            'type' => 'button',
+            'height' => 'sm',
+            'style' => 'secondary',
+            'action' => ['type' => 'message', 'label' => 'ปรึกษาเภสัชกร', 'text' => 'ปรึกษาเภสัช'],
+        ];
+
+        return [
+            'type' => 'bubble',
+            'size' => 'mega',
+            'header' => self::clinicHeader(
+                'เวลาทำการเภสัชกร',
+                $isOpen ? 'พร้อมให้คำปรึกษาขณะนี้' : 'นอกเวลาให้บริการ ข้อความจะถูกบันทึกไว้'
+            ),
+            'body' => ['type' => 'box', 'layout' => 'vertical', 'paddingAll' => '15px', 'contents' => $rows],
+            'footer' => ['type' => 'box', 'layout' => 'vertical', 'spacing' => 'sm', 'paddingAll' => '15px', 'contents' => $footer],
+        ];
+    }
+
+    /**
+     * ขอรับยาเดิม — การ์ดนำเข้าสู่รายการยาที่มีปุ่มสั่งซ้ำอยู่แล้ว
+     *
+     * ปุ่มหลักยิง postback action=member_medications ซึ่ง MemberPostbackRouter
+     * ตอบด้วย medicationList() (มีปุ่ม member_med_refill รายตัวอยู่แล้ว)
+     * จึงไม่สร้างเส้นทางสั่งซ้ำเส้นที่สอง
+     *
+     * @param array       $recentMedications แถวจาก medication_reminders
+     * @param string|null $liffUrl           deep link ไปหน้า /health ใน Mini App
+     */
+    public static function refillRequestCard($recentMedications = [], $liffUrl = null)
+    {
+        $recentMedications = is_array($recentMedications) ? $recentMedications : [];
+        $body = [];
+
+        if (empty($recentMedications)) {
+            $body[] = ['type' => 'text', 'text' => 'ยังไม่มีรายการยาที่บันทึกไว้', 'size' => 'sm', 'weight' => 'bold', 'color' => self::CLINIC_INK];
+            $body[] = ['type' => 'text', 'text' => 'เมื่อรับยาจากร้าน ระบบจะบันทึกให้อัตโนมัติ แล้วสั่งซ้ำได้จากที่นี่', 'size' => 'xs', 'color' => self::CLINIC_MUTED, 'margin' => 'sm', 'wrap' => true];
+        } else {
+            $body[] = ['type' => 'text', 'text' => 'ยาที่ได้รับล่าสุด', 'size' => 'xs', 'color' => self::CLINIC_MUTED];
+            foreach (array_slice($recentMedications, 0, 3) as $med) {
+                $name = trim((string) ($med['medication_name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $body[] = self::memberRow(mb_substr($name, 0, 40), trim((string) ($med['dosage'] ?? '')));
+            }
+            $remaining = count($recentMedications) - 3;
+            if ($remaining > 0) {
+                $body[] = ['type' => 'text', 'text' => 'และอีก ' . $remaining . ' รายการ', 'size' => 'xxs', 'color' => self::CLINIC_MUTED, 'margin' => 'md'];
+            }
+        }
+
+        $footer = [self::memberButton('ดูรายการยาและสั่งซ้ำ', 'action=member_medications', 'primary', self::CLINIC_MAIN)];
+        if (!empty($liffUrl)) {
+            $footer[] = self::clinicUriButton('เปิดประวัติยาในแอป', $liffUrl);
+        }
+
+        return [
+            'type' => 'bubble',
+            'size' => 'mega',
+            'header' => self::clinicHeader('ขอรับยาเดิม', 'สั่งซ้ำจากรายการยาที่เคยได้รับ'),
+            'body' => ['type' => 'box', 'layout' => 'vertical', 'paddingAll' => '15px', 'contents' => $body],
+            'footer' => ['type' => 'box', 'layout' => 'vertical', 'spacing' => 'sm', 'paddingAll' => '15px', 'contents' => $footer],
+        ];
+    }
+
+    /**
+     * เริ่มประเมินอาการ — อธิบายขั้นตอนและขอบเขตก่อนเข้าห้องปรึกษา
+     *
+     * @param string|null $liffUrl deep link ไปหน้า /ai-chat ใน Mini App
+     */
+    public static function clinicalTriageCard($liffUrl = null)
+    {
+        $steps = [
+            ['1', 'ระบุอาการและระยะเวลาที่เป็น'],
+            ['2', 'ระบบคัดกรองสัญญาณอันตรายเบื้องต้น'],
+            ['3', 'เภสัชกรรับช่วงต่อเมื่อจำเป็น'],
+        ];
+
+        $body = [
+            ['type' => 'text', 'text' => 'การประเมินนี้ไม่ใช่การวินิจฉัยทางการแพทย์ หากมีอาการรุนแรงหรือฉุกเฉิน โทร 1669 ทันที', 'size' => 'xs', 'color' => self::CLINIC_ALERT, 'wrap' => true],
+            ['type' => 'separator', 'margin' => 'lg', 'color' => self::CLINIC_HAIRLINE],
+        ];
+        foreach ($steps as $step) {
+            $body[] = [
+                'type' => 'box',
+                'layout' => 'horizontal',
+                'margin' => 'md',
+                'spacing' => 'md',
+                'contents' => [
+                    ['type' => 'text', 'text' => $step[0], 'size' => 'sm', 'weight' => 'bold', 'color' => self::CLINIC_MAIN, 'flex' => 0],
+                    ['type' => 'text', 'text' => $step[1], 'size' => 'sm', 'color' => self::CLINIC_INK, 'wrap' => true, 'flex' => 1],
+                ],
+            ];
+        }
+
+        $footer = [];
+        if (!empty($liffUrl)) {
+            $footer[] = self::clinicUriButton('เริ่มประเมินอาการ', $liffUrl, 'primary', self::CLINIC_MAIN);
+        }
+        // 'ปรึกษาเภสัชกร' เป็นคำสั่งหยุดบอทที่มีอยู่เดิม — ปุ่มนี้คือทางออกสู่คนจริง
+        $footer[] = [
+            'type' => 'button',
+            'height' => 'sm',
+            'style' => 'secondary',
+            'action' => ['type' => 'message', 'label' => 'ขอคุยกับเภสัชกร', 'text' => 'ปรึกษาเภสัชกร'],
+        ];
+
+        return [
+            'type' => 'bubble',
+            'size' => 'mega',
+            'header' => self::clinicHeader('ปรึกษาเภสัชกร', 'ประเมินอาการเบื้องต้นก่อนส่งต่อ'),
+            'body' => ['type' => 'box', 'layout' => 'vertical', 'paddingAll' => '15px', 'contents' => $body],
+            'footer' => ['type' => 'box', 'layout' => 'vertical', 'spacing' => 'sm', 'paddingAll' => '15px', 'contents' => $footer],
+        ];
+    }
 }
