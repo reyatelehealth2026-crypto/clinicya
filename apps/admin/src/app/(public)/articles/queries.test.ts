@@ -1,4 +1,4 @@
-import { makeFakeTenantDb } from '../users/testHelpers/fakeTenantDb';
+import { makeFakeTenantDb } from '@/app/(tenant)/users/testHelpers/fakeTenantDb';
 import {
   getArticleBySlug,
   getArticleCategories,

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { requireTenantPageContext } from '../users/_lib/session';
+import { requirePublicTenantContext } from '@/lib/tenant/publicTenantPageContext';
 import { firstParam, isSearchQueryPresent, parseCategoryIdParam } from './_lib/params';
 import { getArticleCategories, getPublishedArticles, getShopSettings, resolveDefaultLineAccountId, searchArticles } from './queries';
 import { ArticleCard } from './_components/ArticleCard';
@@ -14,26 +14,24 @@ import { EmptyState } from '@/components/EmptyState';
  * at the same clean URL shape PHP does — `/articles`, `?category=<id>`,
  * `?q=<term>` all preserved.
  *
- * ACCESS-MODEL DEVIATION (flagged for mig-orchestrator sign-off before any
- * real flip — NOT a merge blocker this round, per this batch's brief):
- * articles.php/article.php are FULLY PUBLIC, unauthenticated pages in PHP —
- * confirmed by reading both files in full: neither includes
- * `includes/header.php`, checks `$_SESSION`, or calls any of
- * `isSuperAdmin()`/`isAdmin()`/`isStaff()`. There are zero create/edit/
- * delete forms in either file either — HealthArticleService's
- * create()/update()/delete()/togglePublish()/toggleFeatured() are exercised
- * only by `includes/landing/admin-articles.php` (the real article CMS,
- * explicitly Phase 12 scope — NOT touched by this batch). The route
- * boundary this batch was given places the port inside `(tenant)/**`,
- * whose `layout.tsx` unconditionally redirects any unauthenticated request
- * to `/auth/login` (`requireTenantPageContext()` below, same as every
- * other Phase-2 admin page) — so this port is reachable ONLY to a logged-in
- * tenant admin session, a strictly narrower audience than the PHP original
- * (any member of the public with the URL). This access-model change is a
- * deliberate, documented consequence of the given path boundary
- * (`articles/**` nested under the existing `(tenant)` realm), not an
- * oversight — see `[slug]/page.tsx`'s own doc comment for the matching
- * note on that route.
+ * PUBLIC BY DESIGN: articles.php/article.php are fully public,
+ * unauthenticated pages in PHP — confirmed by reading both files in full:
+ * neither includes `includes/header.php`, checks `$_SESSION`, or calls any
+ * of `isSuperAdmin()`/`isAdmin()`/`isStaff()`. This port therefore lives
+ * under `(public)/**`, NOT `(tenant)/**`, and resolves its tenant DB from
+ * the Host header via `requirePublicTenantContext()` (the same
+ * `bootstrap/resolve_subdomain.php` signal `proxy.ts` already pins on every
+ * request) rather than from an admin session. An earlier revision of this
+ * port sat inside `(tenant)/**`, whose `layout.tsx` redirects any
+ * unauthenticated request to `/auth/login`; that turned a public page into a
+ * login-walled one and has been corrected — do not move this route back
+ * under a session-gated realm.
+ *
+ * There are zero create/edit/delete forms in either PHP file:
+ * HealthArticleService's create()/update()/delete()/togglePublish()/
+ * toggleFeatured() are exercised only by `includes/landing/admin-articles.php`
+ * (the real article CMS, explicitly Phase 12 scope — NOT touched here), so
+ * nothing on this route needs an auth gate.
  */
 export interface ArticlesPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -42,7 +40,7 @@ export interface ArticlesPageProps {
 const ARTICLES_LIMIT = 20;
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { db } = await requireTenantPageContext();
+  const { db } = await requirePublicTenantContext();
   const lineAccountId = await resolveDefaultLineAccountId(db);
   const { shopName } = await getShopSettings(db, lineAccountId);
   return {
@@ -53,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function ArticlesPage({ searchParams }: ArticlesPageProps) {
   const params = await searchParams;
-  const { db } = await requireTenantPageContext();
+  const { db } = await requirePublicTenantContext();
 
   const categoryId = parseCategoryIdParam(params.category);
   // NOT trimmed — see _lib/params.ts's isSearchQueryPresent doc for why (no trim() in articles.php
