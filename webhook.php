@@ -1571,6 +1571,25 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             }
         }
 
+        // คีย์เวิร์ด self-service ผู้ป่วย — BusinessBot::processMessage เป็นคนตอบ
+        // ประกาศครั้งเดียวแล้วรวมเข้าทั้ง $systemCommands (กัน AI แย่งตอบ) และ
+        // $specialCommands (กัน auto-reply แย่งตอบ) เพื่อไม่ให้สองรายการหลุดจากกัน
+        $patientSelfServiceCommands = [
+            'เวลาทำการ',
+            'เวลาเปิด',
+            'เปิดกี่โมง',
+            'ร้านเปิดไหม',
+            'ปรึกษาเภสัช',
+            'ประเมินอาการ',
+            'ปรึกษาอาการ',
+            'ขอรับยาเดิม',
+            'รับยาเดิม',
+            'สั่งยาเดิม',
+            'ยาเดิม',
+            'สถานะออเดอร์',
+            'สถานะคำสั่งซื้อ',
+        ];
+
         // ===== V3.2: AI ตอบทุกข้อความอัตโนมัติ (ยกเว้นคำสั่งพิเศษ) =====
         // คำสั่งที่ไม่ให้ AI ตอบ (ให้ระบบอื่นจัดการ)
         $systemCommands = [
@@ -1609,6 +1628,7 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             'points',
             'แต้ม'
         ];
+        $systemCommands = array_merge($systemCommands, $patientSelfServiceCommands);
         $isSystemCommand = in_array($textLower, $systemCommands);
 
         // คำสั่งที่จะหยุด AI และส่งต่อเภสัชกร/แอดมิน
@@ -1985,8 +2005,19 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                 return;
         }
 
-        // Check for menu command - แสดงเมนูหลักสวยๆ (อัพเกรด V2)
+        // Check for menu command - เมนูผู้ป่วย (BusinessBot) พร้อม fallback เมนูเดิม
         if (in_array($textLower, ['menu', 'เมนู', 'help', 'ช่วยเหลือ', '?'])) {
+            if (class_exists('BusinessBot')) {
+                try {
+                    $menuBot = new BusinessBot($db, $line, $lineAccountId);
+                    $menuBot->showPatientMenu($userId, $user['id'], $replyToken);
+                    return;
+                } catch (Exception $e) {
+                    // ตกไปใช้เมนูเดิมด้านล่าง ดีกว่าปล่อยให้ผู้ป่วยไม่ได้รับอะไรเลย
+                    logWebhookException($db, 'webhook.php', $e);
+                }
+            }
+
             $shopName = 'LINE Shop';
             try {
                 if ($lineAccountId) {
@@ -2041,7 +2072,10 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
 
         // เช็ค Auto Reply ก่อน BusinessBot (สำหรับข้อความทั่วไป)
         // ยกเว้นคำสั่งพิเศษที่ BusinessBot ต้องจัดการ
-        $specialCommands = ['shop', 'menu', 'orders', 'สินค้า', 'เมนู', 'ออเดอร์', 'points', 'แต้ม'];
+        $specialCommands = array_merge(
+            ['shop', 'menu', 'orders', 'สินค้า', 'เมนู', 'ออเดอร์', 'points', 'แต้ม'],
+            $patientSelfServiceCommands
+        );
         if (!in_array($textLower, $specialCommands) && !$isSlipCommand && !$isOrderCommand) {
             $autoReply = checkAutoReply($db, $messageText, $lineAccountId);
             if ($autoReply) {

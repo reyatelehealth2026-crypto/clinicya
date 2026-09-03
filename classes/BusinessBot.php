@@ -116,7 +116,7 @@ class BusinessBot
      * (the webhook saveOutgoingMessage() isn't called for BusinessBot replies).
      * Best-effort: failures are logged, never thrown.
      */
-    private function saveOutgoing($userDbId, $message, $messageType = 'flex')
+    private function saveOutgoing($userDbId, $message, $messageType = 'flex', $sentBy = 'system:loyalty')
     {
         try {
             $content = is_array($message) ? json_encode($message, JSON_UNESCAPED_UNICODE) : (string) $message;
@@ -126,8 +126,8 @@ class BusinessBot
             } catch (Exception $e) {
             }
             if ($hasSentBy) {
-                $this->db->prepare("INSERT INTO messages (user_id, direction, message_type, content, sent_by) VALUES (?, 'outgoing', ?, ?, 'system:loyalty')")
-                    ->execute([$userDbId, $messageType, $content]);
+                $this->db->prepare("INSERT INTO messages (user_id, direction, message_type, content, sent_by) VALUES (?, 'outgoing', ?, ?, ?)")
+                    ->execute([$userDbId, $messageType, $content, $sentBy]);
             } else {
                 $this->db->prepare("INSERT INTO messages (user_id, direction, message_type, content) VALUES (?, 'outgoing', ?, ?)")
                     ->execute([$userDbId, $messageType, $content]);
@@ -249,6 +249,23 @@ class BusinessBot
                 'line_account_id' => $this->lineAccountId,
             ]);
             if ($handled) {
+                return true;
+            }
+        }
+
+        // Self-service ผู้ป่วย — วางก่อน early-return ของโหมด ด้วยเหตุผลเดียวกับการเช็คแต้ม
+        // คือถามเวลาทำการหรือขอรับยาเดิมต้องได้คำตอบเสมอ ไม่ว่าบัญชีตั้งโหมดใดไว้
+        // ('ปรึกษาเภสัชกร' เต็มคำเป็นคำสั่งหยุดบอทใน webhook.php จึงไม่มาถึงที่นี่)
+        $patientKeywords = [
+            'showPatientMenu' => ['เมนู', 'menu', 'ช่วยเหลือ', 'help', '?'],
+            'showPharmacyHours' => ['เวลาทำการ', 'เวลาเปิด', 'เปิดกี่โมง', 'ร้านเปิดไหม'],
+            'showTriageMenu' => ['ปรึกษาเภสัช', 'ประเมินอาการ', 'ปรึกษาอาการ'],
+            'showRefillRequest' => ['ขอรับยาเดิม', 'รับยาเดิม', 'สั่งยาเดิม', 'ยาเดิม'],
+            'showOrders' => ['สถานะออเดอร์', 'สถานะคำสั่งซื้อ'],
+        ];
+        foreach ($patientKeywords as $method => $words) {
+            if (in_array($text, $words, true)) {
+                $this->$method($userId, $userDbId, $replyToken);
                 return true;
             }
         }
@@ -406,7 +423,6 @@ class BusinessBot
      */
     public function showMainMenu($userId, $userDbId, $replyToken)
     {
-        $businessType = $this->settings['business_type'] ?? 'hybrid';
         $shopName = $this->settings['shop_name'] ?? 'LINE Business';
 
         // ถ้าเป็นโหมด general แสดงเมนูแบบไม่มีร้านค้า
@@ -422,11 +438,110 @@ class BusinessBot
             return $this->showClosedShopMenu($userId, $userDbId, $replyToken, $shopName);
         }
 
-        $menuItems = $this->getMenuItemsByBusinessType($businessType);
-        $flex = FlexTemplates::mainMenu($shopName, $menuItems);
-        $message = FlexTemplates::toMessage($flex, 'เมนูหลัก', 'shop', 'main');
+        // ร้านยา/คลินิกใช้เมนูผู้ป่วยเป็นทางเข้าเดียว — ชื่อเมธอดเดิมคงไว้
+        // เพื่อไม่ให้ผู้เรียกทั้ง 6 จุด (webhook, postback router, shop) ต้องแก้
+        return $this->showPatientMenu($userId, $userDbId, $replyToken);
+    }
 
-        return $this->line->replyMessage($replyToken, [$message]);
+    /**
+     * เมนูผู้ป่วย — ทางเข้า self-service ทั้งหมดในแชท
+     * ปุ่มที่ต้องดูรายละเอียดลึกจะ deep link เข้า Mini App แทน
+     */
+    public function showPatientMenu($userId, $userDbId, $replyToken)
+    {
+        $flex = FlexTemplates::patientMainMenu(
+            [
+                'shop_name' => $this->settings['shop_name'] ?? 'ร้านยา',
+                'is_open' => $this->isShopOpen(),
+            ],
+            [
+                'home' => $this->liffUrl(''),
+                'health' => $this->liffUrl('health'),
+            ]
+        );
+
+        $message = FlexTemplates::toMessage($flex, 'เมนูผู้ป่วย');
+        $this->saveOutgoing($userDbId, $message, 'flex', 'system:patient');
+
+        return $this->line->sendMessage($userId, [$message], $replyToken);
+    }
+
+    /**
+     * เวลาทำการและเภสัชกรผู้ปฏิบัติการ
+     * shop_settings เก็บแค่ is_open — การ์ดจึงรายงานสถานะ ไม่ใช่ตารางเวลา
+     */
+    public function showPharmacyHours($userId, $userDbId, $replyToken)
+    {
+        $flex = FlexTemplates::pharmacyHoursCard(
+            $this->isShopOpen(),
+            $this->settings['pharmacist_name'] ?? '',
+            [
+                'phone' => $this->settings['contact_phone'] ?? '',
+                'address' => $this->settings['shop_address'] ?? '',
+                'pharmacist_license' => $this->settings['pharmacist_license'] ?? '',
+                'pharmacy_license' => $this->settings['pharmacy_license'] ?? '',
+            ]
+        );
+
+        $message = FlexTemplates::toMessage($flex, 'เวลาทำการเภสัชกร');
+        $this->saveOutgoing($userDbId, $message, 'flex', 'system:patient');
+
+        return $this->line->sendMessage($userId, [$message], $replyToken);
+    }
+
+    /**
+     * ขอรับยาเดิม — พรีวิวยาล่าสุด แล้วส่งต่อไปรายการยาที่มีปุ่มสั่งซ้ำอยู่แล้ว
+     */
+    public function showRefillRequest($userId, $userDbId, $replyToken)
+    {
+        $meds = [];
+        try {
+            $stmt = $this->db->prepare(
+                'SELECT id, medication_name, dosage
+                   FROM medication_reminders
+                  WHERE user_id = ? AND is_active = 1
+                    AND (? IS NULL OR line_account_id = ?)
+                    AND (end_date IS NULL OR end_date >= CURDATE())
+                  ORDER BY id DESC LIMIT 20'
+            );
+            $stmt->execute([$userDbId, $this->lineAccountId, $this->lineAccountId]);
+            $meds = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Exception $e) {
+            // ตารางยังไม่มี/อ่านไม่ได้ → การ์ดแสดงสถานะว่างแทนการล้ม
+            $this->logError('showRefillRequest', $e->getMessage());
+        }
+
+        $flex = FlexTemplates::refillRequestCard($meds, $this->liffUrl('health'));
+        $message = FlexTemplates::toMessage($flex, 'ขอรับยาเดิม');
+        $this->saveOutgoing($userDbId, $message, 'flex', 'system:patient');
+
+        return $this->line->sendMessage($userId, [$message], $replyToken);
+    }
+
+    /**
+     * เริ่มประเมินอาการ — เข้าห้องปรึกษาใน Mini App หรือขอคุยกับเภสัชกรจริง
+     */
+    public function showTriageMenu($userId, $userDbId, $replyToken)
+    {
+        $flex = FlexTemplates::clinicalTriageCard($this->liffUrl('ai-chat'));
+        $message = FlexTemplates::toMessage($flex, 'ปรึกษาเภสัชกร');
+        $this->saveOutgoing($userDbId, $message, 'flex', 'system:patient');
+
+        return $this->line->sendMessage($userId, [$message], $replyToken);
+    }
+
+    /**
+     * Deep link เข้า Mini App — คืน null เมื่อยังไม่ได้ตั้ง LIFF ID
+     * ให้ปุ่มที่ต้องใช้ URL หายไปแทนที่จะพาไปหน้าเสีย
+     */
+    private function liffUrl($path = '')
+    {
+        $liffId = $this->getLiffId();
+        if (!$liffId) {
+            return null;
+        }
+        $path = trim((string) $path, '/');
+        return 'https://liff.line.me/' . $liffId . ($path === '' ? '' : '/' . $path);
     }
 
     /**
@@ -512,29 +627,6 @@ class BusinessBot
 
         $message = ['type' => 'flex', 'altText' => 'ร้านค้าปิดให้บริการชั่วคราว', 'contents' => $bubble];
         return $this->line->replyMessage($replyToken, [$message]);
-    }
-
-    private function getMenuItemsByBusinessType($type)
-    {
-        $baseItems = [
-            ['icon' => '🛒', 'label' => 'ดูสินค้า/บริการ', 'text' => 'shop', 'color' => '#06C755'],
-            ['icon' => '🛍️', 'label' => 'ตะกร้า', 'text' => 'cart', 'color' => '#3B82F6'],
-            ['icon' => '📋', 'label' => 'รายการของฉัน', 'text' => 'orders', 'color' => '#8B5CF6'],
-        ];
-
-        switch ($type) {
-            case 'digital':
-                $baseItems[0] = ['icon' => '🎮', 'label' => 'สินค้าดิจิทัล', 'text' => 'shop', 'color' => '#06C755'];
-                break;
-            case 'service':
-                $baseItems[0] = ['icon' => '📅', 'label' => 'จองบริการ', 'text' => 'shop', 'color' => '#06C755'];
-                $baseItems[2] = ['icon' => '📋', 'label' => 'การจองของฉัน', 'text' => 'orders', 'color' => '#8B5CF6'];
-                break;
-        }
-
-        $baseItems[] = ['icon' => '📞', 'label' => 'ติดต่อเรา', 'text' => 'contact', 'color' => '#EF4444'];
-
-        return $baseItems;
     }
 
     /**
