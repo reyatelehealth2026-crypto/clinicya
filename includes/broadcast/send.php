@@ -157,9 +157,16 @@ try {
 }
 
 // 2. ดึง flex_templates จาก Flex Builder
+// ไม่รวม slot-bound overrides (Flex Studio) — พวกนั้นอาจมี {{placeholder}} ที่ต้อง substitute ตอน render
 try {
-    $stmt = $db->prepare("SELECT id, name, category, flex_json as content, created_at FROM flex_templates WHERE line_account_id = ? OR line_account_id IS NULL ORDER BY created_at DESC");
-    $stmt->execute([$currentBotId]);
+    try {
+        $stmt = $db->prepare("SELECT id, name, category, flex_json as content, created_at FROM flex_templates WHERE (line_account_id = ? OR line_account_id IS NULL) AND (slot_key IS NULL OR slot_key = '') ORDER BY created_at DESC");
+        $stmt->execute([$currentBotId]);
+    } catch (Exception $slotErr) {
+        // slot_key column not migrated on this tenant DB → fall back to unfiltered
+        $stmt = $db->prepare("SELECT id, name, category, flex_json as content, created_at FROM flex_templates WHERE line_account_id = ? OR line_account_id IS NULL ORDER BY created_at DESC");
+        $stmt->execute([$currentBotId]);
+    }
     $flexTemplates = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // เพิ่ม message_type = 'flex' ให้กับ flex templates

@@ -57,6 +57,223 @@ class FlexTemplates
         return self::$senders[$key] ?? self::$senders['default'];
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Flex Studio: per-shop brand tokens + slot overrides
+    // ธีมต่อร้าน + เทมเพลต override ต่อ slot  (see docs/plans/2026-07-10-flex-studio-*)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /** Canonical brand colors used across templates; remapped to shop tokens. */
+    const BRAND_PRIMARY = '#06C755';       // LINE green  → primary_color
+    const BRAND_PRIMARY_DARK = '#006400';  // medicine-label dark green → primary_dark
+
+    /** Per-request token cache keyed by line_account_id ('_none' when unset). */
+    private static $tokenCache = [];
+    /** Current line account for auto-theming inside toMessage(). */
+    private static $currentAccountId = null;
+
+    /**
+     * Set the active shop context so toMessage() auto-themes to that shop's brand.
+     * Producers call this once before building Flex. Null disables theming.
+     */
+    public static function useAccount($lineAccountId)
+    {
+        self::$currentAccountId = $lineAccountId ? (int) $lineAccountId : null;
+    }
+
+    /**
+     * Clear cached tokens. Long-running / multi-tenant loop processes
+     * (cron, workers) should call this per tenant iteration so a rebrand or a
+     * tenant switch is picked up instead of serving a stale cached theme.
+     */
+    public static function resetTokenCache()
+    {
+        self::$tokenCache = [];
+    }
+
+    /**
+     * Merge brand tokens for a shop: hardcoded defaults ← shop_settings ← flex_brand_settings.
+     * Always tenant-scoped by line_account_id. Never throws; missing tables fall back to defaults.
+     */
+    public static function getTokens($lineAccountId = null)
+    {
+        $id = $lineAccountId !== null ? (int) $lineAccountId : self::$currentAccountId;
+        // Key by tenant too: line_account_id values collide across per-tenant DBs
+        // (ADR-001), so an id-only key would leak one tenant's brand into another.
+        $tenantPart = '';
+        if (class_exists('TenantContext')) {
+            try {
+                $tid = TenantContext::getCurrentTenantId();
+                if ($tid) {
+                    $tenantPart = 't' . $tid . ':';
+                }
+            } catch (Exception $e) {
+                // no tenant context → global key
+            }
+        }
+        $cacheKey = $tenantPart . ($id === null ? '_none' : (string) $id);
+        if (isset(self::$tokenCache[$cacheKey])) {
+            return self::$tokenCache[$cacheKey];
+        }
+
+        $tokens = [
+            'primary_color'     => self::BRAND_PRIMARY,
+            'primary_dark'      => self::BRAND_PRIMARY_DARK,
+            'accent_color'      => null,
+            'logo_url'          => null,
+            'sender_name'       => null,
+            'sender_icon_url'   => null,
+            'shop_display_name' => null,
+            'footer_text'       => null,
+            'corner_style'      => null,
+        ];
+
+        if ($id !== null && class_exists('Database')) {
+            try {
+                $db = Database::getInstance()->getConnection();
+                try {
+                    $stmt = $db->prepare("SELECT shop_name, shop_logo FROM shop_settings WHERE line_account_id = ? LIMIT 1");
+                    $stmt->execute([$id]);
+                    if ($ss = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                        if (!empty($ss['shop_name'])) {
+                            $tokens['shop_display_name'] = $ss['shop_name'];
+                        }
+                        if (!empty($ss['shop_logo'])) {
+                            $tokens['logo_url'] = $ss['shop_logo'];
+                            $tokens['sender_icon_url'] = $ss['shop_logo'];
+                        }
+                    }
+                } catch (Exception $e) {
+                    // shop_settings missing column/table → ignore
+                }
+                try {
+                    $stmt = $db->prepare("SELECT * FROM flex_brand_settings WHERE line_account_id = ? LIMIT 1");
+                    $stmt->execute([$id]);
+                    if ($bs = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                        foreach (['primary_color', 'primary_dark', 'accent_color', 'logo_url', 'sender_name', 'sender_icon_url', 'shop_display_name', 'footer_text', 'corner_style'] as $k) {
+                            if (isset($bs[$k]) && $bs[$k] !== '' && $bs[$k] !== null) {
+                                $tokens[$k] = $bs[$k];
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    // flex_brand_settings not migrated yet → defaults stand
+                }
+            } catch (Exception $e) {
+                // no DB → defaults
+            }
+        }
+
+        self::$tokenCache[$cacheKey] = $tokens;
+        return $tokens;
+    }
+
+    /**
+     * Recolor a Flex bubble/carousel from the canonical brand colors to a shop's
+     * tokens. Idempotent and non-destructive: only swaps exact brand-color hex on
+     * color/backgroundColor/borderColor keys. Returns input unchanged when the shop
+     * uses default colors.
+     */
+    public static function applyTheme($flex, $lineAccountId = null)
+    {
+        $tokens = self::getTokens($lineAccountId);
+        $primary = $tokens['primary_color'];
+        $primaryDark = $tokens['primary_dark'];
+        if ($primary === self::BRAND_PRIMARY && $primaryDark === self::BRAND_PRIMARY_DARK) {
+            return $flex; // nothing to remap
+        }
+        return self::walkTheme($flex, $primary, $primaryDark);
+    }
+
+    private static function walkTheme($node, $primary, $primaryDark)
+    {
+        if (!is_array($node)) {
+            return $node;
+        }
+        foreach ($node as $k => $v) {
+            if (is_array($v)) {
+                $node[$k] = self::walkTheme($v, $primary, $primaryDark);
+            } elseif (is_string($v) && ($k === 'color' || $k === 'backgroundColor' || $k === 'borderColor')) {
+                $up = strtoupper($v);
+                // Match the brand color exactly OR with an 8-digit alpha suffix
+                // (templates build tints like '#06C75520'); preserve the suffix.
+                if (strpos($up, self::BRAND_PRIMARY) === 0) {
+                    $node[$k] = $primary . substr($v, strlen(self::BRAND_PRIMARY));
+                } elseif (strpos($up, self::BRAND_PRIMARY_DARK) === 0) {
+                    $node[$k] = $primaryDark . substr($v, strlen(self::BRAND_PRIMARY_DARK));
+                }
+            }
+        }
+        return $node;
+    }
+
+    /**
+     * Look up an active per-shop override for a Flex slot. Returns decoded Flex
+     * contents (bubble/carousel) or null. Never throws.
+     */
+    public static function getActiveOverride($slotKey, $lineAccountId)
+    {
+        if (!$lineAccountId || !class_exists('Database')) {
+            return null;
+        }
+        try {
+            $db = Database::getInstance()->getConnection();
+            $stmt = $db->prepare("SELECT flex_json FROM flex_templates WHERE line_account_id = ? AND slot_key = ? AND is_active = 1 ORDER BY id DESC LIMIT 1");
+            $stmt->execute([(int) $lineAccountId, $slotKey]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($row && !empty($row['flex_json'])) {
+                $decoded = json_decode($row['flex_json'], true);
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
+            }
+        } catch (Exception $e) {
+            // slot columns not migrated / bad JSON → no override
+        }
+        return null;
+    }
+
+    /**
+     * Replace {{var}} placeholders in every string leaf of a Flex payload.
+     * Unknown placeholders are left intact.
+     */
+    public static function substituteVars($flex, array $vars)
+    {
+        if (is_array($flex)) {
+            foreach ($flex as $k => $v) {
+                $flex[$k] = self::substituteVars($v, $vars);
+            }
+            return $flex;
+        }
+        if (is_string($flex) && strpos($flex, '{{') !== false) {
+            return preg_replace_callback('/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/', function ($m) use ($vars) {
+                return array_key_exists($m[1], $vars) ? (string) $vars[$m[1]] : $m[0];
+            }, $flex);
+        }
+        return $flex;
+    }
+
+    /**
+     * Central render gateway. Producers call this instead of a template method
+     * directly so a shop can override a slot without code changes.
+     *
+     *   $contents = FlexTemplates::render('order_receipt', $vars, $lineAccountId,
+     *       fn($v) => FlexTemplates::receipt($v['order'], $v['items'], $v['shop_name']));
+     *
+     * 1. active DB override for (line_account_id, slot_key) → its JSON + {{var}} subst
+     * 2. otherwise → $fallback($vars) hardcoded builder
+     * Both paths are themed to the shop's brand. Returns Flex contents (bubble/carousel);
+     * wrap with toMessage() to send.
+     */
+    public static function render($slotKey, array $vars, $lineAccountId, callable $fallback, $allowOverride = true)
+    {
+        self::useAccount($lineAccountId);
+        // Dynamic slots (per-event clinical/order data) must NOT be replaced by a
+        // static override — pass $allowOverride=false there so the real builder wins.
+        $override = $allowOverride ? self::getActiveOverride($slotKey, $lineAccountId) : null;
+        $flex = $override !== null ? self::substituteVars($override, $vars) : $fallback($vars);
+        return self::applyTheme($flex, $lineAccountId);
+    }
+
     /**
      * Build Quick Reply object
      */
@@ -123,18 +340,38 @@ class FlexTemplates
      */
     public static function toMessage($contents, $altText = 'ข้อความ', $sender = null, $quickReply = null)
     {
+        // Auto-theme to the active shop's brand (no-op when unset / default colors)
+        $contents = self::applyTheme($contents);
+
         $message = [
             'type' => 'flex',
             'altText' => $altText,
             'contents' => $contents
         ];
 
-        // Add sender
+        // Add sender: explicit arg → shop brand token → none
         if ($sender) {
             if (is_string($sender)) {
                 $message['sender'] = self::getSender($sender);
             } elseif (is_array($sender)) {
                 $message['sender'] = $sender;
+            }
+        } else {
+            $tokens = self::getTokens();
+            $tokenSender = [];
+            // LINE caps sender.name at 20 chars and requires an https iconUrl;
+            // enforce here so an over-long name or relative/http logo can never
+            // make LINE reject the whole message.
+            $nm = trim((string) ($tokens['sender_name'] ?? ''));
+            if ($nm !== '') {
+                $tokenSender['name'] = mb_substr($nm, 0, 20);
+            }
+            $icon = (string) ($tokens['sender_icon_url'] ?? '');
+            if ($icon !== '' && preg_match('#^https://#i', $icon)) {
+                $tokenSender['iconUrl'] = $icon;
+            }
+            if ($tokenSender) {
+                $message['sender'] = $tokenSender;
             }
         }
 
@@ -538,7 +775,7 @@ class FlexTemplates
     public static function productCard($product, $showAddToCart = true)
     {
         $price = $product['sale_price'] ?? $product['price'];
-        $originalPrice = $product['sale_price'] ? $product['price'] : null;
+        $originalPrice = ($product['sale_price'] ?? null) ? $product['price'] : null;
         
         $priceContents = [
             ['type' => 'text', 'text' => '฿' . number_format($price), 'size' => 'xl', 'weight' => 'bold', 'color' => '#06C755']
