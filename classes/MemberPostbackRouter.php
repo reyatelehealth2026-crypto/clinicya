@@ -101,8 +101,14 @@ class MemberPostbackRouter
         $accountId = isset($ctx['line_account_id']) ? (int) $ctx['line_account_id'] : null;
         $params = $parsed['params'];
 
+        // วงหมุน "กำลังพิมพ์" ไม่ได้อยู่ตรงนี้ — webhook.php ขึ้นให้ตั้งแต่รับ event
+        // แล้ว ครอบทุกเส้นทางตอบกลับ ไม่ใช่แค่ปุ่มของ router นี้
+
         try {
             switch ($parsed['action']) {
+                case 'member_menu':
+                    return self::showMemberMenu($db, $line, $replyToken, $userId, $accountId);
+
                 case 'medication_taken':
                     return self::medicationTaken($db, $line, $replyToken, $userId, $accountId, $params);
 
@@ -153,6 +159,63 @@ class MemberPostbackRouter
     }
 
     // ------------------------------------------------------------------
+    // เมนูรวมฝั่งสมาชิก — เห็นทั้งระบบได้ในแชท ไม่ต้องเข้า mini app
+    // ------------------------------------------------------------------
+
+    /**
+     * "เมนูสมาชิก" → การ์ดเดียวที่สรุปสถานะจริงของลูกค้า + ทางเข้าทุกหน้า
+     *
+     * ตัวเลขบนการ์ดอ่านจากฐานจริงทั้งหมด ไม่ใช่ป้ายนิ่ง ๆ ลูกค้าจึงเห็นว่า
+     * ระบบรู้จักเขาอยู่ก่อนจะกดเข้าไปหน้าไหน
+     */
+    private static function showMemberMenu($db, $line, $replyToken, $userId, $accountId)
+    {
+        $line->replyMessage($replyToken, [
+            FlexTemplates::memberMenu(self::memberMenuStats($db, $userId)),
+        ]);
+        return true;
+    }
+
+    /**
+     * ตัวเลขสรุปสำหรับเมนูรวม — ทุกช่องล้มแยกกันได้ ตารางไหนไม่มีก็ให้เป็น 0
+     *
+     * @return array{meds:int,doses_today:int,appointments:int,points:int}
+     */
+    private static function memberMenuStats($db, $userId)
+    {
+        $stats = ['meds' => 0, 'doses_today' => 0, 'appointments' => 0, 'points' => 0];
+
+        $counts = [
+            'meds' => ['SELECT COUNT(*) FROM medication_reminders WHERE user_id = ? AND is_active = 1', [$userId]],
+            'doses_today' => [
+                "SELECT COUNT(*) FROM medication_taken_history
+                 WHERE user_id = ? AND status = 'taken' AND DATE(taken_at) = CURDATE()",
+                [$userId],
+            ],
+            'appointments' => [
+                "SELECT COUNT(*) FROM appointments
+                 WHERE user_id = ? AND appointment_date >= CURDATE()
+                   AND status IN ('pending', 'confirmed', 'in_progress')",
+                [$userId],
+            ],
+            'points' => ['SELECT COALESCE(points, 0) FROM users WHERE id = ?', [$userId]],
+        ];
+
+        foreach ($counts as $key => [$sql, $args]) {
+            try {
+                $stmt = $db->prepare($sql);
+                $stmt->execute($args);
+                $stats[$key] = (int) $stmt->fetchColumn();
+            } catch (Throwable $e) {
+                // tenant นี้ยังไม่มีตารางนั้น — แสดง 0 ดีกว่าไม่แสดงเมนูเลย
+                $stats[$key] = 0;
+            }
+        }
+
+        return $stats;
+    }
+
+    // ------------------------------------------------------------------
     // เตือนทานยา — เส้นย้อนกลับที่ทำให้ได้ข้อมูลจริงแทนการเดา
     // ------------------------------------------------------------------
 
@@ -180,10 +243,11 @@ class MemberPostbackRouter
         self::reply($line, $replyToken, FlexTemplates::textMessage(
             '✅ บันทึกแล้วค่ะ — ' . $reminder['medication_name'] . "\nดูแลตัวเองดีมากเลย 💚",
             null,
-            FlexTemplates::buildQuickReply([
+            [
                 ['label' => '💊 ยาของฉัน', 'text' => 'ยาของฉัน'],
+                ['label' => '🩺 เมนูสมาชิก', 'text' => 'เมนูสมาชิก'],
                 ['label' => '💳 บัตรสมาชิก', 'text' => 'สมาชิก'],
-            ])
+            ]
         ));
         return true;
     }
