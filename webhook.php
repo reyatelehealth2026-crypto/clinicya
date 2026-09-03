@@ -1757,6 +1757,10 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         $isSlipCommand = in_array($textLower, $slipCommands);
         $isOrderCommand = in_array($textLower, $orderCommands);
         $isMenuCommand = in_array($textLower, $menuCommands);
+        // เมนูผู้ป่วยยิงคำเหล่านี้มา และ BusinessBot เป็นคนตอบ จึงต้องนับเป็น
+        // "คำสั่งที่บอทตอบ" ด้วย ไม่งั้นด่านรอแอดมินด้านล่างจะ return ทิ้ง
+        // ก่อนที่ BusinessBot จะได้ทำงาน
+        $isPatientCommand = in_array($textLower, $patientSelfServiceCommands);
 
         // ===== Handle LIFF Action Messages (สั่งซื้อสำเร็จ, นัดหมายสำเร็จ, etc.) =====
         if (preg_match('/^สั่งซื้อสำเร็จ\s*#?(\w+)/u', $messageText, $matches)) {
@@ -1934,7 +1938,9 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         // ถ้าเป็นคำสั่งเมนู - ให้ Auto Reply หรือ BusinessBot จัดการ (ด้านล่าง)
 
         // ถ้าไม่ใช่คำสั่งที่กำหนด และไม่ใช่โหมด general - ไม่ตอบ (รอแอดมิน)
-        if (!$isSlipCommand && !$isOrderCommand && !$isMenuCommand && $botMode !== 'general') {
+        // ทุกคำสั่งที่ BusinessBot รู้จักต้องผ่านด่านนี้ไปได้ ($isShopCommand เดิมถูก
+        // คำนวณไว้แต่ไม่ได้ใช้ ทำให้ 'shop' ตายไปด้วยเมื่อร้านยังไม่ได้ตั้ง LIFF)
+        if (!$isSlipCommand && !$isOrderCommand && !$isMenuCommand && !$isPatientCommand && !$isShopCommand && $botMode !== 'general') {
             // เช็ค Auto Reply ก่อน
             $autoReply = checkAutoReply($db, $messageText, $lineAccountId);
             if ($autoReply) {
