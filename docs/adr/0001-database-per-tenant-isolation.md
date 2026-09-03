@@ -240,7 +240,7 @@ require_once 'config/database.php';
 - `scripts/migrate_uploads_to_tenant_dirs.php:5-14, 43-51`
 - `packages/auth/src/tenantDbContext.ts:5-18` — AsyncLocalStorage seam ฝั่ง Node
 - `docs/runbooks/websocket-consolidation.md:41` — ข้อจำกัดที่ทำให้ websocket auth ถูก defer
-- `apps/admin/src/app/(tenant)/articles/_lib/seo.ts:10-13` — BASE_URL แบบ hardcode ผิดทุกผู้เช่า
+- `apps/admin/src/app/(public)/articles/_lib/seo.ts:10-13` — BASE_URL แบบ hardcode ผิดทุกผู้เช่า
 
 **สรุปเชิงบรรยาย (สองภาษา):** `CLAUDE.md:7, 101-110`; `README.md:18-22, 79-82`
 
