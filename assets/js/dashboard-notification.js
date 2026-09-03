@@ -12,7 +12,10 @@
 
 const DashboardNotification = (function () {
     const config = {
-        pollInterval: 5000,
+        // แบดจ์แจ้งเตือนข้างเมนูไม่ต้องสดระดับ 5 วินาที และไฟล์นี้ถูกโหลดจาก
+        // footer.php = ทุกหน้า admin ยิงพร้อมกันหมด 20 วินาทีพอสำหรับ badge
+        // (หน้า inbox มี inbox-realtime.js poll ถี่กว่าอยู่แล้ว)
+        pollInterval: 20000,
         apiEndpoint: '/api/inbox-realtime.php',
         enableSound: true,
         enableBrowserNotification: true,
@@ -204,6 +207,13 @@ const DashboardNotification = (function () {
      */
     async function poll() {
         if (!state.isRunning) return;
+
+        // แท็บที่ซ่อนอยู่ไม่ต้องยิง: ทุก PHP request บนโฮสต์นี้กิน entry process
+        // ~1 วินาที (วัดแล้ว) แท็บ admin ที่เปิดค้างไว้จึงทำให้ทั้งระบบช้า
+        if (document.hidden) {
+            state.pollTimer = setTimeout(poll, config.pollInterval);
+            return;
+        }
 
         try {
             const params = new URLSearchParams({
