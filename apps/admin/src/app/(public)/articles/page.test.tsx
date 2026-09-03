@@ -1,11 +1,11 @@
 import { render, screen } from '@testing-library/react';
 
-const mockRequireTenantPageContext = jest.fn();
-jest.mock('../users/_lib/session', () => ({
-  requireTenantPageContext: () => mockRequireTenantPageContext(),
+const mockRequirePublicTenantContext = jest.fn();
+jest.mock('@/lib/tenant/publicTenantPageContext', () => ({
+  requirePublicTenantContext: () => mockRequirePublicTenantContext(),
 }));
 
-import { makeFakeTenantDb } from '../users/testHelpers/fakeTenantDb';
+import { makeFakeTenantDb } from '@/app/(tenant)/users/testHelpers/fakeTenantDb';
 import ArticlesPage, { generateMetadata } from './page';
 
 const ARTICLE_ROW = {
@@ -22,7 +22,7 @@ const ARTICLE_ROW = {
 
 function wireDb(queryImpl: (sqlText: string, params: unknown[]) => unknown) {
   const { db, queries } = makeFakeTenantDb(queryImpl);
-  mockRequireTenantPageContext.mockResolvedValue({ db, session: { tenantId: 1 } });
+  mockRequirePublicTenantContext.mockResolvedValue({ db, session: { tenantId: 1 } });
   return { queries };
 }
 

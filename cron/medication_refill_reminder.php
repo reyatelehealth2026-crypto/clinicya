@@ -97,7 +97,12 @@ foreach ($items as $item) {
             'line_account_id' => $item['line_account_id'] ?? null,
             'channel_access_token' => $item['channel_access_token'],
             'event_type' => 'medication_refill',
-            'dedupe_key' => 'refill:' . $item['id'] . ':' . date('Y-m-d'),
+            // ตั้งใจใช้ namespace เดียวกับ cron/adherence_reminder.php — สอง cron
+            // ทำนายวันยาหมดคนละวิธี (estimated_end_date คงที่ vs days-supply ต่อ
+            // การจ่ายยา) และกันซ้ำกันเองคนละกลไก จึงไม่เคยกันซ้ำข้ามกัน
+            // NotificationGate เป็นจุดร่วมจุดเดียวที่ทำได้ ลูกค้าต้องไม่ได้
+            // ข้อความ "ยาใกล้หมด" ของยาตัวเดียวกันสองรอบในวันเดียว
+            'dedupe_key' => 'refill:' . (int) $item['user_id'] . ':' . (int) $item['product_id'] . ':' . date('Y-m-d'),
             'messages' => [$flexMessage],
         ])['sent'];
         

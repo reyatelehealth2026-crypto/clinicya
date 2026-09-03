@@ -45,8 +45,9 @@ describe('giveByPhone — validation (no DB writes)', () => {
     const result = await giveByPhone(db, { lineAccountId: 1, adminUserId: 1, phone: '0812', name: '', userId: 0, amount: 100, points: 0, paymentMethod: '' });
     expect(result.success).toBe(false);
     expect(result.message).toMatch(/เบอร์/);
-    // Only the defensive ensurePointsClaimsTable() CREATE TABLE runs before phone validation.
-    expect(queries.every((q) => q.sql.includes('CREATE TABLE'))).toBe(true);
+    // Phone validation short-circuits before any query — the schema is owned by
+    // database/migration_2026-06-02_points_claims.sql, not by a runtime CREATE TABLE.
+    expect(queries).toHaveLength(0);
   });
 
   it('rejects negative amount', async () => {

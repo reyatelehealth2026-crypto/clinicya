@@ -1,6 +1,6 @@
-const mockRequireTenantPageContext = jest.fn();
-jest.mock('../users/_lib/session', () => ({
-  requireTenantPageContext: () => mockRequireTenantPageContext(),
+const mockRequirePublicTenantContext = jest.fn();
+jest.mock('@/lib/tenant/publicTenantPageContext', () => ({
+  requirePublicTenantContext: () => mockRequirePublicTenantContext(),
 }));
 
 const mockIncrementArticleViewCount = jest.fn();
@@ -15,18 +15,18 @@ describe('incrementViewCountAction', () => {
     jest.clearAllMocks();
   });
 
-  it('resolves its own db via requireTenantPageContext and delegates to incrementArticleViewCount', async () => {
+  it('resolves its own db via requirePublicTenantContext and delegates to incrementArticleViewCount', async () => {
     const fakeDb = { marker: 'fake-db' };
-    mockRequireTenantPageContext.mockResolvedValue({ db: fakeDb, session: { tenantId: 1 } });
+    mockRequirePublicTenantContext.mockResolvedValue({ db: fakeDb, session: { tenantId: 1 } });
 
     await incrementViewCountAction(42);
 
-    expect(mockRequireTenantPageContext).toHaveBeenCalledTimes(1);
+    expect(mockRequirePublicTenantContext).toHaveBeenCalledTimes(1);
     expect(mockIncrementArticleViewCount).toHaveBeenCalledWith(fakeDb, 42);
   });
 
   it('fires once per call — two calls increment twice, matching "not deduped" legacy behavior', async () => {
-    mockRequireTenantPageContext.mockResolvedValue({ db: {}, session: { tenantId: 1 } });
+    mockRequirePublicTenantContext.mockResolvedValue({ db: {}, session: { tenantId: 1 } });
 
     await incrementViewCountAction(7);
     await incrementViewCountAction(7);

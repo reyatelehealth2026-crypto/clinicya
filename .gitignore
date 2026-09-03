@@ -273,3 +273,4 @@ cost-by-*.csv
 # Windows MAX_PATH breaks worktrees). See chore/remove-chrome-profile-junk.
 **/.chrome-profile*/
 **/.chrome-profile*
+!database/migration_2026-09-03_member_flex_flow.sql

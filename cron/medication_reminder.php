@@ -132,6 +132,66 @@ foreach ($reminders as $reminder) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// รอบเก็บงาน "เลื่อนเตือน" — ลูกค้ากด ⏰ เตือนอีกครั้ง บน Flex
+// MemberPostbackRouter เขียน snooze_until ไว้ รอบนี้มาหยิบที่ถึงเวลาแล้ว
+// เคลียร์ snooze_until เป็น NULL หลังส่ง แถวยังคง status='snoozed' ไว้เป็น
+// หลักฐาน adherence ว่าลูกค้าเลื่อนสล็อตนั้น
+// ---------------------------------------------------------------------------
+$snoozeSql = "SELECT h.id AS history_id, h.scheduled_time,
+                     r.*, u.line_user_id, u.display_name, la.channel_access_token
+              FROM medication_taken_history h
+              JOIN medication_reminders r ON h.reminder_id = r.id
+              JOIN users u ON r.user_id = u.id
+              LEFT JOIN line_accounts la ON r.line_account_id = la.id
+              WHERE h.status = 'snoozed'
+                AND h.snooze_until IS NOT NULL
+                AND h.snooze_until <= NOW()
+                AND r.is_active = 1
+                AND u.line_user_id IS NOT NULL
+                AND la.channel_access_token IS NOT NULL
+              LIMIT 200";
+
+try {
+    $snoozed = $db->query($snoozeSql)->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // tenant นี้ยังไม่ได้รัน migration_2026-09-03_member_flex_flow.sql
+    $snoozed = [];
+    echo "Snooze pickup skipped: " . $e->getMessage() . "\n";
+}
+
+echo "Snoozed due now: " . count($snoozed) . "\n";
+
+foreach ($snoozed as $row) {
+    $slot = substr((string) $row['scheduled_time'], 0, 5);
+
+    try {
+        $gate = new NotificationGate($db);
+        $sent = $gate->send([
+            'user_id' => (int) $row['user_id'],
+            'line_user_id' => $row['line_user_id'],
+            'line_account_id' => $row['line_account_id'] ?? null,
+            'channel_access_token' => $row['channel_access_token'],
+            'event_type' => 'medication_dose',
+            'dedupe_key' => 'dose:snooze:' . $row['history_id'],
+            'messages' => [createMedicationReminderFlex($row, $slot)],
+        ])['sent'];
+
+        // เคลียร์คิวไม่ว่าจะส่งผ่านหรือไม่ กันวนส่งซ้ำทุกรอบ cron
+        $clear = $db->prepare("UPDATE medication_taken_history SET snooze_until = NULL WHERE id = ?");
+        $clear->execute([(int) $row['history_id']]);
+
+        if ($sent) {
+            $notified++;
+        } else {
+            $skipped++;
+        }
+    } catch (Exception $e) {
+        echo "  Snooze resend error: " . $e->getMessage() . "\n";
+        $errors++;
+    }
+}
+
 echo "=== Summary ===\n";
 echo "Notified: {$notified}\n";
 echo "Skipped (already sent): {$skipped}\n";

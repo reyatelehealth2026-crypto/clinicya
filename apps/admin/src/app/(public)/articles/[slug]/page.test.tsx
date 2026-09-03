@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 
-const mockRequireTenantPageContext = jest.fn();
-jest.mock('../../users/_lib/session', () => ({
-  requireTenantPageContext: () => mockRequireTenantPageContext(),
+const mockRequirePublicTenantContext = jest.fn();
+jest.mock('@/lib/tenant/publicTenantPageContext', () => ({
+  requirePublicTenantContext: () => mockRequirePublicTenantContext(),
 }));
 
 const mockRedirect = jest.fn((url: string) => {
@@ -17,7 +17,7 @@ jest.mock('next/headers', () => ({
 }));
 
 import { headers } from 'next/headers';
-import { makeFakeTenantDb } from '../../users/testHelpers/fakeTenantDb';
+import { makeFakeTenantDb } from '@/app/(tenant)/users/testHelpers/fakeTenantDb';
 import ArticleDetailPage, { generateMetadata } from './page';
 
 const mockHeaders = headers as jest.MockedFunction<typeof headers>;
@@ -54,7 +54,7 @@ function defaultQueryImpl(sqlText: string) {
 
 function wireDb(queryImpl: (sqlText: string, params: unknown[]) => unknown = defaultQueryImpl) {
   const { db, queries } = makeFakeTenantDb(queryImpl);
-  mockRequireTenantPageContext.mockResolvedValue({ db, session: { tenantId: 1 } });
+  mockRequirePublicTenantContext.mockResolvedValue({ db, session: { tenantId: 1 } });
   return { queries };
 }
 

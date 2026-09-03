@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { requireTenantPageContext } from '../../users/_lib/session';
-import { formatNumber } from '../../users/_lib/format';
+import { requirePublicTenantContext } from '@/lib/tenant/publicTenantPageContext';
+import { formatNumber } from '@/app/(tenant)/users/_lib/format';
 import { getArticleBySlug, getRelatedArticles, getShopSettings, resolveDefaultLineAccountId } from '../queries';
 import { incrementViewCountAction } from '../actions';
 import { formatArticleDate, parseArticleTags, toArticleIsoDateTime } from '../_lib/format';
@@ -23,20 +23,15 @@ import { ShareButtons } from '../_components/ShareButtons';
  * RelatedArticles, ShareButtons' `url` prop, JSON-LD, og:url) is already
  * consistent with this shape — see `_lib/seo.ts`'s `buildArticleUrl`.
  *
- * ACCESS-MODEL DEVIATION (flagged for mig-orchestrator sign-off before any
- * real flip — NOT a merge blocker this round): article.php has NO auth gate
- * at all (no `includes/header.php`, no `$_SESSION` check, no
- * `isSuperAdmin()`/`isAdmin()`/`isStaff()` anywhere — grepped the full
- * file). This port sits under `(tenant)/**`, whose `layout.tsx`
- * unconditionally redirects unauthenticated requests to `/auth/login` (via
- * `requireTenantPageContext()` below) — so a public reader with a shared
- * article link will now hit a login wall instead of the article, a real
- * behavior change from the legacy public page. This is a consequence of the
- * route boundary this batch was given (`articles/**` nested under the
- * existing `(tenant)` realm, the only realm with an established
- * `requireTenantPageContext()`/Kysely convention to reuse) and is called
- * out here for the orchestrator to weigh before this route is ever put
- * behind the real public `/articles` path at flip time.
+ * PUBLIC BY DESIGN: article.php has NO auth gate at all (no
+ * `includes/header.php`, no `$_SESSION` check, no `isSuperAdmin()`/
+ * `isAdmin()`/`isStaff()` anywhere — grepped the full file), so a shared
+ * article link must open the article for any reader. This port lives under
+ * `(public)/**` and resolves its tenant DB from the Host header via
+ * `requirePublicTenantContext()`, not from an admin session. An earlier
+ * revision sat under `(tenant)/**` and inherited that layout's
+ * redirect-to-`/auth/login` gate — a login wall on a public page; corrected
+ * here. Do not move this route back under a session-gated realm.
  *
  * MISSING/UNPUBLISHED SLUG: article.php sends BOTH `header('HTTP/1.0 404
  * Not Found')` AND `header('Location: articles.php')` (lines 45-46) — a
@@ -64,7 +59,7 @@ const RELATED_ARTICLES_LIMIT = 3;
 
 export async function generateMetadata({ params }: ArticleDetailPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const { db } = await requireTenantPageContext();
+  const { db } = await requirePublicTenantContext();
   const lineAccountId = await resolveDefaultLineAccountId(db);
   const [{ shopName }, article] = await Promise.all([getShopSettings(db, lineAccountId), getArticleBySlug(db, slug, lineAccountId)]);
 
@@ -98,7 +93,7 @@ export async function generateMetadata({ params }: ArticleDetailPageProps): Prom
 
 export default async function ArticleDetailPage({ params }: ArticleDetailPageProps) {
   const { slug } = await params;
-  const { db } = await requireTenantPageContext();
+  const { db } = await requirePublicTenantContext();
   const lineAccountId = await resolveDefaultLineAccountId(db);
   const [{ shopName, shopLogo }, article] = await Promise.all([getShopSettings(db, lineAccountId), getArticleBySlug(db, slug, lineAccountId)]);
 

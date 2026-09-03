@@ -1,6 +1,6 @@
 'use server';
 
-import { requireTenantPageContext } from '../users/_lib/session';
+import { requirePublicTenantContext } from '@/lib/tenant/publicTenantPageContext';
 import { incrementArticleViewCount } from './_lib/mutations';
 
 /**
@@ -10,8 +10,9 @@ import { incrementArticleViewCount } from './_lib/mutations';
  * `_lib/mutations.ts`'s doc for why the read (queries.ts's
  * `getArticleBySlug`) and this write are split apart.
  *
- * Resolves its own `db`/session via `requireTenantPageContext()` rather
- * than accepting a caller-supplied `Kysely<TenantDB>` — same defensive
+ * Resolves its own `db` via `requirePublicTenantContext()` (Host-header
+ * tenant pin, no session — this is a public route) rather than accepting a
+ * caller-supplied `Kysely<TenantDB>` — same defensive
  * convention loyalty-members/actions.ts's `giveByPhoneAction` already
  * establishes for this codebase's Server Actions (never trust a
  * caller-supplied db handle across the action boundary, even when the only
@@ -28,6 +29,6 @@ import { incrementArticleViewCount } from './_lib/mutations';
  * article twice increments `view_count` twice, same as PHP.
  */
 export async function incrementViewCountAction(articleId: number): Promise<void> {
-  const { db } = await requireTenantPageContext();
+  const { db } = await requirePublicTenantContext();
   await incrementArticleViewCount(db, articleId);
 }
