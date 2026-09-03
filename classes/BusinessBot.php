@@ -41,6 +41,11 @@ class BusinessBot
         $this->db = $db;
         $this->line = $line;
         $this->lineAccountId = $lineAccountId;
+        // Flex Studio: theme every bot Flex send to this shop's brand (no-op on default colors).
+        if ($lineAccountId && class_exists('FlexTemplates')) {
+            FlexTemplates::useAccount($lineAccountId);
+        }
+        $this->resolveBrandTone();
         $this->loadBotMode();
         $this->loadSettings();
     }
@@ -2312,11 +2317,45 @@ class BusinessBot
         return $configs[$status] ?? ['icon' => '📋', 'text' => $status, 'color' => '#888888'];
     }
 
-    /** Brand tone shared by every loyalty Flex reply (mirrors line-mini-app). */
-    private const BRAND_GRAD_START = '#0B5F50';
-    private const BRAND_GRAD_MID = '#187162';
-    private const BRAND_GRAD_END = '#082D28';
-    private const BRAND_MAIN = '#0B5F50';
+    /** Default brand tone shared by every loyalty Flex reply (mirrors line-mini-app); used until a shop sets a custom Flex Studio theme. */
+    private const BRAND_GRAD_START_DEFAULT = '#0B5F50';
+    private const BRAND_GRAD_MID_DEFAULT = '#187162';
+    private const BRAND_GRAD_END_DEFAULT = '#082D28';
+    private const BRAND_MAIN_DEFAULT = '#0B5F50';
+
+    /** Resolved loyalty-card brand tone: shop's Flex Studio theme when set, else the default teal. */
+    private $brandGradStart;
+    private $brandGradMid;
+    private $brandGradEnd;
+    private $brandMain;
+
+    /** Blend two #rrggbb colors; $ratio=0 → $hex1, $ratio=1 → $hex2. */
+    private static function mixHex(string $hex1, string $hex2, float $ratio): string
+    {
+        $c1 = sscanf($hex1, "#%02x%02x%02x");
+        $c2 = sscanf($hex2, "#%02x%02x%02x");
+        $mix = array_map(fn($a, $b) => (int) round($a + ($b - $a) * $ratio), $c1, $c2);
+        return sprintf('#%02X%02X%02X', ...$mix);
+    }
+
+    /** Resolve the loyalty-card brand tone once per request: shop's saved theme, or the default teal. */
+    private function resolveBrandTone(): void
+    {
+        $tokens = class_exists('FlexTemplates') ? FlexTemplates::getTokens($this->lineAccountId) : [];
+        $hasCustomBrand = !empty($tokens)
+            && ($tokens['primary_color'] !== FlexTemplates::BRAND_PRIMARY || $tokens['primary_dark'] !== FlexTemplates::BRAND_PRIMARY_DARK);
+        if ($hasCustomBrand) {
+            $this->brandMain = $tokens['primary_color'];
+            $this->brandGradStart = $tokens['primary_color'];
+            $this->brandGradEnd = $tokens['primary_dark'];
+            $this->brandGradMid = self::mixHex($tokens['primary_color'], $tokens['primary_dark'], 0.5);
+        } else {
+            $this->brandMain = self::BRAND_MAIN_DEFAULT;
+            $this->brandGradStart = self::BRAND_GRAD_START_DEFAULT;
+            $this->brandGradMid = self::BRAND_GRAD_MID_DEFAULT;
+            $this->brandGradEnd = self::BRAND_GRAD_END_DEFAULT;
+        }
+    }
 
     /**
      * Build the premium gradient member-card bubble shared by showPoints and
@@ -2371,13 +2410,13 @@ class BusinessBot
                 'type' => 'box',
                 'layout' => 'vertical',
                 'paddingAll' => '20px',
-                'backgroundColor' => self::BRAND_GRAD_START,
+                'backgroundColor' => $this->brandGradStart,
                 'background' => [
                     'type' => 'linearGradient',
                     'angle' => '160deg',
-                    'startColor' => self::BRAND_GRAD_START,
-                    'centerColor' => self::BRAND_GRAD_MID,
-                    'endColor' => self::BRAND_GRAD_END,
+                    'startColor' => $this->brandGradStart,
+                    'centerColor' => $this->brandGradMid,
+                    'endColor' => $this->brandGradEnd,
                     'centerPosition' => '55%'
                 ],
                 'contents' => [
@@ -2525,7 +2564,7 @@ class BusinessBot
                 [
                     'type' => 'box', 'layout' => 'vertical', 'spacing' => 'sm', 'flex' => 1,
                     'contents' => [
-                        ['type' => 'button', 'action' => ['type' => 'postback', 'label' => 'ส่งสลิปรับแต้ม', 'data' => '{"action":"send_receipt"}', 'displayText' => 'ส่งใบเสร็จ'], 'style' => 'primary', 'color' => self::BRAND_MAIN, 'height' => 'sm'],
+                        ['type' => 'button', 'action' => ['type' => 'postback', 'label' => 'ส่งสลิปรับแต้ม', 'data' => '{"action":"send_receipt"}', 'displayText' => 'ส่งใบเสร็จ'], 'style' => 'primary', 'color' => $this->brandMain, 'height' => 'sm'],
                         [
                             'type' => 'box', 'layout' => 'horizontal', 'spacing' => 'sm',
                             'contents' => [
@@ -2574,8 +2613,8 @@ class BusinessBot
                         'type' => 'box',
                         'layout' => 'vertical',
                         'paddingAll' => '14px',
-                        'backgroundColor' => self::BRAND_GRAD_START,
-                        'background' => ['type' => 'linearGradient', 'angle' => '160deg', 'startColor' => self::BRAND_GRAD_START, 'endColor' => self::BRAND_GRAD_END],
+                        'backgroundColor' => $this->brandGradStart,
+                        'background' => ['type' => 'linearGradient', 'angle' => '160deg', 'startColor' => $this->brandGradStart, 'endColor' => $this->brandGradEnd],
                         'contents' => [
                             ['type' => 'text', 'text' => '🎁 ของรางวัล', 'size' => 'xxs', 'color' => '#FFFFFFB3', 'weight' => 'bold'],
                             ['type' => 'text', 'text' => $reward['name'], 'weight' => 'bold', 'size' => 'md', 'color' => '#FFFFFF', 'wrap' => true, 'margin' => 'sm']
@@ -2589,7 +2628,7 @@ class BusinessBot
                             [
                                 'type' => 'box', 'layout' => 'baseline',
                                 'contents' => [
-                                    ['type' => 'text', 'text' => number_format($reward['points_required']), 'size' => 'xl', 'weight' => 'bold', 'color' => self::BRAND_MAIN, 'flex' => 0],
+                                    ['type' => 'text', 'text' => number_format($reward['points_required']), 'size' => 'xl', 'weight' => 'bold', 'color' => $this->brandMain, 'flex' => 0],
                                     ['type' => 'text', 'text' => ' แต้ม', 'size' => 'sm', 'color' => '#888888', 'flex' => 0, 'margin' => 'xs']
                                 ]
                             ],
@@ -2601,7 +2640,7 @@ class BusinessBot
                         'type' => 'box',
                         'layout' => 'vertical',
                         'contents' => [
-                            ['type' => 'button', 'action' => ['type' => 'message', 'label' => $canRedeem ? '🎁 แลกเลย' : 'แต้มไม่พอ', 'text' => "redeem {$reward['id']}"], 'style' => $canRedeem ? 'primary' : 'secondary', 'color' => $canRedeem ? self::BRAND_MAIN : '#CCCCCC', 'height' => 'sm']
+                            ['type' => 'button', 'action' => ['type' => 'message', 'label' => $canRedeem ? '🎁 แลกเลย' : 'แต้มไม่พอ', 'text' => "redeem {$reward['id']}"], 'style' => $canRedeem ? 'primary' : 'secondary', 'color' => $canRedeem ? $this->brandMain : '#CCCCCC', 'height' => 'sm']
                         ],
                         'paddingAll' => 'md'
                     ]
@@ -2674,7 +2713,7 @@ class BusinessBot
                 [
                     'type' => 'box', 'layout' => 'vertical', 'spacing' => 'sm', 'flex' => 1,
                     'contents' => [
-                        ['type' => 'button', 'action' => ['type' => 'postback', 'label' => 'ส่งสลิปรับแต้ม', 'data' => '{"action":"send_receipt"}', 'displayText' => 'ส่งใบเสร็จ'], 'style' => 'primary', 'color' => self::BRAND_MAIN, 'height' => 'sm'],
+                        ['type' => 'button', 'action' => ['type' => 'postback', 'label' => 'ส่งสลิปรับแต้ม', 'data' => '{"action":"send_receipt"}', 'displayText' => 'ส่งใบเสร็จ'], 'style' => 'primary', 'color' => $this->brandMain, 'height' => 'sm'],
                         [
                             'type' => 'box', 'layout' => 'horizontal', 'spacing' => 'sm',
                             'contents' => [
@@ -2758,8 +2797,8 @@ class BusinessBot
                     'size' => 'mega',
                     'body' => [
                         'type' => 'box', 'layout' => 'vertical', 'paddingAll' => '24px', 'spacing' => 'md',
-                        'backgroundColor' => self::BRAND_GRAD_START,
-                        'background' => ['type' => 'linearGradient', 'angle' => '160deg', 'startColor' => self::BRAND_GRAD_START, 'centerColor' => self::BRAND_GRAD_MID, 'endColor' => self::BRAND_GRAD_END, 'centerPosition' => '55%'],
+                        'backgroundColor' => $this->brandGradStart,
+                        'background' => ['type' => 'linearGradient', 'angle' => '160deg', 'startColor' => $this->brandGradStart, 'centerColor' => $this->brandGradMid, 'endColor' => $this->brandGradEnd, 'centerPosition' => '55%'],
                         'contents' => [
                             ['type' => 'text', 'text' => '✅', 'size' => '4xl', 'align' => 'center'],
                             ['type' => 'text', 'text' => 'แลกของรางวัลสำเร็จ!', 'size' => 'xl', 'weight' => 'bold', 'color' => '#FFFFFF', 'align' => 'center', 'wrap' => true],
@@ -2775,7 +2814,7 @@ class BusinessBot
                     ],
                     'footer' => [
                         'type' => 'box', 'layout' => 'vertical', 'paddingAll' => '12px',
-                        'contents' => [['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ดูแต้มคงเหลือ', 'text' => 'แต้ม'], 'style' => 'primary', 'color' => self::BRAND_MAIN, 'height' => 'sm']]
+                        'contents' => [['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ดูแต้มคงเหลือ', 'text' => 'แต้ม'], 'style' => 'primary', 'color' => $this->brandMain, 'height' => 'sm']]
                     ]
                 ];
                 $loyaltyMsg = FlexTemplates::toMessage($successCard, 'แลกของรางวัล');

@@ -1893,6 +1893,13 @@ function sendReceiptMessage($order, $slipUrl = null) {
         // Build Flex Receipt
         $flex = buildFlexReceipt($order, $items, $deliveryInfo, $slipUrl);
 
+        // Flex Studio: theme the receipt to the shop's brand (no-op on default colors).
+        $receiptLaId = $order['line_account_id'] ?? ($userData['line_account_id'] ?? null);
+        if ($receiptLaId) {
+            require_once __DIR__ . '/../classes/FlexTemplates.php';
+            $flex = FlexTemplates::applyTheme($flex, (int) $receiptLaId);
+        }
+
         $messages = [
             [
                 'type' => 'flex',

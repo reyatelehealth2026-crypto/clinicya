@@ -277,6 +277,7 @@ $quickAccessMenus = [
     // 'broadcast-catalog' removed — tab of บรอดแคสต์ (/broadcast?tab=catalog)
     'drip-campaigns' => ['icon' => 'fa-water', 'label' => 'Drip Campaign', 'url' => '/drip-campaigns', 'page' => 'drip-campaigns', 'color' => 'blue', 'roles' => ['admin', 'marketing']],
     'templates' => ['icon' => 'fa-file-alt', 'label' => 'Templates', 'url' => '/templates', 'page' => 'templates', 'color' => 'slate', 'roles' => ['admin', 'marketing']],
+    'flex-studio' => ['icon' => 'fa-palette', 'label' => 'Flex Studio', 'url' => '/flex-studio', 'page' => 'flex-studio', 'color' => 'indigo', 'roles' => ['admin', 'marketing']],
 
     // ==================== Patient & Journey - Digital Front Door ====================
     'rich-menu' => ['icon' => 'fa-th-large', 'label' => 'Rich Menu', 'url' => '/rich-menu', 'page' => 'rich-menu', 'color' => 'teal', 'roles' => ['admin', 'marketing']],
