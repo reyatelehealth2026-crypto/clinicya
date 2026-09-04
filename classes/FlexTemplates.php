@@ -481,219 +481,107 @@ class FlexTemplates
     public static function mainMenu($shopName = 'LINE Shop', $menuItems = null)
     {
         $defaultItems = [
-            ['icon' => '🛒', 'label' => 'ดูสินค้า', 'desc' => 'เลือกซื้อสินค้าคุณภาพ', 'text' => 'shop', 'color' => '#06C755'],
-            ['icon' => '🛍️', 'label' => 'ตะกร้า', 'desc' => 'ดูสินค้าในตะกร้า', 'text' => 'cart', 'color' => '#3B82F6'],
-            ['icon' => '📦', 'label' => 'ออเดอร์', 'desc' => 'เช็คสถานะคำสั่งซื้อ', 'text' => 'orders', 'color' => '#8B5CF6'],
-            ['icon' => '💳', 'label' => 'ส่งสลิป', 'desc' => 'แจ้งชำระเงิน', 'text' => 'สลิป', 'color' => '#F59E0B'],
-            ['icon' => '⭐', 'label' => 'แต้มสะสม', 'desc' => 'ดูแต้มและสิทธิพิเศษ', 'text' => 'points', 'color' => '#EC4899'],
-            ['icon' => '📞', 'label' => 'ติดต่อเรา', 'desc' => 'สอบถามข้อมูลเพิ่มเติม', 'text' => 'contact', 'color' => '#EF4444'],
+            ['label' => 'ดูสินค้า', 'desc' => 'เลือกซื้อสินค้าจากร้าน', 'text' => 'shop'],
+            ['label' => 'ตะกร้า', 'desc' => 'ดูรายการที่เลือกไว้', 'text' => 'cart'],
+            ['label' => 'สถานะคำสั่งซื้อ', 'desc' => 'ติดตามรายการที่สั่งไว้', 'text' => 'orders'],
+            ['label' => 'แจ้งชำระเงิน', 'desc' => 'ส่งสลิปโอนเงินให้เจ้าหน้าที่ตรวจสอบ', 'text' => 'สลิป'],
+            ['label' => 'แต้มสะสมและสิทธิ์สมาชิก', 'desc' => 'ยอดแต้มคงเหลือและระดับสมาชิก', 'text' => 'points'],
+            ['label' => 'ติดต่อร้าน', 'desc' => 'สอบถามข้อมูลเพิ่มเติม', 'text' => 'contact'],
         ];
         $menuItems = $menuItems ?: $defaultItems;
 
-        // สร้างเมนูแบบ Grid 2 คอลัมน์
+        // เมนูร้านค้าใช้โครงเดียวกับเมนูผู้ป่วย — แถวรายการ ไม่มี emoji ไม่มีสีแยกต่อปุ่ม
         $rows = [];
-        $chunks = array_chunk($menuItems, 2);
-        
-        foreach ($chunks as $pair) {
-            $rowContents = [];
-            foreach ($pair as $item) {
-                $rowContents[] = [
-                    'type' => 'box',
-                    'layout' => 'vertical',
-                    'contents' => [
-                        ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                            ['type' => 'text', 'text' => $item['icon'], 'size' => 'xxl', 'align' => 'center']
-                        ], 'paddingAll' => 'lg', 'backgroundColor' => ($item['color'] ?? '#06C755') . '15', 'cornerRadius' => 'xl'],
-                        ['type' => 'text', 'text' => $item['label'], 'size' => 'md', 'weight' => 'bold', 'align' => 'center', 'margin' => 'md'],
-                        ['type' => 'text', 'text' => $item['desc'] ?? '', 'size' => 'xxs', 'color' => '#888888', 'align' => 'center', 'wrap' => true]
-                    ],
-                    'flex' => 1,
-                    'paddingAll' => 'md',
-                    'backgroundColor' => '#FFFFFF',
-                    'cornerRadius' => 'xl',
-                    'borderWidth' => '1px',
-                    'borderColor' => '#E5E5E5',
-                    'action' => ['type' => 'message', 'text' => $item['text']]
-                ];
-            }
-            // ถ้ามีแค่ 1 item ในแถว ให้เพิ่ม filler
-            if (count($rowContents) === 1) {
-                $rowContents[] = ['type' => 'filler'];
-            }
-            $rows[] = [
-                'type' => 'box',
-                'layout' => 'horizontal',
-                'contents' => $rowContents,
-                'spacing' => 'md'
-            ];
+        foreach ($menuItems as $item) {
+            $rows[] = self::clinicMenuRow(
+                self::stripEmoji($item['label'] ?? ''),
+                self::stripEmoji($item['desc'] ?? ''),
+                ['type' => 'message', 'label' => self::stripEmoji($item['label'] ?? ''), 'text' => $item['text'] ?? $item['label'] ?? '']
+            );
         }
 
-        return [
-            'type' => 'bubble',
-            'size' => 'mega',
-            'header' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'box', 'layout' => 'horizontal', 'contents' => [
-                        ['type' => 'text', 'text' => '📋', 'size' => 'xl'],
-                        ['type' => 'text', 'text' => $shopName, 'weight' => 'bold', 'size' => 'lg', 'margin' => 'sm', 'color' => '#FFFFFF']
-                    ]],
-                    ['type' => 'text', 'text' => 'เลือกเมนูที่ต้องการได้เลยค่ะ', 'size' => 'sm', 'color' => '#FFFFFF', 'margin' => 'sm', 'style' => 'italic']
-                ],
-                'backgroundColor' => '#06C755',
-                'paddingAll' => 'lg'
-            ],
-            'body' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => $rows,
-                'spacing' => 'md',
-                'paddingAll' => 'lg',
-                'backgroundColor' => '#F5F5F5'
-            ],
-            'footer' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'box', 'layout' => 'horizontal', 'contents' => [
-                        ['type' => 'text', 'text' => '💬 พิมพ์ข้อความเพื่อสอบถามได้เลย', 'size' => 'xs', 'color' => '#888888', 'align' => 'center', 'flex' => 1]
-                    ]]
-                ],
-                'paddingAll' => 'md',
-                'backgroundColor' => '#FAFAFA'
-            ]
-        ];
+        return self::clinicCard($shopName, 'เลือกรายการที่ต้องการ', self::clinicRows($rows));
     }
+
     
     /**
      * Quick Menu - เมนูด่วนแบบ Carousel
      */
     public static function quickMenu($shopName = 'LINE Shop')
     {
-        $menus = [
-            [
-                'title' => '🛒 ช้อปปิ้ง',
-                'color' => '#06C755',
-                'items' => [
-                    ['icon' => '🏪', 'label' => 'ดูสินค้าทั้งหมด', 'text' => 'shop'],
-                    ['icon' => '🔥', 'label' => 'สินค้าขายดี', 'text' => 'bestseller'],
-                    ['icon' => '🆕', 'label' => 'สินค้าใหม่', 'text' => 'new'],
-                    ['icon' => '💰', 'label' => 'โปรโมชั่น', 'text' => 'promotion'],
-                ]
-            ],
-            [
-                'title' => '📦 คำสั่งซื้อ',
-                'color' => '#3B82F6',
-                'items' => [
-                    ['icon' => '🛍️', 'label' => 'ตะกร้าสินค้า', 'text' => 'cart'],
-                    ['icon' => '📋', 'label' => 'ออเดอร์ของฉัน', 'text' => 'orders'],
-                    ['icon' => '💳', 'label' => 'ส่งสลิปชำระเงิน', 'text' => 'สลิป'],
-                    ['icon' => '🚚', 'label' => 'ติดตามพัสดุ', 'text' => 'tracking'],
-                ]
-            ],
-            [
-                'title' => '⭐ สมาชิก',
-                'color' => '#EC4899',
-                'items' => [
-                    ['icon' => '🎁', 'label' => 'แต้มสะสม', 'text' => 'points'],
-                    ['icon' => '🏆', 'label' => 'ระดับสมาชิก', 'text' => 'membership'],
-                    ['icon' => '🎫', 'label' => 'คูปองของฉัน', 'text' => 'coupons'],
-                    ['icon' => '📞', 'label' => 'ติดต่อเรา', 'text' => 'contact'],
-                ]
-            ]
+        $groups = [
+            ['ช้อปปิ้ง', 'เลือกซื้อสินค้าจากร้าน', [
+                ['ดูสินค้าทั้งหมด', 'รายการสินค้าที่เปิดขายอยู่', 'shop'],
+                ['สินค้าขายดี', 'รายการที่ลูกค้าสั่งบ่อย', 'bestseller'],
+                ['สินค้าใหม่', 'รายการที่เพิ่งเข้าร้าน', 'new'],
+                ['โปรโมชัน', 'ส่วนลดและสิทธิพิเศษช่วงนี้', 'promotion'],
+            ]],
+            ['คำสั่งซื้อ', 'ตะกร้าและการชำระเงิน', [
+                ['ตะกร้าสินค้า', 'ดูรายการที่เลือกไว้', 'cart'],
+                ['สถานะคำสั่งซื้อ', 'ติดตามรายการที่สั่งไว้', 'orders'],
+                ['แจ้งชำระเงิน', 'ส่งสลิปโอนเงินให้ตรวจสอบ', 'สลิป'],
+                ['ติดตามพัสดุ', 'เลขพัสดุและสถานะจัดส่ง', 'tracking'],
+            ]],
+            ['สมาชิก', 'แต้มสะสมและสิทธิ์', [
+                ['แต้มสะสม', 'ยอดแต้มคงเหลือ', 'points'],
+                ['ระดับสมาชิก', 'สิทธิ์ตามระดับที่ได้รับ', 'membership'],
+                ['ของรางวัล', 'รายการที่แลกได้ด้วยแต้ม', 'ของรางวัล'],
+                ['ติดต่อร้าน', 'สอบถามข้อมูลเพิ่มเติม', 'contact'],
+            ]],
         ];
-        
+
         $bubbles = [];
-        foreach ($menus as $menu) {
-            $itemContents = [];
-            foreach ($menu['items'] as $item) {
-                $itemContents[] = [
-                    'type' => 'box',
-                    'layout' => 'horizontal',
-                    'contents' => [
-                        ['type' => 'text', 'text' => $item['icon'], 'size' => 'lg', 'flex' => 0],
-                        ['type' => 'text', 'text' => $item['label'], 'size' => 'sm', 'margin' => 'md', 'flex' => 1, 'gravity' => 'center']
-                    ],
-                    'paddingAll' => 'md',
-                    'backgroundColor' => '#F8F8F8',
-                    'cornerRadius' => 'lg',
-                    'action' => ['type' => 'message', 'text' => $item['text']]
-                ];
+        foreach ($groups as [$title, $subtitle, $items]) {
+            $rows = [];
+            foreach ($items as [$label, $hint, $text]) {
+                $rows[] = self::clinicMenuRow($label, $hint, ['type' => 'message', 'label' => $label, 'text' => $text]);
             }
-            
-            $bubbles[] = [
-                'type' => 'bubble',
-                'size' => 'kilo',
-                'header' => [
-                    'type' => 'box',
-                    'layout' => 'vertical',
-                    'contents' => [
-                        ['type' => 'text', 'text' => $menu['title'], 'weight' => 'bold', 'size' => 'lg', 'color' => '#FFFFFF']
-                    ],
-                    'backgroundColor' => $menu['color'],
-                    'paddingAll' => 'lg'
-                ],
-                'body' => [
-                    'type' => 'box',
-                    'layout' => 'vertical',
-                    'contents' => $itemContents,
-                    'spacing' => 'sm',
-                    'paddingAll' => 'md'
-                ]
-            ];
+            $bubbles[] = self::clinicCard($title, $subtitle, self::clinicRows($rows), [], 'kilo');
         }
-        
+
         return ['type' => 'carousel', 'contents' => $bubbles];
     }
 
     /**
      * Order Status Update - อัพเดทสถานะออเดอร์
+     *
+     * โทนคลินิกชุดเดียวกับเมนูผู้ป่วย ใช้สีแดงเฉพาะสถานะที่ต้องตรวจสอบ
      */
     public static function orderStatus($orderNumber, $status, $trackingNumber = null, $message = '')
     {
         $statusConfig = [
-            'pending' => ['icon' => '⏳', 'text' => 'รอดำเนินการ', 'color' => '#F59E0B', 'msg' => 'ออเดอร์ของคุณอยู่ระหว่างรอดำเนินการ'],
-            'confirmed' => ['icon' => '✅', 'text' => 'ยืนยันแล้ว', 'color' => '#06C755', 'msg' => 'ออเดอร์ของคุณได้รับการยืนยันแล้ว'],
-            'paid' => ['icon' => '💰', 'text' => 'ชำระเงินแล้ว', 'color' => '#06C755', 'msg' => 'ได้รับการชำระเงินเรียบร้อย'],
-            'shipping' => ['icon' => '🚚', 'text' => 'กำลังจัดส่ง', 'color' => '#3B82F6', 'msg' => 'สินค้ากำลังจัดส่งถึงคุณ'],
-            'delivered' => ['icon' => '📦', 'text' => 'จัดส่งแล้ว', 'color' => '#10B981', 'msg' => 'สินค้าถึงมือคุณแล้ว'],
-            'cancelled' => ['icon' => '❌', 'text' => 'ยกเลิก', 'color' => '#EF4444', 'msg' => 'ออเดอร์ถูกยกเลิก']
+            'pending'   => ['text' => 'รอดำเนินการ', 'msg' => 'ออเดอร์ของคุณอยู่ระหว่างรอดำเนินการ'],
+            'confirmed' => ['text' => 'ยืนยันแล้ว', 'msg' => 'ออเดอร์ของคุณได้รับการยืนยันแล้ว'],
+            'paid'      => ['text' => 'ชำระเงินแล้ว', 'msg' => 'ได้รับการชำระเงินเรียบร้อย'],
+            'shipping'  => ['text' => 'กำลังจัดส่ง', 'msg' => 'สินค้ากำลังจัดส่งถึงคุณ'],
+            'delivered' => ['text' => 'จัดส่งแล้ว', 'msg' => 'สินค้าถึงมือคุณแล้ว'],
+            'cancelled' => ['text' => 'ยกเลิก', 'msg' => 'ออเดอร์ถูกยกเลิก', 'alert' => true],
         ];
 
-        $config = $statusConfig[$status] ?? ['icon' => '📋', 'text' => $status, 'color' => '#888888', 'msg' => ''];
-        $statusMessage = $message ?: $config['msg'];
+        $config = $statusConfig[$status] ?? ['text' => (string) $status, 'msg' => ''];
+        $tone = !empty($config['alert']) ? self::CLINIC_ALERT : self::CLINIC_MAIN;
 
-        $bodyContents = [
-            ['type' => 'text', 'text' => $config['icon'], 'size' => '4xl', 'align' => 'center'],
-            ['type' => 'text', 'text' => $config['text'], 'weight' => 'bold', 'size' => 'xl', 'align' => 'center', 'margin' => 'lg', 'color' => $config['color']],
-            ['type' => 'text', 'text' => "ออเดอร์ #{$orderNumber}", 'size' => 'md', 'align' => 'center', 'color' => '#888888', 'margin' => 'sm'],
-            ['type' => 'separator', 'margin' => 'xl'],
-            ['type' => 'text', 'text' => $statusMessage, 'size' => 'sm', 'align' => 'center', 'wrap' => true, 'margin' => 'xl', 'color' => '#555555']
+        $rows = [
+            self::memberRow('สถานะ', $config['text'], $tone),
+            self::memberRow('เลขที่ออเดอร์', '#' . $orderNumber),
         ];
-
         if ($trackingNumber) {
-            $bodyContents[] = [
-                'type' => 'box', 'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'text', 'text' => '📮 เลขพัสดุ', 'size' => 'xs', 'color' => '#888888'],
-                    ['type' => 'text', 'text' => $trackingNumber, 'size' => 'lg', 'weight' => 'bold', 'color' => '#3B82F6']
-                ],
-                'margin' => 'xl', 'paddingAll' => 'lg', 'backgroundColor' => '#EFF6FF', 'cornerRadius' => 'lg'
-            ];
+            $rows[] = self::memberRow('เลขพัสดุ', $trackingNumber, self::CLINIC_INK);
         }
 
-        return [
-            'type' => 'bubble',
-            'body' => ['type' => 'box', 'layout' => 'vertical', 'contents' => $bodyContents, 'paddingAll' => 'xl'],
-            'footer' => [
-                'type' => 'box', 'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📋 ดูออเดอร์ทั้งหมด', 'text' => 'orders'], 'style' => 'secondary', 'height' => 'sm']
-                ],
-                'paddingAll' => 'lg'
-            ]
-        ];
+        $body = self::clinicRows($rows);
+        $statusMessage = $message ?: $config['msg'];
+        if ($statusMessage !== '') {
+            $body[] = ['type' => 'separator', 'color' => self::CLINIC_HAIRLINE, 'margin' => 'md'];
+            $body[] = ['type' => 'text', 'text' => self::stripEmoji($statusMessage), 'size' => 'xs', 'color' => self::CLINIC_MUTED, 'wrap' => true, 'margin' => 'md'];
+        }
+
+        return self::clinicCard(
+            'สถานะคำสั่งซื้อ',
+            $config['text'],
+            $body,
+            [['label' => 'ดูคำสั่งซื้อทั้งหมด', 'text' => 'orders', 'style' => 'secondary']]
+        );
     }
 
     /**
@@ -701,72 +589,36 @@ class FlexTemplates
      */
     public static function slipReceived($orderNumber, $amount)
     {
-        return [
-            'type' => 'bubble',
-            'body' => [
-                'type' => 'box', 'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => '✅', 'size' => '4xl', 'align' => 'center']
-                    ], 'paddingAll' => 'lg'],
-                    ['type' => 'text', 'text' => 'ได้รับสลิปแล้ว!', 'weight' => 'bold', 'size' => 'xl', 'align' => 'center', 'color' => '#06C755'],
-                    ['type' => 'text', 'text' => "ออเดอร์ #{$orderNumber}", 'size' => 'md', 'align' => 'center', 'color' => '#888888', 'margin' => 'md'],
-                    ['type' => 'separator', 'margin' => 'xl'],
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => '💰 ยอดชำระ', 'size' => 'sm', 'color' => '#888888', 'align' => 'center'],
-                        ['type' => 'text', 'text' => '฿' . number_format($amount, 2), 'size' => 'xxl', 'weight' => 'bold', 'color' => '#06C755', 'align' => 'center']
-                    ], 'margin' => 'xl', 'paddingAll' => 'lg', 'backgroundColor' => '#F0FDF4', 'cornerRadius' => 'lg'],
-                    ['type' => 'text', 'text' => '⏳ กรุณารอตรวจสอบ', 'size' => 'sm', 'align' => 'center', 'color' => '#F59E0B', 'margin' => 'xl'],
-                    ['type' => 'text', 'text' => 'จะแจ้งผลให้ทราบเร็วๆ นี้', 'size' => 'xs', 'align' => 'center', 'color' => '#888888', 'margin' => 'sm']
-                ],
-                'paddingAll' => 'xl'
-            ]
-        ];
+        return self::clinicCard(
+            'ได้รับสลิปแล้ว',
+            'อยู่ระหว่างตรวจสอบการชำระเงิน',
+            array_merge(
+                self::clinicRows([
+                    self::memberRow('เลขที่ออเดอร์', '#' . $orderNumber),
+                    self::memberRow('ยอดชำระ', '฿' . number_format($amount, 2), self::CLINIC_MAIN),
+                ]),
+                [
+                    ['type' => 'separator', 'color' => self::CLINIC_HAIRLINE, 'margin' => 'md'],
+                    ['type' => 'text', 'text' => 'เจ้าหน้าที่จะตรวจสอบและแจ้งผลให้ทราบ', 'size' => 'xs', 'color' => self::CLINIC_MUTED, 'wrap' => true, 'margin' => 'md'],
+                ]
+            )
+        );
     }
 
     /**
      * Notification Card - การแจ้งเตือนทั่วไป
      */
-    public static function notification($title, $message, $icon = '🔔', $color = '#06C755', $buttons = [])
+    public static function notification($title, $message, $icon = '', $color = '#06C755', $buttons = [])
     {
-        $footerContents = [];
-        foreach ($buttons as $btn) {
-            $action = isset($btn['uri']) 
-                ? ['type' => 'uri', 'label' => $btn['label'], 'uri' => $btn['uri']]
-                : ['type' => 'message', 'label' => $btn['label'], 'text' => $btn['text'] ?? $btn['label']];
-            
-            $footerContents[] = [
-                'type' => 'button', 'action' => $action,
-                'style' => $btn['style'] ?? 'primary',
-                'color' => $btn['color'] ?? $color,
-                'height' => 'sm', 'margin' => 'sm'
-            ];
-        }
-
-        $bubble = [
-            'type' => 'bubble',
-            'body' => [
-                'type' => 'box', 'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'box', 'layout' => 'horizontal', 'contents' => [
-                        ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                            ['type' => 'text', 'text' => $icon, 'size' => 'xxl', 'align' => 'center']
-                        ], 'width' => '60px', 'height' => '60px', 'backgroundColor' => $color . '20', 'cornerRadius' => 'xxl', 'justifyContent' => 'center'],
-                        ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                            ['type' => 'text', 'text' => $title, 'weight' => 'bold', 'size' => 'lg', 'wrap' => true],
-                            ['type' => 'text', 'text' => $message, 'size' => 'sm', 'color' => '#666666', 'wrap' => true, 'margin' => 'sm']
-                        ], 'margin' => 'lg', 'flex' => 1]
-                    ]]
-                ],
-                'paddingAll' => 'xl'
-            ]
-        ];
-
-        if (!empty($footerContents)) {
-            $bubble['footer'] = ['type' => 'box', 'layout' => 'vertical', 'contents' => $footerContents, 'paddingAll' => 'lg'];
-        }
-
-        return $bubble;
+        // $icon/$color ยังรับไว้เพื่อความเข้ากันได้กับผู้เรียกเดิม แต่การ์ดคลินิก
+        // ไม่วาด emoji และใช้โทนเขียวเข้มชุดเดียวทั้งระบบ
+        return self::clinicCard(
+            $title,
+            'แจ้งเตือน',
+            [['type' => 'text', 'text' => self::stripEmoji($message), 'size' => 'sm', 'color' => self::CLINIC_INK, 'wrap' => true]],
+            $buttons,
+            'kilo'
+        );
     }
 
     /**
@@ -938,35 +790,26 @@ class FlexTemplates
         return self::statusMessage('ℹ️', $title, $message, '#3B82F6', $buttons);
     }
 
+    /**
+     * การ์ดสถานะ (สำเร็จ/เตือน/ผิดพลาด/ข้อมูล) — โทนคลินิกชุดเดียวกับเมนูผู้ป่วย
+     *
+     * $icon กับ $color ยังรับไว้เพื่อไม่ให้ผู้เรียกเดิมพัง แต่ไม่ได้วาด emoji แล้ว
+     * ใช้แค่แยกว่าเป็นเรื่องเตือน (แดง) หรือเรื่องปกติ (เขียวเข้ม)
+     */
     private static function statusMessage($icon, $title, $message, $color, $buttons = [])
     {
-        $bubble = [
-            'type' => 'bubble',
-            'body' => [
-                'type' => 'box', 'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'text', 'text' => $icon, 'size' => '3xl', 'align' => 'center'],
-                    ['type' => 'text', 'text' => $title, 'weight' => 'bold', 'size' => 'lg', 'align' => 'center', 'margin' => 'lg', 'color' => $color],
-                    ['type' => 'text', 'text' => $message, 'size' => 'sm', 'align' => 'center', 'color' => '#666666', 'wrap' => true, 'margin' => 'md']
-                ],
-                'paddingAll' => 'xl'
-            ]
-        ];
+        $isAlert = in_array(strtoupper((string) $color), ['#EF4444', '#F59E0B', '#DC2626'], true);
+        $tone = $isAlert ? self::CLINIC_ALERT : self::CLINIC_MAIN;
 
-        if (!empty($buttons)) {
-            $footerContents = [];
-            foreach ($buttons as $btn) {
-                $footerContents[] = [
-                    'type' => 'button',
-                    'action' => ['type' => 'message', 'label' => $btn['label'], 'text' => $btn['text'] ?? $btn['label']],
-                    'style' => $btn['style'] ?? 'secondary',
-                    'height' => 'sm', 'margin' => 'sm'
-                ];
-            }
-            $bubble['footer'] = ['type' => 'box', 'layout' => 'vertical', 'contents' => $footerContents, 'paddingAll' => 'lg'];
-        }
-
-        return $bubble;
+        return self::clinicCard(
+            $title,
+            $isAlert ? 'ต้องตรวจสอบ' : 'แจ้งข้อมูล',
+            [['type' => 'text', 'text' => self::stripEmoji($message), 'size' => 'sm', 'color' => self::CLINIC_INK, 'wrap' => true]],
+            array_map(static function ($btn) use ($tone) {
+                return $btn + ['style' => 'primary', 'color' => $tone];
+            }, $buttons),
+            'kilo'
+        );
     }
 
     /**
@@ -1216,7 +1059,7 @@ class FlexTemplates
                 'type' => 'action',
                 'action' => [
                     'type' => 'message',
-                    'label' => $item['label'],
+                    'label' => self::stripEmoji($item['label']),
                     'text' => $item['text'] ?? $item['label']
                 ]
             ];
@@ -2233,7 +2076,7 @@ class FlexTemplates
     }
 
     /** แถวข้อมูล label ซ้าย / value ขวา */
-    private static function memberRow($label, $value, $valueColor = '#111111')
+    public static function memberRow($label, $value, $valueColor = '#111111')
     {
         return [
             'type' => 'box',
@@ -2667,13 +2510,14 @@ class FlexTemplates
     // เจตนา: ไม่สร้างภาษาภาพชุดที่สองในบอทตัวเดียว
     // ==================================================================
 
-    private const CLINIC_MAIN = '#0B5F50';
-    private const CLINIC_DEEP = '#082D28';
-    private const CLINIC_ON_DARK = '#C7E4DC';
-    private const CLINIC_INK = '#0F172A';
-    private const CLINIC_MUTED = '#64748B';
-    private const CLINIC_HAIRLINE = '#E2E8F0';
-    private const CLINIC_ALERT = '#B91C1C';
+    // public เพราะ BusinessBot วาดการ์ด (ออเดอร์/ของรางวัล/ร้านค้า) ด้วยโทนเดียวกัน
+    public const CLINIC_MAIN = '#0B5F50';
+    public const CLINIC_DEEP = '#082D28';
+    public const CLINIC_ON_DARK = '#C7E4DC';
+    public const CLINIC_INK = '#0F172A';
+    public const CLINIC_MUTED = '#64748B';
+    public const CLINIC_HAIRLINE = '#E2E8F0';
+    public const CLINIC_ALERT = '#B91C1C';
 
     /** หัวการ์ดคลินิก — ไล่เฉดเดียวกับบัตรสมาชิก ไม่มีไอคอน */
     private static function clinicHeader($title, $subtitle)
@@ -2697,7 +2541,7 @@ class FlexTemplates
     }
 
     /** แถวเมนูที่กดได้ทั้งแถว — หัวข้อหนา + คำอธิบายหนึ่งบรรทัด */
-    private static function clinicMenuRow($label, $hint, array $action)
+    public static function clinicMenuRow($label, $hint, array $action)
     {
         return [
             'type' => 'box',
@@ -2719,12 +2563,82 @@ class FlexTemplates
             'type' => 'button',
             'height' => 'sm',
             'style' => $style,
-            'action' => ['type' => 'uri', 'label' => $label, 'uri' => $uri],
+            'action' => ['type' => 'uri', 'label' => self::stripEmoji($label), 'uri' => $uri],
         ];
         if ($color !== null) {
             $btn['color'] = $color;
         }
         return $btn;
+    }
+
+    /**
+     * ตัด emoji และสัญลักษณ์ตกแต่งออก — ดีไซน์คลินิกไม่ใช้ emoji
+     *
+     * เรียกจากตัวสร้างการ์ดกลาง แทนที่จะไล่แก้ป้ายปุ่มทีละจุดใน 30 ไฟล์ที่เรียก
+     * ช่วงที่ตัดครอบเฉพาะบล็อกสัญลักษณ์/emoji ไม่แตะอักษรไทย (U+0E00–U+0E7F)
+     */
+    public static function stripEmoji($text)
+    {
+        $clean = preg_replace(
+            '/[\x{1F000}-\x{1FAFF}\x{2190}-\x{21FF}\x{2300}-\x{23FF}\x{2460}-\x{24FF}\x{25A0}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE0E}\x{FE0F}\x{200D}\x{20E3}]/u',
+            '',
+            (string) $text
+        );
+        return trim(preg_replace('/\s{2,}/u', ' ', $clean));
+    }
+
+    /** ปุ่มการ์ดคลินิก รับได้ทั้ง uri และ message ป้ายถูกตัด emoji ให้เสมอ */
+    public static function clinicButton(array $btn, $defaultColor = self::CLINIC_MAIN)
+    {
+        $label = self::stripEmoji($btn['label'] ?? '');
+        $action = isset($btn['uri'])
+            ? ['type' => 'uri', 'label' => $label, 'uri' => $btn['uri']]
+            : ['type' => 'message', 'label' => $label, 'text' => $btn['text'] ?? $btn['label'] ?? $label];
+
+        $style = $btn['style'] ?? 'primary';
+        $out = ['type' => 'button', 'height' => 'sm', 'margin' => 'sm', 'style' => $style, 'action' => $action];
+        if ($style === 'primary') {
+            $out['color'] = $btn['color'] ?? $defaultColor;
+        }
+        return $out;
+    }
+
+    /**
+     * การ์ดคลินิกทั่วไป — header เขียวเข้ม + เนื้อหา + ปุ่ม
+     * ตัวสร้างกลางที่เมนู/สถานะ/ออเดอร์/ของรางวัล ใช้ร่วมกัน เพื่อไม่ให้ดีไซน์แตกอีก
+     */
+    public static function clinicCard($title, $subtitle, array $bodyContents, array $buttons = [], $size = 'mega')
+    {
+        $bubble = [
+            'type' => 'bubble',
+            'size' => $size,
+            'header' => self::clinicHeader(self::stripEmoji($title), self::stripEmoji($subtitle)),
+            'body' => ['type' => 'box', 'layout' => 'vertical', 'paddingAll' => '15px', 'contents' => $bodyContents],
+        ];
+
+        if (!empty($buttons)) {
+            $bubble['footer'] = [
+                'type' => 'box',
+                'layout' => 'vertical',
+                'paddingAll' => '15px',
+                'contents' => array_map([self::class, 'clinicButton'], $buttons),
+            ];
+        }
+
+        return $bubble;
+    }
+
+    /** แถวเนื้อหาคั่นด้วยเส้นบาง — ใส่ separator ให้อัตโนมัติระหว่างแถว */
+    public static function clinicRows(array $rows)
+    {
+        $out = [];
+        foreach ($rows as $i => $row) {
+            if ($i > 0) {
+                $out[] = ['type' => 'separator', 'color' => self::CLINIC_HAIRLINE];
+            }
+            $out[] = $row;
+        }
+        return $out;
     }
 
     /**

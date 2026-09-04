@@ -433,6 +433,52 @@ class ClinicalFlexPropertyTest extends TestCase
         }
     }
 
+    /**
+     * ดีไซน์คลินิกไม่ใช้ emoji — การ์ดที่ลูกค้าเห็นต้องไม่มีสัญลักษณ์หลุดมา
+     * แม้ผู้เรียกจะส่งป้ายปุ่มที่มี emoji มาก็ตาม (ตัวสร้างกลางต้องตัดให้)
+     */
+    public function testCustomerFacingCardsCarryNoEmoji()
+    {
+        $cards = [
+            'patientMainMenu' => \FlexTemplates::patientMainMenu(['shop_name' => 'ร้านทดสอบ', 'is_open' => true]),
+            'mainMenu'        => \FlexTemplates::mainMenu('ร้านทดสอบ'),
+            'quickMenu'       => \FlexTemplates::quickMenu('ร้านทดสอบ'),
+            'orderStatus'     => \FlexTemplates::orderStatus('RYA-1001', 'shipping', 'TH123456789TH'),
+            'slipReceived'    => \FlexTemplates::slipReceived('RYA-1001', 520),
+            'info'            => \FlexTemplates::info('หัวข้อ', 'ข้อความ', [['label' => '🛒 ไปช้อป', 'text' => 'shop']]),
+            'notification'    => \FlexTemplates::notification('แจ้งเตือน', '🔔 ข้อความทดสอบ'),
+        ];
+
+        foreach ($cards as $name => $card) {
+            $json = json_encode($card, JSON_UNESCAPED_UNICODE);
+            $this->assertSame(
+                0,
+                preg_match('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{2300}-\x{23FF}\x{FE0F}]/u', $json),
+                "การ์ด {$name} ยังมี emoji หลุดออกไปถึงลูกค้า"
+            );
+        }
+    }
+
+    /** การ์ดที่ลูกค้าเห็นต้องใช้โทนเดียว — ห้ามมีเขียว LINE เดิมปนกับเขียวคลินิก */
+    public function testCustomerFacingCardsShareOneAccentColour()
+    {
+        $cards = [
+            'mainMenu'     => \FlexTemplates::mainMenu('ร้านทดสอบ'),
+            'quickMenu'    => \FlexTemplates::quickMenu('ร้านทดสอบ'),
+            'orderStatus'  => \FlexTemplates::orderStatus('RYA-1001', 'paid'),
+            'slipReceived' => \FlexTemplates::slipReceived('RYA-1001', 520),
+        ];
+
+        foreach ($cards as $name => $card) {
+            $json = json_encode($card, JSON_UNESCAPED_UNICODE);
+            $this->assertStringNotContainsStringIgnoringCase(
+                '#06C755',
+                $json,
+                "การ์ด {$name} ยังใช้เขียว LINE เดิม ไม่ตรงกับโทนคลินิก"
+            );
+        }
+    }
+
     /** ไม่มีคอลัมน์เก็บเวลาทำการ — การ์ดต้องไม่แสดงช่วงเวลาที่ระบบไม่มีข้อมูล */
     public function testHoursCardNeverInventsOpeningTimes()
     {
