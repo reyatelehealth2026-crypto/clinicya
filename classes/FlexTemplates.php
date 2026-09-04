@@ -9,35 +9,35 @@ class FlexTemplates
     // Default sender profiles
     private static $senders = [
         'default' => ['name' => 'Shop Bot', 'iconUrl' => 'https://i.imgur.com/BOBkgJA.png'],
-        'shop' => ['name' => '🛒 Shop', 'iconUrl' => 'https://i.imgur.com/BOBkgJA.png'],
-        'support' => ['name' => '💬 Support', 'iconUrl' => 'https://i.imgur.com/YkPqZKx.png'],
-        'notify' => ['name' => '🔔 Notify', 'iconUrl' => 'https://i.imgur.com/8LQHV0Z.png'],
-        'order' => ['name' => '📦 Order', 'iconUrl' => 'https://i.imgur.com/wPVlSoK.png'],
-        'payment' => ['name' => '💳 Payment', 'iconUrl' => 'https://i.imgur.com/3P1Z3hB.png'],
+        'shop' => ['name' => 'Shop', 'iconUrl' => 'https://i.imgur.com/BOBkgJA.png'],
+        'support' => ['name' => 'Support', 'iconUrl' => 'https://i.imgur.com/YkPqZKx.png'],
+        'notify' => ['name' => 'Notify', 'iconUrl' => 'https://i.imgur.com/8LQHV0Z.png'],
+        'order' => ['name' => 'Order', 'iconUrl' => 'https://i.imgur.com/wPVlSoK.png'],
+        'payment' => ['name' => 'Payment', 'iconUrl' => 'https://i.imgur.com/3P1Z3hB.png'],
     ];
 
     // Default quick reply sets
     private static $quickReplySets = [
         'main' => [
-            ['label' => '🛒 ดูสินค้า', 'text' => 'shop'],
-            ['label' => '📋 เมนู', 'text' => 'menu'],
-            ['label' => '🛍️ ตะกร้า', 'text' => 'cart'],
-            ['label' => '📦 ออเดอร์', 'text' => 'orders'],
+            ['label' => 'ดูสินค้า', 'text' => 'shop'],
+            ['label' => 'เมนู', 'text' => 'menu'],
+            ['label' => 'ตะกร้า', 'text' => 'cart'],
+            ['label' => 'ออเดอร์', 'text' => 'orders'],
         ],
         'shop' => [
-            ['label' => '🛒 ดูสินค้า', 'text' => 'shop'],
-            ['label' => '🛍️ ตะกร้า', 'text' => 'cart'],
-            ['label' => '💳 ชำระเงิน', 'text' => 'checkout'],
+            ['label' => 'ดูสินค้า', 'text' => 'shop'],
+            ['label' => 'ตะกร้า', 'text' => 'cart'],
+            ['label' => 'ชำระเงิน', 'text' => 'checkout'],
         ],
         'order' => [
-            ['label' => '📦 เช็คสถานะ', 'text' => 'orders'],
-            ['label' => '💳 ส่งสลิป', 'text' => 'สลิป'],
-            ['label' => '🛒 ช้อปต่อ', 'text' => 'shop'],
+            ['label' => 'เช็คสถานะ', 'text' => 'orders'],
+            ['label' => 'ส่งสลิป', 'text' => 'สลิป'],
+            ['label' => 'ช้อปต่อ', 'text' => 'shop'],
         ],
         'support' => [
-            ['label' => '📋 เมนู', 'text' => 'menu'],
-            ['label' => '❓ FAQ', 'text' => 'faq'],
-            ['label' => '📞 โทรหาเรา', 'text' => 'contact'],
+            ['label' => 'เมนู', 'text' => 'menu'],
+            ['label' => 'FAQ', 'text' => 'faq'],
+            ['label' => 'โทรหาเรา', 'text' => 'contact'],
         ],
     ];
 
@@ -192,14 +192,22 @@ class FlexTemplates
         foreach ($node as $k => $v) {
             if (is_array($v)) {
                 $node[$k] = self::walkTheme($v, $primary, $primaryDark);
-            } elseif (is_string($v) && ($k === 'color' || $k === 'backgroundColor' || $k === 'borderColor')) {
+            } elseif (is_string($v) && in_array($k, ['color', 'backgroundColor', 'borderColor', 'startColor', 'endColor'], true)) {
                 $up = strtoupper($v);
                 // Match the brand color exactly OR with an 8-digit alpha suffix
-                // (templates build tints like '#06C75520'); preserve the suffix.
-                if (strpos($up, self::BRAND_PRIMARY) === 0) {
-                    $node[$k] = $primary . substr($v, strlen(self::BRAND_PRIMARY));
-                } elseif (strpos($up, self::BRAND_PRIMARY_DARK) === 0) {
-                    $node[$k] = $primaryDark . substr($v, strlen(self::BRAND_PRIMARY_DARK));
+                // (templates build tints like '#0B5F5020'); preserve the suffix.
+                // โทนคลินิก (CLINIC_MAIN/CLINIC_DEEP) นับเป็นสีแบรนด์ด้วย ไม่งั้น
+                // การ์ดที่ย้ายมาใช้โทนนี้จะหลุดจากธีมของร้านไปเงียบ ๆ
+                foreach ([
+                    self::BRAND_PRIMARY => $primary,
+                    self::CLINIC_MAIN => $primary,
+                    self::BRAND_PRIMARY_DARK => $primaryDark,
+                    self::CLINIC_DEEP => $primaryDark,
+                ] as $brandHex => $shopHex) {
+                    if (strpos($up, $brandHex) === 0) {
+                        $node[$k] = $shopHex . substr($v, strlen($brandHex));
+                        break;
+                    }
                 }
             }
         }
@@ -297,17 +305,17 @@ class FlexTemplates
             if (isset($item['type']) && $item['type'] === 'camera') {
                 $quickReplyItems[] = [
                     'type' => 'action',
-                    'action' => ['type' => 'camera', 'label' => $item['label'] ?? '📷 ถ่ายรูป']
+                    'action' => ['type' => 'camera', 'label' => $item['label'] ?? 'ถ่ายรูป']
                 ];
             } elseif (isset($item['type']) && $item['type'] === 'cameraRoll') {
                 $quickReplyItems[] = [
                     'type' => 'action',
-                    'action' => ['type' => 'cameraRoll', 'label' => $item['label'] ?? '🖼️ เลือกรูป']
+                    'action' => ['type' => 'cameraRoll', 'label' => $item['label'] ?? 'เลือกรูป']
                 ];
             } elseif (isset($item['type']) && $item['type'] === 'location') {
                 $quickReplyItems[] = [
                     'type' => 'action',
-                    'action' => ['type' => 'location', 'label' => $item['label'] ?? '📍 ส่งตำแหน่ง']
+                    'action' => ['type' => 'location', 'label' => $item['label'] ?? 'ส่งตำแหน่ง']
                 ];
             } elseif (isset($item['uri'])) {
                 $quickReplyItems[] = [
@@ -415,64 +423,28 @@ class FlexTemplates
     public static function welcome($displayName, $pictureUrl = null, $shopName = 'LINE Shop', $features = [])
     {
         $defaultFeatures = [
-            ['icon' => '🛒', 'text' => 'สั่งซื้อสินค้าง่ายๆ'],
-            ['icon' => '💬', 'text' => 'แชทกับเราได้ตลอด 24 ชม.'],
-            ['icon' => '🎁', 'text' => 'โปรโมชั่นพิเศษสำหรับสมาชิก'],
-            ['icon' => '🚚', 'text' => 'จัดส่งรวดเร็วทันใจ']
+            ['text' => 'สั่งซื้อสินค้าจากร้านได้ในแชท'],
+            ['text' => 'ปรึกษาเภสัชกรและประเมินอาการเบื้องต้น'],
+            ['text' => 'สะสมแต้มและรับสิทธิ์สมาชิก'],
+            ['text' => 'ติดตามสถานะคำสั่งซื้อและการจัดส่ง'],
         ];
         $features = $features ?: $defaultFeatures;
 
-        $featureContents = [];
+        $rows = [['type' => 'text', 'text' => "สวัสดีคุณ {$displayName}", 'size' => 'sm', 'weight' => 'bold', 'color' => self::CLINIC_INK, 'wrap' => true]];
         foreach ($features as $f) {
-            $featureContents[] = [
-                'type' => 'box',
-                'layout' => 'horizontal',
-                'contents' => [
-                    ['type' => 'text', 'text' => $f['icon'], 'size' => 'lg', 'flex' => 0],
-                    ['type' => 'text', 'text' => $f['text'], 'size' => 'sm', 'color' => '#555555', 'margin' => 'md', 'flex' => 1, 'wrap' => true]
-                ],
-                'margin' => 'md'
-            ];
+            $rows[] = ['type' => 'separator', 'color' => self::CLINIC_HAIRLINE, 'margin' => 'md'];
+            $rows[] = ['type' => 'text', 'text' => self::stripEmoji($f['text'] ?? ''), 'size' => 'xs', 'color' => self::CLINIC_MUTED, 'margin' => 'md', 'wrap' => true];
         }
 
-        return [
-            'type' => 'bubble',
-            'size' => 'mega',
-            'header' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => '🎉', 'size' => '3xl', 'align' => 'center']
-                    ], 'paddingTop' => 'lg']
-                ],
-                'backgroundColor' => '#06C755',
-                'paddingAll' => 'lg'
-            ],
-            'body' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'text', 'text' => 'ยินดีต้อนรับ!', 'weight' => 'bold', 'size' => 'xl', 'align' => 'center', 'color' => '#06C755'],
-                    ['type' => 'text', 'text' => "สวัสดีคุณ {$displayName}", 'size' => 'lg', 'align' => 'center', 'margin' => 'md', 'weight' => 'bold'],
-                    ['type' => 'text', 'text' => "ขอบคุณที่เพิ่มเพื่อน {$shopName}", 'size' => 'sm', 'align' => 'center', 'color' => '#888888', 'margin' => 'sm', 'wrap' => true],
-                    ['type' => 'separator', 'margin' => 'xl'],
-                    ['type' => 'text', 'text' => '✨ สิ่งที่คุณจะได้รับ', 'weight' => 'bold', 'size' => 'md', 'margin' => 'xl', 'color' => '#333333'],
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => $featureContents, 'margin' => 'lg', 'paddingAll' => 'md', 'backgroundColor' => '#F8F8F8', 'cornerRadius' => 'lg']
-                ],
-                'paddingAll' => 'xl'
-            ],
-            'footer' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🛒 เริ่มช้อปเลย!', 'text' => 'shop'], 'style' => 'primary', 'color' => '#06C755', 'height' => 'md'],
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📋 ดูเมนูทั้งหมด', 'text' => 'menu'], 'style' => 'secondary', 'height' => 'sm', 'margin' => 'sm']
-                ],
-                'paddingAll' => 'lg'
-            ],
-            'styles' => ['footer' => ['separator' => true]]
-        ];
+        return self::clinicCard(
+            $shopName,
+            'ยินดีต้อนรับ ขอบคุณที่เพิ่มเพื่อน',
+            $rows,
+            [
+                ['label' => 'ดูสินค้า', 'text' => 'shop', 'style' => 'primary'],
+                ['label' => 'ดูเมนูทั้งหมด', 'text' => 'menu', 'style' => 'secondary'],
+            ]
+        );
     }
 
     /**
@@ -608,7 +580,7 @@ class FlexTemplates
     /**
      * Notification Card - การแจ้งเตือนทั่วไป
      */
-    public static function notification($title, $message, $icon = '', $color = '#06C755', $buttons = [])
+    public static function notification($title, $message, $icon = '', $color = '#0B5F50', $buttons = [])
     {
         // $icon/$color ยังรับไว้เพื่อความเข้ากันได้กับผู้เรียกเดิม แต่การ์ดคลินิก
         // ไม่วาด emoji และใช้โทนเขียวเข้มชุดเดียวทั้งระบบ
@@ -630,7 +602,7 @@ class FlexTemplates
         $originalPrice = ($product['sale_price'] ?? null) ? $product['price'] : null;
         
         $priceContents = [
-            ['type' => 'text', 'text' => '฿' . number_format($price), 'size' => 'xl', 'weight' => 'bold', 'color' => '#06C755']
+            ['type' => 'text', 'text' => '฿' . number_format($price), 'size' => 'xl', 'weight' => 'bold', 'color' => '#0B5F50']
         ];
         
         if ($originalPrice) {
@@ -645,9 +617,9 @@ class FlexTemplates
 
         $buttons = [];
         if ($showAddToCart && $inStock) {
-            $buttons[] = ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🛒 เพิ่มลงตะกร้า', 'text' => "add {$product['id']}"], 'style' => 'primary', 'color' => '#06C755'];
+            $buttons[] = ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'เพิ่มลงตะกร้า', 'text' => "add {$product['id']}"], 'style' => 'primary', 'color' => '#0B5F50'];
         }
-        $buttons[] = ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📋 รายละเอียด', 'text' => "product {$product['id']}"], 'style' => 'secondary', 'margin' => 'sm'];
+        $buttons[] = ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'รายละเอียด', 'text' => "product {$product['id']}"], 'style' => 'secondary', 'margin' => 'sm'];
 
         $bodyContents = [
             ['type' => 'text', 'text' => $product['name'], 'weight' => 'bold', 'size' => 'lg', 'wrap' => true],
@@ -656,8 +628,8 @@ class FlexTemplates
         // Only render a stock line when stock is actually known.
         if ($hasStock) {
             $bodyContents[] = $inStock
-                ? ['type' => 'text', 'text' => "📦 เหลือ {$product['stock']} ชิ้น", 'size' => 'xs', 'color' => '#888888', 'margin' => 'md']
-                : ['type' => 'text', 'text' => '❌ สินค้าหมด', 'size' => 'xs', 'color' => '#EF4444', 'margin' => 'md'];
+                ? ['type' => 'text', 'text' => "เหลือ {$product['stock']} ชิ้น", 'size' => 'xs', 'color' => '#888888', 'margin' => 'md']
+                : ['type' => 'text', 'text' => 'สินค้าหมด', 'size' => 'xs', 'color' => '#EF4444', 'margin' => 'md'];
         }
 
         return [
@@ -716,14 +688,14 @@ class FlexTemplates
             'body' => [
                 'type' => 'box', 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '🛍️ ตะกร้าสินค้า', 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
+                    ['type' => 'text', 'text' => 'ตะกร้าสินค้า', 'weight' => 'bold', 'size' => 'xl', 'color' => '#0B5F50'],
                     ['type' => 'text', 'text' => "{$itemCount} รายการ", 'size' => 'sm', 'color' => '#888888', 'margin' => 'sm'],
                     ['type' => 'separator', 'margin' => 'lg'],
                     ['type' => 'box', 'layout' => 'vertical', 'contents' => $itemContents, 'margin' => 'lg'],
                     ['type' => 'separator', 'margin' => 'lg'],
                     ['type' => 'box', 'layout' => 'horizontal', 'contents' => [
                         ['type' => 'text', 'text' => 'รวมทั้งหมด', 'weight' => 'bold', 'size' => 'md'],
-                        ['type' => 'text', 'text' => '฿' . number_format($total, 2), 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755', 'align' => 'end']
+                        ['type' => 'text', 'text' => '฿' . number_format($total, 2), 'weight' => 'bold', 'size' => 'xl', 'color' => '#0B5F50', 'align' => 'end']
                     ], 'margin' => 'lg']
                 ],
                 'paddingAll' => 'xl'
@@ -731,8 +703,8 @@ class FlexTemplates
             'footer' => [
                 'type' => 'box', 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '💳 ชำระเงิน', 'text' => 'checkout'], 'style' => 'primary', 'color' => '#06C755'],
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🛒 ช้อปต่อ', 'text' => 'shop'], 'style' => 'secondary', 'margin' => 'sm']
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ชำระเงิน', 'text' => 'checkout'], 'style' => 'primary', 'color' => '#0B5F50'],
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ช้อปต่อ', 'text' => 'shop'], 'style' => 'secondary', 'margin' => 'sm']
                 ],
                 'paddingAll' => 'lg'
             ]
@@ -749,7 +721,6 @@ class FlexTemplates
             'body' => [
                 'type' => 'box', 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '❓', 'size' => '3xl', 'align' => 'center'],
                     ['type' => 'text', 'text' => $title, 'weight' => 'bold', 'size' => 'lg', 'align' => 'center', 'margin' => 'lg'],
                     ['type' => 'text', 'text' => $message, 'size' => 'sm', 'align' => 'center', 'color' => '#666666', 'wrap' => true, 'margin' => 'md']
                 ],
@@ -759,7 +730,7 @@ class FlexTemplates
                 'type' => 'box', 'layout' => 'horizontal', 'spacing' => 'md',
                 'contents' => [
                     ['type' => 'button', 'action' => ['type' => 'message', 'label' => $cancelText, 'text' => $cancelAction], 'style' => 'secondary', 'flex' => 1],
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => $confirmText, 'text' => $confirmAction], 'style' => 'primary', 'color' => '#06C755', 'flex' => 1]
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => $confirmText, 'text' => $confirmAction], 'style' => 'primary', 'color' => '#0B5F50', 'flex' => 1]
                 ],
                 'paddingAll' => 'lg'
             ]
@@ -771,23 +742,23 @@ class FlexTemplates
      */
     public static function success($title, $message, $buttons = [])
     {
-        return self::statusMessage('✅', $title, $message, '#06C755', $buttons);
+        return self::statusMessage('', $title, $message, '#0B5F50', $buttons);
     }
 
     public static function error($title, $message, $suggestion = '', $buttons = [])
     {
-        $msg = $suggestion ? "{$message}\n\n💡 {$suggestion}" : $message;
-        return self::statusMessage('❌', $title, $msg, '#EF4444', $buttons);
+        $msg = $suggestion ? "{$message}\n\n{$suggestion}" : $message;
+        return self::statusMessage('', $title, $msg, '#EF4444', $buttons);
     }
 
     public static function warning($title, $message, $buttons = [])
     {
-        return self::statusMessage('⚠️', $title, $message, '#F59E0B', $buttons);
+        return self::statusMessage('', $title, $message, '#F59E0B', $buttons);
     }
 
     public static function info($title, $message, $buttons = [])
     {
-        return self::statusMessage('ℹ️', $title, $message, '#3B82F6', $buttons);
+        return self::statusMessage('', $title, $message, '#3B82F6', $buttons);
     }
 
     /**
@@ -859,10 +830,10 @@ class FlexTemplates
             'header' => [
                 'type' => 'box', 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '🧾 ใบเสร็จ', 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'xl'],
+                    ['type' => 'text', 'text' => 'ใบเสร็จ', 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'xl'],
                     ['type' => 'text', 'text' => $shopName, 'color' => '#FFFFFF', 'size' => 'sm', 'margin' => 'sm']
                 ],
-                'backgroundColor' => '#06C755', 'paddingAll' => 'lg'
+                'backgroundColor' => '#0B5F50', 'paddingAll' => 'lg'
             ],
             'body' => [
                 'type' => 'box', 'layout' => 'vertical',
@@ -884,7 +855,7 @@ class FlexTemplates
                     ], 'margin' => 'lg'],
                     ['type' => 'box', 'layout' => 'horizontal', 'contents' => [
                         ['type' => 'text', 'text' => 'รวมทั้งหมด', 'weight' => 'bold', 'size' => 'lg'],
-                        ['type' => 'text', 'text' => '฿' . number_format($order['grand_total'], 2), 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755', 'align' => 'end']
+                        ['type' => 'text', 'text' => '฿' . number_format($order['grand_total'], 2), 'weight' => 'bold', 'size' => 'xl', 'color' => '#0B5F50', 'align' => 'end']
                     ], 'margin' => 'lg']
                 ],
                 'paddingAll' => 'xl'
@@ -902,11 +873,10 @@ class FlexTemplates
             'body' => [
                 'type' => 'box', 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '🎉', 'size' => '4xl', 'align' => 'center'],
-                    ['type' => 'text', 'text' => 'สวัสดีครับ!', 'weight' => 'bold', 'size' => 'xl', 'align' => 'center', 'margin' => 'lg', 'color' => '#06C755'],
+                    ['type' => 'text', 'text' => 'สวัสดีครับ!', 'weight' => 'bold', 'size' => 'xl', 'align' => 'center', 'margin' => 'lg', 'color' => '#0B5F50'],
                     ['type' => 'text', 'text' => "ขอบคุณที่เชิญ {$botName} เข้ากลุ่ม", 'size' => 'sm', 'align' => 'center', 'color' => '#666666', 'margin' => 'md', 'wrap' => true],
                     ['type' => 'separator', 'margin' => 'xl'],
-                    ['type' => 'text', 'text' => '💡 คำสั่งที่ใช้ได้', 'weight' => 'bold', 'size' => 'md', 'margin' => 'xl'],
+                    ['type' => 'text', 'text' => 'คำสั่งที่ใช้ได้', 'weight' => 'bold', 'size' => 'md', 'margin' => 'xl'],
                     ['type' => 'box', 'layout' => 'vertical', 'contents' => [
                         ['type' => 'text', 'text' => '• พิมพ์ "shop" - ดูสินค้า', 'size' => 'sm', 'color' => '#555555'],
                         ['type' => 'text', 'text' => '• พิมพ์ "menu" - ดูเมนู', 'size' => 'sm', 'color' => '#555555', 'margin' => 'sm'],
@@ -928,7 +898,6 @@ class FlexTemplates
             'body' => [
                 'type' => 'box', 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '⏳', 'size' => '3xl', 'align' => 'center'],
                     ['type' => 'text', 'text' => $message, 'size' => 'md', 'align' => 'center', 'color' => '#666666', 'margin' => 'lg']
                 ],
                 'paddingAll' => 'xl'
@@ -942,7 +911,6 @@ class FlexTemplates
     public static function emptyState($title, $message, $actionLabel = null, $actionText = null)
     {
         $contents = [
-            ['type' => 'text', 'text' => '📭', 'size' => '4xl', 'align' => 'center'],
             ['type' => 'text', 'text' => $title, 'weight' => 'bold', 'size' => 'lg', 'align' => 'center', 'margin' => 'lg', 'color' => '#888888'],
             ['type' => 'text', 'text' => $message, 'size' => 'sm', 'align' => 'center', 'color' => '#AAAAAA', 'wrap' => true, 'margin' => 'md']
         ];
@@ -956,7 +924,7 @@ class FlexTemplates
             $bubble['footer'] = [
                 'type' => 'box', 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => $actionLabel, 'text' => $actionText], 'style' => 'primary', 'color' => '#06C755']
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => $actionLabel, 'text' => $actionText], 'style' => 'primary', 'color' => '#0B5F50']
                 ],
                 'paddingAll' => 'lg'
             ];
@@ -974,7 +942,7 @@ class FlexTemplates
      * @param string $color - สีปุ่ม
      * @return array - Button component
      */
-    public static function shareButton($label = '📤 แชร์ให้เพื่อน', $shareText = '', $style = 'secondary', $color = '#3B82F6')
+    public static function shareButton($label = 'แชร์ให้เพื่อน', $shareText = '', $style = 'secondary', $color = '#3B82F6')
     {
         // ใช้ LINE URI Scheme สำหรับแชร์ข้อความ
         // line://msg/text/{message} - แชร์ข้อความ
@@ -1002,7 +970,7 @@ class FlexTemplates
      * @param array $params - parameters ที่จะส่งไป LIFF
      * @return array - Button component
      */
-    public static function shareFlexButton($liffId, $label = '📤 แชร์ให้เพื่อน', $params = [])
+    public static function shareFlexButton($liffId, $label = 'แชร์ให้เพื่อน', $params = [])
     {
         $queryString = !empty($params) ? '?' . http_build_query($params) : '';
         
@@ -1026,7 +994,7 @@ class FlexTemplates
      * @param string $label - ข้อความบนปุ่ม
      * @return array - Modified bubble with share button
      */
-    public static function withShareButton($bubble, $shareText, $label = '📤 แชร์ให้เพื่อน')
+    public static function withShareButton($bubble, $shareText, $label = 'แชร์ให้เพื่อน')
     {
         if (!isset($bubble['footer'])) {
             $bubble['footer'] = [
@@ -1072,7 +1040,7 @@ class FlexTemplates
                 'type' => 'action',
                 'action' => [
                     'type' => 'uri',
-                    'label' => '📤 แชร์',
+                    'label' => 'แชร์',
                     'uri' => "https://line.me/R/share?text=" . $encodedText
                 ]
             ];
@@ -1091,9 +1059,9 @@ class FlexTemplates
     public static function shareableProductCard($product, $shopUrl = '')
     {
         $price = $product['sale_price'] ?? $product['price'];
-        $shareText = "🛒 {$product['name']}\n💰 ราคา ฿" . number_format($price);
+        $shareText = "{$product['name']}\nราคา ฿" . number_format($price);
         if ($shopUrl) {
-            $shareText .= "\n🔗 {$shopUrl}";
+            $shareText .= "\n{$shopUrl}";
         }
         
         $bubble = self::productCard($product);
@@ -1104,7 +1072,7 @@ class FlexTemplates
                 'type' => 'button',
                 'action' => [
                     'type' => 'uri',
-                    'label' => '📤 แชร์ให้เพื่อน',
+                    'label' => 'แชร์ให้เพื่อน',
                     'uri' => "https://line.me/R/share?text=" . urlencode($shareText)
                 ],
                 'style' => 'secondary',
@@ -1128,7 +1096,7 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '🎉 ' . $title, 'weight' => 'bold', 'size' => 'xl', 'color' => '#FF6B6B', 'wrap' => true],
+                    ['type' => 'text', 'text' => $title, 'weight' => 'bold', 'size' => 'xl', 'color' => self::CLINIC_MAIN, 'wrap' => true],
                     ['type' => 'text', 'text' => $description, 'size' => 'sm', 'color' => '#666666', 'wrap' => true, 'margin' => 'md']
                 ],
                 'paddingAll' => 'xl'
@@ -1137,8 +1105,8 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🛒 ดูเลย!', 'text' => $actionText], 'style' => 'primary', 'color' => '#FF6B6B'],
-                    self::shareButton('📤 บอกเพื่อน', $shareText ?: "🎉 {$title}\n{$description}", 'secondary', '#3B82F6')
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ดูเลย!', 'text' => $actionText], 'style' => 'primary', 'color' => '#FF6B6B'],
+                    self::shareButton('บอกเพื่อน', $shareText ?: "{$title}\n{$description}", 'secondary', '#3B82F6')
                 ],
                 'paddingAll' => 'lg',
                 'spacing' => 'sm'
@@ -1163,13 +1131,13 @@ class FlexTemplates
      */
     public static function referralCard($userName, $referralCode, $reward = '', $shopUrl = '')
     {
-        $shareText = "🎁 {$userName} ชวนคุณมาช้อป!\n";
+        $shareText = "{$userName} ชวนคุณมาช้อป!\n";
         $shareText .= "ใช้โค้ด: {$referralCode}";
         if ($reward) {
-            $shareText .= "\n🎉 รับ {$reward}";
+            $shareText .= "\nรับ {$reward}";
         }
         if ($shopUrl) {
-            $shareText .= "\n🔗 {$shopUrl}";
+            $shareText .= "\n{$shopUrl}";
         }
         
         return [
@@ -1178,14 +1146,13 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '🎁', 'size' => '4xl', 'align' => 'center'],
                     ['type' => 'text', 'text' => 'ชวนเพื่อนมาช้อป!', 'weight' => 'bold', 'size' => 'xl', 'align' => 'center', 'margin' => 'lg', 'color' => '#FF6B6B'],
                     ['type' => 'text', 'text' => 'แชร์โค้ดนี้ให้เพื่อน', 'size' => 'sm', 'align' => 'center', 'color' => '#888888', 'margin' => 'md'],
                     ['type' => 'box', 'layout' => 'vertical', 'contents' => [
                         ['type' => 'text', 'text' => 'โค้ดของคุณ', 'size' => 'xs', 'color' => '#888888', 'align' => 'center'],
                         ['type' => 'text', 'text' => $referralCode, 'size' => 'xxl', 'weight' => 'bold', 'color' => '#FF6B6B', 'align' => 'center']
                     ], 'margin' => 'xl', 'paddingAll' => 'lg', 'backgroundColor' => '#FFF5F5', 'cornerRadius' => 'lg'],
-                    $reward ? ['type' => 'text', 'text' => "🎉 เพื่อนได้รับ {$reward}", 'size' => 'sm', 'align' => 'center', 'color' => '#06C755', 'margin' => 'lg'] : ['type' => 'filler']
+                    $reward ? ['type' => 'text', 'text' => "เพื่อนได้รับ {$reward}", 'size' => 'sm', 'align' => 'center', 'color' => '#0B5F50', 'margin' => 'lg'] : ['type' => 'filler']
                 ],
                 'paddingAll' => 'xl'
             ],
@@ -1193,7 +1160,7 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    self::shareButton('📤 แชร์ให้เพื่อนเลย!', $shareText, 'primary', '#FF6B6B')
+                    self::shareButton('แชร์ให้เพื่อนเลย!', $shareText, 'primary', '#FF6B6B')
                 ],
                 'paddingAll' => 'lg'
             ]
@@ -1210,86 +1177,24 @@ class FlexTemplates
      */
     public static function liffMenu($shopName = 'LINE Shop', $liffShopUrl = '', $liffVideoCallUrl = '', $displayName = 'คุณลูกค้า')
     {
-        $menuItems = [];
-        
-        // Shop button - always show if LIFF URL available
+        $buttons = [];
         if ($liffShopUrl) {
-            $menuItems[] = [
-                'type' => 'button',
-                'action' => [
-                    'type' => 'uri',
-                    'label' => '🛒 เปิดร้านค้า',
-                    'uri' => $liffShopUrl
-                ],
-                'style' => 'primary',
-                'color' => '#06C755',
-                'height' => 'md'
-            ];
+            $buttons[] = ['label' => 'เปิดร้านค้า', 'uri' => $liffShopUrl, 'style' => 'primary'];
         }
-        
-        // Video Call button - optional
         if ($liffVideoCallUrl) {
-            $menuItems[] = [
-                'type' => 'button',
-                'action' => [
-                    'type' => 'uri',
-                    'label' => '📹 วิดีโอคอล',
-                    'uri' => $liffVideoCallUrl
-                ],
-                'style' => 'secondary',
-                'height' => 'sm',
-                'margin' => 'sm'
-            ];
+            $buttons[] = ['label' => 'วิดีโอคอลกับเภสัชกร', 'uri' => $liffVideoCallUrl, 'style' => 'secondary'];
         }
-        
-        // Menu button - always show
-        $menuItems[] = [
-            'type' => 'button',
-            'action' => [
-                'type' => 'message',
-                'label' => '📋 ดูเมนูทั้งหมด',
-                'text' => 'menu'
+        $buttons[] = ['label' => 'ดูเมนูทั้งหมด', 'text' => 'menu', 'style' => 'secondary'];
+
+        return self::clinicCard(
+            $shopName,
+            'เลือกบริการที่ต้องการ',
+            [
+                ['type' => 'text', 'text' => "สวัสดีคุณ {$displayName}", 'size' => 'sm', 'weight' => 'bold', 'color' => self::CLINIC_INK, 'wrap' => true],
+                ['type' => 'text', 'text' => 'กดปุ่มด้านล่างเพื่อเริ่มใช้งาน', 'size' => 'xs', 'color' => self::CLINIC_MUTED, 'margin' => 'sm', 'wrap' => true],
             ],
-            'style' => 'secondary',
-            'height' => 'sm',
-            'margin' => 'sm'
-        ];
-        
-        return [
-            'type' => 'bubble',
-            'size' => 'mega',
-            'header' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'text', 'text' => '🎉', 'size' => '3xl', 'align' => 'center']
-                ],
-                'backgroundColor' => '#06C755',
-                'paddingAll' => 'lg'
-            ],
-            'body' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'text', 'text' => 'ยินดีต้อนรับ!', 'weight' => 'bold', 'size' => 'xl', 'align' => 'center', 'color' => '#06C755'],
-                    ['type' => 'text', 'text' => "สวัสดีคุณ {$displayName}", 'size' => 'lg', 'align' => 'center', 'margin' => 'md', 'weight' => 'bold'],
-                    ['type' => 'text', 'text' => "ขอบคุณที่ติดต่อ {$shopName}", 'size' => 'sm', 'align' => 'center', 'color' => '#888888', 'margin' => 'sm', 'wrap' => true],
-                    ['type' => 'separator', 'margin' => 'xl'],
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => '✨ เลือกบริการที่ต้องการ', 'weight' => 'bold', 'size' => 'md', 'align' => 'center', 'color' => '#333333'],
-                        ['type' => 'text', 'text' => 'กดปุ่มเริ่มต้นใช้งาน', 'size' => 'xs', 'align' => 'center', 'color' => '#888888', 'margin' => 'sm']
-                    ], 'margin' => 'xl', 'paddingAll' => 'md', 'backgroundColor' => '#F8F8F8', 'cornerRadius' => 'lg']
-                ],
-                'paddingAll' => 'xl'
-            ],
-            'footer' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => $menuItems,
-                'paddingAll' => 'lg'
-            ],
-            'styles' => ['footer' => ['separator' => true]]
-        ];
+            $buttons
+        );
     }
     
     /**
@@ -1299,113 +1204,20 @@ class FlexTemplates
     public static function firstMessageMenu($shopName = 'LINE Shop', $liffShopUrl = '', $displayName = 'คุณลูกค้า')
     {
         $buttons = [];
-        
-        // LIFF Shop button
         if ($liffShopUrl) {
-            $buttons[] = [
-                'type' => 'box',
-                'layout' => 'horizontal',
-                'contents' => [
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => '🛒', 'size' => 'xxl', 'align' => 'center']
-                    ], 'width' => '50px', 'height' => '50px', 'backgroundColor' => '#06C75520', 'cornerRadius' => 'xl', 'justifyContent' => 'center'],
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => 'เปิดร้านค้า', 'weight' => 'bold', 'size' => 'md'],
-                        ['type' => 'text', 'text' => 'ดูสินค้าและสั่งซื้อ', 'size' => 'xs', 'color' => '#888888']
-                    ], 'margin' => 'lg', 'justifyContent' => 'center']
-                ],
-                'paddingAll' => 'md',
-                'backgroundColor' => '#FFFFFF',
-                'cornerRadius' => 'xl',
-                'borderWidth' => '1px',
-                'borderColor' => '#E5E5E5',
-                'action' => ['type' => 'uri', 'uri' => $liffShopUrl]
-            ];
+            $buttons[] = ['label' => 'เปิดร้านค้า', 'uri' => $liffShopUrl, 'style' => 'primary'];
         }
-        
-        // Menu button
-        $buttons[] = [
-            'type' => 'box',
-            'layout' => 'horizontal',
-            'contents' => [
-                ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                    ['type' => 'text', 'text' => '📋', 'size' => 'xxl', 'align' => 'center']
-                ], 'width' => '50px', 'height' => '50px', 'backgroundColor' => '#3B82F620', 'cornerRadius' => 'xl', 'justifyContent' => 'center'],
-                ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                    ['type' => 'text', 'text' => 'ดูเมนู', 'weight' => 'bold', 'size' => 'md'],
-                    ['type' => 'text', 'text' => 'บริการทั้งหมด', 'size' => 'xs', 'color' => '#888888']
-                ], 'margin' => 'lg', 'justifyContent' => 'center']
+        $buttons[] = ['label' => 'ดูเมนูทั้งหมด', 'text' => 'menu', 'style' => 'secondary'];
+
+        return self::clinicCard(
+            $shopName,
+            'เริ่มใช้งานร้านยา',
+            [
+                ['type' => 'text', 'text' => "สวัสดีคุณ {$displayName}", 'size' => 'sm', 'weight' => 'bold', 'color' => self::CLINIC_INK, 'wrap' => true],
+                ['type' => 'text', 'text' => 'พิมพ์ข้อความสอบถามได้ตลอด หรือเลือกจากปุ่มด้านล่าง', 'size' => 'xs', 'color' => self::CLINIC_MUTED, 'margin' => 'sm', 'wrap' => true],
             ],
-            'paddingAll' => 'md',
-            'backgroundColor' => '#FFFFFF',
-            'cornerRadius' => 'xl',
-            'borderWidth' => '1px',
-            'borderColor' => '#E5E5E5',
-            'margin' => 'md',
-            'action' => ['type' => 'message', 'text' => 'menu']
-        ];
-        
-        // Contact button
-        $buttons[] = [
-            'type' => 'box',
-            'layout' => 'horizontal',
-            'contents' => [
-                ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                    ['type' => 'text', 'text' => '💬', 'size' => 'xxl', 'align' => 'center']
-                ], 'width' => '50px', 'height' => '50px', 'backgroundColor' => '#EC489920', 'cornerRadius' => 'xl', 'justifyContent' => 'center'],
-                ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                    ['type' => 'text', 'text' => 'ติดต่อเรา', 'weight' => 'bold', 'size' => 'md'],
-                    ['type' => 'text', 'text' => 'สอบถามข้อมูล', 'size' => 'xs', 'color' => '#888888']
-                ], 'margin' => 'lg', 'justifyContent' => 'center']
-            ],
-            'paddingAll' => 'md',
-            'backgroundColor' => '#FFFFFF',
-            'cornerRadius' => 'xl',
-            'borderWidth' => '1px',
-            'borderColor' => '#E5E5E5',
-            'margin' => 'md',
-            'action' => ['type' => 'message', 'text' => 'contact']
-        ];
-        
-        return [
-            'type' => 'bubble',
-            'size' => 'mega',
-            'header' => [
-                'type' => 'box',
-                'layout' => 'horizontal',
-                'contents' => [
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => '👋', 'size' => '3xl', 'align' => 'center']
-                    ], 'flex' => 0],
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => [
-                        ['type' => 'text', 'text' => $shopName, 'weight' => 'bold', 'size' => 'lg', 'color' => '#FFFFFF'],
-                        ['type' => 'text', 'text' => 'ยินดีให้บริการค่ะ', 'size' => 'sm', 'color' => '#FFFFFF', 'style' => 'italic']
-                    ], 'margin' => 'lg']
-                ],
-                'backgroundColor' => '#06C755',
-                'paddingAll' => 'lg'
-            ],
-            'body' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'text', 'text' => "สวัสดีคุณ {$displayName} 🙏", 'weight' => 'bold', 'size' => 'lg', 'align' => 'center'],
-                    ['type' => 'text', 'text' => 'เลือกบริการที่ต้องการได้เลยค่ะ', 'size' => 'sm', 'align' => 'center', 'color' => '#888888', 'margin' => 'md'],
-                    ['type' => 'separator', 'margin' => 'lg'],
-                    ['type' => 'box', 'layout' => 'vertical', 'contents' => $buttons, 'margin' => 'lg']
-                ],
-                'paddingAll' => 'xl'
-            ],
-            'footer' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    ['type' => 'text', 'text' => '💡 พิมพ์ข้อความเพื่อสอบถามได้เลย', 'size' => 'xs', 'color' => '#888888', 'align' => 'center']
-                ],
-                'paddingAll' => 'md',
-                'backgroundColor' => '#FAFAFA'
-            ]
-        ];
+            $buttons
+        );
     }
 
     /**
@@ -1453,10 +1265,10 @@ class FlexTemplates
         $thaiDate = date('d/m/', $ts) . ((int) date('Y', $ts) + 543) . ' ' . date('H:i', $ts) . ' น.';
 
         $paymentLabels = [
-            'cash' => '💵 เงินสด',
-            'transfer' => '📱 โอนเงิน',
-            'card' => '💳 บัตร',
-            'qr' => '📲 QR',
+            'cash' => 'เงินสด',
+            'transfer' => 'โอนเงิน',
+            'card' => 'บัตร',
+            'qr' => 'QR',
         ];
         $paymentText = $paymentLabels[$paymentMethod] ?? ($paymentMethod !== '' ? $paymentMethod : '-');
 
@@ -1473,7 +1285,7 @@ class FlexTemplates
             ];
         }
         $headerContents[] = ['type' => 'text', 'text' => $shopName, 'weight' => 'bold', 'size' => 'lg', 'color' => $white, 'align' => 'center', 'wrap' => true, 'margin' => $shopLogo !== '' ? 'sm' : 'none'];
-        $headerContents[] = ['type' => 'text', 'text' => '⭐ ใบรับแต้มสะสม', 'size' => 'xs', 'color' => $white, 'align' => 'center', 'margin' => 'xs'];
+        $headerContents[] = ['type' => 'text', 'text' => 'ใบรับแต้มสะสม', 'size' => 'xs', 'color' => $white, 'align' => 'center', 'margin' => 'xs'];
 
         // --- Detail rows helper ---
         $detailRow = static function (string $label, string $value, string $valueColor = '#000000') use ($gray): array {
@@ -1495,7 +1307,7 @@ class FlexTemplates
             'type' => 'box',
             'layout' => 'vertical',
             'contents' => [
-                ['type' => 'text', 'text' => '✅ บันทึกการซื้อสำเร็จ', 'size' => 'md', 'weight' => 'bold', 'color' => $darkGreen, 'align' => 'center']
+                ['type' => 'text', 'text' => 'บันทึกการซื้อสำเร็จ', 'size' => 'md', 'weight' => 'bold', 'color' => $darkGreen, 'align' => 'center']
             ],
             'paddingAll' => 'sm'
         ];
@@ -1519,7 +1331,7 @@ class FlexTemplates
             'layout' => 'horizontal',
             'contents' => [
                 ['type' => 'text', 'text' => 'แต้มที่ได้รับ', 'size' => 'sm', 'color' => $darkGreen, 'weight' => 'bold', 'gravity' => 'center', 'flex' => 1],
-                ['type' => 'text', 'text' => '+' . number_format($points) . ' ⭐', 'size' => 'xl', 'color' => $darkGreen, 'weight' => 'bold', 'align' => 'end', 'flex' => 1]
+                ['type' => 'text', 'text' => '+' . number_format($points) . ' à¹à¸à¹à¸¡', 'size' => 'xl', 'color' => $darkGreen, 'weight' => 'bold', 'align' => 'end', 'flex' => 1]
             ],
             'margin' => 'md',
             'paddingAll' => 'md',
@@ -1530,7 +1342,7 @@ class FlexTemplates
         ];
 
         // Running balance
-        $bodyContents[] = $detailRow('แต้มสะสมรวม', number_format($totalPoints) . ' ⭐', $darkGreen);
+        $bodyContents[] = $detailRow('แต้มสะสมรวม', number_format($totalPoints) . ' à¹à¸à¹à¸¡', $darkGreen);
 
         // Thank-you + keep-as-proof
         $bodyContents[] = ['type' => 'separator', 'color' => '#E5E7EB', 'margin' => 'md'];
@@ -1539,7 +1351,7 @@ class FlexTemplates
             'type' => 'box',
             'layout' => 'vertical',
             'contents' => [
-                ['type' => 'text', 'text' => 'ขอบคุณคุณ ' . $thankName . ' 🙏', 'size' => 'sm', 'color' => $black, 'align' => 'center', 'wrap' => true, 'weight' => 'bold'],
+                ['type' => 'text', 'text' => 'ขอบคุณคุณ ' . $thankName . '', 'size' => 'sm', 'color' => $black, 'align' => 'center', 'wrap' => true, 'weight' => 'bold'],
                 ['type' => 'text', 'text' => 'เก็บข้อความนี้ไว้เป็นหลักฐาน', 'size' => 'xxs', 'color' => $gray, 'align' => 'center', 'margin' => 'sm']
             ],
             'margin' => 'md'
@@ -1566,7 +1378,7 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => $shopPhone !== '' ? ('☎ ' . $shopPhone) : 'สะสมแต้มแลกของรางวัลได้เลย', 'size' => 'xs', 'color' => $darkGreen, 'align' => 'center', 'weight' => 'bold']
+                    ['type' => 'text', 'text' => $shopPhone !== '' ? ('à¹à¸à¸£ ' . $shopPhone) : 'สะสมแต้มแลกของรางวัลได้เลย', 'size' => 'xs', 'color' => $darkGreen, 'align' => 'center', 'weight' => 'bold']
                 ],
                 'paddingAll' => 'md',
                 'backgroundColor' => $lightGreen
@@ -1669,7 +1481,6 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'horizontal',
                 'contents' => [
-                    ['type' => 'text', 'text' => '⚠️', 'size' => 'sm', 'flex' => 0],
                     ['type' => 'text', 'text' => $label, 'size' => 'sm', 'color' => '#B91C1C', 'weight' => 'bold', 'margin' => 'sm', 'wrap' => true, 'flex' => 1]
                 ],
                 'margin' => 'sm'
@@ -1682,7 +1493,6 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'horizontal',
                 'contents' => [
-                    ['type' => 'text', 'text' => '📝', 'size' => 'sm', 'flex' => 0],
                     ['type' => 'text', 'text' => $item['notes'], 'size' => 'xs', 'color' => $gray, 'margin' => 'sm', 'wrap' => true, 'flex' => 1]
                 ],
                 'margin' => 'sm'
@@ -1697,7 +1507,7 @@ class FlexTemplates
             'type' => 'box',
             'layout' => 'vertical',
             'contents' => [
-                ['type' => 'text', 'text' => '⚠️ ตั้งครรภ์ แพ้ยา มีโรคประจำตัว กรุณาแจ้งเภสัชกร', 'size' => 'xxs', 'color' => $white, 'wrap' => true, 'align' => 'center', 'weight' => 'bold']
+                ['type' => 'text', 'text' => 'ตั้งครรภ์ แพ้ยา มีโรคประจำตัว กรุณาแจ้งเภสัชกร', 'size' => 'xxs', 'color' => $white, 'wrap' => true, 'align' => 'center', 'weight' => 'bold']
             ],
             'backgroundColor' => '#B91C1C',
             'paddingAll' => 'sm',
@@ -1803,7 +1613,7 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '💊 สรรพคุณ / ข้อบ่งใช้', 'size' => 'xs', 'weight' => 'bold', 'color' => $darkGreen],
+                    ['type' => 'text', 'text' => 'สรรพคุณ / ข้อบ่งใช้', 'size' => 'xs', 'weight' => 'bold', 'color' => $darkGreen],
                     ['type' => 'text', 'text' => (string) $item['indication'], 'size' => 'sm', 'wrap' => true, 'color' => $black, 'margin' => 'sm']
                 ],
                 'margin' => 'md',
@@ -1825,7 +1635,7 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '📖 วิธีใช้', 'size' => 'xs', 'weight' => 'bold', 'color' => '#B45309'],
+                    ['type' => 'text', 'text' => 'วิธีใช้', 'size' => 'xs', 'weight' => 'bold', 'color' => '#B45309'],
                     ['type' => 'text', 'text' => $usageDisplay, 'size' => 'sm', 'wrap' => true, 'color' => $black, 'margin' => 'sm']
                 ],
                 'margin' => 'md',
@@ -1880,7 +1690,7 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => array_merge(
-                    [['type' => 'text', 'text' => '⚠️ คำเตือน', 'size' => 'xs', 'weight' => 'bold', 'color' => '#B91C1C']],
+                    [['type' => 'text', 'text' => 'คำเตือน', 'size' => 'xs', 'weight' => 'bold', 'color' => '#B91C1C']],
                     $specialContents
                 ),
                 'margin' => 'md',
@@ -1900,7 +1710,7 @@ class FlexTemplates
             $headerContents[] = ['type' => 'text', 'text' => 'Pharmacist: ' . $pharmacistName, 'size' => 'xs', 'color' => $white, 'align' => 'center', 'margin' => 'xs'];
         }
         if (!empty($shopPhone)) {
-            $headerContents[] = ['type' => 'text', 'text' => '☎ ' . $shopPhone, 'size' => 'sm', 'color' => $white, 'align' => 'center', 'margin' => 'sm'];
+            $headerContents[] = ['type' => 'text', 'text' => 'à¹à¸à¸£ ' . $shopPhone, 'size' => 'sm', 'color' => $white, 'align' => 'center', 'margin' => 'sm'];
         }
 
         $headerBox = [
@@ -1931,7 +1741,7 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'uri', 'label' => '💳 ชำระเงิน', 'uri' => $checkoutUrl], 'style' => 'primary', 'color' => $darkGreen],
+                    ['type' => 'button', 'action' => ['type' => 'uri', 'label' => 'ชำระเงิน', 'uri' => $checkoutUrl], 'style' => 'primary', 'color' => $darkGreen],
                     ['type' => 'text', 'text' => 'เปิดทำการทุกวัน เวลา ' . $openHours, 'size' => 'xxs', 'color' => $gray, 'align' => 'center', 'margin' => 'md']
                 ],
                 'paddingAll' => 'lg',
@@ -1987,7 +1797,7 @@ class FlexTemplates
                     'type' => 'box',
                     'layout' => 'vertical',
                     'contents' => [
-                        ['type' => 'text', 'text' => '🧾 สรุปรายการ', 'weight' => 'bold', 'size' => 'lg', 'color' => '#FFFFFF', 'align' => 'center']
+                        ['type' => 'text', 'text' => 'สรุปรายการ', 'weight' => 'bold', 'size' => 'lg', 'color' => '#FFFFFF', 'align' => 'center']
                     ],
                     'backgroundColor' => '#8B5CF6',
                     'paddingAll' => 'lg'
@@ -2001,7 +1811,7 @@ class FlexTemplates
                             ['type' => 'separator', 'margin' => 'lg'],
                             ['type' => 'box', 'layout' => 'horizontal', 'contents' => [
                                 ['type' => 'text', 'text' => 'รวมทั้งหมด', 'weight' => 'bold', 'size' => 'md'],
-                                ['type' => 'text', 'text' => '฿' . number_format($total, 2), 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755', 'align' => 'end']
+                                ['type' => 'text', 'text' => '฿' . number_format($total, 2), 'weight' => 'bold', 'size' => 'xl', 'color' => '#0B5F50', 'align' => 'end']
                             ], 'margin' => 'lg']
                         ]
                     ),
@@ -2011,7 +1821,7 @@ class FlexTemplates
                     'type' => 'box',
                     'layout' => 'vertical',
                     'contents' => [
-                        ['type' => 'button', 'action' => ['type' => 'uri', 'label' => '💳 ชำระเงินทั้งหมด', 'uri' => $checkoutUrl], 'style' => 'primary', 'color' => '#06C755']
+                        ['type' => 'button', 'action' => ['type' => 'uri', 'label' => 'ชำระเงินทั้งหมด', 'uri' => $checkoutUrl], 'style' => 'primary', 'color' => '#0B5F50']
                     ],
                     'paddingAll' => 'lg'
                 ]
@@ -2056,8 +1866,9 @@ class FlexTemplates
             'contents' => [[
                 'type' => 'box',
                 'layout' => 'horizontal',
-                'contents' => [
-                    ['type' => 'text', 'text' => $icon, 'size' => 'xxl', 'flex' => 0],
+                'contents' => array_values(array_filter([
+                    // ไอคอนว่าง = ไม่วาดช่องไอคอนเลย (LINE ไม่รับ text ว่าง)
+                    self::stripEmoji($icon) === '' ? null : ['type' => 'text', 'text' => self::stripEmoji($icon), 'size' => 'xxl', 'flex' => 0],
                     [
                         'type' => 'box',
                         'layout' => 'vertical',
@@ -2070,7 +1881,7 @@ class FlexTemplates
                             ['type' => 'text', 'text' => $subtitle, 'color' => '#FFFFFF', 'size' => 'xs', 'margin' => 'xs', 'adjustMode' => 'shrink-to-fit'],
                         ],
                     ],
-                ],
+                ])),
             ]],
         ];
     }
@@ -2236,10 +2047,10 @@ class FlexTemplates
                 'spacing' => 'sm',
                 'paddingAll' => '15px',
                 'contents' => [
-                    self::memberButton('💊 ยาของฉัน', 'action=member_medications', 'primary', self::MEMBER_COLOR_MED),
-                    self::memberButton('📅 นัดหมายของฉัน', 'action=member_appointments', 'primary', self::MEMBER_COLOR_APPT),
-                    self::memberButton('⭐ ประวัติแต้ม', 'action=member_points_history', 'primary', self::MEMBER_COLOR_POINTS),
-                    self::memberButton('🔔 ตั้งค่าแจ้งเตือน', 'action=member_notif_prefs'),
+                    self::memberButton('ยาของฉัน', 'action=member_medications', 'primary', self::MEMBER_COLOR_MED),
+                    self::memberButton('นัดหมายของฉัน', 'action=member_appointments', 'primary', self::MEMBER_COLOR_APPT),
+                    self::memberButton('ประวัติแต้ม', 'action=member_points_history', 'primary', self::MEMBER_COLOR_POINTS),
+                    self::memberButton('ตั้งค่าแจ้งเตือน', 'action=member_notif_prefs'),
                 ],
             ],
         ];
@@ -2257,7 +2068,7 @@ class FlexTemplates
     {
         if (empty($meds)) {
             return self::emptyState(
-                '💊 ยังไม่มียาที่ตั้งเตือน',
+                'ยังไม่มียาที่ตั้งเตือน',
                 'เมื่อรับยาจากร้าน ระบบจะตั้งเตือนให้อัตโนมัติ'
             );
         }
@@ -2287,8 +2098,8 @@ class FlexTemplates
                     'spacing' => 'sm',
                     'paddingAll' => '15px',
                     'contents' => [
-                        self::memberButton('🔁 สั่งซ้ำ', 'action=member_med_refill&id=' . (int) $med['id'], 'primary', self::MEMBER_COLOR_MED),
-                        self::memberButton('🔕 หยุดเตือน', 'action=member_med_stop&id=' . (int) $med['id']),
+                        self::memberButton('สั่งซ้ำ', 'action=member_med_refill&id=' . (int) $med['id'], 'primary', self::MEMBER_COLOR_MED),
+                        self::memberButton('หยุดเตือน', 'action=member_med_stop&id=' . (int) $med['id']),
                     ],
                 ],
             ];
@@ -2312,7 +2123,7 @@ class FlexTemplates
     public static function pointsHistory($rows, $balance = 0, $moreUri = null)
     {
         if (empty($rows)) {
-            return self::emptyState('📋 ยังไม่มีประวัติแต้ม', 'เมื่อซื้อสินค้าหรือส่งสลิป แต้มจะขึ้นที่นี่');
+            return self::emptyState('ยังไม่มีประวัติแต้ม', 'เมื่อซื้อสินค้าหรือส่งสลิป แต้มจะขึ้นที่นี่');
         }
 
         $items = [];
@@ -2345,7 +2156,7 @@ class FlexTemplates
             ];
         }
 
-        $footer = [self::memberButton('💳 กลับไปบัตรสมาชิก', 'action=member_card')];
+        $footer = [self::memberButton('กลับไปบัตรสมาชิก', 'action=member_card')];
         if ($moreUri) {
             $footer[] = [
                 'type' => 'button',
@@ -2372,7 +2183,7 @@ class FlexTemplates
     public static function appointmentList($appts)
     {
         if (empty($appts)) {
-            return self::emptyState('📅 ยังไม่มีนัดหมาย', 'พิมพ์ "จองนัด" เพื่อนัดปรึกษาเภสัชกรได้เลยค่ะ');
+            return self::emptyState('ยังไม่มีนัดหมาย', 'พิมพ์ "จองนัด" เพื่อนัดปรึกษาเภสัชกรได้เลยค่ะ');
         }
 
         $typeLabels = [
@@ -2397,13 +2208,13 @@ class FlexTemplates
 
             $footer = [];
             if ($status === 'pending') {
-                $footer[] = self::memberButton('✅ ยืนยันนัด', 'action=member_appt_confirm&id=' . (int) $appt['id'], 'primary', '#10B981');
+                $footer[] = self::memberButton('ยืนยันนัด', 'action=member_appt_confirm&id=' . (int) $appt['id'], 'primary', '#10B981');
             }
             if ($status === 'pending' || $status === 'confirmed') {
-                $footer[] = self::memberButton('✖️ ขอยกเลิก', 'action=member_appt_cancel&id=' . (int) $appt['id']);
+                $footer[] = self::memberButton('ขอยกเลิก', 'action=member_appt_cancel&id=' . (int) $appt['id']);
             }
             if (!$footer) {
-                $footer[] = self::memberButton('💳 กลับไปบัตรสมาชิก', 'action=member_card');
+                $footer[] = self::memberButton('กลับไปบัตรสมาชิก', 'action=member_card');
             }
 
             $typeKey = (string) ($appt['appointment_type'] ?? '');
@@ -2457,7 +2268,7 @@ class FlexTemplates
                 'margin' => 'md',
                 'alignItems' => 'center',
                 'contents' => [
-                    ['type' => 'text', 'text' => $meta[0] . ' ' . $meta[1], 'size' => 'sm', 'flex' => 3, 'wrap' => true],
+                    ['type' => 'text', 'text' => $meta[1], 'size' => 'sm', 'flex' => 3, 'wrap' => true],
                     [
                         'type' => 'button',
                         'flex' => 2,
@@ -2484,7 +2295,7 @@ class FlexTemplates
             'backgroundColor' => '#FFF7ED',
             'cornerRadius' => 'md',
             'contents' => [
-                ['type' => 'text', 'text' => '🌙 ช่วงห้ามรบกวน 21:00–08:00 น.', 'size' => 'xs', 'color' => '#92400E', 'weight' => 'bold'],
+                ['type' => 'text', 'text' => 'ช่วงห้ามรบกวน 21:00–08:00 น.', 'size' => 'xs', 'color' => '#92400E', 'weight' => 'bold'],
                 ['type' => 'text', 'text' => 'ข้อความที่ร้านเป็นคนเริ่มจะถูกเลื่อนไปเช้า ยกเว้นเตือนทานยาและนัดหมายที่คุณตั้งเวลาไว้เอง', 'size' => 'xxs', 'color' => '#92400E', 'wrap' => true, 'margin' => 'sm'],
             ],
         ];
@@ -2498,7 +2309,7 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'paddingAll' => '15px',
-                'contents' => [self::memberButton('💳 กลับไปบัตรสมาชิก', 'action=member_card')],
+                'contents' => [self::memberButton('กลับไปบัตรสมาชิก', 'action=member_card')],
             ],
         ];
     }

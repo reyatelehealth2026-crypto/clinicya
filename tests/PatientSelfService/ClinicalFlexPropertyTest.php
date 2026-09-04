@@ -447,6 +447,13 @@ class ClinicalFlexPropertyTest extends TestCase
             'slipReceived'    => \FlexTemplates::slipReceived('RYA-1001', 520),
             'info'            => \FlexTemplates::info('หัวข้อ', 'ข้อความ', [['label' => '🛒 ไปช้อป', 'text' => 'shop']]),
             'notification'    => \FlexTemplates::notification('แจ้งเตือน', '🔔 ข้อความทดสอบ'),
+            'welcome'         => \FlexTemplates::welcome('คุณลูกค้า', null, 'ร้านทดสอบ'),
+            'liffMenu'        => \FlexTemplates::liffMenu('ร้านทดสอบ', 'https://liff.line.me/1', 'https://liff.line.me/1/v', 'คุณลูกค้า'),
+            'firstMessageMenu' => \FlexTemplates::firstMessageMenu('ร้านทดสอบ', 'https://liff.line.me/1', 'คุณลูกค้า'),
+            'productCard'     => \FlexTemplates::productCard(['id' => 1, 'name' => 'ยาทดสอบ', 'price' => 100, 'sale_price' => 90, 'stock' => 5]),
+            'cartSummary'     => \FlexTemplates::cartSummary([['name' => 'ยาทดสอบ', 'quantity' => 1, 'subtotal' => 90]], 90, 1),
+            'promoCard'       => \FlexTemplates::promoCard('หัวข้อ', 'รายละเอียด', null, 'shop', 'แชร์'),
+            'referralCard'    => \FlexTemplates::referralCard('คุณลูกค้า', 'CODE', 'คูปอง', 'https://example.test/'),
         ];
 
         foreach ($cards as $name => $card) {
@@ -467,6 +474,9 @@ class ClinicalFlexPropertyTest extends TestCase
             'quickMenu'    => \FlexTemplates::quickMenu('ร้านทดสอบ'),
             'orderStatus'  => \FlexTemplates::orderStatus('RYA-1001', 'paid'),
             'slipReceived' => \FlexTemplates::slipReceived('RYA-1001', 520),
+            'welcome'      => \FlexTemplates::welcome('คุณลูกค้า', null, 'ร้านทดสอบ'),
+            'liffMenu'     => \FlexTemplates::liffMenu('ร้านทดสอบ', 'https://liff.line.me/1', '', 'คุณลูกค้า'),
+            'cartSummary'  => \FlexTemplates::cartSummary([['name' => 'ยาทดสอบ', 'quantity' => 1, 'subtotal' => 90]], 90, 1),
         ];
 
         foreach ($cards as $name => $card) {
