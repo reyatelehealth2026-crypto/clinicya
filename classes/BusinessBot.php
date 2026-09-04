@@ -220,7 +220,7 @@ class BusinessBot
         // shop logo + customer info + points balance. Runs before the mode early-returns so
         // a points check always gets answered. webhook already treats these as special
         // commands that bypass auto-reply.
-        if (in_array($text, ['แต้ม', 'แต้มสะสม', 'คะแนน', 'คะแนนสะสม', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'])) {
+        if (in_array($text, ['แต้ม', 'แต้มสะสม', 'สะสมแต้ม', 'คะแนน', 'คะแนนสะสม', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'])) {
             $this->showPoints($userId, $userDbId, $replyToken);
             return true;
         }
@@ -316,9 +316,23 @@ class BusinessBot
 
 
 
-        // Pattern matching - Removed legacy text commands
-        // All shop interactions should go through LIFF
-
+        // คีย์เวิร์ดฝั่งร้านค้า — ปุ่มในการ์ด Flex ทุกใบยิงข้อความพวกนี้กลับมา
+        // เมธอดปลายทางมีอยู่แล้วและเช็คร้านเปิด/LIFF เอง แต่ไม่มีใคร route ให้
+        // ตั้งแต่ย้ายไป LIFF ปุ่มจึงกดแล้วเงียบ วางไว้หลัง state เพื่อไม่แย่งขั้นตอน
+        // checkout ที่ค้างอยู่
+        $shopKeywords = [
+            'showCategories'       => ['shop', 'ร้านค้า', 'ร้าน', 'สินค้า', 'ซื้อ', 'สั่งซื้อ', 'ดูสินค้า', 'เปิดร้าน'],
+            'showCart'             => ['cart', 'ตะกร้า', 'ดูตะกร้า'],
+            'showLiffCheckoutLink' => ['checkout', 'เช็คเอาท์', 'ชำระเงิน'],
+            'showOrders'           => ['orders', 'order', 'ออเดอร์', 'คำสั่งซื้อ', 'ติดตาม', 'tracking', 'รายการของฉัน'],
+            'showRewards'          => ['ของรางวัล', 'rewards', 'reward', 'แลกของรางวัล', 'แลกแต้ม'],
+        ];
+        foreach ($shopKeywords as $method => $words) {
+            if (in_array($text, $words, true)) {
+                $this->$method($userId, $userDbId, $replyToken);
+                return true;
+            }
+        }
 
         // ล้างตะกร้า - ต้องเป็นโหมด shop และร้านเปิด
         if (in_array($text, ['clear', 'ล้างตะกร้า', 'เคลียร์ตะกร้า'])) {

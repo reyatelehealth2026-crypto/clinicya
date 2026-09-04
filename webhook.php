@@ -1590,6 +1590,28 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             'สถานะคำสั่งซื้อ',
         ];
 
+        // คำสั่งฝั่งร้านค้าที่ปุ่มใน Flex ยิงกลับมา และมีแต่ BusinessBot ที่ตอบได้
+        // (webhook ไม่มี handler ของตัวเอง) ประกาศรวมที่เดียวกับ self-service
+        // ด้วยเหตุผลเดียวกัน — ถ้าลืมรวมเข้า list ใดๆ ปุ่มจะกดแล้วเงียบ
+        $botShopCommands = [
+            'ดูสินค้า',
+            'เปิดร้าน',
+            'cart',
+            'ตะกร้า',
+            'ดูตะกร้า',
+            'checkout',
+            'เช็คเอาท์',
+            'ชำระเงิน',
+            'orders',
+            'รายการของฉัน',
+            'ของรางวัล',
+            'rewards',
+            'reward',
+            'แลกของรางวัล',
+            'แลกแต้ม',
+            'สะสมแต้ม',
+        ];
+
         // ===== V3.2: AI ตอบทุกข้อความอัตโนมัติ (ยกเว้นคำสั่งพิเศษ) =====
         // คำสั่งที่ไม่ให้ AI ตอบ (ให้ระบบอื่นจัดการ)
         $systemCommands = [
@@ -1628,7 +1650,7 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
             'points',
             'แต้ม'
         ];
-        $systemCommands = array_merge($systemCommands, $patientSelfServiceCommands);
+        $systemCommands = array_merge($systemCommands, $patientSelfServiceCommands, $botShopCommands);
         $isSystemCommand = in_array($textLower, $systemCommands);
 
         // คำสั่งที่จะหยุด AI และส่งต่อเภสัชกร/แอดมิน
@@ -1761,6 +1783,10 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         // "คำสั่งที่บอทตอบ" ด้วย ไม่งั้นด่านรอแอดมินด้านล่างจะ return ทิ้ง
         // ก่อนที่ BusinessBot จะได้ทำงาน
         $isPatientCommand = in_array($textLower, $patientSelfServiceCommands);
+        // ด่านรอแอดมินด้านล่างเช็คตัวนี้ตัวเดียว จะได้ไม่ต้องไล่เพิ่ม flag ทีละตัว
+        // ทุกครั้งที่มีคีย์เวิร์ดใหม่ (สาเหตุเดิมที่ทำให้ปุ่มบางปุ่มกดแล้วเงียบ)
+        $isBotCommand = $isShopCommand || $isSlipCommand || $isOrderCommand || $isMenuCommand
+            || $isPatientCommand || in_array($textLower, $botShopCommands);
 
         // ===== Handle LIFF Action Messages (สั่งซื้อสำเร็จ, นัดหมายสำเร็จ, etc.) =====
         if (preg_match('/^สั่งซื้อสำเร็จ\s*#?(\w+)/u', $messageText, $matches)) {
@@ -1940,7 +1966,7 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         // ถ้าไม่ใช่คำสั่งที่กำหนด และไม่ใช่โหมด general - ไม่ตอบ (รอแอดมิน)
         // ทุกคำสั่งที่ BusinessBot รู้จักต้องผ่านด่านนี้ไปได้ ($isShopCommand เดิมถูก
         // คำนวณไว้แต่ไม่ได้ใช้ ทำให้ 'shop' ตายไปด้วยเมื่อร้านยังไม่ได้ตั้ง LIFF)
-        if (!$isSlipCommand && !$isOrderCommand && !$isMenuCommand && !$isPatientCommand && !$isShopCommand && $botMode !== 'general') {
+        if (!$isBotCommand && $botMode !== 'general') {
             // เช็ค Auto Reply ก่อน
             $autoReply = checkAutoReply($db, $messageText, $lineAccountId);
             if ($autoReply) {
@@ -2080,7 +2106,8 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         // ยกเว้นคำสั่งพิเศษที่ BusinessBot ต้องจัดการ
         $specialCommands = array_merge(
             ['shop', 'menu', 'orders', 'สินค้า', 'เมนู', 'ออเดอร์', 'points', 'แต้ม'],
-            $patientSelfServiceCommands
+            $patientSelfServiceCommands,
+            $botShopCommands
         );
         if (!in_array($textLower, $specialCommands) && !$isSlipCommand && !$isOrderCommand) {
             $autoReply = checkAutoReply($db, $messageText, $lineAccountId);

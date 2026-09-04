@@ -330,14 +330,28 @@ class ClinicalFlexPropertyTest extends TestCase
     // ตรวจจากซอร์สโดยตรง ไม่โหลดคลาส เพื่อไม่ต้องพึ่ง DB/LineAPI
     // ------------------------------------------------------------------
 
-    /** ดึงคีย์ของ $patientKeywords ใน BusinessBot::processMessage */
+    /**
+     * ทุกตาราง routing ใน processMessage รวมกัน
+     * เพิ่มตารางใหม่ต้องมาต่อชื่อไว้ที่นี่ ไม่งั้นเทสต์จะไม่คุ้มตารางนั้น
+     */
     private function patientKeywordMap()
+    {
+        // recursive เพราะ method เดียวกันโผล่ได้ทั้งสองตาราง (showOrders)
+        // array_merge ปกติจะทับคีย์เวิร์ดชุดแรกทิ้ง ทำให้เทสต์มองไม่เห็น
+        return array_merge_recursive(
+            $this->keywordMap('patientKeywords'),
+            $this->keywordMap('shopKeywords')
+        );
+    }
+
+    /** ดึงคู่ method => คีย์เวิร์ด จากตาราง routing ตัวหนึ่งใน BusinessBot::processMessage */
+    private function keywordMap($varName)
     {
         $src = file_get_contents(__DIR__ . '/../../classes/BusinessBot.php');
         $this->assertNotFalse($src, 'อ่าน BusinessBot.php ไม่ได้');
 
-        $start = strpos($src, '$patientKeywords = [');
-        $this->assertNotFalse($start, 'ไม่พบตาราง $patientKeywords — routing ถูกย้ายหรือลบไปแล้ว');
+        $start = strpos($src, '$' . $varName . ' = [');
+        $this->assertNotFalse($start, "ไม่พบตาราง \${$varName} — routing ถูกย้ายหรือลบไปแล้ว");
         $end = strpos($src, '];', $start);
         $block = substr($src, $start, $end - $start);
 
