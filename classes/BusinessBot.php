@@ -105,7 +105,10 @@ class BusinessBot
      */
     private function replyText($replyToken, $text)
     {
-        return $this->line->replyMessage($replyToken, [['type' => 'text', 'text' => $text]]);
+        // ตัด emoji ที่จุดเดียว แทนการไล่แก้ข้อความตอบทีละบรรทัด
+        // ถ้าตัดแล้วว่าง (ข้อความเป็น emoji ล้วน) ใช้ของเดิม LINE ไม่รับ text ว่าง
+        $clean = FlexTemplates::stripEmoji($text);
+        return $this->line->replyMessage($replyToken, [['type' => 'text', 'text' => $clean !== '' ? $clean : $text]]);
     }
 
     /**
@@ -213,14 +216,14 @@ class BusinessBot
         // Reset command - ให้ลูกค้า clear state ได้เอง
         if (in_array($text, ['reset', 'รีเซ็ต', 'เริ่มใหม่', 'clear', 'ล้าง'])) {
             $this->clearUserState($userDbId);
-            return $this->replyText($replyToken, "✅ รีเซ็ตเรียบร้อยแล้ว\n\nพิมพ์ 'menu' เพื่อดูเมนู หรือ 'shop' เพื่อดูสินค้า");
+            return $this->replyText($replyToken, "รีเซ็ตเรียบร้อยแล้ว\n\nพิมพ์ 'menu' เพื่อดูเมนู หรือ 'shop' เพื่อดูสินค้า");
         }
 
         // Loyalty via chat (no mini app): "เช็คแต้ม" → designed member-card Flex with the
         // shop logo + customer info + points balance. Runs before the mode early-returns so
         // a points check always gets answered. webhook already treats these as special
         // commands that bypass auto-reply.
-        if (in_array($text, ['แต้ม', 'แต้มสะสม', 'คะแนน', 'คะแนนสะสม', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'])) {
+        if (in_array($text, ['แต้ม', 'แต้มสะสม', 'สะสมแต้ม', 'คะแนน', 'คะแนนสะสม', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'])) {
             $this->showPoints($userId, $userDbId, $replyToken);
             return true;
         }
@@ -316,18 +319,32 @@ class BusinessBot
 
 
 
-        // Pattern matching - Removed legacy text commands
-        // All shop interactions should go through LIFF
-
+        // คีย์เวิร์ดฝั่งร้านค้า — ปุ่มในการ์ด Flex ทุกใบยิงข้อความพวกนี้กลับมา
+        // เมธอดปลายทางมีอยู่แล้วและเช็คร้านเปิด/LIFF เอง แต่ไม่มีใคร route ให้
+        // ตั้งแต่ย้ายไป LIFF ปุ่มจึงกดแล้วเงียบ วางไว้หลัง state เพื่อไม่แย่งขั้นตอน
+        // checkout ที่ค้างอยู่
+        $shopKeywords = [
+            'showCategories'       => ['shop', 'ร้านค้า', 'ร้าน', 'สินค้า', 'ซื้อ', 'สั่งซื้อ', 'ดูสินค้า', 'เปิดร้าน'],
+            'showCart'             => ['cart', 'ตะกร้า', 'ดูตะกร้า'],
+            'showLiffCheckoutLink' => ['checkout', 'เช็คเอาท์', 'ชำระเงิน'],
+            'showOrders'           => ['orders', 'order', 'ออเดอร์', 'คำสั่งซื้อ', 'ติดตาม', 'tracking', 'รายการของฉัน'],
+            'showRewards'          => ['ของรางวัล', 'rewards', 'reward', 'แลกของรางวัล', 'แลกแต้ม'],
+        ];
+        foreach ($shopKeywords as $method => $words) {
+            if (in_array($text, $words, true)) {
+                $this->$method($userId, $userDbId, $replyToken);
+                return true;
+            }
+        }
 
         // ล้างตะกร้า - ต้องเป็นโหมด shop และร้านเปิด
         if (in_array($text, ['clear', 'ล้างตะกร้า', 'เคลียร์ตะกร้า'])) {
             if (!$this->isShopModeEnabled()) {
-                $this->replyText($replyToken, "ℹ️ บัญชีนี้ไม่ได้เปิดใช้งานระบบร้านค้า");
+                $this->replyText($replyToken, "บัญชีนี้ไม่ได้เปิดใช้งานระบบร้านค้า");
                 return true;
             }
             if (!$this->isShopOpen()) {
-                $this->replyText($replyToken, "🚫 ขออภัย ร้านค้าปิดให้บริการชั่วคราว");
+                $this->replyText($replyToken, "ขออภัย ร้านค้าปิดให้บริการชั่วคราว");
                 return true;
             }
             $this->clearCart($userId, $userDbId, $replyToken);
@@ -566,7 +583,7 @@ class BusinessBot
                         'layout' => 'horizontal',
                         'margin' => 'md',
                         'contents' => [
-                            ['type' => 'text', 'text' => '💬 ยินดีต้อนรับ', 'size' => 'sm', 'color' => '#3B82F6', 'weight' => 'bold']
+                            ['type' => 'text', 'text' => 'ยินดีต้อนรับ', 'size' => 'sm', 'color' => '#3B82F6', 'weight' => 'bold']
                         ]
                     ],
                     ['type' => 'separator', 'margin' => 'lg'],
@@ -580,7 +597,7 @@ class BusinessBot
                 'layout' => 'vertical',
                 'spacing' => 'sm',
                 'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📞 ติดต่อเรา', 'text' => 'ติดต่อ'], 'style' => 'primary', 'color' => '#3B82F6']
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ติดต่อเรา', 'text' => 'ติดต่อ'], 'style' => 'primary', 'color' => '#3B82F6']
                 ],
                 'paddingAll' => 'lg'
             ]
@@ -607,7 +624,7 @@ class BusinessBot
                         'layout' => 'horizontal',
                         'margin' => 'md',
                         'contents' => [
-                            ['type' => 'text', 'text' => '🚫 ปิดให้บริการชั่วคราว', 'size' => 'sm', 'color' => '#EF4444', 'weight' => 'bold']
+                            ['type' => 'text', 'text' => 'ปิดให้บริการชั่วคราว', 'size' => 'sm', 'color' => '#EF4444', 'weight' => 'bold']
                         ]
                     ],
                     ['type' => 'separator', 'margin' => 'lg'],
@@ -623,8 +640,8 @@ class BusinessBot
                 'layout' => 'vertical',
                 'spacing' => 'sm',
                 'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📋 ดูคำสั่งซื้อ', 'text' => 'ออเดอร์'], 'style' => 'primary', 'color' => '#3B82F6'],
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📞 ติดต่อเรา', 'text' => 'ติดต่อ'], 'style' => 'secondary']
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ดูคำสั่งซื้อ', 'text' => 'ออเดอร์'], 'style' => 'primary', 'color' => '#3B82F6'],
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ติดต่อเรา', 'text' => 'ติดต่อ'], 'style' => 'secondary']
                 ],
                 'paddingAll' => 'lg'
             ]
@@ -642,7 +659,7 @@ class BusinessBot
     {
         // ตรวจสอบว่าร้านเปิดหรือไม่
         if (!$this->isShopOpen()) {
-            return $this->replyText($replyToken, "🚫 ขออภัย ร้านค้าปิดให้บริการชั่วคราว\n\nกรุณาติดต่อเราภายหลัง");
+            return $this->replyText($replyToken, "ขออภัย ร้านค้าปิดให้บริการชั่วคราว\n\nกรุณาติดต่อเราภายหลัง");
         }
 
         try {
@@ -659,7 +676,7 @@ class BusinessBot
 
         } catch (Exception $e) {
             error_log("BusinessBot showCategories error: " . $e->getMessage());
-            return $this->replyText($replyToken, "🛒 ระบบร้านค้ายังไม่พร้อมใช้งาน\n\nกรุณาติดต่อผู้ดูแลระบบ");
+            return $this->replyText($replyToken, "ระบบร้านค้ายังไม่พร้อมใช้งาน\n\nกรุณาติดต่อผู้ดูแลระบบ");
         }
     }
 
@@ -729,113 +746,35 @@ class BusinessBot
         } catch (Exception $e) {
         }
 
-        // Build Flex Message
-        $bubble = [
-            'type' => 'bubble',
-            'hero' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    [
-                        'type' => 'box',
-                        'layout' => 'vertical',
-                        'contents' => [
-                            ['type' => 'text', 'text' => '🛍️', 'size' => '3xl', 'align' => 'center'],
-                            ['type' => 'text', 'text' => $shopName, 'weight' => 'bold', 'size' => 'xl', 'align' => 'center', 'color' => '#ffffff', 'margin' => 'md'],
-                            ['type' => 'text', 'text' => 'เลือกซื้อสินค้าได้เลย!', 'size' => 'sm', 'align' => 'center', 'color' => '#ffffff', 'margin' => 'sm']
-                        ],
-                        'paddingAll' => 'xl',
-                        'backgroundColor' => '#06C755',
-                        'cornerRadius' => 'none'
-                    ]
-                ],
-                'paddingAll' => 'none'
-            ],
-            'body' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'contents' => [
-                    [
-                        'type' => 'box',
-                        'layout' => 'horizontal',
-                        'contents' => [
-                            [
-                                'type' => 'box',
-                                'layout' => 'vertical',
-                                'contents' => [
-                                    ['type' => 'text', 'text' => '📦', 'size' => 'xl', 'align' => 'center'],
-                                    ['type' => 'text', 'text' => "{$productCount} สินค้า", 'size' => 'sm', 'align' => 'center', 'color' => '#888888', 'margin' => 'sm']
-                                ],
-                                'flex' => 1
-                            ],
-                            ['type' => 'separator'],
-                            [
-                                'type' => 'box',
-                                'layout' => 'vertical',
-                                'contents' => [
-                                    ['type' => 'text', 'text' => '🛒', 'size' => 'xl', 'align' => 'center'],
-                                    ['type' => 'text', 'text' => $cartCount > 0 ? "{$cartCount} ในตะกร้า" : 'ตะกร้าว่าง', 'size' => 'sm', 'align' => 'center', 'color' => $cartCount > 0 ? '#06C755' : '#888888', 'margin' => 'sm']
-                                ],
-                                'flex' => 1
-                            ]
-                        ],
-                        'paddingAll' => 'lg'
-                    ],
-                    ['type' => 'separator', 'margin' => 'md'],
-                    [
-                        'type' => 'box',
-                        'layout' => 'vertical',
-                        'contents' => [
-                            ['type' => 'text', 'text' => '✨ ส่งฟรีเมื่อซื้อครบ ฿' . number_format($this->settings['free_shipping_min'] ?? 500), 'size' => 'xs', 'color' => '#06C755', 'align' => 'center']
-                        ],
-                        'margin' => 'lg'
-                    ]
-                ],
-                'paddingAll' => 'lg'
-            ],
-            'footer' => [
-                'type' => 'box',
-                'layout' => 'vertical',
-                'spacing' => 'sm',
-                'contents' => [
-                    [
-                        'type' => 'button',
-                        'action' => [
-                            'type' => 'uri',
-                            'label' => '🛒 เปิดร้านค้า',
-                            'uri' => $shopUrl
-                        ],
-                        'style' => 'primary',
-                        'color' => '#06C755',
-                        'height' => 'md'
-                    ]
-                ],
-                'paddingAll' => 'lg'
-            ]
+        // การ์ดร้านค้าใช้โทนคลินิกชุดเดียวกับเมนูผู้ป่วย ปุ่มไม่มี emoji
+        $rows = [
+            FlexTemplates::memberRow('สินค้าในร้าน', number_format($productCount) . ' รายการ'),
+            FlexTemplates::memberRow(
+                'ตะกร้าของคุณ',
+                $cartCount > 0 ? number_format($cartCount) . ' รายการ' : 'ยังว่าง',
+                $cartCount > 0 ? FlexTemplates::CLINIC_MAIN : FlexTemplates::CLINIC_MUTED
+            ),
         ];
-
-        // Add cart button if has items
-        if ($cartCount > 0) {
-            // ใช้ LIFF URL ถ้ามี liff_id
-            if ($liffId) {
-                $checkoutUrl = "https://liff.line.me/{$liffId}/checkout";
-            } else {
-                $checkoutUrl = rtrim($baseUrl, '/') . "/miniapp/cart/";
-            }
-            $bubble['footer']['contents'][] = [
-                'type' => 'button',
-                'action' => [
-                    'type' => 'uri',
-                    'label' => "🛍️ ดำเนินการสั่งซื้อ ({$cartCount})",
-                    'uri' => $checkoutUrl
-                ],
-                'style' => 'secondary',
-                'height' => 'sm',
-                'margin' => 'sm'
-            ];
+        $freeShippingMin = $this->settings['free_shipping_min'] ?? 500;
+        if ($freeShippingMin) {
+            $rows[] = FlexTemplates::memberRow('ส่งฟรีเมื่อซื้อครบ', '฿' . number_format($freeShippingMin));
         }
 
-        $message = ['type' => 'flex', 'altText' => "🛍️ {$shopName} - เลือกซื้อสินค้า", 'contents' => $bubble];
+        $buttons = [['label' => 'เปิดร้านค้า', 'uri' => $shopUrl, 'style' => 'primary']];
+        if ($cartCount > 0) {
+            $checkoutUrl = $liffId
+                ? "https://liff.line.me/{$liffId}/checkout"
+                : rtrim($baseUrl, '/') . '/miniapp/cart/';
+            $buttons[] = ['label' => "ดำเนินการสั่งซื้อ ({$cartCount})", 'uri' => $checkoutUrl, 'style' => 'secondary'];
+        }
+
+        $bubble = FlexTemplates::clinicCard(
+            $shopName,
+            'เลือกซื้อสินค้าจากร้าน',
+            FlexTemplates::clinicRows($rows),
+            $buttons
+        );
+        $message = FlexTemplates::toMessage($bubble, $shopName . ' - เลือกซื้อสินค้า');
 
         $this->trackBehavior($userDbId, 'view_shop', ['via' => 'liff']);
 
@@ -865,7 +804,7 @@ class BusinessBot
         }
 
         if (!$tableExists) {
-            return $this->replyText($replyToken, "🛒 ระบบร้านค้ายังไม่พร้อมใช้งาน\n\nกรุณาติดต่อผู้ดูแลระบบ");
+            return $this->replyText($replyToken, "ระบบร้านค้ายังไม่พร้อมใช้งาน\n\nกรุณาติดต่อผู้ดูแลระบบ");
         }
 
         // ตรวจสอบว่ามี column line_account_id หรือไม่
@@ -887,7 +826,7 @@ class BusinessBot
         $categories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($categories)) {
-            return $this->replyText($replyToken, "📦 ยังไม่มีหมวดหมู่สินค้า\n\nกรุณาเพิ่มหมวดหมู่ในระบบหลังบ้าน");
+            return $this->replyText($replyToken, "ยังไม่มีหมวดหมู่สินค้า\n\nกรุณาเพิ่มหมวดหมู่ในระบบหลังบ้าน");
         }
 
         $flex = $this->buildCategoriesCarousel($categories);
@@ -1021,9 +960,9 @@ class BusinessBot
             $priceContents[] = ['type' => 'text', 'text' => '฿' . number_format($item['price']), 'size' => 'xs', 'color' => '#AAAAAA', 'decoration' => 'line-through', 'margin' => 'sm'];
         }
 
-        $stockText = $item['stock'] > 0 ? "📦 เหลือ {$item['stock']} ชิ้น" : "❌ สินค้าหมด";
+        $stockText = $item['stock'] > 0 ? "เหลือ {$item['stock']} ชิ้น" : "สินค้าหมด";
         if ($itemType === 'digital')
-            $stockText = $item['stock'] > 0 ? "✅ พร้อมส่งทันที" : "❌ หมด";
+            $stockText = $item['stock'] > 0 ? "พร้อมส่งทันที" : "หมด";
 
         $bubble = [
             'type' => 'bubble',
@@ -1031,7 +970,7 @@ class BusinessBot
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => "{$typeIcon} {$item['name']}", 'weight' => 'bold', 'size' => 'md', 'wrap' => true],
+                    ['type' => 'text', 'text' => $item['name'], 'weight' => 'bold', 'size' => 'md', 'wrap' => true],
                     ['type' => 'box', 'layout' => 'horizontal', 'contents' => $priceContents, 'margin' => 'md'],
                     ['type' => 'text', 'text' => $stockText, 'size' => 'xs', 'color' => '#888888', 'margin' => 'sm']
                 ],
@@ -1041,8 +980,8 @@ class BusinessBot
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🛒 เพิ่มลงตะกร้า', 'text' => "add {$item['id']}"], 'style' => 'primary', 'color' => '#06C755'],
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📋 รายละเอียด', 'text' => "item {$item['id']}"], 'style' => 'secondary', 'margin' => 'sm']
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'เพิ่มลงตะกร้า', 'text' => "add {$item['id']}"], 'style' => 'primary', 'color' => '#06C755'],
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'รายละเอียด', 'text' => "item {$item['id']}"], 'style' => 'secondary', 'margin' => 'sm']
                 ],
                 'paddingAll' => 'lg'
             ]
@@ -1068,12 +1007,12 @@ class BusinessBot
 
         switch ($itemType) {
             case self::TYPE_DIGITAL:
-                return $item['stock'] > 0 ? "✅ พร้อมส่งทันที" : "❌ หมด";
+                return $item['stock'] > 0 ? "พร้อมส่งทันที" : "หมด";
             case self::TYPE_SERVICE:
             case self::TYPE_BOOKING:
-                return "📅 เปิดจอง";
+                return "เปิดจอง";
             default:
-                return $item['stock'] > 0 ? "📦 เหลือ {$item['stock']} ชิ้น" : "❌ สินค้าหมด";
+                return $item['stock'] > 0 ? "เหลือ {$item['stock']} ชิ้น" : "สินค้าหมด";
         }
     }
 
@@ -1098,7 +1037,7 @@ class BusinessBot
     {
         // ตรวจสอบว่าร้านเปิดหรือไม่
         if (!$this->isShopOpen()) {
-            return $this->replyText($replyToken, "🚫 ขออภัย ร้านค้าปิดให้บริการชั่วคราว");
+            return $this->replyText($replyToken, "ขออภัย ร้านค้าปิดให้บริการชั่วคราว");
         }
 
         $liffId = $this->getLiffId();
@@ -1106,7 +1045,7 @@ class BusinessBot
             return $this->sendLiffShopMessage($userId, $userDbId, $replyToken, $liffId);
         }
 
-        return $this->replyText($replyToken, "🛒 กรุณาใช้เมนูร้านค้าใน LINE เพื่อดูตะกร้าสินค้า");
+        return $this->replyText($replyToken, "กรุณาใช้เมนูร้านค้าใน LINE เพื่อดูตะกร้าสินค้า");
     }
 
     /**
@@ -1116,7 +1055,7 @@ class BusinessBot
     {
         // ตรวจสอบว่าร้านเปิดหรือไม่
         if (!$this->isShopOpen()) {
-            return $this->replyText($replyToken, "🚫 ขออภัย ร้านค้าปิดให้บริการชั่วคราว");
+            return $this->replyText($replyToken, "ขออภัย ร้านค้าปิดให้บริการชั่วคราว");
         }
 
         $liffId = $this->getLiffId();
@@ -1124,7 +1063,7 @@ class BusinessBot
             return $this->sendLiffShopMessage($userId, $userDbId, $replyToken, $liffId);
         }
 
-        return $this->replyText($replyToken, "🛒 กรุณาใช้เมนูร้านค้าใน LINE เพื่อสั่งซื้อสินค้า");
+        return $this->replyText($replyToken, "กรุณาใช้เมนูร้านค้าใน LINE เพื่อสั่งซื้อสินค้า");
     }
 
     /**
@@ -1153,7 +1092,7 @@ class BusinessBot
     {
         // ตรวจสอบว่าร้านเปิดหรือไม่
         if (!$this->isShopOpen()) {
-            return $this->replyText($replyToken, "🚫 ขออภัย ร้านค้าปิดให้บริการชั่วคราว");
+            return $this->replyText($replyToken, "ขออภัย ร้านค้าปิดให้บริการชั่วคราว");
         }
 
         $liffId = $this->getLiffId();
@@ -1161,7 +1100,7 @@ class BusinessBot
             return $this->sendLiffShopMessage($userId, $userDbId, $replyToken, $liffId);
         }
 
-        return $this->replyText($replyToken, "🛒 กรุณาใช้เมนูร้านค้าใน LINE เพื่อค้นหาสินค้า");
+        return $this->replyText($replyToken, "กรุณาใช้เมนูร้านค้าใน LINE เพื่อค้นหาสินค้า");
     }
 
     /**
@@ -1207,7 +1146,7 @@ class BusinessBot
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '🛒 สั่งซื้อสินค้า', 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
+                    ['type' => 'text', 'text' => 'สั่งซื้อสินค้า', 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
                     ['type' => 'separator', 'margin' => 'lg'],
                     [
                         'type' => 'box',
@@ -1244,7 +1183,7 @@ class BusinessBot
                             ['type' => 'text', 'text' => '฿' . number_format($subtotal + ($isFreeShipping ? 0 : $shippingFee)), 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755', 'align' => 'end', 'flex' => 1]
                         ]
                     ],
-                    ['type' => 'text', 'text' => '📱 กดปุ่มกรอกที่อยู่และชำระเงิน', 'size' => 'xs', 'color' => '#888888', 'margin' => 'lg', 'wrap' => true]
+                    ['type' => 'text', 'text' => 'กดปุ่มกรอกที่อยู่และชำระเงิน', 'size' => 'xs', 'color' => '#888888', 'margin' => 'lg', 'wrap' => true]
                 ]
             ],
             'footer' => [
@@ -1254,20 +1193,20 @@ class BusinessBot
                 'contents' => [
                     [
                         'type' => 'button',
-                        'action' => ['type' => 'uri', 'label' => '📱 ดำเนินการสั่งซื้อ', 'uri' => $liffUrl],
+                        'action' => ['type' => 'uri', 'label' => 'ดำเนินการสั่งซื้อ', 'uri' => $liffUrl],
                         'style' => 'primary',
                         'color' => '#06C755',
                         'height' => 'md'
                     ],
                     [
                         'type' => 'button',
-                        'action' => ['type' => 'message', 'label' => '💬 พิมพ์ที่อยู่เอง', 'text' => 'จัดส่ง'],
+                        'action' => ['type' => 'message', 'label' => 'พิมพ์ที่อยู่เอง', 'text' => 'จัดส่ง'],
                         'style' => 'secondary',
                         'height' => 'sm'
                     ],
                     [
                         'type' => 'button',
-                        'action' => ['type' => 'message', 'label' => '❌ ยกเลิก', 'text' => 'ยกเลิก'],
+                        'action' => ['type' => 'message', 'label' => 'ยกเลิก', 'text' => 'ยกเลิก'],
                         'style' => 'secondary',
                         'color' => '#AAAAAA',
                         'height' => 'sm'
@@ -1289,18 +1228,18 @@ class BusinessBot
         $buttons = [
             [
                 'type' => 'button',
-                'action' => ['type' => 'message', 'label' => '📦 จัดส่ง' . ($isFreeShipping ? ' (ฟรี!)' : " (+฿{$shippingFee})"), 'text' => 'จัดส่ง'],
+                'action' => ['type' => 'message', 'label' => 'จัดส่ง' . ($isFreeShipping ? ' (ฟรี!)' : " (+฿{$shippingFee})"), 'text' => 'จัดส่ง'],
                 'style' => 'primary',
                 'color' => '#06C755'
             ],
             [
                 'type' => 'button',
-                'action' => ['type' => 'message', 'label' => '🏪 รับที่ร้าน (ฟรี)', 'text' => 'รับที่ร้าน'],
+                'action' => ['type' => 'message', 'label' => 'รับที่ร้าน (ฟรี)', 'text' => 'รับที่ร้าน'],
                 'style' => 'secondary'
             ],
             [
                 'type' => 'button',
-                'action' => ['type' => 'message', 'label' => '❌ ยกเลิก', 'text' => 'ยกเลิก'],
+                'action' => ['type' => 'message', 'label' => 'ยกเลิก', 'text' => 'ยกเลิก'],
                 'style' => 'secondary',
                 'color' => '#AAAAAA'
             ]
@@ -1312,7 +1251,7 @@ class BusinessBot
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '🚚 เลือกวิธีรับสินค้า', 'weight' => 'bold', 'size' => 'lg'],
+                    ['type' => 'text', 'text' => 'เลือกวิธีรับสินค้า', 'weight' => 'bold', 'size' => 'lg'],
                     ['type' => 'text', 'text' => "{$itemCount} ชิ้น | ฿" . number_format($subtotal), 'size' => 'sm', 'color' => '#888888', 'margin' => 'sm'],
                     ['type' => 'separator', 'margin' => 'lg']
                 ]
@@ -1428,7 +1367,6 @@ class BusinessBot
                     'type' => 'box',
                     'layout' => 'horizontal',
                     'contents' => [
-                        ['type' => 'text', 'text' => '💚', 'size' => 'sm', 'flex' => 0],
                         ['type' => 'text', 'text' => 'พร้อมเพย์: ' . $promptpay, 'size' => 'sm', 'margin' => 'sm', 'flex' => 1]
                     ]
                 ];
@@ -1442,7 +1380,6 @@ class BusinessBot
                             'type' => 'box',
                             'layout' => 'horizontal',
                             'contents' => [
-                                ['type' => 'text', 'text' => '🏦', 'size' => 'sm', 'flex' => 0],
                                 ['type' => 'text', 'text' => "{$bank['name']}: {$bank['account']}", 'size' => 'sm', 'margin' => 'sm', 'flex' => 1]
                             ]
                         ],
@@ -1461,7 +1398,7 @@ class BusinessBot
                     'type' => 'box',
                     'layout' => 'vertical',
                     'contents' => [
-                        ['type' => 'text', 'text' => "✅ สั่งซื้อสำเร็จ!", 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
+                        ['type' => 'text', 'text' => "สั่งซื้อสำเร็จ!", 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
                         ['type' => 'text', 'text' => "ออเดอร์ #{$orderNumber}", 'size' => 'md', 'color' => '#888888', 'margin' => 'sm'],
                         ['type' => 'separator', 'margin' => 'lg'],
                         ['type' => 'text', 'text' => 'รายการสินค้า', 'weight' => 'bold', 'size' => 'sm', 'color' => '#06C755', 'margin' => 'lg'],
@@ -1483,7 +1420,7 @@ class BusinessBot
                             ]
                         ],
                         ['type' => 'separator', 'margin' => 'lg'],
-                        ['type' => 'text', 'text' => '📌 ช่องทางชำระเงิน:', 'weight' => 'bold', 'size' => 'sm', 'margin' => 'lg'],
+                        ['type' => 'text', 'text' => 'ช่องทางชำระเงิน:', 'weight' => 'bold', 'size' => 'sm', 'margin' => 'lg'],
                         [
                             'type' => 'box',
                             'layout' => 'vertical',
@@ -1491,7 +1428,7 @@ class BusinessBot
                             'spacing' => 'sm',
                             'contents' => $paymentContents
                         ],
-                        ['type' => 'text', 'text' => '📸 กรุณาส่งรูปสลิปมาเลย', 'size' => 'sm', 'color' => '#FF6B6B', 'weight' => 'bold', 'margin' => 'lg', 'wrap' => true]
+                        ['type' => 'text', 'text' => 'กรุณาส่งรูปสลิปมาเลย', 'size' => 'sm', 'color' => '#FF6B6B', 'weight' => 'bold', 'margin' => 'lg', 'wrap' => true]
                     ]
                 ],
                 'footer' => [
@@ -1499,8 +1436,8 @@ class BusinessBot
                     'layout' => 'vertical',
                     'spacing' => 'sm',
                     'contents' => [
-                        ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📤 ส่งสลิป', 'text' => 'โอนแล้ว'], 'style' => 'primary', 'color' => '#06C755'],
-                        ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📋 ดูคำสั่งซื้อ', 'text' => 'orders'], 'style' => 'secondary']
+                        ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ส่งสลิป', 'text' => 'โอนแล้ว'], 'style' => 'primary', 'color' => '#06C755'],
+                        ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ดูคำสั่งซื้อ', 'text' => 'orders'], 'style' => 'secondary']
                     ]
                 ]
             ];
@@ -1514,7 +1451,7 @@ class BusinessBot
 
         } catch (Exception $e) {
             $this->logError('quickCheckout', $e->getMessage(), ['user_id' => $userDbId]);
-            return $this->replyText($replyToken, "❌ เกิดข้อผิดพลาด: " . $e->getMessage());
+            return $this->replyText($replyToken, "เกิดข้อผิดพลาด: " . $e->getMessage());
         }
     }
 
@@ -1555,7 +1492,7 @@ class BusinessBot
         // ยกเลิก
         if (in_array($text, ['ยกเลิก', 'cancel', 'ไม่', 'no', 'ออก', 'exit', 'quit'])) {
             $this->clearUserState($userDbId);
-            return $this->replyText($replyToken, "❌ ยกเลิกการสั่งซื้อแล้ว\n\nพิมพ์ 'cart' เพื่อดูตะกร้า หรือ 'menu' เพื่อดูเมนู");
+            return $this->replyText($replyToken, "ยกเลิกการสั่งซื้อแล้ว\n\nพิมพ์ 'cart' เพื่อดูตะกร้า หรือ 'menu' เพื่อดูเมนู");
         }
 
         // กลับไปเมนู
@@ -1569,7 +1506,7 @@ class BusinessBot
             // Need address
             $stateData['delivery_type'] = 'shipping';
             $this->setUserState($userDbId, 'checkout_address', $stateData);
-            return $this->replyText($replyToken, "📦 กรุณาส่งที่อยู่จัดส่ง\n\nรูปแบบ:\nชื่อ-นามสกุล\nเบอร์โทร\nที่อยู่\n\nตัวอย่าง:\nสมชาย ใจดี\n0812345678\n123 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กทม 10110\n\n💡 พิมพ์ 'ยกเลิก' เพื่อยกเลิก");
+            return $this->replyText($replyToken, "กรุณาส่งที่อยู่จัดส่ง\n\nรูปแบบ:\nชื่อ-นามสกุล\nเบอร์โทร\nที่อยู่\n\nตัวอย่าง:\nสมชาย ใจดี\n0812345678\n123 ถ.สุขุมวิท แขวงคลองเตย เขตคลองเตย กทม 10110\n\nพิมพ์ 'ยกเลิก' เพื่อยกเลิก");
         }
 
         // รับที่ร้าน - รองรับหลายรูปแบบ
@@ -1582,10 +1519,10 @@ class BusinessBot
         }
 
         // ถ้าพิมพ์อะไรมาก็ไม่รู้จัก - แสดงตัวเลือกใหม่พร้อมคำแนะนำ
-        $helpText = "🚚 กรุณาเลือกวิธีรับสินค้า:\n\n";
-        $helpText .= "📦 พิมพ์ 'จัดส่ง' - ส่งถึงบ้าน\n";
-        $helpText .= "🏪 พิมพ์ 'รับที่ร้าน' - มารับเอง\n";
-        $helpText .= "❌ พิมพ์ 'ยกเลิก' - ยกเลิกการสั่งซื้อ\n\n";
+        $helpText = "กรุณาเลือกวิธีรับสินค้า:\n\n";
+        $helpText .= "พิมพ์ 'จัดส่ง' - ส่งถึงบ้าน\n";
+        $helpText .= "พิมพ์ 'รับที่ร้าน' - มารับเอง\n";
+        $helpText .= "พิมพ์ 'ยกเลิก' - ยกเลิกการสั่งซื้อ\n\n";
         $helpText .= "หรือกดปุ่มด้านบนได้เลยค่ะ";
 
         return $this->replyText($replyToken, $helpText);
@@ -1605,7 +1542,7 @@ class BusinessBot
         // Transfer option
         $buttons[] = [
             'type' => 'button',
-            'action' => ['type' => 'message', 'label' => '💳 โอนเงิน/พร้อมเพย์', 'text' => 'โอนเงิน'],
+            'action' => ['type' => 'message', 'label' => 'โอนเงิน/พร้อมเพย์', 'text' => 'โอนเงิน'],
             'style' => 'primary',
             'color' => '#06C755'
         ];
@@ -1614,14 +1551,14 @@ class BusinessBot
         if ($codEnabled) {
             $buttons[] = [
                 'type' => 'button',
-                'action' => ['type' => 'message', 'label' => '📦 เก็บเงินปลายทาง (COD)', 'text' => 'COD'],
+                'action' => ['type' => 'message', 'label' => 'เก็บเงินปลายทาง (COD)', 'text' => 'COD'],
                 'style' => 'secondary'
             ];
         }
 
         $buttons[] = [
             'type' => 'button',
-            'action' => ['type' => 'message', 'label' => '❌ ยกเลิก', 'text' => 'ยกเลิก'],
+            'action' => ['type' => 'message', 'label' => 'ยกเลิก', 'text' => 'ยกเลิก'],
             'style' => 'secondary',
             'color' => '#AAAAAA'
         ];
@@ -1632,7 +1569,7 @@ class BusinessBot
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '💰 เลือกวิธีชำระเงิน', 'weight' => 'bold', 'size' => 'lg'],
+                    ['type' => 'text', 'text' => 'เลือกวิธีชำระเงิน', 'weight' => 'bold', 'size' => 'lg'],
                     ['type' => 'separator', 'margin' => 'lg'],
                     [
                         'type' => 'box',
@@ -1696,10 +1633,10 @@ class BusinessBot
         }
 
         // ถ้าพิมพ์อะไรมาก็ไม่รู้จัก - แสดงตัวเลือกใหม่พร้อมคำแนะนำ
-        $helpText = "💳 กรุณาเลือกวิธีชำระเงิน:\n\n";
-        $helpText .= "💰 พิมพ์ 'โอนเงิน' - โอนเงินก่อน\n";
-        $helpText .= "📦 พิมพ์ 'COD' - เก็บเงินปลายทาง\n";
-        $helpText .= "❌ พิมพ์ 'ยกเลิก' - ยกเลิกการสั่งซื้อ\n\n";
+        $helpText = "กรุณาเลือกวิธีชำระเงิน:\n\n";
+        $helpText .= "พิมพ์ 'โอนเงิน' - โอนเงินก่อน\n";
+        $helpText .= "พิมพ์ 'COD' - เก็บเงินปลายทาง\n";
+        $helpText .= "พิมพ์ 'ยกเลิก' - ยกเลิกการสั่งซื้อ\n\n";
         $helpText .= "หรือกดปุ่มด้านบนได้เลยค่ะ";
 
         return $this->replyText($replyToken, $helpText);
@@ -1718,7 +1655,7 @@ class BusinessBot
         $transactionId = $this->createTransaction($userDbId, $stateData);
 
         if (!$transactionId) {
-            return $this->replyText($replyToken, '❌ เกิดข้อผิดพลาด กรุณาลองใหม่');
+            return $this->replyText($replyToken, 'เกิดข้อผิดพลาด กรุณาลองใหม่');
         }
 
         // Get transaction details
@@ -1754,10 +1691,10 @@ class BusinessBot
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '✅ สั่งซื้อสำเร็จ!', 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
+                    ['type' => 'text', 'text' => 'สั่งซื้อสำเร็จ!', 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
                     ['type' => 'text', 'text' => "ออเดอร์ #{$order['order_number']}", 'size' => 'md', 'color' => '#888888', 'margin' => 'sm'],
                     ['type' => 'separator', 'margin' => 'lg'],
-                    ['type' => 'text', 'text' => '📦 เก็บเงินปลายทาง (COD)', 'weight' => 'bold', 'size' => 'md', 'margin' => 'lg', 'color' => '#FF6B00'],
+                    ['type' => 'text', 'text' => 'เก็บเงินปลายทาง (COD)', 'weight' => 'bold', 'size' => 'md', 'margin' => 'lg', 'color' => '#FF6B00'],
                     [
                         'type' => 'box',
                         'layout' => 'horizontal',
@@ -1773,21 +1710,21 @@ class BusinessBot
 
         if (!empty($deliveryInfo['name'])) {
             $bubble['body']['contents'][] = ['type' => 'separator', 'margin' => 'lg'];
-            $bubble['body']['contents'][] = ['type' => 'text', 'text' => '📍 ที่อยู่จัดส่ง', 'weight' => 'bold', 'size' => 'sm', 'margin' => 'lg'];
+            $bubble['body']['contents'][] = ['type' => 'text', 'text' => 'ที่อยู่จัดส่ง', 'weight' => 'bold', 'size' => 'sm', 'margin' => 'lg'];
             $bubble['body']['contents'][] = ['type' => 'text', 'text' => $deliveryInfo['name'], 'size' => 'sm', 'margin' => 'sm'];
             $bubble['body']['contents'][] = ['type' => 'text', 'text' => $deliveryInfo['phone'] ?? '', 'size' => 'sm'];
             $bubble['body']['contents'][] = ['type' => 'text', 'text' => $deliveryInfo['address'] ?? '', 'size' => 'sm', 'wrap' => true];
         }
 
-        $bubble['body']['contents'][] = ['type' => 'text', 'text' => '🚚 รอการจัดส่ง 1-3 วันทำการ', 'size' => 'sm', 'color' => '#888888', 'margin' => 'lg', 'wrap' => true];
+        $bubble['body']['contents'][] = ['type' => 'text', 'text' => 'รอการจัดส่ง 1-3 วันทำการ', 'size' => 'sm', 'color' => '#888888', 'margin' => 'lg', 'wrap' => true];
 
         $bubble['footer'] = [
             'type' => 'box',
             'layout' => 'vertical',
             'spacing' => 'sm',
             'contents' => [
-                ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📋 ดูคำสั่งซื้อ', 'text' => 'orders'], 'style' => 'primary', 'color' => '#06C755'],
-                ['type' => 'button', 'action' => ['type' => 'message', 'label' => '🛒 ช้อปต่อ', 'text' => 'shop'], 'style' => 'secondary']
+                ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ดูคำสั่งซื้อ', 'text' => 'orders'], 'style' => 'primary', 'color' => '#06C755'],
+                ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ช้อปต่อ', 'text' => 'shop'], 'style' => 'secondary']
             ]
         ];
 
@@ -1810,7 +1747,6 @@ class BusinessBot
                 'type' => 'box',
                 'layout' => 'horizontal',
                 'contents' => [
-                    ['type' => 'text', 'text' => '💚', 'size' => 'sm', 'flex' => 0],
                     ['type' => 'text', 'text' => 'พร้อมเพย์: ' . $promptpay, 'size' => 'sm', 'margin' => 'sm', 'flex' => 1]
                 ]
             ];
@@ -1824,7 +1760,6 @@ class BusinessBot
                         'type' => 'box',
                         'layout' => 'horizontal',
                         'contents' => [
-                            ['type' => 'text', 'text' => '🏦', 'size' => 'sm', 'flex' => 0],
                             ['type' => 'text', 'text' => "{$bank['name']}: {$bank['account']}", 'size' => 'sm', 'margin' => 'sm', 'flex' => 1]
                         ]
                     ],
@@ -1842,7 +1777,7 @@ class BusinessBot
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => '✅ สั่งซื้อสำเร็จ!', 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
+                    ['type' => 'text', 'text' => 'สั่งซื้อสำเร็จ!', 'weight' => 'bold', 'size' => 'xl', 'color' => '#06C755'],
                     ['type' => 'text', 'text' => "ออเดอร์ #{$order['order_number']}", 'size' => 'md', 'color' => '#888888', 'margin' => 'sm'],
                     ['type' => 'separator', 'margin' => 'lg'],
                     [
@@ -1855,7 +1790,7 @@ class BusinessBot
                         ]
                     ],
                     ['type' => 'separator', 'margin' => 'lg'],
-                    ['type' => 'text', 'text' => '📌 ช่องทางชำระเงิน:', 'weight' => 'bold', 'size' => 'sm', 'margin' => 'lg'],
+                    ['type' => 'text', 'text' => 'ช่องทางชำระเงิน:', 'weight' => 'bold', 'size' => 'sm', 'margin' => 'lg'],
                     [
                         'type' => 'box',
                         'layout' => 'vertical',
@@ -1863,7 +1798,7 @@ class BusinessBot
                         'spacing' => 'sm',
                         'contents' => $paymentContents
                     ],
-                    ['type' => 'text', 'text' => '📸 กรุณาส่งรูปสลิปมาเลย', 'size' => 'sm', 'color' => '#FF6B6B', 'weight' => 'bold', 'margin' => 'lg', 'wrap' => true]
+                    ['type' => 'text', 'text' => 'กรุณาส่งรูปสลิปมาเลย', 'size' => 'sm', 'color' => '#FF6B6B', 'weight' => 'bold', 'margin' => 'lg', 'wrap' => true]
                 ]
             ],
             'footer' => [
@@ -1871,8 +1806,8 @@ class BusinessBot
                 'layout' => 'vertical',
                 'spacing' => 'sm',
                 'contents' => [
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📤 ส่งสลิป', 'text' => 'โอนแล้ว'], 'style' => 'primary', 'color' => '#06C755'],
-                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => '📋 ดูคำสั่งซื้อ', 'text' => 'orders'], 'style' => 'secondary']
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ส่งสลิป', 'text' => 'โอนแล้ว'], 'style' => 'primary', 'color' => '#06C755'],
+                    ['type' => 'button', 'action' => ['type' => 'message', 'label' => 'ดูคำสั่งซื้อ', 'text' => 'orders'], 'style' => 'secondary']
                 ]
             ]
         ];
@@ -1898,8 +1833,8 @@ class BusinessBot
         // Parse address (simple format: name\nphone\naddress)
         $lines = explode("\n", trim($message));
         if (count($lines) < 3) {
-            $helpText = "❌ รูปแบบไม่ถูกต้อง\n\n";
-            $helpText .= "📦 กรุณาส่งที่อยู่ในรูปแบบ:\n";
+            $helpText = "รูปแบบไม่ถูกต้อง\n\n";
+            $helpText .= "กรุณาส่งที่อยู่ในรูปแบบ:\n";
             $helpText .= "บรรทัด 1: ชื่อ-นามสกุล\n";
             $helpText .= "บรรทัด 2: เบอร์โทร\n";
             $helpText .= "บรรทัด 3: ที่อยู่\n\n";
@@ -1907,7 +1842,7 @@ class BusinessBot
             $helpText .= "สมชาย ใจดี\n";
             $helpText .= "0812345678\n";
             $helpText .= "123 ถ.สุขุมวิท กทม 10110\n\n";
-            $helpText .= "💡 พิมพ์ 'ยกเลิก' เพื่อยกเลิก หรือ 'กลับ' เพื่อเลือกวิธีจัดส่งใหม่";
+            $helpText .= "พิมพ์ 'ยกเลิก' เพื่อยกเลิก หรือ 'กลับ' เพื่อเลือกวิธีจัดส่งใหม่";
             return $this->replyText($replyToken, $helpText);
         }
 
@@ -1964,24 +1899,24 @@ class BusinessBot
         $total = $subtotal + $shippingFee;
 
         // Build summary message
-        $summaryText = "📋 สรุปคำสั่งซื้อ\n\n";
+        $summaryText = "สรุปคำสั่งซื้อ\n\n";
         foreach ($items as $item) {
             $price = $item['sale_price'] ?? $item['price'];
             $summaryText .= "• {$item['name']} x{$item['quantity']} = ฿" . number_format($price * $item['quantity']) . "\n";
         }
-        $summaryText .= "\n💰 รวมสินค้า: ฿" . number_format($subtotal);
+        $summaryText .= "\nรวมสินค้า: ฿" . number_format($subtotal);
         if ($shippingFee > 0) {
-            $summaryText .= "\n🚚 ค่าส่ง: ฿" . number_format($shippingFee);
+            $summaryText .= "\nค่าส่ง: ฿" . number_format($shippingFee);
         }
-        $summaryText .= "\n\n💵 รวมทั้งหมด: ฿" . number_format($total);
+        $summaryText .= "\n\nรวมทั้งหมด: ฿" . number_format($total);
 
         if ($deliveryInfo) {
-            $summaryText .= "\n\n📦 ส่งถึง:\n{$deliveryInfo['name']}\n{$deliveryInfo['phone']}\n{$deliveryInfo['address']}";
+            $summaryText .= "\n\nส่งถึง:\n{$deliveryInfo['name']}\n{$deliveryInfo['phone']}\n{$deliveryInfo['address']}";
         } elseif ($deliveryType === 'digital') {
-            $summaryText .= "\n\n📧 ส่งทาง LINE ทันทีหลังชำระเงิน";
+            $summaryText .= "\n\nส่งทาง LINE ทันทีหลังชำระเงิน";
         }
 
-        $summaryText .= "\n\n✅ พิมพ์ 'ยืนยัน' เพื่อสร้างออเดอร์";
+        $summaryText .= "\n\nพิมพ์ 'ยืนยัน' เพื่อสร้างออเดอร์";
 
         return $this->replyText($replyToken, $summaryText);
     }
@@ -1998,7 +1933,7 @@ class BusinessBot
         $transactionId = $this->createTransaction($userDbId, $stateData);
 
         if (!$transactionId) {
-            return $this->replyText($replyToken, '❌ เกิดข้อผิดพลาด กรุณาลองใหม่');
+            return $this->replyText($replyToken, 'เกิดข้อผิดพลาด กรุณาลองใหม่');
         }
 
         $this->clearUserState($userDbId);
@@ -2177,22 +2112,22 @@ class BusinessBot
         $bankAccounts = json_decode($this->settings['bank_accounts'] ?? '{"banks":[]}', true);
         $promptpay = $this->settings['promptpay_number'] ?? '';
 
-        $paymentText = "💳 ชำระเงิน\n\n";
-        $paymentText .= "📋 เลขที่: {$orderNumber}\n";
-        $paymentText .= "💰 ยอดชำระ: ฿" . number_format($total, 2) . "\n\n";
+        $paymentText = "ชำระเงิน\n\n";
+        $paymentText .= "เลขที่: {$orderNumber}\n";
+        $paymentText .= "ยอดชำระ: ฿" . number_format($total, 2) . "\n\n";
 
         if ($promptpay) {
-            $paymentText .= "📱 PromptPay: {$promptpay}\n\n";
+            $paymentText .= "PromptPay: {$promptpay}\n\n";
         }
 
         if (!empty($bankAccounts['banks'])) {
-            $paymentText .= "🏦 โอนเงิน:\n";
+            $paymentText .= "โอนเงิน:\n";
             foreach ($bankAccounts['banks'] as $bank) {
                 $paymentText .= "• {$bank['name']}: {$bank['account']}\n  ชื่อ: {$bank['holder']}\n";
             }
         }
 
-        $paymentText .= "\n📸 หลังโอนเงิน กรุณาส่งสลิปมาที่นี่";
+        $paymentText .= "\nหลังโอนเงิน กรุณาส่งสลิปมาที่นี่";
 
         // Set state to await slip
         $this->setUserState($userDbId, 'awaiting_slip', ['transaction_id' => $transactionId]);
@@ -2218,12 +2153,12 @@ class BusinessBot
         // ถ้าผู้ใช้พิมพ์ข้อความแทนที่จะส่งรูป ให้แนะนำให้ส่งรูป
         $textLower = mb_strtolower(trim($message));
         if (!in_array($textLower, ['ยกเลิก', 'cancel', 'ออก', 'exit'])) {
-            return $this->replyText($replyToken, "📸 กรุณาส่งรูปสลิปการโอนเงินมาเลยค่ะ\n\n(หรือพิมพ์ 'ยกเลิก' เพื่อยกเลิก)");
+            return $this->replyText($replyToken, "กรุณาส่งรูปสลิปการโอนเงินมาเลยค่ะ\n\n(หรือพิมพ์ 'ยกเลิก' เพื่อยกเลิก)");
         }
 
         // ผู้ใช้ต้องการยกเลิก
         $this->clearUserState($userDbId);
-        return $this->replyText($replyToken, "❌ ยกเลิกการส่งสลิปแล้ว\n\nพิมพ์ 'orders' เพื่อดูรายการของคุณ\nหรือพิมพ์ 'สลิป' เพื่อส่งสลิปใหม่");
+        return $this->replyText($replyToken, "ยกเลิกการส่งสลิปแล้ว\n\nพิมพ์ 'orders' เพื่อดูรายการของคุณ\nหรือพิมพ์ 'สลิป' เพื่อส่งสลิปใหม่");
     }
 
     /**
@@ -2237,7 +2172,7 @@ class BusinessBot
 
             // ถ้าไม่มีตาราง
             if (!$transTable) {
-                $flex = FlexTemplates::info('ยังไม่มีรายการ', 'ระบบคำสั่งซื้อยังไม่พร้อมใช้งาน', [['label' => '🛒 ไปช้อป', 'text' => 'shop']]);
+                $flex = FlexTemplates::info('ยังไม่มีรายการ', 'ระบบคำสั่งซื้อยังไม่พร้อมใช้งาน', [['label' => 'ไปช้อป', 'text' => 'shop']]);
                 return $this->line->replyMessage($replyToken, [FlexTemplates::toMessage($flex, 'รายการของฉัน')]);
             }
 
@@ -2268,7 +2203,7 @@ class BusinessBot
         }
 
         if (empty($orders)) {
-            $flex = FlexTemplates::info('ยังไม่มีรายการ', 'คุณยังไม่มีรายการสั่งซื้อ', [['label' => '🛒 ไปช้อป', 'text' => 'shop']]);
+            $flex = FlexTemplates::info('ยังไม่มีรายการ', 'คุณยังไม่มีรายการสั่งซื้อ', [['label' => 'ไปช้อป', 'text' => 'shop']]);
             return $this->line->replyMessage($replyToken, [FlexTemplates::toMessage($flex, 'รายการของฉัน')]);
         }
 
@@ -2276,28 +2211,17 @@ class BusinessBot
         foreach ($orders as $order) {
             $statusConfig = $this->getStatusConfig($order['status']);
 
-            $bubbles[] = [
-                'type' => 'bubble',
-                'size' => 'kilo',
-                'body' => [
-                    'type' => 'box',
-                    'layout' => 'vertical',
-                    'contents' => [
-                        ['type' => 'text', 'text' => "#{$order['order_number']}", 'weight' => 'bold', 'size' => 'md'],
-                        ['type' => 'text', 'text' => "฿" . number_format($order['grand_total'], 2), 'size' => 'xl', 'weight' => 'bold', 'color' => '#06C755', 'margin' => 'md'],
-                        [
-                            'type' => 'box',
-                            'layout' => 'horizontal',
-                            'contents' => [
-                                ['type' => 'text', 'text' => $statusConfig['icon'] . ' ' . $statusConfig['text'], 'size' => 'sm', 'color' => $statusConfig['color']]
-                            ],
-                            'margin' => 'md'
-                        ],
-                        ['type' => 'text', 'text' => date('d/m/Y H:i', strtotime($order['created_at'])), 'size' => 'xs', 'color' => '#888888', 'margin' => 'md']
-                    ],
-                    'paddingAll' => 'lg'
-                ]
-            ];
+            $bubbles[] = FlexTemplates::clinicCard(
+                '#' . $order['order_number'],
+                $statusConfig['text'],
+                FlexTemplates::clinicRows([
+                    FlexTemplates::memberRow('ยอดรวม', '฿' . number_format($order['grand_total'], 2), FlexTemplates::CLINIC_MAIN),
+                    FlexTemplates::memberRow('สถานะ', $statusConfig['text'], $statusConfig['color']),
+                    FlexTemplates::memberRow('สั่งเมื่อ', date('d/m/Y H:i', strtotime($order['created_at']))),
+                ]),
+                [],
+                'kilo'
+            );
         }
 
         $flex = ['type' => 'carousel', 'contents' => $bubbles];
@@ -2306,15 +2230,17 @@ class BusinessBot
 
     private function getStatusConfig($status)
     {
+        // ไม่มี icon แล้ว สีเหลือสองระดับ: ปกติ = เขียวเข้ม, ต้องตรวจสอบ = แดง
+        $main = FlexTemplates::CLINIC_MAIN;
         $configs = [
-            'pending' => ['icon' => '⏳', 'text' => 'รอดำเนินการ', 'color' => '#F59E0B'],
-            'confirmed' => ['icon' => '✅', 'text' => 'ยืนยันแล้ว', 'color' => '#06C755'],
-            'paid' => ['icon' => '💰', 'text' => 'ชำระแล้ว', 'color' => '#06C755'],
-            'shipping' => ['icon' => '🚚', 'text' => 'กำลังจัดส่ง', 'color' => '#3B82F6'],
-            'delivered' => ['icon' => '📦', 'text' => 'จัดส่งแล้ว', 'color' => '#10B981'],
-            'cancelled' => ['icon' => '❌', 'text' => 'ยกเลิก', 'color' => '#EF4444']
+            'pending' => ['text' => 'รอดำเนินการ', 'color' => FlexTemplates::CLINIC_MUTED],
+            'confirmed' => ['text' => 'ยืนยันแล้ว', 'color' => $main],
+            'paid' => ['text' => 'ชำระแล้ว', 'color' => $main],
+            'shipping' => ['text' => 'กำลังจัดส่ง', 'color' => $main],
+            'delivered' => ['text' => 'จัดส่งแล้ว', 'color' => $main],
+            'cancelled' => ['text' => 'ยกเลิก', 'color' => FlexTemplates::CLINIC_ALERT]
         ];
-        return $configs[$status] ?? ['icon' => '📋', 'text' => $status, 'color' => '#888888'];
+        return $configs[$status] ?? ['text' => $status, 'color' => FlexTemplates::CLINIC_MUTED];
     }
 
     /** Default brand tone shared by every loyalty Flex reply (mirrors line-mini-app); used until a shop sets a custom Flex Studio theme. */
@@ -2396,12 +2322,12 @@ class BusinessBot
             : [
                 'type' => 'box', 'layout' => 'vertical', 'width' => '46px', 'height' => '46px',
                 'cornerRadius' => '12px', 'backgroundColor' => '#FFFFFF22', 'justifyContent' => 'center',
-                'contents' => [['type' => 'text', 'text' => '💎', 'align' => 'center', 'size' => 'lg']]
+                'contents' => [['type' => 'text', 'text' => 'สมาชิก', 'align' => 'center', 'size' => 'xxs', 'color' => '#FFFFFF']]
             ];
 
         $progressNote = $nextTierName !== ''
             ? ['type' => 'text', 'text' => 'เหลืออีก ' . number_format($pointsToNext) . ' แต้ม → ' . $nextTierName, 'size' => 'xxs', 'color' => '#FFFFFFB3', 'margin' => 'md', 'wrap' => true]
-            : ['type' => 'text', 'text' => '🎉 คุณอยู่ในระดับสูงสุดแล้ว', 'size' => 'xxs', 'color' => '#FFFFFF', 'weight' => 'bold', 'margin' => 'md'];
+            : ['type' => 'text', 'text' => 'คุณอยู่ในระดับสูงสุดแล้ว', 'size' => 'xxs', 'color' => '#FFFFFF', 'weight' => 'bold', 'margin' => 'md'];
 
         return [
             'type' => 'bubble',
@@ -2433,7 +2359,7 @@ class BusinessBot
                                             [
                                                 'type' => 'box', 'layout' => 'horizontal', 'flex' => 0, 'backgroundColor' => '#FFFFFF22',
                                                 'cornerRadius' => '20px', 'paddingAll' => '6px', 'paddingStart' => '12px', 'paddingEnd' => '12px',
-                                                'contents' => [['type' => 'text', 'text' => $tier['icon'] . ' ' . $tier['name'], 'size' => 'xs', 'color' => '#FFFFFF', 'weight' => 'bold']]
+                                                'contents' => [['type' => 'text', 'text' => $tier['name'], 'size' => 'xs', 'color' => '#FFFFFF', 'weight' => 'bold']]
                                             ],
                                             ['type' => 'filler']
                                         ]
@@ -2616,7 +2542,7 @@ class BusinessBot
                         'backgroundColor' => $this->brandGradStart,
                         'background' => ['type' => 'linearGradient', 'angle' => '160deg', 'startColor' => $this->brandGradStart, 'endColor' => $this->brandGradEnd],
                         'contents' => [
-                            ['type' => 'text', 'text' => '🎁 ของรางวัล', 'size' => 'xxs', 'color' => '#FFFFFFB3', 'weight' => 'bold'],
+                            ['type' => 'text', 'text' => 'ของรางวัล', 'size' => 'xxs', 'color' => '#FFFFFFB3', 'weight' => 'bold'],
                             ['type' => 'text', 'text' => $reward['name'], 'weight' => 'bold', 'size' => 'md', 'color' => '#FFFFFF', 'wrap' => true, 'margin' => 'sm']
                         ]
                     ],
@@ -2640,7 +2566,7 @@ class BusinessBot
                         'type' => 'box',
                         'layout' => 'vertical',
                         'contents' => [
-                            ['type' => 'button', 'action' => ['type' => 'message', 'label' => $canRedeem ? '🎁 แลกเลย' : 'แต้มไม่พอ', 'text' => "redeem {$reward['id']}"], 'style' => $canRedeem ? 'primary' : 'secondary', 'color' => $canRedeem ? $this->brandMain : '#CCCCCC', 'height' => 'sm']
+                            ['type' => 'button', 'action' => ['type' => 'message', 'label' => $canRedeem ? 'แลกของรางวัล' : 'แต้มไม่พอ', 'text' => "redeem {$reward['id']}"], 'style' => $canRedeem ? 'primary' : 'secondary', 'color' => $canRedeem ? $this->brandMain : '#CCCCCC', 'height' => 'sm']
                         ],
                         'paddingAll' => 'md'
                     ]
@@ -2800,7 +2726,6 @@ class BusinessBot
                         'backgroundColor' => $this->brandGradStart,
                         'background' => ['type' => 'linearGradient', 'angle' => '160deg', 'startColor' => $this->brandGradStart, 'centerColor' => $this->brandGradMid, 'endColor' => $this->brandGradEnd, 'centerPosition' => '55%'],
                         'contents' => [
-                            ['type' => 'text', 'text' => '✅', 'size' => '4xl', 'align' => 'center'],
                             ['type' => 'text', 'text' => 'แลกของรางวัลสำเร็จ!', 'size' => 'xl', 'weight' => 'bold', 'color' => '#FFFFFF', 'align' => 'center', 'wrap' => true],
                             ['type' => 'text', 'text' => (string) $result['reward']['name'], 'size' => 'sm', 'color' => '#FFFFFFCC', 'align' => 'center', 'wrap' => true],
                             [
@@ -2849,7 +2774,7 @@ class BusinessBot
         $this->setUserState($userDbId, 'booking_select_date', ['item_id' => $itemId, 'item_name' => $item['name']]);
 
         // Show date picker (simplified - just ask for date)
-        $message = "📅 จอง: {$item['name']}\n\n";
+        $message = "จอง: {$item['name']}\n\n";
         $message .= "กรุณาพิมพ์วันที่ต้องการจอง\n";
         $message .= "รูปแบบ: DD/MM/YYYY\n";
         $message .= "ตัวอย่าง: " . date('d/m/Y', strtotime('+1 day'));
@@ -2868,13 +2793,13 @@ class BusinessBot
         }
 
         if (!$date || strtotime($date) < strtotime('today')) {
-            return $this->replyText($replyToken, "❌ วันที่ไม่ถูกต้อง กรุณาระบุวันที่ในอนาคต\nรูปแบบ: DD/MM/YYYY");
+            return $this->replyText($replyToken, "วันที่ไม่ถูกต้อง กรุณาระบุวันที่ในอนาคต\nรูปแบบ: DD/MM/YYYY");
         }
 
         $stateData['booking_date'] = $date;
         $this->setUserState($userDbId, 'booking_select_time', $stateData);
 
-        $message = "⏰ เลือกเวลา\n\n";
+        $message = "เลือกเวลา\n\n";
         $message .= "วันที่: " . date('d/m/Y', strtotime($date)) . "\n\n";
         $message .= "กรุณาพิมพ์เวลาที่ต้องการ\n";
         $message .= "รูปแบบ: HH:MM\n";
@@ -2887,7 +2812,7 @@ class BusinessBot
     {
         // Parse time
         if (!preg_match('/(\d{1,2}):(\d{2})/', $message, $matches)) {
-            return $this->replyText($replyToken, "❌ เวลาไม่ถูกต้อง\nรูปแบบ: HH:MM");
+            return $this->replyText($replyToken, "เวลาไม่ถูกต้อง\nรูปแบบ: HH:MM");
         }
 
         $time = sprintf('%02d:%02d', $matches[1], $matches[2]);
@@ -2899,13 +2824,13 @@ class BusinessBot
         $this->clearUserState($userDbId);
 
         if (!$bookingId) {
-            return $this->replyText($replyToken, '❌ เกิดข้อผิดพลาด กรุณาลองใหม่');
+            return $this->replyText($replyToken, 'เกิดข้อผิดพลาด กรุณาลองใหม่');
         }
 
         $flex = FlexTemplates::success(
             'จองสำเร็จ!',
-            "{$stateData['item_name']}\n📅 " . date('d/m/Y', strtotime($stateData['booking_date'])) . " ⏰ {$time}",
-            [['label' => '📋 ดูการจอง', 'text' => 'orders']]
+            "{$stateData['item_name']}\n" . date('d/m/Y', strtotime($stateData['booking_date'])) . " {$time}",
+            [['label' => 'ดูการจอง', 'text' => 'orders']]
         );
 
         return $this->line->replyMessage($replyToken, [FlexTemplates::toMessage($flex, 'จองสำเร็จ')]);
@@ -3003,10 +2928,10 @@ class BusinessBot
                 case self::DELIVER_LINE:
                     // Send via LINE message
                     if (!empty($actionData['game_code'])) {
-                        $message = "🎮 โค้ดเกมของคุณ\n\n";
-                        $message .= "📋 รายการ: {$item['name']}\n";
-                        $message .= "🔑 โค้ด: {$actionData['game_code']}\n\n";
-                        $message .= "⚠️ กรุณาเก็บโค้ดนี้ไว้ ใช้ได้ครั้งเดียว";
+                        $message = "โค้ดเกมของคุณ\n\n";
+                        $message .= "รายการ: {$item['name']}\n";
+                        $message .= "โค้ด: {$actionData['game_code']}\n\n";
+                        $message .= "กรุณาเก็บโค้ดนี้ไว้ ใช้ได้ครั้งเดียว";
 
                         $this->line->pushMessage($lineUserId, $message);
                         $fulfillmentData['code_sent'] = $actionData['game_code'];
@@ -3016,11 +2941,11 @@ class BusinessBot
                 case self::DELIVER_DOWNLOAD:
                     // Send download link
                     if (!empty($actionData['download_url'])) {
-                        $message = "📥 ลิงก์ดาวน์โหลด\n\n";
-                        $message .= "📋 รายการ: {$item['name']}\n";
-                        $message .= "🔗 {$actionData['download_url']}\n\n";
+                        $message = "ลิงก์ดาวน์โหลด\n\n";
+                        $message .= "รายการ: {$item['name']}\n";
+                        $message .= "{$actionData['download_url']}\n\n";
                         if (!empty($item['validity_days'])) {
-                            $message .= "⏰ ลิงก์หมดอายุใน {$item['validity_days']} วัน";
+                            $message .= "ลิงก์หมดอายุใน {$item['validity_days']} วัน";
                         }
 
                         $this->line->pushMessage($lineUserId, $message);
@@ -3454,13 +3379,13 @@ class BusinessBot
 
     public function showHelp($userId, $userDbId, $replyToken)
     {
-        $helpText = "📖 วิธีใช้งาน\n\n";
-        $helpText .= "🛒 shop - ดูสินค้า/บริการ\n";
-        $helpText .= "🛍️ cart - ดูตะกร้า\n";
-        $helpText .= "📋 orders - ดูรายการของฉัน\n";
-        $helpText .= "📞 contact - ติดต่อเรา\n\n";
-        $helpText .= "💡 พิมพ์ 'add [เลข]' เพื่อเพิ่มสินค้า\n";
-        $helpText .= "💡 พิมพ์ 'book [เลข]' เพื่อจองบริการ";
+        $helpText = "วิธีใช้งาน\n\n";
+        $helpText .= "shop - ดูสินค้า/บริการ\n";
+        $helpText .= "cart - ดูตะกร้า\n";
+        $helpText .= "orders - ดูรายการของฉัน\n";
+        $helpText .= "contact - ติดต่อเรา\n\n";
+        $helpText .= "พิมพ์ 'add [เลข]' เพื่อเพิ่มสินค้า\n";
+        $helpText .= "พิมพ์ 'book [เลข]' เพื่อจองบริการ";
 
         return $this->line->replyMessage($replyToken, ['type' => 'text', 'text' => $helpText]);
     }
@@ -3470,11 +3395,11 @@ class BusinessBot
         $shopName = $this->settings['shop_name'] ?? 'LINE Business';
         $phone = $this->settings['contact_phone'] ?? '';
 
-        $contactText = "📞 ติดต่อ {$shopName}\n\n";
+        $contactText = "ติดต่อ {$shopName}\n\n";
         if ($phone) {
-            $contactText .= "📱 โทร: {$phone}\n";
+            $contactText .= "โทร: {$phone}\n";
         }
-        $contactText .= "💬 แชทกับเราได้ที่นี่เลย!";
+        $contactText .= "แชทกับเราได้ที่นี่เลย!";
 
         return $this->line->replyMessage($replyToken, ['type' => 'text', 'text' => $contactText]);
     }
@@ -3492,10 +3417,10 @@ class BusinessBot
                 // มีออเดอร์รอชำระ - ขอให้ส่งสลิป
                 $this->setUserState($userDbId, 'awaiting_slip', ['order_id' => $order['id']]);
 
-                $text = "💳 ส่งสลิปชำระเงิน\n\n";
-                $text .= "📋 ออเดอร์: #{$order['order_number']}\n";
-                $text .= "💰 ยอดชำระ: ฿" . number_format($order['grand_total'], 2) . "\n\n";
-                $text .= "📸 กรุณาส่งรูปสลิปการโอนเงินมาเลยค่ะ";
+                $text = "ส่งสลิปชำระเงิน\n\n";
+                $text .= "ออเดอร์: #{$order['order_number']}\n";
+                $text .= "ยอดชำระ: ฿" . number_format($order['grand_total'], 2) . "\n\n";
+                $text .= "กรุณาส่งรูปสลิปการโอนเงินมาเลยค่ะ";
 
                 return $this->line->replyMessage($replyToken, ['type' => 'text', 'text' => $text]);
             }
@@ -3504,7 +3429,7 @@ class BusinessBot
         }
 
         // ไม่มีออเดอร์รอชำระ
-        $text = "📋 ยังไม่มีรายการที่รอชำระเงิน\n\n";
+        $text = "ยังไม่มีรายการที่รอชำระเงิน\n\n";
         $text .= "พิมพ์ 'shop' เพื่อดูสินค้า\n";
         $text .= "หรือพิมพ์ 'orders' เพื่อดูรายการของคุณ";
 

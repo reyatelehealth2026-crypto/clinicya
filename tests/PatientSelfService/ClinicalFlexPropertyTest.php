@@ -330,14 +330,28 @@ class ClinicalFlexPropertyTest extends TestCase
     // ตรวจจากซอร์สโดยตรง ไม่โหลดคลาส เพื่อไม่ต้องพึ่ง DB/LineAPI
     // ------------------------------------------------------------------
 
-    /** ดึงคีย์ของ $patientKeywords ใน BusinessBot::processMessage */
+    /**
+     * ทุกตาราง routing ใน processMessage รวมกัน
+     * เพิ่มตารางใหม่ต้องมาต่อชื่อไว้ที่นี่ ไม่งั้นเทสต์จะไม่คุ้มตารางนั้น
+     */
     private function patientKeywordMap()
+    {
+        // recursive เพราะ method เดียวกันโผล่ได้ทั้งสองตาราง (showOrders)
+        // array_merge ปกติจะทับคีย์เวิร์ดชุดแรกทิ้ง ทำให้เทสต์มองไม่เห็น
+        return array_merge_recursive(
+            $this->keywordMap('patientKeywords'),
+            $this->keywordMap('shopKeywords')
+        );
+    }
+
+    /** ดึงคู่ method => คีย์เวิร์ด จากตาราง routing ตัวหนึ่งใน BusinessBot::processMessage */
+    private function keywordMap($varName)
     {
         $src = file_get_contents(__DIR__ . '/../../classes/BusinessBot.php');
         $this->assertNotFalse($src, 'อ่าน BusinessBot.php ไม่ได้');
 
-        $start = strpos($src, '$patientKeywords = [');
-        $this->assertNotFalse($start, 'ไม่พบตาราง $patientKeywords — routing ถูกย้ายหรือลบไปแล้ว');
+        $start = strpos($src, '$' . $varName . ' = [');
+        $this->assertNotFalse($start, "ไม่พบตาราง \${$varName} — routing ถูกย้ายหรือลบไปแล้ว");
         $end = strpos($src, '];', $start);
         $block = substr($src, $start, $end - $start);
 
@@ -415,6 +429,62 @@ class ClinicalFlexPropertyTest extends TestCase
                 'ปรึกษาเภสัชกร',
                 $words,
                 "{$method}() แย่งคำสั่งส่งต่อเภสัชกรตัวจริงไป"
+            );
+        }
+    }
+
+    /**
+     * ดีไซน์คลินิกไม่ใช้ emoji — การ์ดที่ลูกค้าเห็นต้องไม่มีสัญลักษณ์หลุดมา
+     * แม้ผู้เรียกจะส่งป้ายปุ่มที่มี emoji มาก็ตาม (ตัวสร้างกลางต้องตัดให้)
+     */
+    public function testCustomerFacingCardsCarryNoEmoji()
+    {
+        $cards = [
+            'patientMainMenu' => \FlexTemplates::patientMainMenu(['shop_name' => 'ร้านทดสอบ', 'is_open' => true]),
+            'mainMenu'        => \FlexTemplates::mainMenu('ร้านทดสอบ'),
+            'quickMenu'       => \FlexTemplates::quickMenu('ร้านทดสอบ'),
+            'orderStatus'     => \FlexTemplates::orderStatus('RYA-1001', 'shipping', 'TH123456789TH'),
+            'slipReceived'    => \FlexTemplates::slipReceived('RYA-1001', 520),
+            'info'            => \FlexTemplates::info('หัวข้อ', 'ข้อความ', [['label' => '🛒 ไปช้อป', 'text' => 'shop']]),
+            'notification'    => \FlexTemplates::notification('แจ้งเตือน', '🔔 ข้อความทดสอบ'),
+            'welcome'         => \FlexTemplates::welcome('คุณลูกค้า', null, 'ร้านทดสอบ'),
+            'liffMenu'        => \FlexTemplates::liffMenu('ร้านทดสอบ', 'https://liff.line.me/1', 'https://liff.line.me/1/v', 'คุณลูกค้า'),
+            'firstMessageMenu' => \FlexTemplates::firstMessageMenu('ร้านทดสอบ', 'https://liff.line.me/1', 'คุณลูกค้า'),
+            'productCard'     => \FlexTemplates::productCard(['id' => 1, 'name' => 'ยาทดสอบ', 'price' => 100, 'sale_price' => 90, 'stock' => 5]),
+            'cartSummary'     => \FlexTemplates::cartSummary([['name' => 'ยาทดสอบ', 'quantity' => 1, 'subtotal' => 90]], 90, 1),
+            'promoCard'       => \FlexTemplates::promoCard('หัวข้อ', 'รายละเอียด', null, 'shop', 'แชร์'),
+            'referralCard'    => \FlexTemplates::referralCard('คุณลูกค้า', 'CODE', 'คูปอง', 'https://example.test/'),
+        ];
+
+        foreach ($cards as $name => $card) {
+            $json = json_encode($card, JSON_UNESCAPED_UNICODE);
+            $this->assertSame(
+                0,
+                preg_match('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{2300}-\x{23FF}\x{FE0F}]/u', $json),
+                "การ์ด {$name} ยังมี emoji หลุดออกไปถึงลูกค้า"
+            );
+        }
+    }
+
+    /** การ์ดที่ลูกค้าเห็นต้องใช้โทนเดียว — ห้ามมีเขียว LINE เดิมปนกับเขียวคลินิก */
+    public function testCustomerFacingCardsShareOneAccentColour()
+    {
+        $cards = [
+            'mainMenu'     => \FlexTemplates::mainMenu('ร้านทดสอบ'),
+            'quickMenu'    => \FlexTemplates::quickMenu('ร้านทดสอบ'),
+            'orderStatus'  => \FlexTemplates::orderStatus('RYA-1001', 'paid'),
+            'slipReceived' => \FlexTemplates::slipReceived('RYA-1001', 520),
+            'welcome'      => \FlexTemplates::welcome('คุณลูกค้า', null, 'ร้านทดสอบ'),
+            'liffMenu'     => \FlexTemplates::liffMenu('ร้านทดสอบ', 'https://liff.line.me/1', '', 'คุณลูกค้า'),
+            'cartSummary'  => \FlexTemplates::cartSummary([['name' => 'ยาทดสอบ', 'quantity' => 1, 'subtotal' => 90]], 90, 1),
+        ];
+
+        foreach ($cards as $name => $card) {
+            $json = json_encode($card, JSON_UNESCAPED_UNICODE);
+            $this->assertStringNotContainsStringIgnoringCase(
+                '#06C755',
+                $json,
+                "การ์ด {$name} ยังใช้เขียว LINE เดิม ไม่ตรงกับโทนคลินิก"
             );
         }
     }
