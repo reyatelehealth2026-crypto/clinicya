@@ -26,7 +26,9 @@ class ReceiptPointsAdmin
         }
 
         $lp = new LoyaltyPoints($db, $lineAccountId);
-        $lp->addPoints((int) $claim['user_id'], $points, 'receipt', $claimId, $description);
+        // Same key webhook.php uses for the auto-award, so approving a claim
+        // the OCR already paid for credits nothing a second time.
+        $lp->addPoints((int) $claim['user_id'], $points, 'receipt', $claimId, $description, 'receipt:' . $claimId);
 
         $upd = $db->prepare("UPDATE receipt_point_claims SET status = 'approved', points_awarded = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?");
         $upd->execute([$points, $adminUserId, $claimId]);

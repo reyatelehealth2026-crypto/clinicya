@@ -401,12 +401,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $earnedPoints = $loyalty->calculatePoints((float) $order['grand_total']);
 
                     if ($earnedPoints > 0) {
+                        // Keyed on the order so approving twice — a double
+                        // click, a refreshed POST — pays for it once.
                         $loyalty->addPoints(
                             $order['user_id'],
                             $earnedPoints,
                             'order',
                             $orderId,
-                            "แต้มจากออเดอร์ #{$order['order_number']}"
+                            "แต้มจากออเดอร์ #{$order['order_number']}",
+                            'order:' . $orderId
                         );
 
                         // ⚠️ ไม่ส่งแจ้งเตือนแต้มแยก - จะรวมในข้อความสถานะออเดอร์ด้านบน
