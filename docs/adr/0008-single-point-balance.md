@@ -120,21 +120,48 @@ ledger คำนวณจากค่าที่อ่านมาก่อน�
 
 ---
 
+## สำรวจโปรดักชัน (2026-09-07)
+
+สำรวจครบ 33 tenant DB ผลออกมาดีกว่าที่กลัวไว้มาก:
+
+| tenant | คนที่มี `points` | ยอดรวม | เป็นอะไร |
+|---|---|---|---|
+| 0003 (บ้านยาริมชล) | 24 | 1,200 | 24 × 50 โบนัสต้อนรับล้วน |
+| 0013 | 2 | 100 | 2 × 50 |
+| 0007 / 0101 | 1 / 1 | 50 / 50 | คนละ 50 |
+| 0001 | 7 | 11,573 | มี 50 อยู่ 3 คน ที่เหลือเป็น legacy import |
+
+**`users.points` ทั้งแพลตฟอร์มมีแค่ 35 คน** และนอกจาก tenant 0001 แล้วเป็นเลข 50
+เป๊ะทุกคน — คือโบนัสต้อนรับล้วน `points_history` ของ 0003 มี type เดียวคือ
+`bonus` 24 แถว = 1,200 ไม่มีอย่างอื่นเลย
+
+**ledger สุขภาพดี** — tenant 0003 เช็ค 1,062 users: `available_points` เท่ากับ
+ผลรวม `points_transactions` **ทุกคน mismatch = 0** (0013 ก็ตรง: 1,511 = 1,511)
+ยืนยันว่า `points_transactions` + `available_points` คือคู่ที่ควรอยู่รอด
+
+ผลต่อแผน: **ไม่ต้อง backfill ยอดจาก `users.points` เข้า `available_points`**
+เพราะนั่นคือการแจกโบนัสที่กำลังยกเลิกซ้ำอีกรอบ เหลือแค่ตัดสินว่า 28 คนที่ถือ 50
+อยู่จะให้เก็บไว้หรือไม่
+
+---
+
 ## Migration plan
 
 ทำตามลำดับ ห้ามข้าม — แต่ละเฟสปล่อยแยก deploy ได้
 
-| เฟส | งาน | เช็คว่าสำเร็จยังไง |
-|---|---|---|
-| 0 | **สำรวจความเสียหายก่อน** — นับผู้ใช้ที่ `points > 0` แต่ `available_points = 0` และกลับกัน ต่อ tenant | ได้ตัวเลขจริง ตัดสินใจเฟส 2 ได้ |
-| 1 | `LoyaltyPoints` ครอบ transaction + `FOR UPDATE`; เพิ่ม `idempotency_key` | property test: 50 การให้แต้มพร้อมกัน แล้ว `balance_after` ของแถวสุดท้าย = `available_points` |
-| 2 | **backfill** — ย้ายยอดจาก `users.points` เข้า `available_points` และ import `points_history` เข้า `points_transactions` เป็น `type='migration'` | ยอดรวมก่อน/หลังเท่ากันทุก user |
-| 3 | เปลี่ยนเส้น B ทั้งหมดมาเรียก `LoyaltyPoints` (`api/member.php` × 3, `api/points.php`, `shop/order-detail.php`) | grep แล้วไม่เหลือ `UPDATE users SET points` |
-| 4 | ผู้อ่าน `points_history` (`api/points.php`, `api/ai-admin.php`) ย้ายมาอ่าน `points_transactions` | ประวัติในทุกหน้าจอตรงกัน |
-| 5 | DROP คอลัมน์/ตารางที่เลิกใช้ ผ่าน `database/migration_*.sql` + บรรทัด `!` ใน `.gitignore` | สคีมาเหลือที่เก็บแต้มชุดเดียว |
+| เฟส | งาน | เช็คว่าสำเร็จยังไง | สถานะ |
+|---|---|---|---|
+| 0 | สำรวจความเสียหายต่อ tenant | ได้ตัวเลขจริง | **เสร็จ** (ดูข้างบน) |
+| 1 | `LoyaltyPoints` ครอบ transaction + `FOR UPDATE`; เลิกแจกโบนัส; เส้น B ทั้งหมดเรียก `LoyaltyPoints` | grep ไม่เหลือ `UPDATE users SET points` / `INSERT INTO points_history` | **เสร็จฝั่ง PHP** (`009186fd`) |
+| 2 | ฝั่ง Next ทำตาม — โดยเฉพาะ `api/miniapp/member` ที่ live อยู่ | โบนัสหยุดถูกแจกจริงบนโปรดักชัน | ยังไม่ทำ |
+| 3 | โอน 50 ของ 28 คนเข้า `points_transactions` เป็น `type='migration'` (หรือทิ้ง ถ้าเจ้าของสั่ง) | ลูกค้าเห็นเลขเดียวกันทั้ง LINE และมินิแอป | ยังไม่ทำ |
+| 4 | ผู้อ่าน `users.points` (`MemberPostbackRouter:201`, `LiffMessageHandler:593`, `includes/membership/members.php:128`, `api/member.php:465`) ย้ายมาอ่าน `available_points` | ทุกหน้าจอโชว์เลขเดียวกัน | ยังไม่ทำ |
+| 5 | เพิ่ม `points_transactions.idempotency_key` + `UNIQUE(source, idempotency_key)` | event เดิมส่งซ้ำได้แต้มครั้งเดียว | ยังไม่ทำ |
+| 6 | DROP คอลัมน์/ตารางที่เลิกใช้ ผ่าน `database/migration_*.sql` + บรรทัด `!` ใน `.gitignore` | สคีมาเหลือที่เก็บแต้มชุดเดียว | ยังไม่ทำ |
 
-**เฟส 2 คือจุดที่ย้อนยาก** — ต้อง snapshot ตาราง `users` ต่อ tenant ก่อนรัน และ
-เก็บ mapping ไว้ให้ย้อนได้
+**เฟส 3 กับ 4 ต้องเรียงกันแบบนี้เท่านั้น** — ถ้าสลับ reader ไป
+`available_points` ก่อนโอน 50 เข้าไป ลูกค้า 28 คนจะเปิดการ์ด LINE มาแล้วเห็น
+แต้มหาย snapshot ตาราง `users` ต่อ tenant ก่อนรันเฟส 3
 
 ---
 
@@ -160,8 +187,25 @@ ledger คำนวณจากค่าที่อ่านมาก่อน�
 
 ## Known Gaps
 
-- **ยังไม่ได้ query โปรดักชัน** — ทั้งหมดข้างบนสรุปจากโค้ดและสคีมาในรีโป
-  ยังไม่รู้ว่าจริง ๆ มีลูกค้ากี่คนที่แต้มค้างใน `users.points` (เฟส 0 ตอบข้อนี้)
+- **ฝั่ง Next ยังไม่ทำ และ `/api/miniapp` คือฝั่งที่ live อยู่** — เฟส 1/3
+  ทำเฉพาะ PHP (`009186fd`) แต่ [`infra/nginx/routes.json`](../../infra/nginx/routes.json)
+  ชี้ `/api/miniapp` ไป `next_admin` แล้ว **โบนัสต้อนรับ 50 แต้มจึงยังถูกแจกอยู่บน
+  โปรดักชัน** จนกว่า `apps/admin/src/app/api/miniapp/member/_lib/handlers.ts`
+  จะแก้ตาม (`/shop/order-detail` ยังเป็น `php_backend` จึงไม่มีปัญหานี้)
+
+  งานฝั่ง Next ใหญ่กว่าที่คิด: admin app มี port ของ `classes/LoyaltyPoints.php`
+  อยู่ **6 ชุดแยกกัน** ใต้ `apps/admin/src/app/` — `(tenant)/loyalty-members`,
+  `(tenant)/user-detail`, `(tenant)/shop/order-detail`, `api/miniapp/member`,
+  `api/miniapp/rewards`, `api/inbox/actions/customer-crm` — เพราะกติกา
+  allowed-paths ของแต่ละ batch ห้าม import ข้ามโฟลเดอร์ ADR นี้ยุบฝั่ง PHP
+  เหลือทางเข้าเดียวแล้ว ฝั่ง TypeScript ต้องยุบด้วย ซึ่งแปลว่าต้องยก 1 ใน 6 ชุด
+  ขึ้นเป็น shared module ไม่ใช่ไล่แก้ทีละ 6 ชุดทุกครั้งที่กติกาเปลี่ยน
+
+- **tenant 0001 ต้องตัดสินแยก** — สำรวจแล้ว (ดู "สำรวจโปรดักชัน" ข้างบน)
+  ผู้ใช้ 4 คนถือ 8,913 / 1,707 / 514 / 289 แต้มใน `users.points` ที่ **ไม่มีแถว
+  ใน `points_history` เลย** น่าจะมาจาก `import-legacy-points.php` และ ledger
+  กับ cache ของ tenant นี้ไม่ตรงกัน (81,723 vs 92,996) ถ้าเป็น demo ให้ข้าม
+  ถ้าเป็นร้านจริงต้องกระทบยอดทีละคนก่อน backfill
 - **`api/points.php` อาจตายแล้ว** — หาผู้เรียกในรีโปไม่เจอเลย (มีแต่
   `install/test_rewards_api.php`) ถ้ายืนยันว่าไม่มี client ภายนอกเรียก ก็ลบทิ้ง
   ได้แทนที่จะพอร์ต ซึ่งจะทำให้เฟส 3 เล็กลง
