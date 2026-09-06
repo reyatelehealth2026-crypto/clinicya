@@ -30,8 +30,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['member_action'])) {
 }
 
 // Filters
-$search = $_GET['search'] ?? '';
-$tier = $_GET['tier'] ?? '';
+// Reject array input (?tier[]=x): $tier is echoed into the pagination link and
+// $search is passed to urlencode(), which throws a TypeError on an array.
+$search = is_string($_GET['search'] ?? '') ? $_GET['search'] : '';
+$tier = is_string($_GET['tier'] ?? '') ? $_GET['tier'] : '';
 $page = max(1, (int) ($_GET['page'] ?? 1));
 $perPage = 20;
 $offset = ($page - 1) * $perPage;
