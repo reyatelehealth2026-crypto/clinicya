@@ -173,8 +173,17 @@ ledger คำนวณจากค่าที่อ่านมาก่อน�
 | 1 | `LoyaltyPoints` ครอบ transaction + `FOR UPDATE`; เลิกแจกโบนัส; เส้น B ทั้งหมดเรียก `LoyaltyPoints` | grep ไม่เหลือ `UPDATE users SET points` / `INSERT INTO points_history` | **เสร็จฝั่ง PHP** (`009186fd`) |
 | 2 | ฝั่ง Next ทำตาม — โดยเฉพาะ `api/miniapp/member` ที่ live อยู่ | โบนัสหยุดถูกแจกจริงบนโปรดักชัน | ยังไม่ทำ |
 | 3 | ผู้อ่าน `users.points` ย้ายมาอ่าน `available_points` — **12 ไฟล์ ไม่ใช่ 4** ตามที่ประเมินไว้แรก | ทุกหน้าจอโชว์เลขเดียวกัน | **เสร็จฝั่ง PHP** (`0343a2fe`) |
-| 4 | เพิ่ม `points_transactions.idempotency_key` + `UNIQUE(source, idempotency_key)` | event เดิมส่งซ้ำได้แต้มครั้งเดียว | ยังไม่ทำ |
+| 4 | เพิ่ม `points_transactions.idempotency_key` + `UNIQUE` บนคอลัมน์นั้น (คีย์ถูก scope ด้วย `line_account_id` ในโค้ด จึงไม่ต้องเป็น composite) | event เดิมส่งซ้ำได้แต้มครั้งเดียว | **เสร็จฝั่ง PHP** (`71800a8c`) — ยังไม่ได้รัน migration บน prod |
 | 5 | DROP คอลัมน์/ตารางที่เลิกใช้ ผ่าน `database/migration_*.sql` + บรรทัด `!` ใน `.gitignore` | สคีมาเหลือที่เก็บแต้มชุดเดียว | ยังไม่ทำ |
+
+**เฟส 4 ต้องรัน migration ก่อนถึงจะมีผล** — `LoyaltyPoints` เช็ค `SHOW COLUMNS`
+ก่อนใช้คีย์ ถ้ายังไม่ได้รัน `install/migrate_all_tenants_points_idempotency.php`
+คีย์จะถูกละไว้เงียบ ๆ และการให้แต้มซ้ำยังเกิดได้เหมือนเดิม
+
+migration นี้เพิ่ม `idx_pt_user` ด้วย — template ของ tenant สร้าง
+`points_transactions` โดยมีแค่ PRIMARY KEY (ยืนยันบน prod 2026-09-07: tenant
+0001/0003/0013 มี index เดียวทั้งตาราง) ทุกการอ่านยอดจึงเป็น full scan และตั้งแต่
+ADR นี้ scan นั้นวิ่งใต้ row lock
 
 เดิมมีเฟส "โอน 50 เข้า ledger ก่อนสลับ reader" คั่นอยู่ และเป็นเฟสเดียวที่ย้อนยาก
 เพราะแตะยอดลูกค้าจริง — ตัดออกแล้วตาม Decision ข้อ 4 การสลับ reader ในเฟส 3 จึง
