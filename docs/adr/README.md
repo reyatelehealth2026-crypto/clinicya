@@ -21,6 +21,7 @@ ADR-001, ADR-002 และ ADR-006 ถูกอ้างอิงในโค้
 | [0005](0005-file-storage-layout.md) | File Storage Layout + Signed URL Strategy | **Accepted (2026-05-25)** | ไม่มี |
 | [0006](0006-super-admin-audit.md) | Super Admin Cross-Tenant Access + Audit | **Accepted (2026-05-25)** | 8 จุด |
 | [0007](0007-two-realm-session-implementation.md) | Two-Realm Session Model — implementation drift จาก ADR-006 | Documents current code, needs confirmation | — |
+| [0008](0008-single-point-balance.md) | แหล่งเก็บแต้มเดียว — `points_transactions` เป็น ledger | **Proposed (2026-09-07)** | — |
 
 ### 0003–0005 ถูกพบแล้ว — ต้นฉบับอยู่บนเครื่องนักพัฒนา
 
