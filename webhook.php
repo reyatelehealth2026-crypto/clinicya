@@ -1457,6 +1457,9 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
 
         // ตรวจสอบคำสั่งและการเรียก AI
         $textLower = mb_strtolower(trim($messageText));
+        // Customers type the loyalty keywords with a leading "/" or "@" often
+        // enough that exact matching was dropping the command silently.
+        $loyaltyTextLower = preg_replace('/^[\/@]+/u', '', $textLower);
         $textTrimmed = trim($messageText);
 
         devLog($db, 'debug', 'webhook', 'Bot mode check', [
@@ -1473,10 +1476,10 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         $pointsKeywords = ['แต้ม', 'แต้มสะสม', 'สะสมแต้ม', 'คะแนน', 'คะแนนสะสม', 'สะสมคะแนน', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'];
         $memberKeywords = ['สมาชิก', 'บัตรสมาชิก', 'บัตร', 'member', 'membercard', 'member card'];
         $rewardKeywords = ['ของรางวัล', 'แลกของรางวัล', 'แลกแต้ม', 'ของแลก', 'rewards', 'reward'];
-        $isRedeem = (bool) preg_match('/^redeem\s+(\d+)$/', $textLower, $redeemMatch);
-        $isLoyaltyCmd = in_array($textLower, $pointsKeywords, true)
-            || in_array($textLower, $memberKeywords, true)
-            || in_array($textLower, $rewardKeywords, true)
+        $isRedeem = (bool) preg_match('/^redeem\s+(\d+)$/', $loyaltyTextLower, $redeemMatch);
+        $isLoyaltyCmd = in_array($loyaltyTextLower, $pointsKeywords, true)
+            || in_array($loyaltyTextLower, $memberKeywords, true)
+            || in_array($loyaltyTextLower, $rewardKeywords, true)
             || $isRedeem;
         if (class_exists('BusinessBot') && $isLoyaltyCmd) {
             try {
@@ -1484,16 +1487,17 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                 $sendResult = null;
                 if ($isRedeem) {
                     $sendResult = $loyaltyBot->redeemReward($userId, $user['id'], (int) $redeemMatch[1], $replyToken);
-                } elseif (in_array($textLower, $pointsKeywords, true)) {
+                } elseif (in_array($loyaltyTextLower, $pointsKeywords, true)) {
                     $sendResult = $loyaltyBot->showPoints($userId, $user['id'], $replyToken);
-                } elseif (in_array($textLower, $memberKeywords, true)) {
+                } elseif (in_array($loyaltyTextLower, $memberKeywords, true)) {
                     $sendResult = $loyaltyBot->showMemberCard($userId, $user['id'], $replyToken);
                 } else {
                     $sendResult = $loyaltyBot->showRewards($userId, $user['id'], $replyToken);
                 }
                 devLog($db, 'info', 'webhook', 'Loyalty command handled (chat)', [
                     'user_id' => $userId,
-                    'command' => $textLower,
+                    'command' => $loyaltyTextLower,
+                    'raw_command' => $textLower,
                     'bot_mode' => $botMode,
                     'send_code' => is_array($sendResult) ? ($sendResult['code'] ?? null) : null,
                     'send_method' => is_array($sendResult) ? ($sendResult['method'] ?? null) : null,
