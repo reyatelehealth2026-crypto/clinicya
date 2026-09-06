@@ -12,7 +12,7 @@ class GeminiAPI
 {
     private AISettings $settings;
     
-    private const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    private const API_BASE = GEMINI_API_BASE . '/v1beta/models/';
     
     public function __construct(AISettings $settings)
     {

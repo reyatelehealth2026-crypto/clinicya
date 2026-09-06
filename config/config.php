@@ -17,6 +17,15 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Origin every Gemini caller builds its URL from. Google refuses some hosts
+// outright with "User location is not supported for the API use.", so a
+// deployment sitting in a blocked region points this at a relay that forwards
+// from a supported one. Override per environment — the default is Google
+// itself, and a relay URL is deployment config, never source.
+if (!defined('GEMINI_API_BASE')) {
+    define('GEMINI_API_BASE', rtrim((string) (getenv('GEMINI_API_BASE') ?: 'https://generativelanguage.googleapis.com'), '/'));
+}
+
 // Database
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'zrismpsz_clinicya');

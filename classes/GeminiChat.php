@@ -14,7 +14,7 @@ class GeminiChat
     private $lineAccountId;
     
     const DEFAULT_MODEL = 'gemini-flash-latest';
-    const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    const API_BASE = GEMINI_API_BASE . '/v1beta/models/';
     
     public function __construct($db, $lineAccountId = null)
     {

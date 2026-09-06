@@ -22,7 +22,7 @@ class PharmacyImageAnalyzerService
     
     // API Configuration
     const DEFAULT_MODEL = 'gemini-2.5-flash';
-    const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    const API_BASE = GEMINI_API_BASE . '/v1beta/models/';
     const CACHE_EXPIRY_HOURS = 24;
     
     // Severity levels

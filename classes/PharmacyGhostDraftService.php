@@ -18,7 +18,7 @@ class PharmacyGhostDraftService
     
     // API Configuration
     const DEFAULT_MODEL = 'gemini-2.5-flash';
-    const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    const API_BASE = GEMINI_API_BASE . '/v1beta/models/';
     
     // Draft generation timeout (seconds) - increased for slower API responses
     const DRAFT_TIMEOUT = 15;

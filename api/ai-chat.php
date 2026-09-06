@@ -787,7 +787,7 @@ $tryGemini = function (string $key) use ($db, $requestLineAccountId, $payload, $
         }
     };
 
-    $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent?alt=sse&key=" . urlencode($key);
+    $url = GEMINI_API_BASE . "/v1beta/models/gemini-flash-latest:streamGenerateContent?alt=sse&key=" . urlencode($key);
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
