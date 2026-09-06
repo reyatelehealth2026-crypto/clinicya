@@ -59,5 +59,11 @@ if (!class_exists('Database', false)) {
         {
             return \Modules\Core\Database::platform();
         }
+
+        /** Release one tenant's pooled connection (for CLI sweep loops). */
+        public static function releaseTenant(int $tenantId): void
+        {
+            \Modules\Core\Database::releaseTenant($tenantId);
+        }
     }
 }
