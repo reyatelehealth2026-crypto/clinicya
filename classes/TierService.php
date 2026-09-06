@@ -207,16 +207,17 @@ class TierService
 
         try {
             $stmt = $this->db->prepare("
-                SELECT points, total_points, available_points 
-                FROM users 
+                SELECT total_points, available_points
+                FROM users
                 WHERE id = ?
             ");
             $stmt->execute([$userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($user) {
-                // Use total_points if available, otherwise points
-                $points = (int) ($user['total_points'] ?? $user['points'] ?? 0);
+                // `users.points` used to be the last fallback here — it holds
+                // only withdrawn welcome bonuses now (ADR-008).
+                $points = (int) ($user['total_points'] ?? $user['available_points'] ?? 0);
             }
         } catch (Exception $e) {
             // Error fetching user points

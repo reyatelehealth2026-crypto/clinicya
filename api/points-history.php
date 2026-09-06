@@ -61,17 +61,17 @@ try {
     // Get user info — scope by line_account_id when provided so we pick the
     // right member row (a LINE user can exist under multiple OAs within a tenant).
     if ($lineAccountId > 0) {
-        $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, points, display_name FROM users WHERE line_user_id = ? AND line_account_id = ? LIMIT 1");
+        $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, display_name FROM users WHERE line_user_id = ? AND line_account_id = ? LIMIT 1");
         $stmt->execute([$lineUserId, $lineAccountId]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
         // Fallback: same person, no account scoping (legacy rows without line_account_id).
         if (!$user) {
-            $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, points, display_name FROM users WHERE line_user_id = ? LIMIT 1");
+            $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, display_name FROM users WHERE line_user_id = ? LIMIT 1");
             $stmt->execute([$lineUserId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
         }
     } else {
-        $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, points, display_name FROM users WHERE line_user_id = ? LIMIT 1");
+        $stmt = $db->prepare("SELECT id, line_account_id, total_points, available_points, used_points, display_name FROM users WHERE line_user_id = ? LIMIT 1");
         $stmt->execute([$lineUserId]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
     }
@@ -83,11 +83,9 @@ try {
         exit;
     }
 
-    // Fallback: use 'points' column if available_points is 0 but points has value
-    if (empty($user['available_points']) && !empty($user['points'])) {
-        $user['available_points'] = $user['points'];
-        $user['total_points'] = $user['points'];
-    }
+    // `users.points` used to be read here when available_points was 0. It
+    // holds nothing but withdrawn welcome bonuses (ADR-008), so falling back
+    // to it handed customers the 50 points that were written off.
 
     $loyalty = new LoyaltyPoints($db, $user['line_account_id']);
 

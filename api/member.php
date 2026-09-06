@@ -286,7 +286,7 @@ function handleCheck($db)
 
  // Try exact match first - use only columns that definitely exist
  $stmt = $db->prepare("
-        SELECT id, member_id, is_registered, first_name, last_name, points, display_name
+        SELECT id, member_id, is_registered, first_name, last_name, available_points, display_name
         FROM users
         WHERE line_user_id = ? AND line_account_id = ?
     ");
@@ -296,7 +296,7 @@ function handleCheck($db)
  // If not found, try without account filter
  if (!$user) {
   $stmt = $db->prepare("
-            SELECT id, member_id, is_registered, first_name, last_name, points, display_name
+            SELECT id, member_id, is_registered, first_name, last_name, available_points, display_name
             FROM users
             WHERE line_user_id = ?
         ");
@@ -324,7 +324,8 @@ function handleCheck($db)
  // Calculate actual tier using TierService
  require_once __DIR__ . '/../classes/TierService.php';
  $tierService = new TierService($db, $lineAccountId);
- $tierInfo = $tierService->calculateTier((int) ($user['points'] ?? 0));
+ // Balance and tier both come from available_points — ADR-008.
+ $tierInfo = $tierService->calculateTier((int) ($user['available_points'] ?? 0));
 
  jsonResponse(true, 'OK', [
   'exists' => true,
@@ -336,7 +337,7 @@ function handleCheck($db)
   'display_name' => $user['display_name'] ?? null,
   'tier' => $tierInfo['tier_code'],
   'tier_name' => $tierInfo['tier_name'],
-  'points' => (int) ($user['points'] ?? 0),
+  'points' => (int) ($user['available_points'] ?? 0),
   'auto_registered' => true
  ]);
 }
@@ -390,7 +391,7 @@ function autoRegisterMember($db, $lineUserId, $lineAccountId, $displayName = '',
   'first_name' => null,
   'last_name' => null,
   'display_name' => $displayName,
-  'points' => 0
+  'available_points' => 0
  ];
 }
 
@@ -427,7 +428,7 @@ function autoUpgradeMember($db, $userId, $lineAccountId)
  error_log("autoUpgradeMember: Upgraded user id=$userId to member_id=$memberId");
 
  // Fetch updated user
- $stmt = $db->prepare("SELECT id, member_id, is_registered, first_name, last_name, display_name, points FROM users WHERE id = ?");
+ $stmt = $db->prepare("SELECT id, member_id, is_registered, first_name, last_name, display_name, available_points FROM users WHERE id = ?");
  $stmt->execute([$userId]);
  return $stmt->fetch(PDO::FETCH_ASSOC);
 }

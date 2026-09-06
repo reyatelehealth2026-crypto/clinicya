@@ -66,22 +66,17 @@ class LoyaltyPoints
         // If no data in points_transactions, fallback to users table
         if (!$result || (int) $result['available_points'] === 0) {
             error_log("getUserPoints: No data in points_transactions, checking users table");
-            $stmt = $this->db->prepare("SELECT total_points, available_points, used_points, points FROM users WHERE id = ?");
+            $stmt = $this->db->prepare("SELECT total_points, available_points, used_points FROM users WHERE id = ?");
             $stmt->execute([$userId]);
             $userResult = $stmt->fetch(PDO::FETCH_ASSOC);
             error_log("getUserPoints: Users table result: " . json_encode($userResult));
 
-            if ($userResult) {
-                // Use 'points' column if available_points is 0 but points has value (same logic as points-history.php)
-                if (empty($userResult['available_points']) && !empty($userResult['points'])) {
-                    $userResult['available_points'] = $userResult['points'];
-                    $userResult['total_points'] = $userResult['points'];
-                    error_log("getUserPoints: Using 'points' column as fallback: " . $userResult['points']);
-                }
-
-                if ((int) $userResult['available_points'] > 0) {
-                    return $userResult;
-                }
+            // `users.points` used to be read here when available_points was 0.
+            // That column holds nothing but withdrawn welcome bonuses (ADR-008
+            // §"4. โบนัสต้อนรับที่เคยแจกไปแล้ว — ตัดทิ้ง ไม่ต้องโอน"), so reading it
+            // handed customers back the 50 points that were written off.
+            if ($userResult && (int) $userResult['available_points'] > 0) {
+                return $userResult;
             }
         }
 

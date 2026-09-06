@@ -313,12 +313,14 @@ class DrugPricingEngineService
         // Get user's points
         $points = 0;
         try {
-            $stmt = $this->db->prepare("SELECT total_points, available_points, points FROM users WHERE id = ?");
+            $stmt = $this->db->prepare("SELECT total_points, available_points FROM users WHERE id = ?");
             $stmt->execute([$userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if ($user) {
-                $points = (int)($user['total_points'] ?? $user['points'] ?? 0);
+                // `users.points` used to be the fallback — it holds only
+                // withdrawn welcome bonuses now (ADR-008).
+                $points = (int)($user['total_points'] ?? $user['available_points'] ?? 0);
             }
         } catch (PDOException $e) {
             // Use default 0 points

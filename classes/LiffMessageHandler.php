@@ -590,10 +590,12 @@ class LiffMessageHandler {
      */
     private function getUserPoints($userId) {
         try {
-            $stmt = $this->db->prepare("SELECT points FROM users WHERE id = ?");
+            // available_points is the balance LoyaltyPoints maintains; the old
+            // `points` column holds only withdrawn welcome bonuses (ADR-008).
+            $stmt = $this->db->prepare("SELECT available_points FROM users WHERE id = ?");
             $stmt->execute([$userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
-            return (int)($user['points'] ?? 0);
+            return (int)($user['available_points'] ?? 0);
         } catch (Exception $e) {}
 
         return 0;

@@ -77,7 +77,7 @@ function handleHistory($db) {
     }
     
     // Get user
-    $stmt = $db->prepare("SELECT id, points FROM users WHERE line_user_id = ?");
+    $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ?");
     $stmt->execute([$lineUserId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -225,7 +225,7 @@ function handleRedeem($db, $data) {
     }
     
     // Get user
-    $stmt = $db->prepare("SELECT id, points FROM users WHERE line_user_id = ?");
+    $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ?");
     $stmt->execute([$lineUserId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     

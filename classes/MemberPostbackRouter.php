@@ -198,7 +198,10 @@ class MemberPostbackRouter
                    AND status IN ('pending', 'confirmed', 'in_progress')",
                 [$userId],
             ],
-            'points' => ['SELECT COALESCE(points, 0) FROM users WHERE id = ?', [$userId]],
+            // available_points, not points — the latter holds only withdrawn
+            // welcome bonuses (ADR-008), so the member card was showing a
+            // balance the customer could not spend.
+            'points' => ['SELECT COALESCE(available_points, 0) FROM users WHERE id = ?', [$userId]],
         ];
 
         foreach ($counts as $key => [$sql, $args]) {

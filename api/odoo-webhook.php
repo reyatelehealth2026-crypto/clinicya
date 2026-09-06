@@ -277,7 +277,7 @@ class OdooWebhookHandler {
 
         // ── หา LineUser ──────────────────────────────────────────────────────
         $userStmt = $this->db->prepare(
-            "SELECT id, points, line_account_id, display_name, picture_url
+            "SELECT id, available_points, line_account_id, display_name, picture_url
              FROM users WHERE line_user_id = ? LIMIT 1"
         );
         $userStmt->execute([$lineUserId]);
@@ -289,20 +289,21 @@ class OdooWebhookHandler {
 
         $userId        = (int) $user['id'];
         $lineAccountId = (int) ($user['line_account_id'] ?? 3);
-        $newPoints     = (int) $user['points'] + $points;
+        $newPoints     = (int) $user['available_points'] + $points;
         $displayName   = $user['display_name'] ?? 'ลูกค้า';
         $pictureUrl    = $user['picture_url'] ?? '';
 
         // ── อัพเดทแต้ม ───────────────────────────────────────────────────────
         $this->db->prepare(
+            // `points` is no longer written — it holds only withdrawn welcome
+            // bonuses and is dropped in a later phase (ADR-008).
             "UPDATE users SET
-                points          = points + ?,
                 available_points = available_points + ?,
                 total_points    = total_points + ?,
                 total_spent     = total_spent + ?,
                 order_count     = order_count + 1
              WHERE id = ?"
-        )->execute([$points, $points, $points, $amountTotal, $userId]);
+        )->execute([$points, $points, $amountTotal, $userId]);
 
         // ── บันทึก points_transactions ────────────────────────────────────────
         $desc = "ได้รับแต้มจากออเดอ " . ($orderName ?: $invoiceNumber)
