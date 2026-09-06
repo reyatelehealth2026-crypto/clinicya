@@ -185,7 +185,7 @@ Customer photographs a shop receipt in LINE and earns loyalty points. Lives almo
 4. Failures and unproven reads go to `recordPendingReceiptPointClaim()`, which writes `receipt_point_claims` (with `fail_reason`: `no_ocr_result`, `not_recognized_as_receipt`, `zero_amount`, `low_confidence`, `ocr_exception`), replies "we'll review it", and drops an admin card via `persistReceiptConversationCard()`. Pharmacists clear the queue in `receipt-points-review.php` / `ReceiptPointsAdmin`.
 5. Success sends the `FlexTemplates::pointsReceipt()` card. Images are stored under `uploads/receipt-claims/YYYY/MM/<sha256>.jpg`; `claim_key` + `image_hash` dedupe re-submissions.
 
-`analyzeReceiptImage()` tries Gemini vision models, then falls back to OCR.Space text OCR + `parseReceiptOcrText()`. Both loops keep escalating until a read is *arithmetically proven* — do not "optimise" either one back into returning the first non-zero total, which is how a slip whose true total was 615 was once recorded as 25. See ADR-0007 (`docs/adr/0007-receipt-points-review.md`).
+`analyzeReceiptImage()` tries Gemini vision models, then falls back to OCR.Space text OCR + `parseReceiptOcrText()`. Both loops keep escalating until a read is *arithmetically proven* — do not "optimise" either one back into returning the first non-zero total, which is how a slip whose true total was 615 was once recorded as 25. See ADR-007 (`docs/adr/0007-receipt-points-review.md`).
 
 ## Commit Convention
 
