@@ -276,6 +276,62 @@ function triggerReceiptFlow($db, $line, $replyToken, $userDbId, $lineUserId = nu
     saveOutgoingMessage($db, $userDbId, json_encode($promptMsg, JSON_UNESCAPED_UNICODE), 'system', 'text');
 }
 
+/**
+ * บอกวิธีสะสมแต้มให้ลูกค้าที่ส่งรูปมาเองโดยไม่ได้เริ่มขั้นตอน — ครั้งเดียวต่อ 30 วัน
+ *
+ * ส่งด้วย push ไม่แตะ reply token เพราะ auto-reply/AI ที่ทำงานต่อจากนี้ยังต้องใช้
+ * เงียบเมื่อร้านปิดฟีเจอร์แต้ม หรือเคยบอกไปแล้ว จะได้ไม่ไปทักทับรูปที่ลูกค้า
+ * ส่งมาปรึกษาเภสัชทุกใบ
+ */
+function maybeSendReceiptPointsHint($db, $line, $userDbId, $lineUserId, $lineAccountId)
+{
+    if (empty($lineUserId)) {
+        return;
+    }
+
+    try {
+        $flag = $db->prepare("SELECT receipt_points_enabled FROM line_accounts WHERE id = ? LIMIT 1");
+        $flag->execute([$lineAccountId]);
+        $enabled = $flag->fetchColumn();
+        if ($enabled !== false && (int) $enabled === 0) {
+            return;
+        }
+    } catch (Exception $e) {
+        // คอลัมน์ยังไม่ถูก migrate — ถือว่าเปิด ตามที่ handleReceiptPointsClaim ทำ
+    }
+
+    try {
+        $seen = $db->prepare("SELECT 1 FROM messages
+            WHERE user_id = ? AND sent_by = 'system:receipt-hint'
+              AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT 1");
+        $seen->execute([$userDbId]);
+        if ($seen->fetchColumn()) {
+            return;
+        }
+    } catch (Exception $e) {
+        // อ่านประวัติไม่ได้ = ไม่รู้ว่าเคยบอกหรือยัง เงียบไว้ดีกว่าเสี่ยงทักซ้ำทุกรูป
+        return;
+    }
+
+    $hint = [
+        'type' => 'text',
+        'text' => 'หมายเหตุ: ถ้าต้องการสะสมแต้มจากใบเสร็จ พิมพ์ "ส่งใบเสร็จ" แล้วส่งรูปใบเสร็จอีกครั้งนะคะ',
+    ];
+
+    try {
+        $line->pushMessage($lineUserId, [$hint]);
+    } catch (Exception $e) {
+        error_log('receipt points hint push failed: ' . $e->getMessage());
+    }
+
+    // บันทึกไว้เสมอแม้ push ไม่ผ่าน กันวนทักซ้ำทุกรูปเมื่อ push ล่มยาว
+    try {
+        saveOutgoingMessage($db, $userDbId, json_encode($hint, JSON_UNESCAPED_UNICODE), 'system:receipt-hint', 'text');
+    } catch (Exception $e) {
+        error_log('receipt points hint log failed: ' . $e->getMessage());
+    }
+}
+
 // Log incoming webhook
 if (!empty($events)) {
     try {
@@ -1000,6 +1056,17 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                     return;
                 }
             }
+
+            // ลูกค้าส่งรูปมาเองโดยไม่ได้กด "ส่งใบเสร็จ" ก่อน เดิมเงียบใส่ทั้งดุ้น
+            // จนเข้าใจว่าระบบอ่านบิลไม่ได้ — บอกวิธีสะสมแต้มให้ครั้งเดียวแล้วเงียบ
+            // ไม่ยิง OCR ตรงนี้ เพราะรูปที่ส่งเข้ามาส่วนใหญ่คือรูปคุยกับเภสัช ไม่ใช่ใบเสร็จ
+            // ตัด state ที่ลูกค้าทำถูกอยู่แล้วออก: waiting_receipt คือกดส่งใบเสร็จมาแล้ว
+            // (ตกมาถึงตรงนี้ได้เมื่อ handler คืน false เช่นร้านปิดฟีเจอร์หรือ Gemini ล้ม)
+            $inGuidedImageFlow = $userState
+                && in_array($userState['state'], ['waiting_receipt', 'waiting_slip', 'awaiting_slip'], true);
+            if ($messageType === 'image' && !$inGuidedImageFlow) {
+                maybeSendReceiptPointsHint($db, $line, $user['id'], $userId, $lineAccountId);
+            }
         } elseif ($messageType === 'sticker') {
             $stickerId = $event['message']['stickerId'] ?? '';
             $packageId = $event['message']['packageId'] ?? '';
@@ -1390,6 +1457,9 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
 
         // ตรวจสอบคำสั่งและการเรียก AI
         $textLower = mb_strtolower(trim($messageText));
+        // Customers type the loyalty keywords with a leading "/" or "@" often
+        // enough that exact matching was dropping the command silently.
+        $loyaltyTextLower = preg_replace('/^[\/@]+/u', '', $textLower);
         $textTrimmed = trim($messageText);
 
         devLog($db, 'debug', 'webhook', 'Bot mode check', [
@@ -1406,10 +1476,10 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
         $pointsKeywords = ['แต้ม', 'แต้มสะสม', 'สะสมแต้ม', 'คะแนน', 'คะแนนสะสม', 'สะสมคะแนน', 'เช็คแต้ม', 'เช็คคะแนน', 'ดูแต้ม', 'ดูคะแนน', 'แต้มของฉัน', 'points', 'point', 'my points', 'mypoints'];
         $memberKeywords = ['สมาชิก', 'บัตรสมาชิก', 'บัตร', 'member', 'membercard', 'member card'];
         $rewardKeywords = ['ของรางวัล', 'แลกของรางวัล', 'แลกแต้ม', 'ของแลก', 'rewards', 'reward'];
-        $isRedeem = (bool) preg_match('/^redeem\s+(\d+)$/', $textLower, $redeemMatch);
-        $isLoyaltyCmd = in_array($textLower, $pointsKeywords, true)
-            || in_array($textLower, $memberKeywords, true)
-            || in_array($textLower, $rewardKeywords, true)
+        $isRedeem = (bool) preg_match('/^redeem\s+(\d+)$/', $loyaltyTextLower, $redeemMatch);
+        $isLoyaltyCmd = in_array($loyaltyTextLower, $pointsKeywords, true)
+            || in_array($loyaltyTextLower, $memberKeywords, true)
+            || in_array($loyaltyTextLower, $rewardKeywords, true)
             || $isRedeem;
         if (class_exists('BusinessBot') && $isLoyaltyCmd) {
             try {
@@ -1417,16 +1487,17 @@ function handleMessage($event, $userId, $replyToken, $db, $line, $lineAccountId 
                 $sendResult = null;
                 if ($isRedeem) {
                     $sendResult = $loyaltyBot->redeemReward($userId, $user['id'], (int) $redeemMatch[1], $replyToken);
-                } elseif (in_array($textLower, $pointsKeywords, true)) {
+                } elseif (in_array($loyaltyTextLower, $pointsKeywords, true)) {
                     $sendResult = $loyaltyBot->showPoints($userId, $user['id'], $replyToken);
-                } elseif (in_array($textLower, $memberKeywords, true)) {
+                } elseif (in_array($loyaltyTextLower, $memberKeywords, true)) {
                     $sendResult = $loyaltyBot->showMemberCard($userId, $user['id'], $replyToken);
                 } else {
                     $sendResult = $loyaltyBot->showRewards($userId, $user['id'], $replyToken);
                 }
                 devLog($db, 'info', 'webhook', 'Loyalty command handled (chat)', [
                     'user_id' => $userId,
-                    'command' => $textLower,
+                    'command' => $loyaltyTextLower,
+                    'raw_command' => $textLower,
                     'bot_mode' => $botMode,
                     'send_code' => is_array($sendResult) ? ($sendResult['code'] ?? null) : null,
                     'send_method' => is_array($sendResult) ? ($sendResult['method'] ?? null) : null,

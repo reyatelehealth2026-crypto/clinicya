@@ -30,7 +30,7 @@ class MIMSPharmacistAI
     private MIMSKnowledgeBase $mimsKB;
     private PharmacyRAG $rag;
     
-    private const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    private const API_BASE = GEMINI_API_BASE . '/v1beta/models/';
     
     // Conversation state
     private array $conversationState = [

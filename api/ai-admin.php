@@ -938,6 +938,50 @@ function getSystemStatus($db, $botId) {
 
 // ==================== GEMINI AI INTEGRATION ====================
 
+function getSetupStatusContext($db, $botId) {
+    try {
+        $f = __DIR__ . '/../modules/Onboarding/SetupStatusChecker.php';
+        if (!is_file($f)) return '(ไม่มีข้อมูลสถานะ)';
+        require_once $f;
+        $checker = new \Modules\Onboarding\SetupStatusChecker($db, $botId);
+        $items = $checker->checkAll();
+        $lines = [];
+        foreach ((array)$items as $it) {
+            $label = $it['label'] ?? ($it['key'] ?? '');
+            if ($label === '') continue;
+            $lines[] = (!empty($it['completed']) ? '✅ ' : '❌ ') . $label;
+        }
+        return $lines ? implode("
+", $lines) : '(ยังไม่มีข้อมูล)';
+    } catch (\Throwable $e) { return '(ตรวจสถานะไม่ได้)'; }
+}
+
+function getFeatureKBContext($message) {
+    $map = [
+        '01-line-oa-inbox-crm.md' => ['line oa','inbox','แชท','กล่องข้อความ','crm','webhook','เชื่อม line'],
+        '02-dispense-pharmacy.md' => ['จ่ายยา','dispense','เภสัช','ฉลากยา','ห้องยา'],
+        '03-shop-miniapp-checkout.md' => ['ร้านค้า','shop','checkout','ตะกร้า','liff','mini app','สั่งซื้อ','ร้านออนไลน์'],
+        '04-inventory-products.md' => ['สินค้า','คลัง','สต๊อก','stock','inventory','รับสินค้า','ผู้จำหน่าย','หมดอายุ'],
+        '05-ai-consultation-slip.md' => ['ปรึกษา','สลิป','slip','ตรวจสลิป','ชำระเงิน'],
+        '06-loyalty-membership.md' => ['สมาชิก','แต้ม','loyalty','รางวัล','membership','สะสม'],
+        '07-broadcast-aistudio.md' => ['บรอดแคสต์','broadcast','ai studio','drip','แคมเปญ','การตลาด'],
+        '08-documents-odoo-platform.md' => ['เอกสาร','ใบกำกับ','ใบเสร็จ','vat','ภาษี','odoo'],
+        '09-appointments-telepharmacy-reminders.md' => ['นัดหมาย','appointment','เตือน','telepharmacy','วิดีโอ','ปรึกษาออนไลน์'],
+        '10-content-playbook.md' => ['คอนเทนต์','โพสต์','content','โปรโมท'],
+    ];
+    $msg = mb_strtolower($message);
+    $dir = __DIR__ . '/../docs/marketing/feature-kb/';
+    foreach ($map as $file => $kws) {
+        foreach ($kws as $kw) {
+            if (mb_strpos($msg, mb_strtolower($kw)) !== false) {
+                $path = $dir . $file;
+                return is_file($path) ? mb_substr(file_get_contents($path), 0, 6000) : '';
+            }
+        }
+    }
+    return '';
+}
+
 function askGeminiAI($db, $message, $botId) {
     $msg = mb_strtolower($message);
     
@@ -951,16 +995,17 @@ function askGeminiAI($db, $message, $botId) {
     }
     
     // ดึง API Key จาก database (column-based structure)
-    $apiKey = null;
+    $apiKey = null; $openaiKey = null;
     try {
-        $stmt = $db->prepare("SELECT gemini_api_key FROM ai_settings WHERE (line_account_id = ? OR line_account_id IS NULL) ORDER BY line_account_id DESC LIMIT 1");
+        $stmt = $db->prepare("SELECT gemini_api_key, openai_api_key FROM ai_settings WHERE (line_account_id = ? OR line_account_id IS NULL) ORDER BY line_account_id DESC LIMIT 1");
         $stmt->execute([$botId]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         $apiKey = $result['gemini_api_key'] ?? null;
+        $openaiKey = $result['openai_api_key'] ?? null;
     } catch (Exception $e) {}
-    
-    // ถ้าไม่มี API Key ให้แสดง help message
-    if (empty($apiKey)) {
+
+    // ถ้าไม่มี key เลยทั้งคู่ ให้แสดง help message
+    if (empty($apiKey) && empty($openaiKey)) {
         return getHelpMessage();
     }
     
@@ -973,36 +1018,117 @@ function askGeminiAI($db, $message, $botId) {
         $productContext = getProductContextForAI($db, $botId, $message);
     }
     
+    $setupStatus = getSetupStatusContext($db, $botId);
+    $kbContext = getFeatureKBContext($message);
+
     // สร้าง prompt
-    $systemPrompt = "คุณเป็น AI Admin Assistant สำหรับระบบ LINE CRM ช่วยตอบคำถามแอดมินเกี่ยวกับระบบ
-ตอบเป็นภาษาไทย สั้น กระชับ ใช้ emoji ให้เหมาะสม
+    $systemPrompt = "คุณคือ 'ผู้จัดการร้าน Re-ya' ผู้ช่วย AI ประจำร้านยาบนแพลตฟอร์ม REYA (ระบบเดียวรวมทุกงานร้านยาบน LINE: CRM, AI เภสัชกร, จ่ายยา, ร้านค้าออนไลน์, Loyalty, Dashboard)
+หน้าที่: ดูแลร้านให้เจ้าของและพนักงาน ตอบได้ทั้ง (1) ข้อมูลร้าน เช่น ยอดขาย ออเดอร์ สต๊อก ลูกค้า (2) คำถามทั่วไป (3) วิธีตั้งค่าและใช้งานระบบ REYA
+บุคลิก: เป็นกันเอง สุภาพ ลงท้าย 'ครับ' กระชับ ใช้ emoji พอเหมาะ ตอบเป็นภาษาไทย
 
 ข้อมูลระบบปัจจุบัน:
 {$systemContext}
 {$productContext}
 
+สถานะการตั้งค่าร้านปัจจุบัน (ใช้บอกผู้ใช้ว่าต้องทำอะไรต่อ):
+{$setupStatus}
+
+ความรู้อ้างอิงฟีเจอร์ที่เกี่ยวข้อง (อ้างอิงเมื่อตอบเรื่องฟีเจอร์นั้น):
+{$kbContext}
+
+แผนที่เมนู REYA (ใช้บอกผู้ใช้ว่าไปที่ไหน):
+- ภาพรวม: สรุปยอดขาย ลูกค้า ออเดอร์
+- กล่องข้อความ: แชทลูกค้า LINE และจ่ายยาผ่านแชท
+- ออเดอร์: รายการสั่งซื้อ ยืนยัน แพ็ค
+- สินค้า & คลัง: สินค้า สต๊อก รับสินค้าเข้า ยาใกล้หมดอายุ ผู้จำหน่าย
+- งานเภสัช: ห้องยา ตารางเวร นัดหมาย ปรึกษาออนไลน์
+- ลูกค้า & สมาชิก: ข้อมูลลูกค้า ระบบสมาชิกและแต้ม (Loyalty)
+- การตลาด LINE: บรอดแคสต์ Drip Campaign Rich Menu
+- รายงาน: วิเคราะห์เชิงลึก
+- ตั้งค่า: บัญชี LINE, ข้อมูลร้าน/ใบกำกับภาษี, การแจ้งเตือน, API Key
+
+ขั้นตอนตั้งค่าเริ่มต้น (ถ้าผู้ใช้ถามวิธีเริ่ม):
+1) เชื่อม LINE OA ที่ ตั้งค่า > บัญชี LINE (ใส่ Channel access token และ secret)
+2) กรอกข้อมูลร้านและโลโก้ ที่ ตั้งค่า > ข้อมูลร้าน
+3) เพิ่มสินค้าและจัดสต๊อก ที่ สินค้า & คลัง
+4) ตั้งช่องทางชำระเงิน (พร้อมเพย์/บัญชีธนาคาร) ในข้อมูลร้าน
+5) ใส่ Gemini API Key ที่ ตั้งค่า > ตั้งค่า API Key เพื่อเปิดใช้ AI
+6) ทำ Rich Menu และส่งบรอดแคสต์หาลูกค้าประจำ
+
 กฎการตอบ:
-- ถ้าผู้ใช้ถามหาสินค้าเฉพาะ ให้แนะนำพิมพ์ \"หาสินค้า ชื่อสินค้า\" เช่น \"หาสินค้า พาราเซตามอล\"
-- ถ้าถามสินค้าแพงสุด/ถูกสุด ให้ตอบจากข้อมูลที่ให้มา
-- ถ้าถามเรื่องยอดขาย ออเดอร์ ลูกค้า ให้แนะนำคำสั่งเฉพาะ เช่น \"ยอดขายวันนี้\" \"สรุป\"
-- ถ้าถามเรื่องทั่วไปเกี่ยวกับการใช้งานระบบ ให้ตอบตามความรู้
-- ถ้าไม่แน่ใจ ให้แนะนำให้ติดต่อทีมซัพพอร์ต";
+- คำถามตัวเลข/ข้อมูล ให้ใช้ข้อมูลระบบด้านบน ถ้าต้องการเจาะลึก แนะนำคำสั่งลัด เช่น 'สรุปวันนี้' 'ยอดขายสัปดาห์' 'ออเดอร์รอดำเนินการ' 'สลิปรอตรวจ' 'สินค้าใกล้หมด' 'หาสินค้า [ชื่อ]' 'หาลูกค้า [ชื่อ]' 'top ลูกค้า' 'แจ้งเตือน' 'สถานะระบบ'
+- คำถามวิธีตั้งค่า/ใช้งาน ให้บอกขั้นตอนชัดเจนว่าไปเมนูไหน ทำอะไรบ้าง
+- คำถามทั่วไป ตอบตามความรู้อย่างสุภาพ
+- ทักทาย/แนะนำตัวเฉพาะตอนเริ่มบทสนทนาเท่านั้น ถ้าคุยกันต่ออยู่แล้วให้ตอบตรงคำถามเลย ไม่ต้องทักซ้ำ
+- ตอบให้ครบจบในคราวเดียว ไม่ตัดกลางประโยค/กลางรายการ ใช้รายการสั้นๆ กระชับ
+- ถ้าไม่แน่ใจหรือเกินขอบเขต บอกตรงๆ และแนะนำให้ติดต่อทีมซัพพอร์ตของ REYA";
 
     $prompt = $message;
-    
-    // เรียก Gemini API
-    try {
-        $result = callGeminiAPI($apiKey, $systemPrompt, $prompt);
-        
-        if ($result['success']) {
-            return ['text' => $result['text'], 'type' => 'ai', 'data' => ['model' => $result['model']]];
-        } else {
-            // ถ้า API error ให้แสดง help แทน
-            return getHelpMessage();
-        }
-    } catch (Exception $e) {
-        return getHelpMessage();
+
+    // 1) มี Gemini key → ส่ง prompt + key ให้ "เบราว์เซอร์" ยิง Gemini เอง (Hybrid)
+    //    เพราะเซิร์ฟเวอร์อยู่ในประเทศที่ Gemini API ไม่รองรับ (geo-block) แต่เบราว์เซอร์แอดมินยิงได้
+    //    key ถูกส่งเฉพาะแอดมินที่ล็อกอินแล้วเท่านั้น (endpoint นี้เช็ค $_SESSION['admin_user'] ที่ส่วนหัว)
+    if (!empty($apiKey)) {
+        return [
+            'text' => '',
+            'type' => 'client_gemini',
+            'data' => [
+                'systemPrompt' => $systemPrompt,
+                'message'      => $prompt,
+                'apiKey'       => $apiKey,
+                'model'        => 'gemini-flash-latest',
+            ],
+        ];
     }
+
+    // 2) Gemini ใช้ไม่ได้ (เช่น โดน geo-block) → ลอง OpenAI (ไม่บล็อกตามภูมิภาค)
+    if (!empty($openaiKey)) {
+        try {
+            $result = callOpenAIAPI($openaiKey, $systemPrompt, $prompt);
+            if ($result['success']) {
+                return ['text' => $result['text'], 'type' => 'ai', 'data' => ['model' => $result['model']]];
+            }
+        } catch (Exception $e) {}
+    }
+
+    // 3) ไม่มี AI สด → ตอบจากคู่มือ (KB) ถ้าตรงหัวข้อ
+    if (!empty($kbContext)) {
+        $excerpt = trim(mb_substr($kbContext, 0, 1600));
+        return ['text' => "ตอนนี้ระบบ AI ตอบสดไม่พร้อมชั่วคราว 🙏 ขอสรุปจากคู่มือให้ก่อนนะครับ:\n\n" . $excerpt, 'type' => 'kb'];
+    }
+
+    // 4) สุดท้าย → help
+    return getHelpMessage();
+}
+
+// เรียก OpenAI Chat API (ใช้เป็น fallback เมื่อ Gemini โดน geo-block)
+function callOpenAIAPI($apiKey, $systemPrompt, $userMessage) {
+    $url = 'https://api.openai.com/v1/chat/completions';
+    $data = [
+        'model' => 'gpt-4o-mini',
+        'messages' => [
+            ['role' => 'system', 'content' => $systemPrompt],
+            ['role' => 'user', 'content' => $userMessage],
+        ],
+        'max_tokens' => 600,
+        'temperature' => 0.7,
+    ];
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'Authorization: Bearer ' . $apiKey]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($httpCode === 200) {
+        $r = json_decode($response, true);
+        if (isset($r['choices'][0]['message']['content'])) {
+            return ['success' => true, 'text' => trim($r['choices'][0]['message']['content']), 'model' => 'gpt-4o-mini'];
+        }
+    }
+    return ['success' => false, 'error' => 'OpenAI API Error'];
 }
 
 // ดึงคำค้นหาสินค้าจากข้อความ
@@ -1110,10 +1236,10 @@ function getSystemContext($db, $botId) {
 }
 
 function callGeminiAPI($apiKey, $systemPrompt, $userMessage) {
-    $models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-pro'];
+    $models = ['gemini-flash-latest', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     
     foreach ($models as $model) {
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}";
+        $url = GEMINI_API_BASE . "/v1beta/models/{$model}:generateContent?key={$apiKey}";
         
         $data = [
             'contents' => [
@@ -1152,11 +1278,8 @@ function callGeminiAPI($apiKey, $systemPrompt, $userMessage) {
             }
         }
         
-        // ถ้า 404 (model not found) ลอง model ถัดไป
-        if ($httpCode === 404) continue;
-        
-        // ถ้า error อื่น หยุดเลย
-        break;
+        // error ใดๆ (404/400/อื่นๆ) — ลอง model ถัดไป ไม่หยุดทันที
+        continue;
     }
     
     return ['success' => false, 'error' => 'API Error'];

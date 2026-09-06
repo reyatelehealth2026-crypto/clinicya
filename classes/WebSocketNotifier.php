@@ -13,6 +13,14 @@ class WebSocketNotifier {
     private $redis;
     private $isConnected = false;
     private $channelName = 'inbox_updates';
+
+    /**
+     * A missing Redis extension is a permanent property of the host, not a
+     * per-request event: on a box without ext-redis every construction logged
+     * its own line, which is where the bulk of error_log's volume came from.
+     * Log it once per process instead.
+     */
+    private static $missingExtLogged = false;
     
     /**
      * Constructor - Initialize Redis connection
@@ -28,7 +36,10 @@ class WebSocketNotifier {
     ) {
         // Check if Redis extension is available
         if (!class_exists('Redis')) {
-            error_log('WebSocketNotifier: Redis extension not available');
+            if (!self::$missingExtLogged) {
+                self::$missingExtLogged = true;
+                error_log('WebSocketNotifier: Redis extension not available');
+            }
             return;
         }
         

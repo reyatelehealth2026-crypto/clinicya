@@ -225,7 +225,7 @@ class ProductRecommender
 
     private function callGemini(string $key, string $payload): string
     {
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" . urlencode($key);
+        $url = GEMINI_API_BASE . "/v1beta/models/gemini-flash-latest:generateContent?key=" . urlencode($key);
         $ch = curl_init($url);
         if ($ch === false) {
             return '';

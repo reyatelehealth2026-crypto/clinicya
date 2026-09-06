@@ -1331,7 +1331,7 @@ class FlexTemplates
             'layout' => 'horizontal',
             'contents' => [
                 ['type' => 'text', 'text' => 'แต้มที่ได้รับ', 'size' => 'sm', 'color' => $darkGreen, 'weight' => 'bold', 'gravity' => 'center', 'flex' => 1],
-                ['type' => 'text', 'text' => '+' . number_format($points) . ' à¹à¸à¹à¸¡', 'size' => 'xl', 'color' => $darkGreen, 'weight' => 'bold', 'align' => 'end', 'flex' => 1]
+                ['type' => 'text', 'text' => '+' . number_format($points) . ' แต้ม', 'size' => 'xl', 'color' => $darkGreen, 'weight' => 'bold', 'align' => 'end', 'flex' => 1]
             ],
             'margin' => 'md',
             'paddingAll' => 'md',
@@ -1342,7 +1342,7 @@ class FlexTemplates
         ];
 
         // Running balance
-        $bodyContents[] = $detailRow('แต้มสะสมรวม', number_format($totalPoints) . ' à¹à¸à¹à¸¡', $darkGreen);
+        $bodyContents[] = $detailRow('แต้มสะสมรวม', number_format($totalPoints) . ' แต้ม', $darkGreen);
 
         // Thank-you + keep-as-proof
         $bodyContents[] = ['type' => 'separator', 'color' => '#E5E7EB', 'margin' => 'md'];
@@ -1378,7 +1378,7 @@ class FlexTemplates
                 'type' => 'box',
                 'layout' => 'vertical',
                 'contents' => [
-                    ['type' => 'text', 'text' => $shopPhone !== '' ? ('à¹à¸à¸£ ' . $shopPhone) : 'สะสมแต้มแลกของรางวัลได้เลย', 'size' => 'xs', 'color' => $darkGreen, 'align' => 'center', 'weight' => 'bold']
+                    ['type' => 'text', 'text' => $shopPhone !== '' ? ('โทร ' . $shopPhone) : 'สะสมแต้มแลกของรางวัลได้เลย', 'size' => 'xs', 'color' => $darkGreen, 'align' => 'center', 'weight' => 'bold']
                 ],
                 'paddingAll' => 'md',
                 'backgroundColor' => $lightGreen
@@ -1710,7 +1710,7 @@ class FlexTemplates
             $headerContents[] = ['type' => 'text', 'text' => 'Pharmacist: ' . $pharmacistName, 'size' => 'xs', 'color' => $white, 'align' => 'center', 'margin' => 'xs'];
         }
         if (!empty($shopPhone)) {
-            $headerContents[] = ['type' => 'text', 'text' => 'à¹à¸à¸£ ' . $shopPhone, 'size' => 'sm', 'color' => $white, 'align' => 'center', 'margin' => 'sm'];
+            $headerContents[] = ['type' => 'text', 'text' => 'โทร ' . $shopPhone, 'size' => 'sm', 'color' => $white, 'align' => 'center', 'margin' => 'sm'];
         }
 
         $headerBox = [

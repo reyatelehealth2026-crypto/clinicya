@@ -52,15 +52,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int)($_POST['id'] ?? 0);
     
     if ($action === 'update_status' && $id) {
-        $status = $_POST['status'];
+        // Whitelist status so an unexpected value can never truncate the ENUM (was
+        // fataling with 1265 "Data truncated"); wrap in try/catch as defence-in-depth.
+        $allowedStatuses = ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'];
+        $status = in_array($_POST['status'] ?? '', $allowedStatuses, true) ? $_POST['status'] : 'pending';
         $notes = trim($_POST['notes'] ?? '');
-        
-        $stmt = $db->prepare("UPDATE appointments SET status = ?, notes = ?, updated_at = NOW() WHERE id = ?");
-        $stmt->execute([$status, $notes, $id]);
-        
-        $message = 'อัพเดทสถานะสำเร็จ!';
-        $messageType = 'success';
-        
+
+        try {
+            $stmt = $db->prepare("UPDATE appointments SET status = ?, notes = ?, updated_at = NOW() WHERE id = ?");
+            $stmt->execute([$status, $notes, $id]);
+            $message = 'อัพเดทสถานะสำเร็จ!';
+            $messageType = 'success';
+        } catch (Exception $e) {
+            $message = 'ไม่สามารถอัพเดทสถานะได้: ' . $e->getMessage();
+            $messageType = 'error';
+        }
+
     } elseif ($action === 'cancel' && $id) {
         $reason = trim($_POST['reason'] ?? '');
         // Check if cancelled_by column exists

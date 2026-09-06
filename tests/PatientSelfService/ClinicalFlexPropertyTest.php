@@ -501,4 +501,26 @@ class ClinicalFlexPropertyTest extends TestCase
             'การ์ดแสดงช่วงเวลาทำการ ทั้งที่ shop_settings ไม่มีคอลัมน์เก็บ: ' . $strings
         );
     }
+
+    /**
+     * ตัวอักษรไทยใน FlexTemplates.php ต้องไม่ถูกเข้ารหัส UTF-8 ซ้ำสองชั้น
+     *
+     * สคริปต์ลบ emoji แบบ byte-wise เคยอ่านไฟล์ UTF-8 เป็น latin1 แล้วเขียนกลับ
+     * เป็น UTF-8 ทำให้คำว่า "แต้ม" เพี้ยนโผล่บนการ์ดจริงของลูกค้า
+     * สแกนทั้งไฟล์ ไม่ใช่แค่การ์ดที่เคยพัง เพราะสคริปต์แบบนั้นพังได้ทุกจุด
+     */
+    public function testSourceHasNoDoubleEncodedThai()
+    {
+        $bytes = file_get_contents(__DIR__ . '/../../classes/FlexTemplates.php');
+
+        // ไทยปกติขึ้นต้นด้วยไบต์ 0xE0 0xB8/0xB9 — พอถูกเข้ารหัสซ้ำจะกลายเป็น
+        // 0xC3 0xA0 0xC2 0xB8/0xB9 สร้าง needle ด้วย chr() เพื่อไม่ให้ไฟล์เทสต์
+        // เองโดนเครื่องมือแปลงเข้ารหัสจนตรวจไม่เจอ
+        $doubleEncoded = chr(0xC3) . chr(0xA0) . chr(0xC2);
+
+        $this->assertFalse(
+            strpos($bytes, $doubleEncoded),
+            'FlexTemplates.php มีข้อความที่ถูกเข้ารหัสซ้ำ — ลูกค้าจะเห็นตัวอักษรเพี้ยนบนการ์ด'
+        );
+    }
 }

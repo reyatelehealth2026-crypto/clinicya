@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Checkout API for LIFF
  * Handles cart, order creation, and slip upload
@@ -1424,6 +1424,16 @@ function handleCreateOrder($data) {
         ])))
     ];
 
+    // Auto-add payment_status column if missing (defensive migration).
+    // MUST run BEFORE beginTransaction: ALTER TABLE causes an implicit COMMIT in
+    // MySQL, which would silently end the order transaction and make the later
+    // $db->commit() throw "There is no active transaction".
+    try {
+        $db->exec("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'");
+    } catch (Exception $e) {
+        // Ignore: column already exists or DB doesn't support IF NOT EXISTS
+    }
+
     // Create order
     $db->beginTransaction();
 
@@ -1435,13 +1445,6 @@ function handleCreateOrder($data) {
         $orderStatus = ($paymentMethod === 'cod') ? 'confirmed' : 'pending';
         // payment_status ต้องอยู่ใน ENUM('pending','paid','failed','refunded') — cod ใช้ pending เหมือนกัน
         $paymentStatus = 'pending';
-
-        // Auto-add payment_status column if missing (defensive migration)
-        try {
-            $db->exec("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'");
-        } catch (Exception $e) {
-            // Ignore: column already exists or DB doesn't support IF NOT EXISTS
-        }
 
         // Level 1: full insert (all columns)
         $inserted = false;
@@ -1589,7 +1592,9 @@ function handleCreateOrder($data) {
             }
         }
 
-        $db->commit();
+        if ($db->inTransaction()) {
+            $db->commit();
+        }
 
         // Hook: Auto-create Account Receivable for credit sales
         // Requirement 8.2: WHEN an Invoice is created from shop order THEN the Accounting System SHALL automatically create corresponding AR record
@@ -1826,11 +1831,79 @@ function handleUploadSlip() {
         }
     }
 
-    // Do NOT mark the order 'paid' here — the pharmacist hasn't verified the
-    // slip yet. The "awaiting verification" state is signalled by the pending
-    // payment_slips row (slip_status). Marking 'paid' prematurely showed the
-    // customer "ชำระเงินแล้ว" before the shop confirmed. Just touch updated_at;
-    // the admin sets status/payment_status='paid' on slip approval.
+    $slipId = $slipSaved ? (int) $db->lastInsertId() : null;
+
+    $qrData = trim((string) ($_POST['qr_data'] ?? ''));
+
+    // Persist the raw QR payload the customer's app decoded so an admin can
+    // re-verify from the order page later — even if auto-verify is skipped.
+    if ($qrData !== '' && $slipId && hasTableColumn('payment_slips', 'qr_payload')) {
+        try {
+            $db->prepare("UPDATE payment_slips SET qr_payload = ? WHERE id = ?")->execute([$qrData, $slipId]);
+        } catch (\Throwable $e) {
+            error_log('qr_payload store error: ' . $e->getMessage());
+        }
+    }
+
+    // --- GhostX QR slip auto-verification (optional) ----------------------
+    // The Mini App decodes the slip's QR client-side and sends `qr_data`.
+    // When it verifies against the order amount AND a shop account we
+    // auto-approve; otherwise the slip stays 'pending' for manual admin
+    // review (current behaviour). Any error degrades to manual review.
+    if ($qrData !== '' && $slipId && hasTableColumn('payment_slips', 'verify_ref')) {
+        try {
+            require_once __DIR__ . '/../classes/SlipVerifier.php';
+            $expectedAmount = (float) ($order['grand_total'] ?? $order['total_amount'] ?? 0);
+            $shopAccounts = getShopPaymentAccounts($db, $order['line_account_id'] ?? null);
+
+            // Amount-only auto-approve: a valid GhostX slip whose amount matches
+            // the order is approved; the destination account is recorded for the
+            // admin's visual check but does not block (shop preference).
+            $vr = (new SlipVerifier())->verify($qrData, $expectedAmount, $shopAccounts, false);
+            $verifyData = json_encode($vr['data'], JSON_UNESCAPED_UNICODE);
+
+            // Guard against the same bank slip being reused on another order.
+            $isDuplicate = false;
+            if ($vr['ref']) {
+                $dup = $db->prepare("SELECT id FROM payment_slips WHERE verify_ref = ? AND id <> ? LIMIT 1");
+                $dup->execute([$vr['ref'], $slipId]);
+                $isDuplicate = (bool) $dup->fetch();
+            }
+
+            if ($vr['verified'] && !$isDuplicate) {
+                $db->prepare(
+                    "UPDATE payment_slips
+                        SET status = 'approved', verify_ref = ?, verify_amount = ?, verify_data = ?, verified_at = NOW()
+                      WHERE id = ?"
+                )->execute([$vr['ref'], $vr['amount'], $verifyData, $slipId]);
+
+                if (hasTableColumn('transactions', 'payment_status')) {
+                    $db->prepare("UPDATE transactions SET payment_status = 'paid' WHERE id = ?")->execute([$orderId]);
+                }
+                error_log("Slip {$slipId} auto-verified via GhostX (ref={$vr['ref']})");
+            } else {
+                // Store raw verification data for admin context; leave verify_ref
+                // NULL so it never collides with the unique index, keep pending.
+                // Never overwrite a real response with an empty one (e.g. on a
+                // transient scan_error) so admins can still re-evaluate it later.
+                if (!empty($vr['data'])) {
+                    $db->prepare("UPDATE payment_slips SET verify_amount = ?, verify_data = ? WHERE id = ?")
+                       ->execute([$vr['amount'], $verifyData, $slipId]);
+                }
+                $reason = $isDuplicate ? 'duplicate_ref' : $vr['reason'];
+                error_log("Slip {$slipId} not auto-verified (reason={$reason}) — left pending for manual review");
+            }
+        } catch (\Throwable $e) {
+            error_log('GhostX slip verification error: ' . $e->getMessage());
+        }
+    }
+
+    // Do NOT mark the order 'paid' here — uploading a slip is not payment being
+    // confirmed. The "awaiting verification" state is signalled by the pending
+    // payment_slips row (slip_status); marking 'paid' on upload showed the
+    // customer "ชำระเงินแล้ว" before the shop had looked at it. Just touch
+    // updated_at. Payment is marked paid in exactly two places that mean it:
+    // the GhostX auto-verification above, and the admin approving the slip.
     $stmt = $db->prepare("UPDATE transactions SET updated_at = NOW() WHERE id = ?");
     $stmt->execute([$orderId]);
 
@@ -1860,6 +1933,40 @@ function handleUploadSlip() {
     jsonResponse(true, 'Slip uploaded', [
         'image_url' => $imageUrl
     ]);
+}
+
+/**
+ * Collect the shop's acceptable destination accounts for slip verification.
+ * Returns a flat list of account-number strings (bank accounts + PromptPay).
+ *
+ * @return string[]
+ */
+function getShopPaymentAccounts($db, $lineAccountId) {
+    $accounts = [];
+    try {
+        $stmt = $db->prepare(
+            "SELECT promptpay_number, bank_accounts FROM shop_settings WHERE line_account_id = ? LIMIT 1"
+        );
+        $stmt->execute([$lineAccountId]);
+        $settings = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        if (!empty($settings['promptpay_number'])) {
+            $accounts[] = (string) $settings['promptpay_number'];
+        }
+        if (!empty($settings['bank_accounts'])) {
+            $decoded = json_decode($settings['bank_accounts'], true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $bank) {
+                    if (!empty($bank['account_number'])) {
+                        $accounts[] = (string) $bank['account_number'];
+                    }
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+        error_log('getShopPaymentAccounts error: ' . $e->getMessage());
+    }
+    return array_values(array_unique($accounts));
 }
 
 /**
@@ -2031,9 +2138,6 @@ function buildFlexReceipt($order, $items, $deliveryInfo, $slipUrl) {
 }
 
 /**
- * Get order details
- */
-/**
  * Repair a malformed slip URL scheme like "https:/host" (single slash, from a
  * typo'd BASE_URL in prod config) → "https://host". Pure display fix; preserves
  * the host so the absolute URL still loads on both the app and the admin.
@@ -2045,6 +2149,9 @@ function reyaFixSlipUrl($url) {
     return preg_replace('#^(https?):/([^/])#i', '$1://$2', $url);
 }
 
+/**
+ * Get order details
+ */
 function handleGetOrder() {
     global $db;
 

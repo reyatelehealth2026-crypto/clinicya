@@ -11,16 +11,17 @@ class GeminiAI {
      * Central model switch for EVERY text / vision call in this class.
      * Do not hard-code Gemini model names in individual menu methods.
      */
-    private const LATEST_MODEL = 'gemini-3.5-flash';
+    private const LATEST_MODEL = 'gemini-3.1-flash-lite';
     private const API_VERSION  = 'v1beta';
+    // Every model here must exist on API_VERSION. A model Google does not serve
+    // burns a full 404 round-trip per receipt before the loop moves on, so
+    // `gemini-3.1-flash` (never served) and `gemini-2.0-flash` (retired) are out.
     private const RECEIPT_VISION_MODELS = [
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash-lite',
         'gemini-3.5-flash',
         'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
         'gemini-flash-latest',
-        'gemini-3.1-flash',
-        'gemini-3.1-flash-lite',
-        'gemini-2.0-flash',
     ];
 
     private $apiKey;
@@ -178,14 +179,38 @@ class GeminiAI {
             throw new Exception('JSON Encode Error: ' . json_last_error_msg());
         }
 
-        $url = 'https://generativelanguage.googleapis.com/' . rawurlencode($apiVersion)
+        // Google answers this host with "User location is not supported for the
+        // API use." on every route, so config.php points GEMINI_API_BASE at a
+        // relay that forwards from a supported region. Only the origin changes;
+        // the request itself is untouched.
+        $apiBase = defined('GEMINI_API_BASE') && GEMINI_API_BASE !== ''
+            ? rtrim(GEMINI_API_BASE, '/')
+            : 'https://generativelanguage.googleapis.com';
+
+        $url = $apiBase . '/' . rawurlencode($apiVersion)
             . '/models/' . rawurlencode($model) . ':' . rawurlencode($method);
+
+        // The relay does not forward custom request headers, so Google saw no
+        // credential at all and answered "Method doesn't allow unregistered
+        // callers". Send the key the way Google documents for plain HTTP
+        // clients as well — travelling in the URL, it survives any proxy.
+        if ($apiBase !== 'https://generativelanguage.googleapis.com') {
+            $url .= '?key=' . rawurlencode((string) $this->apiKey);
+        }
 
         $keyFingerprint = substr(hash('sha256', (string) $this->apiKey), 0, 12);
 
+        // IPv4 first: Google geo-blocks this host's IPv6 egress with
+        // "User location is not supported for the API use." (HTTP 400), while the
+        // same key over IPv4 answers 200. AUTO resolves to IPv6 here, so the old
+        // auto/ipv6/ipv4 order burned two failed round-trips on every single call.
+        // AUTO and IPv6 stay as fallbacks in case the host's egress changes.
+        // IPv4 only. Google geo-blocks this host's IPv6 egress unconditionally
+        // ("User location is not supported for the API use.", HTTP 400) and AUTO
+        // resolves to IPv6 here, so both were guaranteed failures. Worse, they
+        // masked real faults: on an IPv4 timeout the loop fell through to them
+        // and reported the geo-block as the cause instead of the timeout.
         $routes = [
-            ['label' => 'auto', 'resolve' => CURL_IPRESOLVE_WHATEVER],
-            ['label' => 'ipv6', 'resolve' => CURL_IPRESOLVE_V6],
             ['label' => 'ipv4', 'resolve' => CURL_IPRESOLVE_V4],
         ];
 
@@ -314,6 +339,7 @@ class GeminiAI {
             ['language' => 'eng', 'engine' => '1'],
         ];
         $lastError = '';
+        $bestParsed = null;
 
         foreach ($ocrAttempts as $ocrAttempt) {
             $language = $ocrAttempt['language'];
@@ -372,11 +398,31 @@ class GeminiAI {
 
             $parsed = $this->parseReceiptOcrText($text);
             if (!empty($parsed['is_receipt']) && (float) $parsed['total_amount'] > 0) {
-                error_log('analyzeReceiptImage OCR.Space fallback success: language=' . $language . ', engine=' . $engine);
-                return $parsed;
+                // Only an arithmetically proven total ends the search. A bare
+                // non-zero number is often the wrong column: on a real slip
+                // tha/engine1 read 25.00 where eng/engine1 read the true 615.00,
+                // and returning the first total shipped the 25.
+                if (($parsed['confidence'] ?? 'low') === 'high') {
+                    error_log('analyzeReceiptImage OCR.Space fallback success: language=' . $language . ', engine=' . $engine);
+                    return $parsed;
+                }
+
+                if ($bestParsed === null) {
+                    $bestParsed = $parsed;
+                    error_log('analyzeReceiptImage OCR.Space unverified total ('
+                        . $parsed['total_amount'] . ') from language=' . $language . ', engine=' . $engine
+                        . '; trying the remaining engines');
+                }
             }
 
             $lastError = 'no receipt total parsed; language=' . $language . '; engine=' . $engine . '; text_len=' . strlen($text);
+        }
+
+        if ($bestParsed !== null) {
+            // Unproven, so the caller still routes it to manual review - but the
+            // admin card gets a number to check instead of an empty slip.
+            error_log('analyzeReceiptImage OCR.Space fallback: no engine proved a total; returning best unverified read');
+            return $bestParsed;
         }
 
         error_log('analyzeReceiptImage OCR.Space fallback failed: ' . $lastError);
@@ -419,6 +465,20 @@ class GeminiAI {
             $evidence['change']
         );
 
+        if ($verdict['level'] !== 'high'
+            && $evidence['paid'] !== null
+            && $evidence['change'] !== null
+            && ((float) $evidence['paid'] - (float) $evidence['change']) > 0
+        ) {
+            $totalAmount = round((float) $evidence['paid'] - (float) $evidence['change'], 2);
+            $verdict = $this->assessReceiptConfidence(
+                $totalAmount,
+                $evidence['line_items'],
+                $evidence['paid'],
+                $evidence['change']
+            );
+        }
+
         return [
             'is_receipt' => $totalAmount > 0,
             'shop_name' => $this->extractReceiptShopName($normalized),
@@ -442,6 +502,7 @@ class GeminiAI {
         $lines = array_values(array_filter(array_map('trim', $lines), static fn ($l) => $l !== ''));
 
         $columnItems     = []; // numbers in the TOTAL column block (thermal POS layout)
+        $currencyColumnItems = []; // pure currency lines before the summary block
         $inlineItems     = []; // right-most number per plain line (inline layout)
         $totalCandidates = []; // amounts on grand-total lines (keyed, deduped)
         $allAmounts      = []; // every amount seen (largest-fallback only)
@@ -449,10 +510,16 @@ class GeminiAI {
         $paid            = null;
         $change          = null;
         $collectingItems = false;
+        $pendingAmountRoles = [];
+        $seenSummarySection = false;
+        $summaryRoles = [];
+        $summaryAmounts = [];
 
         $totalKeywords  = ['grand total', 'net total', 'total', 'amount due', 'dues', 'ยอดสุทธิ', 'ยอดรวม', 'รวมทั้งสิ้น', 'รวมเงินสุทธิ', 'รวมเงิน', 'ชำระเงิน', 'สุทธิ', 'รวม'];
         $cashKeywords   = ['cash', 'เงินสด', 'รับเงิน', 'paid', 'tendered'];
         $changeKeywords = ['change', 'เงินทอน', 'ทอน'];
+        $discountKeywords = ['discount', 'ส่วนลด'];
+        $serviceKeywords = ['service charge', 'ค่าบริการ'];
 
         foreach ($lines as $line) {
             $lower = mb_strtolower($line, 'UTF-8');
@@ -489,15 +556,81 @@ class GeminiAI {
             $isChange = $this->lineHasKeyword($lower, $changeKeywords);
             $isCash   = $this->lineHasKeyword($lower, $cashKeywords);
             $isTotal  = $this->lineHasKeyword($lower, $totalKeywords);
+            $isDiscount = $this->lineHasKeyword($lower, $discountKeywords);
+            $isService = $this->lineHasKeyword($lower, $serviceKeywords);
+            if (preg_match('/^\s*(?:ใบเสร็จ|receipt)/iu', $line)) {
+                $isCash = false;
+            }
+            $isSummaryTotal = $isTotal && (
+                $numsAll
+                || preg_match('/^(?:total|grand total|net total|amount due|ยอด|สุทธิ|รวม(?:เงิน|ทั้งสิ้น|\s|$))/iu', $line)
+            );
+
+            if ($isSummaryTotal || $isDiscount || $isService) {
+                $seenSummarySection = true;
+            }
+
+            if ($seenSummarySection) {
+                $summaryAmount = $this->extractPureLineAmount($line);
+                if ($summaryAmount !== null) {
+                    $summaryAmounts[] = $summaryAmount;
+                }
+            }
+
+            if (($isSummaryTotal || $isCash || $isChange || $isDiscount || $isService) && !$numsAll) {
+                if ($isChange) {
+                    $summaryRoles[] = 'change';
+                } elseif ($isCash) {
+                    $summaryRoles[] = 'cash';
+                } elseif ($isDiscount) {
+                    $summaryRoles[] = 'discount';
+                } elseif ($isService) {
+                    $summaryRoles[] = 'service';
+                } elseif (preg_match('/ยอด|สุทธิ|net/i', $line)) {
+                    $summaryRoles[] = 'net_total';
+                } else {
+                    $summaryRoles[] = 'subtotal';
+                }
+            }
+
+            if ($pendingAmountRoles && $numsAll && $this->isPureNumberLine($line)) {
+                $pendingAmountRole = array_shift($pendingAmountRoles);
+                $amount = $this->extractPureLineAmount($line);
+                if ($amount === null) {
+                    $amount = (float) $numsAll[count($numsAll) - 1];
+                }
+                if ($pendingAmountRole === 'change') {
+                    $change = $amount;
+                } elseif ($pendingAmountRole === 'cash') {
+                    $paid = $amount;
+                } elseif ($pendingAmountRole === 'total' && $amount >= 1) {
+                    $totalCandidates[number_format($amount, 2, '.', '')] = true;
+                }
+                continue;
+            }
+
+            // OCR.Space often splits Thai receipt item columns into standalone
+            // currency lines before the summary labels, e.g. ฿120 / ฿20 / ฿70
+            // followed by "รวม" and then the grand-total block.
+            if (!$seenSummarySection && $numsAll && $this->isPureCurrencyLine($line)) {
+                $amount = (float) $numsAll[count($numsAll) - 1];
+                if ($amount >= 1) {
+                    $currencyColumnItems[] = $amount;
+                    continue;
+                }
+            }
 
             // Cash / change amounts often live inside parentheses — keep them.
             if ($isCash || $isChange) {
                 if ($numsAll) {
-                    if ($this->lineHasKeyword($lower, $changeKeywords)) {
+                    if ($this->lineHasKeyword($lower, $changeKeywords) || count($numsAll) >= 2) {
                         // e.g. "เงินสด (รับเงิน 1,000.00 เงินทอน 845.00)"
+                        $paid = (float) max($numsAll);
                         $change = (float) $numsAll[count($numsAll) - 1];
-                        if (count($numsAll) >= 2) {
-                            $paid = (float) $numsAll[count($numsAll) - 2];
+                        if (abs($change - $paid) < 0.01) {
+                            $sortedCashNumbers = $numsAll;
+                            sort($sortedCashNumbers, SORT_NUMERIC);
+                            $change = (float) $sortedCashNumbers[0];
                         }
                     } else {
                         // e.g. "เงินสด (รับเงิน 365.00)"
@@ -510,7 +643,7 @@ class GeminiAI {
             // Unit prices/quantities live inside parentheses e.g. (@25.00),(QTY:12).
             $numsNoParen = $this->extractNumbers(preg_replace('/\([^)]*\)/u', ' ', $line));
 
-            if ($isTotal) {
+            if ($isSummaryTotal) {
                 foreach ($numsNoParen as $n) {
                     if ($n >= 1) {
                         $totalCandidates[number_format($n, 2, '.', '')] = true;
@@ -528,11 +661,22 @@ class GeminiAI {
             }
         }
 
+        $summaryBlock = $this->resolveSeparatedSummaryBlock($summaryRoles, $summaryAmounts);
+
         // Prefer the clean column block; fall back to inline extraction.
-        $lineItems = $columnItems ?: $inlineItems;
+        $lineItems = $columnItems ?: ($currencyColumnItems ?: $inlineItems);
+        if (!empty($summaryBlock['line_items'])) {
+            $lineItems = $summaryBlock['line_items'];
+        }
+        if ($summaryBlock['paid'] !== null) {
+            $paid = $summaryBlock['paid'];
+        }
+        if ($summaryBlock['change'] !== null) {
+            $change = $summaryBlock['change'];
+        }
 
         return [
-            'total'      => $this->resolveGrandTotal($totalCandidates, $pureAmounts, $lineItems, $paid, $change, $allAmounts),
+            'total'      => $summaryBlock['total'] ?? $this->resolveGrandTotal($totalCandidates, $pureAmounts, $lineItems, $paid, $change, $allAmounts),
             'line_items' => $lineItems,
             'paid'       => $paid,
             'change'     => $change,
@@ -556,7 +700,83 @@ class GeminiAI {
 
     /** True when the whole line is just a money amount (optionally ฿/THB). */
     private function isPureNumberLine($line) {
-        return (bool) preg_match('/^\s*(?:฿|THB|บาท)?\s*[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?\s*(?:฿|THB|บาท)?\s*$/u', (string) $line);
+        $currency = '(?:\x{0E3F}|THB|บาท)';
+        return (bool) preg_match('/^\s*' . $currency . '?\s*[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?\s*' . $currency . '?\s*$/iu', (string) $line);
+    }
+
+    /** True when the whole line is a money amount with an explicit currency marker. */
+    private function isPureCurrencyLine($line) {
+        $currency = '(?:\x{0E3F}|THB|บาท)';
+        return (bool) preg_match('/^\s*' . $currency . '\s*[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?\s*$/iu', (string) $line)
+            || (bool) preg_match('/^\s*[0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?\s*' . $currency . '\s*$/iu', (string) $line);
+    }
+
+    /** Amount from a standalone money/number line, preserving zero values. */
+    private function extractPureLineAmount($line) {
+        $currency = '(?:\x{0E3F}|THB|บาท)';
+        if (!preg_match('/^\s*' . $currency . '?\s*([0-9]{1,3}(?:,[0-9]{3})*|[0-9]+)(?:\.[0-9]{1,2})?\s*' . $currency . '?\s*$/iu', (string) $line, $m)) {
+            return null;
+        }
+        if (!preg_match('/([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/u', (string) $line, $num)) {
+            return null;
+        }
+        $amount = (float) str_replace(',', '', $num[1]);
+
+        // Thai receipt OCR sometimes reads the baht sign (฿) as a leading "8":
+        // 8120.00 => ฿120.00, 815.00 => ฿15.00, 80.00 => ฿0.00.
+        // Limit this to short standalone decimal amounts without an explicit
+        // currency marker so real 8,000+ totals are not rewritten.
+        if (!preg_match('/' . $currency . '/iu', (string) $line)
+            && preg_match('/^\s*8([0-9]{1,3})(?:\.00)?\s*$/u', (string) $line, $ocrBaht)
+        ) {
+            $amount = (float) $ocrBaht[1];
+        }
+
+        return $amount;
+    }
+
+    /**
+     * OCR can emit summary labels first, then a single amount column:
+     * item totals..., subtotal, service, discount, net total, cash, change.
+     */
+    private function resolveSeparatedSummaryBlock(array $roles, array $amounts) {
+        $result = ['total' => null, 'paid' => null, 'change' => null, 'line_items' => []];
+        $roleCount = count($roles);
+        if ($roleCount === 0 || count($amounts) < $roleCount) {
+            return $result;
+        }
+
+        $summaryValues = array_slice($amounts, -$roleCount);
+        $itemValues = array_slice($amounts, 0, count($amounts) - $roleCount);
+        $mapped = [];
+        foreach ($roles as $idx => $role) {
+            $mapped[$role] = (float) ($summaryValues[$idx] ?? 0);
+        }
+
+        if (array_key_exists('net_total', $mapped)) {
+            $result['total'] = $mapped['net_total'];
+        } elseif (array_key_exists('subtotal', $mapped)) {
+            $result['total'] = $mapped['subtotal'];
+            if (array_key_exists('discount', $mapped)) {
+                $result['total'] = max(0, $result['total'] - $mapped['discount']);
+            }
+        }
+        if (array_key_exists('cash', $mapped)) {
+            $result['paid'] = $mapped['cash'];
+        }
+        if (array_key_exists('change', $mapped)) {
+            $result['change'] = $mapped['change'];
+        }
+
+        $total = (float) ($result['total'] ?? 0);
+        foreach ($itemValues as $amount) {
+            $amount = (float) $amount;
+            if ($amount > 0 && ($total <= 0 || abs($amount - $total) > max($total * 0.005, 0.01))) {
+                $result['line_items'][] = $amount;
+            }
+        }
+
+        return $result;
     }
 
     private function lineHasKeyword($lowerLine, array $keywords) {
@@ -583,20 +803,21 @@ class GeminiAI {
             return (float) $vals[0];
         }
 
-        // 2) Printed grand total block: thermal POS prints the total 2-3x on its
-        //    own lines. Restricted to pure-number lines so a barcode / zip / id
-        //    (e.g. ORR-00-26-18690) can never be mistaken for the total.
-        $rep = $this->maxRepeated($pureAmounts);
-        if ($rep > 0) {
-            return $rep;
-        }
-
-        // 3) Tendered cash minus change, or exact cash.
+        // 2) Tendered cash minus change, or exact cash. This must beat repeated
+        //    standalone amounts because OCR can repeat the change amount too.
         if ($paid !== null && $change !== null && ($paid - $change) > 0) {
             return round((float) $paid - (float) $change, 2);
         }
         if ($paid !== null) {
             return (float) $paid;
+        }
+
+        // 3) Printed grand total block: thermal POS prints the total 2-3x on its
+        //    own lines. Restricted to pure-number lines so a barcode / zip / id
+        //    (e.g. ORR-00-26-18690) can never be mistaken for the total.
+        $rep = $this->maxRepeated($pureAmounts);
+        if ($rep > 0) {
+            return $rep;
         }
 
         // 4) Sum of detected line items.
@@ -801,6 +1022,8 @@ class GeminiAI {
             ],
         ];
 
+        $bestGeminiResult = null;
+
         foreach (self::RECEIPT_VISION_MODELS as $model) {
             try {
                 $result = $this->makeRequest($model, $data, self::API_VERSION, 'generateContent', false);
@@ -827,9 +1050,7 @@ class GeminiAI {
                 $change = isset($parsed['change_amount']) && is_numeric($parsed['change_amount']) ? (float) $parsed['change_amount'] : null;
 
                 $verdict = $this->assessReceiptConfidence($total, $lineItems, $paid, $change);
-
-                error_log('analyzeReceiptImage Gemini success: model=' . $model . ', confidence=' . $verdict['level'] . ' (' . $verdict['reason'] . ')');
-                return [
+                $receiptResult = [
                     'is_receipt'        => !empty($parsed['is_receipt']),
                     'shop_name'         => isset($parsed['shop_name']) && $parsed['shop_name'] !== '' ? trim((string) $parsed['shop_name']) : null,
                     'receipt_number'    => isset($parsed['receipt_number']) && $parsed['receipt_number'] !== '' ? trim((string) $parsed['receipt_number']) : null,
@@ -838,12 +1059,46 @@ class GeminiAI {
                     'confidence'        => $verdict['level'],
                     'confidence_reason' => $verdict['reason'],
                 ];
+
+                error_log('analyzeReceiptImage Gemini success: model=' . $model . ', confidence=' . $verdict['level'] . ' (' . $verdict['reason'] . ')');
+                if (!empty($receiptResult['is_receipt']) && $total > 0 && $verdict['level'] === 'high') {
+                    return $receiptResult;
+                }
+
+                // Keep the first usable read, but let a stronger model try to beat
+                // it. Returning here made every model after the first one dead
+                // code: the rest of the list was only reached when one threw.
+                if ($bestGeminiResult === null
+                    || (empty($bestGeminiResult['is_receipt']) && !empty($receiptResult['is_receipt']))) {
+                    $bestGeminiResult = $receiptResult;
+                }
             } catch (Throwable $e) {
                 error_log('analyzeReceiptImage error model=' . $model . ': ' . $e->getMessage());
+                if (stripos($e->getMessage(), 'User location is not supported') !== false) {
+                    // The region block answers every model identically, so trying
+                    // the rest just burns one more round-trip each.
+                    error_log('analyzeReceiptImage Gemini location blocked; falling back to text OCR');
+                    break;
+                }
             }
         }
 
-        return $this->analyzeReceiptImageWithOcrSpace($imageData, $mimeType);
+        // Thai thermal receipts that Gemini misreads - or, while the region block
+        // stands, never reaches - still get a second opinion from text OCR, held
+        // to the same arithmetic proof before it can auto-award points.
+        $textFallback = $this->analyzeReceiptImageWithOcrSpace($imageData, $mimeType);
+        $fallbackUsable = !empty($textFallback['is_receipt']) && (float) $textFallback['total_amount'] > 0;
+
+        if ($fallbackUsable
+            && (($textFallback['confidence'] ?? 'low') === 'high' || $bestGeminiResult === null)) {
+            return $textFallback;
+        }
+
+        if ($bestGeminiResult !== null) {
+            return $bestGeminiResult;
+        }
+
+        return $fallbackUsable ? $textFallback : null;
     }
 
     /**
@@ -858,3 +1113,4 @@ class GeminiAI {
         );
     }
 }
+

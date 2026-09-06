@@ -369,15 +369,15 @@ function handleBook($db, $data) {
         jsonResponse(false, 'ข้อมูลไม่ครบถ้วน');
     }
     
-    // Get user
-    $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ?");
+    // Get user (name fields used for the booking notifications below)
+    $stmt = $db->prepare("SELECT id, display_name, first_name FROM users WHERE line_user_id = ?");
     $stmt->execute([$lineUserId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
-    
+
     if (!$user) {
         jsonResponse(false, 'ไม่พบข้อมูลผู้ใช้');
     }
-    
+
     // Get pharmacist - check which columns exist
     $duration = 15;
     $consultationFee = 0;
@@ -483,7 +483,24 @@ function handleBook($db, $data) {
         $stmt->execute($insertVals);
         
         $newId = $db->lastInsertId();
-        
+
+        // Best-effort LINE notifications — must NEVER break the booking response.
+        try {
+            reya_notify_appointment_booked($db, [
+                'line_account_id'       => (int) $lineAccountId,
+                'customer_line_user_id' => $lineUserId,
+                'customer_name'         => trim(!empty($user['first_name']) ? $user['first_name'] : ($user['display_name'] ?? '')),
+                'appointment_ref'       => $appointmentId,
+                'appointment_row_id'    => (int) $newId,
+                'pharmacist_id'         => (int) $pharmacistId,
+                'date'                  => $date,
+                'time'                  => $time,
+                'symptoms'              => $symptoms,
+            ]);
+        } catch (\Throwable $e) {
+            error_log('reya_notify_appointment_booked failed: ' . $e->getMessage());
+        }
+
         jsonResponse(true, 'จองนัดหมายสำเร็จ!', [
             'appointment_id' => $appointmentId,
             'id' => $newId,
@@ -750,6 +767,223 @@ function handleRate($db, $data) {
     $stmt->execute([$appointment['pharmacist_id'], $appointment['pharmacist_id'], $appointment['pharmacist_id']]);
     
     jsonResponse(true, 'ขอบคุณสำหรับการให้คะแนน');
+}
+
+/* ============================================================================
+ * Booking notifications (added 2026-07-06)
+ * Fires two LINE messages when a booking is created, using the SAME tenant DB
+ * connection that stored the row (multi-tenant safe). Everything is best-effort
+ * and isolated so a notification failure can never break the booking.
+ * ==========================================================================*/
+
+/**
+ * Send the "new appointment" notifications:
+ *   1. immediate confirmation Flex to the customer;
+ *   2. "new booking" Flex to the shop's designated staff LINE recipients
+ *      (notification_settings.notify_admin_users → admin_users.line_user_id),
+ *      gated by line_notify_enabled + line_notify_appointment.
+ */
+function reya_notify_appointment_booked($db, array $ctx): void
+{
+    $token = reya_appt_channel_token($db, (int) ($ctx['line_account_id'] ?? 0));
+    if (!$token) {
+        error_log('appt notify: no channel access token for line_account ' . ($ctx['line_account_id'] ?? '?'));
+        return;
+    }
+
+    $pharmacistName = 'เภสัชกร';
+    try {
+        $s = $db->prepare("SELECT name FROM pharmacists WHERE id = ?");
+        $s->execute([(int) ($ctx['pharmacist_id'] ?? 0)]);
+        $pharmacistName = ($s->fetchColumn() ?: $pharmacistName);
+    } catch (\Throwable $e) { /* ignore */ }
+
+    // 1) Customer confirmation
+    if (!empty($ctx['customer_line_user_id'])) {
+        reya_appt_push_line($token, $ctx['customer_line_user_id'], reya_appt_customer_flex($ctx, $pharmacistName));
+    }
+
+    // 2) Staff / designated-LINE notification
+    reya_appt_notify_staff($db, $token, $ctx, $pharmacistName);
+}
+
+function reya_appt_channel_token($db, int $lineAccountId): ?string
+{
+    try {
+        if ($lineAccountId > 0) {
+            $s = $db->prepare("SELECT channel_access_token FROM line_accounts WHERE id = ?");
+            $s->execute([$lineAccountId]);
+            $t = $s->fetchColumn();
+            if (!empty($t)) return $t;
+        }
+        $t = $db->query("SELECT channel_access_token FROM line_accounts
+                         WHERE is_active = 1 AND channel_access_token IS NOT NULL AND channel_access_token <> ''
+                         ORDER BY id LIMIT 1")->fetchColumn();
+        return !empty($t) ? $t : null;
+    } catch (\Throwable $e) {
+        return null;
+    }
+}
+
+function reya_appt_notify_staff($db, string $token, array $ctx, string $pharmacistName): void
+{
+    $lineAccountId = (int) ($ctx['line_account_id'] ?? 0);
+
+    $enabled = true; $appointmentOn = true; $adminIds = [];
+    try {
+        $s = $db->prepare("SELECT line_notify_enabled, line_notify_appointment, notify_admin_users
+                           FROM notification_settings WHERE line_account_id = ? LIMIT 1");
+        $s->execute([$lineAccountId]);
+        $row = $s->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            $enabled       = (int) $row['line_notify_enabled'] === 1;
+            $appointmentOn = (int) $row['line_notify_appointment'] === 1;
+            if (!empty($row['notify_admin_users'])) {
+                $adminIds = array_filter(array_map('intval', explode(',', $row['notify_admin_users'])));
+            }
+        }
+    } catch (\Throwable $e) { /* table may be absent — fall through to defaults */ }
+
+    if (!$enabled || !$appointmentOn) return;
+
+    $targets = [];
+    try {
+        if (!empty($adminIds)) {
+            $ph = implode(',', array_fill(0, count($adminIds), '?'));
+            $s = $db->prepare("SELECT line_user_id FROM admin_users
+                               WHERE id IN ({$ph}) AND is_active = 1
+                                 AND line_user_id IS NOT NULL AND line_user_id <> ''");
+            $s->execute($adminIds);
+            $targets = $s->fetchAll(PDO::FETCH_COLUMN);
+        } else {
+            // No explicit recipients configured → notify every active pharmacist/admin with a LINE id.
+            $s = $db->query("SELECT line_user_id FROM admin_users
+                             WHERE role IN ('pharmacist','admin','super_admin') AND is_active = 1
+                               AND line_user_id IS NOT NULL AND line_user_id <> ''");
+            $targets = $s->fetchAll(PDO::FETCH_COLUMN);
+        }
+    } catch (\Throwable $e) {
+        return;
+    }
+
+    $flex = reya_appt_staff_flex($ctx, $pharmacistName);
+    foreach (array_unique(array_filter($targets)) as $uid) {
+        reya_appt_push_line($token, (string) $uid, $flex);
+    }
+}
+
+function reya_appt_push_line(string $token, string $to, array $message): bool
+{
+    try {
+        $ch = curl_init('https://api.line.me/v2/bot/message/push');
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Authorization: Bearer ' . $token],
+            CURLOPT_POSTFIELDS     => json_encode(['to' => $to, 'messages' => [$message]], JSON_UNESCAPED_UNICODE),
+        ]);
+        $resp = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($code !== 200) {
+            error_log("appt notify push failed (HTTP {$code}): {$resp}");
+            return false;
+        }
+        return true;
+    } catch (\Throwable $e) {
+        error_log('appt notify push error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+function reya_appt_customer_flex(array $ctx, string $pharmacistName): array
+{
+    $date = date('d/m/Y', strtotime((string) $ctx['date']));
+    $time = date('H:i', strtotime((string) $ctx['time']));
+    $name = trim((string) ($ctx['customer_name'] ?? '')) ?: 'คุณลูกค้า';
+    $ref  = (string) ($ctx['appointment_ref'] ?? $ctx['appointment_row_id'] ?? '');
+
+    $rows = [
+        reya_appt_row('👨‍⚕️ เภสัชกร', $pharmacistName),
+        reya_appt_row('📅 วันที่', $date),
+        reya_appt_row('⏰ เวลา', $time . ' น.'),
+        reya_appt_row('🎫 รหัสนัด', $ref),
+    ];
+
+    return [
+        'type' => 'flex',
+        'altText' => "✅ จองนัดหมายสำเร็จ {$date} {$time} น. กับ{$pharmacistName}",
+        'contents' => [
+            'type' => 'bubble',
+            'header' => [
+                'type' => 'box', 'layout' => 'vertical', 'backgroundColor' => '#06C755', 'paddingAll' => '20px',
+                'contents' => [
+                    ['type' => 'text', 'text' => '✅', 'size' => '3xl', 'align' => 'center'],
+                    ['type' => 'text', 'text' => 'จองนัดหมายสำเร็จ', 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'xl', 'align' => 'center', 'margin' => 'md'],
+                ],
+            ],
+            'body' => [
+                'type' => 'box', 'layout' => 'vertical', 'paddingAll' => '20px', 'spacing' => 'md',
+                'contents' => [
+                    ['type' => 'text', 'text' => "สวัสดีค่ะ คุณ{$name}", 'weight' => 'bold', 'size' => 'md'],
+                    ['type' => 'text', 'text' => 'เราได้รับการจองของคุณแล้ว ระบบจะแจ้งเตือนอีกครั้งก่อนถึงเวลานัด', 'size' => 'sm', 'color' => '#666666', 'wrap' => true],
+                    ['type' => 'separator', 'margin' => 'md'],
+                    ['type' => 'box', 'layout' => 'vertical', 'margin' => 'md', 'spacing' => 'sm', 'contents' => $rows],
+                ],
+            ],
+        ],
+    ];
+}
+
+function reya_appt_staff_flex(array $ctx, string $pharmacistName): array
+{
+    $date = date('d/m/Y', strtotime((string) $ctx['date']));
+    $time = date('H:i', strtotime((string) $ctx['time']));
+    $cust = trim((string) ($ctx['customer_name'] ?? '')) ?: 'ลูกค้า';
+    $ref  = (string) ($ctx['appointment_ref'] ?? $ctx['appointment_row_id'] ?? '');
+    $symptoms = trim((string) ($ctx['symptoms'] ?? ''));
+
+    $rows = [
+        reya_appt_row('👤 ลูกค้า', $cust),
+        reya_appt_row('👨‍⚕️ เภสัชกร', $pharmacistName),
+        reya_appt_row('📅 วันที่', $date),
+        reya_appt_row('⏰ เวลา', $time . ' น.'),
+        reya_appt_row('🎫 รหัสนัด', $ref),
+    ];
+    if ($symptoms !== '') {
+        $rows[] = reya_appt_row('📝 อาการ', mb_substr($symptoms, 0, 120));
+    }
+
+    return [
+        'type' => 'flex',
+        'altText' => "📅 นัดหมายใหม่ {$date} {$time} น. ({$cust})",
+        'contents' => [
+            'type' => 'bubble',
+            'header' => [
+                'type' => 'box', 'layout' => 'vertical', 'backgroundColor' => '#2563EB', 'paddingAll' => '16px',
+                'contents' => [
+                    ['type' => 'text', 'text' => '📅 นัดหมายใหม่', 'color' => '#FFFFFF', 'weight' => 'bold', 'size' => 'lg'],
+                    ['type' => 'text', 'text' => 'มีลูกค้าจองนัดเข้ามา', 'color' => '#DBEAFE', 'size' => 'xs'],
+                ],
+            ],
+            'body' => [
+                'type' => 'box', 'layout' => 'vertical', 'paddingAll' => '16px', 'spacing' => 'sm', 'contents' => $rows,
+            ],
+        ],
+    ];
+}
+
+function reya_appt_row(string $label, string $value): array
+{
+    return [
+        'type' => 'box', 'layout' => 'horizontal',
+        'contents' => [
+            ['type' => 'text', 'text' => $label, 'size' => 'sm', 'color' => '#888888', 'flex' => 2],
+            ['type' => 'text', 'text' => ($value !== '' ? $value : '-'), 'size' => 'sm', 'weight' => 'bold', 'color' => '#111111', 'align' => 'end', 'flex' => 3, 'wrap' => true],
+        ],
+    ];
 }
 
 function jsonResponse($success, $message, $data = []) {
