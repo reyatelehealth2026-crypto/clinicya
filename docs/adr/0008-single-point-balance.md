@@ -176,9 +176,16 @@ ledger คำนวณจากค่าที่อ่านมาก่อน�
 | 4 | เพิ่ม `points_transactions.idempotency_key` + `UNIQUE` บนคอลัมน์นั้น (คีย์ถูก scope ด้วย `line_account_id` ในโค้ด จึงไม่ต้องเป็น composite) | event เดิมส่งซ้ำได้แต้มครั้งเดียว | **เสร็จฝั่ง PHP** (`71800a8c`) — ยังไม่ได้รัน migration บน prod |
 | 5 | DROP คอลัมน์/ตารางที่เลิกใช้ ผ่าน `database/migration_*.sql` + บรรทัด `!` ใน `.gitignore` | สคีมาเหลือที่เก็บแต้มชุดเดียว | ยังไม่ทำ |
 
-**เฟส 4 ต้องรัน migration ก่อนถึงจะมีผล** — `LoyaltyPoints` เช็ค `SHOW COLUMNS`
-ก่อนใช้คีย์ ถ้ายังไม่ได้รัน `install/migrate_all_tenants_points_idempotency.php`
-คีย์จะถูกละไว้เงียบ ๆ และการให้แต้มซ้ำยังเกิดได้เหมือนเดิม
+**migration รันบนโปรดักชันแล้ว 2026-09-07** — `install/migrate_all_tenants_points_idempotency.php`
+ผ่าน 34/34 DB (33 tenant + `zrismpsz_demo`) 0 fail รันซ้ำแล้วเป็น no-op ครบทุกตัว
+ตรวจ tenant 0003 หลังรัน: index ครบ 4 ตัว, ledger 2,897 แถวเท่าเดิม,
+`available_points` ยังตรงกับผลรวม ledger ทุกคน (mismatched = 0)
+
+**แต่โค้ดยังไม่ขึ้น prod** — คีย์จึงยังไม่กันอะไร คอลัมน์มีแล้วแต่ว่างเปล่า
+(`keyed = 0`) เพราะ `classes/LoyaltyPoints.php` บนเซิร์ฟเวอร์ยังเป็นตัวเดิมที่ไม่ส่งคีย์
+การให้แต้มซ้ำยังเกิดได้จนกว่าจะ deploy — `LoyaltyPoints` เช็ค `SHOW COLUMNS`
+ก่อนใช้คีย์อยู่แล้ว ทั้งสองทิศจึงปลอดภัย: โค้ดใหม่บน DB เก่าก็ได้ DB ใหม่กับ
+โค้ดเก่าก็ได้
 
 migration นี้เพิ่ม `idx_pt_user` ด้วย — template ของ tenant สร้าง
 `points_transactions` โดยมีแค่ PRIMARY KEY (ยืนยันบน prod 2026-09-07: tenant
