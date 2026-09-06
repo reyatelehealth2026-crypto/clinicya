@@ -182,12 +182,12 @@ class AutoTagManager
 
                 // ========== NEW CONDITIONS ==========
                 case 'tier':
-                    // ตรวจสอบ tier ของ user
+                    // Tier is derived from the balance, not stored on the user row.
                     try {
-                        $stmt = $this->db->prepare("SELECT tier FROM loyalty_points WHERE user_id = ? LIMIT 1");
-                        $stmt->execute([$userId]);
-                        $userTier = $stmt->fetchColumn();
-                        if (!$userTier || $userTier !== $value)
+                        require_once __DIR__ . '/TierService.php';
+                        $tierService = new TierService($this->db, $this->lineAccountId);
+                        $userTier = $tierService->calculateTier($this->getUserPointBalance($userId))['tier_code'];
+                        if ($userTier !== strtolower(trim((string) $value)))
                             return false;
                     } catch (Exception $e) {
                         return false;
@@ -196,10 +196,7 @@ class AutoTagManager
 
                 case 'min_points':
                     try {
-                        $stmt = $this->db->prepare("SELECT points FROM loyalty_points WHERE user_id = ? LIMIT 1");
-                        $stmt->execute([$userId]);
-                        $points = (int) $stmt->fetchColumn();
-                        if ($points < $value)
+                        if ($this->getUserPointBalance($userId) < $value)
                             return false;
                     } catch (Exception $e) {
                         return false;
@@ -208,10 +205,7 @@ class AutoTagManager
 
                 case 'max_points':
                     try {
-                        $stmt = $this->db->prepare("SELECT points FROM loyalty_points WHERE user_id = ? LIMIT 1");
-                        $stmt->execute([$userId]);
-                        $points = (int) $stmt->fetchColumn();
-                        if ($points > $value)
+                        if ($this->getUserPointBalance($userId) > $value)
                             return false;
                     } catch (Exception $e) {
                         return false;
@@ -283,6 +277,18 @@ class AutoTagManager
         }
 
         return true;
+    }
+
+    /**
+     * แต้มคงเหลือของ user
+     *
+     * users.available_points is the only balance LoyaltyPoints writes.
+     */
+    private function getUserPointBalance($userId)
+    {
+        $stmt = $this->db->prepare("SELECT COALESCE(available_points, 0) FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        return (int) $stmt->fetchColumn();
     }
 
     /**

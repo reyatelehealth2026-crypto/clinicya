@@ -124,7 +124,6 @@ class AdvancedCRM
 
         $insertQuery = "INSERT INTO segment_members (segment_id, user_id, score)
             SELECT ?, u.id, 1 FROM users u
-            LEFT JOIN loyalty_points lp ON u.id = lp.user_id
             WHERE (u.line_account_id = ? OR u.line_account_id IS NULL) AND u.is_blocked = 0
             {$query['where']}";
 
@@ -175,8 +174,29 @@ class AdvancedCRM
                             break;
 
                         case 'tier':
-                            $where[] = "lp.tier = ?";
-                            $params[] = $value;
+                            // Tier is derived from the balance, not stored — match
+                            // the points range that qualifies for it.
+                            $range = null;
+                            try {
+                                require_once __DIR__ . '/TierService.php';
+                                $tierService = new TierService($this->db, $this->lineAccountId);
+                                $range = $tierService->pointsRangeForTier((string) $value);
+                            } catch (Exception $e) {
+                                error_log('AdvancedCRM: tier range lookup failed - ' . $e->getMessage());
+                            }
+
+                            if ($range === null) {
+                                // Unknown tier matches nobody, rather than everybody.
+                                $where[] = "1 = 0";
+                                break;
+                            }
+
+                            $where[] = "COALESCE(u.available_points, 0) >= ?";
+                            $params[] = $range['min'];
+                            if ($range['max'] !== null) {
+                                $where[] = "COALESCE(u.available_points, 0) < ?";
+                                $params[] = $range['max'];
+                            }
                             break;
 
                         case 'has_tag':

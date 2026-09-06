@@ -55,7 +55,7 @@ try {
             }
 
             // Get user
-            $stmt = $db->prepare("SELECT id, display_name, picture_url FROM users WHERE line_user_id = ?");
+            $stmt = $db->prepare("SELECT id, display_name, picture_url, COALESCE(available_points, 0) AS available_points FROM users WHERE line_user_id = ?");
             $stmt->execute([$lineUserId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -76,21 +76,18 @@ try {
                 'tier' => ['name' => 'Bronze', 'min' => 0]
             ];
 
-            // Get loyalty points
-            try {
-                $stmt = $db->prepare("SELECT points FROM loyalty_points WHERE user_id = ? AND (line_account_id = ? OR line_account_id IS NULL)");
-                $stmt->execute([$user['id'], $accountId]);
-                $points = $stmt->fetchColumn();
-                $response['points'] = (int) ($points ?: 0);
+            // Loyalty balance lives on users.available_points — the only column
+            // LoyaltyPoints actually writes. Tier is derived from it by
+            // TierService so this matches the tiers the shop configured.
+            $response['points'] = (int) $user['available_points'];
 
-                // Calculate tier
-                if ($response['points'] >= 5000) {
-                    $response['tier'] = ['name' => 'Platinum', 'min' => 5000];
-                } elseif ($response['points'] >= 2000) {
-                    $response['tier'] = ['name' => 'Gold', 'min' => 2000];
-                } elseif ($response['points'] >= 500) {
-                    $response['tier'] = ['name' => 'Silver', 'min' => 500];
-                }
+            try {
+                require_once __DIR__ . '/../classes/TierService.php';
+                $tierInfo = (new TierService($db, $accountId))->calculateTier($response['points']);
+                $response['tier'] = [
+                    'name' => $tierInfo['tier_name'],
+                    'min' => (int) $tierInfo['min_points'],
+                ];
             } catch (Exception $e) {
             }
 

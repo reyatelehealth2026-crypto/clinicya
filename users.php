@@ -93,26 +93,45 @@ if ($search) {
     $params[] = "%{$search}%";
 }
 
-// Tier filter
+// Tier filter — tier is derived from the balance, not stored, so match the
+// points range that qualifies for it.
 if ($tierFilter) {
-    $whereConditions[] = "u.id IN (SELECT user_id FROM loyalty_points WHERE tier = ?)";
-    $params[] = $tierFilter;
+    $tierRange = null;
+    try {
+        require_once __DIR__ . '/classes/TierService.php';
+        $tierService = new TierService($db, $_SESSION['current_bot_id'] ?? null);
+        $tierRange = $tierService->pointsRangeForTier($tierFilter);
+    } catch (Exception $e) {
+        error_log('users.php: tier range lookup failed - ' . $e->getMessage());
+    }
+
+    if ($tierRange === null) {
+        // Unknown tier matches nobody, rather than everybody.
+        $whereConditions[] = "1 = 0";
+    } else {
+        $whereConditions[] = "COALESCE(u.available_points, 0) >= ?";
+        $params[] = $tierRange['min'];
+        if ($tierRange['max'] !== null) {
+            $whereConditions[] = "COALESCE(u.available_points, 0) < ?";
+            $params[] = $tierRange['max'];
+        }
+    }
 }
 
 // Points filter
 if ($pointsFilter) {
     switch ($pointsFilter) {
         case '0-100':
-            $whereConditions[] = "COALESCE((SELECT points FROM loyalty_points WHERE user_id = u.id LIMIT 1), 0) BETWEEN 0 AND 100";
+            $whereConditions[] = "COALESCE(u.available_points, 0) BETWEEN 0 AND 100";
             break;
         case '100-500':
-            $whereConditions[] = "COALESCE((SELECT points FROM loyalty_points WHERE user_id = u.id LIMIT 1), 0) BETWEEN 100 AND 500";
+            $whereConditions[] = "COALESCE(u.available_points, 0) BETWEEN 100 AND 500";
             break;
         case '500-1000':
-            $whereConditions[] = "COALESCE((SELECT points FROM loyalty_points WHERE user_id = u.id LIMIT 1), 0) BETWEEN 500 AND 1000";
+            $whereConditions[] = "COALESCE(u.available_points, 0) BETWEEN 500 AND 1000";
             break;
         case '1000+':
-            $whereConditions[] = "COALESCE((SELECT points FROM loyalty_points WHERE user_id = u.id LIMIT 1), 0) > 1000";
+            $whereConditions[] = "COALESCE(u.available_points, 0) > 1000";
             break;
     }
 }

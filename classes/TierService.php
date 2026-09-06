@@ -166,9 +166,37 @@ class TierService
     }
 
     /**
+     * Resolve a tier code to the points range that qualifies for it.
+     *
+     * Tier is derived from a points balance, never stored — so SQL that used to
+     * filter on a `tier` column filters on this range instead.
+     *
+     * @param string $tierCode Tier code (e.g. 'gold')
+     * @return array|null ['min' => int, 'max' => int|null] where max is exclusive
+     *                    and null means no upper bound; null if the code is unknown
+     */
+    public function pointsRangeForTier(string $tierCode): ?array
+    {
+        $tierCode = strtolower(trim($tierCode));
+        $tiers = $this->getTiers();
+
+        foreach ($tiers as $index => $tier) {
+            if ($tier['tier_code'] !== $tierCode) {
+                continue;
+            }
+            return [
+                'min' => (int) $tier['min_points'],
+                'max' => isset($tiers[$index + 1]) ? (int) $tiers[$index + 1]['min_points'] : null,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * Get user's current tier
      * Fetches user points and calculates tier
-     * 
+     *
      * @param int $userId User ID
      * @return array Tier information
      */
