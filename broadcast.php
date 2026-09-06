@@ -77,6 +77,9 @@ require_once 'includes/header.php';
     <a href="templates.php" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid var(--color-slate-200);border-radius:var(--radius-md,12px);font-size:var(--text-sm,14px);font-weight:500;color:var(--color-dark-700);background:#ffffff;text-decoration:none;transition:all 150ms ease;">
         <i class="fas fa-file-alt"></i>Templates
     </a>
+    <a href="flex-samples.php" style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:8px 14px;border:1px solid #bbf7d0;border-radius:var(--radius-md,12px);font-size:var(--text-sm,14px);font-weight:600;color:#047857;background:#ecfdf5;text-decoration:none;transition:all 150ms ease;">
+        <i class="fas fa-vial"></i>Flex Samples
+    </a>
 </div>
 
 <!-- Tab Styles -->

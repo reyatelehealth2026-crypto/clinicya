@@ -147,7 +147,11 @@ class LineAPI
                     return $result;
                 }
                 // Reply failed, fallback to push
-                error_log("LineAPI: replyMessage failed (code: {$result['code']}), falling back to pushMessage");
+                error_log(
+                    "LineAPI: replyMessage failed (code: {$result['code']}), body="
+                    . json_encode($result['body'] ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                    . ", falling back to pushMessage"
+                );
             } else {
                 // Token expired, clear it
                 $this->clearReplyToken($db, $internalUserId, $userId);
@@ -157,6 +161,10 @@ class LineAPI
         // Fallback to push message
         $result = $this->pushMessage($userId, $messages);
         $result['method'] = 'push';
+        error_log(
+            "LineAPI: pushMessage result (code: {$result['code']}), body="
+            . json_encode($result['body'] ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
         return $result;
     }
 
