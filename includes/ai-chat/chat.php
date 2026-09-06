@@ -129,7 +129,7 @@ $adminName = $_SESSION['admin_user']['display_name'] ?? $_SESSION['admin_user'][
 </style>
 
 <script>
-const API_URL = '/api/ai-chat.php';
+const API_URL = '/api/ai-admin.php';
 let isLoading = false;
 let chatHistory = [];
 
@@ -189,8 +189,8 @@ async function sendMessage() {
         hideTypingIndicator();
         
         if (data.success) {
-            addMessage(data.message, 'assistant');
-            chatHistory.push({ role: 'assistant', content: data.message });
+            addMessage((data.response || data.message), 'assistant');
+            chatHistory.push({ role: 'assistant', content: (data.response || data.message) });
         } else {
             addMessage(data.error || 'ขออภัย เกิดข้อผิดพลาด', 'assistant');
         }
