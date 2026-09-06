@@ -77,7 +77,7 @@ function handleHistory($db) {
     }
     
     // Get user
-    $stmt = $db->prepare("SELECT id, points FROM users WHERE line_user_id = ?");
+    $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ?");
     $stmt->execute([$lineUserId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -138,8 +138,13 @@ function handleHistory($db) {
         } catch (Exception $e2) {}
     }
     
+    // Balance comes from LoyaltyPoints, not users.points — ADR-008.
+    require_once __DIR__ . '/../classes/LoyaltyPoints.php';
+    $loyalty = new LoyaltyPoints($db, $lineAccountId);
+    $currentPoints = (int) $loyalty->getUserPoints($user['id'])['available_points'];
+
     jsonResponse(true, 'OK', [
-        'current_points' => (int)$user['points'],
+        'current_points' => $currentPoints,
         'total_earned' => (int)$totals['total_earned'],
         'total_used' => (int)$totals['total_used'],
         'history' => $history
@@ -220,7 +225,7 @@ function handleRedeem($db, $data) {
     }
     
     // Get user
-    $stmt = $db->prepare("SELECT id, points FROM users WHERE line_user_id = ?");
+    $stmt = $db->prepare("SELECT id FROM users WHERE line_user_id = ?");
     $stmt->execute([$lineUserId]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     
@@ -264,22 +269,30 @@ function handleRedeem($db, $data) {
         jsonResponse(false, 'ของรางวัลหมดแล้ว');
     }
     
+    // Balance and deduction both go through LoyaltyPoints — ADR-008. This used
+    // to check users.points, a column receipt and dispense awards never touch,
+    // so a customer with a real balance was told they had none.
+    require_once __DIR__ . '/../classes/LoyaltyPoints.php';
+    $loyalty = new LoyaltyPoints($db, $lineAccountId);
+    $currentPoints = (int) $loyalty->getUserPoints($user['id'])['available_points'];
+
     // Check points
-    if ($user['points'] < $reward['points_required']) {
+    if ($currentPoints < $reward['points_required']) {
         jsonResponse(false, 'แต้มไม่เพียงพอ', [
-            'current_points' => (int)$user['points'],
+            'current_points' => $currentPoints,
             'required_points' => (int)$reward['points_required']
         ]);
     }
-    
+
     // Start transaction
     $db->beginTransaction();
 
     try {
-        // Deduct points
-        $newBalance = $user['points'] - $reward['points_required'];
-        $stmt = $db->prepare("UPDATE users SET points = ? WHERE id = ?");
-        $stmt->execute([$newBalance, $user['id']]);
+        // Deduct points — joins the transaction opened above rather than nesting.
+        $newBalance = $currentPoints - $reward['points_required'];
+        if (!$loyalty->deductPoints($user['id'], (int) $reward['points_required'], 'reward', $reward['id'], 'แลก: ' . $reward['name'])) {
+            throw new Exception('ไม่สามารถหักแต้มได้');
+        }
 
         // Update stock if applicable
         if (isset($reward['stock']) && $reward['stock'] !== null && $reward['stock'] > 0) {
@@ -297,19 +310,9 @@ function handleRedeem($db, $data) {
         // Generate coupon code
         $couponCode = 'RW' . date('ymd') . strtoupper(substr(md5(uniqid()), 0, 6));
 
-        // Log redemption
-        $stmt = $db->prepare("
-            INSERT INTO points_history (line_account_id, user_id, points, type, description, reference_type, reference_id, balance_after)
-            VALUES (?, ?, ?, 'redeem', ?, 'reward', ?, ?)
-        ");
-        $stmt->execute([
-            $lineAccountId,
-            $user['id'],
-            -$reward['points_required'],
-            'แลก: ' . $reward['name'],
-            $reward['id'],
-            $newBalance
-        ]);
+        // The redemption is already in points_transactions — deductPoints wrote
+        // it. Logging it to points_history too is what put a customer's history
+        // in two places at once (ADR-008).
 
         // Save redemption record (if table exists)
         try {

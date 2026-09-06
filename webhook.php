@@ -5657,7 +5657,9 @@ function handleReceiptPointsClaim($db, $line, $user, $lineAccountId, $imageData,
 
     // Award points
     $desc = "สะสมแต้มจากใบเสร็จ" . ($receiptNumber ? " #{$receiptNumber}" : '') . " ยอด ฿" . number_format($totalAmount, 2);
-    $lp->addPoints($user['id'], $points, 'receipt', $claimId, $desc);
+    // Keyed on the claim so a redelivered webhook — or a pharmacist approving
+    // the same claim in receipt-points-review.php — cannot pay for it twice.
+    $lp->addPoints($user['id'], $points, 'receipt', $claimId, $desc, 'receipt:' . $claimId);
 
     $newBalance = (int) $lp->getUserPoints($user['id'])['available_points'];
 

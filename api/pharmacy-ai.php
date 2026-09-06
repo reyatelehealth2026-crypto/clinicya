@@ -335,7 +335,8 @@ function getUserFullContext($db, $lineUserId) {
             ORDER BY r.points_required ASC
             LIMIT 3
         ");
-        $stmt->execute([$user['points'] ?? 0]);
+        // available_points, not points — see ADR-008.
+        $stmt->execute([$user['available_points'] ?? 0]);
         $user['available_rewards'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         return $user;

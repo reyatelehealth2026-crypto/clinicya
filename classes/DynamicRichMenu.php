@@ -139,20 +139,28 @@ class DynamicRichMenu {
      */
     private function getUserData($userId) {
         $stmt = $this->db->prepare("
-            SELECT u.*, 
-                   COALESCE(lp.points, 0) as points,
-                   COALESCE(lp.tier, 'bronze') as tier,
+            SELECT u.*,
+                   COALESCE(u.available_points, 0) as points,
                    DATEDIFF(NOW(), u.created_at) as days_since_follow,
                    DATEDIFF(NOW(), u.last_interaction) as days_inactive
             FROM users u
-            LEFT JOIN loyalty_points lp ON u.id = lp.user_id AND lp.line_account_id = ?
             WHERE u.id = ?
         ");
-        $stmt->execute([$this->lineAccountId, $userId]);
+        $stmt->execute([$userId]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if (!$user) return null;
-        
+
+        // Tier is derived from the balance, not stored on the user row.
+        $user['tier'] = 'bronze';
+        try {
+            require_once __DIR__ . '/TierService.php';
+            $tierService = new TierService($this->db, $this->lineAccountId);
+            $user['tier'] = $tierService->calculateTier((int) $user['points'])['tier_code'];
+        } catch (Exception $e) {
+            error_log('DynamicRichMenu: tier calculation failed - ' . $e->getMessage());
+        }
+
         // ดึง tags
         $stmt = $this->db->prepare("
             SELECT t.name FROM user_tags t

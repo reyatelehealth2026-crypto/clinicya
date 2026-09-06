@@ -2575,7 +2575,7 @@ class OdooWebhookHandler
 
         // หา user
         $userStmt = $this->db->prepare(
-            "SELECT id, points, line_account_id, display_name, picture_url
+            "SELECT id, available_points, line_account_id, display_name, picture_url
              FROM users WHERE line_user_id = ? LIMIT 1"
         );
         $userStmt->execute([$lineUserId]);
@@ -2587,29 +2587,29 @@ class OdooWebhookHandler
 
         $userId        = (int) $user['id'];
         $lineAccountId = (int) ($user['line_account_id'] ?? 3);
-        $newPoints     = (int) $user['points'] + $points;
         $displayName   = $user['display_name'] ?? 'ลูกค้า';
         $pictureUrl    = $user['picture_url'] ?? '';
 
-        // อัพเดทแต้ม
+        // ยอดซื้อสะสม (ไม่ใช่แต้ม)
         $this->db->prepare(
             "UPDATE users SET
-                points           = points + ?,
-                available_points = available_points + ?,
-                total_points     = total_points + ?,
-                total_spent      = total_spent + ?,
-                order_count      = order_count + 1
+                total_spent = total_spent + ?,
+                order_count = order_count + 1
              WHERE id = ?"
-        )->execute([$points, $points, $points, $amountTotal, $userId]);
+        )->execute([$amountTotal, $userId]);
 
-        // บันทึก points_transactions
+        // แต้ม — ผ่าน LoyaltyPoints เพื่อให้ยอดกับ ledger เคลื่อนพร้อมกันใต้ row
+        // lock (ADR-008) และคีย์ที่ invoice กัน Odoo ส่ง webhook ซ้ำแล้วได้แต้มซ้ำ
+        require_once __DIR__ . '/LoyaltyPoints.php';
         $desc = "ได้รับแต้มจากออเดอ " . ($orderName ?: $invoiceNumber)
               . " (" . number_format($amountTotal, 0, '.', ',') . " ฿ → {$points} point)";
-        $this->db->prepare(
-            "INSERT INTO points_transactions
-                (user_id, points, type, balance_after, reference_type, reference_id, description, line_account_id, created_at)
-             VALUES (?, ?, 'earn', ?, 'invoice', ?, ?, ?, NOW())"
-        )->execute([$userId, $points, $newPoints, $invoiceId, $desc, $lineAccountId]);
+
+        $loyalty = new LoyaltyPoints($this->db, $lineAccountId);
+        $loyalty->addPoints($userId, $points, 'invoice', $invoiceId, $desc, 'invoice:' . $invoiceId);
+
+        // Read the balance back rather than predicting it — on a redelivery no
+        // points were added and the prediction would be wrong.
+        $newPoints = (int) $loyalty->getUserPoints($userId)['available_points'];
 
         // System message
         $msgContent = "🧾 ชำระเงินใบแจ้งหนี้ {$invoiceNumber} เรียบร้อย\n"

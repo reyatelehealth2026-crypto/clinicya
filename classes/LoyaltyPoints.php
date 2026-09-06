@@ -8,6 +8,8 @@ class LoyaltyPoints
     private $db;
     private $lineAccountId;
     private $settings;
+    /** null until first checked — see hasIdempotencyColumn() */
+    private $hasIdempotencyColumn = null;
 
     public function __construct($db, $lineAccountId = null)
     {
@@ -66,22 +68,17 @@ class LoyaltyPoints
         // If no data in points_transactions, fallback to users table
         if (!$result || (int) $result['available_points'] === 0) {
             error_log("getUserPoints: No data in points_transactions, checking users table");
-            $stmt = $this->db->prepare("SELECT total_points, available_points, used_points, points FROM users WHERE id = ?");
+            $stmt = $this->db->prepare("SELECT total_points, available_points, used_points FROM users WHERE id = ?");
             $stmt->execute([$userId]);
             $userResult = $stmt->fetch(PDO::FETCH_ASSOC);
             error_log("getUserPoints: Users table result: " . json_encode($userResult));
 
-            if ($userResult) {
-                // Use 'points' column if available_points is 0 but points has value (same logic as points-history.php)
-                if (empty($userResult['available_points']) && !empty($userResult['points'])) {
-                    $userResult['available_points'] = $userResult['points'];
-                    $userResult['total_points'] = $userResult['points'];
-                    error_log("getUserPoints: Using 'points' column as fallback: " . $userResult['points']);
-                }
-
-                if ((int) $userResult['available_points'] > 0) {
-                    return $userResult;
-                }
+            // `users.points` used to be read here when available_points was 0.
+            // That column holds nothing but withdrawn welcome bonuses (ADR-008
+            // §"4. โบนัสต้อนรับที่เคยแจกไปแล้ว — ตัดทิ้ง ไม่ต้องโอน"), so reading it
+            // handed customers back the 50 points that were written off.
+            if ($userResult && (int) $userResult['available_points'] > 0) {
+                return $userResult;
             }
         }
 
@@ -168,25 +165,37 @@ class LoyaltyPoints
         ];
     }
 
-    public function addPoints($userId, $points, $referenceType = null, $referenceId = null, $description = null)
+    public function addPoints($userId, $points, $referenceType = null, $referenceId = null, $description = null, $idempotencyKey = null)
     {
         if ($points <= 0)
             return false;
-        $current = $this->getUserPoints($userId);
-        $newBalance = $current['available_points'] + $points;
+
         $expiresAt = $this->settings['points_expiry_days'] > 0 ? date('Y-m-d H:i:s', strtotime("+{$this->settings['points_expiry_days']} days")) : null;
-
-        $stmt = $this->db->prepare("UPDATE users SET total_points = total_points + ?, available_points = available_points + ? WHERE id = ?");
-        $stmt->execute([$points, $points, $userId]);
-
-        // Update tier
-        $this->updateUserTier($userId, $newBalance);
 
         // Keep referenceId as integer or null (don't convert to string for INT column)
         $referenceIdValue = ($referenceId !== null && $referenceId !== '') ? (int) $referenceId : null;
 
-        $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description, expires_at) VALUES (?, ?, 'earn', ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $this->lineAccountId, $points, $newBalance, $referenceType, $referenceIdValue, $description ?? "Earned {$points} points", $expiresAt]);
+        $newBalance = $this->mutate(
+            $userId,
+            "UPDATE users SET total_points = total_points + ?, available_points = available_points + ? WHERE id = ?",
+            $points,
+            function ($balanceAfter, $key) use ($userId, $points, $referenceType, $referenceIdValue, $description, $expiresAt) {
+                if ($key !== null) {
+                    $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description, expires_at, idempotency_key) VALUES (?, ?, 'earn', ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt->execute([$userId, $this->lineAccountId, $points, $balanceAfter, $referenceType, $referenceIdValue, $description ?? "Earned {$points} points", $expiresAt, $key]);
+                    return;
+                }
+                $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description, expires_at) VALUES (?, ?, 'earn', ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$userId, $this->lineAccountId, $points, $balanceAfter, $referenceType, $referenceIdValue, $description ?? "Earned {$points} points", $expiresAt]);
+            },
+            $idempotencyKey
+        );
+
+        if ($newBalance === null)
+            return false;
+
+        // Tier is a derived cache — never let it fail the award.
+        $this->updateUserTier($userId, $newBalance);
 
         // Platform-owner activity feed + (throttled) Telegram (best-effort).
         if (@is_file(__DIR__ . '/TenantActivity.php')) {
@@ -199,27 +208,144 @@ class LoyaltyPoints
         return true;
     }
 
-    public function deductPoints($userId, $points, $referenceType = null, $referenceId = null, $description = null)
+    public function deductPoints($userId, $points, $referenceType = null, $referenceId = null, $description = null, $idempotencyKey = null)
     {
         if ($points <= 0)
             return false;
-        $current = $this->getUserPoints($userId);
-        if ($current['available_points'] < $points)
-            return false;
-        $newBalance = $current['available_points'] - $points;
-
-        $stmt = $this->db->prepare("UPDATE users SET available_points = available_points - ?, used_points = used_points + ? WHERE id = ?");
-        $stmt->execute([$points, $points, $userId]);
-
-        // Update tier
-        $this->updateUserTier($userId, $newBalance);
 
         // Keep referenceId as integer or null (don't convert to string for INT column)
         $referenceIdValue = ($referenceId !== null && $referenceId !== '') ? (int) $referenceId : null;
 
-        $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description) VALUES (?, ?, 'redeem', ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $this->lineAccountId, -$points, $newBalance, $referenceType, $referenceIdValue, $description ?? "Used {$points} points"]);
+        $newBalance = $this->mutate(
+            $userId,
+            "UPDATE users SET available_points = available_points - ?, used_points = used_points + ? WHERE id = ?",
+            -$points,
+            function ($balanceAfter, $key) use ($userId, $points, $referenceType, $referenceIdValue, $description) {
+                if ($key !== null) {
+                    $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description, idempotency_key) VALUES (?, ?, 'redeem', ?, ?, ?, ?, ?, ?)");
+                    $stmt->execute([$userId, $this->lineAccountId, -$points, $balanceAfter, $referenceType, $referenceIdValue, $description ?? "Used {$points} points", $key]);
+                    return;
+                }
+                $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description) VALUES (?, ?, 'redeem', ?, ?, ?, ?, ?)");
+                $stmt->execute([$userId, $this->lineAccountId, -$points, $balanceAfter, $referenceType, $referenceIdValue, $description ?? "Used {$points} points"]);
+            },
+            $idempotencyKey
+        );
+
+        if ($newBalance === null)
+            return false;
+
+        // Tier is a derived cache — never let it fail the redemption.
+        $this->updateUserTier($userId, $newBalance);
         return true;
+    }
+
+    /**
+     * Move a user's balance and write the matching ledger row, atomically.
+     *
+     * The balance is read, the cache columns are updated, and the
+     * points_transactions row is written inside one transaction with the user
+     * row locked. Without the lock two concurrent awards both read the old
+     * balance and stamp the same `balance_after`, so the ledger stops
+     * reconciling with the cache even though the balance itself is correct.
+     *
+     * Callers that already opened a transaction (redeemReward via
+     * api/points.php) join it rather than nesting, which PDO cannot do.
+     *
+     * An idempotency key makes the move safe to retry: the key is stored on
+     * the ledger row, and a second call carrying the same key returns the
+     * current balance without awarding anything. Keys are scoped to the LINE
+     * account here, so callers pass a bare "order:1042" and cannot collide
+     * across accounts in the same tenant.
+     *
+     * @param int         $userId
+     * @param string      $balanceSql  UPDATE with three placeholders: amount, amount, userId
+     * @param int         $delta       Signed change applied to the balance (+earn / -redeem)
+     * @param callable    $writeLedger Receives the new balance and the scoped key; writes the ledger row
+     * @param string|null $idempotencyKey Natural key for this award, or null when there isn't one
+     * @return int|null New balance, or null if the move could not be made
+     */
+    private function mutate($userId, $balanceSql, $delta, callable $writeLedger, $idempotencyKey = null)
+    {
+        $scopedKey = ($idempotencyKey !== null && $idempotencyKey !== '' && $this->hasIdempotencyColumn())
+            ? ((int) $this->lineAccountId) . ':' . $idempotencyKey
+            : null;
+
+        $ownTransaction = !$this->db->inTransaction();
+        if ($ownTransaction)
+            $this->db->beginTransaction();
+
+        try {
+            // Serialise every point movement for this user.
+            $stmt = $this->db->prepare("SELECT id FROM users WHERE id = ? FOR UPDATE");
+            $stmt->execute([$userId]);
+            if ($stmt->fetchColumn() === false) {
+                if ($ownTransaction)
+                    $this->db->rollBack();
+                return null;
+            }
+
+            // Already paid for under this key — report the balance, award nothing.
+            if ($scopedKey !== null) {
+                $stmt = $this->db->prepare("SELECT id FROM points_transactions WHERE idempotency_key = ? LIMIT 1");
+                $stmt->execute([$scopedKey]);
+                if ($stmt->fetchColumn() !== false) {
+                    $balance = (int) $this->getUserPoints($userId)['available_points'];
+                    if ($ownTransaction)
+                        $this->db->commit();
+                    error_log('LoyaltyPoints: duplicate award ignored for key ' . $scopedKey);
+                    return $balance;
+                }
+            }
+
+            $current = (int) $this->getUserPoints($userId)['available_points'];
+            $newBalance = $current + $delta;
+
+            // Refuse to spend points the customer does not have.
+            if ($newBalance < 0) {
+                if ($ownTransaction)
+                    $this->db->rollBack();
+                return null;
+            }
+
+            $amount = abs($delta);
+            $stmt = $this->db->prepare($balanceSql);
+            $stmt->execute([$amount, $amount, $userId]);
+
+            $writeLedger($newBalance, $scopedKey);
+
+            if ($ownTransaction)
+                $this->db->commit();
+
+            return $newBalance;
+        } catch (Exception $e) {
+            if ($ownTransaction && $this->db->inTransaction())
+                $this->db->rollBack();
+            error_log('LoyaltyPoints: balance move failed for user ' . $userId . ' - ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Does this tenant DB have the idempotency column yet?
+     *
+     * database/migration_2026-09-07_points_idempotency.sql adds it. Until it
+     * has run, keys are ignored and awards behave exactly as before rather
+     * than failing on an unknown column.
+     */
+    private function hasIdempotencyColumn()
+    {
+        if ($this->hasIdempotencyColumn !== null)
+            return $this->hasIdempotencyColumn;
+
+        try {
+            $stmt = $this->db->query("SHOW COLUMNS FROM points_transactions LIKE 'idempotency_key'");
+            $this->hasIdempotencyColumn = $stmt->fetch() !== false;
+        } catch (Exception $e) {
+            $this->hasIdempotencyColumn = false;
+        }
+
+        return $this->hasIdempotencyColumn;
     }
 
     public function awardPointsForOrder($userId, $orderId, $orderAmount)
@@ -294,7 +420,10 @@ class LoyaltyPoints
                 $stmt = $this->db->prepare("UPDATE users SET member_tier = ? WHERE id = ?");
                 $stmt->execute([$tierInfo['tier_code'], $userId]);
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
+            // Throwable, not Exception: the points are already committed by the
+            // time this runs, so a missing TierService.php or a type error here
+            // must not take the request down after the customer was paid.
             error_log("Failed to update user tier: " . $e->getMessage());
         }
     }

@@ -50,7 +50,9 @@ try {
     $hasIsRegistered = in_array('is_registered', $cols);
     $hasMemberTier = in_array('member_tier', $cols);
     $hasRegisteredAt = in_array('registered_at', $cols);
-    $hasPoints = in_array('points', $cols);
+    // available_points, not points — see ADR-008; the tier counts below are
+    // derived from the balance, and `points` holds withdrawn welcome bonuses.
+    $hasPoints = in_array('available_points', $cols);
     $hasMemberId = in_array('member_id', $cols);
 } catch (Exception $e) {
 }
@@ -125,14 +127,14 @@ try {
 
     if ($hasPoints) {
         // Get all members with points and count per tier
-        $membersQuery = "SELECT points FROM users";
+        $membersQuery = "SELECT available_points FROM users";
         if ($hasIsRegistered) {
             $membersQuery .= " WHERE is_registered = 1";
         }
         $allMembers = $db->query($membersQuery)->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($allMembers as $member) {
-            $memberPoints = (int) ($member['points'] ?? 0);
+            $memberPoints = (int) ($member['available_points'] ?? 0);
             $memberTier = $tierService->calculateTier($memberPoints);
             $tierCode = $memberTier['tier_code'];
             if (isset($tierCounts[$tierCode])) {
@@ -215,8 +217,10 @@ try {
                         </td>
                         <td class="px-4 py-3">
                             <?php
-                            // Use available_points if exists, otherwise fallback to total_points or points
-                            $displayPoints = $member['available_points'] ?? $member['total_points'] ?? $member['points'] ?? 0;
+                            // available_points is the balance; `points` was dropped
+                            // from this chain — it holds only withdrawn welcome
+                            // bonuses (ADR-008).
+                            $displayPoints = $member['available_points'] ?? $member['total_points'] ?? 0;
 
                             // Calculate tier dynamicallly
                             $tierInfo = $tierService->calculateTier($displayPoints);
