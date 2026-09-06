@@ -172,7 +172,7 @@ ledger คำนวณจากค่าที่อ่านมาก่อน�
 | 0 | สำรวจความเสียหายต่อ tenant | ได้ตัวเลขจริง | **เสร็จ** (ดูข้างบน) |
 | 1 | `LoyaltyPoints` ครอบ transaction + `FOR UPDATE`; เลิกแจกโบนัส; เส้น B ทั้งหมดเรียก `LoyaltyPoints` | grep ไม่เหลือ `UPDATE users SET points` / `INSERT INTO points_history` | **เสร็จฝั่ง PHP** (`009186fd`) |
 | 2 | ฝั่ง Next ทำตาม — โดยเฉพาะ `api/miniapp/member` ที่ live อยู่ | โบนัสหยุดถูกแจกจริงบนโปรดักชัน | ยังไม่ทำ |
-| 3 | ผู้อ่าน `users.points` (`MemberPostbackRouter:201`, `LiffMessageHandler:593`, `includes/membership/members.php:128`, `api/member.php:465`) ย้ายมาอ่าน `available_points` | ทุกหน้าจอโชว์เลขเดียวกัน | ยังไม่ทำ |
+| 3 | ผู้อ่าน `users.points` ย้ายมาอ่าน `available_points` — **12 ไฟล์ ไม่ใช่ 4** ตามที่ประเมินไว้แรก | ทุกหน้าจอโชว์เลขเดียวกัน | **เสร็จฝั่ง PHP** (`0343a2fe`) |
 | 4 | เพิ่ม `points_transactions.idempotency_key` + `UNIQUE(source, idempotency_key)` | event เดิมส่งซ้ำได้แต้มครั้งเดียว | ยังไม่ทำ |
 | 5 | DROP คอลัมน์/ตารางที่เลิกใช้ ผ่าน `database/migration_*.sql` + บรรทัด `!` ใน `.gitignore` | สคีมาเหลือที่เก็บแต้มชุดเดียว | ยังไม่ทำ |
 
