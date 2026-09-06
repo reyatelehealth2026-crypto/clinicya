@@ -3,8 +3,11 @@
  * Developer Dashboard - Error Logs & Debug Tools
  * สำหรับดู error logs, webhook logs, และ debug ข้อมูลต่างๆ
  */
-require_once 'config/database.php';
+// config.php first: database.php runs bootstrap/resolve_subdomain.php, which
+// needs DB_HOST to look the tenant up. Loaded in the other order the lookup
+// threw "Undefined constant DB_HOST" and fell through to the legacy database.
 require_once 'config/config.php';
+require_once 'config/database.php';
 
 $pageTitle = '🛠️ Developer Dashboard';
 $db = Database::getInstance()->getConnection();
