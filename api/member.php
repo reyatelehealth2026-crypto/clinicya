@@ -257,27 +257,11 @@ function handleRegister($db, $data)
   flagPointsMergeOnLink($db, $lineAccountId, $userId, $phone);
  }
 
- // Add welcome bonus points if points column exists
- $welcomeBonus = 50;
- try {
-  $stmt = $db->prepare("UPDATE users SET points = ? WHERE id = ?");
-  $stmt->execute([$welcomeBonus, $userId]);
- } catch (Exception $e) {
-  // points column might not exist
-  error_log("Update points error: " . $e->getMessage());
- }
-
- // Log points
- try {
-  $stmt = $db->prepare("
-            INSERT INTO points_history (line_account_id, user_id, points, type, description, balance_after)
-            VALUES (?, ?, ?, 'bonus', 'โบนัสต้อนรับสมาชิกใหม่', ?)
-        ");
-  $stmt->execute([$lineAccountId, $userId, $welcomeBonus, $welcomeBonus]);
- } catch (Exception $e) {
-  // points_history table might not exist
-  error_log("points_history insert error: " . $e->getMessage());
- }
+ // The welcome bonus is withdrawn (ADR-008). It credited users.points and
+ // logged to points_history — neither of which the member card reads — so the
+ // 50 points were never spendable. The field stays in the response at 0 to
+ // keep the MemberRegisterOk contract intact.
+ $welcomeBonus = 0;
 
  jsonResponse(true, 'สมัครสมาชิกสำเร็จ!', [
   'member_id' => $memberId,
@@ -386,7 +370,7 @@ function autoRegisterMember($db, $lineUserId, $lineAccountId, $displayName = '',
  if (isset($existingColumns['points'])) {
   $columns[] = 'points';
   $placeholders[] = '?';
-  $values[] = 50; // Welcome bonus
+  $values[] = 0; // Welcome bonus withdrawn — ADR-008
  }
 
  $sql = "INSERT INTO users (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")";
@@ -394,16 +378,8 @@ function autoRegisterMember($db, $lineUserId, $lineAccountId, $displayName = '',
  $stmt->execute($values);
  $userId = $db->lastInsertId();
 
- // Log welcome bonus points
- try {
-  $stmt = $db->prepare("
-   INSERT INTO points_history (line_account_id, user_id, points, type, description, balance_after)
-   VALUES (?, ?, ?, 'bonus', 'โบนัสต้อนรับสมาชิกใหม่ (Auto-Register)', ?)
-  ");
-  $stmt->execute([$lineAccountId, $userId, 50, 50]);
- } catch (Exception $e) {
-  error_log("points_history insert error: " . $e->getMessage());
- }
+ // Welcome bonus withdrawn — ADR-008. It only ever wrote points_history, which
+ // no member-facing screen reads, so it granted nothing spendable.
 
  error_log("autoRegisterMember: Created new member id=$userId, member_id=$memberId");
 
@@ -414,7 +390,7 @@ function autoRegisterMember($db, $lineUserId, $lineAccountId, $displayName = '',
   'first_name' => null,
   'last_name' => null,
   'display_name' => $displayName,
-  'points' => 50
+  'points' => 0
  ];
 }
 
@@ -439,25 +415,14 @@ function autoUpgradeMember($db, $userId, $lineAccountId)
   $updates[] = "member_tier = 'bronze'";
  }
 
- if (isset($existingColumns['points'])) {
-  $updates[] = 'points = COALESCE(points, 0) + 50';
- }
+ // Welcome bonus withdrawn — ADR-008: no points are granted on upgrade.
 
  $params[] = $userId;
  $sql = "UPDATE users SET " . implode(', ', $updates) . " WHERE id = ?";
  $stmt = $db->prepare($sql);
  $stmt->execute($params);
 
- // Log welcome bonus
- try {
-  $stmt = $db->prepare("
-   INSERT INTO points_history (line_account_id, user_id, points, type, description, balance_after)
-   VALUES (?, ?, ?, 'bonus', 'โบนัสต้อนรับสมาชิก (Auto-Upgrade)', (SELECT COALESCE(points, 50) FROM users WHERE id = ?))
-  ");
-  $stmt->execute([$lineAccountId, $userId, 50, $userId]);
- } catch (Exception $e) {
-  error_log("points_history insert error: " . $e->getMessage());
- }
+ // Welcome bonus withdrawn — ADR-008.
 
  error_log("autoUpgradeMember: Upgraded user id=$userId to member_id=$memberId");
 

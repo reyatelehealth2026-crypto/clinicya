@@ -381,45 +381,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 error_log('BusinessBot error: ' . $e->getMessage());
             }
 
-            // Award loyalty points (unified system)
+            // Award loyalty points — LoyaltyPoints owns the balance and the
+            // ledger (ADR-008). This block used to move users.points and write
+            // both points_history and points_transactions, so the ledger showed
+            // the award while the balance the member card reads never moved.
+            //
+            // LoyaltyPoints reads the same points_settings row this read
+            // inline, and additionally honours is_active and
+            // min_order_for_points, which this path ignored.
             try {
-                $stmt = $db->prepare("SELECT o.*, u.line_user_id, u.points as current_points FROM {$ordersTable} o JOIN users u ON o.user_id = u.id WHERE o.id = ?");
+                require_once __DIR__ . '/../classes/LoyaltyPoints.php';
+
+                $stmt = $db->prepare("SELECT user_id, grand_total, order_number FROM {$ordersTable} WHERE id = ?");
                 $stmt->execute([$orderId]);
                 $order = $stmt->fetch();
 
                 if ($order && $order['user_id']) {
-                    // Get points settings
-                    $pointsPerBaht = 1; // Default: 1 แต้มต่อ 1 บาท
-                    try {
-                        $stmt = $db->prepare("SELECT points_per_baht FROM points_settings WHERE line_account_id = ? OR line_account_id IS NULL ORDER BY line_account_id DESC LIMIT 1");
-                        $stmt->execute([$currentBotId]);
-                        $settings = $stmt->fetch();
-                        if ($settings) $pointsPerBaht = (float)$settings['points_per_baht'];
-                    } catch (Exception $e) {}
-
-                    // Calculate points
-                    $earnedPoints = (int)floor($order['grand_total'] * $pointsPerBaht);
+                    $loyalty = new LoyaltyPoints($db, $currentBotId);
+                    $earnedPoints = $loyalty->calculatePoints((float) $order['grand_total']);
 
                     if ($earnedPoints > 0) {
-                        $newBalance = ($order['current_points'] ?? 0) + $earnedPoints;
-
-                        // Update users.points (for LIFF system)
-                        $stmt = $db->prepare("UPDATE users SET points = points + ? WHERE id = ?");
-                        $stmt->execute([$earnedPoints, $order['user_id']]);
-
-                        // Log to points_history (for LIFF system)
-                        try {
-                            $stmt = $db->prepare("INSERT INTO points_history (line_account_id, user_id, points, type, description, reference_type, reference_id, balance_after) VALUES (?, ?, ?, 'earn', ?, 'order', ?, ?)");
-                            $stmt->execute([$currentBotId, $order['user_id'], $earnedPoints, "แต้มจากออเดอร์ #{$order['order_number']}", $orderId, $newBalance]);
-                        } catch (Exception $e) {
-                            error_log('points_history insert error: ' . $e->getMessage());
-                        }
-
-                        // Also log to points_transactions (for legacy LoyaltyPoints system)
-                        try {
-                            $stmt = $db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description) VALUES (?, ?, 'earn', ?, ?, 'order', ?, ?)");
-                            $stmt->execute([$order['user_id'], $currentBotId, $earnedPoints, $newBalance, $orderId, "Points from order #{$order['order_number']}"]);
-                        } catch (Exception $e) {}
+                        $loyalty->addPoints(
+                            $order['user_id'],
+                            $earnedPoints,
+                            'order',
+                            $orderId,
+                            "แต้มจากออเดอร์ #{$order['order_number']}"
+                        );
 
                         // ⚠️ ไม่ส่งแจ้งเตือนแต้มแยก - จะรวมในข้อความสถานะออเดอร์ด้านบน
                     }

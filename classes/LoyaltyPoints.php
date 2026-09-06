@@ -172,21 +172,27 @@ class LoyaltyPoints
     {
         if ($points <= 0)
             return false;
-        $current = $this->getUserPoints($userId);
-        $newBalance = $current['available_points'] + $points;
+
         $expiresAt = $this->settings['points_expiry_days'] > 0 ? date('Y-m-d H:i:s', strtotime("+{$this->settings['points_expiry_days']} days")) : null;
-
-        $stmt = $this->db->prepare("UPDATE users SET total_points = total_points + ?, available_points = available_points + ? WHERE id = ?");
-        $stmt->execute([$points, $points, $userId]);
-
-        // Update tier
-        $this->updateUserTier($userId, $newBalance);
 
         // Keep referenceId as integer or null (don't convert to string for INT column)
         $referenceIdValue = ($referenceId !== null && $referenceId !== '') ? (int) $referenceId : null;
 
-        $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description, expires_at) VALUES (?, ?, 'earn', ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $this->lineAccountId, $points, $newBalance, $referenceType, $referenceIdValue, $description ?? "Earned {$points} points", $expiresAt]);
+        $newBalance = $this->mutate(
+            $userId,
+            "UPDATE users SET total_points = total_points + ?, available_points = available_points + ? WHERE id = ?",
+            $points,
+            function ($balanceAfter) use ($userId, $points, $referenceType, $referenceIdValue, $description, $expiresAt) {
+                $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description, expires_at) VALUES (?, ?, 'earn', ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$userId, $this->lineAccountId, $points, $balanceAfter, $referenceType, $referenceIdValue, $description ?? "Earned {$points} points", $expiresAt]);
+            }
+        );
+
+        if ($newBalance === null)
+            return false;
+
+        // Tier is a derived cache — never let it fail the award.
+        $this->updateUserTier($userId, $newBalance);
 
         // Platform-owner activity feed + (throttled) Telegram (best-effort).
         if (@is_file(__DIR__ . '/TenantActivity.php')) {
@@ -203,23 +209,88 @@ class LoyaltyPoints
     {
         if ($points <= 0)
             return false;
-        $current = $this->getUserPoints($userId);
-        if ($current['available_points'] < $points)
-            return false;
-        $newBalance = $current['available_points'] - $points;
-
-        $stmt = $this->db->prepare("UPDATE users SET available_points = available_points - ?, used_points = used_points + ? WHERE id = ?");
-        $stmt->execute([$points, $points, $userId]);
-
-        // Update tier
-        $this->updateUserTier($userId, $newBalance);
 
         // Keep referenceId as integer or null (don't convert to string for INT column)
         $referenceIdValue = ($referenceId !== null && $referenceId !== '') ? (int) $referenceId : null;
 
-        $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description) VALUES (?, ?, 'redeem', ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $this->lineAccountId, -$points, $newBalance, $referenceType, $referenceIdValue, $description ?? "Used {$points} points"]);
+        $newBalance = $this->mutate(
+            $userId,
+            "UPDATE users SET available_points = available_points - ?, used_points = used_points + ? WHERE id = ?",
+            -$points,
+            function ($balanceAfter) use ($userId, $points, $referenceType, $referenceIdValue, $description) {
+                $stmt = $this->db->prepare("INSERT INTO points_transactions (user_id, line_account_id, type, points, balance_after, reference_type, reference_id, description) VALUES (?, ?, 'redeem', ?, ?, ?, ?, ?)");
+                $stmt->execute([$userId, $this->lineAccountId, -$points, $balanceAfter, $referenceType, $referenceIdValue, $description ?? "Used {$points} points"]);
+            }
+        );
+
+        if ($newBalance === null)
+            return false;
+
+        // Tier is a derived cache — never let it fail the redemption.
+        $this->updateUserTier($userId, $newBalance);
         return true;
+    }
+
+    /**
+     * Move a user's balance and write the matching ledger row, atomically.
+     *
+     * The balance is read, the cache columns are updated, and the
+     * points_transactions row is written inside one transaction with the user
+     * row locked. Without the lock two concurrent awards both read the old
+     * balance and stamp the same `balance_after`, so the ledger stops
+     * reconciling with the cache even though the balance itself is correct.
+     *
+     * Callers that already opened a transaction (redeemReward via
+     * api/points.php) join it rather than nesting, which PDO cannot do.
+     *
+     * @param int      $userId
+     * @param string   $balanceSql  UPDATE with three placeholders: amount, amount, userId
+     * @param int      $delta       Signed change applied to the balance (+earn / -redeem)
+     * @param callable $writeLedger Receives the new balance; writes the ledger row
+     * @return int|null New balance, or null if the move could not be made
+     */
+    private function mutate($userId, $balanceSql, $delta, callable $writeLedger)
+    {
+        $ownTransaction = !$this->db->inTransaction();
+        if ($ownTransaction)
+            $this->db->beginTransaction();
+
+        try {
+            // Serialise every point movement for this user.
+            $stmt = $this->db->prepare("SELECT id FROM users WHERE id = ? FOR UPDATE");
+            $stmt->execute([$userId]);
+            if ($stmt->fetchColumn() === false) {
+                if ($ownTransaction)
+                    $this->db->rollBack();
+                return null;
+            }
+
+            $current = (int) $this->getUserPoints($userId)['available_points'];
+            $newBalance = $current + $delta;
+
+            // Refuse to spend points the customer does not have.
+            if ($newBalance < 0) {
+                if ($ownTransaction)
+                    $this->db->rollBack();
+                return null;
+            }
+
+            $amount = abs($delta);
+            $stmt = $this->db->prepare($balanceSql);
+            $stmt->execute([$amount, $amount, $userId]);
+
+            $writeLedger($newBalance);
+
+            if ($ownTransaction)
+                $this->db->commit();
+
+            return $newBalance;
+        } catch (Exception $e) {
+            if ($ownTransaction && $this->db->inTransaction())
+                $this->db->rollBack();
+            error_log('LoyaltyPoints: balance move failed for user ' . $userId . ' - ' . $e->getMessage());
+            return null;
+        }
     }
 
     public function awardPointsForOrder($userId, $orderId, $orderAmount)
